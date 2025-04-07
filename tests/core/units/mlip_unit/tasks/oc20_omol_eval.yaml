@@ -1,0 +1,66 @@
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: oc20_energy
+  level: system
+  property: energy
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.PerAtomMAELoss
+    coefficient: 10
+  out_spec:
+    dim: [1]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: 2.783857161157615
+  datasets:
+    - oc20
+  metrics:
+    - mae
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: omol_energy
+  level: system
+  property: energy
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.PerAtomMAELoss
+    coefficient: 10
+  out_spec:
+    dim: [1]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: 2.783857161157615
+  datasets:
+    - omol
+  metrics:
+    - mae
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: forces
+  level: atom
+  property: forces
+  train_on_free_atoms: True
+  eval_on_free_atoms: True
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.L2NormLoss
+    reduction: per_structure
+    coefficient: 50
+  out_spec:
+    dim: [3]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: 2.783857161157615
+  datasets:
+    - oc20
+    - omol
+  metrics:
+    - per_atom_mae
+    - cosine_similarity
+    - magnitude_error

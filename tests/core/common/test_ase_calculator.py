@@ -30,27 +30,26 @@ def atoms() -> Atoms:
     add_adsorbate(atoms, "O", height=1.2, position="fcc")
     return atoms
 
-available_models=[
-        "SchNet-S2EF-OC20-All",
-        "DimeNet++-S2EF-OC20-All",
-        "GemNet-dT-S2EF-OC20-All",
-        "PaiNN-S2EF-OC20-All",
-        "GemNet-OC-Large-S2EF-OC20-All+MD",
-        "SCN-S2EF-OC20-All+MD",
-        "PaiNN-IS2RE-OC20-All",
-        # "EquiformerV2-153M-S2EF-OC20-All+MD" # Equiformer v2  # already tested in test_relaxation_final_energy
-        # eSCNm # already tested in test_random_seed_final_energy
-        # "eSCN-L4-M2-Lay12-S2EF-OC20-2M"
+
+available_models = [
+    "SchNet-S2EF-OC20-All",
+    "DimeNet++-S2EF-OC20-All",
+    "GemNet-dT-S2EF-OC20-All",
+    "PaiNN-S2EF-OC20-All",
+    "GemNet-OC-Large-S2EF-OC20-All+MD",
+    "SCN-S2EF-OC20-All+MD",
+    "PaiNN-IS2RE-OC20-All",
+    # "EquiformerV2-153M-S2EF-OC20-All+MD" # Equiformer v2  # already tested in test_relaxation_final_energy
+    # eSCNm # already tested in test_random_seed_final_energy
+    # "eSCN-L4-M2-Lay12-S2EF-OC20-2M"
 ]
 
 if get_token():
     # Only run OMAT if we have a huggingface token!
     available_models.append("EquiformerV2-31M-OMAT24")
-        
 
-@pytest.fixture(
-    params=available_models
-)
+
+@pytest.fixture(params=available_models)
 def checkpoint_path(request, tmp_path):
     return model_name_to_local_file(request.param, tmp_path)
 
@@ -65,7 +64,7 @@ def test_energy_with_is2re_model(atoms, tmp_path, snapshot):
     random.seed(1)
     torch.manual_seed(1)
 
-    with pytest.raises(AttributeError):  # noqa
+    with pytest.raises(AttributeError):
         calc = OCPCalculator(
             checkpoint_path=model_name_to_local_file("PaiNN-IS2RE-OC20-All", tmp_path),
             cpu=True,

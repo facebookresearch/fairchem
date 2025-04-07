@@ -1,3 +1,11 @@
+from __future__ import annotations
+
+import pytest
+import torch
+from torch_scatter import scatter as torch_scatter_scatter
+
+from fairchem.core.common.utils import sum_partitions
+
 pyg_available = False
 try:
     from torch_scatter import segment_coo, segment_csr
@@ -5,11 +13,6 @@ try:
     pyg_available = True
 except ImportError:
     pass
-
-import torch
-import pytest
-from torch_scatter import scatter as  torch_scatter_scatter
-from fairchem.core.common.utils import sum_partitions
 
 
 @pytest.mark.skipif(
@@ -38,16 +41,17 @@ def test_segment_csr():
 
     assert sum_partitions(src, indptr).isclose(segment_csr(src, indptr)).all()
 
+
 def test_torch_scatter_scatter_vs_torch_scatter():
-    n=128
-    dim=0
-    for k in [n//32,n,10*n,100*n]:
-        index=torch.randint(0,n,(k,))
-        src=torch.rand(k)
+    n = 128
+    dim = 0
+    for k in [n // 32, n, 10 * n, 100 * n]:
+        index = torch.randint(0, n, (k,))
+        src = torch.rand(k)
 
-        out_a=torch.zeros(n).scatter_reduce_(dim,index,src,reduce='sum')
+        out_a = torch.zeros(n).scatter_reduce_(dim, index, src, reduce="sum")
 
-        out_b=torch.zeros(n)
-        torch_scatter_scatter(src,index,dim,out_b)
+        out_b = torch.zeros(n)
+        torch_scatter_scatter(src, index, dim, out_b)
 
         assert out_a.isclose(out_b).all()

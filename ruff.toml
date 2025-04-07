@@ -51,6 +51,11 @@ ignore = [
   "EXE002",  # The file is executable but no shebang is present (not sure why some files come up as this)
   "PLC2401", # non ASCII characters
   "RET504",  # Unnecessary assignment before `return` statement
+  "UP007", # Use `X | Y` for type annotations
+  "RUF005", # concat lists
+  "SIM108", # Use ternary operator
+  "PT006", # Wrong type passed to first argument
+  "PYI024", # Use `typing.NamedTuple` instead of `collections.namedtuple`
 ]
 unfixable = [
   "T20",  # Removes print statements

@@ -79,9 +79,13 @@ class SlurmConfig:
     mem_gb: int = 80
     timeout_hr: int = 168
     cpus_per_task: int = 8
-    partition: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
-    qos: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
-    account: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    partition: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    qos: Optional[str] = None  # omegaconf in python 3.9 does not backport annotations
+    account: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
 
 
 @dataclass
@@ -96,15 +100,25 @@ class SchedulerConfig:
 @dataclass
 class SlurmEnv:
     # reflects the job_id given by submitit (slurm id with array job id and array task id if they exist)
-    job_id: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    job_id: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
     # reflects SLURM_JOB_ID only
-    raw_job_id: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    raw_job_id: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
     # SLURM_ARRAY_JOB_ID
-    array_job_id: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    array_job_id: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
     # SLURM_ARRAY_TASK_ID
-    array_task_id: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    array_task_id: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
     # reflects SLURM_RESTART_COUNT env variable
-    restart_count: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    restart_count: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
 
 
 @dataclass
@@ -131,13 +145,19 @@ class JobConfig:
     device_type: DeviceType = DeviceType.CUDA
     debug: bool = False
     scheduler: SchedulerConfig = field(default_factory=lambda: SchedulerConfig)
-    logger: Optional[dict] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    logger: Optional[dict] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
     seed: int = 0
     deterministic: bool = False
-    runner_state_path: Optional[str] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
+    runner_state_path: Optional[str] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
     # read-only metadata about the job, not user inputs
-    metadata: Optional[Metadata] = None  # noqa: UP007 omegaconf in python 3.9 does not backport annotations
-    graph_parallel_group_size: Optional[int] = None  # noqa: UP007
+    metadata: Optional[Metadata] = (
+        None  # omegaconf in python 3.9 does not backport annotations
+    )
+    graph_parallel_group_size: Optional[int] = None
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)

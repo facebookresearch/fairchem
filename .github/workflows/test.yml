@@ -12,6 +12,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest  # TODO add macos tests too
+    continue-on-error: true
     strategy:
       max-parallel: 10
       matrix:

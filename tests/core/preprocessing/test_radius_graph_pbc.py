@@ -11,6 +11,7 @@ import os
 
 import pytest
 import torch
+from ase import Atoms
 from ase.build import molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
@@ -19,11 +20,6 @@ from torch_geometric.utils import sort_edge_index
 
 from fairchem.core.common.utils import radius_graph_pbc
 from fairchem.core.datasets import data_list_collater
-from fairchem.core.preprocessing import AtomsToGraphs
-from ase import Atoms
-from fairchem.core.datasets import data_list_collater
-
-from fairchem.core.common.utils import radius_graph_pbc
 from fairchem.core.preprocessing import AtomsToGraphs
 
 
@@ -304,7 +300,6 @@ class TestRadiusGraphPBC:
 def test_simple_systems_nopbc(
     atoms, expected_edge_index, max_neighbors, enforce_max_neighbors_strictly
 ):
-
     a2g = AtomsToGraphs(
         r_energy=False,
         r_forces=False,

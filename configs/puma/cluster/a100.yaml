@@ -1,0 +1,10 @@
+data_root_dir: /fsx-ocp-med/shared/
+run_dir: /fsx-checkpoints/${oc.env:USER}/
+account: ocp
+qos: ocp_high
+mode: SLURM
+device: CUDA
+ranks_per_node: 8
+dataloader_workers: 8
+debug: False
+mem_gb: 1000

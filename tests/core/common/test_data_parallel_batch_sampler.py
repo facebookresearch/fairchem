@@ -11,15 +11,11 @@ import functools
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    TypeVar,
-)
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pytest
-from torch.utils.data import Dataset, DistributedSampler
+from torch.utils.data import DistributedSampler
 
 from fairchem.core.common.data_parallel import (
     BalancedBatchSampler,
@@ -30,6 +26,7 @@ from fairchem.core.common.data_parallel import (
 
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
+
 from fairchem.core.datasets.base_dataset import BaseDataset
 
 DATA = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
@@ -180,7 +177,7 @@ def test_invalid_mode(invalid_dataset) -> None:
 
 def test_invalid_dataset(invalid_dataset) -> None:
     with pytest.raises(UnsupportedDatasetError):
-        sampler = BalancedBatchSampler(
+        BalancedBatchSampler(
             dataset=invalid_dataset,
             batch_size=1,
             rank=0,

@@ -1503,7 +1503,7 @@ def get_weight_table(model: torch.nn.Module) -> tuple[list, list]:
             row_grad = list(tensor_stats(f"grad/{param_name}", params.grad).values())
         else:
             row_grad = [None] * len(row_weight)
-        data.append([param_name] + [params.shape] + row_weight + row_grad)  # noqa
+        data.append([param_name] + [params.shape] + row_weight + row_grad)
     return columns, data
 
 

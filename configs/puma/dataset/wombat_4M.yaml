@@ -1,0 +1,264 @@
+snapshot_dir: .
+
+osc_train:
+  splits:
+    train:
+      sample_n: 1000000
+      src:
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch3/2024-10-25-22-32
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch5/2024-10-25-22-33
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch4/2024-10-25-22-39
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch7/2024-10-25-22-44
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch6/2024-10-25-22-46
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch1/2024-10-25-22-46
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch2/2024-10-25-22-47
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch8/2024-10-25-22-51
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch9/2024-10-25-23-03
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch10/2024-10-25-23-03
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch11/2024-10-25-23-05
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch12/2024-10-25-23-05
+        -  ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/train/batch13/2024-10-25-23-06
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: osc_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: osc
+
+osc_val:
+  splits:
+    val:
+      sample_n: 50000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/osc_s2efs_nov_2024/val-small
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: osc_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: osc
+
+omol_train:
+  splits:
+    train:
+      sample_n: 1000000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/train
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+    r_data_keys: ['spin', 'charge']
+  key_mapping:
+    energy: omol_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: omol
+
+omol_val:
+  splits:
+    pdb_ood:
+      sample_n: 10000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/pdb_ood
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/pdb_ood/metadata.npz
+    low_mo:
+      sample_n: 10000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/low_mo
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/low_mo/metadata.npz
+    val_mo:
+      sample_n: 10000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val/metadata.npz
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - metal_organics_outputs_060124
+            - metal_organics_outputs_060424
+            - metal_organics_outputs_061824
+            - metal_organics_outputs_062424
+            - metal_organics_outputs_070324
+            - metal_organics_outputs_072324
+            - metal_organics_outputs_incomplete_060424
+            - metal_organics_outputs_ln_082524
+            - metal_organics_outputs_low_spin_241118
+    val_electrolytes:
+      sample_n: 10000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val/metadata.npz
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - electrolytes_md_based
+            - electrolytes_solvated_090624
+    val_biomolecules:
+      sample_n: 10000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val/metadata.npz
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - pdb_pockets_700
+            - solvated_protein_outputs_240923
+            - solvated_protein_outputs_241002
+    val_neutralorganics:
+      sample_n: 10000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/omol_dec15_merged_lmdbs/val/metadata.npz
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - geom_outputs_052024
+            - ani2x_dec15_merged_full
+            - orbnet_denali
+            - rgd1
+            - spice
+            - trans1x_rks_dec15_ocphigh
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+    r_data_keys: ['spin', 'charge']
+  key_mapping:
+    energy: omol_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: omol
+
+omat_train:
+  splits:
+    train:
+      sample_n: 1000000
+      src:
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/aimd-from-PBE-1000-npt/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/aimd-from-PBE-1000-nvt/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/aimd-from-PBE-3000-npt/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/aimd-from-PBE-3000-nvt/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-300-subsampled/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-500-subsampled/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-1000-subsampled/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-300/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-500/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-1000/prototype_label-parent_prototype_label/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13/rattled-relax/prototype_label-parent_prototype_label/train
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omat_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: omat
+
+omat_val:
+  splits:
+    val:
+      sample_n: 25000
+      src: # small val, ~1M samples from full val
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/aimd-from-PBE-1000-npt/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/aimd-from-PBE-1000-nvt/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/aimd-from-PBE-3000-npt/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/aimd-from-PBE-3000-nvt/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-300-subsampled/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-500-subsampled/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-1000-subsampled/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-300/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-500/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-1000/prototype_label-parent_prototype_label/val.aselmdb
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/2024-09-13-small-val/rattled-relax/prototype_label-parent_prototype_label/val.aselmdb
+    test:
+      sample_n: 25000
+      src:
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/aimd-from-PBE-1000-npt/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/aimd-from-PBE-1000-nvt/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/aimd-from-PBE-3000-npt/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/aimd-from-PBE-3000-nvt/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-1000/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-1000-subsampled/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-300/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-300-subsampled/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-500/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-500-subsampled/
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/omat24/tests/test_protostructure/rattled-relax/
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omat_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: omat
+
+oc20_train:
+  splits:
+    train:
+      sample_n: 1000000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/train/all_md
+  format: fairchem.experimental.foundation_models.multi_task_dataloader.mt_lmdb.LmdbDataset
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  oc20_ref: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/oc20_ref.pkl
+  train_on_oc20_total_energies: True
+  key_mapping:
+    energy: oc20_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: oc20
+
+oc20_val:
+  splits:
+    val_id:
+      sample_n: 25000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/val/id
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/val/id/metadata.npz
+    val_ood_both:
+      sample_n: 25000
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/val/ood_both
+      metadata_path: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/val/ood_both/metadata.npz
+  format: fairchem.experimental.foundation_models.multi_task_dataloader.mt_lmdb.LmdbDataset
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  oc20_ref: ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/s2ef/oc20_ref.pkl
+  train_on_oc20_total_energies: True
+  key_mapping:
+    energy: oc20_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: oc20
