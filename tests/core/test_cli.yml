@@ -2,6 +2,7 @@ job:
   device_type: CPU
   scheduler:
     mode: LOCAL
+    ranks_per_node: 1
 
 replacement_var: 5
 

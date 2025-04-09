@@ -17,6 +17,14 @@ def test_cli():
     main()
 
 
+def test_cli_multi_rank_cpu():
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = ["--config", "tests/core/test_cli.yml", "job.scheduler.ranks_per_node=2"]
+    sys.argv[1:] = sys_args
+    main()
+
+
 def test_cli_run_reduce():
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()

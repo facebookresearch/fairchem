@@ -21,7 +21,7 @@ from fairchem.core.common.typing import none_throws
 
 T = TypeVar("T")
 DISTRIBUTED_PORT = 13356
-CURRENT_DEVICE_STR = "CURRRENT_DEVICE"
+CURRENT_DEVICE_TYPE_STR = "CURRRENT_DEVICE_TYPE"
 
 
 def os_environ_get_or_throw(x: str) -> str:
@@ -77,15 +77,7 @@ def setup(config) -> None:
                     f"local rank: {config['local_rank']}, visible devices: {os.environ['CUDA_VISIBLE_DEVICES']}"
                 )
 
-                # In the new hydra runners, we setup the device for each rank as either cuda:0 or cpu
-                # after this point, the local rank should either be using "cpu" or "cuda"
-                if config.get("use_cuda_visibile_devices"):
-                    assign_device_for_local_rank(config["cpu"], config["local_rank"])
-                else:
-                    # in the old code, all ranks can see all devices but need to be assigned a device equal to their local rank
-                    # this is dangerous and should be deprecated, however, FSDP still requires backwards compatibility with
-                    # initializing this way for now so we need to keep it
-                    torch.cuda.set_device(config["local_rank"])
+                assign_device_for_local_rank(config["cpu"], config["local_rank"])
 
                 dist.init_process_group(
                     backend="nccl",
@@ -98,40 +90,15 @@ def setup(config) -> None:
                 raise e
             except FileNotFoundError:  # Slurm is not installed
                 pass
-    elif config["summit"]:
-        world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
-        world_rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
-        get_master = (
-            "echo $(cat {} | sort | uniq | grep -v batch | grep -v login | head -1)"
-        ).format(os.environ["LSB_DJOB_HOSTFILE"])
-        os.environ["MASTER_ADDR"] = str(
-            subprocess.check_output(get_master, shell=True)
-        )[2:-3]
-        os.environ["MASTER_PORT"] = "23456"
-        os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
-        os.environ["RANK"] = os.environ["OMPI_COMM_WORLD_RANK"]
-        # NCCL and MPI initialization
-        dist.init_process_group(
-            backend="nccl",
-            rank=world_rank,
-            world_size=world_size,
-            init_method="env://",
-            timeout=timeout,
-        )
-    else:
+    else:  # local mode
         if not os.environ.get("MASTER_ADDR"):
             assert (
                 config["world_size"] == 1
             ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
             setup_env_local()
         config["local_rank"] = int(os.environ.get("LOCAL_RANK"))
-        if config.get("use_cuda_visibile_devices"):
-            assign_device_for_local_rank(config["cpu"], config["local_rank"])
-        elif torch.cuda.is_available():
-            # in the old code, all ranks can see all devices but need to be assigned a device equal to their local rank
-            # this is dangerous and should be deprecated, however, FSDP still requires backwards compatibility with
-            # initializing this way for now so we need to keep it
-            torch.cuda.set_device(config["local_rank"])
+        assign_device_for_local_rank(config["cpu"], config["local_rank"])
+
         dist.init_process_group(
             backend=config["distributed_backend"],
             rank=int(os.environ.get("RANK")),
@@ -230,25 +197,27 @@ def gather_objects(data: T, group: dist.ProcessGroup = dist.group.WORLD) -> list
     return output
 
 
-def assign_device_for_local_rank(cpu: bool, local_rank: int):
+def assign_device_for_local_rank(cpu: bool, local_rank: int) -> None:
     if cpu:
-        os.environ[CURRENT_DEVICE_STR] = "cpu"
+        os.environ[CURRENT_DEVICE_TYPE_STR] = "cpu"
     else:
-        # assert the cuda device to be the local rank
-        os.environ[CURRENT_DEVICE_STR] = "cuda"
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+        assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
+        os.environ[CURRENT_DEVICE_TYPE_STR] = "cuda"
+        torch.cuda.set_device(local_rank)
 
 
-def get_device_for_local_rank():
-    cur_dev_env = os.environ.get(CURRENT_DEVICE_STR)
-    if cur_dev_env is not None:
-        return cur_dev_env
+def get_device_for_local_rank() -> str:
+    assert (
+        os.environ.get(CURRENT_DEVICE_TYPE_STR) is not None
+    ), "must call assign_device_for_local_rank first!"
+
+    if os.environ[CURRENT_DEVICE_TYPE_STR] == "cuda":
+        assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
+        return f"cuda:{torch.cuda.current_device()}"
+    elif os.environ[CURRENT_DEVICE_TYPE_STR] == "cpu":
+        return "cpu"
     else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logging.warning(
-            f"{CURRENT_DEVICE_STR} env variable not found, defaulting to {device}"
-        )
-        return device
+        raise ValueError(f"unsupported device type: {CURRENT_DEVICE_TYPE_STR}")
 
 
 def setup_env_local():

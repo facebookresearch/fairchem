@@ -338,7 +338,6 @@ def map_job_config_to_dist_config(job_cfg: JobConfig) -> dict:
         "submit": scheduler_config.mode == SchedulerType.SLURM,
         "summit": None,
         "cpu": job_cfg.device_type == DeviceType.CPU,
-        "use_cuda_visibile_devices": True,
     }
 
 
@@ -469,7 +468,7 @@ def main(
         ), f"You cannot use more than one node (scheduler_cfg.num_nodes={scheduler_cfg.num_nodes}) in LOCAL mode"
         if scheduler_cfg.ranks_per_node > 1:
             logging.info(
-                f"Running in local mode with {scheduler_cfg.ranks_per_node} ranks"
+                f"Running in local mode with {scheduler_cfg.ranks_per_node} ranks using device_type:{cfg.job.device_type}"
             )
             launch_config = LaunchConfig(
                 min_nodes=1,
