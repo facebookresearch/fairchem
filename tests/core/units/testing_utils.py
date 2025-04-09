@@ -5,7 +5,7 @@ import sys
 import hydra
 
 import fairchem.core.common.gp_utils as gp_utils
-from fairchem.core._cli_hydra import main
+from fairchem.core._cli import main
 from fairchem.core.common import distutils
 
 

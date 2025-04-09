@@ -9,7 +9,7 @@ import torch
 import torch.distributed as dist
 from omegaconf import OmegaConf
 
-from fairchem.core._cli_hydra import get_hydra_config_from_yaml
+from fairchem.core._cli import get_hydra_config_from_yaml
 from fairchem.core.common.distutils import setup_env_local
 from fairchem.core.components.train.train_runner import (
     get_most_recent_viable_checkpoint_path,

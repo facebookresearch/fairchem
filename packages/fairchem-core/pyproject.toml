@@ -39,7 +39,6 @@ quacc = ["quacc[phonons]>=0.13.0"]
 
 [project.scripts]
 fairchem = "fairchem.core._cli:main"
-fairchemv2 = "fairchem.core._cli_hydra:main"
 
 [project.urls]
 repository = "https://github.com/FAIR-Chem/fairchem"
