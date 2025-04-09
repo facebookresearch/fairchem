@@ -230,7 +230,6 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset):
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
-@pytest.mark.skip(reason="This test is taking too long, skipping for now")
 @pytest.mark.parametrize(
     "train_config, dataset_config",
     [
@@ -256,11 +255,13 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             f"datasets={dataset_config}",
             f"datasets.data_root_dir={fake_puma_dataset}",
             "optimizer=savegrad",
+            "runner.max_steps=1"
         ]
 
         no_gp_args = sys_args.copy()
         no_gp_args.append(f"optimizer.save_path={no_gp_save_path}")
         no_gp_args += ["+job.scheduler.ranks_per_node=2"]
+
         launch_main(no_gp_args)
 
         gp_args = sys_args.copy()
@@ -271,7 +272,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
         ]
         launch_main(gp_args)
 
-        for step in range(3):
+        for step in range(1):   
             for ddp_rank in range(4):
                 gp_rank = ddp_rank // 2
                 compare_to_non_gp_ddp_rank = gp_rank

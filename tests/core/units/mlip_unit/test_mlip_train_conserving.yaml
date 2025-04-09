@@ -53,6 +53,7 @@ runner:
     print_every: 1
     clip_grad_norm: 100
   max_steps: 3
+  max_epochs: null
   callbacks:
     - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
       expected_loss: ${expected_loss}
