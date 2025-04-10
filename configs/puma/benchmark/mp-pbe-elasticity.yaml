@@ -1,0 +1,41 @@
+job:
+  run_name: eSEN-30M-OAM
+  scheduler:
+    mode: SLURM
+    num_array_jobs: 2000
+    slurm:
+      partition: scavenge
+      mem_gb: 256
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: test-benchmarks
+
+benchmark_name: mp-pbe-elasticity
+
+runner:
+  _target_: fairchem.core.components.calculate.elasticity_runner.ElasticityRunner
+  calculator:
+    _target_: fairchem.core.modules.calculator.MLIPCalculator
+    inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_32MoE_conserved_0331_605000.pt
+    dataset_name: omat
+    energy_key: omat_energy
+    forces_key: omat_forces
+    stress_key: omat_stress
+    act_ckpt: True
+#    _target_: fairchem.core.OCPCalculator
+#    checkpoint_path: /checkpoint/lbluque/model-checkpoints/esen/eSEN-30M-OMat-MPsAlex/checkpoint.pt
+#    trainer: equiformerv2_forces
+#    cpu: False
+  input_data:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      src: /large_experiments/opencatalyst/foundation_models/evaluation/mp-elasticity/mp-pbe-elasticity-2025.3.aselmdb
+
+reducer:
+  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
+  target_data_path: /large_experiments/opencatalyst/foundation_models/evaluation/mp-elasticity/mp-pbe-elasticity-2025.3-no-elastic-tensor.json.gz
+  benchmark_name: ${benchmark_name}
+  index_name: mp_id

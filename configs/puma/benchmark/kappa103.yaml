@@ -1,0 +1,53 @@
+job:
+  # run_name: eSEN-30M-OAM-kappa103
+  # run_name: PUMA-SM-0MoP-kappa103
+  run_name: PUMA-SM-32MoP-kappa103
+  run_dir: /checkpoint/xiangfu/benchmark_test
+  scheduler:
+    mode: SLURM
+    num_array_jobs: 103
+    slurm:
+      partition: scavenge
+      mem_gb: 256
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: test-benchmarks
+
+# job:
+#   device_type: CPU
+#   scheduler:
+#     mode: LOCAL
+#   logger:
+#     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+#     _partial_: true
+#     entity: fairchem
+#     project: test-benchmarks
+
+benchmark_name: kappa103
+
+runner:
+  _target_: fairchem.core.components.calculate.kappa_runner.KappaRunner
+  # calculator:
+  #   _target_: fairchem.core.OCPCalculator
+  #   checkpoint_path: /checkpoint/xiangfu/esen_release/after_surgery/oam/checkpoint.pt
+  #   cpu: False
+  calculator:
+    _target_: fairchem.core.modules.calculator.MLIPCalculator
+    # inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_noMoE_conserved_0331_745000.pt
+    inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_32MoE_conserved_0331_605000.pt
+    dataset_name: omat
+    energy_key: omat_energy
+    forces_key: omat_forces
+    stress_key: omat_stress
+    act_ckpt: True
+  input_data:
+    _target_: fairchem.core.components.calculate.kappa_runner.get_kappa103_data_list
+    debug: False
+  displacement: 0.03
+
+reducer:
+  _target_: fairchem.core.components.benchmark.kappa_reducer.Kappa103Reducer
+  benchmark_name: ${benchmark_name}

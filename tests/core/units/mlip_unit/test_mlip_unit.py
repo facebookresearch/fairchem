@@ -12,7 +12,7 @@ import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
-from tests.core.units.testing_utils import launch_main
+from tests.core.testing_utils import launch_main
 
 if TYPE_CHECKING:
     from torchtnt.framework.state import State
