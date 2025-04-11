@@ -9,10 +9,6 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
-
-__all__ = ["OCPCalculator"]
-
 try:
     __version__ = version("fairchem.core")
 except PackageNotFoundError:

@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fairchem.core import OCPCalculator
 from fairchem.core.components.calculate import (
     ElasticityRunner,
 )
@@ -22,9 +21,10 @@ from fairchem.core.components.calculate import (
 @pytest.mark.skip(reason="Pending OCPCalculator fix")
 def test_calculate_runner(dummy_binary_dataset, tmp_path):
     # TODO for now we will use an old OCPCalculator, update this with a new checkpoint
-    calc = OCPCalculator(
-        model_name="eSCN-L4-M2-Lay12-S2EF-OC20-2M", local_cache=tmp_path
-    )
+    calc = None
+    # OCPCalculator(
+    #     model_name="eSCN-L4-M2-Lay12-S2EF-OC20-2M", local_cache=tmp_path
+    # )
     elastic_runner = ElasticityRunner(calc, input_data=dummy_binary_dataset)
 
     # check running a calculation of all the dataset

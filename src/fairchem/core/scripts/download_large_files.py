@@ -5,7 +5,13 @@ import logging
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from fairchem.core.common.tutorial_utils import fairchem_root
+
+def fairchem_root():
+    """Return the root directory of the installed fairchem-core package."""
+    import fairchem.core
+
+    return Path(fairchem.core.__file__).parent.parent
+
 
 S3_ROOT = "https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/"
 

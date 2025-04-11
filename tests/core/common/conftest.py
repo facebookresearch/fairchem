@@ -3,17 +3,8 @@ from __future__ import annotations
 import pytest
 from ase import build
 
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
-
-
-@pytest.fixture(scope="session")
-def calculator(tmp_path_factory):
-    dir = tmp_path_factory.mktemp("checkpoints")
-    return OCPCalculator(
-        model_name="EquiformerV2-31M-S2EF-OC20-All+MD", local_cache=dir, seed=0
-    )
 
 
 @pytest.fixture()
