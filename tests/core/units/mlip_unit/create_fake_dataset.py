@@ -46,6 +46,7 @@ class FakeDatasetConfig:
     energy_field: str = "energy"
     forces_mean: float = 0.0
     seed: int = 0
+    pbc: bool = True
 
     def get_split_config(self):
         if self.metadata_path is not None:
@@ -98,9 +99,19 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
             fake_dataset_config.system_size_range[0],
             fake_dataset_config.system_size_range[1] + 1,
         )
-        atom_positions = np.random.uniform(-20, 20, (n_atoms, 3))
+        
+        # 0.1 atoms per A^3
+        sys_size = (n_atoms * 10) ** (1/3)
+        atom_positions = np.random.uniform(0, sys_size, (n_atoms, 3))
+        if fake_dataset_config.pbc:
+            pbc = True
+            cell = np.eye(3) * sys_size
+        else:
+            pbc = False
+            cell = None
         atom_symbols = np.random.choice(fake_elements, size=n_atoms)
-        atoms = Atoms(symbols=atom_symbols, positions=atom_positions)
+        atoms = Atoms(symbols=atom_symbols, positions=atom_positions, cell=cell, pbc=pbc)
+                
         forces = calculate_forces_repulsive_force_field(atoms)
         energy = compute_energy(atoms)
         systems.append({"atoms": atoms, "forces": forces, "energy": energy})
@@ -180,6 +191,7 @@ def create_fake_puma_dataset(tmpdirname: str, train_size: int = 14, val_size: in
                 src=f"{tmpdirname}/oc20/oc20_{train_or_val}.aselmdb",
                 metadata_path=f"{tmpdirname}/oc20/oc20_{train_or_val}_metadata.npz",
                 seed=0,
+                pbc=True,
             )
             for train_or_val in ("train", "val")
         },
@@ -196,6 +208,7 @@ def create_fake_puma_dataset(tmpdirname: str, train_size: int = 14, val_size: in
                 src=f"{tmpdirname}/omol/omol_{train_or_val}.aselmdb",
                 metadata_path=f"{tmpdirname}/omol/omol_{train_or_val}_metadata.npz",
                 seed=1,
+                pbc=False,
             )
             for train_or_val in ("train", "val")
         },

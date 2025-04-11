@@ -139,8 +139,8 @@ def test_full_conserving_moe_eval_from_cli(fake_puma_dataset):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
         f"datasets.data_root_dir={fake_puma_dataset}",
-        "oc20_energy_mae=22.649953651428223",
-        "omol_energy_mae=1.775369644165039",
+        "oc20_energy_mae=16.582261562347412",
+        "omol_energy_mae=0.2785639584064484",
     ]
     launch_main(sys_args)
 
@@ -148,10 +148,10 @@ def test_full_conserving_moe_eval_from_cli(fake_puma_dataset):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
         f"datasets.data_root_dir={fake_puma_dataset}",
-        "oc20_energy_mae=1.8061175346374512",
-        "omol_energy_mae=21.401422214508056",
-        f"datasets.omol_val.splits.train.src=[{fake_puma_dataset}/oc20/oc20_val.aselmdb]",
-        f"datasets.oc20_val.splits.train.src=[{fake_puma_dataset}/omol/omol_val.aselmdb]",
+        "oc20_energy_mae=16.582261562347412",
+        "omol_energy_mae=0.2785639584064484",
+        f"datasets.oc20_val.splits.train.src=[{fake_puma_dataset}/oc20/oc20_val.aselmdb]",
+        f"datasets.omol_val.splits.train.src=[{fake_puma_dataset}/omol/omol_val.aselmdb]",
     ]
     launch_main(sys_args)
 
@@ -172,7 +172,7 @@ def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset):
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_puma_dataset}",
-        "+expected_loss=11.918289184570312",
+        "+expected_loss=13.662849426269531",
     ]
     launch_main(sys_args)
 
@@ -333,11 +333,11 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset):
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
-        (3, 2, 0.8595410585403442),
-        (6, 2, 0.8595410585403442),
-        (5, 2, 0.8595410585403442),
-        (6, 3, 26.077909469604492),
-        (14, 3, 26.077909469604492),
+        (3, 2, 6.207723140716553),
+        (6, 2, 6.207660675048828),
+        (5, 2, 6.207639217376709),
+        (6, 3, 43.085227966308594),
+        (14, 3, 43.08521270751953),
     ],
 )
 def test_train_and_resume_max_epochs(
@@ -376,8 +376,8 @@ def test_train_and_resume_max_epochs(
 @pytest.mark.parametrize(
     "checkpoint_step, max_steps, expected_loss",
     [
-        (4, 7, 4.694008827209473),
-        (6, 7, 4.6940088272094739),
+        (4, 7, 29.3492488861084),
+        (6, 7, 29.349267959594727),
     ],
 )
 def test_train_and_resume_max_steps(

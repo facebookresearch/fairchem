@@ -35,6 +35,7 @@ omol_val:
     r_stress: True
     r_edges: ${datasets.cpu_graph}
     max_neigh: ${max_neighbors}
+    molecule_cell_size: 120.0
   key_mapping:
     energy: omol_energy
     forces: ${datasets.omol_forces_key}
