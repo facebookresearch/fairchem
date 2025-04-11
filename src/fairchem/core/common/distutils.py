@@ -16,6 +16,7 @@ from typing import Any, TypeVar
 import torch
 import torch.distributed as dist
 from torch.distributed.elastic.utils.distributed import get_free_port
+from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
 
 from fairchem.core.common.typing import none_throws
 
@@ -30,6 +31,45 @@ def os_environ_get_or_throw(x: str) -> str:
     return none_throws(os.environ.get(x))
 
 
+def get_init_method(
+    init_method,
+    world_size: int | None,
+    rank: int | None = None,
+    node_list: str | None = None,
+    filename: str | None = None,
+):
+    """
+    Get the initialization method for a distributed job based on the specified method type.
+
+    Args:
+        init_method: The initialization method type, either "tcp" or "file".
+        world_size: The total number of processes in the distributed job.
+        rank: The rank of the current process (optional).
+        node_list: The list of nodes for SLURM-based distributed job (optional, used with "tcp").
+        filename: The shared file path for file-based initialization (optional, used with "file").
+
+    Returns:
+        The initialization method string to be used by PyTorch's distributed module.
+
+    Raises:
+        ValueError: If an invalid init_method is provided.
+    """
+    if init_method == "tcp":
+        hostnames = subprocess.check_output(
+            ["scontrol", "show", "hostnames", node_list]
+        )
+        return get_tcp_init_method(
+            world_size=world_size,
+            hostname=hostnames.split()[0].decode("utf-8"),
+            rank=rank,
+            port=get_free_port() if world_size == 1 else DISTRIBUTED_PORT,
+        )
+    elif init_method == "file":
+        return get_file_init_method(world_size=world_size, rank=rank, filename=filename)
+    else:
+        raise ValueError(f"Invalid init_method: {init_method}")
+
+
 def setup(config) -> None:
     timeout = timedelta(minutes=config.get("timeout", 30))
     if config["submit"]:
@@ -38,16 +78,6 @@ def setup(config) -> None:
             node_list = os.environ.get("SLURM_JOB_NODELIST")
         if node_list is not None:
             try:
-                hostnames = subprocess.check_output(
-                    ["scontrol", "show", "hostnames", node_list]
-                )
-                config["init_method"] = "tcp://{host}:{port}".format(
-                    host=hostnames.split()[0].decode("utf-8"),
-                    # a fixed DISTRIBUTED_PORT works if a full node is used, otherwise we can get port clashes
-                    port=get_free_port()
-                    if config["world_size"] == 1
-                    else DISTRIBUTED_PORT,
-                )
                 nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
                 ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
                 if ntasks_per_node is not None:
@@ -61,29 +91,35 @@ def setup(config) -> None:
                     assert config["world_size"] % nnodes == 0
                     gpus_per_node = config["world_size"] // nnodes
                     node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
-                    config["rank"] = node_id * gpus_per_node
-                    config["local_rank"] = 0
+                    rank = node_id * gpus_per_node
+                    local_rank = 0
                 else:
                     assert ntasks_per_node == config["world_size"] // nnodes
-                    config["rank"] = int(os_environ_get_or_throw("SLURM_PROCID"))
-                    config["local_rank"] = int(os_environ_get_or_throw("SLURM_LOCALID"))
+                    rank = int(os_environ_get_or_throw("SLURM_PROCID"))
+                    local_rank = int(os_environ_get_or_throw("SLURM_LOCALID"))
 
-                logging.info(
-                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
+                init_method = get_init_method(
+                    config["init_method"],
+                    world_size=config["world_size"],
+                    rank=rank,
+                    node_list=node_list,
+                    filename=os.path.join(
+                        config["shared_file_dir"],
+                        f".distributed-shared-file-{config['array_job_num']}",
+                    ),
                 )
+                logging.info(f"Torch distributed initialized with: {init_method}")
 
                 # ensures GPU0 does not have extra context/higher peak memory
                 logging.info(
-                    f"local rank: {config['local_rank']}, visible devices: {os.environ['CUDA_VISIBLE_DEVICES']}"
+                    f"local rank: {local_rank}, visible devices: {os.environ.get('CUDA_VISIBLE_DEVICES', 'None')}"
                 )
 
-                assign_device_for_local_rank(config["cpu"], config["local_rank"])
+                assign_device_for_local_rank(config["cpu"], local_rank)
 
                 dist.init_process_group(
                     backend="nccl",
-                    init_method=config["init_method"],
-                    world_size=config["world_size"],
-                    rank=config["rank"],
+                    init_method=init_method,
                     timeout=timeout,
                 )
             except subprocess.CalledProcessError as e:  # scontrol failed
@@ -91,17 +127,17 @@ def setup(config) -> None:
             except FileNotFoundError:  # Slurm is not installed
                 pass
     else:  # local mode
-        if not os.environ.get("MASTER_ADDR"):
+        if "MASTER_ADDR" not in os.environ:
             assert (
                 config["world_size"] == 1
             ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
             setup_env_local()
-        config["local_rank"] = int(os.environ.get("LOCAL_RANK"))
-        assign_device_for_local_rank(config["cpu"], config["local_rank"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        assign_device_for_local_rank(config["cpu"], local_rank)
 
         dist.init_process_group(
             backend=config["distributed_backend"],
-            rank=int(os.environ.get("RANK")),
+            rank=int(os.environ["RANK"]),
             world_size=config["world_size"],
             timeout=timeout,
         )

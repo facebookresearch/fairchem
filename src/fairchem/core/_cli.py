@@ -74,6 +74,11 @@ class RunType(str, Enum):
     REDUCE = "reduce"
 
 
+class DistributedInitMethod(str, Enum):
+    TCP = "tcp"
+    FILE = "file"
+
+
 @dataclass
 class SlurmConfig:
     mem_gb: int = 80
@@ -91,6 +96,7 @@ class SlurmConfig:
 @dataclass
 class SchedulerConfig:
     mode: SchedulerType = SchedulerType.LOCAL
+    distributed_init_method: DistributedInitMethod = DistributedInitMethod.TCP
     ranks_per_node: int = 1
     num_nodes: int = 1
     num_array_jobs: int = 1
@@ -228,6 +234,7 @@ class Submitit(Checkpointable):
     def __init__(self) -> None:
         self.config = None
         self.runner = None
+        self.reducer = None
 
     def __call__(
         self, dict_config: DictConfig, run_type: RunType = RunType.RUN
@@ -262,6 +269,7 @@ class Submitit(Checkpointable):
             )
 
         self._init_logger()
+
         _set_seeds(self.config.job.seed)
         if self.config.job.deterministic:
             _set_deterministic_mode()
@@ -290,6 +298,7 @@ class Submitit(Checkpointable):
             self.config.job.logger
             and distutils.is_master()
             and not self.config.job.debug
+            and self.config.job.metadata.array_job_num == 0
         ):
             # get a partial function from the config and instantiate wandb with it
             # currently code assumes that we only use the WandBSingletonLogger
@@ -336,8 +345,11 @@ def map_job_config_to_dist_config(job_cfg: JobConfig) -> dict:
             "gloo" if job_cfg.device_type == DeviceType.CPU else "nccl"
         ),
         "submit": scheduler_config.mode == SchedulerType.SLURM,
-        "summit": None,
         "cpu": job_cfg.device_type == DeviceType.CPU,
+        "init_method": scheduler_config.distributed_init_method,
+        # for distributed shared file initialization
+        "shared_file_dir": os.path.join(job_cfg.run_dir, job_cfg.timestamp_id),
+        "array_job_num": job_cfg.metadata.array_job_num,
     }
 
 
@@ -449,12 +461,12 @@ def main(
             logging.info(f"Submitted {len(jobs)} jobs: {jobs[0].job_id.split('_')[0]}")
 
         if "reducer" in cfg:
-            # TODO if a run is pre-empted/queued and resubmitted we need to update the dependency of the reduce job
+            job_id = jobs[0].job_id.split("_")[0]
             executor.update_parameters(
                 name=f"{cfg.job.run_name}_reduce",
                 # set a single node, or do we want the same config as the Runner or a separate JobConfig
                 nodes=1,
-                slurm_dependency=f"afterok:{','.join(job.job_id for job in jobs)}",
+                slurm_dependency=f"afterok:{job_id}",
                 slurm_additional_parameters={
                     "kill-on-invalid-dep": "yes"
                 },  # kill the reducer if run fails
