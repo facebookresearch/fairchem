@@ -7,16 +7,16 @@ otf_graph: True
 max_neighbors: ${max_neighbors}
 use_pbc: True
 use_pbc_single: True
-cutoff: 12.0
+cutoff: 6.
 edge_channels: 16
 distance_function: gaussian
-num_distance_basis: 512
+num_distance_basis: 64
 regress_forces: True
 regress_stress: ${regress_stress}
 direct_forces: ${direct_forces} 
 num_layers: 2
 hidden_channels: 16
 norm_type: rms_norm_sh
-act_type: s2
-ff_type: grid
+act_type: gate
+ff_type: spectral
 dataset_list: ["oc20", "omol"]

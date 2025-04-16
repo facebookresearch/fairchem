@@ -163,8 +163,24 @@ def test_full_train_from_cli():
         "+expected_loss=8.070940971374512",
     ]
     launch_main(sys_args)
+    
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "backbone=K2L2_gate",
+        "+expected_loss=10.157896995544434",
+    ]
+    launch_main(sys_args)
 
-
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "backbone=K2L2_gate",
+        "backbone.mmax=1",
+        "+expected_loss=23.392169952392578",
+    ]
+    launch_main(sys_args)
+    
 @pytest.mark.skip(reason="This test is failing on CI but not locally, skipping for now")
 def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset):
     sys_args = [
