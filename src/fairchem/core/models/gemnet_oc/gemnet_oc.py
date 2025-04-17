@@ -20,7 +20,8 @@ from fairchem.core.common.utils import (
     get_max_neighbors_mask,
     scatter_det,
 )
-from fairchem.core.models.base import BackboneInterface, GraphModelMixin, HeadInterface
+from fairchem.core.graph.compute import generate_graph
+from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.modules.scaling.compat import load_scales_compat
 
 from .initializers import get_initializer
@@ -47,7 +48,7 @@ if typing.TYPE_CHECKING:
 
 
 @registry.register_model("gemnet_oc")
-class GemNetOC(nn.Module, GraphModelMixin):
+class GemNetOC(nn.Module):
     """
     Arguments
     ---------
@@ -868,11 +869,14 @@ class GemNetOC(nn.Module, GraphModelMixin):
     def generate_graph_dict(self, data, cutoff, max_neighbors):
         """Generate a radius/nearest neighbor graph."""
         otf_graph = cutoff > 6 or max_neighbors > 50 or self.otf_graph
-        graph = self.generate_graph(
+        graph = generate_graph(
             data,
             cutoff=cutoff,
             max_neighbors=max_neighbors,
             otf_graph=otf_graph,
+            use_pbc=self.use_pbc,
+            enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+            use_pbc_single=self.use_pbc_single,
         )
         # These vectors actually point in the opposite direction.
         # But we want to use col as idx_t for efficient aggregation.

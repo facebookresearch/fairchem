@@ -19,9 +19,7 @@ from typing_extensions import deprecated
 from fairchem.core.common import gp_utils
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
-from fairchem.core.models.base import (
-    GraphModelMixin,
-)
+from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.equiformer_v2.heads import EqV2ScalarHead, EqV2VectorHead
 from fairchem.core.models.scn.smearing import GaussianSmearing
 
@@ -84,7 +82,7 @@ class EquiformerV2EnergyHead(EqV2ScalarHead):
 
 
 @registry.register_model("equiformer_v2_backbone")
-class EquiformerV2Backbone(nn.Module, GraphModelMixin):
+class EquiformerV2Backbone(nn.Module):
     """
     Equiformer with graph attention built upon SO(2) convolution and feedforward network built upon S2 activation
 
@@ -403,9 +401,14 @@ class EquiformerV2Backbone(nn.Module, GraphModelMixin):
         assert (
             atomic_numbers.max().item() < self.max_num_elements
         ), "Atomic number exceeds that given in model config"
-        graph = self.generate_graph(
+        graph = generate_graph(
             data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
             enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+            use_pbc_single=self.use_pbc_single,
         )
 
         data_batch = data.batch

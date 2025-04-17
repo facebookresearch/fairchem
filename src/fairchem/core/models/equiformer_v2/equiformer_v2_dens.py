@@ -24,7 +24,8 @@ except ImportError:
 
     contextlib.suppress(ImportError)
 
-from fairchem.core.models.base import GraphData, HeadInterface
+from fairchem.core.graph.compute import GraphData, generate_graph
+from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.equiformer_v2.equiformer_v2 import (
     EquiformerV2Backbone,
     eqv2_init_weights,
@@ -173,9 +174,14 @@ class EqV2DeNSBackbone(EquiformerV2Backbone):
         self.device = data.pos.device
         num_atoms = len(data.atomic_numbers)
         atomic_numbers = data.atomic_numbers.long()
-        graph = self.generate_graph(
+        graph = generate_graph(
             data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
             enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+            use_pbc_single=self.use_pbc_single,
         )
 
         data_batch = data.batch

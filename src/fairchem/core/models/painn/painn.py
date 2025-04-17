@@ -44,7 +44,8 @@ from torch_scatter import scatter, segment_coo
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
-from fairchem.core.models.base import BackboneInterface, GraphModelMixin, HeadInterface
+from fairchem.core.graph.compute import generate_graph
+from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.models.gemnet.layers.base_layers import ScaledSiLU
 from fairchem.core.models.gemnet.layers.embedding_block import AtomEmbedding
 from fairchem.core.models.gemnet.layers.radial_basis import RadialBasis
@@ -55,7 +56,7 @@ from .utils import get_edge_id, repeat_blocks
 
 
 @registry.register_model("painn")
-class PaiNN(nn.Module, GraphModelMixin):
+class PaiNN(nn.Module):
     r"""PaiNN model based on the description in Schütt et al. (2021):
     Equivariant message passing for the prediction of tensorial properties
     and molecular spectra, https://arxiv.org/abs/2102.03150.
@@ -313,7 +314,15 @@ class PaiNN(nn.Module, GraphModelMixin):
         )
 
     def generate_graph_values(self, data):
-        graph = self.generate_graph(data)
+        graph = generate_graph(
+            data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
+            enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+            use_pbc_single=self.use_pbc_single,
+        )
 
         # Unit vectors pointing from edge_index[1] to edge_index[0],
         # i.e., edge_index[0] - edge_index[1] divided by the norm.

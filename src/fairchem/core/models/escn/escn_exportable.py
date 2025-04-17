@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
     from torch_geometric.data.batch import Batch
 
 from fairchem.core.common.registry import registry
-from fairchem.core.models.base import GraphModelMixin
+from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.escn.so3_exportable import (
     CoefficientMapping,
     SO3_Grid,
@@ -38,7 +38,7 @@ with contextlib.suppress(ImportError):
 
 
 @registry.register_model("escn_export")
-class eSCN(nn.Module, GraphModelMixin):
+class eSCN(nn.Module):
     """Equivariant Spherical Channel Network
     Paper: Reducing SO(3) Convolutions to SO(2) for Efficient Equivariant GNNs
 
@@ -232,9 +232,10 @@ class eSCN(nn.Module, GraphModelMixin):
     def forward_trainable(self, data: Batch) -> dict[str, torch.Tensor]:
         # standard forward call that generates the graph on-the-fly with generate_graph
         # this part of the code is not compile/export friendly so we keep it separated and wrap the exportaable forward
-        graph = self.generate_graph(
+        graph = generate_graph(
             data,
             max_neighbors=self.max_neighbors,
+            enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
             otf_graph=True,
             use_pbc=True,
             use_pbc_single=True,

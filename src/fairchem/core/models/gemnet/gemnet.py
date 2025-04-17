@@ -20,7 +20,8 @@ from torch_sparse import SparseTensor
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
-from fairchem.core.models.base import BackboneInterface, GraphModelMixin, HeadInterface
+from fairchem.core.graph.compute import generate_graph
+from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.modules.scaling.compat import load_scales_compat
 
 from .layers.atom_update_block import OutputBlock
@@ -34,7 +35,7 @@ from .utils import inner_product_normalized, mask_neighbors, ragged_range, repea
 
 
 @registry.register_model("gemnet_t")
-class GemNetT(nn.Module, GraphModelMixin):
+class GemNetT(nn.Module):
     """
     GemNet-T, triplets-only variant of GemNet
 
@@ -420,7 +421,15 @@ class GemNetT(nn.Module, GraphModelMixin):
 
     def generate_interaction_graph(self, data):
         num_atoms = data.atomic_numbers.size(0)
-        graph = self.generate_graph(data)
+        graph = generate_graph(
+            data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
+            enforce_max_neighbors_strictly=False,
+            use_pbc_single=self.use_pbc_single,
+        )
         # These vectors actually point in the opposite direction.
         # But we want to use col as idx_t for efficient aggregation.
         V_st = -graph.edge_distance_vec / graph.edge_distance[:, None]

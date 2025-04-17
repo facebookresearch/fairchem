@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta, Inc. and its affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import os
@@ -9,7 +16,8 @@ from torch.profiler import record_function
 from fairchem.core.common import gp_utils
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import cg_change_mat, conditional_grad, irreps_sum
-from fairchem.core.models.base import GraphModelMixin, HeadInterface
+from fairchem.core.graph.compute import generate_graph
+from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.puma.common.rotation import (
     init_edge_rot_mat,
     rotation_to_wigner,
@@ -34,7 +42,7 @@ from .escn_md_block import eSCNMD_Block
 
 
 @registry.register_model("escnmd_backbone")
-class eSCNMDBackbone(nn.Module, GraphModelMixin):
+class eSCNMDBackbone(nn.Module):
     def __init__(
         self,
         max_num_elements: int = 100,
@@ -239,7 +247,7 @@ class eSCNMDBackbone(nn.Module, GraphModelMixin):
         return edge_rot_mat, wigner, wigner_inv
 
     def generate_graph(self, *args, **kwargs):
-        graph = super().generate_graph(*args, **kwargs)
+        graph = generate_graph(*args, **kwargs)
         return dict(  # noqa: C408
             edge_index=graph.edge_index,
             edge_distance=graph.edge_distance,
@@ -300,7 +308,15 @@ class eSCNMDBackbone(nn.Module, GraphModelMixin):
 
         with record_function("generate_graph"):
             if self.otf_graph:
-                graph_dict = self.generate_graph(data_dict)
+                graph_dict = self.generate_graph(
+                    data_dict,
+                    cutoff=self.cutoff,
+                    max_neighbors=self.max_neighbors,
+                    use_pbc=self.use_pbc,
+                    otf_graph=self.otf_graph,
+                    enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+                    use_pbc_single=self.use_pbc_single,
+                )
             else:
                 cell_per_edge = data_dict["cell"].repeat_interleave(
                     data_dict["nedges"], dim=0

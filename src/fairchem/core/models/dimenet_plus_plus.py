@@ -51,7 +51,8 @@ from torch_sparse import SparseTensor
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
-from fairchem.core.models.base import BackboneInterface, GraphModelMixin, HeadInterface
+from fairchem.core.graph.compute import generate_graph
+from fairchem.core.models.base import BackboneInterface, HeadInterface
 
 if typing.TYPE_CHECKING:
     from torch_geometric.data.batch import Batch
@@ -367,7 +368,7 @@ class DimeNetPlusPlusWrapEnergyAndForceHead(nn.Module, HeadInterface):
 
 
 @registry.register_model("dimenetplusplus")
-class DimeNetPlusPlusWrap(DimeNetPlusPlus, GraphModelMixin):
+class DimeNetPlusPlusWrap(DimeNetPlusPlus):
     def __init__(
         self,
         use_pbc: bool = True,
@@ -414,7 +415,15 @@ class DimeNetPlusPlusWrap(DimeNetPlusPlus, GraphModelMixin):
     def _forward(self, data):
         pos = data.pos
         batch = data.batch
-        graph = self.generate_graph(data)
+        graph = generate_graph(
+            data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
+            enforce_max_neighbors_strictly=False,
+            use_pbc_single=self.use_pbc_single,
+        )
 
         data.edge_index = graph.edge_index
         data.cell_offsets = graph.cell_offsets
@@ -495,7 +504,15 @@ class DimeNetPlusPlusWrapBackbone(DimeNetPlusPlusWrap, BackboneInterface):
         if self.regress_forces:
             data.pos.requires_grad_(True)
         pos = data.pos
-        graph = self.generate_graph(data)
+        graph = generate_graph(
+            data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
+            enforce_max_neighbors_strictly=False,
+            use_pbc_single=self.use_pbc_single,
+        )
         data.edge_index = graph.edge_index
         data.cell_offsets = graph.cell_offsets
         data.neighbors = graph.neighbors

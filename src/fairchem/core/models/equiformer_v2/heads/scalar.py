@@ -15,12 +15,14 @@ from torch import nn
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.registry import registry
-from fairchem.core.models.base import GraphData, HeadInterface
+from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.equiformer_v2.transformer_block import FeedForwardNetwork
 from fairchem.core.models.equiformer_v2.weight_initialization import eqv2_init_weights
 
 if TYPE_CHECKING:
     from torch_geometric.data import Batch
+
+    from fairchem.core.graph.compute import GraphData
 
 
 @registry.register_model("equiformerV2_scalar_head")
