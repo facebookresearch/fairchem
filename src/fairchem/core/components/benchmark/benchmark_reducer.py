@@ -12,6 +12,7 @@ from abc import ABCMeta, abstractmethod
 from glob import glob
 from typing import Sequence, TypeVar
 
+import numpy as np
 import pandas as pd
 
 from fairchem.core.common import distutils
@@ -271,11 +272,25 @@ class JsonDFReducer(BenchmarkReducer):
 
         if self.target_data_keys is not None:
             for target_name in self.target_data_keys:
-                metrics[target_name] = (
-                    (results[target_name] - results[f"{target_name}_target"])
-                    .abs()
-                    .mean()
-                )
+                if target_name == "forces":
+                    forces_norm = results["forces"].apply(
+                        lambda x: [np.linalg.norm(force) for force in x]
+                    )
+                    forces_target_norm = results[f"{target_name}_target"].apply(
+                        lambda x: [np.linalg.norm(force) for force in x]
+                    )
+                    metrics[target_name] = np.mean(
+                        np.abs(
+                            np.concatenate(forces_norm.values)
+                            - np.concatenate(forces_target_norm.values)
+                        )
+                    )
+                else:
+                    metrics[target_name] = (
+                        (results[target_name] - results[f"{target_name}_target"])
+                        .abs()
+                        .mean()
+                    )
 
         return pd.DataFrame([metrics], index=[run_name])
 
