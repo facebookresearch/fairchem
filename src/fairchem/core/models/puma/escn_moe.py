@@ -695,9 +695,11 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         dataset_names,
         head_cls,
         wrap_property=True,
-        head_kwargs={},  # noqa: B006
+        head_kwargs=None,
     ):
         super().__init__()
+        if head_kwargs is None:
+            head_kwargs = {}
         self.regress_stress = backbone.regress_stress
         self.regress_forces = backbone.regress_forces
 
@@ -747,8 +749,6 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             .to(data.pos.device)
         )
 
-        # print(f"datanatoms:{data.natoms}:routing_idxs:{self.global_moe_tensors.routing_idxs}")
-
         # run the internal head
         head_output = self.head(data, emb)
 
@@ -771,6 +771,53 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
                             torch.where(torch.from_numpy(dataset_mask))[0],
                         )
                         output_tensor[atoms_mask] = moe_output_tensor[atoms_mask]
+                full_output[f"{dataset_name}_{key}"] = (
+                    {key: output_tensor} if self.wrap_property else output_tensor
+                )
+
+        return full_output
+
+
+class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
+    def __init__(
+        self, backbone, dataset_names, head_cls, wrap_property=True, head_kwargs=None
+    ):
+        super().__init__()
+        if head_kwargs is None:
+            head_kwargs = {}
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+
+        self.wrap_property = wrap_property
+
+        self.dataset_names = sorted(dataset_names)
+        self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
+
+    @conditional_grad(torch.enable_grad())
+    def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        data_batch_full = data.batch_full.cpu()
+        # run the internal head
+        head_output = self.head(data, emb)
+
+        # breakout the outputs to correct heads named by datasetname
+        np_dataset_names = np.array(data.dataset)
+        full_output = {}
+        for dataset_name in self.dataset_names:
+            dataset_mask = np_dataset_names == dataset_name
+            for key, head_output_tensor in head_output.items():
+                # TODO cant we use torch.zeros here?
+                output_tensor = torch.full(
+                    head_output_tensor.shape, 0.0, device=head_output_tensor.device
+                )  # float('inf'))
+                if dataset_mask.any():
+                    if output_tensor.shape[0] == dataset_mask.shape[0]:
+                        output_tensor[dataset_mask] = head_output_tensor[dataset_mask]
+                    else:  # assume atoms are the first dimension
+                        atoms_mask = torch.isin(
+                            data_batch_full,
+                            torch.where(torch.from_numpy(dataset_mask))[0],
+                        )
+                        output_tensor[atoms_mask] = head_output_tensor[atoms_mask]
                 full_output[f"{dataset_name}_{key}"] = (
                     {key: output_tensor} if self.wrap_property else output_tensor
                 )
