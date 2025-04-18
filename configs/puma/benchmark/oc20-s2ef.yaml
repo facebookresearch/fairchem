@@ -1,0 +1,39 @@
+job:
+  run_dir: /checkpoint/mshuaibi/benchmark_test
+  scheduler:
+    mode: SLURM
+    num_array_jobs: 200
+    distributed_init_method: FILE
+    num_nodes: 1
+    ranks_per_node: 1
+    slurm:
+      partition: scavenge
+      mem_gb: 256
+      timeout_hr: 72
+      cpus_per_task: 8
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: test-benchmarks
+
+runner:
+  _target_: fairchem.core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
+  calculator:
+    _target_: fairchem.experimental.foundation_models.modules.calculator.MLIPCalculator
+    inference_ckpt_path: /checkpoint/mshuaibi/puma/checkpoints/puma_sm_sh_760000_migrated.pt
+    dataset_name: oc20
+    energy_key: oc20_energy
+    forces_key: oc20_forces
+  evaluate_total_energy: False
+  adsorption_energy_model: False
+  input_data:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      src: /large_experiments/opencatalyst/foundation_models/data/catalysis/benchmark/s2ef/is
+
+reducer:
+  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
+  target_data_keys: ["energy", "forces"]
+  benchmark_name: oc20-s2ef
+  index_name: identifier

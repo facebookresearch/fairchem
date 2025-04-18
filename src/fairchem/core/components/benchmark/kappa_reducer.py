@@ -31,8 +31,9 @@ class Kappa103Reducer(JsonDFReducer):
         self,
         benchmark_name: str,
         target_data_path: str = Kappa103_TARGET_DATA_PATH,
-        index_name: str
-        | None = "mp_id",  # bug in matbench-discovery on column name file content mismatch: mp_id vs Key.mat_id
+        index_name: (
+            str | None
+        ) = "mp_id",  # bug in matbench-discovery on column name file content mismatch: mp_id vs Key.mat_id
     ):
         """
         Args:

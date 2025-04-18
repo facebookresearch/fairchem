@@ -272,21 +272,25 @@ class JsonDFReducer(BenchmarkReducer):
 
         if self.target_data_keys is not None:
             for target_name in self.target_data_keys:
+                # TODO: For now we'll hardcode forces, but a more general
+                # approach for arbitrary metrics + properties should be
+                # incorporated
                 if target_name == "forces":
-                    forces_norm = results["forces"].apply(
-                        lambda x: [np.linalg.norm(force) for force in x]
+                    forces = np.concatenate(results[target_name].values)
+                    forces_norm = np.linalg.norm(forces, axis=1)
+                    forces_target = np.concatenate(
+                        results[f"{target_name}_target"].values
                     )
-                    forces_target_norm = results[f"{target_name}_target"].apply(
-                        lambda x: [np.linalg.norm(force) for force in x]
+                    forces_target_norm = np.linalg.norm(forces_target, axis=1)
+
+                    metrics[f"{target_name}_mae"] = np.mean(
+                        np.abs(forces - forces_target)
                     )
-                    metrics[target_name] = np.mean(
-                        np.abs(
-                            np.concatenate(forces_norm.values)
-                            - np.concatenate(forces_target_norm.values)
-                        )
+                    metrics[f"{target_name}_magnitude_error"] = np.mean(
+                        np.abs(forces_norm - forces_target_norm)
                     )
                 else:
-                    metrics[target_name] = (
+                    metrics[f"{target_name}_mae"] = (
                         (results[target_name] - results[f"{target_name}_target"])
                         .abs()
                         .mean()
