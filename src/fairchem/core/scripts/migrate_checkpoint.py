@@ -55,6 +55,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--checkpoint-out", type=str, help="checkpoint output", required=True
     )
+    parser.add_argument(
+        "--remove-static-keys", default=True, action=argparse.BooleanOptionalAction
+    )
     args = parser.parse_args()
 
     if os.path.exists(args.checkpoint_out):
@@ -67,5 +70,14 @@ if __name__ == "__main__":
     checkpoint = torch.load(args.checkpoint_in, pickle_module=pickle)
     checkpoint.tasks_config = update_config(checkpoint.tasks_config)
     checkpoint.model_config = update_config(checkpoint.model_config)
+
+    # remove keys for registered buffers that are no longer saved
+    if args.remove_static_keys:
+        remove_keys = {"expand_index", "offset", "balance_degree_weight"}
+        for state_dict_name in ["model_state_dict", "ema_state_dict"]:
+            state_dict = getattr(checkpoint, state_dict_name)
+            for k in [key for key in state_dict if key.split(".")[-1] in remove_keys]:
+                state_dict.pop(k)
+                print(f"Removing {k} from {state_dict_name}")
 
     torch.save(checkpoint, args.checkpoint_out)

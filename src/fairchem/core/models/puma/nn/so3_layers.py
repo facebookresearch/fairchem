@@ -28,7 +28,7 @@ class SO3_Linear(torch.nn.Module):
             start_idx = lval**2
             length = 2 * lval + 1
             expand_index[start_idx : (start_idx + length)] = lval
-        self.register_buffer("expand_index", expand_index)
+        self.register_buffer("expand_index", expand_index, persistent=False)
 
     def forward(self, input_embedding):
         weight = torch.index_select(

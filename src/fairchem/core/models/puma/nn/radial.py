@@ -47,7 +47,7 @@ class GaussianSmearing(torch.nn.Module):
         self.num_output = num_gaussians
         offset = torch.linspace(start, stop, num_gaussians)
         self.coeff = -0.5 / (basis_width_scalar * (offset[1] - offset[0])).item() ** 2
-        self.register_buffer("offset", offset)
+        self.register_buffer("offset", offset, persistent=False)
 
     def forward(self, dist) -> torch.Tensor:
         dist = dist.view(-1, 1) - self.offset.view(1, -1)

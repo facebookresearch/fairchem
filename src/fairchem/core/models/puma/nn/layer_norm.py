@@ -165,7 +165,9 @@ class EquivariantLayerNormArraySphericalHarmonics(nn.Module):
                     1.0 / length
                 )
             balance_degree_weight = balance_degree_weight / self.lmax
-            self.register_buffer("balance_degree_weight", balance_degree_weight)
+            self.register_buffer(
+                "balance_degree_weight", balance_degree_weight, persistent=False
+            )
         else:
             self.balance_degree_weight = None
 
@@ -336,7 +338,7 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
         self.normalization = normalization
 
         expand_index = get_l_to_all_m_expand_index(self.lmax)
-        self.register_buffer("expand_index", expand_index)
+        self.register_buffer("expand_index", expand_index, persistent=False)
 
         if self.std_balance_degrees:
             balance_degree_weight = torch.zeros((self.lmax + 1) ** 2, 1)
@@ -347,7 +349,9 @@ class EquivariantRMSNormArraySphericalHarmonicsV2(nn.Module):
                     1.0 / length
                 )
             balance_degree_weight = balance_degree_weight / (self.lmax + 1)
-            self.register_buffer("balance_degree_weight", balance_degree_weight)
+            self.register_buffer(
+                "balance_degree_weight", balance_degree_weight, persistent=False
+            )
         else:
             self.balance_degree_weight = None
 
@@ -426,7 +430,7 @@ class EquivariantDegreeLayerScale(nn.Module):
                 1.0 / math.sqrt(self.scale_factor * lval)
             )
         expand_index = get_l_to_all_m_expand_index(self.lmax)
-        self.register_buffer("expand_index", expand_index)
+        self.register_buffer("expand_index", expand_index, persistent=False)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(lmax={self.lmax}, num_channels={self.num_channels}, scale_factor={self.scale_factor})"
