@@ -84,29 +84,29 @@ class MDRPhononRunner(CalculateRunner):
 
                 results = {
                     "sid": phonon_file_name.stem.split(".")[0],
-                    "energy_pa": phonon_results["energy_pa"],
-                    "volume_pa": phonon_results["volume_pa"],
+                    "energy_per_atom": phonon_results["energy_per_atom"],
+                    "volume_per_atom": phonon_results["volume_per_atom"],
                     "max_freq": max_freq,
                     "avg_freq": avg_freq,
                     "entropy": entropy,
                     "heat_capacity": heat_capacity,
                     "free_energy": free_energy,
                     "errors": "",
-                    "error_traceback": "",
+                    "traceback": "",
                 }
 
             except Exception as ex:
                 results = {
                     "sid": phonon_file_name.stem.split(".")[0],
-                    "energy_pa": np.nan,
-                    "volume_pa": np.nan,
+                    "energy_per_atom": np.nan,
+                    "volume_per_atom": np.nan,
                     "max_freq": np.nan,
                     "avg_freq": np.nan,
                     "entropy": np.nan,
                     "heat_capacity": np.nan,
                     "free_energy": np.nan,
                     "errors": (f"{ex!r}"),
-                    "error_traceback": (traceback.format_exc()),
+                    "traceback": (traceback.format_exc()),
                 }
 
             all_results.append(results)

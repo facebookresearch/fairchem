@@ -1,49 +1,60 @@
+defaults:
+  - cluster: v100
+  - checkpoint: puma_031425_sm_conserve_32MoP_singlehead_halfLR
+  - _self_
+
+benchmark_name: osc-is2re
+
 job:
-  run_name: eSEN-30M-OAM
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
   scheduler:
-    mode: SLURM
-    num_array_jobs: 10000
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 100000
     slurm:
-      partition: scavenge
-      mem_gb: 256
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
       timeout_hr: 72
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: test-benchmarks
-
-benchmark_name: osc-is2re
-target_properties: ["energy"]
+    project: puma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
 
 runner:
   _target_: fairchem.core.components.calculate.relaxation_runner.RelaxationRunner
   calculator:
-    #    _target_: fairchem.core.modules.calculator.MLIPCalculator
-    #    inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_32MoE_conserved_0331_605000.pt
-    #    dataset_name: omat
-    #    energy_key: omat_energy
-    #    forces_key: omat_forces
-    #    stress_key: omat_stress
-    #    act_ckpt: True
-    _target_: fairchem.core.OCPCalculator
-    checkpoint_path: /checkpoint/lbluque/model-checkpoints/esen/eSEN-30M-OMat-MPsAlex/checkpoint.pt
-    trainer: equiformerv2_forces
-    cpu: False
+    _target_: fairchem.core.common.calculator.MLIPCalculator
+    inference_ckpt_path: ${checkpoint.ckpt_path}
+    dataset_name: osc
+    energy_key: osc_energy
+    forces_key: osc_forces
+    stress_key: osc_stress
+    act_ckpt: true
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: /large_experiments/opencatalyst/foundation_models/evaluation/osc/OSC_IS2RE.aselmdb
+      src: ${cluster.data_root_dir}/materials/osc/OSC_IS2RE.aselmdb
   save_relaxed_atoms: False
-  save_target_properties: ${target_properties}
-  fmax: 0.1  # very tight?
-  steps: 500
-  cell_filter:
+  normalize_properties_by:
+    energy: natoms
+  save_target_properties: ["energy"]
+  fmax: 0.001
+  steps: 10
+  optimizer_cls:
+    _target_: ase.optimize.LBFGS
+    _partial_: True
+  cell_filter_cls:
     _target_: ase.filters.FrechetCellFilter
     _partial_: True
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
-  target_data_keys: ${target_properties}
+  target_data_keys: ["energy", "energy_per_atom"]
   benchmark_name: ${benchmark_name}
   index_name: sid

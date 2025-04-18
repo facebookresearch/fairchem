@@ -70,7 +70,7 @@ class ElasticityRunner(CalculateRunner):
                 results = calculate_elasticity(
                     atoms,
                     calculator=self.calculator,
-                    cell_filter=FrechetCellFilter,
+                    cell_filter_cls=FrechetCellFilter,
                     fix_symmetry=False,
                 )
                 results["sid"] = atoms.info.get("sid", i)

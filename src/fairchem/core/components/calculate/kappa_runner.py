@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import os
 import traceback
 import warnings
@@ -87,7 +88,7 @@ class KappaRunner(CalculateRunner):
 
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
 
-        for i in tqdm(chunk_indices, desc="Running kappa calculations."):
+        for i in tqdm(chunk_indices, desc="Running kappa calculations"):
             atoms = self.input_data[i]
 
             mat_id = atoms.info.get(Key.mat_id, f"id-{len(all_results)}")
@@ -122,12 +123,14 @@ class KappaRunner(CalculateRunner):
                         atoms, mask=[True] * 3 + [False] * 3
                     )
 
-                    optimizer = FIRE(filtered_atoms)
+                    optimizer = FIRE(filtered_atoms, logfile=None)
                     optimizer.run(fmax=force_max, steps=max_steps)
 
                     reached_max_steps = optimizer.Nsteps >= max_steps
                     if reached_max_steps:
-                        print(f"{mat_id=} reached {max_steps=} during relaxation.")
+                        logging.info(
+                            f"{mat_id=} reached {max_steps=} during relaxation."
+                        )
 
                     max_stress = (
                         atoms.get_stress().reshape((2, 3), order="C").max(axis=1)
@@ -188,16 +191,13 @@ class KappaRunner(CalculateRunner):
                 )
 
                 if ltc_condition:  # Calculate third-order force constants
-                    print(f"Calculating FC3 for {mat_id}")
-                    # TODO where is this used?
-                    # fc3_set = ltc.calculate_fc3_set(
-                    #     ph3,
-                    #     calculator=self.calculator,
-                    #     pbar_kwargs={"leave": False, "disable": not prog_bar},
-                    # )
+                    logging.info(f"Calculating FC3 for {mat_id}")
+                    ltc.calculate_fc3_set(
+                        ph3,
+                        calculator=self.calculator,
+                        pbar_kwargs={"leave": False, "disable": not prog_bar},
+                    )
                     ph3.produce_fc3(symmetrize_fc3r=True)
-                # else:
-                #     fc3_set = []
 
                 if not ltc_condition:
                     results = info_dict | relax_dict | freqs_dict
@@ -218,10 +218,10 @@ class KappaRunner(CalculateRunner):
                 continue
 
             try:  # Calculate thermal conductivity
+                logging.info(f"Calculating kappa for {mat_id}")
                 ph3, kappa_dict, _cond = ltc.calculate_conductivity(
                     ph3, temperatures=temperatures
                 )
-                print(f"Calculated kappa for {mat_id}: {kappa_dict}")
             except Exception as exc:
                 warnings.warn(
                     f"Failed to calculate conductivity {mat_id}: {exc!r}", stacklevel=2

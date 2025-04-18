@@ -1,41 +1,48 @@
+defaults:
+  - cluster: v100
+  - checkpoint: puma_031425_sm_conserve_32MoP_singlehead_halfLR
+  - _self_
+
+benchmark_name: mp-binary-pbe-elasticity
+
 job:
-  run_name: eSEN-30M-OAM
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
   scheduler:
-    mode: SLURM
-    num_array_jobs: 2000
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 500
     slurm:
-      partition: scavenge
-      mem_gb: 256
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
       timeout_hr: 72
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: test-benchmarks
-
-benchmark_name: mp-binary-pbe-elasticity
+    project: puma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
 
 runner:
   _target_: fairchem.core.components.calculate.elasticity_runner.ElasticityRunner
   calculator:
-    _target_: fairchem.core.modules.calculator.MLIPCalculator
-    inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_32MoE_conserved_0331_605000.pt
+    _target_: fairchem.core.common.calculator.MLIPCalculator
+    inference_ckpt_path: ${checkpoint.ckpt_path}
     dataset_name: omat
     energy_key: omat_energy
     forces_key: omat_forces
     stress_key: omat_stress
     act_ckpt: True
-#    _target_: fairchem.core.OCPCalculator
-#    checkpoint_path: /checkpoint/lbluque/model-checkpoints/esen/eSEN-30M-OMat-MPsAlex/checkpoint.pt
-#    trainer: equiformerv2_forces
-#    cpu: False
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: /large_experiments/opencatalyst/foundation_models/evaluation/mp-elasticity/mp-binary-pbe-elasticity-2025.1.aselmdb
+      src: ${cluster.data_root_dir}/materials/mp-elasticity/mp-binary-pbe-elasticity-2025.1.aselmdb
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
-  target_data_path: /large_experiments/opencatalyst/foundation_models/evaluation/mp-elasticity/mp-binary-pbe-elasticity-2025.1.json.gz
+  target_data_path: ${cluster.data_root_dir}/materials/mp-elasticity/mp-binary-pbe-elasticity-2025.1.json.gz
   benchmark_name: ${benchmark_name}
   index_name: mp_id

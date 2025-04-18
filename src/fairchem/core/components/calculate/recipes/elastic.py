@@ -77,7 +77,7 @@ def calculate_elasticity(
         atoms.calc = calculator
 
         if relax_strained is True:
-            relax_kwargs.update({"cell_filter": None})
+            relax_kwargs.update({"cell_filter_cls": None})
             atoms = relax_atoms(atoms, **relax_kwargs)
 
         stresses.append(atoms.get_stress(voigt=False))

@@ -313,7 +313,9 @@ class JsonDFReducer(BenchmarkReducer):
             run_name: Name of the current run
         """
         if self.logger is not None:
-            self.logger.log_dataframe(name=self.benchmark_name, dataframe=metrics)
+            self.logger.log_dataframe(
+                name=self.benchmark_name, dataframe=metrics.reset_index()
+            )
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         pass

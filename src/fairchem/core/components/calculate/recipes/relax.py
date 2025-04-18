@@ -24,7 +24,7 @@ def relax_atoms(
     fmax: float = 0.02,
     optimizer_cls: type[Optimizer] | None = None,
     fix_symmetry: bool = False,
-    cell_filter: Filter | None = None,
+    cell_filter_cls: type[Filter] | None = None,
 ) -> Atoms:
     """Simple helper function to run relaxations and return the relaxed Atoms
 
@@ -34,7 +34,7 @@ def relax_atoms(
         fmax: force convergence threshold
         optimizer_cls: ASE optimizer. Default FIRE
         fix_symmetry: fix structure symmetry in relaxation: Default False
-        cell_filter: An instance of an ASE filter.
+        cell_filter_cls: An instance of an ASE filter.
 
     Returns:
         Atoms: relaxed atoms
@@ -43,8 +43,8 @@ def relax_atoms(
     if fix_symmetry:
         atoms.set_constraint(FixSymmetry(atoms))
 
-    if cell_filter is not None:
-        _atoms = cell_filter(atoms)
+    if cell_filter_cls is not None:
+        _atoms = cell_filter_cls(atoms)
     else:
         _atoms = atoms
 

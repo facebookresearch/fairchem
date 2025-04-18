@@ -74,7 +74,7 @@ def run_mdr_phonon_benchmark(
             primcell.set_constraint(FixSymmetry(primcell))
 
         primcell.calc = calculator
-        opt = FIRE(FrechetCellFilter(primcell))
+        opt = FIRE(FrechetCellFilter(primcell), logfile=None)
         opt.run(fmax=0.005, steps=500)
         natoms = len(primcell.positions)
         final_energy_per_atom = primcell.get_potential_energy() / natoms
@@ -102,8 +102,8 @@ def run_mdr_phonon_benchmark(
 
     results = {
         "frequencies": calculate_phonon_frequencies(phonon) * THz_to_K,
-        "energy_pa": final_energy_per_atom,
-        "volume_pa": final_volume_per_atom,
+        "energy_per_atom": final_energy_per_atom,
+        "volume_per_atom": final_volume_per_atom,
         **calculate_thermal_properties(phonon, t_step=75, t_max=600, t_min=0),
     }
 

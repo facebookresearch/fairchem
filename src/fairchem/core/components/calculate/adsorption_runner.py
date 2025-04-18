@@ -10,9 +10,9 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import ase.optimize
 import numpy as np
 import pandas as pd
+from ase.optimize import LBFGS
 from tqdm import tqdm
 
 from fairchem.core.components.calculate import CalculateRunner
@@ -22,6 +22,7 @@ from fairchem.core.components.calculate.recipes.adsorption import (
 
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
+    from ase.optimize import Optimizer
 
     from fairchem.core.datasets import AseDBDataset
 
@@ -53,7 +54,7 @@ class AdsorptionRunner(CalculateRunner):
         input_data: AseDBDataset,
         save_relaxed_atoms: bool = True,
         relax_surface: bool = False,
-        optimizer_cls: str = "LBFGS",
+        optimizer_cls: type[Optimizer] = LBFGS,
         fmax: float = 0.05,
         steps: int = 300,
     ):
@@ -65,7 +66,7 @@ class AdsorptionRunner(CalculateRunner):
             input_data: Dataset containing atomic structures to process
             save_relaxed_atoms (bool): Whether to save the relaxed structures in the results
             relax_surface (bool): Whether to relax the bare surface
-            optimizer_cls (str): Optimizer to use
+            optimizer_cls (Optimizer): ASE optimizer class to use
             fmax (float): force convergence threshold
             steps (int): max number of relaxation steps
         """
@@ -73,10 +74,7 @@ class AdsorptionRunner(CalculateRunner):
         self.fmax = fmax
         self.steps = steps
         self.relax_surface = relax_surface
-        try:
-            self.optimizer_cls = getattr(ase.optimize, optimizer_cls)
-        except Exception as exc:
-            raise NotImplementedError(f"Unknown optimizer: {optimizer_cls}") from exc
+        self.optimizer_cls = optimizer_cls
         super().__init__(calculator=calculator, input_data=input_data)
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:

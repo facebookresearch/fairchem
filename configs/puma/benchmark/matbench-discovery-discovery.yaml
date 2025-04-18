@@ -1,38 +1,45 @@
+defaults:
+  - cluster: v100
+  - checkpoint: puma_031425_sm_conserve_32MoP_singlehead_halfLR
+  - _self_
+
 benchmark_name: matbench-discovery
 
 job:
-  run_name: eSEN-30M-OAM
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
   scheduler:
-    mode: SLURM
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
     num_array_jobs: 5000
     slurm:
-      partition: scavenge
-      mem_gb: 256
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
       timeout_hr: 72
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: test-benchmarks
+    project: puma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
 
 runner:
   _target_: fairchem.core.components.calculate.relaxation_runner.RelaxationRunner
   calculator:
-#    _target_: fairchem.core.modules.calculator.MLIPCalculator
-#    inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_32MoE_conserved_0331_605000.pt
-#    dataset_name: omat
-#    energy_key: omat_energy
-#    forces_key: omat_forces
-#    stress_key: omat_stress
-#    act_ckpt: True
-    _target_: fairchem.core.OCPCalculator
-    checkpoint_path: /checkpoint/lbluque/model-checkpoints/esen/eSEN-30M-OMat-MPsAlex/checkpoint.pt
-    trainer: equiformerv2_forces
-    cpu: False
+    _target_: fairchem.core.common.calculator.MLIPCalculator
+    inference_ckpt_path: ${checkpoint.ckpt_path}
+    dataset_name: omat
+    energy_key: omat_energy
+    forces_key: omat_forces
+    stress_key: omat_stress
+    act_ckpt: True
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: /large_experiments/opencatalyst/foundation_models/evaluation/matbench-discovery/WBM_IS2RE.aselmdb
+      src: ${cluster.data_root_dir}/materials/matbench-discovery/WBM_IS2RE.aselmdb
   save_relaxed_atoms: True
 
 reducer:
