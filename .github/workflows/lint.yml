@@ -23,8 +23,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f packages/requirements.txt ]; then pip install -r packages/requirements.txt; fi
-          if [ -f packages/requirements-optional.txt ]; then pip install -r packages/requirements-optional.txt; fi
           pip install -e  packages/fairchem-core[dev]
       - name: ruff
         run: |

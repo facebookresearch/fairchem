@@ -13,7 +13,9 @@ def convert_fine_tune_checkpoint(
     fine_tune_yaml_fn=None,
     output_yaml_fn=None,
 ):
-    fine_tune_checkpoint = torch.load(fine_tune_checkpoint_fn, map_location="cpu")
+    fine_tune_checkpoint = torch.load(
+        fine_tune_checkpoint_fn, map_location="cpu", weights_only=False
+    )
 
     if "config" not in fine_tune_checkpoint:
         raise KeyError("Finetune checkpoint does not have a valid 'config' field")
@@ -28,7 +30,9 @@ def convert_fine_tune_checkpoint(
         )
         raise e
 
-    starting_checkpoint = torch.load(starting_checkpoint_fn, map_location="cpu")
+    starting_checkpoint = torch.load(
+        starting_checkpoint_fn, map_location="cpu", weights_only=False
+    )
     start_checkpoint_model_config = starting_checkpoint["config"]["model"]
 
     fine_tune_checkpoint["config"]["model"]["backbone"] = start_checkpoint_model_config[

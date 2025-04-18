@@ -8,7 +8,7 @@ import torch.distributed as dist
 from omegaconf import OmegaConf
 
 from fairchem.core._cli import get_hydra_config_from_yaml
-from fairchem.core.common.distutils import setup_env_local
+from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
 from fairchem.core.units.mlip_unit.mlip_unit import update_configs
 
 
@@ -27,6 +27,7 @@ def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
 def test_traineval_runner_finetuning():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     setup_env_local()
+    assign_device_for_local_rank(True, 0)
     dist.init_process_group(backend="gloo", rank=0, world_size=1)
     config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
@@ -75,8 +76,8 @@ def test_traineval_runner_finetuning():
     fch_path = finetune_cfg.job.metadata.checkpoint_dir
     finetune_runner.save_state(fch_path)
 
-    starting_ckpt = torch.load(f"{ch_path}/inference_ckpt.pt")
-    finetune_ckpt = torch.load(f"{fch_path}/inference_ckpt.pt")
+    starting_ckpt = torch.load(f"{ch_path}/inference_ckpt.pt", weights_only=False)
+    finetune_ckpt = torch.load(f"{fch_path}/inference_ckpt.pt", weights_only=False)
 
     # backbone config of finetuned model inference checkpoint should match the starting checkpoint without overrides
     start_model_config = starting_ckpt.model_config

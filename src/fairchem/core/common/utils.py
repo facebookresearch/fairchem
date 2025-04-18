@@ -39,8 +39,6 @@ import yaml
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from torch_geometric.data import Data
-from torch_geometric.utils import remove_self_loops
-from torch_scatter import scatter
 
 import fairchem.core
 from fairchem.core.common.registry import registry
@@ -102,32 +100,6 @@ multitask_required_keys = {
     "model",
     "optim",
 }
-
-
-class Complete:
-    def __call__(self, data):
-        device = data.edge_index.device
-
-        row = torch.arange(data.num_nodes, dtype=torch.long, device=device)
-        col = torch.arange(data.num_nodes, dtype=torch.long, device=device)
-
-        row = row.view(-1, 1).repeat(1, data.num_nodes).view(-1)
-        col = col.repeat(data.num_nodes)
-        edge_index = torch.stack([row, col], dim=0)
-
-        edge_attr = None
-        if data.edge_attr is not None:
-            idx = data.edge_index[0] * data.num_nodes + data.edge_index[1]
-            size = list(data.edge_attr.size())
-            size[0] = data.num_nodes * data.num_nodes
-            edge_attr = data.edge_attr.new_zeros(size)
-            edge_attr[idx] = data.edge_attr
-
-        edge_index, edge_attr = remove_self_loops(edge_index, edge_attr)
-        data.edge_attr = edge_attr
-        data.edge_index = edge_index
-
-        return data
 
 
 def warmup_lr_lambda(current_step: int, optim_config):
@@ -1231,20 +1203,6 @@ def load_state_dict(
     return _report_incompat_keys(module, incompat_keys, strict=strict)
 
 
-def scatter_det(*args, **kwargs):
-    from fairchem.core.common.registry import registry
-
-    if registry.get("set_deterministic_scatter", no_warning=True):
-        torch.use_deterministic_algorithms(mode=True)
-
-    out = scatter(*args, **kwargs)
-
-    if registry.get("set_deterministic_scatter", no_warning=True):
-        torch.use_deterministic_algorithms(mode=False)
-
-    return out
-
-
 def get_commit_hash() -> str:
     core_hash = get_commit_hash_for_repo(fairchem.core.__path__[0])
     experimental_hash = None
@@ -1466,7 +1424,9 @@ def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
             errno.ENOENT, "Checkpoint file not found", checkpoint_path
         )
     logging.info(f"Loading checkpoint from: {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    checkpoint = torch.load(
+        checkpoint_path, map_location=torch.device("cpu"), weights_only=False
+    )
     # this assumes the checkpont also contains the config with the full model in it
     # TODO: need to schematize how we save and load the config from checkpoint
     config = checkpoint["config"]["model"]
