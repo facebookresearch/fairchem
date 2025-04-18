@@ -110,7 +110,7 @@ class GateActivation(torch.nn.Module):
             length = min((2 * lval + 1), (2 * self.mmax + 1))
             expand_index[start_idx : (start_idx + length)] = lval - 1
             start_idx = start_idx + length
-        self.register_buffer("expand_index", expand_index)
+        self.register_buffer("expand_index", expand_index, persistent=False)
 
         self.scalar_act = (
             torch.nn.SiLU()
