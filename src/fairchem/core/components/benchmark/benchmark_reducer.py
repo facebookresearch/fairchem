@@ -283,14 +283,14 @@ class JsonDFReducer(BenchmarkReducer):
                     )
                     forces_target_norm = np.linalg.norm(forces_target, axis=1)
 
-                    metrics[f"{target_name}_mae"] = np.mean(
+                    metrics[f"{target_name},mae"] = np.mean(
                         np.abs(forces - forces_target)
                     )
-                    metrics[f"{target_name}_magnitude_error"] = np.mean(
+                    metrics[f"{target_name},magnitude_error"] = np.mean(
                         np.abs(forces_norm - forces_target_norm)
                     )
                 else:
-                    metrics[f"{target_name}_mae"] = (
+                    metrics[f"{target_name},mae"] = (
                         (results[target_name] - results[f"{target_name}_target"])
                         .abs()
                         .mean()

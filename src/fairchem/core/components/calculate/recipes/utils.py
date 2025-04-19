@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 from ase.calculators.calculator import PropertyNotPresent
 
@@ -16,7 +16,9 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
 
-def get_property_from_atoms(atoms: Atoms, property_name: str) -> int | float:
+def get_property_from_atoms(
+    atoms: Atoms, property_name: str
+) -> int | float | ArrayLike:
     """Retrieve a property from an Atoms object, either from its properties or info dictionary.
 
     Args:
@@ -24,7 +26,7 @@ def get_property_from_atoms(atoms: Atoms, property_name: str) -> int | float:
         property_name: Name of the property to retrieve
 
     Returns:
-        The property value as an integer or float
+        The property value as an integer, float, or array-like object
 
     Raises:
         ValueError: If the property is not found in either the properties or info dictionary
@@ -32,7 +34,7 @@ def get_property_from_atoms(atoms: Atoms, property_name: str) -> int | float:
     try:
         # get_properties returns a Properties dict-like object, so we index again for the property requested
         prop = atoms.get_properties([property_name])[property_name]
-    except PropertyNotPresent:
+    except (PropertyNotPresent, ValueError):
         try:
             prop = atoms.info[property_name]
         except KeyError as err:
@@ -61,3 +63,32 @@ def normalize_property(
     else:
         norm_prop = get_property_from_atoms(atoms, normalize_by)
         return property_value / norm_prop
+
+
+def get_property_dict_from_atoms(
+    properties: Sequence[str], atoms: Atoms, normalize_by: dict[str, str] | None = None
+) -> dict[str, float | ArrayLike]:
+    """Get a sequence of properties from an atoms object and return a dict.
+
+    Args:
+        properties: Sequence of property names to retrieve from the atoms object
+        atoms: The ASE Atoms object to extract properties from
+        normalize_by: Dictionary mapping property names to normalization methods
+
+    Returns:
+        Dictionary containing the requested properties as keys and
+            normalized properties if specified in normalize_by
+    """
+    normalize_by = normalize_by or {}
+    results = {}
+    for property_name in properties:
+        results[property_name] = get_property_from_atoms(atoms, property_name)
+        if property_name in normalize_by:
+            norm_by = normalize_by[property_name]
+            key = (
+                f"{property_name}_per_atom"
+                if norm_by == "natoms"
+                else f"{property_name}_per_{norm_by}"
+            )
+            results[key] = normalize_property(results[property_name], atoms, norm_by)
+    return results

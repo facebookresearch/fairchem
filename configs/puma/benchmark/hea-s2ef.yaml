@@ -1,44 +1,53 @@
+defaults:
+  - cluster: v100
+  - checkpoint: puma_031425_sm_conserve_32MoP_singlehead_halfLR
+  - _self_
+
+benchmark_name: hea-s2ef
+target_properties: ["energy", "forces"]
+
 job:
-  run_dir: /checkpoint/jagritisahoo
-  run_name: eSEN-30M-OAM
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
   scheduler:
-    mode: SLURM
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
     num_array_jobs: 500
     slurm:
-      partition: scavenge
-      mem_gb: 256
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
       timeout_hr: 72
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: test-benchmarks
-
-benchmark_name: hea-s2ef
-target_properties: ["energy", "forces"]
+    project: puma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
 
 runner:
   _target_: fairchem.core.components.calculate.singlepoint_runner.SinglePointRunner
   calculator:
-       _target_: fairchem.experimental.foundation_models.modules.calculator.MLIPCalculator
-       inference_ckpt_path: /checkpoint/xiangfu/selected_ckpts/puma_sm_32MoE_conserved_0331_605000.pt
-       dataset_name: omat
-       energy_key: omat_energy
-       forces_key: omat_forces
-       stress_key: omat_stress
-       act_ckpt: True
-    # _target_: fairchem.core.OCPCalculator
-    # checkpoint_path: /checkpoint/lbluque/model-checkpoints/esen/eSEN-30M-OMat-MPsAlex/checkpoint.pt
-    # trainer: equiformerv2_forces
-    #cpu: False
+    _target_: fairchem.core.common.calculator.MLIPCalculator
+    inference_ckpt_path: ${checkpoint.ckpt_path}
+    dataset_name: omat
+    energy_key: omat_energy
+    forces_key: omat_forces
+    stress_key: omat_stress
+    act_ckpt: True
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: /large_experiments/opencatalyst/foundation_models/data/bulks/high_entropy/HEA_subsample_datasets/filtered_asedbs/bcc_subsample/bcc_subsample.aselmdb
+      src: ${cluster.data_root_dir}/materials/hea
+  calculate_properties: ${target_properties}
   save_target_properties: ${target_properties}
+  normalize_properties_by:
+    energy: natoms
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
-  target_data_keys: ${target_properties}
+  target_data_keys: ["energy_per_atom", "forces"]
   benchmark_name: ${benchmark_name}
   index_name: sid

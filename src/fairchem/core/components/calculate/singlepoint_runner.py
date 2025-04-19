@@ -13,13 +13,14 @@ from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 import numpy as np
 import pandas as pd
-from ase.calculators.calculator import PropertyNotPresent
 from tqdm import tqdm
 
 from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate.recipes.utils import (
+    get_property_dict_from_atoms,
+)
 
 if TYPE_CHECKING:
-    from ase.atoms import Atoms
     from ase.calculators.calculator import Calculator
 
     from fairchem.core.datasets import AseDBDataset
@@ -38,22 +39,26 @@ class SinglePointRunner(CalculateRunner):
         self,
         calculator: Calculator,
         input_data: AseDBDataset,
+        calculate_properties: Sequence[str],
+        normalize_properties_by: dict[str, str] | None = None,
         save_target_properties: Sequence[str] | None = None,
-        **singlepoint_kwargs,
     ):
         """Initialize the SinglePointRunner.
 
         Args:
             calculator: ASE calculator to use for energy and force calculations
             input_data: Dataset containing atomic structures to process
+            calculate_properties: Sequence of properties to calculate
+            normalize_properties_by (dict[str, str] | None): Dictionary mapping property names to natoms or a key in
+                atoms.info to normalize by
             save_target_properties (Sequence[str] | None): Sequence of target property names to save in the results file
                 These properties need to be available using atoms.get_properties or present in the atoms.info dictionary
-            singlepoint_kwargs: Keyword arguments passed to singlepoint. (MAY BE THIS IS NOT REQUIRED, HAVE ADDED THIS USING RELAXATION RUNNER)
         """
+        self._calculate_properties = calculate_properties
+        self._normalize_properties_by = normalize_properties_by or {}
         self._save_target_properties = (
             save_target_properties if save_target_properties is not None else []
         )
-        self._singlepoint_kwargs = singlepoint_kwargs
 
         super().__init__(calculator=calculator, input_data=input_data)
 
@@ -72,22 +77,28 @@ class SinglePointRunner(CalculateRunner):
         all_results = []
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running singlepoint calculations"):
-            results = {}
             atoms = self.input_data.get_atoms(i)
-            try:
-                for property_name in self._save_target_properties:
-                    results[f"{property_name}_target"] = self._get_property_from_atoms(
-                        atoms, property_name
-                    )
+            results = {
+                "sid": atoms.info.get("sid", i),
+                "natoms": len(atoms),
+            }
+            # add target properties if requested
+            target_properties = get_property_dict_from_atoms(
+                self._save_target_properties, atoms, self._normalize_properties_by
+            )
+            results.update(
+                {f"{key}_target": target_properties[key] for key in target_properties}
+            )
 
+            try:
                 atoms.calc = self.calculator
-                energy = atoms.get_potential_energy()
-                forces = atoms.get_forces()
+                results.update(
+                    get_property_dict_from_atoms(
+                        self._calculate_properties, atoms, self._normalize_properties_by
+                    )
+                )
                 results.update(
                     {
-                        "sid": atoms.info.get("sid", i),
-                        "energy": energy,
-                        "forces": forces,
                         "errors": "",
                         "traceback": "",
                     }
@@ -95,9 +106,12 @@ class SinglePointRunner(CalculateRunner):
             except Exception as ex:  # TODO too broad-figure out which to catch
                 results.update(
                     {
-                        "sid": i if atoms is None else atoms.info.get("sid", i),
-                        "energy": np.nan,
-                        "forces": np.nan,
+                        property_name: np.nan
+                        for property_name in self._calculate_properties
+                    }
+                )
+                results.update(
+                    {
                         "errors": f"{ex!r}",
                         "traceback": traceback.format_exc(),
                     }
@@ -106,33 +120,6 @@ class SinglePointRunner(CalculateRunner):
             all_results.append(results)
 
         return all_results
-
-    @staticmethod  # TODO make this a utils function?
-    def _get_property_from_atoms(atoms: Atoms, property_name: str) -> int | float:
-        """Retrieve a property from an Atoms object, either from its properties or info dictionary.
-
-        Args:
-            atoms: The ASE Atoms object to extract properties from
-            property_name: Name of the property to retrieve
-
-        Returns:
-            The property value as an integer or float
-
-        Raises:
-            ValueError: If the property is not found in either the properties or info dictionary
-        """
-        try:
-            # get_properties returns a Properties dict-like object, so we index again for the property requested
-            prop = atoms.get_properties([property_name])[property_name]
-        except PropertyNotPresent:
-            try:
-                prop = atoms.info[property_name]
-            except KeyError as err:
-                raise ValueError(
-                    f"The listed property {property_name} in `save_target_properties` is not available from"
-                    f" the atoms object or its info dictionary"
-                ) from err
-        return prop
 
     def write_results(
         self,

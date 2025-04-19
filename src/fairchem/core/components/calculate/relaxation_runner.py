@@ -21,8 +21,7 @@ from fairchem.core.components.calculate.recipes.relax import (
     relax_atoms,
 )
 from fairchem.core.components.calculate.recipes.utils import (
-    get_property_from_atoms,
-    normalize_property,
+    get_property_dict_from_atoms,
 )
 
 if TYPE_CHECKING:
@@ -44,6 +43,7 @@ class RelaxationRunner(CalculateRunner):
         self,
         calculator: Calculator,
         input_data: AseDBDataset,
+        calculate_properties: Sequence[str],
         save_relaxed_atoms: bool = True,
         normalize_properties_by: dict[str, str] | None = None,
         save_target_properties: Sequence[str] | None = None,
@@ -54,14 +54,16 @@ class RelaxationRunner(CalculateRunner):
         Args:
             calculator: ASE calculator to use for energy and force calculations
             input_data: Dataset containing atomic structures to process
+            calculate_properties: Sequence of properties to calculate after relaxation
             save_relaxed_atoms (bool): Whether to save the relaxed structures in the results
             normalize_properties_by (dict[str, str] | None): Dictionary mapping property names to natoms or a key in
-            atoms.info to normalize by
+                atoms.info to normalize by
             save_target_properties (Sequence[str] | None): Sequence of target property names to save in the results file
                 These properties need to be available using atoms.get_properties or present in the atoms.info dictionary
                 This is useful if running a benchmark were errors will be computed after running relaxations
             relax_kwargs: Keyword arguments passed to relax. See signature of calculate.recipes.relax_atoms for options
         """
+        self._calculate_properties = calculate_properties
         self._save_relaxed_atoms = save_relaxed_atoms
         self._normalize_properties_by = normalize_properties_by or {}
         self._save_target_properties = (
@@ -90,58 +92,48 @@ class RelaxationRunner(CalculateRunner):
                 "sid": atoms.info.get("sid", i),
                 "natoms": len(atoms),
             }
+
+            # add target properties if requested
+            target_properties = get_property_dict_from_atoms(
+                self._save_target_properties, atoms, self._normalize_properties_by
+            )
+            results.update(
+                {f"{key}_target": target_properties[key] for key in target_properties}
+            )
+
             try:
                 atoms.calc = self.calculator
                 atoms = relax_atoms(atoms, **self._relax_kwargs)
-                energy = atoms.get_potential_energy()
+                results.update(
+                    get_property_dict_from_atoms(
+                        self._calculate_properties, atoms, self._normalize_properties_by
+                    )
+                )
                 results.update(
                     {
-                        "energy": energy,
                         "errors": "",
                         "traceback": "",
                     }
                 )
-                if "energy" in self._normalize_properties_by:
-                    normalize_by = self._normalize_properties_by["energy"]
-                    key = (
-                        "energy_per_atom"
-                        if normalize_by == "natoms"
-                        else f"energy_per_{normalize_by}"
-                    )
-                    results[key] = normalize_property(
-                        results["energy"], atoms, normalize_by
-                    )
 
             except Exception as ex:  # TODO too broad-figure out which to catch
                 results.update(
                     {
-                        "sid": i if atoms is None else atoms.info.get("sid", i),
-                        "energy": np.nan,
+                        property_name: np.nan
+                        for property_name in self._calculate_properties
+                    }
+                )
+                results.update(
+                    {
                         "errors": f"{ex!r}",
                         "traceback": traceback.format_exc(),
                     }
                 )
-            finally:
-                if self._save_relaxed_atoms:
-                    results["atoms"] = MSONAtoms(atoms).as_dict()
 
-            # add target properties if requested
-            for property_name in self._save_target_properties:
-                results[f"{property_name}_target"] = get_property_from_atoms(
-                    atoms, property_name
-                )
-                if property_name in self._normalize_properties_by:
-                    normalize_by = self._normalize_properties_by[property_name]
-                    key = (
-                        f"{property_name}_per_atom_target"
-                        if normalize_by == "natoms"
-                        else f"{property_name}_per_{normalize_by}_target"
-                    )
-                    results[key] = normalize_property(
-                        results[property_name], atoms, normalize_by
-                    )
+            if self._save_relaxed_atoms:
+                results["atoms"] = MSONAtoms(atoms).as_dict()
 
-        all_results.append(results)
+            all_results.append(results)
 
         return all_results
 
