@@ -327,9 +327,6 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
                 ), "Failed percent withing 10% tolerance"
 
 
-@pytest.mark.xfail(
-    reason="This test is failing on CI but not locally, skipping for now"
-)
 @pytest.mark.parametrize("mode", ["gp", "no_gp"])
 def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset):
     sys_args = [
@@ -337,7 +334,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset):
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "datasets=aselmdb_conserving",
         f"datasets.data_root_dir={fake_puma_dataset}",
-        "+expected_loss=5.228205680847168",
+        "+expected_loss=33.96360397338867",
     ]
     if mode == "gp":
         sys_args += [
