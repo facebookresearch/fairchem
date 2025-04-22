@@ -7,6 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from typing import Optional, Sequence
+
 import pandas as pd
 from monty.dev import requires
 from pymatviz.enums import Key
@@ -15,10 +17,8 @@ from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
 from fairchem.core.components.calculate.kappa_runner import KappaRunner
 
 try:
-    from matbench_discovery.enums import DataFiles
     from matbench_discovery.metrics import phonons
 
-    Kappa103_TARGET_DATA_PATH = DataFiles.phonondb_pbe_103_kappa_no_nac.path
     mbd_installed = True
 except ImportError:
     Kappa103_TARGET_DATA_PATH = None
@@ -30,7 +30,8 @@ class Kappa103Reducer(JsonDFReducer):
     def __init__(
         self,
         benchmark_name: str,
-        target_data_path: str = Kappa103_TARGET_DATA_PATH,
+        target_data_path: Optional[str] = None,
+        target_data_keys: Sequence[str] | None = None,
         index_name: (
             str | None
         ) = "mp_id",  # bug in matbench-discovery on column name file content mismatch: mp_id vs Key.mat_id
@@ -44,7 +45,7 @@ class Kappa103Reducer(JsonDFReducer):
             max_error_threshold: Maximum allowed mean absolute formation energy per atom error threshold
         """
         index_name = index_name or str(Key.mat_id)
-        super().__init__(benchmark_name, target_data_path, index_name)
+        super().__init__(benchmark_name, target_data_path, target_data_keys, index_name)
 
     @property
     def runner_type(self) -> type[KappaRunner]:

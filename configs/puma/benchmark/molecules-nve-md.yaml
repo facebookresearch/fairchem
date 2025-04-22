@@ -1,9 +1,9 @@
 defaults:
-  - cluster: h100
+  - cluster: v100
   - checkpoint: puma_sm
   - _self_
 
-benchmark_name: oc20-s2ef-0421
+benchmark_name: matbench-discovery
 
 job:
   run_name: ${checkpoint.model_name}
@@ -13,10 +13,8 @@ job:
   scheduler:
     mode: ${cluster.mode}
     distributed_init_method: FILE
-    num_array_jobs: 100
+    num_array_jobs: 2000
     slurm:
-      account: ${cluster.account}
-      qos: ${cluster.qos}
       partition: ${cluster.partition}
       mem_gb: ${cluster.mem_gb}
       timeout_hr: 72
@@ -29,23 +27,25 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
+  _target_: fairchem.core.components.calculate.relaxation_runner.RelaxationRunner
   calculator:
     _target_: fairchem.core.common.calculator.MLIPCalculator
     inference_ckpt_path: ${checkpoint.ckpt_path}
-    dataset_name: oc20
-    energy_key: oc20_energy
-    forces_key: oc20_forces
+    dataset_name: mptrj
+    energy_key: mptrj_energy
+    forces_key: mptrj_forces
+    stress_key: mptrj_stress
     act_ckpt: True
-  evaluate_total_energy: False
-  adsorption_energy_model: False
+  calculate_properties: []
+  save_target_properties: []
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: ${cluster.data_root_dir}/catalysis/s2ef/is
+      src: ${cluster.data_root_dir}/materials/matbench-discovery/WBM_IS2RE.aselmdb
+  save_relaxed_atoms: True
 
 reducer:
-  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
-  target_data_keys: ["energy", "forces"]
+  _target_: fairchem.core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer
   benchmark_name: ${benchmark_name}
-  index_name: sid
+  target_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2023-12-13-wbm-summary.csv.gz
+  cse_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2022-10-19-wbm-computed-structure-entries.jsonl.gz

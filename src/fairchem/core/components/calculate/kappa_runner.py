@@ -40,10 +40,10 @@ except ImportError:
 from fairchem.core.components.calculate import CalculateRunner
 
 
-def get_kappa103_data_list(debug=False):
-    atoms = ase.io.read(
-        DataFiles.phonondb_pbe_103_structures.path, format="extxyz", index=":"
-    )
+def get_kappa103_data_list(
+    reference_data_path=DataFiles.phonondb_pbe_103_structures.path, debug=False
+):
+    atoms = ase.io.read(reference_data_path, format="extxyz", index=":")
     if debug:
         atoms = atoms[:1]
     return atoms
@@ -75,7 +75,7 @@ class KappaRunner(CalculateRunner):
 
     # TODO continue if unfinished
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:
-        max_steps = 300
+        max_steps = 1000
         force_max = 1e-4  # Run until the forces are smaller than this in eV/A
         symprec = 1e-5
         enforce_relax_symm = True
@@ -157,6 +157,7 @@ class KappaRunner(CalculateRunner):
                 info_dict["errors"].append(f"RelaxError: {exc!r}")
                 info_dict["error_traceback"].append(traceback.format_exc())
                 results = info_dict | relax_dict
+                all_results.append(results)
                 continue
 
             # Calculation of force sets
@@ -205,6 +206,7 @@ class KappaRunner(CalculateRunner):
                         f"{mat_id=} has imaginary frequencies or broken symmetry",
                         stacklevel=2,
                     )
+                    all_results.append(results)
                     continue
 
             except Exception as exc:
@@ -215,6 +217,7 @@ class KappaRunner(CalculateRunner):
                 info_dict["errors"].append(f"ForceConstantError: {exc!r}")
                 info_dict["error_traceback"].append(traceback.format_exc())
                 results = info_dict | relax_dict
+                all_results.append(results)
                 continue
 
             try:  # Calculate thermal conductivity
@@ -230,6 +233,7 @@ class KappaRunner(CalculateRunner):
                 info_dict["errors"].append(f"ConductivityError: {exc!r}")
                 info_dict["error_traceback"].append(traceback.format_exc())
                 results = info_dict | relax_dict | freqs_dict
+                all_results.append(results)
                 continue
 
             results = info_dict | relax_dict | freqs_dict | kappa_dict

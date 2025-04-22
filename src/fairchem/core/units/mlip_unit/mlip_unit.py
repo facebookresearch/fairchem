@@ -894,6 +894,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                     pred_output[task_name] = task.element_references.undo_refs(
                         data_device, pred_output[task_name]
                     )
+
         return pred_output
 
 

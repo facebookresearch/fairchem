@@ -73,10 +73,12 @@ class MLIPCalculator(Calculator):
             warnings.warn(
                 f"dataset_name not set. call <self.set_dataset_name(dataset_name)> before using the calculator. available dataset names: {self.available_datasets}"
             )
-        if dataset_name not in self.available_datasets:
-            raise KeyError(
-                f"dataset_name: <{dataset_name}> not found in predictor. available dataset names: {self.available_datasets}"
-            )
+
+        # TODO comment the below out for now to accomodate a MPA hack
+        # if dataset_name not in self.available_datasets:
+        #     raise KeyError(
+        #         f"dataset_name: <{dataset_name}> not found in predictor. available dataset names: {self.available_datasets}"
+        #     )
 
         self.dataset_name = dataset_name
         self.energy_key = energy_key

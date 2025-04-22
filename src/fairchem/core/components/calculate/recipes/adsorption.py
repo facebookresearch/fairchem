@@ -55,18 +55,17 @@ def adsorb_atoms(
         steps=steps,
         optimizer_cls=optimizer_cls,
     )
+    relaxed_adslab_atoms_energy = relaxed_adslab_atoms.get_potential_energy()
 
     results = {
         "sid": sid,
-        "direct": relaxed_adslab_atoms.get_potential_energy(),
+        "direct": relaxed_adslab_atoms_energy,
         "target": dft_adsorption_energy,
     }
 
     # Compute adsorption energy using DFT slab energies
     hybrid_adsorption_energy = (
-        relaxed_adslab_atoms.get_potential_energy()
-        - dft_relaxed_slab_energy
-        - gas_reference_energy
+        relaxed_adslab_atoms_energy - dft_relaxed_slab_energy - gas_reference_energy
     )
     results["hybrid"] = hybrid_adsorption_energy
 
@@ -81,7 +80,7 @@ def adsorb_atoms(
             optimizer_cls=optimizer_cls,
         )
         pred_adsorption_energy = (
-            relaxed_adslab_atoms.get_potential_energy()
+            relaxed_adslab_atoms_energy
             - relaxed_slab_atoms.get_potential_energy()
             - gas_reference_energy
         )

@@ -10,12 +10,12 @@ from __future__ import annotations
 import logging
 import os
 from glob import glob
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 from monty.dev import requires
-from monty.serialization import loadfn
 from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
+from pymatgen.entries.computed_entries import ComputedStructureEntry
 from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
 from tqdm import tqdm
 
@@ -30,19 +30,16 @@ try:
         calc_energy_from_e_refs,
         mp_elemental_ref_energies,
     )
-    from matbench_discovery.enums import DataFiles, MbdKey
+    from matbench_discovery.enums import MbdKey
     from matbench_discovery.metrics.discovery import stable_metrics
     from pymatviz.enums import Key
 
-    MBD_TARGET_DATA_PATH = DataFiles.wbm_summary.path
     mbd_installed = True
 except ImportError:
-    MBD_TARGET_DATA_PATH = None
     mbd_installed = False
 
 if TYPE_CHECKING:
     from pymatgen.entries.compatibility import Compatibility
-    from pymatgen.entries.computed_entries import ComputedStructureEntry
 
 
 MP2020Compatibility = MaterialsProject2020Compatibility()
@@ -53,7 +50,8 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
     def __init__(
         self,
         benchmark_name: str,
-        target_data_path: str = MBD_TARGET_DATA_PATH,
+        target_data_path: Optional[str] = None,
+        cse_data_path: str | None = None,
         index_name: str | None = None,
         corrections: Compatibility | None = MP2020Compatibility,
         max_error_threshold: float = 5.0,
@@ -69,7 +67,12 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         index_name = index_name or str(Key.mat_id)
         self._corrections = corrections
         self._max_error_threshold = max_error_threshold
-        super().__init__(benchmark_name, target_data_path, index_name)
+        self._cse_data_path = cse_data_path
+        super().__init__(
+            benchmark_name=benchmark_name,
+            target_data_path=target_data_path,
+            index_name=index_name,
+        )
 
     @property
     def runner_type(self) -> type[RelaxationRunner]:
@@ -93,7 +96,9 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         return df_wbm.sort_index()
 
     @staticmethod
-    def _get_computed_structure_entries(results: pd.DataFrame) -> pd.DataFrame:
+    def _get_computed_structure_entries(
+        cse_data_path: str, results: pd.DataFrame
+    ) -> pd.DataFrame:
         """
         Convert prediction results to computed structure entries with updated energies and structures.
 
@@ -101,11 +106,17 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
             DataFrame of computed structure entries indexed by material IDs
         """
         # WBM DF used to obtain CSEs for corrections and phase diagram input
-        df_wbm_cse = pd.DataFrame(
-            loadfn(DataFiles.wbm_computed_structure_entries.path)
-        ).set_index(Key.mat_id)
+        df_wbm_cse = pd.DataFrame(pd.read_json(cse_data_path, lines=True)).set_index(
+            Key.mat_id
+        )
         df_wbm_cse = df_wbm_cse.sort_index()
 
+        df_wbm_cse[Key.computed_structure_entry] = [
+            ComputedStructureEntry.from_dict(dct)
+            for dct in tqdm(
+                df_wbm_cse[Key.computed_structure_entry], desc="Creating pmg CSEs"
+            )
+        ]
         # transfer energies and relaxed structures to ComputedStructureEntries in order to apply corrections.
         # corrections applied below are structure-dependent (for oxides and sulfides)
         df_result_cse: list[dict[str, str | ComputedStructureEntry]] = []
@@ -169,7 +180,7 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         ).sort_index()
         results.index.name = Key.mat_id
 
-        df_cse = self._get_computed_structure_entries(results)
+        df_cse = self._get_computed_structure_entries(self._cse_data_path, results)
         self._apply_corrections(df_cse[Key.computed_structure_entry].tolist())
 
         # compute formation energy per atom

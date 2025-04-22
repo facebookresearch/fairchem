@@ -1,9 +1,9 @@
 defaults:
-  - cluster: v100
-  - checkpoint: puma_031425_sm_conserve_32MoP_singlehead_halfLR
+  - cluster: h100
+  - checkpoint: puma_sm
   - _self_
 
-benchmark_name: adsorption
+benchmark_name: adsorption-0421
 
 job:
   run_name: ${checkpoint.model_name}
@@ -17,10 +17,11 @@ job:
     num_nodes: 1
     ranks_per_node: 1
     slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
       partition: ${cluster.partition}
       mem_gb: ${cluster.mem_gb}
       timeout_hr: 72
-      cpus_per_task: 8
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
@@ -37,13 +38,18 @@ runner:
     dataset_name: oc20
     energy_key: oc20_energy
     forces_key: oc20_forces
+    act_ckpt: False
   save_relaxed_atoms: False
   relax_surface: True
-  fmax: 0.05
+  fmax: 0.02
   steps: 300
   optimizer_cls:
     _target_: ase.optimize.LBFGS
     _partial_: True
+    maxstep: 0.2
+    memory: 50
+    damping: 1.2
+    alpha: 80
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
