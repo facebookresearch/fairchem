@@ -1,0 +1,10 @@
+#fairchem -c puma_speed.yaml +run_dir_root=/checkpoint/ocp/misko/benchmark
+
+runner: 
+  _target_: fairchem.core.components.benchmark.puma_speed_benchmark.InferenceBenchRunner
+  timeiters: 100
+  sizes_to_bench: [5]
+  model_checkpoints: {
+    "puma_sm_conserved_0_exp_k4l2": "/checkpoint/ocp/shared/puma_0ex_migratedK4L2_new.pt"
+  }
+  run_dir_root: ${run_dir_root}

@@ -16,7 +16,7 @@ from torch.profiler import record_function
 from fairchem.core.common import gp_utils
 from fairchem.core.models.puma.nn.activation import (
     GateActivation,
-    SeparableS2Activation,
+    SeparableS2Activation_M,
 )
 from fairchem.core.models.puma.nn.layer_norm import (
     get_normalization_layer,
@@ -53,13 +53,19 @@ class Edgewise(torch.nn.Module):
 
         if self.act_type == "gate":
             self.act = GateActivation(
-                lmax=self.lmax, mmax=self.mmax, num_channels=self.hidden_channels
+                lmax=self.lmax,
+                mmax=self.mmax,
+                num_channels=self.hidden_channels,
+                m_prime=True,
             )
             extra_m0_output_channels = self.lmax * self.hidden_channels
         elif self.act_type == "s2":
             # NOTE: this is the only place where the SO3 grid of the edges (lmax/mmax) is used
-            self.act = SeparableS2Activation(
-                lmax=self.lmax, mmax=self.mmax, SO3_grid=self.SO3_grid
+            self.act = SeparableS2Activation_M(
+                lmax=self.lmax,
+                mmax=self.mmax,
+                SO3_grid=self.SO3_grid,
+                to_m=self.mappingReduced.to_m,
             )
             extra_m0_output_channels = self.hidden_channels
         else:
@@ -100,8 +106,8 @@ class Edgewise(torch.nn.Module):
         x_edge,
         edge_distance,
         edge_index,
-        wigner,
-        wigner_inv,
+        wigner_and_M_mapping,
+        wigner_and_M_mapping_inv,
         node_offset: int = 0,
     ):
         if gp_utils.initialized():
@@ -113,16 +119,17 @@ class Edgewise(torch.nn.Module):
             x_target = x[edge_index[1]]
 
         x_message = torch.cat((x_source, x_target), dim=2)
-        # NOTE if strictly local
-        # x_message = x[edge_index[0]]
 
         with record_function("SO2Conv"):
             # Rotate the irreps to align with the edge
-            x_message = torch.bmm(wigner[:, self.out_mask, :], x_message)
+            x_message = torch.bmm(wigner_and_M_mapping, x_message)
 
             # SO2 convolution
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
+
+            # M-prime...
             x_message = self.act(x_0_gating, x_message)
+
             x_message = self.so2_conv_2(x_message, x_edge)
 
             # envelope
@@ -131,7 +138,7 @@ class Edgewise(torch.nn.Module):
             x_message = x_message * env.view(-1, 1, 1)
 
             # Rotate back the irreps
-            x_message = torch.bmm(wigner_inv[:, :, self.out_mask], x_message)
+            x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
 
         # Compute the sum of the incoming neighboring messages for each target node
         new_embedding = torch.zeros(
@@ -286,8 +293,8 @@ class eSCNMD_Block(torch.nn.Module):
         x_edge,
         edge_distance,
         edge_index,
-        wigner,
-        wigner_inv,
+        wigner_and_M_mapping,
+        wigner_and_M_mapping_inv,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -303,8 +310,8 @@ class eSCNMD_Block(torch.nn.Module):
                 x_edge,
                 edge_distance,
                 edge_index,
-                wigner,
-                wigner_inv,
+                wigner_and_M_mapping,
+                wigner_and_M_mapping_inv,
                 node_offset,
             )
             x = x + x_res

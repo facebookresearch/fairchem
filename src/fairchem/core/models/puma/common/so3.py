@@ -51,7 +51,7 @@ class CoefficientMapping(torch.nn.Module):
                 to_m[idx_out + offset, idx_in] = 1.0
             offset = offset + len(idx_r)
 
-            self.m_size[m] = int(len(idx_r))
+            self.m_size[m] = len(idx_r)
 
             for idx_out, idx_in in enumerate(idx_i):
                 to_m[idx_out + offset, idx_in] = 1.0

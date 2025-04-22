@@ -10,6 +10,7 @@ osc_train:
     r_forces: True
     r_stress: ${regress_stress}
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: osc_energy
@@ -32,6 +33,7 @@ osc_val:
     r_forces: True
     r_stress: ${regress_stress}
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: osc_energy
@@ -54,6 +56,7 @@ omol_train:
     r_forces: True
     r_data_keys: ['spin', 'charge']
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: omol_energy
@@ -119,6 +122,7 @@ omol_val:
     r_forces: True
     r_data_keys: ['spin', 'charge']
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: omol_energy
@@ -137,6 +141,7 @@ odac_train:
     r_energy: True
     r_forces: True
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: odac_energy
@@ -156,6 +161,7 @@ odac_val:
     r_energy: True
     r_forces: True
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: odac_energy
@@ -185,6 +191,7 @@ omat_train:
     r_forces: True
     r_stress: ${regress_stress}
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: omat_energy
@@ -232,6 +239,7 @@ omat_val:
     r_forces: True
     r_stress: ${regress_stress}
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: omat_energy
@@ -259,6 +267,7 @@ oc20_train:
     r_energy: True
     r_forces: True
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: oc20_energy
@@ -282,6 +291,7 @@ oc20_val:
     r_energy: True
     r_forces: True
     r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: oc20_energy

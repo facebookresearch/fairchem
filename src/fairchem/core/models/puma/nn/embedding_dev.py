@@ -70,7 +70,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x_edge,
         edge_distance,
         edge_index,
-        wigner_inv,
+        wigner_and_M_mapping_inv,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
@@ -87,14 +87,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             dtype=x_edge_m_0.dtype,
         )
         x_edge_embedding = torch.cat((x_edge_m_0, x_edge_m_pad), dim=1)
-
-        # Reshape the spherical harmonics based on l (degree)
-        x_edge_embedding = torch.einsum(
-            "nac,ab->nbc", x_edge_embedding, self.mappingReduced.to_m
-        )
-
-        # Rotate back the irreps
-        x_edge_embedding = torch.bmm(wigner_inv[:, :, self.out_mask], x_edge_embedding)
+        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
         # envelope
         dist_scaled = edge_distance / self.cutoff
@@ -199,16 +192,8 @@ class DatasetEmbedding(nn.Module):
     def forward(self, dataset_list):
         device = list(self.parameters())[0].device
         emb_idx = torch.tensor(0, device=device, dtype=torch.long)
-
-        # TODO: this is a hack to accomodate the MPA finetuning
-        # emb_for_datasets = [
-        #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
-        # ]
         emb_for_datasets = [
-            self.dataset_emb_dict["omat"](emb_idx)
-            if dataset in ["mptrj", "salex"]
-            else self.dataset_emb_dict[dataset](emb_idx)
-            for dataset in dataset_list
+            self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
         ]
 
         return torch.stack(emb_for_datasets, dim=0)

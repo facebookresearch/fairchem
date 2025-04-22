@@ -26,13 +26,10 @@ class PolynomialEnvelope(torch.nn.Module):
         self.c: float = -self.p * (self.p + 1) / 2
 
     def forward(self, d_scaled: torch.Tensor) -> torch.Tensor:
-        env_val = (
-            1
-            + self.a * d_scaled**self.p
-            + self.b * d_scaled ** (self.p + 1)
-            + self.c * d_scaled ** (self.p + 2)
+        env_val = 1 + (d_scaled**self.p) * (
+            self.a + d_scaled * (self.b + self.c * d_scaled)
         )
-        return torch.where(d_scaled < 1, env_val, torch.zeros_like(d_scaled))
+        return torch.where(d_scaled < 1, env_val, 0)
 
 
 class GaussianSmearing(torch.nn.Module):

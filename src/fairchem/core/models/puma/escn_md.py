@@ -220,6 +220,11 @@ class eSCNMDBackbone(nn.Module):
             num_channels=self.sphere_channels,
         )
 
+        coefficient_index = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(
+            self.lmax, self.mmax
+        )
+        self.register_buffer("coefficient_index", coefficient_index, persistent=False)
+
     def prepare_MOE(self, data, graph, csd_mixed_emb):
         pass
 
@@ -244,7 +249,19 @@ class eSCNMDBackbone(nn.Module):
             )
             wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        return edge_rot_mat, wigner, wigner_inv
+        # select subset of coefficients we are using
+        if self.mmax != self.lmax:
+            wigner = wigner.index_select(1, self.coefficient_index)
+            wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
+
+        wigner_and_M_mapping = torch.einsum(
+            "mk,nkj->nmj", self.mappingReduced.to_m, wigner
+        )
+        wigner_and_M_mapping_inv = torch.einsum(
+            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m
+        )
+
+        return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
 
     def generate_graph(self, *args, **kwargs):
         graph = generate_graph(*args, **kwargs)
@@ -290,8 +307,8 @@ class eSCNMDBackbone(nn.Module):
             symmetric_displacement = 0.5 * (
                 displacement + displacement.transpose(-1, -2)
             )
-
-            data_dict["pos"].requires_grad = True
+            if data_dict["pos"].requires_grad is False:
+                data_dict["pos"].requires_grad = True
             data_dict["pos_original"] = data_dict["pos"]
             data_dict["pos"] = data_dict["pos"] + torch.bmm(
                 data_dict["pos"].unsqueeze(-2),
@@ -303,7 +320,12 @@ class eSCNMDBackbone(nn.Module):
                 data_dict["cell"], symmetric_displacement
             )
 
-        if not self.regress_stress and self.regress_forces and not self.direct_forces:
+        if (
+            not self.regress_stress
+            and self.regress_forces
+            and not self.direct_forces
+            and data_dict["pos"].requires_grad is False
+        ):
             data_dict["pos"].requires_grad = True
 
         with record_function("generate_graph"):
@@ -331,6 +353,7 @@ class eSCNMDBackbone(nn.Module):
                     - data_dict["pos"][data_dict["edge_index"][1]]
                     + shifts
                 )  # [n_edges, 3]
+                # pylint: disable=E1102
                 edge_distance = torch.linalg.norm(
                     edge_distance_vec, dim=-1, keepdim=False
                 )  # [n_edges, 1]
@@ -352,15 +375,19 @@ class eSCNMDBackbone(nn.Module):
             graph_dict["edge_index_full"] = graph_dict["edge_index"]
 
         with record_function("obtain wigner"):
-            _, wigner_full, wigner_inv_full = self.get_rotmat_and_wigner(
-                graph_dict["edge_distance_vec_full"]
+            (_, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
+                self.get_rotmat_and_wigner(graph_dict["edge_distance_vec_full"])
             )
         if gp_utils.initialized():
-            wigner = wigner_full[graph_dict["edge_partition"]]
-            wigner_inv = wigner_inv_full[graph_dict["edge_partition"]]
+            wigner_and_M_mapping = wigner_and_M_mapping_full[
+                graph_dict["edge_partition"]
+            ]
+            wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full[
+                graph_dict["edge_partition"]
+            ]
         else:
-            wigner = wigner_full
-            wigner_inv = wigner_inv_full
+            wigner_and_M_mapping = wigner_and_M_mapping_full
+            wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
 
         ###############################################################
         # Initialize node embeddings
@@ -415,7 +442,7 @@ class eSCNMDBackbone(nn.Module):
                 x_edge,
                 graph_dict["edge_distance"],
                 graph_dict["edge_index"],
-                wigner_inv,
+                wigner_and_M_mapping_inv,
                 graph_dict["node_offset"],
             )
 
@@ -431,8 +458,8 @@ class eSCNMDBackbone(nn.Module):
                         x_edge,
                         graph_dict["edge_distance"],
                         graph_dict["edge_index"],
-                        wigner,
-                        wigner_inv,
+                        wigner_and_M_mapping,
+                        wigner_and_M_mapping_inv,
                         sys_node_embedding,
                         graph_dict["node_offset"],
                         use_reentrant=(
@@ -445,8 +472,8 @@ class eSCNMDBackbone(nn.Module):
                         x_edge,
                         graph_dict["edge_distance"],
                         graph_dict["edge_index"],
-                        wigner,
-                        wigner_inv,
+                        wigner_and_M_mapping,
+                        wigner_and_M_mapping_inv,
                         sys_node_embedding=sys_node_embedding,
                         node_offset=graph_dict["node_offset"],
                     )

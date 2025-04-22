@@ -481,7 +481,7 @@ def standalone_prepare_MOE(model, data, graph, csd_mixed_emb):
         with torch.no_grad():
             if model.counter % 500 == 0:
                 logging.info(
-                    f"{model.counter }: Expert variance: "
+                    f"{model.counter}: Expert variance: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -492,7 +492,7 @@ def standalone_prepare_MOE(model, data, graph, csd_mixed_emb):
                     )
                 )
                 logging.info(
-                    f"{model.counter }: Expert mean: "
+                    f"{model.counter}: Expert mean: "
                     + ",".join(
                         [
                             f"{x:.2e}"

@@ -162,7 +162,7 @@ def test_full_train_from_cli():
         "+expected_loss=8.070940971374512",
     ]
     launch_main(sys_args)
-
+    
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
@@ -179,8 +179,7 @@ def test_full_train_from_cli():
         "+expected_loss=23.392169952392578",
     ]
     launch_main(sys_args)
-
-
+    
 def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset):
     sys_args = [
         "--config",
@@ -270,7 +269,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             f"datasets={dataset_config}",
             f"datasets.data_root_dir={fake_puma_dataset}",
             "optimizer=savegrad",
-            "runner.max_steps=1",
+            "runner.max_steps=1"
         ]
 
         no_gp_args = sys_args.copy()
@@ -287,7 +286,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
         ]
         launch_main(gp_args)
 
-        for step in range(1):
+        for step in range(1):   
             for ddp_rank in range(4):
                 gp_rank = ddp_rank // 2
                 compare_to_non_gp_ddp_rank = gp_rank
