@@ -274,14 +274,15 @@ class Submitit(Checkpointable):
         if self.config.job.deterministic:
             _set_deterministic_mode()
 
-        logging.info("Calling runner.run() ...")
         if run_type == RunType.RUN:
+            logging.info("Calling runner.run() ...")
             self.runner: Runner = hydra.utils.instantiate(self.config.runner)
             self.runner.job_config = self.config.job
             # must call resume state AFTER the runner has been initialized
             self.runner.load_state(self.config.job.runner_state_path)
             self.runner.run()
         elif run_type == RunType.REDUCE:
+            logging.info("Calling reducer.reduce() ...")
             self.reducer: Reducer = hydra.utils.instantiate(self.config.reducer)
             self.reducer.job_config = self.config.job
             self.reducer.runner_config = self.config.runner

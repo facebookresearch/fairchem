@@ -1,2 +1,0 @@
-model_name: puma_031425_sm_conserve_32MoP_singlehead_halfLR
-ckpt_path: ${cluster.checkpoint_root_dir}/202504-0320-0120-0a0b/inference_ckpt_760000.pt

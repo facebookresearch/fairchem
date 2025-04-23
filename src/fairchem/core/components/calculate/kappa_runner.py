@@ -25,7 +25,6 @@ from monty.dev import requires
 
 try:
     # pylint: disable=E0611
-    from matbench_discovery.enums import DataFiles
     from matbench_discovery.phonons import check_imaginary_freqs
     from matbench_discovery.phonons import thermal_conductivity as ltc
     from moyopy import MoyoDataset
@@ -40,9 +39,7 @@ except ImportError:
 from fairchem.core.components.calculate import CalculateRunner
 
 
-def get_kappa103_data_list(
-    reference_data_path=DataFiles.phonondb_pbe_103_structures.path, debug=False
-):
+def get_kappa103_data_list(reference_data_path: str, debug=False):
     atoms = ase.io.read(reference_data_path, format="extxyz", index=":")
     if debug:
         atoms = atoms[:1]

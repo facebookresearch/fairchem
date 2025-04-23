@@ -10,12 +10,12 @@ from __future__ import annotations
 import logging
 import os
 from glob import glob
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from monty.dev import requires
 from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
-from pymatgen.entries.computed_entries import ComputedStructureEntry
+from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEntry
 from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
 from tqdm import tqdm
 
@@ -23,13 +23,9 @@ from fairchem.core.components.benchmark import JsonDFReducer
 from fairchem.core.components.calculate import (
     RelaxationRunner,
 )
+from fairchem.core.components.calculate.recipes.energy import calc_energy_from_e_refs
 
 try:
-    from matbench_discovery.data import as_dict_handler
-    from matbench_discovery.energy import (
-        calc_energy_from_e_refs,
-        mp_elemental_ref_energies,
-    )
     from matbench_discovery.enums import MbdKey
     from matbench_discovery.metrics.discovery import stable_metrics
     from pymatviz.enums import Key
@@ -45,13 +41,27 @@ if TYPE_CHECKING:
 MP2020Compatibility = MaterialsProject2020Compatibility()
 
 
+def as_dict_handler(obj: Any) -> dict[str, Any] | None:
+    """Pass this to json.dump(default=) or as pandas.to_json(default_handler=) to
+    serialize Python classes with as_dict(). Warning: Objects without a as_dict() method
+    are replaced with None in the serialized data.
+
+    From matbench_discovery: https://github.com/janosh/matbench-discovery/blob/main/matbench_discovery/data.py
+    """
+    try:
+        return obj.as_dict()  # all MSONable objects implement as_dict()
+    except AttributeError:
+        return None
+
+
 @requires(mbd_installed, message="Requires `matbench_discovery` to be installed")
 class MaterialsDiscoveryReducer(JsonDFReducer):
     def __init__(
         self,
         benchmark_name: str,
-        target_data_path: Optional[str] = None,
+        target_data_path: str,
         cse_data_path: str | None = None,
+        elemental_references_path: str | None = None,
         index_name: str | None = None,
         corrections: Compatibility | None = MP2020Compatibility,
         max_error_threshold: float = 5.0,
@@ -60,6 +70,8 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         Args:
             benchmark_name: Name of the benchmark, used for file naming
             target_data_path: Path to the target data JSON file
+            cse_data_path: Path to the WBM computed structure entries JSON file
+            elemental_references_path: Path to elemental energy references JSON file
             index_name: Optional name of the column to use as index
             corrections: Optional correction class to apply to all entries
             max_error_threshold: Maximum allowed mean absolute formation energy per atom error threshold
@@ -67,6 +79,7 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         index_name = index_name or str(Key.mat_id)
         self._corrections = corrections
         self._max_error_threshold = max_error_threshold
+        self._elemental_references_path = elemental_references_path
         self._cse_data_path = cse_data_path
         super().__init__(
             benchmark_name=benchmark_name,
@@ -96,7 +109,21 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         return df_wbm.sort_index()
 
     @staticmethod
-    def _get_computed_structure_entries(
+    def _load_elemental_ref_energies(
+        elemental_references_path: str,
+    ) -> dict[str, float]:
+        elem_ref_entries = (
+            pd.read_json(elemental_references_path, typ="series")
+            .map(ComputedEntry.from_dict)
+            .to_dict()
+        )
+        elemental_ref_energies = {
+            elem: entry.energy_per_atom for elem, entry in elem_ref_entries.items()
+        }
+        return elemental_ref_energies
+
+    @staticmethod
+    def _load_computed_structure_entries(
         cse_data_path: str, results: pd.DataFrame
     ) -> pd.DataFrame:
         """
@@ -180,12 +207,15 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         ).sort_index()
         results.index.name = Key.mat_id
 
-        df_cse = self._get_computed_structure_entries(self._cse_data_path, results)
+        df_cse = self._load_computed_structure_entries(self._cse_data_path, results)
         self._apply_corrections(df_cse[Key.computed_structure_entry].tolist())
 
         # compute formation energy per atom
+        elemental_ref_energies = self._load_elemental_ref_energies(
+            self._elemental_references_path
+        )
         results["e_form_per_atom"] = [
-            calc_energy_from_e_refs(cse, ref_energies=mp_elemental_ref_energies)
+            calc_energy_from_e_refs(cse, ref_energies=elemental_ref_energies)
             for cse in tqdm(
                 df_cse[Key.computed_structure_entry],
                 total=len(results),
@@ -298,7 +328,8 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
                     index=[run_name],
                 )
                 self.logger.log_dataframe(
-                    name=f"{self.benchmark_name}-{split}", dataframe=split_metrics
+                    name=f"{self.benchmark_name}-{split}",
+                    dataframe=split_metrics.reset_index(),
                 )
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
