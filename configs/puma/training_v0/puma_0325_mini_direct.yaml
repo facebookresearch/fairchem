@@ -16,6 +16,7 @@ job:
       account: ${cluster.account}
       qos: ${cluster.qos}
       mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
   run_name: puma_mini_direct_128_mole_R6

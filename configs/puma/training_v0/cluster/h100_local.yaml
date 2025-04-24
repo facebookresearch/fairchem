@@ -7,4 +7,5 @@ device: CUDA
 ranks_per_node: 1
 dataloader_workers: 0
 debug: True
-mem_gb: 1000
+mem_gb: 0
+cpus_per_task: 24
