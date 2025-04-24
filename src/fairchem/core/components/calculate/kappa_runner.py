@@ -72,7 +72,7 @@ class KappaRunner(CalculateRunner):
 
     # TODO continue if unfinished
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:
-        max_steps = 1000
+        max_steps = 5000
         force_max = 1e-4  # Run until the forces are smaller than this in eV/A
         symprec = 1e-5
         enforce_relax_symm = True

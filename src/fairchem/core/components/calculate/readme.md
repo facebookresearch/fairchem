@@ -17,36 +17,41 @@ run all benchmarks on H100-1:
 - MDR Phonon
 - MP binary PBE elasticity
 - MP PBE elasticity
+- NVE MD conservation TM23
+- NVE MD conservation MD22
 
 ```
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/oc20-s2ef.yaml
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/oc20-is2re-adsorption.yaml
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/kappa103.yaml
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/mdr-phonon.yaml
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/mp-binary-pbe-elasticity.yaml
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/mp-pbe-elasticity.yaml
+fairchem -c configs/puma/benchmark/oc20-s2ef.yaml checkpoint=puma_sm_mpa
+fairchem -c configs/puma/benchmark/oc20-is2re-adsorption.yaml checkpoint=puma_sm_mpa
+fairchem -c configs/puma/benchmark/kappa103.yaml checkpoint=puma_sm_mpa
+fairchem -c configs/puma/benchmark/mdr-phonon.yaml checkpoint=puma_sm_mpa
+fairchem -c configs/puma/benchmark/mp-binary-pbe-elasticity.yaml checkpoint=puma_sm_mpa
+fairchem -c configs/puma/benchmark/mp-pbe-elasticity.yaml checkpoint=puma_sm_mpa
+fairchem -c configs/puma/benchmark/nvemd_materials.yaml checkpoint=puma_sm_mpa cluster=h100
+fairchem -c configs/puma/benchmark/nvemd_molecules.yaml checkpoint=puma_sm_mpa cluster=h100
 ```
 
 default on V100 to use more jobs:
 
 - Matbench-Discovery
+
 ```
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/matbench-discovery-discovery.yaml
+fairchem -c configs/puma/benchmark/matbench-discovery-discovery.yaml checkpoint=puma_sm_mpa
 ```
 
 if you want to use a different model / are on a different cluster (e.g. V100):
 
 ```
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/mp-pbe-elasticity.yaml checkpoint=puma_sm cluster=v100
+fairchem -c configs/puma/benchmark/mp-pbe-elasticity.yaml checkpoint=puma_sm cluster=v100
 ```
 
 To be finalized:
 
 ```
 # Matbench-Discovery
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/matbench-discovery-discovery.yaml
+fairchem -c configs/puma/benchmark/matbench-discovery-discovery.yaml
 # HEA S2EF
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/hea-s2ef.yaml
+fairchem -c configs/puma/benchmark/hea-s2ef.yaml
 # OSC IS2RE: taking too long, needs downsampling
-fairchem -c /home/xiangfu/fm_release_0525/configs/puma/benchmark/osc-is2re.yaml
+fairchem -c configs/puma/benchmark/osc-is2re.yaml
 ```

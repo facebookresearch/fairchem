@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 from monty.dev import requires
@@ -15,6 +15,9 @@ from pymatviz.enums import Key
 
 from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
 from fairchem.core.components.calculate.kappa_runner import KappaRunner
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 try:
     from matbench_discovery.metrics import phonons

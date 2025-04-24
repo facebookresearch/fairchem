@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import traceback
-from typing import TYPE_CHECKING, Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,8 @@ from fairchem.core.components.calculate.recipes.utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ase.calculators.calculator import Calculator
 
     from fairchem.core.datasets import AseDBDataset
@@ -117,12 +119,7 @@ class RelaxationRunner(CalculateRunner):
                 )
 
             except Exception as ex:  # TODO too broad-figure out which to catch
-                results.update(
-                    {
-                        property_name: np.nan
-                        for property_name in self._calculate_properties
-                    }
-                )
+                results.update(dict.fromkeys(self._calculate_properties, np.nan))
                 results.update(
                     {
                         "errors": f"{ex!r}",

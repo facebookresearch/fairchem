@@ -1,6 +1,6 @@
 #fairchem -c puma_speed.yaml +run_dir_root=/checkpoint/ocp/misko/benchmark
 
-runner: 
+runner:
   _target_: fairchem.core.components.benchmark.puma_speed_benchmark.InferenceBenchRunner
   timeiters: 100
   sizes_to_bench: [5]

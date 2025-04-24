@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from abc import ABCMeta, abstractmethod
 from glob import glob
-from typing import Sequence, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,9 @@ from fairchem.core.components.calculate.calculate_runner import (
     CalculateRunner,
 )
 from fairchem.core.components.reducer import Reducer
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 R = TypeVar("R")
 M = TypeVar("M")

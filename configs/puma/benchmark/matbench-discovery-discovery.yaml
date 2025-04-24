@@ -31,10 +31,10 @@ runner:
   calculator:
     _target_: fairchem.core.common.calculator.MLIPCalculator
     inference_ckpt_path: ${checkpoint.ckpt_path}
-    dataset_name: mptrj
-    energy_key: mptrj_energy
-    forces_key: mptrj_forces
-    stress_key: mptrj_stress
+    dataset_name: omat
+    energy_key: omat_energy
+    forces_key: omat_forces
+    stress_key: omat_stress
     act_ckpt: True
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset

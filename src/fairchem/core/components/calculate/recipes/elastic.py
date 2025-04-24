@@ -13,7 +13,7 @@ Functions to run elasticity calculations using ASE + pymatgen
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 from pymatgen.analysis.elasticity import DeformedStructureSet, ElasticTensor, Strain
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -23,6 +23,8 @@ from fairchem.core.components.calculate.recipes.relax import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ase import Atoms
     from ase.calculators.calculator import Calculator
 

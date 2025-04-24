@@ -192,8 +192,16 @@ class DatasetEmbedding(nn.Module):
     def forward(self, dataset_list):
         device = list(self.parameters())[0].device
         emb_idx = torch.tensor(0, device=device, dtype=torch.long)
+
+        # TODO: this is a hack to accomodate the MPA finetuning
+        # emb_for_datasets = [
+        #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
+        # ]
         emb_for_datasets = [
-            self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
+            self.dataset_emb_dict["omat"](emb_idx)
+            if dataset in ["mptrj", "salex"]
+            else self.dataset_emb_dict[dataset](emb_idx)
+            for dataset in dataset_list
         ]
 
         return torch.stack(emb_for_datasets, dim=0)

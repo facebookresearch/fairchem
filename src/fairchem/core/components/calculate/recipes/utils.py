@@ -7,11 +7,13 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from ase.calculators.calculator import PropertyNotPresent
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ase import Atoms
     from numpy.typing import ArrayLike
 

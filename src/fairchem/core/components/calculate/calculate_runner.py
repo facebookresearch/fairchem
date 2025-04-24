@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import os
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Sequence, TypeVar
+from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ase.calculators import Calculator
 
 
