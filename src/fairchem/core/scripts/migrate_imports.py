@@ -11,6 +11,7 @@ mapping = {
     "fairchem.experimental.foundation_models.models.nn": "fairchem.core.models.puma.nn",
     "fairchem.experimental.foundation_models.models.common": "fairchem.core.models.puma.common",
     "fairchem.experimental.foundation_models.models.message_passing.escn_md": "fairchem.core.models.puma.escn_md",
+    "fairchem.experimental.foundation_models.models.message_passing.escn_omol": "fairchem.core.models.puma.escn_md",
     "fairchem.experimental.foundation_models.models.message_passing.escn_moe": "fairchem.core.models.puma.escn_moe",
     "fairchem.experimental.foundation_models.modules.element_references": "fairchem.core.modules.normalization.element_references",
     "fairchem.experimental.foundation_models.modules.loss": "fairchem.core.modules.loss",

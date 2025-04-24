@@ -74,6 +74,7 @@ class eSCNMDBackbone(nn.Module):
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
+        use_dataset_embedding: bool = True,
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -100,6 +101,7 @@ class eSCNMDBackbone(nn.Module):
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
+        self.use_dataset_embedding = use_dataset_embedding
         assert (
             self.dataset_list
         ), "the dataset list is empty, please add it to the model backbone config"
@@ -140,13 +142,17 @@ class eSCNMDBackbone(nn.Module):
         )
 
         # dataset embedding
-        self.dataset_embedding = DatasetEmbedding(
-            self.sphere_channels,
-            grad=self.dataset_emb_grad,
-            dataset_list=self.dataset_list,
-        )
-        # mix charge, spin, dataset embeddings
-        self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
+        if self.use_dataset_embedding:
+            self.dataset_embedding = DatasetEmbedding(
+                self.sphere_channels,
+                grad=self.dataset_emb_grad,
+                dataset_list=self.dataset_list,
+            )
+            # mix charge, spin, dataset embeddings
+            self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
+        else:
+            # mix charge, spin
+            self.mix_csd = nn.Linear(2 * self.sphere_channels, self.sphere_channels)
 
         # edge distance embedding
         self.cutoff = cutoff
@@ -410,10 +416,15 @@ class eSCNMDBackbone(nn.Module):
             # Add charge, spin, and dataset embeddings
             chg_emb = self.charge_embedding(data_dict["charge"])
             spin_emb = self.spin_embedding(data_dict["spin"])
-            dataset_emb = self.dataset_embedding(data_dict["dataset"])
-            csd_mixed_emb = torch.nn.SiLU()(
-                self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
-            )
+            if self.use_dataset_embedding:
+                dataset_emb = self.dataset_embedding(data_dict["dataset"])
+                csd_mixed_emb = torch.nn.SiLU()(
+                    self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
+                )
+            else:
+                csd_mixed_emb = torch.nn.SiLU()(
+                    self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1))
+                )
             x_message[:, 0, :] = x_message[:, 0, :] + csd_mixed_emb[data_dict["batch"]]
             sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
         # full_sys = csd_mixed_emb[data_dict["batch_full"]]

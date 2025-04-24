@@ -24,6 +24,12 @@ def find_new_module_name(module):
 
 def update_config(config_or_data):
     if isinstance(config_or_data, (omegaconf.dictconfig.DictConfig, dict)):
+        if (
+            "model" in config_or_data
+            and config_or_data["model"]
+            == "fairchem.experimental.foundation_models.models.message_passing.escn_omol.eSCNMDBackbone"
+        ):
+            config_or_data["use_dataset_embedding"] = False
         for k, v in config_or_data.items():
             config_or_data[k] = update_config(v)
     elif isinstance(config_or_data, (omegaconf.listconfig.ListConfig, list)):
@@ -68,6 +74,7 @@ if __name__ == "__main__":
     pickle.Unpickler = RenameUnpickler
 
     checkpoint = torch.load(args.checkpoint_in, pickle_module=pickle)
+
     checkpoint.tasks_config = update_config(checkpoint.tasks_config)
     checkpoint.model_config = update_config(checkpoint.model_config)
 
