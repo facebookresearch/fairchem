@@ -243,9 +243,16 @@ def assign_device_for_local_rank(cpu: bool, local_rank: int) -> None:
 
 
 def get_device_for_local_rank() -> str:
-    assert (
-        os.environ.get(CURRENT_DEVICE_TYPE_STR) is not None
-    ), "must call assign_device_for_local_rank first!"
+    if os.environ.get(CURRENT_DEVICE_TYPE_STR) is None:
+        os.environ[CURRENT_DEVICE_TYPE_STR] = (
+            f"cuda:{torch.cuda.current_device()}"
+            if torch.cuda.is_available()
+            else "cpu"
+        )
+        logging.WARN(
+            f"WARNIGN: assign_device_for_local_rank was never called, automatically defaulting to using {os.environ[CURRENT_DEVICE_TYPE_STR]}"
+        )
+        return os.environ[CURRENT_DEVICE_TYPE_STR]
 
     if os.environ[CURRENT_DEVICE_TYPE_STR] == "cuda":
         assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
