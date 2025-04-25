@@ -36,7 +36,7 @@ def get_property_from_atoms(
     try:
         # get_properties returns a Properties dict-like object, so we index again for the property requested
         prop = atoms.get_properties([property_name])[property_name]
-    except (PropertyNotPresent, ValueError):
+    except (PropertyNotPresent, ValueError, RuntimeError):
         try:
             prop = atoms.info[property_name]
         except KeyError as err:

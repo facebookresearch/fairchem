@@ -3,7 +3,7 @@ defaults:
   - checkpoint: puma_sm
   - _self_
 
-benchmark_name: osc-is2re
+benchmark_name: osc-is2re-10k
 
 job:
   run_name: ${checkpoint.model_name}
