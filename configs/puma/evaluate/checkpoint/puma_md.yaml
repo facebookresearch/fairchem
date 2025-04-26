@@ -1,0 +1,2 @@
+model_name: puma_md_32MoLE_510k
+ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/puma_md_510000.pt 
