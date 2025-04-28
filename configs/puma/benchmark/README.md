@@ -52,14 +52,10 @@ fairchem -c configs/puma/benchmark/mp-pbe-elasticity.yaml checkpoint=puma_sm clu
 
 ## Materials benchmarks:
 ```bash
-fairchem -c configs/puma/benchmark/oc20-s2ef.yaml checkpoint=puma_sm_mpa cluster=h100
-fairchem -c configs/puma/benchmark/oc20-is2re-adsorption.yaml checkpoint=puma_sm_mpa cluster=h100
 fairchem -c configs/puma/benchmark/kappa103.yaml checkpoint=puma_sm_mpa cluster=h100
 fairchem -c configs/puma/benchmark/mdr-phonon.yaml checkpoint=puma_sm_mpa cluster=h100
 fairchem -c configs/puma/benchmark/mp-binary-pbe-elasticity.yaml checkpoint=puma_sm_mpa cluster=h100
 fairchem -c configs/puma/benchmark/mp-pbe-elasticity.yaml checkpoint=puma_sm_mpa cluster=h100
-fairchem -c configs/puma/benchmark/nvemd_materials.yaml checkpoint=puma_sm_mpa cluster=h100
-fairchem -c configs/puma/benchmark/nvemd_molecules.yaml checkpoint=puma_sm_mpa cluster=h100
 ```
 ##### Default on V100 to use more jobs:
 
@@ -73,6 +69,7 @@ fairchem -c configs/puma/benchmark/hea-is2re.yaml checkpoint=puma_sm cluster=h10
 ```
 
 ## OSC benchmarks
+
 ##### On h100
 ```bash
 fairchem -c configs/puma/benchmark/osc-s2e-polymorphs.yaml checkpoint=puma_sm cluster=h100
@@ -88,4 +85,10 @@ fairchem -c configs/puma/benchmark/osc-is2re-10k.yaml checkpoint=puma_sm cluster
 ```bash
 fairchem -c configs/puma/benchmark/oc20-s2ef.yaml checkpoint=puma_sm cluster=h100
 fairchem -c configs/puma/benchmark/oc20-is2re-adsorption.yaml checkpoint=puma_sm cluster=h100
+```
+
+## NVE MD conservation
+```bash
+fairchem -c configs/puma/benchmark/nvemd_materials.yaml checkpoint=puma_sm cluster=h100
+fairchem -c configs/puma/benchmark/nvemd_molecules.yaml checkpoint=puma_sm cluster=h100
 ```
