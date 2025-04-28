@@ -191,9 +191,6 @@ class eSCNMDBackbone(nn.Module):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
-            out_mask=self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(
-                self.lmax, self.mmax
-            ),
         )
 
         self.num_layers = num_layers

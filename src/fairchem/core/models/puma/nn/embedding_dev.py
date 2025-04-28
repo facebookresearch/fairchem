@@ -38,7 +38,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         rescale_factor,
         cutoff,
         mappingReduced,
-        out_mask,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -62,7 +61,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
 
         self.cutoff = cutoff
         self.envelope = PolynomialEnvelope(exponent=5)
-        self.out_mask = out_mask
 
     def forward(
         self,
