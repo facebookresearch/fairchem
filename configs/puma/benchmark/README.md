@@ -16,7 +16,8 @@ Running PUMA Benchmarks
 
 ### Catalysis
 - OC20 S2EF Adsorption
-- OC20 IS2RE Adsorption
+- OC20 IS2RE
+- AdsorbML
 
 ### Molecules
 - NVE MD conservation MD22
@@ -85,6 +86,7 @@ fairchem -c configs/puma/benchmark/osc-is2re-10k.yaml checkpoint=puma_sm cluster
 ```bash
 fairchem -c configs/puma/benchmark/oc20-s2ef.yaml checkpoint=puma_sm cluster=h100
 fairchem -c configs/puma/benchmark/oc20-is2re-adsorption.yaml checkpoint=puma_sm cluster=h100
+fairchem -c configs/puma/benchmark/adsorbml.yaml checkpoint=puma_sm cluster=h100
 ```
 
 ## NVE MD conservation
