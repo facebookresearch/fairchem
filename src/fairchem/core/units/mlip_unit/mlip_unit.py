@@ -970,12 +970,26 @@ class MLIPEvalUnit(EvalUnit[Batch]):
         self.total_loss_metrics = Metrics()
         self.total_atoms = 0
         self.total_runtime = 0
+        self.total_len = len(state.eval_state.dataloader)
+        self.start_time = time.time()
+        self.last_report = time.time()
+        self.report_every = 180
 
     def eval_step(self, state: State, data: Batch) -> None:
         """Evaluates the model on a batch of data."""
         device = get_device_for_local_rank()
         data = data.to(device)
         self.total_atoms += data.natoms.sum().item()
+
+        if (time.time() - self.last_report) > self.report_every:
+            seconds_per_step = (time.time() - self.start_time) / max(
+                1, self.eval_progress.num_steps_completed
+            )
+            eta_hours = self.total_len * seconds_per_step / (60.0 * 60.0)
+            print(
+                f"step: {self.eval_progress.num_steps_completed}, seconds_per_step: {seconds_per_step} eta_hours: {eta_hours}"
+            )
+            self.last_report = time.time()
 
         with torch.autocast(
             device_type=get_device_for_local_rank(),
