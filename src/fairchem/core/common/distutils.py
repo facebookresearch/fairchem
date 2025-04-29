@@ -249,8 +249,8 @@ def get_device_for_local_rank() -> str:
             if torch.cuda.is_available()
             else "cpu"
         )
-        logging.WARN(
-            f"WARNIGN: assign_device_for_local_rank was never called, automatically defaulting to using {os.environ[CURRENT_DEVICE_TYPE_STR]}"
+        logging.warning(
+            f"WARNING: assign_device_for_local_rank was never called, automatically defaulting to using {os.environ[CURRENT_DEVICE_TYPE_STR]}"
         )
         return os.environ[CURRENT_DEVICE_TYPE_STR]
 
