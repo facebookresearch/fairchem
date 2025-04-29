@@ -8,4 +8,4 @@ mode: LOCAL
 device: CUDA
 ranks_per_node: 1
 debug: True
-mem_gb: 1000
+mem_gb: 240

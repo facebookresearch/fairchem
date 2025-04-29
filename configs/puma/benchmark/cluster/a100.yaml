@@ -7,4 +7,4 @@ partition: ""
 mode: SLURM
 device: CUDA
 debug: False
-mem_gb: 1000
+mem_gb: 120
