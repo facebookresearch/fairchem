@@ -211,9 +211,11 @@ class S2Activation_M(torch.nn.Module):
         self.act = torch.nn.SiLU()
         self.SO3_grid = SO3_grid
         to_grid_mat = self.SO3_grid["lmax_mmax"].get_to_grid_mat()
-        self.to_grid_mat_m = torch.einsum("ji,bai->jba", to_m, to_grid_mat)
+        to_grid_mat_m = torch.einsum("ji,bai->jba", to_m, to_grid_mat)
+        self.register_buffer("to_grid_mat_m", to_grid_mat_m, persistent=False)
         from_grid_mat = self.SO3_grid["lmax_mmax"].get_from_grid_mat()
-        self.from_grid_mat_m = torch.einsum("ji,bai->baj", to_m, from_grid_mat)
+        from_grid_mat_m = torch.einsum("ji,bai->baj", to_m, from_grid_mat)
+        self.register_buffer("from_grid_mat_m", from_grid_mat_m, persistent=False)
 
     def forward(self, inputs):
         x_grid = torch.einsum("iba, zic -> zbac", self.to_grid_mat_m, inputs)

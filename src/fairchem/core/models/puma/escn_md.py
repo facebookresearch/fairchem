@@ -14,6 +14,7 @@ import torch.nn as nn
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.distutils import get_device_for_local_rank
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import cg_change_mat, conditional_grad, irreps_sum
 from fairchem.core.graph.compute import generate_graph
@@ -22,6 +23,7 @@ from fairchem.core.models.puma.common.rotation import (
     init_edge_rot_mat,
     rotation_to_wigner,
 )
+from fairchem.core.models.puma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 from fairchem.core.models.puma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.puma.nn.embedding_dev import (
     ChgSpinEmbedding,
@@ -75,6 +77,7 @@ class eSCNMDBackbone(nn.Module):
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
+        use_cuda_graph_wigner: bool = False,
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -102,6 +105,7 @@ class eSCNMDBackbone(nn.Module):
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
+        self.use_cuda_graph_wigner = use_cuda_graph_wigner
         assert (
             self.dataset_list
         ), "the dataset list is empty, please add it to the model backbone config"
@@ -223,6 +227,7 @@ class eSCNMDBackbone(nn.Module):
             num_channels=self.sphere_channels,
         )
 
+        self.rot_mat_wigner_cuda = None  # lazily initialize this
         coefficient_index = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(
             self.lmax, self.mmax
         )
@@ -231,26 +236,36 @@ class eSCNMDBackbone(nn.Module):
     def prepare_MOE(self, data, graph, csd_mixed_emb):
         pass
 
-    def get_rotmat_and_wigner(self, edge_distance_vecs):
-        with record_function("obtain rotmat"):
-            edge_rot_mat = init_edge_rot_mat(
-                edge_distance_vecs, rot_clip=(not self.direct_forces)
-            )
-
+    def get_rotmat_and_wigner(
+        self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
+    ):
         Jd_buffers = [
-            getattr(self, f"Jd_{l}").type(edge_rot_mat.dtype)
+            getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
         ]
 
-        with record_function("obtain wigner"):
-            wigner = rotation_to_wigner(
-                edge_rot_mat,
-                0,
-                self.lmax,
-                Jd_buffers,
-                rot_clip=(not self.direct_forces),
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+        if use_cuda_graph:
+            if self.rot_mat_wigner_cuda is None:
+                self.rot_mat_wigner_cuda = RotMatWignerCudaGraph()
+            with record_function("obtain rotmat wigner cudagraph"):
+                edge_rot_mat, wigner, wigner_inv = (
+                    self.rot_mat_wigner_cuda.get_rotmat_and_wigner(
+                        edge_distance_vecs, Jd_buffers
+                    )
+                )
+        else:
+            with record_function("obtain rotmat wigner original"):
+                edge_rot_mat = init_edge_rot_mat(
+                    edge_distance_vecs, rot_clip=(not self.direct_forces)
+                )
+                wigner = rotation_to_wigner(
+                    edge_rot_mat,
+                    0,
+                    self.lmax,
+                    Jd_buffers,
+                    rot_clip=(not self.direct_forces),
+                )
+                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
         # select subset of coefficients we are using
         if self.mmax != self.lmax:
@@ -379,7 +394,12 @@ class eSCNMDBackbone(nn.Module):
 
         with record_function("obtain wigner"):
             (_, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
-                self.get_rotmat_and_wigner(graph_dict["edge_distance_vec_full"])
+                self.get_rotmat_and_wigner(
+                    graph_dict["edge_distance_vec_full"],
+                    use_cuda_graph=self.use_cuda_graph_wigner
+                    and "cuda" in get_device_for_local_rank()
+                    and not self.training,
+                )
             )
         if gp_utils.initialized():
             wigner_and_M_mapping = wigner_and_M_mapping_full[

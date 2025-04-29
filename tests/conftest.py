@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+import torch
 
 
 def pytest_addoption(parser):
@@ -15,6 +16,13 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
+    config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
+
+
+def pytest_runtest_setup(item):
+    # Check if the test has the 'gpu' marker
+    if "gpu" in item.keywords and not torch.cuda.is_available():
+        pytest.skip("CUDA not available, skipping GPU test")
 
 
 def pytest_collection_modifyitems(config, items):
