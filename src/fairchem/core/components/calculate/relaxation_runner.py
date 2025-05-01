@@ -103,7 +103,7 @@ class RelaxationRunner(CalculateRunner):
                 {f"{key}_target": target_properties[key] for key in target_properties}
             )
             if self._save_relaxed_atoms:
-                results["atoms_target"] = MSONAtoms(atoms).as_dict()
+                results["atoms_initial"] = MSONAtoms(atoms).as_dict()
 
             try:
                 atoms.calc = self.calculator

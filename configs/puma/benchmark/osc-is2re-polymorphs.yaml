@@ -42,7 +42,7 @@ runner:
       src: ${cluster.data_root_dir}/osc/7bt-polymorphs/7bt-polymorphs-is.aselmdb
   save_relaxed_atoms: True
   calculate_properties: [ "energy" ]
-  save_target_properties: ["energy", "molecule_id"]
+  save_target_properties: ["energy", "molecule_id", "atoms_relaxed"]
   normalize_properties_by:
     energy: nmolecules
   fmax: 0.01

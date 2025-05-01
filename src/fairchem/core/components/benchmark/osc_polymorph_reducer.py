@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
 
 import ase.units
 import numpy as np
@@ -16,8 +16,10 @@ from monty.dev import requires
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
+from tqdm import tqdm
 
 from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
+from fairchem.core.components.calculate.recipes.local_env import construct_bond_matrix
 from fairchem.core.components.calculate.relaxation_runner import RelaxationRunner
 from fairchem.core.components.calculate.singlepoint_runner import SinglePointRunner
 
@@ -29,33 +31,8 @@ try:
 except ImportError:
     sklearn_scipy_installed = False
 
-if TYPE_CHECKING:
-    from pymatgen.core import Structure
 
 ev2kJ = ase.units.eV * ase.units.mol / ase.units.kJ
-
-
-def construct_covalent_matrix(structure: Structure) -> np.ndarray:
-    """
-    Constructs a covalent bond matrix for a given crystal structure.
-
-    This function uses JmolNN (Jmol Nearest Neighbor) algorithm to identify
-    covalent bonds between atoms in the structure and creates an adjacency matrix
-    where 1 indicates a bond between atoms and 0 indicates no bond.
-
-    Args:
-        structure: A pymatgen Structure object representing the crystal structure
-
-    Returns:
-        np.ndarray: A square matrix where matrix[i,j] = 1 if atoms i and j share a covalent bond,
-            and 0 otherwise
-    """
-    nn_info = JmolNN().get_all_nn_info(structure)
-    nn_matrix = np.zeros((len(nn_info), len(nn_info)))
-    for i in range(len(nn_info)):
-        for j in range(len(nn_info[i])):
-            nn_matrix[i, nn_info[i][j]["site_index"]] = 1
-    return nn_matrix
 
 
 @requires(
@@ -84,11 +61,15 @@ class OSCPolymorphReducer(JsonDFReducer):
         """
         self._molecule_id_key = molecule_id_key
         self._calc_structural_metrics = calculate_structural_metrics
-        self._structure_matcher = (
-            StructureMatcher(ltol=0.2, stol=0.3, angle_tol=5)  # pmg defaults
-            if self._calc_structural_metrics
-            else None
-        )
+
+        if self._calc_structural_metrics:
+            self._structure_matcher = StructureMatcher(
+                primitive_cell=False
+            )  # ltol=0.5, stol=0.5, angle_tol=10,
+            self._jmolnn = JmolNN()
+        else:
+            self._structure_matcher = None
+            self._jmolnn = None
 
         super().__init__(
             benchmark_name=benchmark_name,
@@ -114,6 +95,7 @@ class OSCPolymorphReducer(JsonDFReducer):
         metrics = {}
         energy_key = self.target_data_keys[0]
         for molecule_id in results[self._molecule_id_key].unique():
+            logging.info(f"Computing metrics for {molecule_id=}")
             polymorph_results = results[results[self._molecule_id_key] == molecule_id]
 
             ref_energy = min(polymorph_results[f"{energy_key}_target"])
@@ -138,24 +120,33 @@ class OSCPolymorphReducer(JsonDFReducer):
 
             if self._calc_structural_metrics:  # TODO this will need to be parallelized
                 _rmsds = []
-                for index in polymorph_results.index:
+                for index in tqdm(
+                    polymorph_results.index,
+                    desc=f"Matching polymorphs for {molecule_id=}",
+                ):
                     entry = polymorph_results.loc[index]
                     relaxed_structure = AseAtomsAdaptor.get_structure(
                         MSONAtoms.from_dict(entry["atoms"])
                     )
                     reference_structure = AseAtomsAdaptor.get_structure(
-                        MSONAtoms.from_dict(entry["atoms_target"])
+                        MSONAtoms.from_dict(entry["atoms_relaxed_target"])
                     )
 
-                    reference_matrix = construct_covalent_matrix(reference_structure)
-                    relaxed_matrix = construct_covalent_matrix(relaxed_structure)
-                    if np.array_equal(relaxed_matrix, reference_matrix) is True:
-                        rmsd = self._structure_matcher.get_rms_dist(
-                            reference_structure, relaxed_structure
+                    # not clean but call this directly to avoid rematching (rms, max_dist, mask, cost, mapping)
+                    match = self._structure_matcher._match(
+                        reference_structure, relaxed_structure, fu=1, use_rms=True
+                    )
+                    if match is not None:
+                        reference_matrix = construct_bond_matrix(
+                            reference_structure, nn_finder=self._jmolnn
                         )
-
-                        if rmsd is not None:
-                            _rmsds.append(rmsd)
+                        relaxed_matrix = construct_bond_matrix(
+                            relaxed_structure,
+                            nn_finder=self._jmolnn,
+                            site_permutations=match[4],
+                        )
+                        if np.array_equal(relaxed_matrix, reference_matrix) is True:
+                            _rmsds.append(match[0])
 
                 metrics.update(
                     {
