@@ -1,5 +1,5 @@
 snapshot_dir: dataset_sync_250225
-omol_final_snapshot_dir: omol/250409-final
+omol_final_snapshot_dir: omol/250430-release
 
 osc_train:
   splits:

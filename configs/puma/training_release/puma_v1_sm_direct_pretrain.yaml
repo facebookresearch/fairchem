@@ -19,7 +19,7 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: puma_v1_041425_sm_direct
+  run_name: puma_v1_043025_sm_direct
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
@@ -35,7 +35,7 @@ max_atoms: 700
 bf16: True
 cpu_graph: True
 otf_graph: False
-normalizer_rmsd: 1.422
+normalizer_rmsd: 1.423
 direct_forces_coef: 30
 osc_energy_coef: 10
 omol_energy_coef: 30
