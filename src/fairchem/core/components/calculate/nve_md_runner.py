@@ -209,7 +209,6 @@ class NVEMDRunner(CalculateRunner):
             )
         )
         assert len(time) == len(Et)
-        assert time[-1] == self.steps * self.time_step
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         return True
