@@ -3,7 +3,7 @@ defaults:
   - checkpoint: puma_sm
   - _self_
 
-benchmark_name: oc20-s2ef-0421
+benchmark_name: oc20-s2ef-ood-both
 
 job:
   run_name: ${checkpoint.model_name}
@@ -42,7 +42,7 @@ runner:
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: ${cluster.data_root_dir}/catalysis/s2ef/is
+      src: ${cluster.data_root_dir}/catalysis/s2ef/test/oos_ads_bulk
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer

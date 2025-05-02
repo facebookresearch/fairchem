@@ -84,7 +84,8 @@ fairchem -c configs/puma/benchmark/osc-is2re-10k.yaml checkpoint=puma_sm cluster
 
 ## Catalysis benchmarks
 ```bash
-fairchem -c configs/puma/benchmark/oc20-s2ef.yaml checkpoint=puma_sm cluster=h100
+fairchem -c configs/puma/benchmark/oc20-s2ef-id.yaml checkpoint=puma_sm cluster=h100
+fairchem -c configs/puma/benchmark/oc20-s2ef-ood-both.yaml checkpoint=puma_sm cluster=h100
 fairchem -c configs/puma/benchmark/oc20-is2re-adsorption.yaml checkpoint=puma_sm cluster=h100
 fairchem -c configs/puma/benchmark/adsorbml.yaml checkpoint=puma_sm cluster=h100
 ```
