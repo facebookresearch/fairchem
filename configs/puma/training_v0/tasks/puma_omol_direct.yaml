@@ -36,7 +36,7 @@
     _target_: fairchem.core.modules.loss.DDPMTLoss
     loss_fn:
       _target_: fairchem.core.modules.loss.L2NormLoss
-    reduction: per_structure
+    reduction: mean
     coefficient: 30
   out_spec:
     dim: [3]

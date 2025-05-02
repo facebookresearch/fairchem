@@ -15,9 +15,11 @@ job:
     slurm:
       account: ${cluster.account}
       qos: ocp
+      mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: puma_031425_sm_direct_noMoP_omat_only
+  run_name: puma_031425_sm_direct_noMoP_omat_only_matchsteps
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
@@ -27,9 +29,9 @@ job:
 num_moe_experts: 0
 max_neighbors: 30
 cutoff_radius: 6
-epochs: 8
-steps: null #1680000 # 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
-max_atoms: 2800
+epochs: null
+steps: 1680000 #1680000 # 2.63 epochs 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
+max_atoms: 372 # 1.9e9 atoms/epoch * 2.63 epoch * 4 (sampling ratio) / 1.68e6 steps / 32 ranks = 372 atoms/step/rank
 bf16: True
 cpu_graph: True
 otf_graph: False
