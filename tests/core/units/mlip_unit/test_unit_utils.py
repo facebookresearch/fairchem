@@ -20,7 +20,7 @@ class GradSaveOptimizer(torch.optim.AdamW):
         self.save_step = 0
         # self.params = params
 
-    def step(self):
+    def step(self,closure=None):
         if self.save_path:
             gp_size = 0
             gp_rank = 0

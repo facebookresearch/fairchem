@@ -1,7 +1,7 @@
 defaults:
   - datasets: pickle
   - tasks: oc20_omol
-  - backbone: K2L2
+  - backbone: K2L2_moe
   - optimizer: adamw
   - _self_
 
@@ -12,13 +12,16 @@ job:
     distributed_init_method: FILE
   debug: True
 
-
+bf16: False
+moe_layer_type: pytorch
+regress_stress: True
+direct_forces: True
 max_neighbors: 20
-max_epochs: 1
 max_steps: null
-regress_stress: false
-direct_forces: true
+max_epochs: 1
+expected_loss: null
 
+checkpoint_every: 10000
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
@@ -45,17 +48,17 @@ runner:
       warmup_factor: 0.2
       warmup_epochs: 1
       lr_min_factor: 0.01
-      epochs: ${max_epochs}
-      steps: ${max_steps}
+      epochs: 1
     print_every: 1
     clip_grad_norm: 100
+    bf16: ${bf16}
   max_epochs: ${max_epochs}
   max_steps: ${max_steps}
-  callbacks:
-    - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
-      expected_loss: ${expected_loss}
-      expected_max_steps: ${max_steps}
-      expected_max_epochs: ${max_epochs}
-    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
-      checkpoint_every_n_steps: 3
-      max_saved_checkpoints: 10
+  callbacks: 
+      - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+        checkpoint_every_n_steps: ${checkpoint_every}
+        max_saved_checkpoints: 10
+      - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
+        expected_loss: ${expected_loss}
+        expected_max_steps: 2
+        expected_max_epochs: null

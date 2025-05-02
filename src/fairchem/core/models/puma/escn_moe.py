@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import functools
 import logging
 import math
 from contextlib import suppress
@@ -19,18 +20,18 @@ import torch.nn.init as init
 from matplotlib import pyplot as plt
 from torch.nn import functional as F
 
+from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
-from fairchem.core.models.puma.escn_md import eSCNMDBackbone
-
-with suppress(ModuleNotFoundError):
-    import dgl  # try to use DGL if available
-
-import functools
-
-from fairchem.core.common.registry import registry
 from fairchem.core.models.escn.escn import EdgeBlock
+from fairchem.core.models.puma.escn_md import eSCNMDBackbone
 from fairchem.core.models.puma.nn.so2_layers import SO2_Convolution
+
+fairchem_cpp_found = False
+with suppress(ModuleNotFoundError):
+    import fairchem_cpp  # try to use DGL if available
+
+    fairchem_cpp_found = True
 
 
 def _softmax(x):
@@ -158,39 +159,6 @@ class GlobalBlock(torch.nn.Module):
         return x_global
 
 
-class MOELinearDGLFractional(torch.nn.Module):
-    def __init__(
-        self,
-        fraction_moe: float = 1.0,
-        **kwargs,
-    ):
-        super().__init__()
-        self.in_features = kwargs["in_features"]
-        self.out_features = kwargs["out_features"]
-        self.bias = kwargs["bias"]
-
-        self.linear = None
-        if fraction_moe != 1.0:
-            moe_out_features = int(fraction_moe * kwargs["out_features"])
-            regular_out_features = kwargs["out_features"] - moe_out_features
-            logging.info(
-                f"Creating channels: {moe_out_features} moe and {regular_out_features} regular"
-            )
-            kwargs["out_features"] = moe_out_features
-            self.linear = torch.nn.Linear(
-                kwargs["in_features"], regular_out_features, bias=kwargs["bias"]
-            )
-
-        self.moe_linear = MOELinearDGL(**kwargs)
-
-    def forward(self, x):
-        moe_out = self.moe_linear(x)
-        if self.linear is not None:
-            regular_out = self.linear(x)
-            return torch.concatenate([moe_out, regular_out], dim=moe_out.ndim - 1)
-        return moe_out
-
-
 def init_linear(num_experts, use_bias, out_features, in_features):
     k = math.sqrt(1.0 / in_features)
     weights = nn.Parameter(
@@ -231,23 +199,17 @@ class MOELinearDGL(torch.nn.Module):
             )
         x_shape = x.shape
         if x.ndim == 2:
-            r = dgl.ops.segment_mm(x, weights, self.global_moe_tensors.routing_idxs)
+            r = fairchem_cpp.ops.segment_mm(
+                x, weights, self.global_moe_tensors.routing_idxs
+            )
         elif x.ndim == 3:
-            r = dgl.ops.segment_mm(
+            r = fairchem_cpp.ops.segment_mm(
                 x.reshape(-1, x_shape[-1]),
                 weights,
                 self.global_moe_tensors.routing_idxs * x_shape[1],
             ).reshape(*x_shape[:-1], -1)
-        elif x.ndim == 4:
-            # assume this is one per system
-            assert 1 == 0  # revist natoms in graph parallel
-            r = dgl.ops.segment_mm(
-                x.reshape(-1, x_shape[-1]),
-                weights,
-                self.global_moe_tensors.natoms * x_shape[1] * x_shape[2],
-            ).reshape(*x_shape[:-1], -1)
         else:
-            raise ValueError("x.ndim not in (2,3) not allows")
+            raise ValueError("x.ndim not in (2,3) not allowed")
         if self.bias is not None:
             r += self.bias
         return r
@@ -291,8 +253,8 @@ class MOELinear(torch.nn.Module):
                 out.append(F.linear(x[start:end], weights[idx], bias=self.bias))
                 start = end
         assert x.shape[0] == end
-
-        return torch.concatenate(out, dim=0)
+        out = torch.concatenate(out, dim=0)
+        return out
 
 
 def recursive_replace_so2m0_linear(model, replacement_factory):
@@ -377,13 +339,15 @@ def replace_linear_with_MOElinear(
         return cache[layer_identifier]
 
     if moe_layer_type == "dgl":
-        layer = MOELinearDGLFractional(
+        assert (
+            fairchem_cpp_found
+        ), "Cannot use DGL layer type if fairchem_cpp package is not available"
+        layer = MOELinearDGL(
             num_experts=num_experts,
             global_moe_tensors=global_moe_tensors,
             in_features=existing_linear_module.in_features,
             out_features=existing_linear_module.out_features,
             bias=existing_linear_module.bias is not None,
-            fraction_moe=fraction_moe,
         )
     elif moe_layer_type == "pytorch":
         assert fraction_moe == 1.0, "Cannot use fraction_moe with pytorch MoE layer"
@@ -650,7 +614,6 @@ class eSCNMDMoeBackbone(eSCNMDBackbone):
         **kwargs,
     ):
         super().__init__(**kwargs)
-
         initialize_moe(
             model=self,
             num_experts=num_experts,

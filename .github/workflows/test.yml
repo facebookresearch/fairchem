@@ -42,6 +42,10 @@ jobs:
           pip install packages/fairchem-demo-ocpapi[dev]
           pip install -r tests/requirements.txt # pin test packages
 
+          pushd src/fairchem/fairchem_cpp
+          USE_CUDA=0 python setup.py install
+          popd
+
       - name: Install additional dependencies
         run: |
           wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
@@ -92,6 +96,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev]
           pip install -r tests/requirements.txt # pin test packages
+
+          pushd src/fairchem/fairchem_cpp
+          USE_CUDA=1 python setup.py install
+          popd
 
       - name: Core GPU tests
         env:

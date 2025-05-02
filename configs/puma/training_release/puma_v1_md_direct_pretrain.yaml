@@ -26,6 +26,7 @@ job:
     entity: fairchem
     project: puma
 
+moe_layer_type: pytorch
 num_moe_experts: 32
 max_neighbors: 30
 cutoff_radius: 6

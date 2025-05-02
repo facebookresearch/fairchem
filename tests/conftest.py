@@ -21,7 +21,7 @@ def pytest_configure(config):
 
 def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
-    if "gpu" in item.keywords and not torch.cuda.is_available():
+    if "gpu" in item.keywords and "cpu_and_gpu" not in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
 
 

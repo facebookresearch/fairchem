@@ -258,6 +258,81 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset):
             )
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
+# @pytest.mark.gpu()
+# @pytest.mark.parametrize(
+#     "bf16, tol",
+#     [
+#         (False, 0.0001),
+#         (True, 0.05),
+#     ],
+# )
+# def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_gpu(bf16,tol,fake_puma_dataset):
+#     grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,"CUDA",fake_puma_dataset)
+    
+@pytest.mark.parametrize(
+    "bf16, tol",
+    [
+        (False, 0.0001),
+        (True, 0.05),
+    ],
+)
+def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_cpu(bf16,tol,fake_puma_dataset):
+    grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,"CPU",fake_puma_dataset)
+
+def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset_root_dir):
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        run1_path = os.path.join(tmpdirname, "run1")
+        run2_path = os.path.join(tmpdirname, "run2")
+        os.makedirs(run1_path, exist_ok=True)
+        os.makedirs(run2_path, exist_ok=True)
+
+        sys_args = [
+            "--config",
+            "tests/core/units/mlip_unit/test_mlip_train_moe.yaml",
+            "datasets=aselmdb",
+            f"datasets.data_root_dir={dataset_root_dir}",
+            "optimizer=savegrad",
+            f"job.device_type={device}",
+            f"bf16={bf16}"
+        ]
+
+        pytorch_sys_args = sys_args.copy()
+        pytorch_sys_args.append(f"optimizer.save_path={run1_path}")
+        launch_main(pytorch_sys_args)
+
+        dgl_sys_args = sys_args.copy()
+        dgl_sys_args.append('moe_layer_type=dgl')
+        dgl_sys_args.append(f"optimizer.save_path={run2_path}")
+        launch_main(dgl_sys_args)
+
+        for step in range(3):
+            run1_params_and_grads = torch.load(
+                os.path.join(run1_path, f"ddp1.0_gp0.0_step{step}.pt")
+            )
+            run2_params_and_grads = torch.load(
+                os.path.join(run2_path, f"ddp1.0_gp0.0_step{step}.pt")
+            )
+            relative_diffs = [
+                (
+                    run1_params_and_grads["grad"][idx]
+                    - run2_params_and_grads["grad"][idx]
+                ).abs()
+                / torch.tensor(
+                    [
+                        run1_params_and_grads["grad"][idx].abs().max(),
+                        run2_params_and_grads["grad"][idx].abs().max(),
+                        1e-7,
+                    ]
+                ).max()
+                for idx in range(len(run1_params_and_grads["grad"]))
+            ]
+
+            percent_within_tolerance = (
+                (torch.tensor([x.mean() for x in relative_diffs]) < tol)
+                .to(float)
+                .mean()
+            )
+            assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 @pytest.mark.parametrize(
     "train_config, dataset_config",
@@ -438,5 +513,50 @@ def test_train_and_resume_max_steps(
     assert os.path.isfile(checkpoint_state_yaml)
     # next do a manual restart from a checkpoint on step 3
     sys_args = ["--config", checkpoint_state_yaml]
+    launch_main(sys_args)
+    shutil.rmtree(temp_dir)
+
+
+# @pytest.mark.gpu()
+# def test_train_and_resume_moe_on_dgl_gpu(fake_puma_dataset):
+#     train_and_resume_moe_on_dgl("CUDA",fake_puma_dataset)
+    
+def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset):
+    train_and_resume_moe_on_dgl("CPU",fake_puma_dataset)
+
+
+def train_and_resume_moe_on_dgl(
+    device, data_door_dir
+):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "12345"
+
+    sys_args = [
+            "--config",
+            "tests/core/units/mlip_unit/test_mlip_train_moe.yaml",
+            "datasets=aselmdb",
+            f"+job.run_dir={temp_dir}",
+            f"datasets.data_root_dir={data_door_dir}",
+            f"job.device_type={device}",
+            f"+job.timestamp_id={timestamp_id}",
+            "optimizer=savegrad",
+            "max_steps=2",
+            "expected_loss=40.65530776977539" #21.0660400390625"
+        ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(
+        temp_dir, timestamp_id, "checkpoints", f"step_0"
+    )
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+    # next do a manual restart from a checkpoint on step 3
+    sys_args = ["--config", checkpoint_state_yaml]
+    launch_main(sys_args)
+    sys_args = ["--config", checkpoint_state_yaml, 'runner.train_eval_unit.model.backbone.moe_layer_type=dgl']
     launch_main(sys_args)
     shutil.rmtree(temp_dir)

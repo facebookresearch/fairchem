@@ -1,6 +1,6 @@
 model: fairchem.core.models.puma.escn_moe.eSCNMDMoeBackbone
 moe_dropout: 0.05
-moe_layer_type: pytorch
+moe_layer_type: ${moe_layer_type}
 num_experts: ${num_moe_experts}
 use_composition_embedding: true
 use_global_embedding: false

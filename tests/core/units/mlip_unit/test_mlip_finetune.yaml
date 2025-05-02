@@ -8,6 +8,7 @@ job:
   device_type: CPU
   scheduler:
     mode: LOCAL
+    distributed_init_method: FILE
   debug: True
 
 expected_loss: null
