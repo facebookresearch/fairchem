@@ -168,7 +168,7 @@ class MaxAtomDistributedBatchSampler(Sampler[list[int]]):
             f"Sampler batch generation times: get natoms: {t1 - t0}, total: {t2 - t0}"
         )
         logging.info(
-            f"MaxAtomDistributedSampler generated {len(indices)} batches with total atoms {sum(natoms_list)}, max: {max(atoms_count)}, min: {min(atoms_count)}, mean: {np.mean(atoms_count)}, std: {np.std(atoms_count)}"
+            f"MaxAtomDistributedSampler generated {len(indices)} batches with total atoms {np.sum(natoms_list)}, max: {max(atoms_count)}, min: {min(atoms_count)}, mean: {np.mean(atoms_count)}, std: {np.std(atoms_count)}"
         )
         logging.info(
             f"{samples_filtered} samples were removed because they exceed {self.max_atoms} atoms"
