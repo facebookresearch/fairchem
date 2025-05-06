@@ -856,15 +856,19 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         self,
         inference_model_path: str,
         device: str = "cpu",
+        overrides: dict | None = None,
+        compile: bool = False,
     ):
         super().__init__()
         model, _, tasks = load_inference_model_and_tasks(
-            inference_model_path, use_ema=True
+            inference_model_path, use_ema=True, overrides=overrides
         )
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
         self.model = model
+        if compile:
+            self.model = torch.compile(self.model, dynamic=True)
         self.model.to(self.device)
         self.model.eval()
         self.direct_forces = self.model.module.backbone.direct_forces

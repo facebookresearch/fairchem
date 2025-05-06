@@ -13,6 +13,7 @@ osc_train:
     r_edges: ${cpu_graph}
     r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: osc_energy
     forces: ${osc_forces_key}
@@ -35,6 +36,7 @@ osc_val:
     r_edges: ${cpu_graph}
     r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: osc_energy
     forces: ${osc_forces_key}
@@ -58,6 +60,7 @@ omol_train:
     r_data_keys: ['spin', 'charge']
     r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: omol_energy
     forces: ${omol_forces_key}
@@ -78,6 +81,7 @@ omol_val:
     r_data_keys: ['spin', 'charge']
     r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: omol_energy
     forces: ${omol_forces_key}
@@ -97,6 +101,7 @@ odac_train:
     r_forces: True
     r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: odac_energy
     forces: ${odac_forces_key}
@@ -116,6 +121,7 @@ odac_val:
     r_forces: True
     r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: odac_energy
     forces: ${odac_forces_key}
@@ -136,6 +142,7 @@ omat_train:
     r_edges: ${cpu_graph}
     r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: omat_energy
     forces: ${omat_forces_key}
@@ -163,6 +170,7 @@ omat_val:
     r_edges: ${cpu_graph}
     r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: omat_energy
     forces: ${omat_forces_key}
@@ -185,6 +193,7 @@ oc20_train:
     r_forces: True
     r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: oc20_energy
     forces: ${oc20_forces_key}
@@ -204,6 +213,7 @@ oc20_val:
     r_forces: True
     r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
+    radius: ${cutoff_radius}
   key_mapping:
     energy: oc20_energy
     forces: ${oc20_forces_key}

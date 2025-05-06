@@ -28,10 +28,7 @@ def seed_everywhere(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def get_diamond_tg_data(neighbors: int, cutoff: float, size: int):
-    # get torch geometric data object for diamond
-    atoms = build.bulk("C", "diamond", a=3.567, cubic=True)
-    atoms = atoms.repeat((size, size, size))
+def ase_to_graph(atoms, neighbors: int, cutoff: float):
     a2g = AtomsToGraphs(
         max_neigh=neighbors, radius=cutoff, r_edges=True, r_distances=True
     )
@@ -50,6 +47,18 @@ def get_diamond_tg_data(neighbors: int, cutoff: float, size: int):
     return next(iter(data_loader))
 
 
+def get_fcc_carbon_xtal(
+    neighbors: int, radius: float, num_atoms: int, lattice_constant: float = 3.8
+):
+    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
+    atoms = build.bulk("C", "fcc", a=lattice_constant)
+    n_cells = int(np.ceil(np.cbrt(num_atoms)))
+    atoms = atoms.repeat((n_cells, n_cells, n_cells))
+    indices = np.random.choice(len(atoms), num_atoms, replace=False)
+    sampled_atoms = atoms[indices]
+    return ase_to_graph(sampled_atoms, neighbors, radius)
+
+
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
     def timefunc():
         predictor.predict(data)
@@ -57,6 +66,8 @@ def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
 
     for _ in range(warmups):
         timefunc()
+        logging.info(f"memory allocated: {torch.cuda.memory_allocated()/(1024**3)}")
+
     result = timeit.timeit(timefunc, number=timeiters)
     qps = timeiters / result
     ns_per_day = qps * 24 * 3600 / 1e6
@@ -90,23 +101,25 @@ class InferenceBenchRunner(Runner):
     def __init__(
         self,
         run_dir_root,
+        natoms_list: list[int],
         model_checkpoints: dict[str, str],
-        timeiters: int = 100,
+        timeiters: int = 10,
         seed: int = 1,
-        sizes_to_bench: list[int] | None = None,
         device="cuda",
+        overrides: dict | None = None,
+        compile: bool = False,
     ):
-        if sizes_to_bench is None:
-            sizes_to_bench = [3, 4]
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
         torch.set_float32_matmul_precision("high")
+        self.natoms_list = natoms_list
         self.device = device
         self.seed = seed
         self.timeiters = timeiters
         self.model_checkpoints = model_checkpoints
-        self.sizes_to_bench = sizes_to_bench
         self.run_dir = os.path.join(run_dir_root, uuid.uuid4().hex.upper()[0:8])
+        self.overrides = overrides
+        self.compile = compile
         os.makedirs(self.run_dir, exist_ok=True)
 
     def run(self) -> None:
@@ -114,31 +127,31 @@ class InferenceBenchRunner(Runner):
 
         model_to_qps_data = defaultdict(list)
 
-        # benchmark all models
         for name, model_checkpoint in self.model_checkpoints.items():
             logging.info(f"Loading model: {model_checkpoint}")
-            predictor = MLIPPredictUnit(model_checkpoint, self.device)
+            predictor = MLIPPredictUnit(
+                model_checkpoint,
+                self.device,
+                overrides=self.overrides,
+                compile=self.compile,
+            )
             max_neighbors = predictor.model.module.backbone.max_neighbors
             cutoff = predictor.model.module.backbone.cutoff
-            max_neighbors = 120
-
             predictor.model.module.backbone.otf_graph = False
 
             # benchmark all cell sizes
-            for size in self.sizes_to_bench:
-                diamond_data = get_diamond_tg_data(
-                    neighbors=max_neighbors, cutoff=cutoff, size=size
-                ).to(self.device)
-                make_profile(diamond_data, predictor, name=name, save_loc=self.run_dir)
-
-                qps, ns_per_day = get_qps(
-                    diamond_data, predictor, timeiters=self.timeiters
+            for natoms in self.natoms_list:
+                data = get_fcc_carbon_xtal(max_neighbors, cutoff, natoms)
+                num_atoms = data.natoms.item()
+                num_edges = data.edge_index.shape[1]
+                logging.info(
+                    f"Starting profile: model: {model_checkpoint}, num_atoms: {num_atoms}, num_edges: {num_edges}"
                 )
-                num_atoms = diamond_data.natoms.item()
-                num_edges = diamond_data.edge_index.shape[1]
+                make_profile(data, predictor, name=name, save_loc=self.run_dir)
+                qps, ns_per_day = get_qps(data, predictor, timeiters=self.timeiters)
                 model_to_qps_data[name].append([num_atoms, ns_per_day])
                 logging.info(
-                    f"model: {model_checkpoint}, num_atoms: {num_atoms}, num_edges: {num_edges}, qps: {qps}"
+                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, num_edges: {num_edges}, qps: {qps}, ns_per_day: {ns_per_day}"
                 )
 
     def save_state(self, _):
