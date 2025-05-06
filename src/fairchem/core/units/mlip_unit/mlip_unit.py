@@ -170,6 +170,9 @@ def initialize_finetuning_model(
     model, model_config, _ = load_inference_model_and_tasks(
         checkpoint_location, overrides
     )
+    logging.warning(
+        f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
+    )
 
     model_config["heads"] = deepcopy(heads)
     model.finetune_model_full_config = model_config

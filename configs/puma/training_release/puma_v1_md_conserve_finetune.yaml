@@ -10,7 +10,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 64
+    num_nodes: 32
     slurm:
       account: ${cluster.account}
       qos: ${cluster.qos}
@@ -24,7 +24,7 @@ job:
     _partial_: true
     entity: fairchem
     project: puma
-  graph_parallel_group_size: 4
+  graph_parallel_group_size: 2
 
 starting_checkpoint: none
 max_neighbors: 300
@@ -153,6 +153,7 @@ runner:
           regress_stress: True
           direct_forces: False
           otf_graph: ${otf_graph}
+          moe_layer_type: pytorch
         pass_through_head_outputs: True
       heads: ${heads}
     optimizer_fn:

@@ -10,7 +10,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 16
+    num_nodes: 32
     slurm:
       account: ${cluster.account}
       qos: ${cluster.qos}
@@ -25,12 +25,12 @@ job:
     entity: fairchem
     project: puma
 
-starting_checkpoint: none
+starting_checkpoint: "/checkpoint/ocp/shared/puma/202505-0117-1812-5a58/checkpoints/final/inference_ckpt.pt"
 max_neighbors: 300
 cutoff_radius: 6
 epochs: null
 steps: 1000000 # 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
-max_atoms: 700
+max_atoms: 350
 min_atoms: 0
 bf16: False
 cpu_graph: True
@@ -152,12 +152,13 @@ runner:
           max_neighbors: ${max_neighbors}
           regress_stress: ${regress_stress}
           direct_forces: False
+          moe_layer_type: pytorch
         pass_through_head_outputs: True
       heads: ${heads}
     optimizer_fn:
       _target_: torch.optim.AdamW
       _partial_: true
-      lr: 8e-4
+      lr: 4e-4
       weight_decay: 1e-3
     cosine_lr_scheduler_fn:
       _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
