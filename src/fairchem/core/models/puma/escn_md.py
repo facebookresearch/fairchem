@@ -78,6 +78,7 @@ class eSCNMDBackbone(nn.Module):
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
+        radius_pbc_version: int = 1,
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -97,6 +98,7 @@ class eSCNMDBackbone(nn.Module):
         self.max_neighbors = max_neighbors
         self.use_pbc = use_pbc
         self.use_pbc_single = use_pbc_single
+        self.radius_pbc_version = radius_pbc_version
         self.enforce_max_neighbors_strictly = False
         self.activation_checkpointing = activation_checkpointing
         # related to charge spin dataset system embedding
@@ -356,6 +358,7 @@ class eSCNMDBackbone(nn.Module):
                     otf_graph=self.otf_graph,
                     enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                     use_pbc_single=self.use_pbc_single,
+                    radius_pbc_version=self.radius_pbc_version,
                 )
             else:
                 cell_per_edge = data_dict["cell"].repeat_interleave(

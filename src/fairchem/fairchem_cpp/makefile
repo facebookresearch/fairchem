@@ -13,6 +13,6 @@ clean:
 install:
 		TORCH_CUDA_ARCH_LIST=$(TORCH_CUDA_ARCH_LIST) \
 				     	CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=$(TORCH_ABI)" \
-						pip install -v --no-build-isolation -e .
+						uv pip install -v --no-build-isolation -e .
 
 rebuild: clean install

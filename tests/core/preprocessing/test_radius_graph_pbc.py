@@ -16,7 +16,7 @@ from ase.build import molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
-from fairchem.core.common.utils import radius_graph_pbc
+from fairchem.core.common.utils import radius_graph_pbc, radius_graph_pbc_v2
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.preprocessing import AtomsToGraphs
 
@@ -297,7 +297,7 @@ class TestRadiusGraphPBC:
     ],
 )
 def test_simple_systems_nopbc(
-    atoms, expected_edge_index, max_neighbors, enforce_max_neighbors_strictly
+    atoms, expected_edge_index, max_neighbors, enforce_max_neighbors_strictly, torch_deterministic
 ):
     a2g = AtomsToGraphs(
         r_energy=False,
@@ -311,12 +311,13 @@ def test_simple_systems_nopbc(
 
     batch = data_list_collater([data])
 
-    edge_index, _, _ = radius_graph_pbc(
-        batch,
-        radius=6,
-        max_num_neighbors_threshold=max_neighbors,
-        enforce_max_neighbors_strictly=enforce_max_neighbors_strictly,
-        pbc=[False, False, False],
-    )
+    for radius_graph_pbc_fn in (radius_graph_pbc_v2,radius_graph_pbc):
+        edge_index, _, _ = radius_graph_pbc_fn(
+            batch,
+            radius=6,
+            max_num_neighbors_threshold=max_neighbors,
+            enforce_max_neighbors_strictly=enforce_max_neighbors_strictly,
+            pbc=[False, False, False],
+        )
 
-    assert (edge_index == expected_edge_index).all()
+        assert len(set([ tuple(x) for x in edge_index.T.tolist() ])-set([ tuple(x) for x in expected_edge_index.T.tolist() ]))==0

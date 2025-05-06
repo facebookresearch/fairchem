@@ -133,7 +133,7 @@ def test_full_eval_from_cli():
 # different outputs , would be nice to have to extended
 # so that it checks specifically one example at a time and
 # not an aggregate MAE
-def test_full_conserving_moe_eval_from_cli(fake_puma_dataset):
+def test_full_conserving_moe_eval_from_cli(fake_puma_dataset,torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
@@ -169,7 +169,7 @@ def test_full_train_eval_from_cli_aselmdb_gpu(fake_puma_dataset):
     launch_main(sys_args)
 
 
-def test_full_train_from_cli():
+def test_full_train_from_cli(torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
@@ -195,7 +195,7 @@ def test_full_train_from_cli():
     launch_main(sys_args)
 
 
-def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset):
+def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset,torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
@@ -206,7 +206,7 @@ def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset):
     launch_main(sys_args)
 
 
-def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset):
+def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset,torch_deterministic):
     with tempfile.TemporaryDirectory() as tmpdirname:
         run1_path = os.path.join(tmpdirname, "run1")
         run2_path = os.path.join(tmpdirname, "run2")
@@ -276,7 +276,7 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset):
         (True, 0.05),
     ],
 )
-def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_cpu(bf16,tol,fake_puma_dataset):
+def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_cpu(bf16,tol,fake_puma_dataset,torch_deterministic):
     grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,"CPU",fake_puma_dataset)
 
 def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset_root_dir):
@@ -345,7 +345,7 @@ def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, fake_puma_dataset
+    train_config, dataset_config, fake_puma_dataset,torch_deterministic
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -417,7 +417,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
 
 
 @pytest.mark.parametrize("mode", ["gp", "no_gp"])
-def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset):
+def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset,torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
@@ -444,7 +444,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset):
     ],
 )
 def test_train_and_resume_max_epochs(
-    checkpoint_step, max_epochs, expected_loss, fake_puma_dataset
+    checkpoint_step, max_epochs, expected_loss, fake_puma_dataset,torch_deterministic
 ):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
@@ -484,7 +484,7 @@ def test_train_and_resume_max_epochs(
     ],
 )
 def test_train_and_resume_max_steps(
-    checkpoint_step, max_steps, expected_loss, fake_puma_dataset
+    checkpoint_step, max_steps, expected_loss, fake_puma_dataset,torch_deterministic
 ):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
@@ -521,13 +521,12 @@ def test_train_and_resume_max_steps(
 # def test_train_and_resume_moe_on_dgl_gpu(fake_puma_dataset):
 #     train_and_resume_moe_on_dgl("CUDA",fake_puma_dataset)
     
-def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset):
+def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset,torch_deterministic):
     train_and_resume_moe_on_dgl("CPU",fake_puma_dataset)
 
 
 def train_and_resume_moe_on_dgl(
-    device, data_door_dir
-):
+    device, data_door_dir):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"

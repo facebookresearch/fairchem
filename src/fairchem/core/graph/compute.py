@@ -17,6 +17,7 @@ from fairchem.core.common.utils import (
     compute_neighbors,
     get_pbc_distances,
     radius_graph_pbc,
+    radius_graph_pbc_v2,
 )
 
 
@@ -43,6 +44,7 @@ def generate_graph(
     otf_graph: bool,
     enforce_max_neighbors_strictly: bool,
     use_pbc_single: bool,
+    radius_pbc_version: int = 1,
 ) -> GraphData:
     """Generate a graph representation from atomic structure data.
 
@@ -72,6 +74,13 @@ def generate_graph(
             )
             otf_graph = True
 
+    if radius_pbc_version == 1:
+        radius_graph_pbc_fn = radius_graph_pbc
+    elif radius_pbc_version == 2:
+        radius_graph_pbc_fn = radius_graph_pbc_v2
+    else:
+        raise ValueError(f"Invalid radius_pbc version {radius_pbc_version}")
+
     if use_pbc:
         if otf_graph:
             if use_pbc_single:
@@ -82,7 +91,7 @@ def generate_graph(
                 ) = list(
                     zip(
                         *[
-                            radius_graph_pbc(
+                            radius_graph_pbc_fn(
                                 data[idx],
                                 cutoff,
                                 max_neighbors,
@@ -109,7 +118,7 @@ def generate_graph(
                 ## using two different samples
                 ## sid='mp-675045-mp-675045-0-7' (MPTRAJ)
                 ## sid='75396' (OC22)
-                edge_index, cell_offsets, neighbors = radius_graph_pbc(
+                edge_index, cell_offsets, neighbors = radius_graph_pbc_fn(
                     data,
                     cutoff,
                     max_neighbors,
