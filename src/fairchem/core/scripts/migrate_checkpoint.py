@@ -64,6 +64,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--remove-static-keys", default=True, action=argparse.BooleanOptionalAction
     )
+    parser.add_argument(
+        "--map-undefined-stress-to", type=str, required=False, default=None
+    )
     args = parser.parse_args()
 
     if os.path.exists(args.checkpoint_out):
@@ -77,6 +80,27 @@ if __name__ == "__main__":
 
     checkpoint.tasks_config = update_config(checkpoint.tasks_config)
     checkpoint.model_config = update_config(checkpoint.model_config)
+
+    if args.map_undefined_stress_to is not None:
+        target_stress_task = f"{args.map_undefined_stress_to}_stress"
+        output_dataset_names = set()
+        datasets_with_stress = set()
+        target_stress_config = None
+        for task in checkpoint.tasks_config:
+            if "_energy" in task.name:
+                output_dataset_names.add(task.name.replace("_energy", ""))
+            elif "_stress" in task.name:
+                datasets_with_stress.add(task.name.replace("_stress", ""))
+                if task.name == target_stress_task:
+                    target_stress_config = task
+        assert (
+            target_stress_config is not None
+        ), f"Did not find existing task {target_stress_task} in {[task.name for task in checkpoint.tasks_config]}"
+        for dataset_name in output_dataset_names - datasets_with_stress:
+            task_config = target_stress_config.copy()
+            task_config.name = f"{dataset_name}_stress"
+            task_config.datasets = [dataset_name]
+            checkpoint.tasks_config.append(task_config)
 
     # remove keys for registered buffers that are no longer saved
     if args.remove_static_keys:
