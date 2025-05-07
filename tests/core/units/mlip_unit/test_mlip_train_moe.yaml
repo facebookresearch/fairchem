@@ -20,7 +20,6 @@ max_neighbors: 20
 max_steps: null
 max_epochs: 1
 expected_loss: null
-
 checkpoint_every: 10000
 
 runner:

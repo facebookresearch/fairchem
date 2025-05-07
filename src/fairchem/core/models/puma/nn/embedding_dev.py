@@ -38,12 +38,16 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         rescale_factor,
         cutoff,
         mappingReduced,
+        # Enables activation checkpointing in size of
+        # activation_checkpoint_chunk_size edge blocks
+        activation_checkpoint_chunk_size: int | None,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
         self.lmax = lmax
         self.mmax = mmax
         self.mappingReduced = mappingReduced
+        self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
 
         self.m_0_num_coefficients: int = self.mappingReduced.m_size[0]
         self.m_all_num_coefficents: int = len(self.mappingReduced.l_harmonic)
@@ -62,7 +66,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self.cutoff = cutoff
         self.envelope = PolynomialEnvelope(exponent=5)
 
-    def forward(
+    def forward_chunk(
         self,
         x,
         x_edge,
@@ -95,9 +99,52 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
 
-        x.index_add_(
+        return x.index_add_(
             0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
         )
+
+    def forward(
+        self,
+        x,
+        x_edge,
+        edge_distance,
+        edge_index,
+        wigner_and_M_mapping_inv,
+        node_offset=0,
+    ):
+        if self.activation_checkpoint_chunk_size is None:
+            return self.forward_chunk(
+                x,
+                x_edge,
+                edge_distance,
+                edge_index,
+                wigner_and_M_mapping_inv,
+                node_offset,
+            )
+
+        edge_index_partitions = edge_index.split(
+            self.activation_checkpoint_chunk_size, dim=1
+        )
+        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
+        edge_distance_parititons = edge_distance.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
+        x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
+
+        for idx in range(len(edge_index_partitions)):
+            x = torch.utils.checkpoint.checkpoint(
+                self.forward_chunk,
+                x,
+                x_edge_partitions[idx],
+                edge_distance_parititons[idx],
+                edge_index_partitions[idx],
+                wigner_inv_partitions[idx],
+                node_offset,
+                use_reentrant=False,
+            )
+
         return x
 
 

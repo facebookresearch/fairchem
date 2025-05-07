@@ -100,7 +100,12 @@ class eSCNMDBackbone(nn.Module):
         self.use_pbc_single = use_pbc_single
         self.radius_pbc_version = radius_pbc_version
         self.enforce_max_neighbors_strictly = False
-        self.activation_checkpointing = activation_checkpointing
+
+        activation_checkpoint_chunk_size = None
+        if activation_checkpointing:
+            # The size of edge blocks to use in activation checkpointing
+            activation_checkpoint_chunk_size = 1024 * 128
+
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
@@ -197,6 +202,7 @@ class eSCNMDBackbone(nn.Module):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
+            activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
 
         self.num_layers = num_layers
@@ -220,6 +226,7 @@ class eSCNMDBackbone(nn.Module):
                 self.norm_type,
                 self.act_type,
                 self.ff_type,
+                activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
             )
             self.blocks.append(block)
 
@@ -482,32 +489,16 @@ class eSCNMDBackbone(nn.Module):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
-                if self.activation_checkpointing:
-                    x_message = torch.utils.checkpoint.checkpoint(
-                        self.blocks[i],
-                        x_message,
-                        x_edge,
-                        graph_dict["edge_distance"],
-                        graph_dict["edge_index"],
-                        wigner_and_M_mapping,
-                        wigner_and_M_mapping_inv,
-                        sys_node_embedding,
-                        graph_dict["node_offset"],
-                        use_reentrant=(
-                            not self.training if self.direct_forces else False
-                        ),
-                    )
-                else:
-                    x_message = self.blocks[i](
-                        x_message,
-                        x_edge,
-                        graph_dict["edge_distance"],
-                        graph_dict["edge_index"],
-                        wigner_and_M_mapping,
-                        wigner_and_M_mapping_inv,
-                        sys_node_embedding=sys_node_embedding,
-                        node_offset=graph_dict["node_offset"],
-                    )
+                x_message = self.blocks[i](
+                    x_message,
+                    x_edge,
+                    graph_dict["edge_distance"],
+                    graph_dict["edge_index"],
+                    wigner_and_M_mapping,
+                    wigner_and_M_mapping_inv,
+                    sys_node_embedding=sys_node_embedding,
+                    node_offset=graph_dict["node_offset"],
+                )
 
         # Final layer norm
         x_message = self.norm(x_message)

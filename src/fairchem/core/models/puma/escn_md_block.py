@@ -37,7 +37,10 @@ class Edgewise(torch.nn.Module):
         mappingReduced,
         SO3_grid,
         cutoff,
-        act_type="gate",
+        # Enables activation checkpointing of edges in
+        # activation_checkpoint_chunk_size size edge blocks
+        activation_checkpoint_chunk_size: int | None,
+        act_type: str = "gate",
     ):
         super().__init__()
 
@@ -45,6 +48,7 @@ class Edgewise(torch.nn.Module):
         self.hidden_channels = hidden_channels
         self.lmax = lmax
         self.mmax = mmax
+        self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
 
         self.mappingReduced = mappingReduced
         self.SO3_grid = SO3_grid
@@ -101,6 +105,60 @@ class Edgewise(torch.nn.Module):
         )
 
     def forward(
+        self,
+        x,
+        x_edge,
+        edge_distance,
+        edge_index,
+        wigner_and_M_mapping,
+        wigner_and_M_mapping_inv,
+        node_offset: int = 0,
+    ):
+        if self.activation_checkpoint_chunk_size is None:
+            return self.forward_chunk(
+                x,
+                x_edge,
+                edge_distance,
+                edge_index,
+                wigner_and_M_mapping,
+                wigner_and_M_mapping_inv,
+                node_offset,
+            )
+        edge_index_partitions = edge_index.split(
+            self.activation_checkpoint_chunk_size, dim=1
+        )
+        wigner_partitions = wigner_and_M_mapping.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
+        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
+        edge_distance_parititons = edge_distance.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
+        x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
+        new_embeddings = []
+        for idx in range(len(edge_index_partitions)):
+            new_embeddings.append(
+                torch.utils.checkpoint.checkpoint(
+                    self.forward_chunk,
+                    x,
+                    x_edge_partitions[idx],
+                    edge_distance_parititons[idx],
+                    edge_index_partitions[idx],
+                    wigner_partitions[idx],
+                    wigner_inv_partitions[idx],
+                    node_offset,
+                    use_reentrant=True,
+                )
+            )
+
+            if len(new_embeddings) > 8:
+                new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
+
+        return torch.stack(new_embeddings).sum(axis=0)
+
+    def forward_chunk(
         self,
         x,
         x_edge,
@@ -243,6 +301,7 @@ class eSCNMD_Block(torch.nn.Module):
         norm_type: str,
         act_type: str,
         ff_type: str,
+        activation_checkpoint_chunk_size: int | None,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -264,6 +323,7 @@ class eSCNMD_Block(torch.nn.Module):
             SO3_grid=SO3_grid,
             cutoff=cutoff,
             act_type=act_type,
+            activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
 
         self.norm_2 = get_normalization_layer(
