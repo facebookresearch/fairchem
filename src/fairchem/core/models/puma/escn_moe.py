@@ -373,16 +373,9 @@ def standalone_prepare_MOE(model, data, graph, csd_mixed_emb):
     with torch.autocast(device_type=data.pos.device.type, enabled=False):
         atomic_numbers_full = data.atomic_numbers_full.long()
 
-        if isinstance(graph, dict):
-            # hand escnMD
-            edge_distance_full = graph["edge_distance_full"]
-            edge_index_full = graph["edge_index_full"]
-            edge_index = graph["edge_index"]
-        else:
-            # assume its a graph object
-            edge_distance_full = graph.edge_distance_full
-            edge_index_full = graph.edge_index_full
-            edge_index = graph.edge_index
+        edge_distance_full = graph["edge_distance_full"]
+        edge_index_full = graph["edge_index_full"]
+        edge_index = graph["edge_index"]
 
         model.global_moe_tensors.expert_mixing_coefficients = torch.zeros(
             (len(data), model.num_experts), device=data.batch.device

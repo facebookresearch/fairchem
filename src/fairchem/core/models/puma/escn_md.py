@@ -56,8 +56,8 @@ class eSCNMDBackbone(nn.Module):
         # NOTE: graph construction related, to remove
         otf_graph: bool = False,
         max_neighbors: int = 300,
-        use_pbc: bool = True,
-        use_pbc_single: bool = False,
+        use_pbc: bool = True,  # deprecated
+        use_pbc_single: bool = True,  # deprecated
         cutoff: float = 5.0,
         edge_channels: int = 128,
         distance_function: str = "gaussian",
@@ -96,8 +96,6 @@ class eSCNMDBackbone(nn.Module):
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
-        self.use_pbc = use_pbc
-        self.use_pbc_single = use_pbc_single
         self.radius_pbc_version = radius_pbc_version
         self.enforce_max_neighbors_strictly = False
 
@@ -245,7 +243,7 @@ class eSCNMDBackbone(nn.Module):
     def prepare_MOE(self, data, graph, csd_mixed_emb):
         pass
 
-    def get_rotmat_and_wigner(
+    def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
     ):
         Jd_buffers = [
@@ -290,35 +288,10 @@ class eSCNMDBackbone(nn.Module):
 
         return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
 
-    def generate_graph(self, *args, **kwargs):
-        graph = generate_graph(*args, **kwargs)
-        return dict(  # noqa: C408
-            edge_index=graph.edge_index,
-            edge_distance=graph.edge_distance,
-            edge_distance_vec=graph.edge_distance_vec,
-            cell_offsets=graph.cell_offsets,
-            offset_distances=None,
-            neighbors=None,
-            node_offset=0,
-            batch_full=graph.batch_full,
-            atomic_numbers_full=graph.atomic_numbers_full,
-        )
-
-    @conditional_grad(torch.enable_grad())
-    def forward(self, data_dict) -> dict[str, torch.Tensor]:
+    def _get_displacement_and_cell(self, data_dict):
         ###############################################################
         # gradient-based forces/stress
         ###############################################################
-        data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
-        data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
-        data_dict["batch_full"] = data_dict["batch"]
-
-        # TODO: this part is actually better put in the hydra base forward as
-        # it is a common requirement for any energy-conserving model.
-        # currently we move graph generation to the hydra part, out side backbone forward to
-        # make compilation work. This will break energy-conserving models.
-        # but eventually we might move the require_grad part to the hydra forward.
-        # so this problem can be solved.
         displacement = None
         orig_cell = None
         if self.regress_stress and not self.direct_forces:
@@ -354,73 +327,96 @@ class eSCNMDBackbone(nn.Module):
             and data_dict["pos"].requires_grad is False
         ):
             data_dict["pos"].requires_grad = True
+        return displacement, orig_cell
 
-        with record_function("generate_graph"):
-            if self.otf_graph:
-                graph_dict = self.generate_graph(
-                    data_dict,
-                    cutoff=self.cutoff,
-                    max_neighbors=self.max_neighbors,
-                    use_pbc=self.use_pbc,
-                    otf_graph=self.otf_graph,
-                    enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
-                    use_pbc_single=self.use_pbc_single,
-                    radius_pbc_version=self.radius_pbc_version,
-                )
-            else:
-                cell_per_edge = data_dict["cell"].repeat_interleave(
-                    data_dict["nedges"], dim=0
-                )
-                shifts = torch.einsum(
-                    "ij,ijk->ik",
-                    data_dict["cell_offsets"].to(cell_per_edge.dtype),
-                    cell_per_edge,
-                )
-                edge_distance_vec = (
-                    data_dict["pos"][data_dict["edge_index"][0]]
-                    - data_dict["pos"][data_dict["edge_index"][1]]
-                    + shifts
-                )  # [n_edges, 3]
-                # pylint: disable=E1102
-                edge_distance = torch.linalg.norm(
-                    edge_distance_vec, dim=-1, keepdim=False
-                )  # [n_edges, 1]
+    def _generate_graph(self, data_dict):
+        if self.otf_graph:
+            graph_dict = generate_graph(
+                data_dict,
+                cutoff=self.cutoff,
+                max_neighbors=self.max_neighbors,
+                enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
+                radius_pbc_version=self.radius_pbc_version,
+            )
+        else:
+            # this assume edge_index is provided
+            assert (
+                "edge_index" in data_dict
+            ), "otf_graph is false, need to provide edge_index as input!"
+            cell_per_edge = data_dict["cell"].repeat_interleave(
+                data_dict["nedges"], dim=0
+            )
+            shifts = torch.einsum(
+                "ij,ijk->ik",
+                data_dict["cell_offsets"].to(cell_per_edge.dtype),
+                cell_per_edge,
+            )
+            edge_distance_vec = (
+                data_dict["pos"][data_dict["edge_index"][0]]
+                - data_dict["pos"][data_dict["edge_index"][1]]
+                + shifts
+            )  # [n_edges, 3]
+            # pylint: disable=E1102
+            edge_distance = torch.linalg.norm(
+                edge_distance_vec, dim=-1, keepdim=False
+            )  # [n_edges, 1]
 
-                graph_dict = {
-                    "atomic_numbers_full": data_dict["atomic_numbers_full"],
-                    "batch_full": data_dict["batch_full"],
-                    "edge_index": data_dict["edge_index"],
-                    "edge_distance": edge_distance,
-                    "edge_distance_vec": edge_distance_vec,
-                    "node_offset": 0,
-                }
+            graph_dict = {
+                "edge_index": data_dict["edge_index"],
+                "edge_distance": edge_distance,
+                "edge_distance_vec": edge_distance_vec,
+                "node_offset": 0,
+            }
 
         if gp_utils.initialized():
-            graph_dict, data_dict = self._init_gp_partitions(graph_dict, data_dict)
+            graph_dict = self._init_gp_partitions(
+                graph_dict, data_dict["atomic_numbers_full"]
+            )
+            # create partial atomic numbers and batch tensors for GP
+            node_partition = graph_dict["node_partition"]
+            data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
+                node_partition
+            ]
+            data_dict["batch"] = data_dict["batch_full"][node_partition]
         else:
+            graph_dict["node_offset"] = 0
             graph_dict["edge_distance_vec_full"] = graph_dict["edge_distance_vec"]
             graph_dict["edge_distance_full"] = graph_dict["edge_distance"]
             graph_dict["edge_index_full"] = graph_dict["edge_index"]
 
+        return graph_dict
+
+    @conditional_grad(torch.enable_grad())
+    def forward(self, data_dict) -> dict[str, torch.Tensor]:
+        data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
+        data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
+        data_dict["batch_full"] = data_dict["batch"]
+
+        with record_function("get_displacement_and_cell"):
+            displacement, orig_cell = self._get_displacement_and_cell(data_dict)
+
+        with record_function("generate_graph"):
+            graph_dict = self._generate_graph(data_dict)
+
         with record_function("obtain wigner"):
             (_, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
-                self.get_rotmat_and_wigner(
+                self._get_rotmat_and_wigner(
                     graph_dict["edge_distance_vec_full"],
                     use_cuda_graph=self.use_cuda_graph_wigner
                     and "cuda" in get_device_for_local_rank()
                     and not self.training,
                 )
             )
-        if gp_utils.initialized():
-            wigner_and_M_mapping = wigner_and_M_mapping_full[
-                graph_dict["edge_partition"]
-            ]
-            wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full[
-                graph_dict["edge_partition"]
-            ]
-        else:
-            wigner_and_M_mapping = wigner_and_M_mapping_full
-            wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
+            if gp_utils.initialized():
+                wigner_and_M_mapping = wigner_and_M_mapping_full[
+                    graph_dict["edge_partition"]
+                ]
+                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full[
+                    graph_dict["edge_partition"]
+                ]
+            else:
+                wigner_and_M_mapping = wigner_and_M_mapping_full
+                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
 
         ###############################################################
         # Initialize node embeddings
@@ -509,16 +505,13 @@ class eSCNMDBackbone(nn.Module):
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
-        out.update(graph_dict)
         return out
 
-    def _init_gp_partitions(self, graph_dict, data_dict):
+    def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
         """Graph Parallel
         This creates the required partial tensors for each rank given the full tensors.
         The tensors are split on the dimension along the node index using node_partition.
         """
-        atomic_numbers_full = graph_dict["atomic_numbers_full"]
-        data_batch_full = graph_dict["batch_full"]
         edge_index = graph_dict["edge_index"]
         edge_distance = graph_dict["edge_distance"]
         edge_distance_vec_full = graph_dict["edge_distance_vec"]
@@ -543,20 +536,15 @@ class eSCNMDBackbone(nn.Module):
         graph_dict["edge_distance_full"] = edge_distance
         graph_dict["edge_index_full"] = edge_index
         graph_dict["edge_partition"] = edge_partition
+        graph_dict["node_partition"] = node_partition
 
         # gp versions of data
-        graph_dict["atomic_numbers"] = atomic_numbers_full[node_partition]
-        graph_dict["batch"] = data_batch_full[node_partition]
         graph_dict["edge_index"] = edge_index[:, edge_partition]
         graph_dict["edge_distance"] = edge_distance[edge_partition]
         graph_dict["edge_distance_vec"] = edge_distance_vec_full[edge_partition]
         graph_dict["node_offset"] = node_partition.min().item()
 
-        data_dict["atomic_numbers_full"] = atomic_numbers_full
-        data_dict["atomic_numbers"] = data_dict["atomic_numbers"][node_partition]
-        data_dict["batch"] = data_dict["batch"][node_partition]
-        data_dict["batch_full"] = data_batch_full
-        return graph_dict, data_dict
+        return graph_dict
 
     @property
     def num_params(self):

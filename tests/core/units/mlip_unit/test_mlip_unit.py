@@ -133,7 +133,7 @@ def test_full_eval_from_cli():
 # different outputs , would be nice to have to extended
 # so that it checks specifically one example at a time and
 # not an aggregate MAE
-def test_full_conserving_moe_eval_from_cli(fake_puma_dataset,torch_deterministic):
+def test_full_conserving_moe_eval_from_cli(fake_puma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
@@ -195,7 +195,7 @@ def test_full_train_from_cli(torch_deterministic):
     launch_main(sys_args)
 
 
-def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset,torch_deterministic):
+def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
@@ -206,7 +206,7 @@ def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset,torch_deterministic)
     launch_main(sys_args)
 
 
-def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset,torch_deterministic):
+def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministic):
     with tempfile.TemporaryDirectory() as tmpdirname:
         run1_path = os.path.join(tmpdirname, "run1")
         run2_path = os.path.join(tmpdirname, "run2")
@@ -258,6 +258,7 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset,torch_deterministic
             )
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
+
 # @pytest.mark.gpu()
 # @pytest.mark.parametrize(
 #     "bf16, tol",
@@ -268,7 +269,9 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset,torch_deterministic
 # )
 # def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_gpu(bf16,tol,fake_puma_dataset):
 #     grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,"CUDA",fake_puma_dataset)
-    
+
+
+@pytest.mark.dgl()
 @pytest.mark.parametrize(
     "bf16, tol",
     [
@@ -276,10 +279,18 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset,torch_deterministic
         (True, 0.05),
     ],
 )
-def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_cpu(bf16,tol,fake_puma_dataset,torch_deterministic):
-    grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,"CPU",fake_puma_dataset)
+def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_cpu(
+    bf16, tol, fake_puma_dataset, torch_deterministic
+):
+    grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(
+        bf16, tol, "CPU", fake_puma_dataset
+    )
 
-def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset_root_dir):
+
+@pytest.mark.dgl()
+def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(
+    bf16, tol, device, dataset_root_dir
+):
     with tempfile.TemporaryDirectory() as tmpdirname:
         run1_path = os.path.join(tmpdirname, "run1")
         run2_path = os.path.join(tmpdirname, "run2")
@@ -293,7 +304,7 @@ def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset
             f"datasets.data_root_dir={dataset_root_dir}",
             "optimizer=savegrad",
             f"job.device_type={device}",
-            f"bf16={bf16}"
+            f"bf16={bf16}",
         ]
 
         pytorch_sys_args = sys_args.copy()
@@ -301,7 +312,7 @@ def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset
         launch_main(pytorch_sys_args)
 
         dgl_sys_args = sys_args.copy()
-        dgl_sys_args.append('moe_layer_type=dgl')
+        dgl_sys_args.append("moe_layer_type=dgl")
         dgl_sys_args.append(f"optimizer.save_path={run2_path}")
         launch_main(dgl_sys_args)
 
@@ -334,6 +345,7 @@ def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset
             )
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
+
 @pytest.mark.parametrize(
     "train_config, dataset_config",
     [
@@ -345,7 +357,7 @@ def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,device,dataset
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, fake_puma_dataset,torch_deterministic
+    train_config, dataset_config, fake_puma_dataset, torch_deterministic
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -417,7 +429,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
 
 
 @pytest.mark.parametrize("mode", ["gp", "no_gp"])
-def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset,torch_deterministic):
+def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
@@ -444,7 +456,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset,torch_determini
     ],
 )
 def test_train_and_resume_max_epochs(
-    checkpoint_step, max_epochs, expected_loss, fake_puma_dataset,torch_deterministic
+    checkpoint_step, max_epochs, expected_loss, fake_puma_dataset, torch_deterministic
 ):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
@@ -484,7 +496,7 @@ def test_train_and_resume_max_epochs(
     ],
 )
 def test_train_and_resume_max_steps(
-    checkpoint_step, max_steps, expected_loss, fake_puma_dataset,torch_deterministic
+    checkpoint_step, max_steps, expected_loss, fake_puma_dataset, torch_deterministic
 ):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
@@ -520,42 +532,46 @@ def test_train_and_resume_max_steps(
 # @pytest.mark.gpu()
 # def test_train_and_resume_moe_on_dgl_gpu(fake_puma_dataset):
 #     train_and_resume_moe_on_dgl("CUDA",fake_puma_dataset)
-    
-def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset,torch_deterministic):
-    train_and_resume_moe_on_dgl("CPU",fake_puma_dataset)
 
 
-def train_and_resume_moe_on_dgl(
-    device, data_door_dir):
+@pytest.mark.dgl()
+def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset, torch_deterministic):
+    train_and_resume_moe_on_dgl("CPU", fake_puma_dataset)
+
+
+@pytest.mark.gpu()
+def train_and_resume_moe_on_dgl(device, data_door_dir):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
 
     sys_args = [
-            "--config",
-            "tests/core/units/mlip_unit/test_mlip_train_moe.yaml",
-            "datasets=aselmdb",
-            f"+job.run_dir={temp_dir}",
-            f"datasets.data_root_dir={data_door_dir}",
-            f"job.device_type={device}",
-            f"+job.timestamp_id={timestamp_id}",
-            "optimizer=savegrad",
-            "max_steps=2",
-            "expected_loss=40.65530776977539" #21.0660400390625"
-        ]
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train_moe.yaml",
+        "datasets=aselmdb",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={data_door_dir}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "expected_loss=40.65530776977539",  # 21.0660400390625"
+    ]
     launch_main(sys_args)
 
     # Now resume from checkpoint_step and should get the same result
     # TODO, should get the run config and get checkpoint location from there
-    checkpoint_dir = os.path.join(
-        temp_dir, timestamp_id, "checkpoints", f"step_0"
-    )
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
     checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
     assert os.path.isdir(checkpoint_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     # next do a manual restart from a checkpoint on step 3
     sys_args = ["--config", checkpoint_state_yaml]
     launch_main(sys_args)
-    sys_args = ["--config", checkpoint_state_yaml, 'runner.train_eval_unit.model.backbone.moe_layer_type=dgl']
+    sys_args = [
+        "--config",
+        checkpoint_state_yaml,
+        "runner.train_eval_unit.model.backbone.moe_layer_type=dgl",
+    ]
     launch_main(sys_args)
     shutil.rmtree(temp_dir)
