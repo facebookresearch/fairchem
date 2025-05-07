@@ -6,7 +6,7 @@
     _target_: fairchem.core.modules.loss.DDPMTLoss
     loss_fn:
       _target_: fairchem.core.modules.loss.PerAtomMAELoss
-    coefficient: ${osc_energy_coef}
+    coefficient: ${energy_coef}
   out_spec:
     dim: [1]
     dtype: float32
@@ -33,7 +33,7 @@
     _target_: fairchem.core.modules.loss.DDPMTLoss
     loss_fn:
       _target_: fairchem.core.modules.loss.PerAtomMAELoss
-    coefficient: ${omol_energy_coef}
+    coefficient: ${energy_coef}
   out_spec:
     dim: [1]
     dtype: float32
@@ -53,33 +53,6 @@
   metrics:
     - mae
     - per_atom_mae
-# - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
-#   name: oc20_energy
-#   level: system
-#   property: energy
-#   loss_fn:
-#     _target_: fairchem.core.modules.loss.DDPMTLoss
-#     loss_fn:
-#       _target_: fairchem.core.modules.loss.PerAtomMAELoss
-#     coefficient: ${oc20_energy_coef}
-#   out_spec:
-#     dim: [1]
-#     dtype: float32
-#   normalizer:
-#     _target_: fairchem.core.modules.normalization.normalizer.Normalizer
-#     mean: 0.0
-#     rmsd: ${normalizer_rmsd}
-#   element_references:
-#     _target_: fairchem.core.modules.normalization.element_references.ElementReferences
-#     element_references:
-#       _target_: torch.DoubleTensor
-#       _args_:
-#         - ${element_refs.oc20_elem_refs}
-#   datasets:
-#     - oc20
-#   metrics:
-#     - mae
-#     - per_atom_mae
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
   name: omat_energy
   level: system
@@ -88,7 +61,7 @@
     _target_: fairchem.core.modules.loss.DDPMTLoss
     loss_fn:
       _target_: fairchem.core.modules.loss.PerAtomMAELoss
-    coefficient: ${omat_energy_coef}
+    coefficient: ${energy_coef}
   out_spec:
     dim: [1]
     dtype: float32
@@ -108,7 +81,7 @@
     - mae
     - per_atom_mae
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
-  name: forces
+  name: osc_forces
   level: atom
   property: forces
   train_on_free_atoms: True
@@ -117,8 +90,8 @@
     _target_: fairchem.core.modules.loss.DDPMTLoss
     loss_fn:
       _target_: fairchem.core.modules.loss.L2NormLoss
-    reduction: per_structure
-    coefficient: ${direct_forces_coef}
+    reduction: mean
+    coefficient: ${force_coef}
   out_spec:
     dim: [3]
     dtype: float32
@@ -128,11 +101,101 @@
     rmsd: ${normalizer_rmsd}
   datasets:
     - osc
-    - omol
-    - odac
-    # - oc20
+  metrics:
+    - mae
+    - cosine_similarity
+    - magnitude_error
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: omat_forces
+  level: atom
+  property: forces
+  train_on_free_atoms: True
+  eval_on_free_atoms: True
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.L2NormLoss
+    reduction: mean
+    coefficient: ${force_coef}
+  out_spec:
+    dim: [3]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: ${normalizer_rmsd}
+  datasets:
     - omat
   metrics:
     - mae
     - cosine_similarity
     - magnitude_error
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: omol_forces
+  level: atom
+  property: forces
+  train_on_free_atoms: True
+  eval_on_free_atoms: True
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.L2NormLoss
+    reduction: mean
+    coefficient: ${force_coef}
+  out_spec:
+    dim: [3]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: ${normalizer_rmsd}
+  datasets:
+    - omol
+  metrics:
+    - mae
+    - cosine_similarity
+    - magnitude_error
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: osc_stress
+  level: system
+  property: stress
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.MAELoss
+    reduction: mean
+    coefficient: ${stress_coef}
+  out_spec:
+    dim: [1, 9]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: ${normalizer_rmsd}
+  datasets:
+    - osc
+  metrics:
+    - mae
+    - per_atom_mae
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: omat_stress
+  level: system
+  property: stress
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.MAELoss
+    reduction: mean
+    coefficient: ${stress_coef}
+  out_spec:
+    dim: [1, 9]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: ${normalizer_rmsd}
+  datasets:
+    - omat
+  metrics:
+    - mae
+    - per_atom_mae
