@@ -24,7 +24,7 @@ from fairchem.core.components.calculate.relaxation_runner import RelaxationRunne
 from fairchem.core.components.calculate.singlepoint_runner import SinglePointRunner
 
 try:
-    from scipy.stats import kendalltau
+    from scipy.stats import kendalltau, spearmanr
     from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
     sklearn_scipy_installed = True
@@ -98,12 +98,19 @@ class OSCPolymorphReducer(JsonDFReducer):
             logging.info(f"Computing metrics for {molecule_id=}")
             polymorph_results = results[results[self._molecule_id_key] == molecule_id]
 
-            ref_energy = min(polymorph_results[f"{energy_key}_target"])
-            energy_latt = polymorph_results[energy_key] - ref_energy
-            energy_latt_target = polymorph_results[f"{energy_key}_target"] - ref_energy
+            ref_structure_id = polymorph_results[f"{energy_key}_target"].argmin()
+            ref_energy = polymorph_results[energy_key].iloc[ref_structure_id]
+            ref_energy_target = polymorph_results[f"{energy_key}_target"].iloc[
+                ref_structure_id
+            ]
 
-            rankings_target = pd.Series(energy_latt_target).rank(method="min")
+            energy_latt = polymorph_results[energy_key] - ref_energy
+            energy_latt_target = (
+                polymorph_results[f"{energy_key}_target"] - ref_energy_target
+            )
+
             rankings = pd.Series(energy_latt).rank(method="min")
+            rankings_target = pd.Series(energy_latt_target).rank(method="min")
 
             metrics.update(
                 {
@@ -112,9 +119,12 @@ class OSCPolymorphReducer(JsonDFReducer):
                     f"{molecule_id},rmse": ev2kJ
                     * np.sqrt(mean_squared_error(energy_latt_target, energy_latt)),
                     f"{molecule_id},r2": r2_score(energy_latt_target, energy_latt),
-                    f"{molecule_id},kendall": kendalltau(rankings_target, rankings)[
-                        0
-                    ],  # only the kendalltau, no p
+                    f"{molecule_id},kendall": kendalltau(
+                        rankings_target, rankings
+                    ).statistic,
+                    f"{molecule_id},spearmanr": spearmanr(
+                        rankings_target, rankings
+                    ).statistic,
                 }
             )
 
@@ -133,6 +143,11 @@ class OSCPolymorphReducer(JsonDFReducer):
                     )
 
                     # not clean but call this directly to avoid rematching (rms, max_dist, mask, cost, mapping)
+                    reference_structure, relaxed_structure, _, _ = (
+                        self._structure_matcher._preprocess(
+                            reference_structure, relaxed_structure, niggli=True
+                        )
+                    )
                     match = self._structure_matcher._match(
                         reference_structure, relaxed_structure, fu=1, use_rms=True
                     )
@@ -146,7 +161,14 @@ class OSCPolymorphReducer(JsonDFReducer):
                             site_permutations=match[4],
                         )
                         if np.array_equal(relaxed_matrix, reference_matrix) is True:
-                            _rmsds.append(match[0])
+                            # rmsd from pmg structure matcher is normalized by (V/nsites)^(1/3)
+                            avg_vol = (
+                                relaxed_structure.volume + reference_structure.volume
+                            ) / 2
+                            rmsd = match[0] * (avg_vol / len(reference_structure)) ** (
+                                1 / 3
+                            )
+                            _rmsds.append(rmsd)
 
                 metrics.update(
                     {

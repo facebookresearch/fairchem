@@ -12,7 +12,6 @@ import traceback
 from pathlib import Path
 from typing import Any, ClassVar
 
-import ase.units
 import numpy as np
 import pandas as pd
 import phonopy
@@ -22,8 +21,6 @@ from fairchem.core.components.calculate import CalculateRunner
 from fairchem.core.components.calculate.recipes.phonons import (
     run_mdr_phonon_benchmark,
 )
-
-eVA3_to_GPa = 1 / ase.units.GPa
 
 
 def get_mdr_phonon_data_list(index_df_path, phonon_file_path, debug=False):
@@ -58,7 +55,6 @@ class MDRPhononRunner(CalculateRunner):
     # TODO continue if unfinished
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:
         all_results = []
-
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running phonon calculations."):
             try:
