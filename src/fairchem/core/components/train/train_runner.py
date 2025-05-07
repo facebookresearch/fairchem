@@ -72,7 +72,10 @@ class TrainCheckpointCallback(Callback):
             self.save_callback
         ), "Must initialize set_checkpoint_call_backs from Runner!"
         step = unit.train_progress.num_steps_completed
-        if step % self.checkpoint_every_n_steps == 0:
+        if (
+            self.checkpoint_every_n_steps is not None
+            and step % self.checkpoint_every_n_steps == 0
+        ):
             self.save_callback(os.path.join(self.checkpoint_dir, f"step_{step}"))
             # on main rank only
             # if there are too many checkpoints, delete the oldest one
@@ -84,11 +87,12 @@ class TrainCheckpointCallback(Callback):
                     shutil.rmtree(dir)
 
     def on_train_end(self, state: State, unit: TTrainUnit) -> None:
-        # also always checkpoint on train end
-        assert (
-            self.save_callback
-        ), "Must initialize set_checkpoint_call_backs from Runner!"
-        self.save_callback(os.path.join(self.checkpoint_dir, "final"))
+        if self.checkpoint_every_n_steps is not None:
+            # also always checkpoint on train end
+            assert (
+                self.save_callback
+            ), "Must initialize set_checkpoint_call_backs from Runner!"
+            self.save_callback(os.path.join(self.checkpoint_dir, "final"))
 
 
 class TrainEvalRunner(Runner):

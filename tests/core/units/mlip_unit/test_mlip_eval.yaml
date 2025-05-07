@@ -7,6 +7,8 @@ defaults:
 max_neighbors: 20
 regress_stress: True
 direct_forces: True
+num_experts: 0
+moe_layer_type: pytorch
 
 job:
   device_type: CPU

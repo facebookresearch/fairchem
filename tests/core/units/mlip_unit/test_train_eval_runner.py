@@ -16,7 +16,7 @@ import torch.distributed as dist
 from omegaconf import OmegaConf
 
 from fairchem.core._cli import get_hydra_config_from_yaml
-from fairchem.core.common.distutils import setup_env_local
+from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
 from fairchem.core.components.train.train_runner import (
     get_most_recent_viable_checkpoint_path,
 )
@@ -33,12 +33,13 @@ def check_model_state_equal(old_state: dict, new_state: dict) -> bool:
 
 def test_traineval_runner_save_and_load_checkpoint():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
+    assign_device_for_local_rank(True,0)
     setup_env_local()
     dist.init_process_group(backend="gloo", rank=0, world_size=1)
     config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
     # TODO mock main to avoid repeating this code in other tests
-    cfg = get_hydra_config_from_yaml(config, ["expected_loss=null"])
+    cfg = get_hydra_config_from_yaml(config, ["expected_loss=null","checkpoint_every=null"])
     os.makedirs(cfg.job.run_dir, exist_ok=True)
     os.makedirs(os.path.join(cfg.job.run_dir, cfg.job.timestamp_id), exist_ok=True)
     OmegaConf.save(cfg, cfg.job.metadata.config_path)
@@ -55,10 +56,11 @@ def test_traineval_runner_save_and_load_checkpoint():
     # now re-initialize the runner and load_state
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     # use a different seed so the runner cannot have the same state
-    new_cfg = get_hydra_config_from_yaml(config, ["expected_loss=null"])
+    new_cfg = get_hydra_config_from_yaml(config, ["expected_loss=null","checkpoint_every=null"])
     new_cfg.job.seed = 999
     assert new_cfg.job.seed != cfg.job.seed
     new_runner = hydra.utils.instantiate(new_cfg.runner)
+    new_runner.job_config = new_cfg.job
     new_runner.config = new_cfg
     new_runner.run()
     new_state = new_runner.train_eval_unit.state_dict()

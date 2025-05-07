@@ -305,7 +305,9 @@ def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(
 
         sys_args = [
             "--config",
-            "tests/core/units/mlip_unit/test_mlip_train_moe.yaml",
+            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "num_experts=8",
+            "checkpoint_every=10000",
             "datasets=aselmdb",
             f"datasets.data_root_dir={dataset_root_dir}",
             "optimizer=savegrad",
@@ -545,22 +547,61 @@ def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset, torch_deterministic)
     train_and_resume_moe_on_dgl("CPU", fake_puma_dataset)
 
 
-@pytest.mark.gpu()
-def train_and_resume_moe_on_dgl(device, data_door_dir):
+@pytest.fixture(scope="session")
+def direct_moe_checkpoint(fake_puma_dataset):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    temp_dir = "/tmp/y"
+    timestamp_id = "12345"
+    device='CPU'
+
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "num_experts=8",
+        "checkpoint_every=10000",
+        "datasets=aselmdb",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "max_epochs=null",
+        "expected_loss=null", 
+    ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+
+    return checkpoint_dir,checkpoint_state_yaml
+
+
+
+
+def train_and_resume_moe_on_dgl(device, data_root_dir):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
 
     sys_args = [
         "--config",
-        "tests/core/units/mlip_unit/test_mlip_train_moe.yaml",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "num_experts=8",
+        "checkpoint_every=10000",
         "datasets=aselmdb",
         f"+job.run_dir={temp_dir}",
-        f"datasets.data_root_dir={data_door_dir}",
+        f"datasets.data_root_dir={data_root_dir}",
         f"job.device_type={device}",
         f"+job.timestamp_id={timestamp_id}",
         "optimizer=savegrad",
         "max_steps=2",
+        "max_epochs=null",
         "expected_loss=40.65530776977539",  # 21.0660400390625"
     ]
     launch_main(sys_args)
@@ -581,3 +622,8 @@ def train_and_resume_moe_on_dgl(device, data_door_dir):
     ]
     launch_main(sys_args)
     shutil.rmtree(temp_dir)
+
+#example how to use checkpoint fixtures
+def test_checkpoints_work(conserving_moe_checkpoint,direct_moe_checkpoint):
+    conserving_inference_checkpoint_pt, conserving_train_state_yaml = conserving_moe_checkpoint
+    direct_inference_checkpoint_pt, direct_train_state_yaml = direct_moe_checkpoint

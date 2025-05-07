@@ -13,6 +13,8 @@ job:
   debug: True
 
 
+num_experts: 0
+moe_layer_type: pytorch
 max_neighbors: 20
 max_epochs: 1
 max_steps: null

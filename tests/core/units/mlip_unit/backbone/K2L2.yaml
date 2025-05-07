@@ -1,4 +1,7 @@
-model: fairchem.core.models.puma.escn_md.eSCNMDBackbone
+model: fairchem.core.models.puma.escn_moe.eSCNMDMoeBackbone
+moe_dropout: 0.0
+moe_layer_type: ${moe_layer_type}
+num_experts: ${num_experts} # 8
 max_num_elements: 100
 sphere_channels: 16
 lmax: 2
