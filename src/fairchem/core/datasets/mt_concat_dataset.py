@@ -100,31 +100,6 @@ class ConcatDataset(Dataset[T_co]):
 
         return dataset_idx_ownership, internal_sample_idxs
 
-    def _get_dataset_and_sample_index_list(self, sample_idx: list):
-        sample_idx = np.array(sample_idx)
-
-        # find out which dataset owns which sample_idx
-        dataset_idx_ownership = np.zeros(sample_idx.shape[0], dtype=np.int64)
-        internal_sample_idx = np.zeros(sample_idx.shape[0], dtype=np.int64)
-        for dataset_idx in range(len(self.cumulative_sizes)):
-            this_dataset_idx_ownership = np.where(
-                sample_idx < self.cumulative_sizes[dataset_idx]
-            )[0]
-
-            # breakpoint()
-            dataset_idx_ownership[this_dataset_idx_ownership] = dataset_idx
-
-            offset = 0
-            if dataset_idx > 0:
-                offset = self.cumulative_sizes[dataset_idx - 1]
-
-            internal_sample_idx[this_dataset_idx_ownership] = (
-                sample_idx[this_dataset_idx_ownership] - offset
-            ) % self.real_sizes[dataset_idx]
-            sample_idx[this_dataset_idx_ownership] = self.cumulative_sizes[-1] + 1
-
-        return dataset_idx_ownership, internal_sample_idx
-
     # @functools.cache
     # B019 Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
     def _get_dataset_and_sample_index(self, idx: int):
