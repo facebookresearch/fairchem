@@ -57,6 +57,66 @@ class RenameUnpickler(pickle.Unpickler):
         return super().find_class(find_new_module_name(module), name)
 
 
+def migrate_checkpoint(
+    checkpoint_path: torch.nn.Module,
+    rm_static_keys: bool = True,
+    task_add_stress: str | None = None,
+) -> dict:
+    """
+    Migrates a checkpoint by updating module imports and configurations.
+
+    This function loads a checkpoint, updates its configuration using the mapping
+    defined in fairchem.core.scripts.migrate_imports,
+
+    optionally adds stress tasks for datasets that don't have them,
+    and optionally removes static keys that are no longer needed.
+
+    Args:
+        checkpoint_path: Path to the input checkpoint file
+        rm_static_keys: Whether to remove static keys from the state dictionaries
+        task_add_stress: If provided, adds stress tasks for datasets based on this task
+
+    Returns:
+        Migrated checkpoint dict
+    """
+    pickle.Unpickler = RenameUnpickler
+    checkpoint = torch.load(checkpoint_path, pickle_module=pickle)
+    checkpoint.tasks_config = update_config(checkpoint.tasks_config)
+    checkpoint.model_config = update_config(checkpoint.model_config)
+
+    if task_add_stress is not None:
+        target_stress_task = f"{task_add_stress}_stress"
+        output_dataset_names = set()
+        datasets_with_stress = set()
+        target_stress_config = None
+        for task in checkpoint.tasks_config:
+            if "_energy" in task.name:
+                output_dataset_names.add(task.name.replace("_energy", ""))
+            elif "_stress" in task.name:
+                datasets_with_stress.add(task.name.replace("_stress", ""))
+                if task.name == target_stress_task:
+                    target_stress_config = task
+        assert (
+            target_stress_config is not None
+        ), f"Did not find existing task {target_stress_task} in {[task.name for task in checkpoint.tasks_config]}"
+        for dataset_name in output_dataset_names - datasets_with_stress:
+            task_config = target_stress_config.copy()
+            task_config.name = f"{dataset_name}_stress"
+            task_config.datasets = [dataset_name]
+            checkpoint.tasks_config.append(task_config)
+
+    # remove keys for registered buffers that are no longer saved
+    if rm_static_keys:
+        remove_keys = {"expand_index", "offset", "balance_degree_weight"}
+        for state_dict_name in ["model_state_dict", "ema_state_dict"]:
+            state_dict = getattr(checkpoint, state_dict_name)
+            for k in [key for key in state_dict if key.split(".")[-1] in remove_keys]:
+                state_dict.pop(k)
+                print(f"Removing {k} from {state_dict_name}")
+
+    return checkpoint
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Convert ocp_dev/foundation_model checkpoint to fm_release"
@@ -81,41 +141,10 @@ if __name__ == "__main__":
             f"Output checkpoint ({args.checkpoint_out}) cannot already exist"
         )
 
-    pickle.Unpickler = RenameUnpickler
-
-    checkpoint = torch.load(args.checkpoint_in, pickle_module=pickle)
-
-    checkpoint.tasks_config = update_config(checkpoint.tasks_config)
-    checkpoint.model_config = update_config(checkpoint.model_config)
-
-    if args.map_undefined_stress_to is not None:
-        target_stress_task = f"{args.map_undefined_stress_to}_stress"
-        output_dataset_names = set()
-        datasets_with_stress = set()
-        target_stress_config = None
-        for task in checkpoint.tasks_config:
-            if "_energy" in task.name:
-                output_dataset_names.add(task.name.replace("_energy", ""))
-            elif "_stress" in task.name:
-                datasets_with_stress.add(task.name.replace("_stress", ""))
-                if task.name == target_stress_task:
-                    target_stress_config = task
-        assert (
-            target_stress_config is not None
-        ), f"Did not find existing task {target_stress_task} in {[task.name for task in checkpoint.tasks_config]}"
-        for dataset_name in output_dataset_names - datasets_with_stress:
-            task_config = target_stress_config.copy()
-            task_config.name = f"{dataset_name}_stress"
-            task_config.datasets = [dataset_name]
-            checkpoint.tasks_config.append(task_config)
-
-    # remove keys for registered buffers that are no longer saved
-    if args.remove_static_keys:
-        remove_keys = {"expand_index", "offset", "balance_degree_weight"}
-        for state_dict_name in ["model_state_dict", "ema_state_dict"]:
-            state_dict = getattr(checkpoint, state_dict_name)
-            for k in [key for key in state_dict if key.split(".")[-1] in remove_keys]:
-                state_dict.pop(k)
-                print(f"Removing {k} from {state_dict_name}")
-
+    checkpoint = migrate_checkpoint(
+        args.checkpoint_in,
+        args.checkpoint_out,
+        args.remove_static_keys,
+        args.map_undefined_stress_to,
+    )
     torch.save(checkpoint, args.checkpoint_out)
