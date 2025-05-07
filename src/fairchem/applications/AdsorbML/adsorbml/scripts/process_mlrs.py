@@ -1,4 +1,10 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+"""
 This script processes ML relaxations and sets it up for the next step.
 - Reads final energy and structure for each relaxation
 - Filters out anomalies

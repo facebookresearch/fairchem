@@ -1,4 +1,9 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
 Original source: https://github.com/janosh/matbench-discovery/blob/main/matbench_discovery/energy.py
 
 MIT License

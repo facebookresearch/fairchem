@@ -1,4 +1,10 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+"""
 A python script to run a validation of the ML NEB model on a set of NEB calculations.
 This script has not been written to run in parallel, but should be modified to do so.
 """

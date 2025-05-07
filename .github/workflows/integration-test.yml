@@ -8,11 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest  # TODO add macos tests too
+    runs-on: 32-core-ubuntu  # TODO add macos tests too
     strategy:
       max-parallel: 10
       matrix:
-        python_version: ['3.9', '3.12']
+        python_version: ['3.10', '3.12']
 
     steps:
       - uses: actions/checkout@v4

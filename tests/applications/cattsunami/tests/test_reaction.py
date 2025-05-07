@@ -1,3 +1,9 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 from fairchem.applications.cattsunami.core import Reaction
 import ase
 from fairchem.applications.cattsunami.databases import DISSOCIATION_REACTION_DB_PATH
