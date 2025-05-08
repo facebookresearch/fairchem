@@ -34,11 +34,9 @@ from uuid import uuid4
 import numpy as np
 import torch
 import torch.nn as nn
-import torch_geometric
 import yaml
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
-from torch_geometric.data import Data
 
 import fairchem.core
 from fairchem.core.common.registry import registry
@@ -70,17 +68,6 @@ class UniqueKeyLoader(yaml.SafeLoader):
                 )
             mapping.add(each_key)
         return super().construct_mapping(node, deep)
-
-
-def pyg2_data_transform(data: Data):
-    """
-    if we're on the new pyg (2.0 or later) and if the Data stored is in older format
-    we need to convert the data to the new format
-    """
-    if torch_geometric.__version__ >= "2.0" and "_store" not in data.__dict__:
-        return Data(**{k: v for k, v in data.__dict__.items() if v is not None})
-
-    return data
 
 
 def save_checkpoint(
