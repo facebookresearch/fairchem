@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 from ase.io import read
 
-from fairchem.core.common.utils import get_pbc_distances
 from fairchem.core.datasets import data_list_collater
+from fairchem.core.graph.compute import get_pbc_distances
 from fairchem.core.preprocessing import AtomsToGraphs
 
 
