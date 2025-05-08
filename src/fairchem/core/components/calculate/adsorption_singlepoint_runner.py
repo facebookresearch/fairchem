@@ -78,7 +78,11 @@ class AdsorptionSinglePointRunner(CalculateRunner):
             dft_slab_atoms = atoms.info["dft_slab_atoms"]
             dft_slab_energy = atoms.info["dft_slab_energy"]
             gas_reference_energy = atoms.info["gas_ref"]
-            fixed_mask = atoms.constraints[0].index
+            constraints = atoms.constraints
+            if len(constraints) != 0:
+                fixed_mask = atoms.constraints[0].index
+            else:
+                fixed_mask = []
             free_mask = np.array([i for i in range(len(atoms)) if i not in fixed_mask])
             dft_adsorption_energy = dft_energy - dft_slab_energy - gas_reference_energy
 

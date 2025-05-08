@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import os
 from abc import ABCMeta, abstractmethod
 from glob import glob
@@ -155,11 +156,21 @@ class BenchmarkReducer(Reducer, metaclass=ABCMeta):
             Re-implementing this method in derived classes is discouraged.
         """
         # re-implementing  this method in derived classes is discouraged
+        logging.info(
+            f"Joining calculation results in {self.job_config.metadata.results_dir}"
+        )
         results = self.join_results(
             self.job_config.metadata.results_dir, self.glob_pattern
         )
+        logging.info(
+            f"Saving joined results in {self.job_config.metadata.results_dir}."
+        )
         self.save_results(results, self.job_config.metadata.results_dir)
+        logging.info("Calculating metrics.")
         metrics = self.compute_metrics(results, run_name=self.job_config.run_name)
+        logging.info(
+            f"Saving computed metrics in {self.job_config.metadata.results_dir}"
+        )
         self.save_metrics(metrics, self.job_config.metadata.results_dir)
         if self.logger is not None:
             self.log_metrics(metrics, run_name=self.job_config.run_name)
@@ -213,7 +224,7 @@ class JsonDFReducer(BenchmarkReducer):
         Returns:
             DataFrame containing the target data, sorted by index
         """
-        df_targets = pd.read_json(path)
+        df_targets = pd.read_json(path, dtype=False)
         if index_name is not None:
             df_targets = df_targets.set_index(index_name)
         return df_targets.sort_index()
@@ -229,8 +240,11 @@ class JsonDFReducer(BenchmarkReducer):
             Combined DataFrame containing all results
         """
         results = pd.concat(
-            [pd.read_json(f) for f in glob(os.path.join(results_dir, glob_pattern))]
-        )
+            [
+                pd.read_json(f, dtype=False)
+                for f in glob(os.path.join(results_dir, glob_pattern))
+            ]
+        ).reset_index()
 
         if self.index_name is not None:
             results = results.set_index("sid").sort_index()
@@ -245,7 +259,7 @@ class JsonDFReducer(BenchmarkReducer):
             results:  results: Combined results from join_results
             results_dir: Directory containing result files
         """
-        results.to_json(
+        results.reset_index().to_json(
             os.path.join(results_dir, f"{self.benchmark_name}_results.json.gz")
         )
 
@@ -288,6 +302,11 @@ class JsonDFReducer(BenchmarkReducer):
 
                     metrics[f"{target_name},mae"] = np.mean(
                         np.abs(forces - forces_target)
+                    )
+                    metrics[f"{target_name},cosine_similarity"] = np.sum(
+                        forces_target * forces
+                    ) / max(
+                        np.linalg.norm(forces_target) * np.linalg.norm(forces), 1e-8
                     )
                     metrics[f"{target_name},magnitude_error"] = np.mean(
                         np.abs(forces_norm - forces_target_norm)
