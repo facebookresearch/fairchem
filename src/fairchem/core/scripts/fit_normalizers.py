@@ -12,7 +12,8 @@ import logging
 from pathlib import Path
 
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import load_config, save_checkpoint
+from fairchem.core.common.utils import load_config
+from fairchem.core.modules.normalization._load_utils import save_checkpoint
 from fairchem.core.modules.normalization.element_references import (
     create_element_references,
 )

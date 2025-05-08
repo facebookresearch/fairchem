@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 import torch
 
-from fairchem.core.common.utils import save_checkpoint
+from fairchem.core.modules.normalization._load_utils import save_checkpoint
 
 if TYPE_CHECKING:
     from pathlib import Path
