@@ -143,7 +143,6 @@ if __name__ == "__main__":
 
     checkpoint = migrate_checkpoint(
         args.checkpoint_in,
-        args.checkpoint_out,
         args.remove_static_keys,
         args.map_undefined_stress_to,
     )
