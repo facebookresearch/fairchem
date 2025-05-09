@@ -57,13 +57,13 @@ jobs:
 
       - name: Test core with pytest
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN_OMAT_READONLY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --cov-report=xml --cov=fairchem -c ./packages/fairchem-core/pyproject.toml
 
       - name: Core GPU tests
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN_OMAT_READONLY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
 
@@ -103,6 +103,6 @@ jobs:
 
       - name: Core GPU tests
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN_OMAT_READONLY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml

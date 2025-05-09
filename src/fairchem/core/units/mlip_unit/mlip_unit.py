@@ -892,7 +892,9 @@ class MLIPPredictUnit(PredictUnit[Batch]):
     def predict_step(self, state: State, data: Batch) -> dict[str, torch.tensor]:
         return self.predict(data)
 
-    def predict(self, data: Batch) -> dict[str, torch.tensor]:
+    def predict(
+        self, data: Batch, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
         inference_context = (
             torch.inference_mode() if self.direct_forces else nullcontext()
         )
@@ -904,7 +906,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 pred_output[task_name] = task.normalizer.denorm(
                     output[task_name][task.property]
                 )
-                if task.element_references is not None:
+                if undo_element_references and task.element_references is not None:
                     pred_output[task_name] = task.element_references.undo_refs(
                         data_device, pred_output[task_name]
                     )

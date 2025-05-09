@@ -254,7 +254,7 @@ def get_device_for_local_rank() -> str:
         )
         return os.environ[CURRENT_DEVICE_TYPE_STR]
 
-    if os.environ[CURRENT_DEVICE_TYPE_STR] == "cuda":
+    if "cuda" in os.environ[CURRENT_DEVICE_TYPE_STR]:
         assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
         return f"cuda:{torch.cuda.current_device()}"
     elif os.environ[CURRENT_DEVICE_TYPE_STR] == "cpu":
