@@ -70,25 +70,6 @@ class UniqueKeyLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep)
 
 
-def save_checkpoint(
-    state,
-    checkpoint_dir: str = "checkpoints/",
-    checkpoint_file: str = "checkpoint.pt",
-) -> str:
-    filename = os.path.join(checkpoint_dir, checkpoint_file)
-    torch.save(state, filename)
-    return filename
-
-
-multitask_required_keys = {
-    "tasks",
-    "datasets",
-    "combined_dataset",
-    "model",
-    "optim",
-}
-
-
 def warmup_lr_lambda(current_step: int, optim_config):
     """Returns a learning rate multiplier.
     Till `warmup_steps`, learning rate linearly increases to `initial_lr`,
