@@ -12,13 +12,18 @@ import pickle
 import shutil
 import tempfile
 from collections import namedtuple
+import time
 from typing import TYPE_CHECKING
 
 import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
+from fairchem.core.datasets.ase_datasets import AseDBDataset
+from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 from tests.core.testing_utils import launch_main
+from fairchem.core.datasets import data_list_collater
+from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 
 if TYPE_CHECKING:
     from torchtnt.framework.state import State
@@ -135,11 +140,11 @@ def test_full_eval_from_cli():
     launch_main(sys_args)
 
 
-# test to make sure moe eval heads are in fact giving
+# test to make sure mole eval heads are in fact giving
 # different outputs , would be nice to have to extended
 # so that it checks specifically one example at a time and
 # not an aggregate MAE
-def test_full_conserving_moe_eval_from_cli(fake_puma_dataset, torch_deterministic):
+def test_full_conserving_mole_eval_from_cli(fake_puma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
@@ -273,8 +278,8 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministi
 #         (True, 0.05),
 #     ],
 # )
-# def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_gpu(bf16,tol,fake_puma_dataset):
-#     grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(bf16,tol,"CUDA",fake_puma_dataset)
+# def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_gpu(bf16,tol,fake_puma_dataset):
+#     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(bf16,tol,"CUDA",fake_puma_dataset)
 
 
 @pytest.mark.dgl()
@@ -285,16 +290,16 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministi
         (True, 0.05),
     ],
 )
-def test_grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch_cpu(
+def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_cpu(
     bf16, tol, fake_puma_dataset, torch_deterministic
 ):
-    grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(
+    grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
         bf16, tol, "CPU", fake_puma_dataset
     )
 
 
 @pytest.mark.dgl()
-def grad_train_from_cli_aselmdb_no_lr_moe_dgl_vs_pytorch(
+def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
     bf16, tol, device, dataset_root_dir
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -443,7 +448,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset, torch_determin
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "datasets=aselmdb_conserving",
         f"datasets.data_root_dir={fake_puma_dataset}",
-        "+expected_loss=33.96360397338867",
+        "+expected_loss=86.24614715576172",
     ]
     if mode == "gp":
         sys_args += [
@@ -538,53 +543,18 @@ def test_train_and_resume_max_steps(
 
 
 # @pytest.mark.gpu()
-# def test_train_and_resume_moe_on_dgl_gpu(fake_puma_dataset):
-#     train_and_resume_moe_on_dgl("CUDA",fake_puma_dataset)
+# def test_train_and_resume_mole_on_dgl_gpu(fake_puma_dataset):
+#     train_and_resume_mole_on_dgl("CUDA",fake_puma_dataset)
 
 
 @pytest.mark.dgl()
-def test_train_and_resume_moe_on_dgl_cpu(fake_puma_dataset, torch_deterministic):
-    train_and_resume_moe_on_dgl("CPU", fake_puma_dataset)
-
-
-@pytest.fixture(scope="session")
-def direct_moe_checkpoint(fake_puma_dataset):
-    # first train to completion
-    temp_dir = tempfile.mkdtemp()
-    temp_dir = "/tmp/y"
-    timestamp_id = "12345"
-    device='CPU'
-
-    sys_args = [
-        "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
-        "num_experts=8",
-        "checkpoint_every=10000",
-        "datasets=aselmdb",
-        f"+job.run_dir={temp_dir}",
-        f"datasets.data_root_dir={fake_puma_dataset}",
-        f"job.device_type={device}",
-        f"+job.timestamp_id={timestamp_id}",
-        "optimizer=savegrad",
-        "max_steps=2",
-        "max_epochs=null",
-        "expected_loss=null", 
-    ]
-    launch_main(sys_args)
-
-    # Now resume from checkpoint_step and should get the same result
-    # TODO, should get the run config and get checkpoint location from there
-    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
-    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
-    assert os.path.isdir(checkpoint_dir)
-    assert os.path.isfile(checkpoint_state_yaml)
-
-    return checkpoint_dir,checkpoint_state_yaml
+def test_train_and_resume_mole_on_dgl_cpu(fake_puma_dataset, torch_deterministic):
+    train_and_resume_mole_on_dgl("CPU", fake_puma_dataset)
 
 
 
 
-def train_and_resume_moe_on_dgl(device, data_root_dir):
+def train_and_resume_mole_on_dgl(device, data_root_dir):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
@@ -602,7 +572,7 @@ def train_and_resume_moe_on_dgl(device, data_root_dir):
         "optimizer=savegrad",
         "max_steps=2",
         "max_epochs=null",
-        "expected_loss=40.65530776977539",  # 21.0660400390625"
+        "expected_loss=47.714298248291016",  
     ]
     launch_main(sys_args)
 
@@ -623,7 +593,103 @@ def train_and_resume_moe_on_dgl(device, data_root_dir):
     launch_main(sys_args)
     shutil.rmtree(temp_dir)
 
+@pytest.mark.parametrize(
+    "compile",
+    [
+        (False),
+        (True),
+    ],
+)
+def test_mole_fast_inference(
+    compile, fake_puma_dataset, torch_deterministic
+):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    #temp_dir = "./"
+
+    timestamp_id = "12345"
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "num_experts=8",
+        "checkpoint_every=1",
+        "datasets=aselmdb",
+        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"+job.run_dir={temp_dir}",
+        f"+job.timestamp_id={timestamp_id}",
+        f"max_steps=1",
+        f"max_epochs=null",
+        f"+expected_loss=null",
+    ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(
+        temp_dir, timestamp_id, "checkpoints", f"step_0"
+    )
+
+    inference_checkpoint_path = f'{checkpoint_dir}/inference_ckpt.pt'
+
+    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
+    # predictor.model.module.backbone.regress_stress = True
+
+    db=AseDBDataset(
+                config={"src": os.path.join(fake_puma_dataset,'oc20')}
+            )
+
+    a2g = AtomsToGraphs(
+            max_neigh=10,
+            radius=100,
+            r_energy=False,
+            r_forces=False,
+            r_distances=False,
+            r_edges=False,
+            r_pbc=True,
+            r_data_keys= ['spin', 'charge']
+    )
+
+    sample_idx=0
+    while sample_idx<len(db):
+        sample = a2g.convert(db.get_atoms(0))
+        sample['dataset']='oc20'
+        batch = data_list_collater([sample], otf_graph=True)
+
+        try:
+            _ = predictor.predict(batch)
+            break
+        except ValueError:
+            sample_idx+=1
+
+    assert sample_idx!=len(db) # no system in this dataset has edges!
+
+    n_reruns=10
+
+    #reload predictor fresh
+    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
+    _=predictor.predict(batch)
+
+    start_time=time.time()
+    for _ in range(n_reruns):
+        output_not_merged=predictor.predict(batch)
+    average_time=(time.time()-start_time)/n_reruns
+
+    #reload predictor fresh
+    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu",merge_MOLE=True,compile=compile)
+    _=predictor.predict(batch) # allow it to merge on first iteration
+
+    start_saved_time=time.time()
+    for _ in range(n_reruns):
+        output_merged=predictor.predict(batch)
+    average_merged_time=(time.time()-start_saved_time)/n_reruns
+
+    print("times",average_time,average_merged_time)
+
+    for k in output_not_merged:
+        assert output_not_merged[k].isclose(output_merged[k],rtol=1e-4).all()
+
+
 #example how to use checkpoint fixtures
-def test_checkpoints_work(conserving_moe_checkpoint,direct_moe_checkpoint):
-    conserving_inference_checkpoint_pt, conserving_train_state_yaml = conserving_moe_checkpoint
-    direct_inference_checkpoint_pt, direct_train_state_yaml = direct_moe_checkpoint
+def test_checkpoints_work(conserving_mole_checkpoint,direct_mole_checkpoint):
+    conserving_inference_checkpoint_pt, conserving_train_state_yaml = conserving_mole_checkpoint
+    direct_inference_checkpoint_pt, direct_train_state_yaml = direct_mole_checkpoint

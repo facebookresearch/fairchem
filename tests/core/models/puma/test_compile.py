@@ -114,6 +114,7 @@ def test_compile_backbone_gpu():
     sizes = range(3, 10)
     neighbors = range(30, 100, 10)
     for size, neigh in zip(sizes, neighbors):
+        print("SIZE",size,neigh)
         data = get_diamond_tg_data(neigh, cutoff, size, device)
         seed_everywhere()
         output = model(data)

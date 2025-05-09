@@ -65,7 +65,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s
 
       - if: ${{ matrix.python_version == '3.12' }}
         name: codecov-report

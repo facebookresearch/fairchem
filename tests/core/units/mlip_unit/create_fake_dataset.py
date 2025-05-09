@@ -148,6 +148,8 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
 
         atoms.info["extensive_property"] = 3 * len(atoms)
         atoms.info["tensor_property"] = np.random.random((6, 6))
+        atoms.info['charge'] =  np.random.randint(-10,10)
+        atoms.info['spin'] =  np.random.randint(0,2)
 
         structures.append(atoms)
     return structures

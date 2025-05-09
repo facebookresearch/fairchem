@@ -37,6 +37,7 @@ from fairchem.core.models.puma.nn.layer_norm import (
     EquivariantRMSNormArraySphericalHarmonicsV2,
     get_normalization_layer,
 )
+from fairchem.core.models.puma.nn.mole_utils import MOLEInterface
 from fairchem.core.models.puma.nn.radial import GaussianSmearing
 from fairchem.core.models.puma.nn.so3_layers import SO3_Linear
 
@@ -44,7 +45,7 @@ from .escn_md_block import eSCNMD_Block
 
 
 @registry.register_model("escnmd_backbone")
-class eSCNMDBackbone(nn.Module):
+class eSCNMDBackbone(nn.Module, MOLEInterface):
     def __init__(
         self,
         max_num_elements: int = 100,
@@ -240,9 +241,6 @@ class eSCNMDBackbone(nn.Module):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
-    def prepare_MOE(self, data, graph, csd_mixed_emb):
-        pass
-
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
     ):
@@ -329,6 +327,19 @@ class eSCNMDBackbone(nn.Module):
             data_dict["pos"].requires_grad = True
         return displacement, orig_cell
 
+    def csd_embedding(self, charge, spin, dataset):
+        with record_function("charge spin dataset embeddings"):
+            # Add charge, spin, and dataset embeddings
+            chg_emb = self.charge_embedding(charge)
+            spin_emb = self.spin_embedding(spin)
+            if self.use_dataset_embedding:
+                assert dataset is not None
+                dataset_emb = self.dataset_embedding(dataset)
+                return torch.nn.SiLU()(
+                    self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
+                )
+            return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
+
     def _generate_graph(self, data_dict):
         if self.otf_graph:
             graph_dict = generate_graph(
@@ -392,11 +403,25 @@ class eSCNMDBackbone(nn.Module):
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
 
+        csd_mixed_emb = self.csd_embedding(
+            charge=data_dict["charge"],
+            spin=data_dict["spin"],
+            dataset=data_dict.get("dataset", None),
+        )
+        self.set_MOLE_coefficients(
+            atomic_numbers_full=data_dict["atomic_numbers_full"],
+            batch_full=data_dict["batch_full"],
+            csd_mixed_emb=csd_mixed_emb,
+        )
+
         with record_function("get_displacement_and_cell"):
             displacement, orig_cell = self._get_displacement_and_cell(data_dict)
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
+
+        if graph_dict["edge_index"].numel() == 0:
+            raise ValueError("No edges in batch, refusing to run.")
 
         with record_function("obtain wigner"):
             (_, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
@@ -433,29 +458,18 @@ class eSCNMDBackbone(nn.Module):
             )
             x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
 
-        sys_node_embedding = None
-        csd_mixed_emb = None
-        with record_function("charge spin dataset embeddings"):
-            # Add charge, spin, and dataset embeddings
-            chg_emb = self.charge_embedding(data_dict["charge"])
-            spin_emb = self.spin_embedding(data_dict["spin"])
-            if self.use_dataset_embedding:
-                dataset_emb = self.dataset_embedding(data_dict["dataset"])
-                csd_mixed_emb = torch.nn.SiLU()(
-                    self.mix_csd(torch.cat((chg_emb, spin_emb, dataset_emb), dim=1))
-                )
-            else:
-                csd_mixed_emb = torch.nn.SiLU()(
-                    self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1))
-                )
-            x_message[:, 0, :] = x_message[:, 0, :] + csd_mixed_emb[data_dict["batch"]]
-            sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
-        # full_sys = csd_mixed_emb[data_dict["batch_full"]]
+        sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
+        x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
 
         ###
-        # Hook to allow MOE
+        # Hook to allow MOLE
         ###
-        self.prepare_MOE(data_dict, graph_dict, csd_mixed_emb)
+        self.set_MOLE_sizes(
+            nsystems=csd_mixed_emb.shape[0],
+            batch_full=data_dict["batch_full"],
+            edge_index=graph_dict["edge_index"],
+        )
+        self.log_MOLE_stats()
 
         # edge degree embedding
         with record_function("edge embedding"):

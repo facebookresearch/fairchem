@@ -12,6 +12,9 @@ from contextlib import suppress
 import pytest
 import torch
 
+@pytest.fixture
+def command_line_inference_checkpoint(request):
+    return request.config.getoption("--inference-checkpoint")
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -19,6 +22,11 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="skip ocpapi integration tests",
+    )
+    parser.addoption(
+        "--inference-checkpoint", 
+        action="store", 
+        help="inference checkpoint to run check on"
     )
 
 
@@ -58,3 +66,14 @@ def pytest_collection_modifyitems(config, items):
             if "ocpapi_integration_test" in item.keywords:
                 item.add_marker(skip_ocpapi_integration)
         return
+    if config.getoption("--inference-checkpoint"):
+        # Skip all tests not marked with 'inference_check'
+        for item in items:
+            if "inference_check" not in item.keywords:
+                item.add_marker(pytest.mark.skip(reason="skip all but inference check"))
+    else:
+        # Skip all tests marked with 'inference_check' by default
+        skip_inference_check = pytest.mark.skip(reason="skipping inference check by default")
+        for item in items:
+            if "inference_check" in item.keywords:
+                item.add_marker(skip_inference_check)

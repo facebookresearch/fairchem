@@ -25,7 +25,7 @@ def fake_puma_dataset():
 
 
 @pytest.fixture(scope="session")
-def direct_moe_checkpoint(fake_puma_dataset):
+def direct_mole_checkpoint(fake_puma_dataset):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
@@ -62,7 +62,7 @@ def direct_moe_checkpoint(fake_puma_dataset):
 
 @pytest.fixture(scope="session")
 
-def conserving_moe_checkpoint(fake_puma_dataset):
+def conserving_mole_checkpoint(fake_puma_dataset):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"

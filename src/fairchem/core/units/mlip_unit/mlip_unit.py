@@ -868,26 +868,30 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         device: str = "cpu",
         overrides: dict | None = None,
         compile: bool = False,
+        merge_MOLE: bool = False,
     ):
         super().__init__()
-        model, _, tasks = load_inference_model_and_tasks(
+        self.model, _, self.task_modules = load_inference_model_and_tasks(
             inference_model_path, use_ema=True, overrides=overrides
         )
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
-        self.model = model
-        if compile:
-            self.model = torch.compile(self.model, dynamic=True)
-        self.model.to(self.device)
+        self.tasks = {t.name: t for t in self.task_modules}
         self.model.eval()
+
+        self.lazy_model_intialized = False
+        self.merge_MOLE = merge_MOLE
+
+        self.compile = compile
         self.direct_forces = self.model.module.backbone.direct_forces
 
-        for task in tasks:
+    def move_to_device(self):
+        self.model.to(self.device)
+        for task in self.task_modules:
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)
-        self.tasks = {t.name: t for t in tasks}
 
     def predict_step(self, state: State, data: Batch) -> dict[str, torch.tensor]:
         return self.predict(data)
@@ -895,9 +899,22 @@ class MLIPPredictUnit(PredictUnit[Batch]):
     def predict(
         self, data: Batch, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
+        if not self.lazy_model_intialized:
+            if self.merge_MOLE:
+                # replace backbone with non MOE version
+                self.model.module.backbone = (
+                    self.model.module.backbone.merge_MOLE_model(data)
+                )
+                self.merge_MOLE = False
+            self.move_to_device()
+            if self.compile:
+                self.model = torch.compile(self.model, dynamic=True)
+            self.lazy_model_intialized = True
+
         inference_context = (
-            torch.inference_mode() if self.direct_forces else nullcontext()
-        )
+            nullcontext()
+        )  # torch.no_grad() if self.direct_forces else nullcontext()
+
         data_device = data.to(self.device)
         pred_output = {}
         with inference_context:

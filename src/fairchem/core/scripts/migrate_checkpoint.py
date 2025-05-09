@@ -15,6 +15,7 @@ import omegaconf
 import torch
 
 from fairchem.core.scripts.migrate_imports import mapping
+from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 
 def find_new_module_name(module):
@@ -108,11 +109,23 @@ def migrate_checkpoint(
     # remove keys for registered buffers that are no longer saved
     if rm_static_keys:
         remove_keys = {"expand_index", "offset", "balance_degree_weight"}
+        # list explicit keys to rename here in the weight state dictionary
+        rename_keys = {
+            # "module.backbone.routing_mlp": "module.backbone.mole_coefficient_mlp",
+            # "module.backbone.moe_coefficient_mlp": "module.backbone.mole_coefficient_mlp",
+        }
         for state_dict_name in ["model_state_dict", "ema_state_dict"]:
             state_dict = getattr(checkpoint, state_dict_name)
             for k in [key for key in state_dict if key.split(".")[-1] in remove_keys]:
                 state_dict.pop(k)
                 print(f"Removing {k} from {state_dict_name}")
+            # rename explicitly mapped keys
+            for subkey_from, subkey_to in rename_keys.items():
+                for key_from in [key for key in state_dict if subkey_from in key]:
+                    key_to = key_from.replace(subkey_from, subkey_to)
+                    state_dict[key_to] = state_dict[key_from]
+                    state_dict.pop(key_from)
+                    print("rename", key_from, key_to)
 
     return checkpoint
 
@@ -147,3 +160,6 @@ if __name__ == "__main__":
         args.map_undefined_stress_to,
     )
     torch.save(checkpoint, args.checkpoint_out)
+
+    # test to see if checkpoint loads
+    MLIPPredictUnit(args.checkpoint_out, device="cpu")

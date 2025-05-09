@@ -35,6 +35,7 @@ omol_train:
     r_forces: True
     r_stress: True
     r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
     max_neigh: ${max_neighbors}
     molecule_cell_size: 120.0
   key_mapping:
@@ -59,6 +60,7 @@ omol_val:
     r_forces: True
     r_stress: True
     r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
     max_neigh: ${max_neighbors}
     molecule_cell_size: 120.0
   key_mapping:
@@ -95,6 +97,7 @@ oc20_train:
     r_forces: True
     r_stress: True
     r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: oc20_energy
@@ -118,6 +121,7 @@ oc20_val:
     r_forces: True
     r_stress: True
     r_edges: ${datasets.cpu_graph}
+    r_data_keys: ['spin', 'charge']
     max_neigh: ${max_neighbors}
   key_mapping:
     energy: oc20_energy
