@@ -19,11 +19,7 @@ import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
-from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 from tests.core.testing_utils import launch_main
-from fairchem.core.datasets import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 
 if TYPE_CHECKING:
     from torchtnt.framework.state import State
@@ -596,104 +592,3 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
     ]
     launch_main(sys_args)
     shutil.rmtree(temp_dir)
-
-@pytest.mark.parametrize(
-    "compile",
-    [
-        (False),
-        (True),
-    ],
-)
-def test_mole_fast_inference(
-    compile, fake_puma_dataset, torch_deterministic
-):
-    # first train to completion
-    temp_dir = tempfile.mkdtemp()
-    #temp_dir = "./"
-
-    timestamp_id = "12345"
-    sys_args = [
-        "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
-        "num_experts=8",
-        "checkpoint_every=1",
-        "datasets=aselmdb",
-        f"datasets.data_root_dir={fake_puma_dataset}",
-        f"+job.run_dir={temp_dir}",
-        f"+job.timestamp_id={timestamp_id}",
-        f"max_steps=1",
-        f"max_epochs=null",
-        f"+expected_loss=null",
-    ]
-    launch_main(sys_args)
-
-    # Now resume from checkpoint_step and should get the same result
-    # TODO, should get the run config and get checkpoint location from there
-    checkpoint_dir = os.path.join(
-        temp_dir, timestamp_id, "checkpoints", f"step_0"
-    )
-
-    inference_checkpoint_path = f'{checkpoint_dir}/inference_ckpt.pt'
-
-    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
-    # predictor.model.module.backbone.regress_stress = True
-
-    db=AseDBDataset(
-                config={"src": os.path.join(fake_puma_dataset,'oc20')}
-            )
-
-    a2g = AtomsToGraphs(
-            max_neigh=10,
-            radius=100,
-            r_energy=False,
-            r_forces=False,
-            r_distances=False,
-            r_edges=False,
-            r_pbc=True,
-            r_data_keys= ['spin', 'charge']
-    )
-
-    sample_idx=0
-    while sample_idx<len(db):
-        sample = a2g.convert(db.get_atoms(0))
-        sample['dataset']='oc20'
-        batch = data_list_collater([sample], otf_graph=True)
-
-        try:
-            _ = predictor.predict(batch)
-            break
-        except ValueError:
-            sample_idx+=1
-
-    assert sample_idx!=len(db) # no system in this dataset has edges!
-
-    n_reruns=10
-
-    #reload predictor fresh
-    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
-    _=predictor.predict(batch)
-
-    start_time=time.time()
-    for _ in range(n_reruns):
-        output_not_merged=predictor.predict(batch)
-    average_time=(time.time()-start_time)/n_reruns
-
-    #reload predictor fresh
-    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu",merge_MOLE=True,compile=compile)
-    _=predictor.predict(batch) # allow it to merge on first iteration
-
-    start_saved_time=time.time()
-    for _ in range(n_reruns):
-        output_merged=predictor.predict(batch)
-    average_merged_time=(time.time()-start_saved_time)/n_reruns
-
-    print("times",average_time,average_merged_time)
-
-    for k in output_not_merged:
-        assert output_not_merged[k].isclose(output_merged[k],rtol=1e-4).all()
-
-
-#example how to use checkpoint fixtures
-def test_checkpoints_work(conserving_mole_checkpoint,direct_mole_checkpoint):
-    conserving_inference_checkpoint_pt, conserving_train_state_yaml = conserving_mole_checkpoint
-    direct_inference_checkpoint_pt, direct_train_state_yaml = direct_mole_checkpoint

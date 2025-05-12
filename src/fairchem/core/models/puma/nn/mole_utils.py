@@ -39,6 +39,9 @@ class MOLEInterface:
     def log_MOLE_stats(self) -> None:
         return None
 
+    def merge_MOLE_model(self, data):
+        return self
+
 
 def recursive_replace_so2m0_linear(model, replacement_factory):
     for _, child in model.named_children():

@@ -106,7 +106,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
 
-        return x.index_add_(
+        return x.index_add(
             0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
         )
 

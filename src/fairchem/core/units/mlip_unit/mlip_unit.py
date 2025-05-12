@@ -41,7 +41,10 @@ from torchtnt.framework import EvalUnit, PredictUnit, State, TrainUnit
 from torchtnt.utils.prepare_module import prepare_module
 
 from fairchem.core.common import distutils, gp_utils
-from fairchem.core.common.distutils import get_device_for_local_rank
+from fairchem.core.common.distutils import (
+    CURRENT_DEVICE_TYPE_STR,
+    get_device_for_local_rank,
+)
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
@@ -52,6 +55,11 @@ from fairchem.core.modules.normalization.element_references import (  # noqa: TC
 from fairchem.core.modules.normalization.normalizer import Normalizer  # noqa: TCH001
 from fairchem.core.modules.scheduler import CosineLRLambda
 from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
+from fairchem.core.units.mlip_unit.api.inference import (
+    InferenceSettings,
+    MLIPInferenceCheckpoint,
+    inference_settings_default,
+)
 
 # placeholder for fairchem data
 Batch = Any
@@ -81,14 +89,6 @@ class Task:
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
-
-
-@dataclass
-class MLIPInferenceCheckpoint:
-    model_config: dict
-    model_state_dict: dict
-    ema_state_dict: dict
-    tasks_config: dict
 
 
 def update_configs(original_config, new_config):
@@ -867,24 +867,50 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         inference_model_path: str,
         device: str = "cpu",
         overrides: dict | None = None,
-        compile: bool = False,
-        merge_MOLE: bool = False,
+        inference_settings: InferenceSettings | None = None,
     ):
         super().__init__()
+        os.environ[CURRENT_DEVICE_TYPE_STR] = device
+
+        if inference_settings is None:
+            inference_settings = inference_settings_default()
+        if overrides is None:
+            overrides = {}
+        if "backbone" not in overrides:
+            overrides["backbone"] = {}
+        if inference_settings.activation_checkpointing is not None:
+            overrides["backbone"]["activation_checkpointing"] = (
+                inference_settings.activation_checkpointing
+            )
+        if inference_settings.wigner_cuda is not None:
+            overrides["backbone"]["use_cuda_graph_wigner"] = (
+                inference_settings.wigner_cuda
+            )
+        if inference_settings.external_graph_gen is not None:
+            overrides["backbone"][
+                "otf_graph"
+            ] = not inference_settings.external_graph_gen
+
         self.model, _, self.task_modules = load_inference_model_and_tasks(
             inference_model_path, use_ema=True, overrides=overrides
         )
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
+
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
         self.tasks = {t.name: t for t in self.task_modules}
         self.model.eval()
 
         self.lazy_model_intialized = False
-        self.merge_MOLE = merge_MOLE
 
-        self.compile = compile
         self.direct_forces = self.model.module.backbone.direct_forces
+
+        self.inference_mode = inference_settings
+
+        if self.inference_mode.tf32:
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            torch.set_float32_matmul_precision("high")
 
     def move_to_device(self):
         self.model.to(self.device)
@@ -900,14 +926,17 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         self, data: Batch, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
-            if self.merge_MOLE:
+            if self.inference_mode.merge_mole:
                 # replace backbone with non MOE version
                 self.model.module.backbone = (
                     self.model.module.backbone.merge_MOLE_model(data)
                 )
-                self.merge_MOLE = False
+                self.model.eval()
             self.move_to_device()
-            if self.compile:
+            if self.inference_mode.compile:
+                logging.warning(
+                    "Model is being compiled this might take a while for the first time"
+                )
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 

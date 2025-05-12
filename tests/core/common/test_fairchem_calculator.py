@@ -4,7 +4,6 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
-
 from __future__ import annotations
 
 import logging
@@ -12,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+import torch
 from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.optimize import BFGS
 from huggingface_hub import hf_hub_download
@@ -67,7 +67,7 @@ HF_HUB_CHECKPOINTS = [
 ]
 
 
-@pytest.fixture
+@pytest.fixture()
 def slab_atoms() -> Atoms:
     atoms = fcc111("Pt", size=(2, 2, 5), vacuum=10.0)
     add_adsorbate(atoms, "O", height=1.2, position="fcc")
@@ -75,17 +75,17 @@ def slab_atoms() -> Atoms:
     return atoms
 
 
-@pytest.fixture
+@pytest.fixture()
 def bulk_atoms() -> Atoms:
     return bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
 
 
-@pytest.fixture
+@pytest.fixture()
 def aperiodic_atoms() -> Atoms:
     return molecule("H2O")
 
 
-@pytest.fixture
+@pytest.fixture()
 def periodic_h2o_atoms() -> Atoms:
     """Create a periodic box of H2O molecules."""
     atoms = molecule("H2O")
@@ -95,12 +95,12 @@ def periodic_h2o_atoms() -> Atoms:
     return atoms
 
 
-@pytest.fixture
+@pytest.fixture()
 def large_bulk_atoms() -> Atoms:
     """Create a bulk system with approximately 1000 atoms."""
     return bulk("Fe", "bcc", a=2.87).repeat((10, 10, 10))  # 10x10x10 unit cell
 
-
+@pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_calculator_setup(checkpoint):
 
@@ -135,7 +135,7 @@ def test_calculator_setup(checkpoint):
             calc.forces_key in calc.available_output_keys
         )
 
-
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "atoms_fixture",
     [
@@ -162,6 +162,7 @@ def test_energy_calculation(request, atoms_fixture, checkpoint):
     assert isinstance(energy, float)
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_relaxation_final_energy(slab_atoms, checkpoint):
 
@@ -203,11 +204,11 @@ def test_relaxation_final_energy(slab_atoms, checkpoint):
 #          for seed_b in set(seeds) - {seed_a}:
 #              assert results_by_seed[seed_a] != results_by_seed[seed_b]
 
-
+@pytest.mark.cpu_and_gpu()
 @pytest.mark.parametrize("act_ckpt", [True, False])
-@pytest.mark.parametrize("device", ["cpu", "cuda"])
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
-def test_calculator_configurations(slab_atoms, act_ckpt, device, checkpoint):
+def test_calculator_configurations(slab_atoms, act_ckpt,checkpoint):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     calc = FAIRChemCalculator(
         hf_hub_repo_id=checkpoint["repo_id"],
         hf_hub_filename=checkpoint["filename"],
@@ -228,6 +229,7 @@ def test_calculator_configurations(slab_atoms, act_ckpt, device, checkpoint):
         stress = slab_atoms.get_stress()
         assert isinstance(stress, np.ndarray)
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize("hf_hub", [True, False])
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_calculator_checkpoint_download(slab_atoms, hf_hub, checkpoint):
@@ -260,7 +262,7 @@ def test_calculator_checkpoint_download(slab_atoms, hf_hub, checkpoint):
     energy = slab_atoms.get_potential_energy()
     assert isinstance(energy, float)
 
-
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "checkpoint",
     [
@@ -295,7 +297,7 @@ def test_switch_task_name_calculation(periodic_h2o_atoms, checkpoint):
     # Ensure forces are different between 'omol' and 'osc'
     assert not np.allclose(forces_omol, forces_osc, atol=0.01)
 
-
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "checkpoint",
     [checkpoint for checkpoint in HF_HUB_CHECKPOINTS if checkpoint["charge_spin"]],
@@ -317,6 +319,7 @@ def test_omol_missing_spin_charge_logs_warning(periodic_h2o_atoms, caplog, check
     assert "spin multiplicity is not set in atoms.info" in caplog.text
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "checkpoint",
     [checkpoint for checkpoint in HF_HUB_CHECKPOINTS if checkpoint["charge_spin"]],
@@ -351,6 +354,7 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, checkpoint):
     ), "Energy values are not unique for different charge/spin combinations"
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_large_bulk_system(large_bulk_atoms, checkpoint):
     """Test a bulk system with 1000 atoms using the small model."""
@@ -371,6 +375,7 @@ def test_large_bulk_system(large_bulk_atoms, checkpoint):
     assert isinstance(forces, np.ndarray)
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "pbc",
     [
@@ -426,6 +431,7 @@ def test_guess_pbc_behavior(
         )
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_error_for_pbc_with_zero_cell(aperiodic_atoms, checkpoint):
     """Test error raised when pbc=True but atoms.cell is zero."""

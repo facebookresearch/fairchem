@@ -149,7 +149,7 @@ class Edgewise(torch.nn.Module):
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
                     node_offset,
-                    use_reentrant=True,
+                    use_reentrant=False,
                 )
             )
 

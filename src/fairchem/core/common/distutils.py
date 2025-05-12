@@ -146,6 +146,8 @@ def setup(config) -> None:
 def cleanup() -> None:
     if dist.is_initialized():
         dist.destroy_process_group()
+    if CURRENT_DEVICE_TYPE_STR in os.environ:
+        os.environ.pop(CURRENT_DEVICE_TYPE_STR)
 
 
 def initialized() -> bool:

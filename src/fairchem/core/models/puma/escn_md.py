@@ -43,6 +43,8 @@ from fairchem.core.models.puma.nn.so3_layers import SO3_Linear
 
 from .escn_md_block import eSCNMD_Block
 
+ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+
 
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
@@ -103,7 +105,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         activation_checkpoint_chunk_size = None
         if activation_checkpointing:
             # The size of edge blocks to use in activation checkpointing
-            activation_checkpoint_chunk_size = 1024 * 128
+            activation_checkpoint_chunk_size = ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type

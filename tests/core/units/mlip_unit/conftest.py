@@ -115,6 +115,7 @@ def conserving_mole_checkpoint(fake_puma_dataset):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "num_experts=8",
+        "heads.energyandforcehead.module=fairchem.core.models.puma.escn_moe.DatasetSpecificSingleHeadWrapper",
         "checkpoint_every=10000",
         "datasets=aselmdb_conserving",
         f"+job.run_dir={temp_dir}",

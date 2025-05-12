@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import sys
@@ -22,3 +23,6 @@ def launch_main(sys_args: list) -> None:
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     sys.argv[1:] = sys_args
     main()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
