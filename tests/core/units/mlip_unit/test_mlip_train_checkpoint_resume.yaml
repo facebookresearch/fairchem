@@ -14,6 +14,8 @@ job:
 
 
 num_experts: 0
+act_type: s2
+ff_type: grid
 moe_layer_type: pytorch
 max_neighbors: 20
 max_epochs: 1

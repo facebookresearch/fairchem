@@ -11,6 +11,7 @@ import tempfile
 
 import pytest
 
+from fairchem.core.datasets.lmdb_dataset import data_list_collater
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
     create_fake_puma_dataset,
@@ -45,6 +46,48 @@ def direct_mole_checkpoint(fake_puma_dataset):
         "max_steps=2",
         "max_epochs=null",
         "expected_loss=null", 
+        "act_type=gate",
+        "ff_type=spectral",
+    ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, "inference_ckpt.pt")
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+    assert os.path.isfile(inference_checkpoint_pt)
+
+    yield inference_checkpoint_pt,checkpoint_state_yaml
+
+
+
+@pytest.fixture(scope="session")
+def direct_checkpoint(fake_puma_dataset):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "12345"
+    device='CPU'
+
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "num_experts=0",
+        "checkpoint_every=10000",
+        "datasets=aselmdb",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "max_epochs=null",
+        "expected_loss=null", 
+        "act_type=gate",
+        "ff_type=spectral",
+        #"max_neighbors=300"
     ]
     launch_main(sys_args)
 
@@ -82,6 +125,8 @@ def conserving_mole_checkpoint(fake_puma_dataset):
         "max_steps=2",
         "max_epochs=null",
         "expected_loss=null", 
+        "act_type=gate",
+        "ff_type=spectral",
     ]
     launch_main(sys_args)
 

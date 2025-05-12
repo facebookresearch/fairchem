@@ -22,6 +22,6 @@ direct_forces: ${direct_forces}
 num_layers: 2
 hidden_channels: 16
 norm_type: rms_norm_sh
-act_type: s2
-ff_type: grid
+act_type: ${act_type} #s2
+ff_type: ${ff_type} #grid
 dataset_list: ["oc20", "omol"]

@@ -192,6 +192,8 @@ def test_full_train_from_cli(torch_deterministic):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "backbone=K2L2_gate",
+        "act_type=gate",
+        "ff_type=spectral",
         "+expected_loss=10.157896995544434",
     ]
     launch_main(sys_args)
@@ -200,6 +202,8 @@ def test_full_train_from_cli(torch_deterministic):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "backbone=K2L2_gate",
+        "act_type=gate",
+        "ff_type=spectral",
         "backbone.mmax=1",
         "+expected_loss=23.392169952392578",
     ]

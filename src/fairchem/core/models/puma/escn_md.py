@@ -283,7 +283,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         wigner_and_M_mapping_inv = torch.einsum(
             "njk,mk->njm", wigner_inv, self.mappingReduced.to_m
         )
-
         return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
 
     def _get_displacement_and_cell(self, data_dict):
@@ -424,7 +423,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             raise ValueError("No edges in batch, refusing to run.")
 
         with record_function("obtain wigner"):
-            (_, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
+            (edge_rot_mat, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
                 self._get_rotmat_and_wigner(
                     graph_dict["edge_distance_vec_full"],
                     use_cuda_graph=self.use_cuda_graph_wigner
@@ -432,6 +431,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     and not self.training,
                 )
             )
+            # As a sanity check this should all be 0, dist, 0 (dist = scalar distance)
+            # rotated_ones = torch.bmm(edge_rot_mat, graph_dict["edge_distance_vec"].unsqueeze(-1)).squeeze(-1)
             if gp_utils.initialized():
                 wigner_and_M_mapping = wigner_and_M_mapping_full[
                     graph_dict["edge_partition"]
@@ -512,7 +513,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # Final layer norm
         x_message = self.norm(x_message)
-
         out = {
             "node_embedding": x_message,
             "displacement": displacement,

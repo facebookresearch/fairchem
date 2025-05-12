@@ -20,6 +20,6 @@ direct_forces: ${direct_forces}
 num_layers: 2
 hidden_channels: 16
 norm_type: rms_norm_sh
-act_type: gate
-ff_type: spectral
+act_type: ${act_type} 
+ff_type: ${ff_type} 
 dataset_list: ["oc20", "omol"]

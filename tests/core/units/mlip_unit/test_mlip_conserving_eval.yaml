@@ -9,6 +9,8 @@ regress_stress: True
 direct_forces: True
 num_experts: 0
 moe_layer_type: pytorch
+act_type: s2
+ff_type: grid
 
 job:
   device_type: CPU

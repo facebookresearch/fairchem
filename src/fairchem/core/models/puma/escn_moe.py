@@ -99,26 +99,25 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.autocast(device_type=atomic_numbers_full.device.type, enabled=False):
             embeddings = []
             if self.use_composition_embedding:
-                composition = torch.zeros(
+                composition_by_atom = self.composition_embedding(atomic_numbers_full)
+                composition = composition_by_atom.new_zeros(
                     csd_mixed_emb.shape[0],
                     self.sphere_channels,
-                    device=atomic_numbers_full.device,
                 ).index_reduce_(
                     0,
                     batch_full,
-                    self.composition_embedding(atomic_numbers_full),
+                    composition_by_atom,
                     reduce="mean",
                 )
                 embeddings.append(composition.unsqueeze(0))
 
-            embeddings.append(csd_mixed_emb[None].float())
+            embeddings.append(csd_mixed_emb[None])
 
             expert_mixing_coefficients_before_norm = self.routing_mlp(
                 torch.vstack(embeddings)
                 .transpose(0, 1)
                 .reshape(csd_mixed_emb.shape[0], -1)
             )
-
             self.global_mole_tensors.expert_mixing_coefficients = (
                 self.mole_expert_coefficient_norm(
                     self.mole_dropout(expert_mixing_coefficients_before_norm)
@@ -224,6 +223,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             torch.zeros(
                 data.natoms.shape[0],
                 len(self.dataset_name_to_exp),
+                dtype=data.pos.dtype,
             )
             .scatter(
                 1,
@@ -248,8 +248,8 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             dataset_mask = np_dataset_names == dataset_name
             for key, mole_output_tensor in head_output.items():
                 # TODO cant we use torch.zeros here?
-                output_tensor = torch.full(
-                    mole_output_tensor.shape, 0.0, device=mole_output_tensor.device
+                output_tensor = mole_output_tensor.new_zeros(
+                    mole_output_tensor.shape
                 )  # float('inf'))
                 if dataset_mask.any():
                     if output_tensor.shape[0] == dataset_mask.shape[0]:
@@ -295,8 +295,8 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
             dataset_mask = np_dataset_names == dataset_name
             for key, head_output_tensor in head_output.items():
                 # TODO cant we use torch.zeros here?
-                output_tensor = torch.full(
-                    head_output_tensor.shape, 0.0, device=head_output_tensor.device
+                output_tensor = head_output_tensor.new_zeros(
+                    head_output_tensor.shape
                 )  # float('inf'))
                 if dataset_mask.any():
                     if output_tensor.shape[0] == dataset_mask.shape[0]:

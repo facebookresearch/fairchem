@@ -691,7 +691,7 @@ def radius_graph_pbc(
 
     # Tensor of unit cells
     cells_per_dim = [
-        torch.arange(-rep.item(), rep.item() + 1, device=device, dtype=torch.float)
+        torch.arange(-rep.item(), rep.item() + 1, device=device, dtype=data.cell.dtype)
         for rep in max_rep
     ]
     unit_cell = torch.cartesian_prod(*cells_per_dim)
@@ -1186,7 +1186,12 @@ def get_max_neighbors_mask(
 
     # Create a tensor of size [num_atoms, max_num_neighbors] to sort the distances of the neighbors.
     # Fill with infinity so we can easily remove unused distances later.
-    distance_sort = torch.full([num_atoms * max_num_neighbors], np.inf, device=device)
+    distance_sort = torch.full(
+        [num_atoms * max_num_neighbors],
+        np.inf,
+        device=device,
+        dtype=atom_distance.dtype,
+    )
 
     # Create an index map to map distances from atom_distance to distance_sort
     # index_sort_map assumes index to be sorted
