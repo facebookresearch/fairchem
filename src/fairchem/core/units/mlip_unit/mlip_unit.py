@@ -931,11 +931,12 @@ class MLIPPredictUnit(PredictUnit[Batch]):
 
     def get_composition_charge_spin_dataset(self, data):
         composition_sum = data.atomic_numbers.new_zeros(
-            self.model.module.backbone.max_num_elements
+            self.model.module.backbone.max_num_elements,
+            dtype=torch.int,
         ).index_add(
             0,
             data.atomic_numbers.to(torch.int),
-            data.atomic_numbers.new_ones(data.atomic_numbers.shape[0]),
+            data.atomic_numbers.new_ones(data.atomic_numbers.shape[0], dtype=torch.int),
         )
         comp_charge_spin = (
             composition_sum,
