@@ -8,6 +8,22 @@ file in the root directory of this source tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+
+
+class UMATask(str, Enum):
+    OMOL = "omol"
+    OMAT = "omat"
+    ODAC = "odac"
+    OC20 = "oc20"
+    OMC = "omc"
+
+
+CHARGE_RANGE = [-100, 100]
+SPIN_RANGE = [0, 100]
+DEFAULT_CHARGE = 0
+DEFAULT_SPIN_OMOL = 1
+DEFAULT_SPIN = 0
 
 
 @dataclass
@@ -96,6 +112,18 @@ def inference_settings_turbo():
         compile=True,
         wigner_cuda=True,
         internal_graph_gen_version=2,
+    )
+
+
+# this mode corresponds to the default settings used for training and evaluation
+def inference_settings_traineval():
+    return InferenceSettings(
+        tf32=False,
+        activation_checkpointing=False,
+        merge_mole=False,
+        compile=False,
+        wigner_cuda=False,
+        internal_graph_gen_version=1,
     )
 
 

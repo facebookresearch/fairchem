@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -13,7 +13,13 @@ from huggingface_hub import hf_hub_download
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 from fairchem.core.units.mlip_unit.api.inference import (
+    CHARGE_RANGE,
+    DEFAULT_CHARGE,
+    DEFAULT_SPIN,
+    DEFAULT_SPIN_OMOL,
+    SPIN_RANGE,
     InferenceSettings,
+    UMATask,
     guess_inference_settings,
 )
 from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
@@ -25,14 +31,12 @@ if TYPE_CHECKING:
 
 
 class FAIRChemCalculator(Calculator):
-    implemented_properties: ClassVar = ["energy", "forces", "stress", "free_energy"]
-
     def __init__(
         self,
         checkpoint_path: str | Path | None = None,
         hf_hub_repo_id: str | None = "facebook/UMA",
         hf_hub_filename: str | None = None,
-        task_name: Literal["omol", "omat", "oc20", "odac", "osc"] | None = None,
+        task_name: UMATask | None = None,
         device: str = "cuda",
         inference_settings: InferenceSettings | str = "default",
         seed: int | None = 42,
@@ -45,7 +49,7 @@ class FAIRChemCalculator(Calculator):
             checkpoint_path (str | Path | None): Path to the inference checkpoint file on the local disk. Ignored if `hf_hub_repo_id` and `hf_hub_filename` are provided.
             hf_hub_repo_id (str | None): Hugging Face Hub repository ID to download the checkpoint from.
             hf_hub_filename (str | None): Filename of the checkpoint in the Hugging Face Hub repository.
-            task_name (Literal["omol", "omat", "oc20", "odac", "osc"] | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'osc' (where osc corresponds to the OMC dataset).
+            task_name (UMATask | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'
             device (str): Device to run the calculations on (e.g., "cuda" or "cpu"). Default is "cuda".
             inference_settings (InferenceSettings): Defines the inference flags for the Calculator, currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in custom settings by passing an InferenceSettings object.
             seed (int | None): Random seed for reproducibility. Default is 42.
@@ -54,11 +58,12 @@ class FAIRChemCalculator(Calculator):
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge` and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
                 - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
                 - `spin` must be an integer representing the spin multiplicity and can range from 0 to 100.
-                - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to `0`.
+                - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to charge=`0` and spin=`1`.
             - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy. It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """
 
         super().__init__()
+        self.implemented_properties = []
 
         # Handle checkpoint download
         if hf_hub_repo_id and hf_hub_filename:
@@ -89,6 +94,8 @@ class FAIRChemCalculator(Calculator):
 
         # TODO: move these to a separate function retrieve these properties
         self.available_datasets = self.predictor.model.module.backbone.dataset_list
+        self.model_tasks = self.predictor.tasks
+        self.calc_property_to_model_key_mapping = {}
         self.available_output_keys = list(self.predictor.tasks.keys())
         logging.info(f"Available task names: {self.available_datasets}")
         logging.info(f"Available output keys: {self.available_output_keys}")
@@ -104,19 +111,14 @@ class FAIRChemCalculator(Calculator):
         self.device = device
 
         self.task_name = task_name
-        if self.task_name is None and len(self.available_datasets) == 1:
-            self.energy_key = (
-                "energy" if "energy" in self.available_output_keys else None
-            )
-            self.forces_key = (
-                "forces" if "forces" in self.available_output_keys else None
-            )
-            self.stress_key = (
-                "stress" if "stress" in self.available_output_keys else None
-            )
+        if self.task_name is not None:
+            assert (
+                task_name in UMATask
+            ), f"Valid options are {[t.value for t in UMATask]}"
+            if len(self.available_datasets) == 1:
+                self.task_name = self.available_datasets[0]
 
-        if seed is not None:
-            self.seed = seed
+        self.seed = seed
 
         # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
         a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
@@ -135,19 +137,23 @@ class FAIRChemCalculator(Calculator):
 
     @property
     def task_name(self) -> str:
-        """
-        Get the current task name.
-
-        Returns:
-            str: The current task name.
-        """
-
-        if (len(self.available_datasets) > 1) and self._task_name is None:
-            logging.warning(
-                "You are using a UMA model, but task_name is not set. Please set it before using the calculator!"
-            )
-
         return self._task_name
+
+    def reset_calc_key_mapping(self, task_name: str) -> None:
+        """Create a map of calculator keys to predictor output keys based on whats available in the model"""
+        self.implemented_properties = []
+        self.calc_property_to_model_key_mapping.clear()
+
+        for model_task_name, model_task in self.model_tasks.items():
+            if task_name in model_task.datasets:
+                for calc_key in ["energy", "forces", "stress"]:
+                    if calc_key == model_task.property:
+                        self.calc_property_to_model_key_mapping[calc_key] = (
+                            model_task_name
+                        )
+                        self.implemented_properties.append(calc_key)
+                        if calc_key == "energy":
+                            self.implemented_properties.append("free_energy")
 
     @task_name.setter
     def task_name(self, task_name: str) -> None:
@@ -157,37 +163,9 @@ class FAIRChemCalculator(Calculator):
         Args:
             task_name (str): The name of the task to use.
         """
+        assert task_name in UMATask, f"Valid options are {[t.value for t in UMATask]}"
         self._task_name = task_name
-        self.energy_key = (
-            f"{task_name}_energy"
-            if f"{task_name}_energy" in self.available_output_keys
-            else None
-        )
-        self.forces_key = (
-            f"{task_name}_forces"
-            if f"{task_name}_forces" in self.available_output_keys
-            else None
-        )
-        self.stress_key = (
-            f"{task_name}_stress"
-            if f"{task_name}_stress" in self.available_output_keys
-            else None
-        )
-
-        if self.energy_key not in self.available_output_keys:
-            logging.warning(
-                f"energy_key: <{self.energy_key}> not found in predictor. available keys: {self.available_output_keys}"
-            )
-
-        if self.forces_key not in self.available_output_keys:
-            logging.warning(
-                f"forces_key: <{self.forces_key}> not found in predictor. available keys: {self.available_output_keys}"
-            )
-
-        if self.stress_key not in self.available_output_keys:
-            logging.warning(
-                f"stress_key: <{self.stress_key}> not found in predictor. available keys: {self.available_output_keys}"
-            )
+        self.reset_calc_key_mapping(self._task_name)
 
     def print_warnings(self) -> None:
         """
@@ -196,11 +174,6 @@ class FAIRChemCalculator(Calculator):
         if self.direct_force:
             logging.warning(
                 "This inference checkpoint is a direct-force model. This may lead to discontinuities in the potential energy surface and energy conservation errors. Use with caution."
-            )
-
-        if self.max_neighbors < 0.5 * (self.cutoff**3):
-            logging.warning(
-                f"The limit on maximum number of neighbors: <{self.max_neighbors}> is less than 0.5 * cutoff^3: <{0.1 * (self.cutoff**3)}>. This may lead to discontinuities in the potential energy surface and energy conservation errors. Use with caution."
             )
 
         if not hasattr(self, "seed"):
@@ -238,36 +211,43 @@ class FAIRChemCalculator(Calculator):
         """
 
         if "charge" not in atoms.info:
-            atoms.info["charge"] = 0
-            logging.warning(
-                "task_name='omol' detected, but charge is not set in atoms.info. Defaulting to charge=0. "
-                "Ensure charge is an integer representing the total charge on the system and is within the range -100 to 100."
-            )
+            if self.task_name == UMATask.OMOL.value:
+                logging.warning(
+                    "task_name='omol' detected, but charge is not set in atoms.info. Defaulting to charge=0. "
+                    "Ensure charge is an integer representing the total charge on the system and is within the range -100 to 100."
+                )
+            atoms.info["charge"] = DEFAULT_CHARGE
+
         if "spin" not in atoms.info:
-            atoms.info["spin"] = 0
-            logging.warning(
-                "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=0. "
-                "Ensure spin is an integer representing the spin multiplicity from 0 to 100."
-            )
+            if self.task_name == UMATask.OMOL.value:
+                atoms.info["spin"] = DEFAULT_SPIN_OMOL
+                logging.warning(
+                    "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=0. "
+                    "Ensure spin is an integer representing the spin multiplicity from 0 to 100."
+                )
+            else:
+                atoms.info["spin"] = DEFAULT_SPIN
 
         # Validate charge
-        if not isinstance(atoms.info["charge"], int):
+        charge = atoms.info["charge"]
+        if not isinstance(charge, int):
             raise TypeError(
-                f"Invalid type for charge: {type(atoms.info['charge'])}. Charge must be an integer representing the total charge on the system."
+                f"Invalid type for charge: {type(charge)}. Charge must be an integer representing the total charge on the system."
             )
-        if not (-100 <= atoms.info["charge"] <= 100):
+        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
             raise ValueError(
-                f"Invalid value for charge: {atoms.info['charge']}. Charge must be within the range -100 to 100."
+                f"Invalid value for charge: {charge}. Charge must be within the range -100 to 100."
             )
 
         # Validate spin
+        spin = atoms.info["spin"]
         if not isinstance(atoms.info["spin"], int):
             raise TypeError(
-                f"Invalid type for spin: {type(atoms.info['spin'])}. Spin must be an integer representing the spin multiplicity."
+                f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
             )
-        if not (0 <= atoms.info["spin"] <= 100):
+        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
             raise ValueError(
-                f"Invalid value for spin: {atoms.info['spin']}. Spin must be within the range 0 to 100."
+                f"Invalid value for spin: {spin}. Spin must be within the range 0 to 100."
             )
 
     def calculate(
@@ -277,7 +257,8 @@ class FAIRChemCalculator(Calculator):
         Perform the calculation for the given atomic structure.
 
         Args:
-            atoms (Atoms): The atomic structure to calculate properties for. `charge             properties (list[str]): The list of properties to calculate.
+            atoms (Atoms): The atomic structure to calculate properties for. `charge
+            properties (list[str]): The list of properties to calculate.
             system_changes (list[str]): The list of changes in the system.
 
         Notes:
@@ -287,6 +268,9 @@ class FAIRChemCalculator(Calculator):
             - `charge` and `spin` are currently only used for the `omol` head.
             - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy. It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """
+        assert (
+            self.task_name is not None
+        ), "You must set a task name before attempting to use the calculator"
 
         # Our calculators won't work if natoms=0
         if len(atoms) == 0:
@@ -313,19 +297,20 @@ class FAIRChemCalculator(Calculator):
 
         # Collect the results into self.results
         self.results = {}
-        if self.energy_key is not None:
-            energy = float(pred[self.energy_key].detach().cpu().numpy()[0])
+        for calc_key, predictor_key in self.calc_property_to_model_key_mapping.items():
+            if calc_key == "energy":
+                energy = float(pred[predictor_key].detach().cpu().numpy()[0])
 
-            self.results["energy"] = self.results["free_energy"] = (
-                energy  # Free energy is a copy of energy
-            )
-        if self.forces_key is not None:
-            forces = pred[self.forces_key].detach().cpu().numpy()
-            self.results["forces"] = forces
-        if self.stress_key is not None:
-            stress = pred[self.stress_key].detach().cpu().numpy().reshape(3, 3)
-            stress_voigt = full_3x3_to_voigt_6_stress(stress)
-            self.results["stress"] = stress_voigt
+                self.results["energy"] = self.results["free_energy"] = (
+                    energy  # Free energy is a copy of energy
+                )
+            if calc_key == "forces":
+                forces = pred[predictor_key].detach().cpu().numpy()
+                self.results["forces"] = forces
+            if calc_key == "stress":
+                stress = pred[predictor_key].detach().cpu().numpy().reshape(3, 3)
+                stress_voigt = full_3x3_to_voigt_6_stress(stress)
+                self.results["stress"] = stress_voigt
 
     @property
     def seed(self) -> int:
