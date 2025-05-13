@@ -891,6 +891,9 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 "otf_graph"
             ] = not inference_settings.external_graph_gen
 
+        # TODO: hardcode to use graph gen v2 for inference, remove this after v1 is completely removed
+        overrides["backbone"]["radius_pbc_version"] = 1
+
         self.model, _, self.task_modules = load_inference_model_and_tasks(
             inference_model_path, use_ema=True, overrides=overrides
         )

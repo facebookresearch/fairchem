@@ -26,6 +26,7 @@ class RotMatWignerCudaGraph:
         # number of times graph capture has run, can be used to add logic to fail after certain number of times
         self.graph_capture_count = 0
         self.max_edge_size = None
+        logging.warning("Using Cuda graphs for wigner matrix creation")
 
     def _capture_graph(self, edge_dist_vec: torch.Tensor, jds: list[torch.Tensor]):
         self.max_edge_size = edge_dist_vec.shape[0]
@@ -33,7 +34,7 @@ class RotMatWignerCudaGraph:
             edge_dist_vec, jds
         )
         self.graph_capture_count += 1
-        if self.graph_capture_count % 10 == 1:
+        if self.graph_capture_count % 10 == 5:
             logging.warning(
                 f"CUDA Graph capture for Wigner Matrix has been called {self.graph_capture_count} times, it might slow down inference if called too frequently, consider turning this feature off."
             )

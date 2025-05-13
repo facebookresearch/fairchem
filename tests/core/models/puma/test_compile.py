@@ -4,18 +4,22 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
-from functools import partial
+
+from __future__ import annotations
+
 import itertools
 import random
+from functools import partial
+
 import numpy as np
 import pytest
 import torch
 from ase import build
+
 from fairchem.core.datasets.lmdb_dataset import data_list_collater
 from fairchem.core.models.base import HydraModelV2
-from fairchem.core.models.puma.escn_md import eSCNMDBackbone, MLP_EFS_Head
+from fairchem.core.models.puma.escn_md import MLP_EFS_Head, eSCNMDBackbone
 from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
-
 
 MAX_ELEMENTS = 100
 DATASET_LIST = ["oc20", "omol", "osc", "omat", "odac"]
@@ -107,6 +111,7 @@ def get_escn_md_full(
 
 @pytest.mark.gpu()
 def test_compile_backbone_gpu():
+    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     model = get_escn_md_backbone(cutoff=cutoff, device=device)
@@ -114,7 +119,7 @@ def test_compile_backbone_gpu():
     sizes = range(3, 10)
     neighbors = range(30, 100, 10)
     for size, neigh in zip(sizes, neighbors):
-        print("SIZE",size,neigh)
+        print("SIZE", size, neigh)
         data = get_diamond_tg_data(neigh, cutoff, size, device)
         seed_everywhere()
         output = model(data)
@@ -127,6 +132,7 @@ def test_compile_backbone_gpu():
 
 @pytest.mark.gpu()
 def test_compile_full_gpu():
+    torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
     model = get_escn_md_full(cutoff=cutoff, device=device)

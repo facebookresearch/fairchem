@@ -25,7 +25,13 @@ from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.preprocessing import AtomsToGraphs
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit.api.inference import (
+    InferenceSettings,
+    inference_settings_default,
+)
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    MLIPPredictUnit,
+)
 
 
 def seed_everywhere(seed):
@@ -43,7 +49,7 @@ def ase_to_graph(atoms, neighbors: int, cutoff: float):
     data_object.natoms = len(atoms)
     data_object.charge = 0
     data_object.spin = 0
-    data_object.dataset = "omol"
+    data_object.dataset = "omat"
     data_object.pos.requires_grad = True
     data_loader = torch.utils.data.DataLoader(
         [data_object],
@@ -114,11 +120,8 @@ class InferenceBenchRunner(Runner):
         seed: int = 1,
         device="cuda",
         overrides: dict | None = None,
-        compile: bool = False,
+        inference_settings: InferenceSettings = inference_settings_default(),  # noqa B008
     ):
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.set_float32_matmul_precision("high")
         self.natoms_list = natoms_list
         self.device = device
         self.seed = seed
@@ -126,7 +129,7 @@ class InferenceBenchRunner(Runner):
         self.model_checkpoints = model_checkpoints
         self.run_dir = os.path.join(run_dir_root, uuid.uuid4().hex.upper()[0:8])
         self.overrides = overrides
-        self.compile = compile
+        self.inference_settings = inference_settings
         os.makedirs(self.run_dir, exist_ok=True)
 
     def run(self) -> None:
@@ -135,16 +138,18 @@ class InferenceBenchRunner(Runner):
         model_to_qps_data = defaultdict(list)
 
         for name, model_checkpoint in self.model_checkpoints.items():
-            logging.info(f"Loading model: {model_checkpoint}")
+            logging.info(
+                f"Loading model: {model_checkpoint}, inference_settings: {self.inference_settings}"
+            )
             predictor = MLIPPredictUnit(
                 model_checkpoint,
                 self.device,
                 overrides=self.overrides,
-                compile=self.compile,
+                inference_settings=self.inference_settings,
             )
             max_neighbors = predictor.model.module.backbone.max_neighbors
             cutoff = predictor.model.module.backbone.cutoff
-            predictor.model.module.backbone.otf_graph = False
+            logging.info(f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}")
 
             # benchmark all cell sizes
             for natoms in self.natoms_list:

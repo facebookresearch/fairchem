@@ -12,6 +12,10 @@ from huggingface_hub import hf_hub_download
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
+from fairchem.core.units.mlip_unit.api.inference import (
+    InferenceSettings,
+    guess_inference_settings,
+)
 from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 if TYPE_CHECKING:
@@ -30,7 +34,7 @@ class FAIRChemCalculator(Calculator):
         hf_hub_filename: str | None = None,
         task_name: Literal["omol", "omat", "oc20", "odac", "osc"] | None = None,
         device: str = "cuda",
-        act_ckpt: bool = True,
+        inference_settings: InferenceSettings | str = "default",
         a2g_kwargs: dict[str, Any] | None = None,
         seed: int | None = 42,
         pbc_vacuum_buffer_for_aperiodic_atoms: float | None = None,
@@ -44,8 +48,7 @@ class FAIRChemCalculator(Calculator):
             hf_hub_filename (str | None): Filename of the checkpoint in the Hugging Face Hub repository.
             task_name (Literal["omol", "omat", "oc20", "odac", "osc"] | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'osc' (where osc corresponds to the OMC dataset).
             device (str): Device to run the calculations on (e.g., "cuda" or "cpu"). Default is "cuda".
-            act_ckpt (bool): Whether to enable activation checkpointing for memory efficiency. Default is True.
-                Setting `act_ckpt=False` will make the model run faster (approximately 20-30%) at the expense of using more memory.
+            inference_settings (InferenceSettings): Defines the inference flags for the Calculator, currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in custom settings by passing an InferenceSettings object.
             a2g_kwargs (dict[str, Any] | None): Additional arguments for the AtomsToGraphs conversion.
             seed (int | None): Random seed for reproducibility. Default is 42.
             pbc_vacuum_buffer_for_aperiodic_atoms (float | None): Vacuum size for guessing PBC for aperiodic atoms if not None. Default is None, which raises errors if the atoms object does not have PBC set.
@@ -71,8 +74,19 @@ class FAIRChemCalculator(Calculator):
             raise ValueError(
                 "Either `checkpoint_path` or both `hf_hub_repo_id` and `hf_hub_filename` must be provided."
             )
+        self.inference_settings_obj = guess_inference_settings(inference_settings)
+        if self.inference_settings_obj.external_graph_gen:
+            logging.warning(
+                "inference_settings.external_graph_gen not supported in the FAIRChemCalculator, this is always set to false here"
+            )
 
-        self.predictor = MLIPPredictUnit(checkpoint_path, device=device)
+        self.inference_settings_obj.external_graph_gen = False
+
+        self.predictor = MLIPPredictUnit(
+            checkpoint_path,
+            device=device,
+            inference_settings=self.inference_settings_obj,
+        )
 
         # TODO: clean up config loading after a2g refactor.
         self.available_datasets = self.predictor.model.module.backbone.dataset_list
@@ -83,16 +97,11 @@ class FAIRChemCalculator(Calculator):
         self.max_neighbors = self.predictor.model.module.backbone.max_neighbors
         self.cutoff = self.predictor.model.module.backbone.cutoff
         self.direct_force = self.predictor.model.module.backbone.direct_forces
-        self.otf_graph = self.predictor.model.module.backbone.otf_graph = True
 
         self.device = device
         self.pbc_vacuum_buffer_for_aperiodic_atoms = (
             pbc_vacuum_buffer_for_aperiodic_atoms
         )
-
-        self.act_ckpt = act_ckpt
-        if self.act_ckpt:
-            self.predictor.model.module.backbone.activation_checkpointing = True
 
         self.task_name = task_name
         if self.task_name is None and len(self.available_datasets) == 1:
@@ -121,7 +130,7 @@ class FAIRChemCalculator(Calculator):
             r_energy=False,
             r_forces=False,
             r_distances=False,
-            r_edges=not self.otf_graph,
+            r_edges=False,
             r_pbc=True,
             **a2g_kwargs,
         )
@@ -301,7 +310,7 @@ class FAIRChemCalculator(Calculator):
         data_object.dataset = self.task_name
 
         # Batch and predict
-        batch = data_list_collater([data_object], otf_graph=self.otf_graph)
+        batch = data_list_collater([data_object], otf_graph=True)
         pred = self.predictor.predict(
             batch,
         )

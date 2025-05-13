@@ -4,6 +4,7 @@ Copyright (c) Facebook, Inc. and its affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +23,7 @@ from fairchem.core.common.fairchem_calculator import (
     MissingPBCError,
     MixedPBCError,
 )
+from fairchem.core.units.mlip_unit.api.inference import inference_settings_turbo
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -100,10 +102,10 @@ def large_bulk_atoms() -> Atoms:
     """Create a bulk system with approximately 1000 atoms."""
     return bulk("Fe", "bcc", a=2.87).repeat((10, 10, 10))  # 10x10x10 unit cell
 
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_calculator_setup(checkpoint):
-
     calc = FAIRChemCalculator(
         hf_hub_repo_id=checkpoint["repo_id"],
         hf_hub_filename=checkpoint["filename"],
@@ -135,6 +137,7 @@ def test_calculator_setup(checkpoint):
             calc.forces_key in calc.available_output_keys
         )
 
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "atoms_fixture",
@@ -148,7 +151,6 @@ def test_calculator_setup(checkpoint):
 )
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_energy_calculation(request, atoms_fixture, checkpoint):
-
     calc = FAIRChemCalculator(
         hf_hub_repo_id=checkpoint["repo_id"],
         hf_hub_filename=checkpoint["filename"],
@@ -165,7 +167,6 @@ def test_energy_calculation(request, atoms_fixture, checkpoint):
 @pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
 def test_relaxation_final_energy(slab_atoms, checkpoint):
-
     calc = FAIRChemCalculator(
         hf_hub_repo_id=checkpoint["repo_id"],
         hf_hub_filename=checkpoint["filename"],
@@ -204,16 +205,18 @@ def test_relaxation_final_energy(slab_atoms, checkpoint):
 #          for seed_b in set(seeds) - {seed_a}:
 #              assert results_by_seed[seed_a] != results_by_seed[seed_b]
 
-@pytest.mark.cpu_and_gpu()
-@pytest.mark.parametrize("act_ckpt", [True, False])
+
+@pytest.mark.gpu()
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
-def test_calculator_configurations(slab_atoms, act_ckpt,checkpoint):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+def test_calculator_configurations_turbo(slab_atoms, checkpoint):
+    # turbo mode requires compilation and needs to reset here
+    torch.compiler.reset()
+    device = "cuda"
     calc = FAIRChemCalculator(
         hf_hub_repo_id=checkpoint["repo_id"],
         hf_hub_filename=checkpoint["filename"],
         device=device,
-        act_ckpt=act_ckpt,
+        inference_settings=inference_settings_turbo(),
         task_name=checkpoint["task_name"],
     )
     slab_atoms.calc = calc
@@ -229,6 +232,7 @@ def test_calculator_configurations(slab_atoms, act_ckpt,checkpoint):
         stress = slab_atoms.get_stress()
         assert isinstance(stress, np.ndarray)
 
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize("hf_hub", [True, False])
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
@@ -236,7 +240,9 @@ def test_calculator_checkpoint_download(slab_atoms, hf_hub, checkpoint):
     """Test downloading a checkpoint from Hugging Face Hub and using checkpoint_path directly."""
 
     if hf_hub:
-        checkpoint_path = hf_hub_download(repo_id=checkpoint["repo_id"], filename=checkpoint["filename"])
+        checkpoint_path = hf_hub_download(
+            repo_id=checkpoint["repo_id"], filename=checkpoint["filename"]
+        )
         calc = FAIRChemCalculator(
             checkpoint_path=checkpoint_path,
             device="cuda",
@@ -261,6 +267,7 @@ def test_calculator_checkpoint_download(slab_atoms, hf_hub, checkpoint):
     # Test energy calculation
     energy = slab_atoms.get_potential_energy()
     assert isinstance(energy, float)
+
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
@@ -296,6 +303,7 @@ def test_switch_task_name_calculation(periodic_h2o_atoms, checkpoint):
 
     # Ensure forces are different between 'omol' and 'osc'
     assert not np.allclose(forces_omol, forces_osc, atol=0.01)
+
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
