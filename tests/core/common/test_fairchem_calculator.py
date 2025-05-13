@@ -17,9 +17,9 @@ from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.optimize import BFGS
 from huggingface_hub import hf_hub_download
 
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.common.fairchem_calculator import (
     AllZeroUnitCellError,
-    FAIRChemCalculator,
     MixedPBCError,
 )
 from fairchem.core.units.mlip_unit.api.inference import inference_settings_turbo
