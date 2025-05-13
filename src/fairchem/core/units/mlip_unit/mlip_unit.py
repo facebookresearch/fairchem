@@ -58,7 +58,6 @@ from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     MLIPInferenceCheckpoint,
-    inference_settings_default,
 )
 
 # placeholder for fairchem data
@@ -873,7 +872,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         if inference_settings is None:
-            inference_settings = inference_settings_default()
+            inference_settings = InferenceSettings()
         if overrides is None:
             overrides = {}
         if "backbone" not in overrides:
@@ -891,8 +890,10 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 "otf_graph"
             ] = not inference_settings.external_graph_gen
 
-        # TODO: hardcode to use graph gen v2 for inference, remove this after v1 is completely removed
-        overrides["backbone"]["radius_pbc_version"] = 1
+        if inference_settings.internal_graph_gen_version is not None:
+            overrides["backbone"]["radius_pbc_version"] = (
+                inference_settings.internal_graph_gen_version
+            )
 
         self.model, _, self.task_modules = load_inference_model_and_tasks(
             inference_model_path, use_ema=True, overrides=overrides

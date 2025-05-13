@@ -598,6 +598,8 @@ def radius_graph_pbc(
 ):
     if pbc is None:
         pbc = [True, True, True]
+    else:
+        pbc = list(pbc)
     device = data.pos.device
     batch_size = len(data.natoms)
 

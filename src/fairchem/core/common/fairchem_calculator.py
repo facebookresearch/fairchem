@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 import numpy as np
 import torch
@@ -35,9 +35,8 @@ class FAIRChemCalculator(Calculator):
         task_name: Literal["omol", "omat", "oc20", "odac", "osc"] | None = None,
         device: str = "cuda",
         inference_settings: InferenceSettings | str = "default",
-        a2g_kwargs: dict[str, Any] | None = None,
         seed: int | None = 42,
-        pbc_vacuum_buffer_for_aperiodic_atoms: float | None = None,
+        max_neighbors: int | None = 100,
     ):
         """
         Initialize the FAIRChemCalculator, downloading model checkpoints as necessary.
@@ -49,9 +48,8 @@ class FAIRChemCalculator(Calculator):
             task_name (Literal["omol", "omat", "oc20", "odac", "osc"] | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'osc' (where osc corresponds to the OMC dataset).
             device (str): Device to run the calculations on (e.g., "cuda" or "cpu"). Default is "cuda".
             inference_settings (InferenceSettings): Defines the inference flags for the Calculator, currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in custom settings by passing an InferenceSettings object.
-            a2g_kwargs (dict[str, Any] | None): Additional arguments for the AtomsToGraphs conversion.
             seed (int | None): Random seed for reproducibility. Default is 42.
-            pbc_vacuum_buffer_for_aperiodic_atoms (float | None): Vacuum size for guessing PBC for aperiodic atoms if not None. Default is None, which raises errors if the atoms object does not have PBC set.
+            max_neighbors (int | None): define a custom max neighbors per atom limit, defaults to 100, typically fairchem models are trained with 300, but we find 100 is sufficient for most applications
         Notes:
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge` and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
                 - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
@@ -86,22 +84,24 @@ class FAIRChemCalculator(Calculator):
             checkpoint_path,
             device=device,
             inference_settings=self.inference_settings_obj,
+            overrides={"backbone": {"always_use_pbc": False}},
         )
 
-        # TODO: clean up config loading after a2g refactor.
+        # TODO: move these to a separate function retrieve these properties
         self.available_datasets = self.predictor.model.module.backbone.dataset_list
         self.available_output_keys = list(self.predictor.tasks.keys())
         logging.info(f"Available task names: {self.available_datasets}")
         logging.info(f"Available output keys: {self.available_output_keys}")
 
-        self.max_neighbors = self.predictor.model.module.backbone.max_neighbors
+        self.max_neighbors = min(
+            max_neighbors, self.predictor.model.module.backbone.max_neighbors
+        )
+        assert self.max_neighbors > 0
+
         self.cutoff = self.predictor.model.module.backbone.cutoff
         self.direct_force = self.predictor.model.module.backbone.direct_forces
 
         self.device = device
-        self.pbc_vacuum_buffer_for_aperiodic_atoms = (
-            pbc_vacuum_buffer_for_aperiodic_atoms
-        )
 
         self.task_name = task_name
         if self.task_name is None and len(self.available_datasets) == 1:
@@ -119,11 +119,7 @@ class FAIRChemCalculator(Calculator):
             self.seed = seed
 
         # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
-        if a2g_kwargs is None:
-            a2g_kwargs = {}
-        a2g_kwargs.update({"r_data_keys": ["spin", "charge"]})
-        logging.info(f"setting a2g_kwargs to {a2g_kwargs}")
-
+        a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
         self.a2g = AtomsToGraphs(
             max_neigh=self.max_neighbors,
             radius=self.cutoff,
@@ -297,7 +293,7 @@ class FAIRChemCalculator(Calculator):
             raise NoAtoms
 
         # Check if the atoms object has periodic boundary conditions (PBC) set correctly
-        atoms = self._check_or_set_atoms_pbc(atoms)
+        self._check_atoms_pbc(atoms)
 
         # Validate that charge/spin are set correctly for omol, or default to 0 otherwise
         self._validate_charge_and_spin(atoms)
@@ -350,43 +346,17 @@ class FAIRChemCalculator(Calculator):
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-    def _check_or_set_atoms_pbc(self, atoms) -> Atoms:
+    def _check_atoms_pbc(self, atoms) -> None:
         """
-        Check if the atoms object has periodic boundary conditions (PBC) set or set it if self.pbc_vacuum_buffer_for_aperiodic_atoms is not None.
+        Check for invalid PBC conditions
 
         Args:
             atoms (ase.Atoms): The atomic structure to check.
-
-        Returns:
-            atoms: unchanged atoms, or atoms with guessed PBC if self.add_pbc_for_aperiodic_atoms=True.
         """
-        if hasattr(atoms, "pbc") and np.all(atoms.pbc):
-            if not np.allclose(atoms.cell, 0):
-                return atoms
-            else:
-                raise AllZeroUnitCellError
-        elif self.pbc_vacuum_buffer_for_aperiodic_atoms:
-            return guess_pbc(atoms, vacuum=self.pbc_vacuum_buffer_for_aperiodic_atoms)
-        else:
-            raise MissingPBCError
-
-
-def guess_pbc(atoms, vacuum: float) -> Atoms:
-    if hasattr(atoms, "pbc") and np.all(atoms.pbc):
-        # PBC is already set, return the atoms object
-        return atoms
-    elif hasattr(atoms, "pbc") and not np.all(~atoms.pbc):
-        # We have mixed PBC, and we really can't know what to do. It's on the user to figure this out.
-        raise MixedPBCError
-
-    # if we've gotten here, we need to guess the box and apply pbc!
-    logging.info(
-        "Guessed a sufficiently large unit cell for the atoms object. Setting pbc=True."
-    )
-    atoms_copy = atoms.copy()
-    atoms_copy.center(vacuum=vacuum)
-    atoms_copy.pbc = True
-    return atoms_copy
+        if np.all(atoms.pbc) and np.allclose(atoms.cell, 0):
+            raise AllZeroUnitCellError
+        if np.any(atoms.pbc) and not np.all(atoms.pbc):
+            raise MixedPBCError
 
 
 class MixedPBCError(ValueError):
@@ -395,17 +365,6 @@ class MixedPBCError(ValueError):
     def __init__(
         self,
         message="Attempted to guess PBC for an atoms object, but the atoms object has PBC set to True for some dimensions but not others. Please ensure that the atoms object has PBC set to True for all dimensions.",
-    ):
-        self.message = message
-        super().__init__(self.message)
-
-
-class MissingPBCError(ValueError):
-    """Specific exception example."""
-
-    def __init__(
-        self,
-        message="The atoms object does not have periodic boundary conditions (PBC) in all directions. Please ensure that the atoms object has PBC set to True for all dimensions, or use the `fairchem.core.common.calculator.guess_pbc` to guess a sufficiently large unit cell if you have an uncharged aperiodic system or set add_pbc_for_aperiodic_atoms=True in the calculator.",
     ):
         self.message = message
         super().__init__(self.message)

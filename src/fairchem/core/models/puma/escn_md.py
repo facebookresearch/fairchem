@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import os
 
 import torch
@@ -82,6 +83,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
+        always_use_pbc: bool = True,
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -90,6 +92,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.sphere_channels = sphere_channels
         self.grid_resolution = grid_resolution
         self.num_sphere_samples = num_sphere_samples
+        # set this True if we want to ALWAYS use pbc for internal graph gen
+        # despite what's in the input data this only affects when otf_graph is True
+        # in this mode, the user must be responsible for providing a large vaccum box
+        # for aperiodic systems
+        self.always_use_pbc = always_use_pbc
 
         # energy conservation related
         self.regress_forces = regress_forces
@@ -343,12 +350,25 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _generate_graph(self, data_dict):
         if self.otf_graph:
+            pbc = None
+            if self.always_use_pbc:
+                pbc = (True, True, True)
+            else:
+                assert (
+                    "pbc" in data_dict
+                ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
+                pbc = data_dict["pbc"]
+            assert all(pbc) or not any(
+                pbc
+            ), "We can only accept pbc that is all true or all false"
+            logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
                 max_neighbors=self.max_neighbors,
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
+                pbc=pbc,
             )
         else:
             # this assume edge_index is provided

@@ -64,6 +64,12 @@ class InferenceSettings:
     # will be used.
     external_graph_gen: bool | None = None
 
+    # Deprecated
+    # Not recommended using! manually selects the version of graph gen
+    # code if external_graph_gen is false, if set of None, will default
+    # to whatever is in the checkpoint
+    internal_graph_gen_version: int | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
@@ -74,6 +80,7 @@ def inference_settings_default():
         merge_mole=False,
         compile=False,
         wigner_cuda=False,
+        internal_graph_gen_version=2,
     )
 
 
@@ -88,6 +95,7 @@ def inference_settings_turbo():
         merge_mole=True,
         compile=True,
         wigner_cuda=True,
+        internal_graph_gen_version=2,
     )
 
 

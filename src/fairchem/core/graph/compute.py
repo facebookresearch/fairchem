@@ -25,6 +25,7 @@ def generate_graph(
     max_neighbors: int,
     enforce_max_neighbors_strictly: bool,
     radius_pbc_version: int,
+    pbc: list[bool] = (True, True, True),
 ) -> dict:
     """Generate a graph representation from atomic structure data.
 
@@ -38,6 +39,7 @@ def generate_graph(
         max_neighbors (int): The maximum number of neighbors to consider for each atom.
         enforce_max_neighbors_strictly (bool): Whether to strictly enforce the maximum number of neighbors.
         radius_pbc_version: the version of radius_pbc impl
+        pbc (list[bool]): The periodic boundary conditions in 3 dimensions, defaults to [True,True,True] for 3D pbc
 
     Returns:
         dict: A dictionary containing the generated graph with the following keys:
@@ -68,6 +70,7 @@ def generate_graph(
                     cutoff,
                     max_neighbors,
                     enforce_max_neighbors_strictly,
+                    pbc=pbc,
                 )
                 for idx in range(len(data))
             ]

@@ -20,7 +20,6 @@ from huggingface_hub import hf_hub_download
 from fairchem.core.common.fairchem_calculator import (
     AllZeroUnitCellError,
     FAIRChemCalculator,
-    MissingPBCError,
     MixedPBCError,
 )
 from fairchem.core.units.mlip_unit.api.inference import inference_settings_turbo
@@ -111,7 +110,6 @@ def test_calculator_setup(checkpoint):
         hf_hub_filename=checkpoint["filename"],
         task_name=checkpoint["task_name"],
         device="cuda",
-        pbc_vacuum_buffer_for_aperiodic_atoms=1.0e5,
     )
 
     assert "energy" in calc.implemented_properties
@@ -156,7 +154,6 @@ def test_energy_calculation(request, atoms_fixture, checkpoint):
         hf_hub_filename=checkpoint["filename"],
         task_name=checkpoint["task_name"],
         device="cuda",
-        pbc_vacuum_buffer_for_aperiodic_atoms=1.0e5,
     )
     atoms = request.getfixturevalue(atoms_fixture)
     atoms.calc = calc
@@ -172,7 +169,6 @@ def test_relaxation_final_energy(slab_atoms, checkpoint):
         hf_hub_filename=checkpoint["filename"],
         task_name=checkpoint["task_name"],
         device="cuda",
-        pbc_vacuum_buffer_for_aperiodic_atoms=1.0e5,
     )
 
     slab_atoms.calc = calc
@@ -339,7 +335,6 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, checkpoint):
         hf_hub_filename=checkpoint["filename"],
         task_name=checkpoint["task_name"],
         device="cuda",
-        pbc_vacuum_buffer_for_aperiodic_atoms=1.0e5,
     )
 
     # Test all combinations of charge and spin
@@ -394,49 +389,29 @@ def test_large_bulk_system(large_bulk_atoms, checkpoint):
         (True, True, False),
     ],
 )
-@pytest.mark.parametrize("pbc_vacuum_buffer_for_aperiodic_atoms", [None, 1.0e5])
 @pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
-def test_guess_pbc_behavior(
-    aperiodic_atoms, pbc, pbc_vacuum_buffer_for_aperiodic_atoms, checkpoint
-):
-    """Test guess_pbc behavior for various pbc combinations and add_pbc_for_aperiodic_atoms flag."""
+def test_mixed_pbc_behavior(aperiodic_atoms, pbc, checkpoint):
+    """Test guess_pbc behavior"""
     pbc = np.array(pbc)
     aperiodic_atoms.pbc = pbc
-    if np.all(aperiodic_atoms.pbc):
-        aperiodic_atoms.center(vacuum=1000.0)
+    if np.all(pbc):
+        aperiodic_atoms.cell = [100.0, 100.0, 100.0]
 
     calc = FAIRChemCalculator(
         hf_hub_repo_id=checkpoint["repo_id"],
         hf_hub_filename=checkpoint["filename"],
         task_name=checkpoint["task_name"],
         device="cuda",
-        pbc_vacuum_buffer_for_aperiodic_atoms=pbc_vacuum_buffer_for_aperiodic_atoms,
     )
 
-    if all(pbc):
-        # If all pbc are True, it should work without modification
-        aperiodic_atoms.calc = calc
-        energy = aperiodic_atoms.get_potential_energy()
-        assert isinstance(energy, float)
-    elif np.all(~pbc) and pbc_vacuum_buffer_for_aperiodic_atoms is not None:
-        # If all pbc are False and add_pbc_for_aperiodic_atoms=True, it should calculate the box
-        aperiodic_atoms.calc = calc
-        energy = aperiodic_atoms.get_potential_energy()
-        assert isinstance(energy, float)
-    elif ~np.all(pbc) and pbc_vacuum_buffer_for_aperiodic_atoms is None:
-        # If all pbc are False and add_pbc_for_aperiodic_atoms=False, it should raise an error
-        with pytest.raises(MissingPBCError):
-            aperiodic_atoms.calc = calc
-            aperiodic_atoms.get_potential_energy()
-    elif pbc_vacuum_buffer_for_aperiodic_atoms is not None:
-        # If pbc are mixed, it should raise an error from the pbc guesser
+    if np.any(aperiodic_atoms.pbc) and not np.all(aperiodic_atoms.pbc):
         with pytest.raises(MixedPBCError):
             aperiodic_atoms.calc = calc
             aperiodic_atoms.get_potential_energy()
     else:
-        raise ValueError(
-            "Unhandled combination of pbc and pbc_vacuum_buffer_for_aperiodic_atoms for test_guess_pbc_behavior"
-        )
+        aperiodic_atoms.calc = calc
+        energy = aperiodic_atoms.get_potential_energy()
+        assert isinstance(energy, float)
 
 
 @pytest.mark.gpu()
