@@ -110,13 +110,13 @@ class FAIRChemCalculator(Calculator):
 
         self.device = device
 
-        self.task_name = task_name
-        if self.task_name is not None:
+        if task_name is not None:
             assert (
                 task_name in UMATask
-            ), f"Valid options are {[t.value for t in UMATask]}"
-            if len(self.available_datasets) == 1:
-                self.task_name = self.available_datasets[0]
+            ), f"Given: {task_name}, Valid options are {[t.value for t in UMATask]}"
+            self.task_name = task_name
+        elif len(self.available_datasets) == 1:
+            self.task_name = self.available_datasets[0]
 
         self.seed = seed
 
@@ -163,7 +163,9 @@ class FAIRChemCalculator(Calculator):
         Args:
             task_name (str): The name of the task to use.
         """
-        assert task_name in UMATask, f"Valid options are {[t.value for t in UMATask]}"
+        assert (
+            task_name in UMATask
+        ), f"Given {task_name}, Valid options are {[t.value for t in UMATask]}"
         self._task_name = task_name
         self.reset_calc_key_mapping(self._task_name)
 
