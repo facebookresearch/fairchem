@@ -911,6 +911,9 @@ class MLIPPredictUnit(PredictUnit[Batch]):
 
         self.inference_mode = inference_settings
 
+        # store composition embedding of system the model was merged on
+        self.merged_on = None
+
         if self.inference_mode.tf32:
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
@@ -926,16 +929,36 @@ class MLIPPredictUnit(PredictUnit[Batch]):
     def predict_step(self, state: State, data: Batch) -> dict[str, torch.tensor]:
         return self.predict(data)
 
+    def get_composition_charge_spin_dataset(self, data):
+        composition_sum = data.atomic_numbers.new_zeros(
+            self.model.module.backbone.max_num_elements
+        ).index_add(
+            0,
+            data.atomic_numbers.to(torch.int),
+            data.atomic_numbers.new_ones(data.atomic_numbers.shape[0]),
+        )
+        comp_charge_spin = (
+            composition_sum,
+            getattr(data, "charge", None),
+            getattr(data, "spin", None),
+        )
+        return comp_charge_spin, getattr(data, "dataset", [None])
+
     def predict(
         self, data: Batch, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
+            # merge everything on CPU
             if self.inference_mode.merge_mole:
                 # replace backbone with non MOE version
+                assert (
+                    data.natoms.numel() == 1
+                ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
                 self.model.module.backbone = (
-                    self.model.module.backbone.merge_MOLE_model(data)
+                    self.model.module.backbone.merge_MOLE_model(data.clone())
                 )
                 self.model.eval()
+            # move to device
             self.move_to_device()
             if self.inference_mode.compile:
                 logging.warning(
@@ -944,11 +967,32 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
-        inference_context = (
-            nullcontext()
-        )  # torch.no_grad() if self.direct_forces else nullcontext()
-
         data_device = data.to(self.device)
+
+        if self.inference_mode.merge_mole:
+            if self.merged_on is None:
+                # only get embeddings after moved to final device to get right types
+                self.merged_on = self.get_composition_charge_spin_dataset(data_device)
+            else:
+                this_sys = self.get_composition_charge_spin_dataset(data_device)
+                assert (
+                    data_device.natoms.numel() == 1
+                ), f"Cannot run merged model on batch with multiple systems. Must be exactly 1 system, found {data_device.natoms.numel()}"
+                assert (
+                    self.merged_on[0][0].isclose(this_sys[0][0], rtol=1e-5).all()
+                ), "Cannot run on merged model on system. Embeddings seem different..."
+                assert (
+                    self.merged_on[0][1] == this_sys[0][1]
+                ), f"Cannot run on merged model on system. Charge is diferrent {self.merged_on[0][1]} vs {this_sys[0][1]}"
+                assert (
+                    self.merged_on[0][2] == this_sys[0][2]
+                ), f"Cannot run on merged model on system. Spin is diferrent {self.merged_on[0][2]} vs {this_sys[0][2]}"
+                assert (
+                    self.merged_on[1] == this_sys[1]
+                ), f"Cannot run on merged model on system. Dataset is diferrent {self.merged_on[1]} vs {this_sys[1]}"
+
+        inference_context = torch.no_grad() if self.direct_forces else nullcontext()
+
         pred_output = {}
         with inference_context:
             output = self.model(data_device)
