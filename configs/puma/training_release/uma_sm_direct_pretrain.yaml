@@ -1,8 +1,9 @@
 defaults:
   - cluster: h100
-  - dataset: puma
-  - element_refs: puma_v1_hof_lin_refs
-  - tasks: puma_conserving_stress
+  - backbone: K4L2
+  - dataset: uma
+  - element_refs: uma_v1_hof_lin_refs
+  - tasks: uma_direct
   - _self_
 
 job:
@@ -10,7 +11,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 32
+    num_nodes: 16
     slurm:
       account: ${cluster.account}
       qos: ${cluster.qos}
@@ -18,37 +19,41 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: puma_v1_043025_md_conserve
+  run_name: uma_v1_043025_sm_direct
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: puma
-  graph_parallel_group_size: 2
+    project: uma
 
-starting_checkpoint: none
-max_neighbors: 300
+moe_layer_type: pytorch
+num_moe_experts: 32
+max_neighbors: 30
+cutoff_radius: 6
 epochs: null
-steps: 545000
-max_atoms: 350
-min_atoms: 8
-bf16: False
+steps: 1680000 # 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
+max_atoms: 700
+bf16: True
 cpu_graph: True
 otf_graph: False
 normalizer_rmsd: 1.423
+direct_forces_coef: 30
+osc_energy_coef: 10
+omol_energy_coef: 30
+odac_energy_coef: 10
+oc20_energy_coef: 10
+omat_energy_coef: 10
 
-energy_coef: 20
-force_coef: 2
-stress_coef: 1
+regress_stress: False
+direct_forces: True
 
-regress_stress: True
+oc20_forces_key: forces
+omat_forces_key: forces
+omol_forces_key: forces
+odac_forces_key: forces
+osc_forces_key: forces
 
-oc20_forces_key: oc20_forces
-omat_forces_key: omat_forces
-omol_forces_key: omol_forces
-odac_forces_key: odac_forces
-osc_forces_key: osc_forces
-
+dataset_list: ["oc20", "omol", "omat", "odac", "osc"]
 
 exclude_keys: [
   "id", # only oc20,oc22 have this
@@ -98,7 +103,6 @@ train_dataloader:
     _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
     _partial_: True
     max_atoms: ${max_atoms}
-    min_atoms: ${min_atoms}
     shuffle: True
     seed: 0
   num_workers: ${cluster.dataloader_workers}
@@ -114,7 +118,6 @@ eval_dataloader:
     _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
     _partial_: True
     max_atoms: ${max_atoms}
-    min_atoms: ${min_atoms}
     shuffle: False
     seed: 0
   num_workers: ${cluster.dataloader_workers}
@@ -124,17 +127,18 @@ eval_dataloader:
     exclude_keys: ${exclude_keys}
 
 heads:
-  energyandforcehead:
-    module: fairchem.core.models.puma.escn_moe.DatasetSpecificSingleHeadWrapper
-    head_cls: fairchem.core.models.puma.escn_md.MLP_EFS_Head
-    head_kwargs:
-      wrap_property: False
-    dataset_names:
-      - omol
-      - omat
-      - oc20
-      - osc
-      - odac
+  oc20_energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  omat_energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  osc_energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  omol_energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  odac_energy:
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  forces:
+    module: fairchem.core.models.uma.escn_md.Linear_Force_Head
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
@@ -145,21 +149,13 @@ runner:
     job_config: ${job}
     tasks: ${tasks}
     model:
-      _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
-      checkpoint_location: ${starting_checkpoint}
-      overrides:
-        backbone:
-          max_neighbors: ${max_neighbors}
-          regress_stress: True
-          direct_forces: False
-          otf_graph: ${otf_graph}
-          moe_layer_type: pytorch
-        pass_through_head_outputs: True
+      _target_: fairchem.core.models.base.HydraModel
+      backbone: ${backbone}
       heads: ${heads}
     optimizer_fn:
       _target_: torch.optim.AdamW
       _partial_: true
-      lr: 4e-4
+      lr: 8e-4
       weight_decay: 1e-3
     cosine_lr_scheduler_fn:
       _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler

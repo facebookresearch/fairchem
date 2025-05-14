@@ -1,8 +1,8 @@
 defaults:
   - cluster: h100
-  - dataset: puma
-  - element_refs: puma_v1_hof_lin_refs
-  - tasks: puma_conserving_stress
+  - dataset: uma
+  - element_refs: uma_v1_hof_lin_refs
+  - tasks: uma_conserving_stress
   - _self_
 
 job:
@@ -18,22 +18,23 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: puma_v1_043025_sm_conserve
+  run_name: uma_v1_043025_md_conserve
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: puma
+    project: uma
+  graph_parallel_group_size: 2
 
-starting_checkpoint: "/checkpoint/ocp/shared/puma/202505-0117-1812-5a58/checkpoints/final/inference_ckpt.pt"
+starting_checkpoint: none
 max_neighbors: 300
-cutoff_radius: 6
 epochs: null
-steps: 1000000 # 140B atoms, 128 ranks, max atoms 700 (mean atoms 650)
+steps: 545000
 max_atoms: 350
-min_atoms: 0
+min_atoms: 8
 bf16: False
 cpu_graph: True
+otf_graph: False
 normalizer_rmsd: 1.423
 
 energy_coef: 20
@@ -122,11 +123,10 @@ eval_dataloader:
     tasks: ${tasks}
     exclude_keys: ${exclude_keys}
 
-
 heads:
   energyandforcehead:
-    module: fairchem.core.models.puma.escn_moe.DatasetSpecificSingleHeadWrapper
-    head_cls: fairchem.core.models.puma.escn_md.MLP_EFS_Head
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
+    head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
     head_kwargs:
       wrap_property: False
     dataset_names:
@@ -150,8 +150,9 @@ runner:
       overrides:
         backbone:
           max_neighbors: ${max_neighbors}
-          regress_stress: ${regress_stress}
+          regress_stress: True
           direct_forces: False
+          otf_graph: ${otf_graph}
           moe_layer_type: pytorch
         pass_through_head_outputs: True
       heads: ${heads}

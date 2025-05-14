@@ -1,9 +1,9 @@
 defaults:
   - cluster: h100
   - backbone: K10L4
-  - dataset: puma
-  - element_refs: puma_v1_hof_lin_refs
-  - tasks: puma_direct
+  - dataset: uma
+  - element_refs: uma_v1_hof_lin_refs
+  - tasks: uma_direct
   - _self_
 
 job:
@@ -19,12 +19,12 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: puma_v1_043025_md_direct
+  run_name: uma_v1_043025_md_direct
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: puma
+    project: uma
 
 moe_layer_type: pytorch
 num_moe_experts: 32
@@ -128,17 +128,17 @@ eval_dataloader:
 
 heads:
   oc20_energy:
-    module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   omat_energy:
-    module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   osc_energy:
-    module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   omol_energy:
-    module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   odac_energy:
-    module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   forces:
-    module: fairchem.core.models.puma.escn_md.Linear_Force_Head
+    module: fairchem.core.models.uma.escn_md.Linear_Force_Head
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
