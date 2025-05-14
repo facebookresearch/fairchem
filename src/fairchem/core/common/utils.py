@@ -7,33 +7,24 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import ast
-import collections
 import copy
 import datetime
 import errno
 import functools
 import importlib
-import itertools
-import json
 import logging
 import os
 import pathlib
 import subprocess
 import sys
-import time
 from functools import reduce, wraps
-from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-import numpy as np
 import torch
 import torch.nn as nn
 import yaml
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 
 import fairchem.core
 from fairchem.core.common.registry import registry
@@ -67,16 +58,6 @@ class UniqueKeyLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep)
 
 
-def print_cuda_usage() -> None:
-    print("Memory Allocated:", torch.cuda.memory_allocated() / (1024 * 1024))
-    print(
-        "Max Memory Allocated:",
-        torch.cuda.max_memory_allocated() / (1024 * 1024),
-    )
-    print("Memory Cached:", torch.cuda.memory_cached() / (1024 * 1024))
-    print("Max Memory Cached:", torch.cuda.max_memory_cached() / (1024 * 1024))
-
-
 def conditional_grad(dec):
     "Decorator to enable/disable grad depending on whether force/energy predictions are being made"
 
@@ -92,66 +73,6 @@ def conditional_grad(dec):
         return cls_method
 
     return decorator
-
-
-def plot_histogram(data, xlabel: str = "", ylabel: str = "", title: str = ""):
-    assert isinstance(data, list)
-
-    # Preset
-    fig = Figure(figsize=(5, 4), dpi=150)
-    canvas = FigureCanvas(fig)
-    ax = fig.gca()
-
-    # Plot
-    ax.hist(data, bins=20, rwidth=0.9, zorder=3)
-
-    # Axes
-    ax.grid(color="0.95", zorder=0)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    fig.tight_layout(pad=2)
-
-    # Return numpy array
-    canvas.draw()
-    image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    return image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-
-
-# Override the collation method in `pytorch_geometric.data.InMemoryDataset`
-def collate(data_list):
-    keys = data_list[0].keys
-    data = data_list[0].__class__()
-
-    for key in keys:
-        data[key] = []
-    slices = {key: [0] for key in keys}
-
-    for item, key in product(data_list, keys):
-        data[key].append(item[key])
-        if torch.is_tensor(item[key]):
-            s = slices[key][-1] + item[key].size(item.__cat_dim__(key, item[key]))
-        elif isinstance(item[key], (int, float)):
-            s = slices[key][-1] + 1
-        else:
-            raise ValueError("Unsupported attribute type")
-        slices[key].append(s)
-
-    if hasattr(data_list[0], "__num_nodes__"):
-        data.__num_nodes__ = []
-        for item in data_list:
-            data.__num_nodes__.append(item.num_nodes)
-
-    for key in keys:
-        if torch.is_tensor(data_list[0][key]):
-            data[key] = torch.cat(
-                data[key], dim=data.__cat_dim__(key, data_list[0][key])
-            )
-        else:
-            data[key] = torch.tensor(data[key])
-        slices[key] = torch.tensor(slices[key], dtype=torch.long)
-
-    return data, slices
 
 
 def _import_local_file(path: Path, *, project_root: Path) -> None:
@@ -252,210 +173,6 @@ def setup_imports(config: dict | None = None) -> None:
             setup_experimental_imports(project_root)
     finally:
         registry.register("imports_setup", True)
-
-
-def dict_set_recursively(dictionary, key_sequence, val) -> None:
-    top_key = key_sequence.pop(0)
-    if len(key_sequence) == 0:
-        dictionary[top_key] = val
-    else:
-        if top_key not in dictionary:
-            dictionary[top_key] = {}
-        dict_set_recursively(dictionary[top_key], key_sequence, val)
-
-
-def parse_value(value):
-    """
-    Parse string as Python literal if possible and fallback to string.
-    """
-    try:
-        return ast.literal_eval(value)
-    except (ValueError, SyntaxError):
-        # Use as string if nothing else worked
-        return value
-
-
-def create_dict_from_args(args: list, sep: str = "."):
-    """
-    Create a (nested) dictionary from console arguments.
-    Keys in different dictionary levels are separated by sep.
-    """
-    return_dict = {}
-    for arg in args:
-        keys_concat, val = arg.removeprefix("--").split("=")
-        val = parse_value(val)
-        key_sequence = keys_concat.split(sep)
-        dict_set_recursively(return_dict, key_sequence, val)
-    return return_dict
-
-
-# given a filename and set of paths , return the full file path
-def find_relative_file_in_paths(filename, include_paths):
-    if os.path.exists(filename):
-        return filename
-    for path in include_paths:
-        include_filename = os.path.join(path, filename)
-        if os.path.exists(include_filename):
-            return include_filename
-    raise ValueError(f"Cannot find include YML {filename}")
-
-
-def load_config(
-    path: str,
-    files_previously_included: list | None = None,
-    include_paths: list | None = None,
-):
-    """
-    Load a given config with any defined imports
-
-    When imports are present this is a recursive function called on imports.
-    To prevent any cyclic imports we keep track of already imported yml files
-    using files_previously_included
-    """
-    if include_paths is None:
-        include_paths = []
-    if files_previously_included is None:
-        files_previously_included = []
-    path = Path(path)
-    if path in files_previously_included:
-        raise ValueError(
-            f"Cyclic config include detected. {path} included in sequence {files_previously_included}."
-        )
-    files_previously_included = [*files_previously_included, path]
-
-    with open(path) as fp:
-        current_config = yaml.load(fp, Loader=UniqueKeyLoader)
-
-    # Load config from included files.
-    includes_listed_in_config = (
-        current_config.pop("includes") if "includes" in current_config else []
-    )
-    if not isinstance(includes_listed_in_config, list):
-        raise AttributeError(
-            f"Includes must be a list, '{type(includes_listed_in_config)}' provided"
-        )
-
-    config_from_includes = {}
-    duplicates_warning = []
-    duplicates_error = []
-    for include in includes_listed_in_config:
-        include_filename = find_relative_file_in_paths(
-            include, [os.path.dirname(path), *include_paths]
-        )
-        include_config, inc_dup_warning, inc_dup_error = load_config(
-            include_filename, files_previously_included
-        )
-        duplicates_warning += inc_dup_warning
-        duplicates_error += inc_dup_error
-
-        # Duplicates between includes causes an error
-        config_from_includes, merge_dup_error = merge_dicts(
-            config_from_includes, include_config
-        )
-        duplicates_error += merge_dup_error
-
-    # Duplicates between included and main file causes warnings
-    config_from_includes, merge_dup_warning = merge_dicts(
-        config_from_includes, current_config
-    )
-    duplicates_warning += merge_dup_warning
-    return config_from_includes, duplicates_warning, duplicates_error
-
-
-def build_config(args, args_override, include_paths=None):
-    config, duplicates_warning, duplicates_error = load_config(
-        args.config_yml, include_paths=include_paths
-    )
-    if len(duplicates_warning) > 0:
-        logging.warning(
-            f"Overwritten config parameters from included configs "
-            f"(non-included parameters take precedence): {duplicates_warning}"
-        )
-    if len(duplicates_error) > 0:
-        raise ValueError(
-            f"Conflicting (duplicate) parameters in simultaneously "
-            f"included configs: {duplicates_error}"
-        )
-
-    # Some other flags.
-    config["mode"] = args.mode
-    config["identifier"] = args.identifier
-    config["timestamp_id"] = args.timestamp_id
-    config["seed"] = args.seed
-    config["is_debug"] = args.debug
-    config["run_dir"] = args.run_dir
-    config["print_every"] = args.print_every
-    config["amp"] = args.amp
-    config["checkpoint"] = args.checkpoint
-    config["cpu"] = args.cpu
-    # Submit
-    config["submit"] = args.submit
-    config["summit"] = args.summit
-    # Distributed
-    config["world_size"] = args.num_nodes * args.num_gpus
-    config["distributed_backend"] = "gloo" if args.cpu else "nccl"
-    config["gp_gpus"] = args.gp_gpus
-
-    # Check for overridden parameters.
-    if args_override != []:
-        overrides = create_dict_from_args(args_override)
-        config, _ = merge_dicts(config, overrides)
-
-    return config
-
-
-def create_grid(base_config, sweep_file: str):
-    def _flatten_sweeps(sweeps, root_key: str = "", sep: str = "."):
-        flat_sweeps = []
-        for key, value in sweeps.items():
-            new_key = root_key + sep + key if root_key else key
-            if isinstance(value, collections.MutableMapping):
-                flat_sweeps.extend(_flatten_sweeps(value, new_key).items())
-            else:
-                flat_sweeps.append((new_key, value))
-        return collections.OrderedDict(flat_sweeps)
-
-    def _update_config(config, keys, override_vals, sep: str = "."):
-        for key, value in zip(keys, override_vals):
-            key_path = key.split(sep)
-            child_config = config
-            for name in key_path[:-1]:
-                child_config = child_config[name]
-            child_config[key_path[-1]] = value
-        return config
-
-    with open(sweep_file) as fp:
-        sweeps = yaml.load(fp, Loader=UniqueKeyLoader)
-
-    flat_sweeps = _flatten_sweeps(sweeps)
-    keys = list(flat_sweeps.keys())
-    values = list(itertools.product(*flat_sweeps.values()))
-
-    configs = []
-    for i, override_vals in enumerate(values):
-        config = copy.deepcopy(base_config)
-        config = _update_config(config, keys, override_vals)
-        config["identifier"] = config["identifier"] + f"_run{i}"
-        configs.append(config)
-    return configs
-
-
-def save_experiment_log(args, jobs, configs):
-    log_file = args.logdir / "exp" / time.strftime("%Y-%m-%d-%I-%M-%S%p.log")
-    log_file.parent.mkdir(exist_ok=True, parents=True)
-    with open(log_file, "w") as f:
-        for job, config in zip(jobs, configs):
-            print(
-                json.dumps(
-                    {
-                        "config": config,
-                        "slurm_id": job.job_id,
-                        "timestamp": time.strftime("%I:%M:%S%p %Z %b %d, %Y"),
-                    }
-                ),
-                file=f,
-            )
-    return log_file
 
 
 def get_pruned_edge_idx(

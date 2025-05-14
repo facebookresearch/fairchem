@@ -16,7 +16,7 @@ import torch
 from ase.geometry import wrap_positions
 from torch_geometric.data import Data
 
-from fairchem.core.common.utils import collate
+from fairchem.core.preprocessing.atoms_to_graphs import collate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

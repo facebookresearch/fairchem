@@ -10,13 +10,14 @@ from __future__ import annotations
 import os
 
 import ray
+from fairchem.experimental.legacy.utils import build_config
 from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.schedulers import PopulationBasedTraining
 
 from fairchem.core.common.flags import flags
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import build_config, setup_imports
+from fairchem.core.common.utils import setup_imports
 
 
 # this function is general and should work for any ocp trainer

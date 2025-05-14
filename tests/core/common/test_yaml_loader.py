@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,8 +12,9 @@ import tempfile
 
 import pytest
 import yaml
+from fairchem.experimental.legacy.utils import load_config
 
-from fairchem.core.common.utils import UniqueKeyLoader, load_config
+from fairchem.core.common.utils import UniqueKeyLoader
 
 
 @pytest.fixture(scope="class")
@@ -68,7 +70,6 @@ def test_valid_config(valid_yaml_config):
 
 def test_load_config_with_include_path(include_path_in_yaml_config, valid_yaml_config):
     with tempfile.TemporaryDirectory() as tempdirname:
-
         this_yml_path = f"{tempdirname}/this.yml"
         with open(this_yml_path, "w") as fp:
             fp.write(include_path_in_yaml_config)
