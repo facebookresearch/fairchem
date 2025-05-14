@@ -16,8 +16,8 @@
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
-> :warning: **FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models.**
-> If you want to use an older model or code from version 1you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
+> :warning: **FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.**
+> If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
 > as detailed [here](#looking-for-fairchem-v1).
 
 ### Try the demo!
