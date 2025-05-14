@@ -1,12 +1,12 @@
-Running PUMA Evaluations
+Running uma Evaluations
 ------------------------
 
 Conserving val and test
 ```bash
-fairchem -c configs/puma/evaluate/puma_conserving.yaml cluster=h100 checkpoint=puma_sm
+fairchem -c configs/uma/evaluate/uma_conserving.yaml cluster=h100 checkpoint=uma_sm
 ```
 
 Direct val and test
 ```bash
-fairchem -c configs/puma/evaluate/puma_direct.yaml cluster=h100 checkpoint=puma_lg
+fairchem -c configs/uma/evaluate/uma_direct.yaml cluster=h100 checkpoint=uma_lg
 ```

@@ -1,2 +1,2 @@
-ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/puma_lg_mpa_0429_final.pt
-model_name: puma_lg_mpa_0429
+ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/uma_lg_mpa_0429_final.pt
+model_name: uma_lg_mpa_0429

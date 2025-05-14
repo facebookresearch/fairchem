@@ -24,7 +24,7 @@ job:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: puma-evals
+    project: uma-evals
 
 max_neighbors: 300
 cutoff_radius: 6

@@ -1,7 +1,7 @@
 defaults:
   - cluster: h100
   - dataset: uma
-  - element_refs: puma_v1_hof_lin_refs
+  - element_refs: uma_v1_hof_lin_refs
   - tasks: uma_conserving
   - checkpoint: uma_sm_v1_950000
   - _self_
@@ -24,7 +24,7 @@ job:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: puma-evals
+    project: uma-evals
 
 max_neighbors: 300
 cutoff_radius: 6

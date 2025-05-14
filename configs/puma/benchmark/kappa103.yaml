@@ -1,6 +1,6 @@
 defaults:
   - cluster: h100
-  - checkpoint: puma_sm_mpa
+  - checkpoint: uma_sm_mpa
   - _self_
 
 benchmark_name: kappa103
@@ -24,7 +24,7 @@ job:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: puma-benchmarks
+    project: uma-benchmarks
     group: ${checkpoint.model_name}
     job_type: ${benchmark_name}
   deterministic: False
