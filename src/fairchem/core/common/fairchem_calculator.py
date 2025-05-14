@@ -115,9 +115,6 @@ class FAIRChemCalculator(Calculator):
             self.task_name = task_name
         elif len(self.available_datasets) == 1:
             self.task_name = self.available_datasets[0]
-        logging.debug(
-            f"Calculator property to model output key mapping: {self.calc_property_to_model_key_mapping}"
-        )
 
         self.seed = seed
 
@@ -174,6 +171,9 @@ class FAIRChemCalculator(Calculator):
         ), f"Given {task_name}, Valid options are {self.available_datasets}"
         self._task_name = task_name
         self._reset_calc_key_mapping(self._task_name)
+        logging.info(
+            f"Switching task to {task_name}, the available outputs are this task are: {self.calc_property_to_model_key_mapping.keys()}"
+        )
 
     def print_warnings(self) -> None:
         """
