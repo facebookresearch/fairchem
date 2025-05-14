@@ -93,10 +93,10 @@ class FAIRChemCalculator(Calculator):
         )
 
         # TODO: move these to a separate function retrieve these properties
-        self.available_datasets = self.predictor.model.module.backbone.dataset_list
+
         self.model_tasks = self.predictor.tasks
         self.calc_property_to_model_key_mapping = {}
-        logging.info(f"Available task names: {self.available_datasets}")
+        logging.info(f"Available task names: {self.available_tasks}")
 
         self.max_neighbors = min(
             max_neighbors, self.predictor.model.module.backbone.max_neighbors
@@ -110,14 +110,14 @@ class FAIRChemCalculator(Calculator):
 
         if task_name is not None:
             assert (
-                task_name in self.available_datasets
-            ), f"Given: {task_name}, Valid options are {self.available_datasets}"
+                task_name in self.available_tasks
+            ), f"Given: {task_name}, Valid options are {self.available_tasks}"
             self.task_name = task_name
-        elif len(self.available_datasets) == 1:
-            self.task_name = self.available_datasets[0]
+        elif len(self.available_tasks) == 1:
+            self.task_name = self.available_tasks[0]
         else:
             raise RuntimeError(
-                f"A task name must be provided. Valid options are {self.available_datasets}"
+                f"A task name must be provided. Valid options are {self.available_tasks}"
             )
 
         self.seed = seed
@@ -140,6 +140,10 @@ class FAIRChemCalculator(Calculator):
     @property
     def task_name(self) -> str:
         return self._task_name
+
+    @property
+    def available_tasks(self):
+        return self.predictor.model.module.backbone.dataset_list
 
     def _reset_calc_key_mapping(self, task_name: str) -> None:
         """
@@ -172,8 +176,8 @@ class FAIRChemCalculator(Calculator):
             task_name (str): The name of the task to use.
         """
         assert (
-            task_name in self.available_datasets
-        ), f"Given {task_name}, Valid options are {self.available_datasets}"
+            task_name in self.available_tasks
+        ), f"Given {task_name}, Valid options are {self.available_tasks}"
         self._task_name = task_name
         self._reset_calc_key_mapping(self._task_name)
         logging.info(
@@ -194,9 +198,9 @@ class FAIRChemCalculator(Calculator):
                 "The random seed is not set. This may lead to non-deterministic behavior. Use <self.seed = seed> to set the random seed."
             )
 
-        if self.task_name is None and len(self.available_datasets) > 1:
+        if self.task_name is None and len(self.available_tasks) > 1:
             logging.warning(
-                f"task_name is not set. If you are using a UMA model, call <self.set_task_name(task_name)> before using the calculator. Available task names: {self.available_datasets}."
+                f"task_name is not set. If you are using a UMA model, call <self.set_task_name(task_name)> before using the calculator. Available task names: {self.available_tasks}."
             )
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
