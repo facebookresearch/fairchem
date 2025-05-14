@@ -28,6 +28,8 @@ from fairchem.core.components.calculate.recipes.energy import calc_energy_from_e
 try:
     from matbench_discovery.enums import MbdKey
     from matbench_discovery.metrics.discovery import stable_metrics
+    from matbench_discovery.metrics.geo_opt import calc_geo_opt_metrics
+    from matbench_discovery.structure import symmetry
     from pymatviz.enums import Key
 
     mbd_installed = True
@@ -35,6 +37,7 @@ except ImportError:
     mbd_installed = False
 
 if TYPE_CHECKING:
+    from pymatgen.core import Structure
     from pymatgen.entries.compatibility import Compatibility
 
 
@@ -65,6 +68,8 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         index_name: str | None = None,
         corrections: Compatibility | None = MP2020Compatibility,
         max_error_threshold: float = 5.0,
+        analyze_geo_opt: bool = True,
+        geo_symprec: float = 1e-5,
     ):
         """
         Args:
@@ -75,12 +80,16 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
             index_name: Optional name of the column to use as index
             corrections: Optional correction class to apply to all entries
             max_error_threshold: Maximum allowed mean absolute formation energy per atom error threshold
+            analyze_geo_opt: Whether to analyze geometry of relaxed structures and compute RMSD
+            geo_symprec: Symmetry precision of moyopy.
         """
         index_name = index_name or str(Key.mat_id)
         self._corrections = corrections
         self._max_error_threshold = max_error_threshold
         self._elemental_references_path = elemental_references_path
         self._cse_data_path = cse_data_path
+        self._analyze_geo_opt = analyze_geo_opt
+        self._geo_symprec = geo_symprec
         super().__init__(
             benchmark_name=benchmark_name,
             target_data_path=target_data_path,
@@ -151,7 +160,7 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
             results.index,
             desc="Converting predicted structures and energies to computed structure entries",
         ):
-            cse = df_wbm_cse.loc[mat_id, Key.computed_structure_entry]
+            cse = df_wbm_cse.loc[mat_id, Key.computed_structure_entry].copy()
             atoms = MSONAtoms.from_dict(results.loc[mat_id, "atoms"])
             structure = AseAtomsAdaptor.get_structure(atoms)
             energy = results.loc[mat_id, "energy"]
@@ -160,8 +169,8 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
             df_result_cse.append(
                 {Key.mat_id: mat_id, Key.computed_structure_entry: cse}
             )
-
-        return pd.DataFrame(df_result_cse).set_index(Key.mat_id)
+        df_result_cse = pd.DataFrame(df_result_cse).set_index(Key.mat_id)
+        return df_result_cse, df_wbm_cse
 
     def _apply_corrections(
         self, computed_structure_entries: list[ComputedStructureEntry]
@@ -182,6 +191,36 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
                 raise ValueError(
                     f"not all entries processed: {len(processed)=} {len(computed_structure_entries)=}"
                 )
+
+    def _analyze_relaxed_geometry(
+        self,
+        pred_structures: dict[str, Structure],
+        target_structures: dict[str, Structure],
+    ) -> dict[str, float]:
+        """Analyze geometry of relaxed structures and calculate RMSD wrt to the target structures.
+
+        Args:
+            pred_structures: Dictionary mapping material IDs to predicted Structure objects
+            target_structures: Dictionary mapping material IDs to target Structure objects
+
+        Returns:
+            Dictionary containing geometric analysis metrics
+        """
+        df_symm_pred = symmetry.get_sym_info_from_structs(
+            pred_structures,
+            symprec=self._geo_symprec,
+        )
+        df_symm_target = symmetry.get_sym_info_from_structs(
+            target_structures,
+            symprec=self._geo_symprec,
+        )
+        df_geo_analysis = symmetry.pred_vs_ref_struct_symmetry(
+            df_symm_pred,
+            df_symm_target,
+            pred_structures,
+            target_structures,
+        )
+        return df_geo_analysis
 
     def join_results(self, results_dir: str, glob_pattern: str) -> pd.DataFrame:
         """Join results from multiple relaxation JSON files into a single DataFrame.
@@ -207,8 +246,10 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         ).sort_index()
         results.index.name = Key.mat_id
 
-        df_cse = self._load_computed_structure_entries(self._cse_data_path, results)
-        self._apply_corrections(df_cse[Key.computed_structure_entry].tolist())
+        df_cse_pred, df_cse_target = self._load_computed_structure_entries(
+            self._cse_data_path, results
+        )
+        self._apply_corrections(df_cse_pred[Key.computed_structure_entry].tolist())
 
         # compute formation energy per atom
         elemental_ref_energies = self._load_elemental_ref_energies(
@@ -217,11 +258,25 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
         results["e_form_per_atom"] = [
             calc_energy_from_e_refs(cse, ref_energies=elemental_ref_energies)
             for cse in tqdm(
-                df_cse[Key.computed_structure_entry],
+                df_cse_pred[Key.computed_structure_entry],
                 total=len(results),
                 desc="Computing formation energies",
             )
         ]
+
+        if self._analyze_geo_opt:
+            pred_structures = {
+                mat_id: cse.structure
+                for mat_id, cse in df_cse_pred[Key.computed_structure_entry].items()
+            }
+            target_structures = {
+                mat_id: cse.structure
+                for mat_id, cse in df_cse_target[Key.computed_structure_entry].items()
+            }
+            df_geo_analysis = self._analyze_relaxed_geometry(
+                pred_structures, target_structures
+            )
+            results = results.join(df_geo_analysis)
 
         return results
 
@@ -304,6 +359,15 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
             most_stable_10k,
             fillna=True,
         )
+
+        if self._analyze_geo_opt:
+            metrics.update(calc_geo_opt_metrics(results))
+            metrics_uniq_proto.update(
+                calc_geo_opt_metrics(results[df_wbm[MbdKey.uniq_proto]])
+            )
+            metrics_most_stable_10k.update(
+                calc_geo_opt_metrics(results.loc[most_stable_10k.index])
+            )
 
         all_metrics = pd.DataFrame(
             [metrics, metrics_uniq_proto, metrics_most_stable_10k],
