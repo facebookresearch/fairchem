@@ -159,10 +159,6 @@ class FAIRChemCalculator(Calculator):
         return self._task_name
 
     @property
-    def model_tasks(self):
-        return self.predictor.tasks
-
-    @property
     def available_tasks(self) -> list[str]:
         return self.predictor.model.module.backbone.dataset_list
 
@@ -176,7 +172,7 @@ class FAIRChemCalculator(Calculator):
         implemented_properties = set()
         self.calc_property_to_model_key_mapping.clear()
 
-        for model_task_name, model_task in self.model_tasks.items():
+        for model_task_name, model_task in self.predictor.tasks.items():
             if task_name in model_task.datasets:
                 for calc_key in ["energy", "forces", "stress"]:
                     if calc_key == model_task.property:
