@@ -16,6 +16,10 @@ import torch
 def command_line_inference_checkpoint(request):
     return request.config.getoption("--inference-checkpoint")
 
+@pytest.fixture
+def command_line_inference_dataset(request):
+    return request.config.getoption("--inference-dataset")
+
 def pytest_addoption(parser):
     parser.addoption(
         "--skip-ocpapi-integration",
@@ -27,6 +31,11 @@ def pytest_addoption(parser):
         "--inference-checkpoint", 
         action="store", 
         help="inference checkpoint to run check on"
+    )
+    parser.addoption(
+        "--inference-dataset", 
+        action="store", 
+        help="inference dataset to run check on"
     )
 
 
