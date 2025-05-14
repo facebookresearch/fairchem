@@ -115,7 +115,7 @@ class FAIRChemCalculator(Calculator):
             self.task_name = task_name
         elif len(self.available_datasets) == 1:
             self.task_name = self.available_datasets[0]
-        logging.info(
+        logging.debug(
             f"Calculator property to model output key mapping: {self.calc_property_to_model_key_mapping}"
         )
 
@@ -140,8 +140,13 @@ class FAIRChemCalculator(Calculator):
     def task_name(self) -> str:
         return self._task_name
 
-    def reset_calc_key_mapping(self, task_name: str) -> None:
-        """Create a map of calculator keys to predictor output keys based on whats available in the model"""
+    def _reset_calc_key_mapping(self, task_name: str) -> None:
+        """
+        Create a map of calculator keys to predictor output keys based on whats available in the model.
+
+        Args:
+            task_name (str): The name of the task to use.
+        """
         self.implemented_properties = []
         self.calc_property_to_model_key_mapping.clear()
 
@@ -168,7 +173,7 @@ class FAIRChemCalculator(Calculator):
             task_name in self.available_datasets
         ), f"Given {task_name}, Valid options are {self.available_datasets}"
         self._task_name = task_name
-        self.reset_calc_key_mapping(self._task_name)
+        self._reset_calc_key_mapping(self._task_name)
 
     def print_warnings(self) -> None:
         """
