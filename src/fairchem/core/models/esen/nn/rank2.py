@@ -13,9 +13,9 @@ from torch import nn
 from torch_scatter import scatter
 
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import cg_change_mat, irreps_sum
 from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.models.equiformer_v2.layer_norm import get_normalization_layer
+from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
 
 class Rank2Block(nn.Module):

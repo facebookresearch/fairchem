@@ -36,7 +36,8 @@ if TYPE_CHECKING:
 
 
 DEFAULT_ENV_VARS = {
-    # Expandable segments is a new cuda feature that helps with memory fragmentation during frequent allocations (ie: in the case of variable batch sizes).
+    # Expandable segments is a new cuda feature that helps with memory fragmentation during frequent
+    # allocations (ie: in the case of variable batch sizes).
     # see https://pytorch.org/docs/stable/notes/cuda.html.
     "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
 }
@@ -175,60 +176,15 @@ def setup_imports(config: dict | None = None) -> None:
         registry.register("imports_setup", True)
 
 
-def get_pruned_edge_idx(
-    edge_index, num_atoms: int, max_neigh: float = 1e9
-) -> torch.Tensor:
-    assert num_atoms is not None  # TODO: Shouldn't be necessary
+def debug_log_entry_exit(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        logging.debug(f"{func.__name__}...")
+        result = func(*args, **kwargs)
+        logging.debug(f"{func.__name__} done")
+        return result
 
-    # removes neighbors > max_neigh
-    # assumes neighbors are sorted in increasing distance
-    _nonmax_idx_list = []
-    for i in range(num_atoms):
-        idx_i = torch.arange(len(edge_index[1]))[(edge_index[1] == i)][:max_neigh]
-        _nonmax_idx_list.append(idx_i)
-    return torch.cat(_nonmax_idx_list)
-
-
-def merge_dicts(dict1: dict, dict2: dict):
-    """Recursively merge two dictionaries.
-    Values in dict2 override values in dict1. If dict1 and dict2 contain a dictionary as a
-    value, this will call itself recursively to merge these dictionaries.
-    This does not modify the input dictionaries (creates an internal copy).
-    Additionally returns a list of detected duplicates.
-    Adapted from https://github.com/TUM-DAML/seml/blob/master/seml/utils.py
-
-    Parameters
-    ----------
-    dict1: dict
-        First dict.
-    dict2: dict
-        Second dict. Values in dict2 will override values from dict1 in case they share the same key.
-
-    Returns
-    -------
-    return_dict: dict
-        Merged dictionaries.
-    """
-    if not isinstance(dict1, dict):
-        raise ValueError(f"Expecting dict1 to be dict, found {type(dict1)}.")
-    if not isinstance(dict2, dict):
-        raise ValueError(f"Expecting dict2 to be dict, found {type(dict2)}.")
-
-    return_dict = copy.deepcopy(dict1)
-    duplicates = []
-
-    for k, v in dict2.items():
-        if k not in dict1:
-            return_dict[k] = v
-        else:
-            if isinstance(v, dict) and isinstance(dict1[k], dict):
-                return_dict[k], duplicates_k = merge_dicts(dict1[k], dict2[k])
-                duplicates += [f"{k}.{dup}" for dup in duplicates_k]
-            else:
-                return_dict[k] = dict2[k]
-                duplicates.append(k)
-
-    return return_dict, duplicates
+    return wrapper
 
 
 class SeverityLevelBetween(logging.Filter):
@@ -239,17 +195,6 @@ class SeverityLevelBetween(logging.Filter):
 
     def filter(self, record) -> bool:
         return self.min_level <= record.levelno < self.max_level
-
-
-def debug_log_entry_exit(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        logging.debug(f"{func.__name__}...")
-        result = func(*args, **kwargs)
-        logging.debug(f"{func.__name__} done")
-        return result
-
-    return wrapper
 
 
 def setup_logging() -> None:
@@ -276,15 +221,6 @@ def setup_logging() -> None:
         handler_err.setLevel(logging.WARNING)
         handler_err.setFormatter(log_formatter)
         root.addHandler(handler_err)
-
-
-def check_traj_files(batch, traj_dir) -> bool:
-    if traj_dir is None:
-        return False
-    traj_dir = Path(traj_dir)
-    sid_list = batch.sid.tolist() if isinstance(batch.sid, torch.Tensor) else batch.sid
-    traj_files = [traj_dir / f"{sid}.traj" for sid in sid_list]
-    return all(fl.exists() for fl in traj_files)
 
 
 def setup_env_vars() -> None:
@@ -420,52 +356,6 @@ def get_commit_hash_for_repo(
         commit_hash = None
 
     return commit_hash
-
-
-def cg_change_mat(ang_mom: int, device: str = "cpu") -> torch.tensor:
-    if ang_mom not in [2]:
-        raise NotImplementedError
-
-    if ang_mom == 2:
-        change_mat = torch.tensor(
-            [
-                [3 ** (-0.5), 0, 0, 0, 3 ** (-0.5), 0, 0, 0, 3 ** (-0.5)],
-                [0, 0, 0, 0, 0, 2 ** (-0.5), 0, -(2 ** (-0.5)), 0],
-                [0, 0, -(2 ** (-0.5)), 0, 0, 0, 2 ** (-0.5), 0, 0],
-                [0, 2 ** (-0.5), 0, -(2 ** (-0.5)), 0, 0, 0, 0, 0],
-                [0, 0, 0.5**0.5, 0, 0, 0, 0.5**0.5, 0, 0],
-                [0, 2 ** (-0.5), 0, 2 ** (-0.5), 0, 0, 0, 0, 0],
-                [
-                    -(6 ** (-0.5)),
-                    0,
-                    0,
-                    0,
-                    2 * 6 ** (-0.5),
-                    0,
-                    0,
-                    0,
-                    -(6 ** (-0.5)),
-                ],
-                [0, 0, 0, 0, 0, 2 ** (-0.5), 0, 2 ** (-0.5), 0],
-                [-(2 ** (-0.5)), 0, 0, 0, 0, 0, 0, 0, 2 ** (-0.5)],
-            ],
-            device=device,
-        ).detach()
-
-    return change_mat
-
-
-def irreps_sum(ang_mom: int) -> int:
-    """
-    Returns the sum of the dimensions of the irreps up to the specified angular momentum.
-
-    :param ang_mom: max angular momenttum to sum up dimensions of irreps
-    """
-    total = 0
-    for i in range(ang_mom + 1):
-        total += 2 * i + 1
-
-    return total
 
 
 def update_config(base_config):
