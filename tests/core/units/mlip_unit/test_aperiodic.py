@@ -18,11 +18,11 @@ import torch
         (torch.float64,1e-29,1e-29),
     ],
 )
-def test_conserving_mole_aperiodic_on_pt(dtype,num_tol,rot_tol,conserving_mole_checkpoint,fake_puma_dataset):
+def test_conserving_mole_aperiodic_on_pt(dtype,num_tol,rot_tol,conserving_mole_checkpoint,fake_uma_dataset):
     device="cuda" if torch.cuda.is_available() else "cpu"
     inference_checkpoint_path, _ = conserving_mole_checkpoint
     db=AseDBDataset(
-                config={"src": os.path.join(fake_puma_dataset,'oc20')}
+                config={"src": os.path.join(fake_uma_dataset,'oc20')}
             )
 
     a2g = AtomsToGraphs(
