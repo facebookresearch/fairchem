@@ -46,7 +46,7 @@ class FAIRChemCalculator(Calculator):
         task_name: UMATask | None = None,
         device: str = "cuda",
         inference_settings: InferenceSettings | str = "default",
-        seed: int | None = 42,
+        seed: int = 42,
         max_neighbors: int | None = 100,
     ):
         """
@@ -108,9 +108,8 @@ class FAIRChemCalculator(Calculator):
             overrides={"backbone": {"always_use_pbc": False}},
         )
 
-        self.model_tasks = self.predictor.tasks
         self.calc_property_to_model_key_mapping = {}
-        logging.info(f"Available task names: {self.available_tasks}")
+        logging.debug(f"Available task names: {self.available_tasks}")
 
         self.max_neighbors = min(
             max_neighbors, self.predictor.model.module.backbone.max_neighbors
@@ -125,14 +124,15 @@ class FAIRChemCalculator(Calculator):
             assert (
                 task_name in self.available_tasks
             ), f"Given: {task_name}, Valid options are {self.available_tasks}"
-            self.task_name = task_name
+            self._task_name = task_name
         elif len(self.available_tasks) == 1:
-            self.task_name = self.available_tasks[0]
+            self._task_name = self.available_tasks[0]
         else:
             raise RuntimeError(
                 f"A task name must be provided. Valid options are {self.available_tasks}"
             )
 
+        self._reset_calc_key_mapping(self._task_name)
         self.seed = seed
 
         # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
@@ -148,14 +148,22 @@ class FAIRChemCalculator(Calculator):
             **a2g_kwargs,
         )
 
-        self.print_warnings()
+        if self.direct_force:
+            logging.warning(
+                "This inference checkpoint is a direct-force model. This may lead to discontinuities in the potential "
+                "energy surface and energy conservation errors. Use with caution."
+            )
 
     @property
     def task_name(self) -> str:
         return self._task_name
 
     @property
-    def available_tasks(self):
+    def model_tasks(self):
+        return self.predictor.tasks
+
+    @property
+    def available_tasks(self) -> list[str]:
         return self.predictor.model.module.backbone.dataset_list
 
     def _reset_calc_key_mapping(self, task_name: str) -> None:
@@ -180,45 +188,24 @@ class FAIRChemCalculator(Calculator):
                             implemented_properties.add("free_energy")
         self.implemented_properties = list(implemented_properties)
 
-    @task_name.setter
-    def task_name(self, task_name: str) -> None:
+    @property
+    def seed(self) -> int:
         """
-        Set the task name for the calculator and automatically set energy, forces, and stress keys.
+        Get the current random seed.
 
-        Args:
-            task_name (str): The name of the task to use.
+        Returns:
+            int: The current random seed.
         """
-        assert (
-            task_name in self.available_tasks
-        ), f"Given {task_name}, Valid options are {self.available_tasks}"
-        self._task_name = task_name
-        self._reset_calc_key_mapping(self._task_name)
-        logging.info(
-            f"Switching task to {task_name}, the available outputs for this task are: "
-            f"{self.calc_property_to_model_key_mapping.keys()}"
-        )
+        return self._seed
 
-    def print_warnings(self) -> None:
-        """
-        Print warnings related to the model configuration.
-        """
-        if self.direct_force:
-            logging.warning(
-                "This inference checkpoint is a direct-force model. This may lead to discontinuities in the potential "
-                "energy surface and energy conservation errors. Use with caution."
-            )
-
-        if not hasattr(self, "seed"):
-            logging.warning(
-                "The random seed is not set. This may lead to non-deterministic behavior. Use <self.seed = seed> to set"
-                " the random seed."
-            )
-
-        if self.task_name is None and len(self.available_tasks) > 1:
-            logging.warning(
-                f"task_name is not set. If you are using a UMA model, call <self.task_name = task_name> before using "
-                f" the calculator. Available task names: {self.available_tasks}."
-            )
+    @seed.setter
+    def seed(self, seed: int) -> None:
+        logging.info(f"Setting random seed to {seed}")
+        self._seed = seed
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
         """
@@ -345,25 +332,6 @@ class FAIRChemCalculator(Calculator):
                 stress = pred[predictor_key].detach().cpu().numpy().reshape(3, 3)
                 stress_voigt = full_3x3_to_voigt_6_stress(stress)
                 self.results["stress"] = stress_voigt
-
-    @property
-    def seed(self) -> int:
-        """
-        Get the current random seed.
-
-        Returns:
-            int: The current random seed.
-        """
-        return self._seed if hasattr(self, "_seed") else None
-
-    @seed.setter
-    def seed(self, seed: int) -> None:
-        logging.info(f"Setting random seed to {seed}")
-        self._seed = seed
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
 
     def _check_atoms_pbc(self, atoms) -> None:
         """
