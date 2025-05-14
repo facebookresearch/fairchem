@@ -144,7 +144,7 @@ class FAIRChemCalculator(Calculator):
         Args:
             task_name (str): The name of the task to use.
         """
-        self.implemented_properties = []
+        implemented_properties = set()
         self.calc_property_to_model_key_mapping.clear()
 
         for model_task_name, model_task in self.model_tasks.items():
@@ -154,9 +154,10 @@ class FAIRChemCalculator(Calculator):
                         self.calc_property_to_model_key_mapping[calc_key] = (
                             model_task_name
                         )
-                        self.implemented_properties.append(calc_key)
+                        implemented_properties.add(calc_key)
                         if calc_key == "energy":
-                            self.implemented_properties.append("free_energy")
+                            implemented_properties.add("free_energy")
+        self.implemented_properties = list(implemented_properties)
 
     @task_name.setter
     def task_name(self, task_name: str) -> None:
