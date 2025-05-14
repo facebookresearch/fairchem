@@ -1,7 +1,7 @@
 snapshot_dir: fm_training/dataset_sync_250225
 omol_final_snapshot_dir: omol/250430-release
 
-osc_train:
+omc_train:
   splits:
     train:
       src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/csp/250225/train/
@@ -14,16 +14,16 @@ osc_train:
     radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
-    energy: osc_energy
-    forces: ${osc_forces_key}
-    stress: osc_stress
+    energy: omc_energy
+    forces: ${omc_forces_key}
+    stress: omc_stress
   transforms:
     common_transform:
-      dataset_name: osc
+      dataset_name: omc
     stress_reshape_transform:
-      dataset_name: osc
+      dataset_name: omc
 
-osc_val:
+omc_val:
   splits:
     val:
       sample_n: 25000
@@ -37,14 +37,14 @@ osc_val:
     radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
-    energy: osc_energy
-    forces: ${osc_forces_key}
-    stress: osc_stress
+    energy: omc_energy
+    forces: ${omc_forces_key}
+    stress: omc_stress
   transforms:
     common_transform:
-      dataset_name: osc
+      dataset_name: omc
     stress_reshape_transform:
-      dataset_name: osc
+      dataset_name: omc
 
 omol_train:
   splits:

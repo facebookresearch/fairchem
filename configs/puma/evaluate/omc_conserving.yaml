@@ -38,13 +38,13 @@ force_coef: 2
 stress_coef: 1
 
 regress_stress: True
-osc_forces_key: osc_forces
+omc_forces_key: omc_forces
 exclude_keys: []
 
 eval_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.omc}
+    omc: ${dataset.omc}
   combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
 
 eval_dataloader:

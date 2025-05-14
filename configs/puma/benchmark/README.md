@@ -10,9 +10,9 @@ Running UMA Benchmarks
 - HEA IS2RE
 - NVE MD conservation TM23
 
-### OSC
-- OSC S2E Polymorphs
-- OSC IS2RE Polymorphs
+### OMC
+- OMC S2E Polymorphs
+- OMC IS2RE Polymorphs
 
 ### Catalysis
 - OC20 S2EF Adsorption
@@ -33,7 +33,7 @@ pip install phono3py==3.15.0
 pip install moyopy
 ```
 
-#### Running OSC benchmarks requires scikit-learn and scipy
+#### Running OMC benchmarks requires scikit-learn and scipy
 ```bash
 pip install scipy==1.14.1
 pip install scikit-learn==1.6.1
@@ -69,17 +69,17 @@ fairchem -c configs/uma/benchmark/matbench-discovery-discovery.yaml checkpoint=u
 fairchem -c configs/uma/benchmark/hea-is2re.yaml checkpoint=uma_sm cluster=h100
 ```
 
-## OSC benchmarks
+## OMC benchmarks
 
 ##### On h100
 ```bash
-fairchem -c configs/uma/benchmark/osc-s2e-polymorphs.yaml checkpoint=uma_sm cluster=h100
+fairchem -c configs/uma/benchmark/omc-s2e-polymorphs.yaml checkpoint=uma_sm cluster=h100
 ```
 ##### On v100
 
 ```bash
-fairchem -c configs/uma/benchmark/osc-is2re-polymorphs.yaml checkpoint=uma_sm cluster=v100
-fairchem -c configs/uma/benchmark/osc-is2re-10k.yaml checkpoint=uma_sm cluster=v100
+fairchem -c configs/uma/benchmark/omc-is2re-polymorphs.yaml checkpoint=uma_sm cluster=v100
+fairchem -c configs/uma/benchmark/omc-is2re-10k.yaml checkpoint=uma_sm cluster=v100
 ```
 
 ## Catalysis benchmarks

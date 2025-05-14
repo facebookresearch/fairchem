@@ -15,11 +15,11 @@ omc:
     radius: ${cutoff_radius}
     max_neigh: ${max_neighbors}
   key_mapping:
-    energy: osc_energy
-    forces: ${osc_forces_key}
-    stress: osc_stress
+    energy: omc_energy
+    forces: ${omc_forces_key}
+    stress: omc_stress
   transforms:
     common_transform:
-      dataset_name: osc
+      dataset_name: omc
     stress_reshape_transform:
-      dataset_name: osc
+      dataset_name: omc

@@ -43,7 +43,7 @@ oc20_forces_key: oc20_forces
 omat_forces_key: omat_forces
 omol_forces_key: omol_forces
 odac_forces_key: odac_forces
-osc_forces_key: osc_forces
+omc_forces_key: omc_forces
 
 exclude_keys: [
   "id", # only oc20,oc22 have this
@@ -61,7 +61,7 @@ exclude_keys: [
 eval_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.omc}
+    omc: ${dataset.omc}
     omol_preview: ${dataset.omol_preview}
     omol: ${dataset.omol}
     odac: ${dataset.odac}

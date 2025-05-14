@@ -3,7 +3,7 @@ defaults:
   - checkpoint: uma_sm
   - _self_
 
-benchmark_name: osc-is2re-polymorphs
+benchmark_name: omc-is2re-polymorphs
 
 job:
   run_name: ${checkpoint.model_name}
@@ -31,7 +31,7 @@ runner:
   calculator:
     _target_: fairchem.core.common.calculator.FAIRChemCalculator
     checkpoint_path: ${checkpoint.ckpt_path}
-    task_name: osc
+    task_name: omc
     act_ckpt: true
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
@@ -52,7 +52,7 @@ runner:
     _partial_: True
 
 reducer:
-  _target_: fairchem.core.components.benchmark.osc_polymorph_reducer.OSCPolymorphReducer
+  _target_: fairchem.core.components.benchmark.omc_polymorph_reducer.OMCPolymorphReducer
   benchmark_name: ${benchmark_name}
   target_data_key: "energy_per_nmolecules"
   molecule_id_key: "molecule_id_target"

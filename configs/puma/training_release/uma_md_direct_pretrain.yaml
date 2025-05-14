@@ -38,7 +38,7 @@ cpu_graph: True
 otf_graph: False
 normalizer_rmsd: 1.423
 direct_forces_coef: 30
-osc_energy_coef: 10
+omc_energy_coef: 10
 omol_energy_coef: 30
 odac_energy_coef: 10
 oc20_energy_coef: 10
@@ -51,9 +51,9 @@ oc20_forces_key: forces
 omat_forces_key: forces
 omol_forces_key: forces
 odac_forces_key: forces
-osc_forces_key: forces
+omc_forces_key: forces
 
-dataset_list: ["oc20", "omol", "omat", "odac", "osc"]
+dataset_list: ["oc20", "omol", "omat", "odac", "omc"]
 
 exclude_keys: [
   "id", # only oc20,oc22 have this
@@ -71,7 +71,7 @@ exclude_keys: [
 train_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.osc_train}
+    omc: ${dataset.omc_train}
     omol: ${dataset.omol_train}
     odac: ${dataset.odac_train}
     omat: ${dataset.omat_train}
@@ -82,14 +82,14 @@ train_dataset:
       ratios:
         omol.train: 4.0
         oc20.train: 1.0
-        osc.train: 2.0
+        omc.train: 2.0
         odac.train: 1.0
         omat.train: 2.0
 
 val_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.osc_val}
+    omc: ${dataset.omc_val}
     omol: ${dataset.omol_val}
     odac: ${dataset.odac_val}
     omat: ${dataset.omat_val}
@@ -131,7 +131,7 @@ heads:
     module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   omat_energy:
     module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
-  osc_energy:
+  omc_energy:
     module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
   omol_energy:
     module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
