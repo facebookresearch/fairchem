@@ -23,13 +23,14 @@ demos, and application efforts for materials science and quantum chemistry.
 ### Try the demo!
 If you want to explore model capabilities check out our
 [educational demo](https://huggingface.co/spaces/facebook/fairchem_uma_demo)
+![output](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)
 
 ### Installation
 Install fairchem-core using pip,
 ```bash
 pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
 ```
-:note: PyPI package coming soon!
+**PyPI package coming soon!**
 
 ### Quick Start
 The easiest way to use pretrained models is via the `FAIRChemCalculator` [ASE](https://wiki.fysik.dtu.dk/ase/).
@@ -37,10 +38,8 @@ A single uma model can be used for a wide range of applications in chemistry and
 appropriate task name for domain specific prediction.
 
 #### Instantiate a calculator from a pretrained model
-Make sure you have a Hugging Face account, have already applied for model access
-[here](), and have logged in using to Hugging Face using an access token.
-
-#TODO add proper link to HF repo and filename
+Make sure you have a Hugging Face account, have already applied for model access to the 
+[UMA model repository](https://huggingface.co/facebook/UMA), and have logged in using to Hugging Face using an access token.
 
 #### Set the task for your application and calculate
 
