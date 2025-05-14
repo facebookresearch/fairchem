@@ -1,5 +1,5 @@
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
-  name: osc_energy
+  name: omc_energy
   level: system
   property: energy
   loss_fn:
@@ -19,9 +19,9 @@
     element_references:
       _target_: torch.DoubleTensor
       _args_:
-        - ${element_refs.osc_elem_refs}
+        - ${element_refs.omc_elem_refs}
   datasets:
-    - osc
+    - omc
   metrics:
     - mae
     - per_atom_mae
@@ -135,7 +135,7 @@
     - mae
     - per_atom_mae
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
-  name: osc_forces
+  name: omc_forces
   level: atom
   property: forces
   train_on_free_atoms: True
@@ -154,7 +154,7 @@
     mean: 0.0
     rmsd: ${normalizer_rmsd}
   datasets:
-    - osc
+    - omc
   metrics:
     - mae
     - cosine_similarity
@@ -260,7 +260,7 @@
     - cosine_similarity
     - magnitude_error
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
-  name: osc_stress
+  name: omc_stress
   level: system
   property: stress
   loss_fn:
@@ -277,7 +277,7 @@
     mean: 0.0
     rmsd: ${normalizer_rmsd}
   datasets:
-    - osc
+    - omc
   metrics:
     - mae
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task

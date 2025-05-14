@@ -3,7 +3,7 @@ defaults:
   - checkpoint: uma_sm
   - _self_
 
-benchmark_name: osc-is2re-polymorphs
+benchmark_name: omc-is2re-polymorphs
 
 job:
   run_name: ${checkpoint.model_name}
@@ -31,7 +31,7 @@ runner:
   calculator:
     _target_: fairchem.core.common.calculator.FAIRChemCalculator
     checkpoint_path: ${checkpoint.ckpt_path}
-    task_name: osc
+    task_name: omc
     act_ckpt: true
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset

@@ -47,7 +47,7 @@ oc20_forces_key: oc20_forces
 omat_forces_key: omat_forces
 omol_forces_key: omol_forces
 odac_forces_key: odac_forces
-osc_forces_key: osc_forces
+omc_forces_key: omc_forces
 
 
 exclude_keys: [
@@ -66,7 +66,7 @@ exclude_keys: [
 train_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.osc_train}
+    omc: ${dataset.omc_train}
     omol: ${dataset.omol_train}
     odac: ${dataset.odac_train}
     omat: ${dataset.omat_train}
@@ -77,14 +77,14 @@ train_dataset:
       ratios:
         omol.train: 4.0
         oc20.train: 1.0
-        osc.train: 2.0
+        omc.train: 2.0
         odac.train: 1.0
         omat.train: 2.0
 
 val_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.osc_val}
+    omc: ${dataset.omc_val}
     omol: ${dataset.omol_val}
     odac: ${dataset.odac_val}
     omat: ${dataset.omat_val}
@@ -133,7 +133,7 @@ heads:
       - omol
       - omat
       - oc20
-      - osc
+      - omc
       - odac
 
 runner:
