@@ -1,2 +1,0 @@
-ckpt_path: ${cluster.checkpoint_root_dir}/202505-0720-0949-69f9/uma_sm_v1_old_ratio_500k.pt
-model_name: uma_sm_v1_old_ratio_500k

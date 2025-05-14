@@ -1,2 +1,2 @@
-model_name: uma_sm_32MoLE_final
-ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/uma_sm_final.pt
+ckpt_path: ${cluster.checkpoint_root_dir}/202505-0622-2445-47b9/uma_sm_v1_release_950k.pt
+model_name: uma_sm

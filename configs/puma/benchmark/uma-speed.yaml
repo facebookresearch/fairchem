@@ -1,5 +1,3 @@
-#fairchem -c uma_speed.yaml +run_dir_root=/checkpoint/ocp/misko/benchmark
-
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 10
