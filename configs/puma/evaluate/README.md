@@ -1,4 +1,4 @@
-Running uma Evaluations
+Running UMA Evaluations
 ------------------------
 
 Conserving val and test

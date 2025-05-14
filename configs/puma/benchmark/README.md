@@ -1,4 +1,4 @@
-Running uma Benchmarks
+Running UMA Benchmarks
 -----------------------
 ## List of benchmarks
 
