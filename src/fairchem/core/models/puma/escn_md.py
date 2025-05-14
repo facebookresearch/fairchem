@@ -443,9 +443,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         if graph_dict["edge_index"].numel() == 0:
             raise ValueError(
-                f"""No edges found in input system, this means either you have a single atom in the system
-                  or the atoms are farther apart than the radius cutoff of the model of {self.cutoff} Angstroms.
-                  We don't know how to handle this case. Check the positions of system: {data_dict['pos']}"""
+                f"No edges found in input system, this means either you have a single atom in the system or the atoms are farther apart than the radius cutoff of the model of {self.cutoff} Angstroms. We don't know how to handle this case. Check the positions of system: {data_dict['pos']}"
             )
 
         with record_function("obtain wigner"):
