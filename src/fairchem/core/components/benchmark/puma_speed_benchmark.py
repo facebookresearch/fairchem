@@ -41,9 +41,13 @@ def seed_everywhere(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def ase_to_graph(atoms, neighbors: int, cutoff: float):
+def ase_to_graph(atoms, neighbors: int, cutoff: float, external_graph=True):
     a2g = AtomsToGraphs(
-        max_neigh=neighbors, radius=cutoff, r_edges=True, r_distances=True
+        max_neigh=neighbors,
+        radius=cutoff,
+        r_edges=external_graph,
+        r_distances=external_graph,
+        r_pbc=True,
     )
     data_object = a2g.convert(atoms)
     data_object.natoms = len(atoms)
@@ -61,7 +65,11 @@ def ase_to_graph(atoms, neighbors: int, cutoff: float):
 
 
 def get_fcc_carbon_xtal(
-    neighbors: int, radius: float, num_atoms: int, lattice_constant: float = 3.8
+    neighbors: int,
+    radius: float,
+    num_atoms: int,
+    lattice_constant: float = 3.8,
+    external_graph: bool = True,
 ):
     # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
     atoms = build.bulk("C", "fcc", a=lattice_constant)
@@ -69,7 +77,7 @@ def get_fcc_carbon_xtal(
     atoms = atoms.repeat((n_cells, n_cells, n_cells))
     indices = np.random.choice(len(atoms), num_atoms, replace=False)
     sampled_atoms = atoms[indices]
-    return ase_to_graph(sampled_atoms, neighbors, radius)
+    return ase_to_graph(sampled_atoms, neighbors, radius, external_graph)
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
@@ -121,6 +129,7 @@ class InferenceBenchRunner(Runner):
         device="cuda",
         overrides: dict | None = None,
         inference_settings: InferenceSettings = inference_settings_default(),  # noqa B008
+        generate_traces: bool = False,  # takes additional memory and time
     ):
         self.natoms_list = natoms_list
         self.device = device
@@ -130,6 +139,7 @@ class InferenceBenchRunner(Runner):
         self.run_dir = os.path.join(run_dir_root, uuid.uuid4().hex.upper()[0:8])
         self.overrides = overrides
         self.inference_settings = inference_settings
+        self.generate_traces = generate_traces
         os.makedirs(self.run_dir, exist_ok=True)
 
     def run(self) -> None:
@@ -153,17 +163,25 @@ class InferenceBenchRunner(Runner):
 
             # benchmark all cell sizes
             for natoms in self.natoms_list:
-                data = get_fcc_carbon_xtal(max_neighbors, cutoff, natoms)
-                num_atoms = data.natoms.item()
-                num_edges = data.edge_index.shape[1]
-                logging.info(
-                    f"Starting profile: model: {model_checkpoint}, num_atoms: {num_atoms}, num_edges: {num_edges}"
+                data = get_fcc_carbon_xtal(
+                    max_neighbors,
+                    cutoff,
+                    natoms,
+                    external_graph=self.inference_settings.external_graph_gen,
                 )
-                make_profile(data, predictor, name=name, save_loc=self.run_dir)
+                num_atoms = data.natoms.item()
+
+                print_info = f"Starting profile: model: {model_checkpoint}, num_atoms: {num_atoms}"
+                if self.inference_settings.external_graph_gen:
+                    num_edges = data.edge_index.shape[1]
+                    print_info += f" num edges compute on: {num_edges}"
+                logging.info(print_info)
+                if self.generate_traces:
+                    make_profile(data, predictor, name=name, save_loc=self.run_dir)
                 qps, ns_per_day = get_qps(data, predictor, timeiters=self.timeiters)
                 model_to_qps_data[name].append([num_atoms, ns_per_day])
                 logging.info(
-                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, num_edges: {num_edges}, qps: {qps}, ns_per_day: {ns_per_day}"
+                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
                 )
 
     def save_state(self, _):
