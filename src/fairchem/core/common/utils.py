@@ -22,7 +22,6 @@ import pathlib
 import subprocess
 import sys
 import time
-from bisect import bisect
 from functools import reduce, wraps
 from itertools import product
 from pathlib import Path
@@ -66,30 +65,6 @@ class UniqueKeyLoader(yaml.SafeLoader):
                 )
             mapping.add(each_key)
         return super().construct_mapping(node, deep)
-
-
-def warmup_lr_lambda(current_step: int, optim_config):
-    """Returns a learning rate multiplier.
-    Till `warmup_steps`, learning rate linearly increases to `initial_lr`,
-    and then gets multiplied by `lr_gamma` every time a milestone is crossed.
-    """
-
-    # keep this block for older configs that have warmup_epochs instead of warmup_steps
-    # and lr_milestones are defined in epochs
-    if (
-        any(x < 100 for x in optim_config["lr_milestones"])
-        or "warmup_epochs" in optim_config
-    ):
-        raise Exception(
-            "ConfigError: please define lr_milestones in steps not epochs and define warmup_steps instead of warmup_epochs"
-        )
-
-    if current_step <= optim_config["warmup_steps"]:
-        alpha = current_step / float(optim_config["warmup_steps"])
-        return optim_config["warmup_factor"] * (1.0 - alpha) + alpha
-    else:
-        idx = bisect(optim_config["lr_milestones"], current_step)
-        return pow(optim_config["lr_gamma"], idx)
 
 
 def print_cuda_usage() -> None:
