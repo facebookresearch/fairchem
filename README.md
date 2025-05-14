@@ -20,11 +20,15 @@ demos, and application efforts for materials science and quantum chemistry.
 > If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
 > as detailed [here](#looking-for-fairchem-v1).
 
-### Try the demo!
+### Read our latest release post!
 Read about the [UMA model and dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
+[![Meta FAIR Science Release](https://github.com/user-attachments/assets/acddd09b-ed6f-4d05-9a4b-9ba5e2301150)]([https://example.com](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/?ref=shareable))
+
+### Try the demo!
 If you want to explore model capabilities check out our
 [educational demo](https://facebook-fairchem-uma-demo.hf.space/)
+
 ![output](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)
 
 
