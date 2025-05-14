@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 import torch
 
-from fairchem.core.common.fairchem_calculator import FAIRChemCalculator
+from fairchem.core import FAIRChemCalculator
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.lmdb_dataset import data_list_collater
 from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs

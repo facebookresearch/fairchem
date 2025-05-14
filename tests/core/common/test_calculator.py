@@ -18,7 +18,7 @@ from ase.optimize import BFGS
 from huggingface_hub import hf_hub_download
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.common.fairchem_calculator import (
+from fairchem.core.common.calculator import (
     AllZeroUnitCellError,
     MixedPBCError,
 )
