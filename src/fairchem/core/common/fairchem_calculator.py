@@ -96,9 +96,7 @@ class FAIRChemCalculator(Calculator):
         self.available_datasets = self.predictor.model.module.backbone.dataset_list
         self.model_tasks = self.predictor.tasks
         self.calc_property_to_model_key_mapping = {}
-        self.available_output_keys = list(self.predictor.tasks.keys())
         logging.info(f"Available task names: {self.available_datasets}")
-        logging.info(f"Available output keys: {self.available_output_keys}")
 
         self.max_neighbors = min(
             max_neighbors, self.predictor.model.module.backbone.max_neighbors
@@ -117,6 +115,9 @@ class FAIRChemCalculator(Calculator):
             self.task_name = task_name
         elif len(self.available_datasets) == 1:
             self.task_name = self.available_datasets[0]
+        logging.info(
+            f"Calculator property to model output key mapping: {self.calc_property_to_model_key_mapping}"
+        )
 
         self.seed = seed
 
