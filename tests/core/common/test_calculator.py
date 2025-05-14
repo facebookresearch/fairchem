@@ -70,7 +70,7 @@ HF_HUB_CHECKPOINTS = [
 
 @pytest.fixture()
 def slab_atoms() -> Atoms:
-    atoms = fcc111("Pt", size=(2, 2, 5), vacuum=10.0)
+    atoms = fcc111("Pt", size=(2, 2, 5), vacuum=10.0, periodic=True)
     add_adsorbate(atoms, "O", height=1.2, position="fcc")
     atoms.pbc = True
     return atoms
@@ -225,28 +225,22 @@ def test_calculator_checkpoint_download(slab_atoms, hf_hub, checkpoint):
     """Test downloading a checkpoint from Hugging Face Hub and using checkpoint_path directly."""
 
     if hf_hub:
-        checkpoint_path = hf_hub_download(
-            repo_id=checkpoint["repo_id"], filename=checkpoint["filename"]
-        )
-        calc = FAIRChemCalculator(
-            checkpoint_path=checkpoint_path,
-            device="cuda",
-            task_name="omat",
-        )
-    else:
         calc = FAIRChemCalculator(
             hf_hub_repo_id=checkpoint["repo_id"],
             hf_hub_filename=checkpoint["filename"],
             device="cuda",
             task_name=checkpoint["task_name"],
         )
+    else:
+        checkpoint_path = hf_hub_download(
+            repo_id=checkpoint["repo_id"], filename=checkpoint["filename"]
+        )
+        calc = FAIRChemCalculator(
+            checkpoint_path=checkpoint_path,
+            device="cuda",
+            task_name=checkpoint["task_name"],
+        )
 
-    calc = FAIRChemCalculator(
-        hf_hub_repo_id=checkpoint["repo_id"],
-        hf_hub_filename=checkpoint["filename"],
-        task_name=checkpoint["task_name"],
-        device="cuda",
-    )
     slab_atoms.calc = calc
 
     # Test energy calculation
