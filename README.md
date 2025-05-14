@@ -27,8 +27,9 @@ If you want to explore model capabilities check out our
 ### Installation
 Install fairchem-core using pip,
 ```bash
-pip install fairchem-core
+pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
 ```
+:note: PyPI package coming soon!
 
 ### Quick Start
 The easiest way to use pretrained models is via the `FAIRChemCalculator` [ASE](https://wiki.fysik.dtu.dk/ase/).
@@ -39,11 +40,7 @@ appropriate task name for domain specific prediction.
 Make sure you have a Hugging Face account, have already applied for model access
 [here](), and have logged in using to Hugging Face using an access token.
 
-```python
-from fairchem.core import FAIRChemCalculator
-
-calc = FAIRChemCalculator(hf_hub_filename="uma-sm.pt", device="cuda")
-```
+#TODO add proper link to HF repo and filename
 
 #### Set the task for your application and calculate
 
@@ -57,13 +54,15 @@ Relax adsorbate on a catalytic surface,
 ```python
 from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
+from fairchem.core import FAIRChemCalculator
+
+calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="oc20")
 
 # Set up your system as an ASE atoms object
-slab = fcc100("Cu", (3, 3, 3), vacuum=8)
+slab = fcc100("Cu", (3, 3, 3), vacuum=8, periodic=True)
 adsorbate = molecule("CO")
 add_adsorbate(slab, adsorbate, 2.0, "bridge")
 
-calc.task_name = "oc20"  # set the task name for catalysis
 slab.calc = calc
 
 # Set up LBFGS dynamics object
@@ -76,9 +75,11 @@ Or relax an inorganic crystal,
 from ase.build import bulk
 from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
+from fairchem.core import FAIRChemCalculator
+
+calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="omat")
 
 atoms = bulk("Fe")
-calc.task_name = "omat"  # set the task name for inorganic materials
 atoms.calc = calc
 
 opt = LBFGS(FrechetCellFilter(atoms))
@@ -91,10 +92,11 @@ from ase import units
 from ase.io import Trajectory
 from ase.md.langevin import Langevin
 from ase.build import molecule
+from fairchem.core import FAIRChemCalculator
+
+calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="omol")
 
 atoms = molecule("H2O")
-
-calc.task_name = "omol"  # set the task name for molecules
 atoms.calc = calc
 
 dyn = Langevin(
