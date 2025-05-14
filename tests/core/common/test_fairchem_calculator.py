@@ -24,8 +24,6 @@ from fairchem.core.common.fairchem_calculator import (
 )
 from fairchem.core.units.mlip_unit.api.inference import inference_settings_turbo
 
-pytestmark = pytest.mark.skip("Skipping all tests with HF checkpoints until migrated")
-
 if TYPE_CHECKING:
     from ase import Atoms
 
@@ -33,40 +31,40 @@ if TYPE_CHECKING:
 HF_HUB_CHECKPOINTS = [
     {
         "repo_id": "facebook/uma-prerelease-checkpoints",
-        "filename": "uma_sm_v1.pt",
+        "filename": "uma_sm_130525.pt",
         "task_name": "omat",
         "charge_spin": False,
     },
     {
         "repo_id": "facebook/uma-prerelease-checkpoints",
-        "filename": "uma_sm_v1.pt",
+        "filename": "uma_sm_130525.pt",
         "task_name": "omol",
         "charge_spin": True,
     },
-    # {
-    #     "repo_id": "facebook/uma-prerelease-checkpoints",
-    #     "filename": "uma_sm_v1.pt",
-    #     "task_name": "omc",
-    #     "charge_spin": False,
-    # },
     {
         "repo_id": "facebook/uma-prerelease-checkpoints",
-        "filename": "uma_sm_v1.pt",
+        "filename": "uma_sm_130525.pt",
+        "task_name": "omc",
+        "charge_spin": False,
+    },
+    {
+        "repo_id": "facebook/uma-prerelease-checkpoints",
+        "filename": "uma_sm_130525.pt",
         "task_name": "odac",
         "charge_spin": False,
     },
     {
         "repo_id": "facebook/uma-prerelease-checkpoints",
-        "filename": "uma_sm_v1.pt",
+        "filename": "uma_sm_130525.pt",
         "task_name": "oc20",
         "charge_spin": False,
     },
-    # {
-    #     "repo_id": "facebook/uma-prerelease-checkpoints",
-    #     "filename": "omol_test_checkpoint.pt",
-    #     "task_name": None,
-    #     "charge_spin": True,
-    # },
+    {
+        "repo_id": "facebook/uma-prerelease-checkpoints",
+        "filename": "omol_test_checkpoint_130525.pt",
+        "task_name": None,
+        "charge_spin": True,
+    },
 ]
 
 
