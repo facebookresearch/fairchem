@@ -117,23 +117,12 @@ def test_calculator_setup(checkpoint):
     # assert "stress" in calc.implemented_properties
 
     # all conservative UMA checkpoints should support E/F/S!
-    # if not calc.predictor.direct_forces and calc.task_name is not None:
-    #     assert calc.energy_key is not None, (
-    #         calc.energy_key in calc.available_output_keys
-    #     )
-    #     assert calc.forces_key is not None, (
-    #         calc.forces_key in calc.available_output_keys
-    #     )
-    #     assert calc.stress_key is not None, (
-    #         calc.stress_key in calc.available_output_keys
-    #     )
-    # else:
-    #     assert calc.energy_key is not None, (
-    #         calc.energy_key in calc.available_output_keys
-    #     )
-    #     assert calc.forces_key is not None, (
-    #         calc.forces_key in calc.available_output_keys
-    #     )
+    if not calc.predictor.direct_forces and calc.task_name is not None:
+        for key in ["energy", "forces", "stress"]:
+            assert key in calc.calc_property_to_model_key_mapping
+    else:
+        for key in ["energy", "forces"]:
+            assert key in calc.calc_property_to_model_key_mapping
 
 
 @pytest.mark.gpu()
