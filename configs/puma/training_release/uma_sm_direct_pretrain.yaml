@@ -19,7 +19,7 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: uma_v1_043025_sm_direct
+  run_name: uma_sm_direct
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
