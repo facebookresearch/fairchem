@@ -45,7 +45,7 @@ HF_HUB_CHECKPOINTS = [
     },
     # {
     #     "repo_id": "facebook/uma-prerelease-checkpoints",
-    #     "filename": "puma_sm_v1.pt",
+    #     "filename": "uma_sm_v1.pt",
     #     "task_name": "omc",
     #     "charge_spin": False,
     # },
