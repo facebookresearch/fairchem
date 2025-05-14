@@ -53,15 +53,15 @@ fairchem -c configs/uma/benchmark/mp-pbe-elasticity.yaml checkpoint=uma_sm clust
 
 ## Materials benchmarks:
 ```bash
-fairchem -c configs/uma/benchmark/kappa103.yaml checkpoint=uma_sm_mpa_0428 cluster=h100
-fairchem -c configs/uma/benchmark/mdr-phonon.yaml checkpoint=uma_sm_mpa_0428 cluster=h100
-fairchem -c configs/uma/benchmark/mp-binary-pbe-elasticity.yaml checkpoint=uma_sm_mpa_0428 cluster=h100
-fairchem -c configs/uma/benchmark/mp-pbe-elasticity.yaml checkpoint=uma_sm_mpa_0428 cluster=h100
+fairchem -c configs/uma/benchmark/kappa103.yaml checkpoint=uma_sm_mpa cluster=h100
+fairchem -c configs/uma/benchmark/mdr-phonon.yaml checkpoint=uma_sm_mpa cluster=h100
+fairchem -c configs/uma/benchmark/mp-binary-pbe-elasticity.yaml checkpoint=uma_sm_mpa cluster=h100
+fairchem -c configs/uma/benchmark/mp-pbe-elasticity.yaml checkpoint=uma_sm_mpa cluster=h100
 ```
 ##### Default on V100 to use more jobs:
 
 ```bash
-fairchem -c configs/uma/benchmark/matbench-discovery-discovery.yaml checkpoint=uma_sm_mpa_0428 cluster=v100
+fairchem -c configs/uma/benchmark/matbench-discovery-discovery.yaml checkpoint=uma_sm_mpa cluster=v100
 ```
 
 ##### Using OMat head (not MPA!)
