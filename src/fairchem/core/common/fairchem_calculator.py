@@ -115,6 +115,10 @@ class FAIRChemCalculator(Calculator):
             self.task_name = task_name
         elif len(self.available_datasets) == 1:
             self.task_name = self.available_datasets[0]
+        else:
+            raise RuntimeError(
+                f"A task name must be provided. Valid options are {self.available_datasets}"
+            )
 
         self.seed = seed
 
