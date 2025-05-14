@@ -297,7 +297,11 @@ class TestRadiusGraphPBC:
     ],
 )
 def test_simple_systems_nopbc(
-    atoms, expected_edge_index, max_neighbors, enforce_max_neighbors_strictly, torch_deterministic
+    atoms,
+    expected_edge_index,
+    max_neighbors,
+    enforce_max_neighbors_strictly,
+    torch_deterministic,
 ):
     a2g = AtomsToGraphs(
         r_energy=False,
@@ -311,7 +315,7 @@ def test_simple_systems_nopbc(
 
     batch = data_list_collater([data])
 
-    for radius_graph_pbc_fn in (radius_graph_pbc_v2,radius_graph_pbc):
+    for radius_graph_pbc_fn in (radius_graph_pbc_v2, radius_graph_pbc):
         edge_index, _, _ = radius_graph_pbc_fn(
             batch,
             radius=6,
@@ -320,4 +324,10 @@ def test_simple_systems_nopbc(
             pbc=[False, False, False],
         )
 
-        assert len(set([ tuple(x) for x in edge_index.T.tolist() ])-set([ tuple(x) for x in expected_edge_index.T.tolist() ]))==0
+        assert (
+            len(
+                set(tuple(x) for x in edge_index.T.tolist())
+                - set(tuple(x) for x in expected_edge_index.T.tolist())
+            )
+            == 0
+        )
