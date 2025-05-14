@@ -165,8 +165,8 @@ class FAIRChemCalculator(Calculator):
             task_name (str): The name of the task to use.
         """
         assert (
-            task_name in UMATask
-        ), f"Given {task_name}, Valid options are {[t.value for t in UMATask]}"
+            task_name in self.available_datasets
+        ), f"Given {task_name}, Valid options are {self.available_datasets}"
         self._task_name = task_name
         self.reset_calc_key_mapping(self._task_name)
 
