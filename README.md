@@ -16,30 +16,33 @@
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
-> :warning: **FAIRChem version 2 is not compatible with our previous pretrained models.**
-> If you want to use an older model you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
+> :warning: **FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.**
+> If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
 > as detailed [here](#looking-for-fairchem-v1).
 
 ### Try the demo!
+Read about the [UMA model and dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
+
 If you want to explore model capabilities check out our
-[educational demo](https://huggingface.co/spaces/facebook/fairchem_uma_demo)
+[educational demo](https://facebook-fairchem-uma-demo.hf.space/)
 ![output](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)
+
 
 ### Installation
 Install fairchem-core using pip,
 ```bash
 pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
 ```
-**PyPI package coming soon!**
+**The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
 
 ### Quick Start
-The easiest way to use pretrained models is via the `FAIRChemCalculator` [ASE](https://wiki.fysik.dtu.dk/ase/).
+The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
 A single uma model can be used for a wide range of applications in chemistry and materials science by picking the
 appropriate task name for domain specific prediction.
 
 #### Instantiate a calculator from a pretrained model
 Make sure you have a Hugging Face account, have already applied for model access to the 
-[UMA model repository](https://huggingface.co/facebook/UMA), and have logged in using to Hugging Face using an access token.
+[UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
 
 #### Set the task for your application and calculate
 
