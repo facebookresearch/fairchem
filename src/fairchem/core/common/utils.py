@@ -817,7 +817,9 @@ def radius_graph_pbc_v2(
     ).long()
 
     # Create a tensor of unit cells for each image
-    unit_cell = torch.zeros(torch.sum(cells_per_image), 3, device=device)
+    unit_cell = torch.zeros(
+        torch.sum(cells_per_image), 3, device=device, dtype=data.cell.dtype
+    )
     offset = 0
     for i in range(batch_size):
         cells_x = torch.arange(
@@ -842,7 +844,6 @@ def radius_graph_pbc_v2(
     # Position of the target atoms for the edges
     target_atom_pos = atom_pos
     target_atom_image = data_batch_idxs
-    grid_atom_index = torch.zeros(754552 * 39, dtype=torch.int, device=device) - 1
 
     # Compute the position of the source atoms for the edges. There are
     # more source atoms than target atoms, since the source atoms are
