@@ -288,17 +288,17 @@ def test_switch_task_name_calculation(periodic_h2o_atoms, checkpoint):
     forces_omol = periodic_h2o_atoms.get_forces()
     assert isinstance(forces_omol, np.ndarray)
 
-    # Switch to 'osc' mode
+    # Switch to 'omat' mode
     calc.task_name = "omat"
     calc.results = {}
     periodic_h2o_atoms.calc = calc
 
-    # Calculate forces in 'osc' mode
-    forces_osc = periodic_h2o_atoms.get_forces()
-    assert isinstance(forces_osc, np.ndarray)
+    # Calculate forces in 'omat' mode
+    forces_omat = periodic_h2o_atoms.get_forces()
+    assert isinstance(forces_omat, np.ndarray)
 
-    # Ensure forces are different between 'omol' and 'osc'
-    assert not np.allclose(forces_omol, forces_osc, atol=0.01)
+    # Ensure forces are different between 'omol' and 'omat'
+    assert not np.allclose(forces_omol, forces_omat, atol=0.01)
 
 
 @pytest.mark.gpu()
