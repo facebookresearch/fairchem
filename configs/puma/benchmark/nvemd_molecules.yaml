@@ -1,0 +1,49 @@
+defaults:
+  - cluster: h100
+  - checkpoint: puma_sm
+  - _self_
+
+benchmark_name: nve-md-omol-100ps
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 7
+    slurm:
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: puma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+
+runner:
+  _target_: fairchem.core.components.calculate.nve_md_runner.NVEMDRunner
+  calculator:
+    _target_: fairchem.core.common.calculator.MLIPCalculator
+    inference_ckpt_path: ${checkpoint.ckpt_path}
+    dataset_name: omol
+    energy_key: omol_energy
+    forces_key: omol_forces
+    act_ckpt: True
+    a2g_kwargs:
+      molecule_cell_size: 200.
+  input_data:
+    _target_: fairchem.core.components.calculate.nve_md_runner.get_nve_md_data
+    dataset_root: ${cluster.data_root_dir}/md
+    dataset_name: md22
+  time_step: 1.
+  steps: 100000
+
+reducer:
+  _target_: fairchem.core.components.benchmark.nvemd_reducer.NVEMDReducer
+  benchmark_name: ${benchmark_name}

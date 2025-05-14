@@ -1,0 +1,2 @@
+model_name: eSEN-30M-OAM
+ckpt_path: ${cluster.checkpoint_root_dir}/baseline_models/esen_30m_oam.pt

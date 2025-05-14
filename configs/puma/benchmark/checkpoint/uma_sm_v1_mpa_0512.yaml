@@ -1,0 +1,2 @@
+ckpt_path: ${cluster.checkpoint_root_dir}/202505-1122-4706-69f1/uma_sm_v1_mpa_0512_final.pt
+model_name: uma_sm_v1_mpa_0512

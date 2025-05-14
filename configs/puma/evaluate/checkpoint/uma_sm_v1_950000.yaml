@@ -1,0 +1,2 @@
+ckpt_path: ${cluster.checkpoint_root_dir}/202505-0622-2445-47b9/full_run_dir/checkpoints/step_950000/inference_ckpt.pt
+model_name: uma_sm_v1_950000
