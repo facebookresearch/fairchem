@@ -59,12 +59,12 @@ HF_HUB_CHECKPOINTS = [
         "task_name": "oc20",
         "charge_spin": False,
     },
-    {
-        "repo_id": "facebook/uma-prerelease-checkpoints",
-        "filename": "omol_test_checkpoint.pt",
-        "task_name": None,
-        "charge_spin": True,
-    },
+    # {
+    #     "repo_id": "facebook/uma-prerelease-checkpoints",
+    #     "filename": "omol_test_checkpoint.pt",
+    #     "task_name": None,
+    #     "charge_spin": True,
+    # },
 ]
 
 
