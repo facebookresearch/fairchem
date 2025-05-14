@@ -194,7 +194,8 @@ class FAIRChemCalculator(Calculator):
         self._task_name = task_name
         self._reset_calc_key_mapping(self._task_name)
         logging.info(
-            f"Switching task to {task_name}, the available outputs for this task are: {self.calc_property_to_model_key_mapping.keys()}"
+            f"Switching task to {task_name}, the available outputs for this task are: "
+            f"{self.calc_property_to_model_key_mapping.keys()}"
         )
 
     def print_warnings(self) -> None:
@@ -203,17 +204,20 @@ class FAIRChemCalculator(Calculator):
         """
         if self.direct_force:
             logging.warning(
-                "This inference checkpoint is a direct-force model. This may lead to discontinuities in the potential energy surface and energy conservation errors. Use with caution."
+                "This inference checkpoint is a direct-force model. This may lead to discontinuities in the potential "
+                "energy surface and energy conservation errors. Use with caution."
             )
 
         if not hasattr(self, "seed"):
             logging.warning(
-                "The random seed is not set. This may lead to non-deterministic behavior. Use <self.seed = seed> to set the random seed."
+                "The random seed is not set. This may lead to non-deterministic behavior. Use <self.seed = seed> to set"
+                " the random seed."
             )
 
         if self.task_name is None and len(self.available_tasks) > 1:
             logging.warning(
-                f"task_name is not set. If you are using a UMA model, call <self.task_name = task_name> before using the calculator. Available task names: {self.available_tasks}."
+                f"task_name is not set. If you are using a UMA model, call <self.task_name = task_name> before using "
+                f" the calculator. Available task names: {self.available_tasks}."
             )
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
