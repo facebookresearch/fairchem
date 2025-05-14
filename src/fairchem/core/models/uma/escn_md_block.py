@@ -14,16 +14,16 @@ import torch.nn as nn
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
-from fairchem.core.models.puma.nn.activation import (
+from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,
 )
-from fairchem.core.models.puma.nn.layer_norm import (
+from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
-from fairchem.core.models.puma.nn.radial import PolynomialEnvelope
-from fairchem.core.models.puma.nn.so2_layers import SO2_Convolution
-from fairchem.core.models.puma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
+from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
+from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 
 
 class Edgewise(torch.nn.Module):

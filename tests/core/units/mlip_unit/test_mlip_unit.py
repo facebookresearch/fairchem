@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import math
@@ -12,7 +13,6 @@ import pickle
 import shutil
 import tempfile
 from collections import namedtuple
-import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -140,11 +140,11 @@ def test_full_eval_from_cli():
 # different outputs , would be nice to have to extended
 # so that it checks specifically one example at a time and
 # not an aggregate MAE
-def test_full_conserving_mole_eval_from_cli(fake_puma_dataset, torch_deterministic):
+def test_full_conserving_mole_eval_from_cli(fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "oc20_energy_mae=16.582261562347412",
         "omol_energy_mae=0.2785639584064484",
     ]
@@ -153,22 +153,22 @@ def test_full_conserving_mole_eval_from_cli(fake_puma_dataset, torch_determinist
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_conserving_eval.yaml",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "oc20_energy_mae=16.582261562347412",
         "omol_energy_mae=0.2785639584064484",
-        f"datasets.oc20_val.splits.train.src=[{fake_puma_dataset}/oc20/oc20_val.aselmdb]",
-        f"datasets.omol_val.splits.train.src=[{fake_puma_dataset}/omol/omol_val.aselmdb]",
+        f"datasets.oc20_val.splits.train.src=[{fake_uma_dataset}/oc20/oc20_val.aselmdb]",
+        f"datasets.omol_val.splits.train.src=[{fake_uma_dataset}/omol/omol_val.aselmdb]",
     ]
     launch_main(sys_args)
 
 
 @pytest.mark.gpu()
-def test_full_train_eval_from_cli_aselmdb_gpu(fake_puma_dataset):
+def test_full_train_eval_from_cli_aselmdb_gpu(fake_uma_dataset):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "job.device_type=CUDA",
         # "+job.deterministic=True", # this doesnt work because it requires setting CUBLAS_WORKSPACE_CONFIG beforehand
         "+expected_loss=13.66177",
@@ -206,18 +206,18 @@ def test_full_train_from_cli(torch_deterministic):
     launch_main(sys_args)
 
 
-def test_full_train_eval_from_cli_aselmdb(fake_puma_dataset, torch_deterministic):
+def test_full_train_eval_from_cli_aselmdb(fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=13.662849426269531",
     ]
     launch_main(sys_args)
 
 
-def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministic):
+def test_grad_train_from_cli_aselmdb_no_lr(fake_uma_dataset, torch_deterministic):
     with tempfile.TemporaryDirectory() as tmpdirname:
         run1_path = os.path.join(tmpdirname, "run1")
         run2_path = os.path.join(tmpdirname, "run2")
@@ -228,7 +228,7 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministi
             "--config",
             "tests/core/units/mlip_unit/test_mlip_train.yaml",
             "datasets=aselmdb",
-            f"datasets.data_root_dir={fake_puma_dataset}",
+            f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
         ]
 
@@ -278,8 +278,8 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministi
 #         (True, 0.05),
 #     ],
 # )
-# def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_gpu(bf16,tol,fake_puma_dataset):
-#     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(bf16,tol,"CUDA",fake_puma_dataset)
+# def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_gpu(bf16,tol,fake_uma_dataset):
+#     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(bf16,tol,"CUDA",fake_uma_dataset)
 
 
 @pytest.mark.dgl()
@@ -291,10 +291,10 @@ def test_grad_train_from_cli_aselmdb_no_lr(fake_puma_dataset, torch_deterministi
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch_cpu(
-    bf16, tol, fake_puma_dataset, torch_deterministic
+    bf16, tol, fake_uma_dataset, torch_deterministic
 ):
     grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
-        bf16, tol, "CPU", fake_puma_dataset
+        bf16, tol, "CPU", fake_uma_dataset
     )
 
 
@@ -370,7 +370,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, fake_puma_dataset, torch_deterministic
+    train_config, dataset_config, fake_uma_dataset, torch_deterministic
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -382,7 +382,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             "--config",
             train_config,
             f"datasets={dataset_config}",
-            f"datasets.data_root_dir={fake_puma_dataset}",
+            f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
             "runner.max_steps=1",
         ]
@@ -442,12 +442,12 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
 
 
 @pytest.mark.parametrize("mode", ["gp", "no_gp"])
-def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset, torch_deterministic):
+def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "datasets=aselmdb_conserving",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=86.24614715576172",
     ]
     if mode == "gp":
@@ -469,7 +469,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_puma_dataset, torch_determin
     ],
 )
 def test_train_and_resume_max_epochs(
-    checkpoint_step, max_epochs, expected_loss, fake_puma_dataset, torch_deterministic
+    checkpoint_step, max_epochs, expected_loss, fake_uma_dataset, torch_deterministic
 ):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
@@ -478,7 +478,7 @@ def test_train_and_resume_max_epochs(
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
         "datasets=aselmdb",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         f"+job.run_dir={temp_dir}",
         f"+job.timestamp_id={timestamp_id}",
         f"max_epochs={max_epochs}",
@@ -509,7 +509,7 @@ def test_train_and_resume_max_epochs(
     ],
 )
 def test_train_and_resume_max_steps(
-    checkpoint_step, max_steps, expected_loss, fake_puma_dataset, torch_deterministic
+    checkpoint_step, max_steps, expected_loss, fake_uma_dataset, torch_deterministic
 ):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
@@ -518,7 +518,7 @@ def test_train_and_resume_max_steps(
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_checkpoint_resume.yaml",
         "datasets=aselmdb",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         f"+job.run_dir={temp_dir}",
         f"+job.timestamp_id={timestamp_id}",
         "max_epochs=null",
@@ -543,15 +543,13 @@ def test_train_and_resume_max_steps(
 
 
 # @pytest.mark.gpu()
-# def test_train_and_resume_mole_on_dgl_gpu(fake_puma_dataset):
-#     train_and_resume_mole_on_dgl("CUDA",fake_puma_dataset)
+# def test_train_and_resume_mole_on_dgl_gpu(fake_uma_dataset):
+#     train_and_resume_mole_on_dgl("CUDA",fake_uma_dataset)
 
 
 @pytest.mark.dgl()
-def test_train_and_resume_mole_on_dgl_cpu(fake_puma_dataset, torch_deterministic):
-    train_and_resume_mole_on_dgl("CPU", fake_puma_dataset)
-
-
+def test_train_and_resume_mole_on_dgl_cpu(fake_uma_dataset, torch_deterministic):
+    train_and_resume_mole_on_dgl("CPU", fake_uma_dataset)
 
 
 def train_and_resume_mole_on_dgl(device, data_root_dir):
@@ -572,7 +570,7 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
         "optimizer=savegrad",
         "max_steps=2",
         "max_epochs=null",
-        "expected_loss=47.714298248291016",  
+        "expected_loss=47.714298248291016",
     ]
     launch_main(sys_args)
 

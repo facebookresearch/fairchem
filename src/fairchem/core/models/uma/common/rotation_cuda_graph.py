@@ -13,7 +13,7 @@ import math
 import torch
 from e3nn import o3
 
-from fairchem.core.models.puma.common.rotation import wigner_D
+from fairchem.core.models.uma.common.rotation import wigner_D
 
 YTOL = 0.999999
 

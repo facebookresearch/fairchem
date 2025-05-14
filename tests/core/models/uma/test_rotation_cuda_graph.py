@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import functools
@@ -17,13 +18,13 @@ import torch
 from torch.profiler import ProfilerActivity, profile
 
 from fairchem.core.common.profiler_utils import get_profile_schedule
-from fairchem.core.models.puma.common.rotation import (
+from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_mat,
     rotation_to_wigner,
 )
-from fairchem.core.models.puma.common.rotation_cuda_graph import RotMatWignerCudaGraph
+from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 
-JD_path = "src/fairchem/core/models/puma/Jd.pt"
+JD_path = "src/fairchem/core/models/uma/Jd.pt"
 
 
 def seed_everywhere(seed=0):

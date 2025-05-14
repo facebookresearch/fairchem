@@ -24,8 +24,8 @@ omol_energy_mae: null
 
 heads:
   energyandforcehead:
-    module: fairchem.core.models.puma.escn_moe.DatasetSpecificMoEWrapper
-    head_cls: fairchem.core.models.puma.escn_md.MLP_EFS_Head
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificMoEWrapper
+    head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
     head_kwargs:
       wrap_property: False
     dataset_names:

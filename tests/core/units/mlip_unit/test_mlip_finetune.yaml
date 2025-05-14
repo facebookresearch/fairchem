@@ -22,11 +22,11 @@ model:
       dataset_list: ["oc20", "omol"]
   heads:
     oc20_energy:
-      module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+      module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
     omol_energy:
-      module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+      module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
     forces:
-      module: fairchem.core.models.puma.escn_md.Linear_Force_Head
+      module: fairchem.core.models.uma.escn_md.Linear_Force_Head
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner

@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,26 +12,25 @@ import tempfile
 
 import pytest
 
-from fairchem.core.datasets.lmdb_dataset import data_list_collater
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
-    create_fake_puma_dataset,
+    create_fake_uma_dataset,
 )
 
 
 @pytest.fixture(scope="session")
-def fake_puma_dataset():
+def fake_uma_dataset():
     with tempfile.TemporaryDirectory() as tempdirname:
-        datasets_yaml = create_fake_puma_dataset(tempdirname)
+        datasets_yaml = create_fake_uma_dataset(tempdirname)
         yield datasets_yaml
 
 
 @pytest.fixture(scope="session")
-def direct_mole_checkpoint(fake_puma_dataset):
+def direct_mole_checkpoint(fake_uma_dataset):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
-    device='CPU'
+    device = "CPU"
 
     sys_args = [
         "--config",
@@ -39,13 +39,13 @@ def direct_mole_checkpoint(fake_puma_dataset):
         "checkpoint_every=10000",
         "datasets=aselmdb",
         f"+job.run_dir={temp_dir}",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         f"job.device_type={device}",
         f"+job.timestamp_id={timestamp_id}",
         "optimizer=savegrad",
         "max_steps=2",
         "max_epochs=null",
-        "expected_loss=null", 
+        "expected_loss=null",
         "act_type=gate",
         "ff_type=spectral",
     ]
@@ -60,16 +60,15 @@ def direct_mole_checkpoint(fake_puma_dataset):
     assert os.path.isfile(checkpoint_state_yaml)
     assert os.path.isfile(inference_checkpoint_pt)
 
-    yield inference_checkpoint_pt,checkpoint_state_yaml
-
+    return inference_checkpoint_pt, checkpoint_state_yaml
 
 
 @pytest.fixture(scope="session")
-def direct_checkpoint(fake_puma_dataset):
+def direct_checkpoint(fake_uma_dataset):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
-    device='CPU'
+    device = "CPU"
 
     sys_args = [
         "--config",
@@ -78,16 +77,16 @@ def direct_checkpoint(fake_puma_dataset):
         "checkpoint_every=10000",
         "datasets=aselmdb",
         f"+job.run_dir={temp_dir}",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         f"job.device_type={device}",
         f"+job.timestamp_id={timestamp_id}",
         "optimizer=savegrad",
         "max_steps=2",
         "max_epochs=null",
-        "expected_loss=null", 
+        "expected_loss=null",
         "act_type=gate",
         "ff_type=spectral",
-        #"max_neighbors=300"
+        # "max_neighbors=300"
     ]
     launch_main(sys_args)
 
@@ -100,32 +99,31 @@ def direct_checkpoint(fake_puma_dataset):
     assert os.path.isfile(checkpoint_state_yaml)
     assert os.path.isfile(inference_checkpoint_pt)
 
-    yield inference_checkpoint_pt,checkpoint_state_yaml
+    return inference_checkpoint_pt, checkpoint_state_yaml
 
 
 @pytest.fixture(scope="session")
-
-def conserving_mole_checkpoint(fake_puma_dataset):
+def conserving_mole_checkpoint(fake_uma_dataset):
     # first train to completion
     temp_dir = tempfile.mkdtemp()
     timestamp_id = "12345"
-    device='CPU'
+    device = "CPU"
 
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "num_experts=8",
-        "heads.energyandforcehead.module=fairchem.core.models.puma.escn_moe.DatasetSpecificSingleHeadWrapper",
+        "heads.energyandforcehead.module=fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper",
         "checkpoint_every=10000",
         "datasets=aselmdb_conserving",
         f"+job.run_dir={temp_dir}",
-        f"datasets.data_root_dir={fake_puma_dataset}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         f"job.device_type={device}",
         f"+job.timestamp_id={timestamp_id}",
         "optimizer=savegrad",
         "max_steps=2",
         "max_epochs=null",
-        "expected_loss=null", 
+        "expected_loss=null",
         "act_type=gate",
         "ff_type=spectral",
     ]
@@ -140,4 +138,4 @@ def conserving_mole_checkpoint(fake_puma_dataset):
     assert os.path.isfile(checkpoint_state_yaml)
     assert os.path.isfile(inference_checkpoint_pt)
 
-    yield inference_checkpoint_pt,checkpoint_state_yaml
+    return inference_checkpoint_pt, checkpoint_state_yaml

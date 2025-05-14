@@ -60,14 +60,14 @@ class PairwiseCountRunner(Runner, metaclass=ABCMeta):
 
     def run(self):
         os.makedirs(
-            f"/checkpoint/ocp/shared/pairwise_data/puma-preview-r{self.radius}_p{self.portion}",
+            f"/checkpoint/ocp/shared/pairwise_data/uma-preview-r{self.radius}_p{self.portion}",
             exist_ok=True,
         )
 
         job_num = self.job_config.metadata.array_job_num
         num_jobs = self.job_config.scheduler.num_array_jobs
 
-        # canonical config of a training run. here I took puma_sm_direct (preview)
+        # canonical config of a training run. here I took uma_sm_direct (preview)
         cfg = omegaconf.OmegaConf.load(self.dataset_cfg)
         dataset_cfg = cfg["runner"]["train_dataloader"]["dataset"]
         dataset_names = sorted(dataset_cfg["dataset_configs"].keys())
@@ -75,10 +75,10 @@ class PairwiseCountRunner(Runner, metaclass=ABCMeta):
             dataset_cfg["dataset_configs"][ds]["a2g_args"]["radius"] = self.radius
             dataset_cfg["dataset_configs"][ds]["a2g_args"]["max_neigh"] = 300
 
-        concat_puma_dataset = hydra.utils.instantiate(dataset_cfg)
+        concat_uma_dataset = hydra.utils.instantiate(dataset_cfg)
 
         ds_idx = dataset_names.index(self.ds_name)
-        dataset = concat_puma_dataset.datasets[ds_idx]
+        dataset = concat_uma_dataset.datasets[ds_idx]
 
         count_mtx = np.zeros([100, 100])
         downsample = int(1 / self.portion)
@@ -91,7 +91,7 @@ class PairwiseCountRunner(Runner, metaclass=ABCMeta):
             count_mtx += count_pairs(pairs).float().numpy()
 
         np.save(
-            f"/checkpoint/ocp/shared/pairwise_data/puma-preview-r{self.radius}_p{self.portion}/{self.ds_name}_{num_jobs}_{job_num}.npy",
+            f"/checkpoint/ocp/shared/pairwise_data/uma-preview-r{self.radius}_p{self.portion}/{self.ds_name}_{num_jobs}_{job_num}.npy",
             count_mtx,
         )
 

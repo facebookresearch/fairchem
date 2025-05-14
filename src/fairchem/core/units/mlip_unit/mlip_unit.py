@@ -588,7 +588,7 @@ class MLIPTrainEvalUnit(TrainUnit[Batch], EvalUnit[Batch], Stateful):
                 )
         elif train_strategy == TrainStrategy.FSDP:
             # only wrap MOElinears for now, these are the layers that has large parameter size
-            from fairchem.core.models.puma.escn_moe import MOELinear
+            from fairchem.core.models.uma.escn_moe import MOELinear
 
             shard_group_size = job_config.scheduler.ranks_per_node
             mesh_2d = init_device_mesh(

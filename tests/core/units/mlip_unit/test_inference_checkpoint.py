@@ -27,11 +27,11 @@ from fairchem.core.units.mlip_unit.mlip_unit import InferenceSettings, MLIPPredi
 
 @pytest.mark.inference_check()
 def test_inference_checkpoint_direct(
-    command_line_inference_checkpoint, fake_puma_dataset, torch_deterministic
+    command_line_inference_checkpoint, fake_uma_dataset, torch_deterministic
 ):
     predictor = MLIPPredictUnit(command_line_inference_checkpoint, device="cpu")
 
-    db = AseDBDataset(config={"src": os.path.join(fake_puma_dataset, "oc20")})
+    db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
     a2g = AtomsToGraphs(
         max_neigh=10,
@@ -65,6 +65,7 @@ def test_inference_checkpoint_direct(
     )
     print(f"Keys in output {out.keys()}")
 
+
 @pytest.mark.inference_check()
 @pytest.mark.inference_dataset()
 @pytest.mark.gpu()
@@ -90,36 +91,42 @@ def test_conserving_mole_inference_modes_gpu(
     external_graph_gen,
     command_line_inference_checkpoint,
     command_line_inference_dataset,
-    fake_puma_dataset): 
+    fake_uma_dataset,
+):
     if command_line_inference_dataset is None:
-        task='oc20'
-        db = AseDBDataset(config={"src": os.path.join(fake_puma_dataset, "oc20")})
+        task = "oc20"
+        db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
     else:
-        task='omol'
+        task = "omol"
         db = AseDBDataset(config={"src": command_line_inference_dataset})
-    #/checkpoint/ocp/shared/omol/250430-release/val
+    # /checkpoint/ocp/shared/omol/250430-release/val
 
-    calc = FAIRChemCalculator(checkpoint_path=command_line_inference_checkpoint, device="cuda", task_name=task,inference_settings=InferenceSettings(
+    calc = FAIRChemCalculator(
+        checkpoint_path=command_line_inference_checkpoint,
+        device="cuda",
+        task_name=task,
+        inference_settings=InferenceSettings(
             tf32=tf32,
             activation_checkpointing=activation_checkpointing,
             merge_mole=merge_mole,
             compile=compile,
             wigner_cuda=wigner_cuda,
             external_graph_gen=external_graph_gen,
-        ))
-    calc.task_name=task
+        ),
+    )
+    calc.task_name = task
 
     energies = []
     forces = []
 
     sample_idx = 0
     while sample_idx < min(5, len(db)):
-        atoms=db.get_atoms(sample_idx)
-        target_energy=atoms.get_potential_energy()
-        target_forces=atoms.get_forces()
+        atoms = db.get_atoms(sample_idx)
+        target_energy = atoms.get_potential_energy()
+        target_forces = atoms.get_forces()
         atoms.calc = calc
-        energies.append(target_energy-atoms.get_potential_energy())
-        forces.append(target_forces-atoms.get_forces())
+        energies.append(target_energy - atoms.get_potential_energy())
+        forces.append(target_forces - atoms.get_forces())
         sample_idx += 1
     forces = np.vstack(forces)
     energies = np.stack(energies)
