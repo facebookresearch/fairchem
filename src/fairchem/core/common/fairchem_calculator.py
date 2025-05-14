@@ -110,8 +110,8 @@ class FAIRChemCalculator(Calculator):
 
         if task_name is not None:
             assert (
-                task_name in UMATask
-            ), f"Given: {task_name}, Valid options are {[t.value for t in UMATask]}"
+                task_name in self.available_datasets
+            ), f"Given: {task_name}, Valid options are {self.available_datasets}"
             self.task_name = task_name
         elif len(self.available_datasets) == 1:
             self.task_name = self.available_datasets[0]
