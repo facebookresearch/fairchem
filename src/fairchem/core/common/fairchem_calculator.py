@@ -32,7 +32,7 @@ class FAIRChemCalculator(Calculator):
         checkpoint_path: str | Path | None = None,
         hf_hub_repo_id: str | None = "facebook/UMA",
         hf_hub_filename: str | None = None,
-        task_name: Literal["omol", "omat", "oc20", "odac", "osc"] | None = None,
+        task_name: Literal["omol", "omat", "oc20", "odac", "omc"] | None = None,
         device: str = "cuda",
         inference_settings: InferenceSettings | str = "default",
         seed: int | None = 42,
@@ -45,7 +45,7 @@ class FAIRChemCalculator(Calculator):
             checkpoint_path (str | Path | None): Path to the inference checkpoint file on the local disk. Ignored if `hf_hub_repo_id` and `hf_hub_filename` are provided.
             hf_hub_repo_id (str | None): Hugging Face Hub repository ID to download the checkpoint from.
             hf_hub_filename (str | None): Filename of the checkpoint in the Hugging Face Hub repository.
-            task_name (Literal["omol", "omat", "oc20", "odac", "osc"] | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'osc' (where osc corresponds to the OMC dataset).
+            task_name (Literal["omol", "omat", "oc20", "odac", "omc"] | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
             device (str): Device to run the calculations on (e.g., "cuda" or "cpu"). Default is "cuda".
             inference_settings (InferenceSettings): Defines the inference flags for the Calculator, currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in custom settings by passing an InferenceSettings object.
             seed (int | None): Random seed for reproducibility. Default is 42.

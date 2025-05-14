@@ -47,6 +47,7 @@ def update_config(config_or_data):
         for k, v in mapping.items():
             if k in config_or_data:
                 config_or_data = config_or_data.replace(k, v)
+        config_or_data = config_or_data.replace("osc", "omc")
     return config_or_data
 
 
@@ -90,6 +91,7 @@ def migrate_checkpoint(
         output_dataset_names = set()
         datasets_with_stress = set()
         target_stress_config = None
+        # find output datasets
         for task in checkpoint.tasks_config:
             if "_energy" in task.name:
                 output_dataset_names.add(task.name.replace("_energy", ""))
@@ -100,6 +102,7 @@ def migrate_checkpoint(
         assert (
             target_stress_config is not None
         ), f"Did not find existing task {target_stress_task} in {[task.name for task in checkpoint.tasks_config]}"
+        # copy over the task configs to tasks that dont have stress
         for dataset_name in output_dataset_names - datasets_with_stress:
             task_config = target_stress_config.copy()
             task_config.name = f"{dataset_name}_stress"
@@ -113,6 +116,7 @@ def migrate_checkpoint(
         rename_keys = {
             # "module.backbone.routing_mlp": "module.backbone.mole_coefficient_mlp",
             # "module.backbone.moe_coefficient_mlp": "module.backbone.mole_coefficient_mlp",
+            "module.backbone.dataset_embedding.dataset_emb_dict.osc.weight": "module.backbone.dataset_embedding.dataset_emb_dict.omc.weight"
         }
         for state_dict_name in ["model_state_dict", "ema_state_dict"]:
             state_dict = getattr(checkpoint, state_dict_name)

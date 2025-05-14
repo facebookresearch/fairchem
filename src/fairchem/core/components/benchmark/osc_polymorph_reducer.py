@@ -38,7 +38,7 @@ ev2kJ = ase.units.eV * ase.units.mol / ase.units.kJ
 @requires(
     sklearn_scipy_installed, "Requires `scipy` and `scikit-learn` to be installed"
 )
-class OSCPolymorphReducer(JsonDFReducer):
+class OMCPolymorphReducer(JsonDFReducer):
     def __init__(
         self,
         benchmark_name: str,
@@ -83,7 +83,7 @@ class OSCPolymorphReducer(JsonDFReducer):
         return RelaxationRunner if self._calc_structural_metrics else SinglePointRunner
 
     def compute_metrics(self, results: pd.DataFrame, run_name: str) -> pd.DataFrame:
-        """Compute OSC polymorph metrics for single point or relaxed energy and structure predictions.
+        """Compute OMC polymorph metrics for single point or relaxed energy and structure predictions.
 
         Args:
             results: DataFrame containing prediction results with energy values
