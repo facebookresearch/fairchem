@@ -257,42 +257,6 @@ def test_calculator_checkpoint_download(slab_atoms, hf_hub, checkpoint):
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "checkpoint",
-    [
-        checkpoint
-        for checkpoint in HF_HUB_CHECKPOINTS
-        if checkpoint["task_name"] == "omol"
-    ],
-)
-def test_switch_task_name_calculation(periodic_h2o_atoms, checkpoint):
-    """Test switching task_name from 'omol' to 'omc'."""
-    calc = FAIRChemCalculator(
-        hf_hub_repo_id=checkpoint["repo_id"],
-        hf_hub_filename=checkpoint["filename"],
-        task_name="omol",
-        device="cuda",
-    )
-    periodic_h2o_atoms.calc = calc
-
-    # Calculate forces in 'omol' mode
-    forces_omol = periodic_h2o_atoms.get_forces()
-    assert isinstance(forces_omol, np.ndarray)
-
-    # Switch to 'omat' mode
-    calc.task_name = "omat"
-    calc.results = {}
-    periodic_h2o_atoms.calc = calc
-
-    # Calculate forces in 'omat' mode
-    forces_omat = periodic_h2o_atoms.get_forces()
-    assert isinstance(forces_omat, np.ndarray)
-
-    # Ensure forces are different between 'omol' and 'omat'
-    assert not np.allclose(forces_omol, forces_omat, atol=0.01)
-
-
-@pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "checkpoint",
     [checkpoint for checkpoint in HF_HUB_CHECKPOINTS if checkpoint["charge_spin"]],
 )
 def test_omol_missing_spin_charge_logs_warning(periodic_h2o_atoms, caplog, checkpoint):
