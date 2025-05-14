@@ -30,7 +30,7 @@ Install fairchem-core using pip,
 ```bash
 pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
 ```
-**PyPI package coming soon!**
+**The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
 
 ### Quick Start
 The easiest way to use pretrained models is via the `FAIRChemCalculator` [ASE](https://wiki.fysik.dtu.dk/ase/).
