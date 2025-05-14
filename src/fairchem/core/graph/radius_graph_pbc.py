@@ -92,7 +92,12 @@ def get_max_neighbors_mask(
 
     # Create a tensor of size [num_atoms, max_num_neighbors] to sort the distances of the neighbors.
     # Fill with infinity so we can easily remove unused distances later.
-    distance_sort = torch.full([num_atoms * max_num_neighbors], np.inf, device=device)
+    distance_sort = torch.full(
+        [num_atoms * max_num_neighbors],
+        np.inf,
+        device=device,
+        dtype=atom_distance.dtype,
+    )
 
     # Create an index map to map distances from atom_distance to distance_sort
     # index_sort_map assumes index to be sorted
@@ -163,6 +168,8 @@ def radius_graph_pbc(
 ):
     if pbc is None:
         pbc = [True, True, True]
+    else:
+        pbc = list(pbc)
     device = data.pos.device
     batch_size = len(data.natoms)
 
@@ -256,7 +263,7 @@ def radius_graph_pbc(
 
     # Tensor of unit cells
     cells_per_dim = [
-        torch.arange(-rep.item(), rep.item() + 1, device=device, dtype=torch.float)
+        torch.arange(-rep.item(), rep.item() + 1, device=device, dtype=data.cell.dtype)
         for rep in max_rep
     ]
     unit_cell = torch.cartesian_prod(*cells_per_dim)
@@ -380,7 +387,9 @@ def radius_graph_pbc_v2(
     ).long()
 
     # Create a tensor of unit cells for each image
-    unit_cell = torch.zeros(torch.sum(cells_per_image), 3, device=device)
+    unit_cell = torch.zeros(
+        torch.sum(cells_per_image), 3, device=device, dtype=data.cell.dtype
+    )
     offset = 0
     for i in range(batch_size):
         cells_x = torch.arange(
@@ -405,7 +414,6 @@ def radius_graph_pbc_v2(
     # Position of the target atoms for the edges
     target_atom_pos = atom_pos
     target_atom_image = data_batch_idxs
-    grid_atom_index = torch.zeros(754552 * 39, dtype=torch.int, device=device) - 1
 
     # Compute the position of the source atoms for the edges. There are
     # more source atoms than target atoms, since the source atoms are
