@@ -53,20 +53,29 @@ class FAIRChemCalculator(Calculator):
         Initialize the FAIRChemCalculator, downloading model checkpoints as necessary.
 
         Args:
-            checkpoint_path (str | Path | None): Path to the inference checkpoint file on the local disk. Ignored if `hf_hub_repo_id` and `hf_hub_filename` are provided.
+            checkpoint_path (str | Path | None): Path to the inference checkpoint file on the local disk. Ignored if
+            `hf_hub_repo_id` and `hf_hub_filename` are provided.
             hf_hub_repo_id (str | None): Hugging Face Hub repository ID to download the checkpoint from.
             hf_hub_filename (str | None): Filename of the checkpoint in the Hugging Face Hub repository.
-            task_name (UMATask | None): Name of the task to use if using a UMA checkpoint. Determines default key names for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'
+            task_name (UMATask | None): Name of the task to use if using a UMA checkpoint. Determines default key names
+            for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'
             device (str): Device to run the calculations on (e.g., "cuda" or "cpu"). Default is "cuda".
-            inference_settings (InferenceSettings): Defines the inference flags for the Calculator, currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in custom settings by passing an InferenceSettings object.
+            inference_settings (InferenceSettings | str): Defines the inference flags for the Calculator, currently the
+            acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed
+            for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in
+            custom settings by passing an InferenceSettings object.
             seed (int | None): Random seed for reproducibility. Default is 42.
-            max_neighbors (int | None): define a custom max neighbors per atom limit, defaults to 100, typically fairchem models are trained with 300, but we find 100 is sufficient for most applications
+            max_neighbors (int | None): define a custom max neighbors per atom limit, defaults to 100, typically
+            fairchem models are trained with 300, but we find 100 is sufficient for most applications
         Notes:
-            - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge` and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
+            - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge`
+              and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
                 - `charge` must be an integer representing the total charge on the system and can range from -100 to 100.
                 - `spin` must be an integer representing the spin multiplicity and can range from 0 to 100.
-                - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to charge=`0` and spin=`1`.
-            - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy. It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
+                - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to
+                charge=`0` and spin=`1`.
+            - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy.
+            It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """
 
         super().__init__()
@@ -99,8 +108,6 @@ class FAIRChemCalculator(Calculator):
             overrides={"backbone": {"always_use_pbc": False}},
         )
 
-        # TODO: move these to a separate function retrieve these properties
-
         self.model_tasks = self.predictor.tasks
         self.calc_property_to_model_key_mapping = {}
         logging.info(f"Available task names: {self.available_tasks}")
@@ -112,7 +119,6 @@ class FAIRChemCalculator(Calculator):
 
         self.cutoff = self.predictor.model.module.backbone.cutoff
         self.direct_force = self.predictor.model.module.backbone.direct_forces
-
         self.device = device
 
         if task_name is not None:
@@ -188,7 +194,7 @@ class FAIRChemCalculator(Calculator):
         self._task_name = task_name
         self._reset_calc_key_mapping(self._task_name)
         logging.info(
-            f"Switching task to {task_name}, the available outputs are this task are: {self.calc_property_to_model_key_mapping.keys()}"
+            f"Switching task to {task_name}, the available outputs for this task are: {self.calc_property_to_model_key_mapping.keys()}"
         )
 
     def print_warnings(self) -> None:
@@ -207,7 +213,7 @@ class FAIRChemCalculator(Calculator):
 
         if self.task_name is None and len(self.available_tasks) > 1:
             logging.warning(
-                f"task_name is not set. If you are using a UMA model, call <self.set_task_name(task_name)> before using the calculator. Available task names: {self.available_tasks}."
+                f"task_name is not set. If you are using a UMA model, call <self.task_name = task_name> before using the calculator. Available task names: {self.available_tasks}."
             )
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
@@ -246,7 +252,7 @@ class FAIRChemCalculator(Calculator):
             if self.task_name == UMATask.OMOL.value:
                 atoms.info["spin"] = DEFAULT_SPIN_OMOL
                 logging.warning(
-                    "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=0. "
+                    "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=1. "
                     "Ensure spin is an integer representing the spin multiplicity from 0 to 100."
                 )
             else:
@@ -260,18 +266,18 @@ class FAIRChemCalculator(Calculator):
             )
         if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
             raise ValueError(
-                f"Invalid value for charge: {charge}. Charge must be within the range -100 to 100."
+                f"Invalid value for charge: {charge}. Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
             )
 
         # Validate spin
         spin = atoms.info["spin"]
-        if not isinstance(atoms.info["spin"], int):
+        if not isinstance(spin, int):
             raise TypeError(
                 f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
             )
         if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
             raise ValueError(
-                f"Invalid value for spin: {spin}. Spin must be within the range 0 to 100."
+                f"Invalid value for spin: {spin}. Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
             )
 
     def calculate(
@@ -281,7 +287,7 @@ class FAIRChemCalculator(Calculator):
         Perform the calculation for the given atomic structure.
 
         Args:
-            atoms (Atoms): The atomic structure to calculate properties for. `charge
+            atoms (Atoms): The atomic structure to calculate properties for.
             properties (list[str]): The list of properties to calculate.
             system_changes (list[str]): The list of changes in the system.
 
