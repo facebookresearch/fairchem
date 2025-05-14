@@ -43,7 +43,7 @@ def test_direct_mole_inference_modes(
     wigner_cuda,
     external_graph_gen,
     direct_mole_checkpoint,
-    fake_puma_dataset,
+    fake_uma_dataset,
     torch_deterministic,
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
@@ -57,7 +57,7 @@ def test_direct_mole_inference_modes(
             external_graph_gen=external_graph_gen,
         ),
         direct_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cpu",
     )
 
@@ -80,7 +80,7 @@ def test_conserving_mole_inference_modes(
     wigner_cuda,
     external_graph_gen,
     conserving_mole_checkpoint,
-    fake_puma_dataset,
+    fake_uma_dataset,
     torch_deterministic,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
@@ -94,7 +94,7 @@ def test_conserving_mole_inference_modes(
             external_graph_gen=external_graph_gen,
         ),
         conserving_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cpu",
     )
 
@@ -121,7 +121,7 @@ def test_conserving_mole_inference_modes_gpu(
     wigner_cuda,
     external_graph_gen,
     conserving_mole_checkpoint,
-    fake_puma_dataset,
+    fake_uma_dataset,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -134,7 +134,7 @@ def test_conserving_mole_inference_modes_gpu(
             external_graph_gen=external_graph_gen,
         ),
         conserving_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cuda",
         forces_rtol=5e-2,
     )
@@ -142,49 +142,49 @@ def test_conserving_mole_inference_modes_gpu(
 
 # Test the two main modes inference and MD on CPU for direct and convserving
 def test_conserving_mole_inference_mode_default(
-    conserving_mole_checkpoint, fake_puma_dataset, torch_deterministic
+    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cpu",
     )
 
 
 def test_conserving_mole_inference_mode_md(
-    conserving_mole_checkpoint, fake_puma_dataset, torch_deterministic
+    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
         inference_settings_turbo(),
         conserving_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cpu",
     )
 
 
 def test_direct_mole_inference_mode_default(
-    direct_mole_checkpoint, fake_puma_dataset, torch_deterministic
+    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
         inference_settings_default(),
         direct_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cpu",
     )
 
 
 def test_direct_mole_inference_mode_md(
-    direct_mole_checkpoint, fake_puma_dataset, torch_deterministic
+    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
         inference_settings_turbo(),
         direct_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cpu",
     )
 
@@ -194,13 +194,13 @@ def test_direct_mole_inference_mode_md(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_default_gpu(
-    conserving_mole_checkpoint, fake_puma_dataset
+    conserving_mole_checkpoint, fake_uma_dataset
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
         inference_settings_default(),
         conserving_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cuda",
         energy_rtol=1e-4,
         forces_rtol=5e-2,
@@ -209,13 +209,13 @@ def test_conserving_mole_inference_mode_default_gpu(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_md_gpu(
-    conserving_mole_checkpoint, fake_puma_dataset
+    conserving_mole_checkpoint, fake_uma_dataset
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
         inference_settings_turbo(),
         conserving_mole_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
         device="cuda",
         energy_rtol=1e-4,
         forces_rtol=5e-2,
@@ -298,7 +298,7 @@ def test_checkpoints_work(conserving_mole_checkpoint, direct_mole_checkpoint):
 
 
 @pytest.mark.gpu()
-def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_puma_dataset):
+def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset):
     conserving_inference_checkpoint_pt, conserving_train_state_yaml = (
         conserving_mole_checkpoint
     )
@@ -310,7 +310,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_puma_dataset
         external_graph_gen=True,
     )
 
-    db = AseDBDataset(config={"src": os.path.join(fake_puma_dataset, "oc20")})
+    db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
     a2g = AtomsToGraphs(
         max_neigh=10,

@@ -14,13 +14,13 @@ import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
 
-from fairchem.core.models.puma.nn.mole import (
+from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEDGL,
     MOLEGlobals,
     norm_str_to_fn,
 )
-from fairchem.core.models.puma.nn.so2_layers import SO2_Convolution
+from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 
 fairchem_cpp_found = False
 with suppress(ModuleNotFoundError):

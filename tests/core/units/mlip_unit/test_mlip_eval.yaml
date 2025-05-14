@@ -32,11 +32,11 @@ runner:
       backbone: ${backbone}
       heads:
         oc20_energy:
-          module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
         omol_energy:
-          module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
         forces:
-          module: fairchem.core.models.puma.escn_md.Linear_Force_Head
+          module: fairchem.core.models.uma.escn_md.Linear_Force_Head
   callbacks:
     - _target_: tests.core.units.mlip_unit.test_mlip_unit.EvalEndCallback
       total_atoms: 1425

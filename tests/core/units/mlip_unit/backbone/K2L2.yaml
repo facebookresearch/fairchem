@@ -1,4 +1,4 @@
-model: fairchem.core.models.puma.escn_moe.eSCNMDMoeBackbone
+model: fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone
 moe_dropout: 0.0
 moe_layer_type: ${moe_layer_type}
 num_experts: ${num_experts} # 8
@@ -18,7 +18,7 @@ distance_function: gaussian
 num_distance_basis: 512
 regress_forces: True
 regress_stress: ${regress_stress}
-direct_forces: ${direct_forces} 
+direct_forces: ${direct_forces}
 num_layers: 2
 hidden_channels: 16
 norm_type: rms_norm_sh

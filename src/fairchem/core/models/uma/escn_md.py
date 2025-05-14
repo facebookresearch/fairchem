@@ -20,27 +20,27 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import cg_change_mat, conditional_grad, irreps_sum
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
-from fairchem.core.models.puma.common.rotation import (
+from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_mat,
     rotation_to_wigner,
 )
-from fairchem.core.models.puma.common.rotation_cuda_graph import RotMatWignerCudaGraph
-from fairchem.core.models.puma.common.so3 import CoefficientMapping, SO3_Grid
-from fairchem.core.models.puma.nn.embedding_dev import (
+from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
+from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
     DatasetEmbedding,
     EdgeDegreeEmbedding,
 )
-from fairchem.core.models.puma.nn.layer_norm import (
+from fairchem.core.models.uma.nn.layer_norm import (
     EquivariantLayerNormArray,
     EquivariantLayerNormArraySphericalHarmonics,
     EquivariantRMSNormArraySphericalHarmonics,
     EquivariantRMSNormArraySphericalHarmonicsV2,
     get_normalization_layer,
 )
-from fairchem.core.models.puma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.puma.nn.radial import GaussianSmearing
-from fairchem.core.models.puma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
+from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 
 from .escn_md_block import eSCNMD_Block
 

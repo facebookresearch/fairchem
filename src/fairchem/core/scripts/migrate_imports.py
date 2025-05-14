@@ -32,6 +32,10 @@ mapping = {
     "fairchem.experimental.foundation_models.tests.units": "tests.core.units.mlip_unit",
     "fairchem.experimental.foundation_models.components.evaluate": "fairchem.core.components.evaluate",
     "tests/units/": "tests/core/units/mlip_unit/",
+    "fairchem.core.models.puma.nn": "fairchem.core.models.uma.nn",
+    "fairchem.core.models.puma.common": "fairchem.core.models.uma.common",
+    "fairchem.core.models.puma.escn_md": "fairchem.core.models.uma.escn_md",
+    "fairchem.core.models.puma.escn_moe": "fairchem.core.models.uma.escn_moe",
 }
 
 extensions = [".yaml", ".py"]

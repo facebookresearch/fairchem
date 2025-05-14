@@ -14,7 +14,7 @@ job:
 
 act_type: s2
 ff_type: grid
-num_experts: 0 
+num_experts: 0
 bf16: False
 moe_layer_type: pytorch
 regress_stress: True
@@ -38,11 +38,11 @@ runner:
       backbone: ${backbone}
       heads:
         oc20_energy:
-          module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
         omol_energy:
-          module: fairchem.core.models.puma.escn_md.MLP_Energy_Head
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
         forces:
-          module: fairchem.core.models.puma.escn_md.Linear_Force_Head
+          module: fairchem.core.models.uma.escn_md.Linear_Force_Head
     optimizer_fn: ${optimizer}
     cosine_lr_scheduler_fn:
       _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
@@ -56,7 +56,7 @@ runner:
     bf16: ${bf16}
   max_epochs: ${max_epochs}
   max_steps: ${max_steps}
-  callbacks: 
+  callbacks:
       - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
         checkpoint_every_n_steps: ${checkpoint_every}
         max_saved_checkpoints: 10

@@ -28,11 +28,11 @@ from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
     ],
 )
 def test_direct_equivariance(
-    dtype, num_tol, rot_tol, direct_checkpoint, fake_puma_dataset
+    dtype, num_tol, rot_tol, direct_checkpoint, fake_uma_dataset
 ):
     direct_inference_checkpoint_pt, _ = direct_checkpoint
     equivariance_on_pt(
-        dtype, num_tol, rot_tol, direct_inference_checkpoint_pt, fake_puma_dataset
+        dtype, num_tol, rot_tol, direct_inference_checkpoint_pt, fake_uma_dataset
     )
 
 
@@ -44,11 +44,11 @@ def test_direct_equivariance(
     ],
 )
 def test_direct_mole_equivariance(
-    dtype, num_tol, rot_tol, direct_mole_checkpoint, fake_puma_dataset
+    dtype, num_tol, rot_tol, direct_mole_checkpoint, fake_uma_dataset
 ):
     direct_mole_inference_checkpoint_pt, _ = direct_mole_checkpoint
     equivariance_on_pt(
-        dtype, num_tol, rot_tol, direct_mole_inference_checkpoint_pt, fake_puma_dataset
+        dtype, num_tol, rot_tol, direct_mole_inference_checkpoint_pt, fake_uma_dataset
     )
 
 
@@ -60,7 +60,7 @@ def test_direct_mole_equivariance(
     ],
 )
 def test_conserving_mole_equivariance(
-    dtype, num_tol, rot_tol, conserving_mole_checkpoint, fake_puma_dataset
+    dtype, num_tol, rot_tol, conserving_mole_checkpoint, fake_uma_dataset
 ):
     conserving_mole_inference_checkpoint_pt, _ = conserving_mole_checkpoint
     equivariance_on_pt(
@@ -68,7 +68,7 @@ def test_conserving_mole_equivariance(
         num_tol,
         rot_tol,
         conserving_mole_inference_checkpoint_pt,
-        fake_puma_dataset,
+        fake_uma_dataset,
     )
 
 

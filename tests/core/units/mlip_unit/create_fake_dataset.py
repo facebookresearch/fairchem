@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import os
@@ -14,7 +15,6 @@ import torch
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.db import connect
-
 
 fake_elements = (
     "H",
@@ -66,7 +66,6 @@ class FakeDatasetConfig:
         }
 
 
-
 def calculate_forces_repulsive_force_field(atoms):
     positions = torch.tensor(atoms.positions)
     dists = torch.cdist(positions, positions)
@@ -105,9 +104,9 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
             fake_dataset_config.system_size_range[0],
             fake_dataset_config.system_size_range[1] + 1,
         )
-        
+
         # 0.1 atoms per A^3
-        sys_size = (n_atoms * 10) ** (1/3)
+        sys_size = (n_atoms * 10) ** (1 / 3)
         atom_positions = np.random.uniform(0, sys_size, (n_atoms, 3))
         if fake_dataset_config.pbc:
             pbc = True
@@ -116,8 +115,10 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
             pbc = False
             cell = None
         atom_symbols = np.random.choice(fake_elements, size=n_atoms)
-        atoms = Atoms(symbols=atom_symbols, positions=atom_positions, cell=cell, pbc=pbc)
-                
+        atoms = Atoms(
+            symbols=atom_symbols, positions=atom_positions, cell=cell, pbc=pbc
+        )
+
         forces = calculate_forces_repulsive_force_field(atoms)
         energy = compute_energy(atoms)
         systems.append({"atoms": atoms, "forces": forces, "energy": energy})
@@ -148,8 +149,8 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
 
         atoms.info["extensive_property"] = 3 * len(atoms)
         atoms.info["tensor_property"] = np.random.random((6, 6))
-        atoms.info['charge'] =  np.random.randint(-10,10)
-        atoms.info['spin'] =  np.random.randint(0,2)
+        atoms.info["charge"] = np.random.randint(-10, 10)
+        atoms.info["spin"] = np.random.randint(0, 2)
 
         structures.append(atoms)
     return structures
@@ -183,7 +184,7 @@ def create_fake_dataset(fake_dataset_config: FakeDatasetConfig):
     return
 
 
-def create_fake_puma_dataset(tmpdirname: str, train_size: int = 14, val_size: int = 10):
+def create_fake_uma_dataset(tmpdirname: str, train_size: int = 14, val_size: int = 10):
     systems_per_dataset = {"train": train_size, "val": val_size}
     dataset_configs = {
         "oc20": {
@@ -227,4 +228,3 @@ def create_fake_puma_dataset(tmpdirname: str, train_size: int = 14, val_size: in
         for fake_dataset_config in train_and_val_fake_dataset_configs.values():
             create_fake_dataset(fake_dataset_config)
     return tmpdirname
-
