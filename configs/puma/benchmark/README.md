@@ -92,6 +92,6 @@ fairchem -c configs/uma/benchmark/adsorbml.yaml checkpoint=uma_sm cluster=h100
 
 ## NVE MD conservation
 ```bash
-fairchem -c configs/uma/benchmark/nvemd_materials.yaml checkpoint=uma_sm cluster=h100
-fairchem -c configs/uma/benchmark/nvemd_molecules.yaml checkpoint=uma_sm cluster=h100
+fairchem -c configs/uma/benchmark/nvemd-materials.yaml checkpoint=uma_sm cluster=h100
+fairchem -c configs/uma/benchmark/nvemd-molecules.yaml checkpoint=uma_sm cluster=h100
 ```

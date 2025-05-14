@@ -33,11 +33,9 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.adsorption_runner.AdsorptionRunner
   calculator:
-    _target_: fairchem.core.common.calculator.MLIPCalculator
-    inference_ckpt_path: ${checkpoint.ckpt_path}
-    dataset_name: oc20
-    energy_key: oc20_energy
-    forces_key: oc20_forces
+    _target_: fairchem.core.common.calculator.FAIRChemCalculator
+    checkpoint_path: ${checkpoint.ckpt_path}
+    task_name: oc20
     act_ckpt: False
   save_relaxed_atoms: False
   relax_surface: True

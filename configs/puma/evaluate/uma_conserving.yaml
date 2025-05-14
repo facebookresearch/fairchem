@@ -1,7 +1,7 @@
 defaults:
   - cluster: h100
   - dataset: uma
-  - element_refs: uma_hof_lin_refs
+  - element_refs: uma_v1_hof_lin_refs
   - tasks: uma_conserving
   - checkpoint: uma_sm
   - _self_
@@ -11,10 +11,10 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 8
+    num_nodes: 16
     slurm:
       account: ${cluster.account}
-      qos: ${cluster.qos}
+      qos: ocp_high
       mem_gb: ${cluster.mem_gb}
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
@@ -31,7 +31,7 @@ cutoff_radius: 6
 max_atoms: 350
 
 cpu_graph: True
-normalizer_rmsd: 1.568 # v0 # 1.422 v1
+normalizer_rmsd: 1.423
 
 energy_coef: 20
 force_coef: 2
@@ -61,7 +61,7 @@ exclude_keys: [
 eval_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    osc: ${dataset.osc}
+    osc: ${dataset.omc}
     omol_preview: ${dataset.omol_preview}
     omol: ${dataset.omol}
     odac: ${dataset.odac}

@@ -31,11 +31,9 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
   calculator:
-    _target_: fairchem.core.common.calculator.MLIPCalculator
-    inference_ckpt_path: ${checkpoint.ckpt_path}
-    dataset_name: odac
-    energy_key: odac_energy
-    forces_key: odac_forces
+    _target_: fairchem.core.common.calculator.FAIRChemCalculator
+    checkpoint_path: ${checkpoint.ckpt_path}
+    task_name: odac
     act_ckpt: True
   evaluate_total_energy: False
   adsorption_energy_model: False
