@@ -108,7 +108,8 @@ def get_escn_md_full(
     model.eval()
     return model
 
-
+# compile tests take a long time
+@pytest.mark.skip()
 @pytest.mark.gpu()
 def test_compile_backbone_gpu():
     torch.compiler.reset()

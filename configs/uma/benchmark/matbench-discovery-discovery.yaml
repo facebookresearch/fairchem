@@ -1,0 +1,55 @@
+defaults:
+  - cluster: v100
+  - checkpoint: uma_sm_mpa
+  - _self_
+
+benchmark_name: matbench-discovery
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 2000
+    slurm:
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+
+runner:
+  _target_: fairchem.core.components.calculate.relaxation_runner.RelaxationRunner
+  calculator:
+    _target_: fairchem.core.common.calculator.FAIRChemCalculator
+    checkpoint_path: ${checkpoint.ckpt_path}
+    task_name: omat
+  input_data:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      src: ${cluster.data_root_dir}/materials/matbench-discovery/WBM_IS2RE.aselmdb
+  save_relaxed_atoms: True
+  calculate_properties: ["energy"]
+  fmax: 0.02
+  steps: 500
+  optimizer_cls:
+    _target_: ase.optimize.FIRE
+    _partial_: True
+  cell_filter_cls:
+    _target_: ase.filters.FrechetCellFilter
+    _partial_: True
+
+reducer:
+  _target_: fairchem.core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer
+  benchmark_name: ${benchmark_name}
+  target_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2023-12-13-wbm-summary.csv.gz
+  cse_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2022-10-19-wbm-computed-structure-entries.jsonl.gz
+  elemental_references_path: ${cluster.data_root_dir}/materials/matbench-discovery/2023-02-07-mp-elemental-reference-entries.json.gz

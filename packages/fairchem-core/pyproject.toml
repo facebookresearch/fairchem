@@ -27,8 +27,8 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "pydantic>=2.10.0",
     "torch_geometric@git+https://github.com/pyg-team/pytorch_geometric.git@2cc28ed9b6c9b649c873070e1e53e7523efd8708",
-    "ase@git+https://gitlab.com/ase/ase.git@4a5e1f69979f9f5463a82001245e5471364adcf1",
-    "ase-db-backends@git+https://gitlab.com/ase/ase-db-backends.git@2fda57e952c0d1cd2fd511eee5a2659f85ebe64a",
+    "ase>=3.25.0",
+    "ase-db-backends>=0.10.0",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]

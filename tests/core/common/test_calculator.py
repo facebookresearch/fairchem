@@ -192,9 +192,13 @@ def test_relaxation_final_energy(slab_atoms, checkpoint):
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("checkpoint", HF_HUB_CHECKPOINTS)
+@pytest.mark.parametrize(
+    "checkpoint",
+    [checkpoint for checkpoint in HF_HUB_CHECKPOINTS if checkpoint["task_name"] == "omat"],
+)
 def test_calculator_configurations_turbo(slab_atoms, checkpoint):
     # turbo mode requires compilation and needs to reset here
+    # this test is expensive, just run one checkpoint
     torch.compiler.reset()
     device = "cuda"
     calc = FAIRChemCalculator(

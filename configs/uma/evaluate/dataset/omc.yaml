@@ -1,0 +1,25 @@
+snapshot_dir: fm_training/dataset_sync_250225
+
+omc:
+  splits:
+    test:
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/csp/250225/test/
+    val:
+      src: ${cluster.data_root_dir}/${dataset.snapshot_dir}/csp/250225/val/
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: ${regress_stress}
+    r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omc_energy
+    forces: ${omc_forces_key}
+    stress: omc_stress
+  transforms:
+    common_transform:
+      dataset_name: omc
+    stress_reshape_transform:
+      dataset_name: omc
