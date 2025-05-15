@@ -32,7 +32,6 @@ runner:
     _target_: fairchem.core.common.calculator.FAIRChemCalculator
     checkpoint_path: ${checkpoint.ckpt_path}
     task_name: omol
-    act_ckpt: True
     a2g_kwargs:
       molecule_cell_size: 200.
   input_data:

@@ -36,7 +36,6 @@ runner:
     _target_: fairchem.core.common.calculator.FAIRChemCalculator
     checkpoint_path: ${checkpoint.ckpt_path}
     task_name: oc20
-    act_ckpt: False
   save_relaxed_atoms: False
   relax_surface: True
   fmax: 0.02

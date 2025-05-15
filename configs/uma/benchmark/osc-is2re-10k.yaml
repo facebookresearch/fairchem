@@ -32,7 +32,6 @@ runner:
     _target_: fairchem.core.common.calculator.FAIRChemCalculator
     checkpoint_path: ${checkpoint.ckpt_path}
     task_name: omc
-    act_ckpt: true
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:

@@ -32,7 +32,7 @@ runner:
     _target_: fairchem.core.common.calculator.FAIRChemCalculator
     checkpoint_path: ${checkpoint.ckpt_path}
     task_name: omat
-    act_ckpt: True
+
   input_data:
     _target_: fairchem.core.components.calculate.nve_md_runner.get_nve_md_data
     dataset_root: ${cluster.data_root_dir}/md
