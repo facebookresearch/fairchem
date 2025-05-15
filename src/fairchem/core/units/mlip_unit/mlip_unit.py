@@ -857,7 +857,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
-        self._seed = seed
+        self.seed(seed)
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -912,11 +912,6 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             torch.backends.cudnn.allow_tf32 = True
             torch.set_float32_matmul_precision("high")
 
-    @property
-    def seed(self) -> int:
-        return self._seed
-
-    @seed.setter
     def seed(self, seed: int | None) -> None:
         logging.info(f"Setting random seed to {seed}")
         self._seed = seed
