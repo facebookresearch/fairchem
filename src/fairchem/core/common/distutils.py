@@ -1,5 +1,5 @@
 """
-Copyright (c) Meta, Inc. and its affiliates.
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -16,18 +16,58 @@ from typing import Any, TypeVar
 import torch
 import torch.distributed as dist
 from torch.distributed.elastic.utils.distributed import get_free_port
+from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
 
 from fairchem.core.common.typing import none_throws
 
 T = TypeVar("T")
 DISTRIBUTED_PORT = 13356
-CURRENT_DEVICE_STR = "CURRRENT_DEVICE"
+CURRENT_DEVICE_TYPE_STR = "CURRRENT_DEVICE_TYPE"
 
 
 def os_environ_get_or_throw(x: str) -> str:
     if x not in os.environ:
         raise RuntimeError(f"Could not find {x} in ENV variables")
     return none_throws(os.environ.get(x))
+
+
+def get_init_method(
+    init_method,
+    world_size: int | None,
+    rank: int | None = None,
+    node_list: str | None = None,
+    filename: str | None = None,
+):
+    """
+    Get the initialization method for a distributed job based on the specified method type.
+
+    Args:
+        init_method: The initialization method type, either "tcp" or "file".
+        world_size: The total number of processes in the distributed job.
+        rank: The rank of the current process (optional).
+        node_list: The list of nodes for SLURM-based distributed job (optional, used with "tcp").
+        filename: The shared file path for file-based initialization (optional, used with "file").
+
+    Returns:
+        The initialization method string to be used by PyTorch's distributed module.
+
+    Raises:
+        ValueError: If an invalid init_method is provided.
+    """
+    if init_method == "tcp":
+        hostnames = subprocess.check_output(
+            ["scontrol", "show", "hostnames", node_list]
+        )
+        return get_tcp_init_method(
+            world_size=world_size,
+            hostname=hostnames.split()[0].decode("utf-8"),
+            rank=rank,
+            port=get_free_port() if world_size == 1 else DISTRIBUTED_PORT,
+        )
+    elif init_method == "file":
+        return get_file_init_method(world_size=world_size, rank=rank, filename=filename)
+    else:
+        raise ValueError(f"Invalid init_method: {init_method}")
 
 
 def setup(config) -> None:
@@ -38,16 +78,6 @@ def setup(config) -> None:
             node_list = os.environ.get("SLURM_JOB_NODELIST")
         if node_list is not None:
             try:
-                hostnames = subprocess.check_output(
-                    ["scontrol", "show", "hostnames", node_list]
-                )
-                config["init_method"] = "tcp://{host}:{port}".format(
-                    host=hostnames.split()[0].decode("utf-8"),
-                    # a fixed DISTRIBUTED_PORT works if a full node is used, otherwise we can get port clashes
-                    port=get_free_port()
-                    if config["world_size"] == 1
-                    else DISTRIBUTED_PORT,
-                )
                 nnodes = int(os_environ_get_or_throw("SLURM_NNODES"))
                 ntasks_per_node = os.environ.get("SLURM_NTASKS_PER_NODE")
                 if ntasks_per_node is not None:
@@ -61,80 +91,53 @@ def setup(config) -> None:
                     assert config["world_size"] % nnodes == 0
                     gpus_per_node = config["world_size"] // nnodes
                     node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
-                    config["rank"] = node_id * gpus_per_node
-                    config["local_rank"] = 0
+                    rank = node_id * gpus_per_node
+                    local_rank = 0
                 else:
                     assert ntasks_per_node == config["world_size"] // nnodes
-                    config["rank"] = int(os_environ_get_or_throw("SLURM_PROCID"))
-                    config["local_rank"] = int(os_environ_get_or_throw("SLURM_LOCALID"))
+                    rank = int(os_environ_get_or_throw("SLURM_PROCID"))
+                    local_rank = int(os_environ_get_or_throw("SLURM_LOCALID"))
 
-                logging.info(
-                    f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
+                init_method = get_init_method(
+                    config["init_method"],
+                    world_size=config["world_size"],
+                    rank=rank,
+                    node_list=node_list,
+                    filename=os.path.join(
+                        config["shared_file_dir"],
+                        f".distributed-shared-file-{config['array_job_num']}",
+                    ),
                 )
+                logging.info(f"Torch distributed initialized with: {init_method}")
 
                 # ensures GPU0 does not have extra context/higher peak memory
                 logging.info(
-                    f"local rank: {config['local_rank']}, visible devices: {os.environ['CUDA_VISIBLE_DEVICES']}"
+                    f"local rank: {local_rank}, visible devices: {os.environ.get('CUDA_VISIBLE_DEVICES', 'None')}"
                 )
 
-                # In the new hydra runners, we setup the device for each rank as either cuda:0 or cpu
-                # after this point, the local rank should either be using "cpu" or "cuda"
-                if config.get("use_cuda_visibile_devices"):
-                    assign_device_for_local_rank(config["cpu"], config["local_rank"])
-                else:
-                    # in the old code, all ranks can see all devices but need to be assigned a device equal to their local rank
-                    # this is dangerous and should be deprecated, however, FSDP still requires backwards compatibility with
-                    # initializing this way for now so we need to keep it
-                    torch.cuda.set_device(config["local_rank"])
+                assign_device_for_local_rank(config["cpu"], local_rank)
 
                 dist.init_process_group(
                     backend="nccl",
-                    init_method=config["init_method"],
-                    world_size=config["world_size"],
-                    rank=config["rank"],
+                    init_method=init_method,
                     timeout=timeout,
                 )
             except subprocess.CalledProcessError as e:  # scontrol failed
                 raise e
             except FileNotFoundError:  # Slurm is not installed
                 pass
-    elif config["summit"]:
-        world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
-        world_rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
-        get_master = (
-            "echo $(cat {} | sort | uniq | grep -v batch | grep -v login | head -1)"
-        ).format(os.environ["LSB_DJOB_HOSTFILE"])
-        os.environ["MASTER_ADDR"] = str(
-            subprocess.check_output(get_master, shell=True)
-        )[2:-3]
-        os.environ["MASTER_PORT"] = "23456"
-        os.environ["WORLD_SIZE"] = os.environ["OMPI_COMM_WORLD_SIZE"]
-        os.environ["RANK"] = os.environ["OMPI_COMM_WORLD_RANK"]
-        # NCCL and MPI initialization
-        dist.init_process_group(
-            backend="nccl",
-            rank=world_rank,
-            world_size=world_size,
-            init_method="env://",
-            timeout=timeout,
-        )
-    else:
-        if not os.environ.get("MASTER_ADDR"):
+    else:  # local mode
+        if "MASTER_ADDR" not in os.environ:
             assert (
                 config["world_size"] == 1
             ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
             setup_env_local()
-        config["local_rank"] = int(os.environ.get("LOCAL_RANK"))
-        if config.get("use_cuda_visibile_devices"):
-            assign_device_for_local_rank(config["cpu"], config["local_rank"])
-        elif torch.cuda.is_available():
-            # in the old code, all ranks can see all devices but need to be assigned a device equal to their local rank
-            # this is dangerous and should be deprecated, however, FSDP still requires backwards compatibility with
-            # initializing this way for now so we need to keep it
-            torch.cuda.set_device(config["local_rank"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        assign_device_for_local_rank(config["cpu"], local_rank)
+
         dist.init_process_group(
             backend=config["distributed_backend"],
-            rank=int(os.environ.get("RANK")),
+            rank=int(os.environ["RANK"]),
             world_size=config["world_size"],
             timeout=timeout,
         )
@@ -143,6 +146,8 @@ def setup(config) -> None:
 def cleanup() -> None:
     if dist.is_initialized():
         dist.destroy_process_group()
+    if CURRENT_DEVICE_TYPE_STR in os.environ:
+        os.environ.pop(CURRENT_DEVICE_TYPE_STR)
 
 
 def initialized() -> bool:
@@ -230,25 +235,34 @@ def gather_objects(data: T, group: dist.ProcessGroup = dist.group.WORLD) -> list
     return output
 
 
-def assign_device_for_local_rank(cpu: bool, local_rank: int):
+def assign_device_for_local_rank(cpu: bool, local_rank: int) -> None:
     if cpu:
-        os.environ[CURRENT_DEVICE_STR] = "cpu"
+        os.environ[CURRENT_DEVICE_TYPE_STR] = "cpu"
     else:
-        # assert the cuda device to be the local rank
-        os.environ[CURRENT_DEVICE_STR] = "cuda"
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(local_rank)
+        assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
+        os.environ[CURRENT_DEVICE_TYPE_STR] = "cuda"
+        torch.cuda.set_device(local_rank)
 
 
-def get_device_for_local_rank():
-    cur_dev_env = os.environ.get(CURRENT_DEVICE_STR)
-    if cur_dev_env is not None:
-        return cur_dev_env
-    else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logging.warning(
-            f"{CURRENT_DEVICE_STR} env variable not found, defaulting to {device}"
+def get_device_for_local_rank() -> str:
+    if os.environ.get(CURRENT_DEVICE_TYPE_STR) is None:
+        os.environ[CURRENT_DEVICE_TYPE_STR] = (
+            f"cuda:{torch.cuda.current_device()}"
+            if torch.cuda.is_available()
+            else "cpu"
         )
-        return device
+        logging.warning(
+            f"WARNING: assign_device_for_local_rank was never called, automatically defaulting to using {os.environ[CURRENT_DEVICE_TYPE_STR]}"
+        )
+        return os.environ[CURRENT_DEVICE_TYPE_STR]
+
+    if "cuda" in os.environ[CURRENT_DEVICE_TYPE_STR]:
+        assert torch.cuda.is_available(), "cannot set cpu=false and no cuda available!"
+        return f"cuda:{torch.cuda.current_device()}"
+    elif os.environ[CURRENT_DEVICE_TYPE_STR] == "cpu":
+        return "cpu"
+    else:
+        raise ValueError(f"unsupported device type: {CURRENT_DEVICE_TYPE_STR}")
 
 
 def setup_env_local():

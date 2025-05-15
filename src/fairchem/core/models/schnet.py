@@ -1,5 +1,5 @@
 """
-Copyright (c) Meta, Inc. and its affiliates.
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -12,11 +12,11 @@ from torch_geometric.nn import SchNet
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
-from fairchem.core.models.base import GraphModelMixin
+from fairchem.core.graph.compute import generate_graph
 
 
 @registry.register_model("schnet")
-class SchNetWrap(SchNet, GraphModelMixin):
+class SchNetWrap(SchNet):
     r"""Wrapper around the continuous-filter convolutional neural network SchNet from the
     `"SchNet: A Continuous-filter Convolutional Neural Network for Modeling
     Quantum Interactions" <https://arxiv.org/abs/1706.08566>`_. Each layer uses interaction
@@ -84,7 +84,15 @@ class SchNetWrap(SchNet, GraphModelMixin):
         z = data.atomic_numbers.long()
         pos = data.pos
         batch = data.batch
-        graph = self.generate_graph(data)
+        graph = generate_graph(
+            data,
+            cutoff=self.cutoff,
+            max_neighbors=self.max_neighbors,
+            use_pbc=self.use_pbc,
+            otf_graph=self.otf_graph,
+            enforce_max_neighbors_strictly=False,
+            use_pbc_single=self.use_pbc_single,
+        )
 
         if self.use_pbc:
             assert z.dim() == 1

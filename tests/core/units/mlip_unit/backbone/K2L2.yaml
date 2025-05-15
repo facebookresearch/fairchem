@@ -1,0 +1,27 @@
+model: fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone
+moe_dropout: 0.0
+moe_layer_type: ${moe_layer_type}
+num_experts: ${num_experts} # 8
+use_global_embedding: False
+use_composition_embedding: True
+max_num_elements: 100
+sphere_channels: 16
+lmax: 2
+mmax: 2
+otf_graph: True
+max_neighbors: ${max_neighbors}
+use_pbc: True
+use_pbc_single: True
+cutoff: 12.0
+edge_channels: 16
+distance_function: gaussian
+num_distance_basis: 512
+regress_forces: True
+regress_stress: ${regress_stress}
+direct_forces: ${direct_forces}
+num_layers: 2
+hidden_channels: 16
+norm_type: rms_norm_sh
+act_type: ${act_type} #s2
+ff_type: ${ff_type} #grid
+dataset_list: ["oc20", "omol"]

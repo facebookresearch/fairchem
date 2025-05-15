@@ -1,3 +1,9 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 # dataclasses_json breaks if using __future__.annotations, so keep 3.9 typing annotations for compatibility
 from dataclasses import dataclass, field
 from enum import Enum

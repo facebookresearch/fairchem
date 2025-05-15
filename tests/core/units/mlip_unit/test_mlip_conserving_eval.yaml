@@ -1,0 +1,51 @@
+defaults:
+  - datasets: aselmdb_conserving_eval
+  - tasks: oc20_omol_conserving
+  - backbone: K2L2
+  - _self_
+
+max_neighbors: 20
+regress_stress: True
+direct_forces: True
+num_experts: 0
+moe_layer_type: pytorch
+act_type: s2
+ff_type: grid
+
+job:
+  device_type: CPU
+  scheduler:
+    mode: LOCAL
+    distributed_init_method: FILE
+
+oc20_energy_mae: null
+omol_energy_mae: null
+
+
+heads:
+  energyandforcehead:
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificMoEWrapper
+    head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
+    head_kwargs:
+      wrap_property: False
+    dataset_names:
+      - omol
+      - oc20
+
+runner:
+  _target_: fairchem.core.components.evaluate.eval_runner.EvalRunner
+  dataloader: ${datasets.val_dataloader}
+  eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.models.base.HydraModel
+      backbone: ${backbone}
+      heads: ${heads}
+      pass_through_head_outputs: True
+  callbacks:
+    - _target_: tests.core.units.mlip_unit.test_mlip_unit.EvalEndCallbackASELMDB
+      total_atoms: 90
+      oc20_energy_mae: ${oc20_energy_mae}
+      omol_energy_mae: ${omol_energy_mae}

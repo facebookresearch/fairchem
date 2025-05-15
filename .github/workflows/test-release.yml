@@ -24,7 +24,7 @@ jobs:
 
   release-core:
     needs: [ build ]
-    runs-on: ubuntu-latest
+    runs-on: 32-core-ubuntu
     if: |
       github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_core-')
 

@@ -1,0 +1,94 @@
+
+data_root_dir: "."
+cpu_graph: false
+
+oc20_forces_key: oc20_forces
+omol_forces_key: omol_forces
+
+max_atoms: 21
+
+exclude_keys: [
+  "id", # only oc20,oc22 have this
+  "fid", # only oc20,oc22 have this
+  "absolute_idx", # only ani has this
+  "target_pos", # only ani has this
+  "ref_energy", # only ani/geom have this
+  "pbc", # only ani/transition1x have this
+  "nads", # oc22
+  "oc22", # oc22
+  "formation_energy", # spice
+  "total_charge", # spice
+]
+
+
+
+omol_val:
+  splits:
+    train:
+      first_n: 5
+      src:
+        - ${datasets.data_root_dir}/omol/omol_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    max_neigh: ${max_neighbors}
+    molecule_cell_size: 120.0
+  key_mapping:
+    energy: omol_energy
+    forces: ${datasets.omol_forces_key}
+    stress: omol_stress
+  transforms:
+    common_transform:
+      dataset_name: omol
+    stress_reshape_transform:
+      dataset_name: omol
+
+
+oc20_val:
+  splits:
+    train:
+      first_n: 5
+      src:
+        - ${datasets.data_root_dir}/oc20/oc20_val.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+    r_edges: ${datasets.cpu_graph}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: oc20_energy
+    forces: ${datasets.oc20_forces_key}
+    stress: oc20_stress
+  transforms:
+    common_transform:
+      dataset_name: oc20
+    stress_reshape_transform:
+      dataset_name: oc20
+
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol: ${datasets.omol_val}
+    oc20: ${datasets.oc20_val}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+val_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${datasets.val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${datasets.max_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: 0
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${datasets.exclude_keys}

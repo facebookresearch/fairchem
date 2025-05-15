@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -8,12 +15,174 @@ from fairchem.core.common.utils import cg_change_mat, irreps_sum
 
 if TYPE_CHECKING:
     from torch_geometric.data import Data
-from contextlib import suppress
 
-with suppress(ImportError):
-    # TODO remove this in favor of a better solution
-    # We should never be importing * from a module
-    from fairchem.experimental.foundation_models.multi_task_dataloader.transforms.data_object import *  # noqa
+import numpy as np
+from ase import Atoms
+
+
+def _get_molecule_cell(data_object: Data):
+    # create an Atoms object and center molecule in cell
+    mol = Atoms(
+        numbers=data_object.atomic_numbers,
+        positions=data_object.pos,
+    )
+    # largest radius cutoff is ~12A include that and a safety factor of 10
+    mol.center(vacuum=(12.0 * 10.0))
+    mol.pbc = [True, True, True]
+
+    positions = np.array(mol.get_positions(), copy=True)
+    # pbc = np.array(mol.pbc, copy=True)
+    cell = np.array(mol.get_cell(complete=True), copy=True)
+
+    atomic_numbers = torch.Tensor(mol.get_atomic_numbers())
+    positions = torch.from_numpy(positions).float()
+    cell = torch.from_numpy(cell).view(1, 3, 3).float()
+    natoms = positions.shape[0]
+    assert data_object.natoms == natoms
+
+    return atomic_numbers, positions, cell
+
+
+def common_transform(data_object: Data, config) -> Data:
+    data_object.dataset = config["dataset_name"]
+
+    if not hasattr(data_object, "charge"):
+        data_object.charge = 0
+    if not hasattr(data_object, "spin"):
+        data_object.spin = 0
+    ensure_tensor(data_object, "energy")
+    return data_object
+
+
+def ensure_tensor(data_object, keys):
+    # ensure dataset_energy is a tensor
+    if isinstance(keys, str):
+        keys = [keys]
+    for key in keys:
+        if hasattr(data_object, key):
+            if not torch.is_tensor(getattr(data_object, key)):
+                setattr(
+                    data_object,
+                    key,
+                    torch.tensor(getattr(data_object, key), dtype=torch.float),
+                )
+            setattr(data_object, key, getattr(data_object, key).view(-1).float())
+    return data_object
+
+
+def ani1x_transform(data_object: Data, config) -> Data:
+    # make periodic with molecule centered in large cell
+    atomic_numbers, positions, cell = _get_molecule_cell(data_object)
+    data_object.atomic_numbers = atomic_numbers
+    data_object.pos = positions
+    data_object.cell = cell
+
+    # add fixed
+    data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
+
+    # common transforms
+    data_object = common_transform(data_object, config)
+
+    # ensure ani1x_energy is a tensor
+    return data_object
+
+
+def trans1x_transform(data_object: Data, config) -> Data:
+    # make periodic with molecule centered in large cell
+    atomic_numbers, positions, cell = _get_molecule_cell(data_object)
+    data_object.atomic_numbers = atomic_numbers
+    data_object.pos = positions
+    data_object.cell = cell
+
+    # add fixed and cell
+    data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
+
+    # common transforms
+    data_object = common_transform(data_object, config)
+
+    # ensure trans1x_energy is a tensor
+
+    return data_object
+
+
+def spice_transform(data_object: Data, config) -> Data:
+    # make periodic with molecule centered in large cell
+    atomic_numbers, positions, cell = _get_molecule_cell(data_object)
+    data_object.atomic_numbers = atomic_numbers
+    data_object.pos = positions
+    data_object.cell = cell
+
+    # add fixed
+    data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
+
+    # common transforms
+    data_object = common_transform(data_object, config)
+    # this is necessary for SPICE maceoff split to work with GemNet-OC
+    data_object.tags = torch.full(data_object.tags.shape, 2, dtype=torch.long)
+
+    # ensure spice_energy is a tensor
+
+    return data_object
+
+
+def qmof_transform(data_object: Data, config) -> Data:
+    # add fixed and cell
+    data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
+
+    # common transforms
+    data_object = common_transform(data_object, config)
+
+    return data_object
+
+
+def qm9_transform(data_object: Data, config) -> Data:
+    # make periodic with molecule centered in large cell
+    atomic_numbers, positions, cell = _get_molecule_cell(data_object)
+    data_object.atomic_numbers = atomic_numbers
+    data_object.pos = positions
+    data_object.cell = cell
+
+    # add fixed
+    data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
+
+    # common transforms
+    data_object = common_transform(data_object, config)
+
+    return data_object
+
+
+def omol_transform(data_object: Data, config) -> Data:
+    # make periodic with molecule centered in large cell
+    atomic_numbers, positions, cell = _get_molecule_cell(data_object)
+    data_object.atomic_numbers = atomic_numbers
+    data_object.pos = positions
+    data_object.cell = cell
+    assert hasattr(
+        data_object, "charge"
+    ), "no charge in omol dataset set a2g_args: {r_energy: True, r_forces: True, r_data_keys: ['spin', 'charge']}"
+    assert hasattr(
+        data_object, "spin"
+    ), "no spin in omol dataset set a2g_args: {r_energy: True, r_forces: True, r_data_keys: ['spin', 'charge']}"
+
+    # add fixed
+    data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
+
+    return common_transform(data_object, config)
+
+
+def stress_reshape_transform(data_object: Data, config) -> Data:
+    for k in data_object.keys():  # noqa: SIM118
+        if "stress" in k and ("iso" not in k and "aniso" not in k):
+            data_object[k] = data_object[k].reshape(1, 9)
+    return data_object
+
+
+def asedb_transform(data_object: Data, config) -> Data:
+    data_object.dataset = config["dataset_name"]
+    data_object.sid = str(
+        data_object.sid.item() if torch.is_tensor(data_object) else data_object.sid
+    )
+    return data_object
 
 
 class DataTransforms:

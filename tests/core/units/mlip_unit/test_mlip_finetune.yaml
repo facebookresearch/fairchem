@@ -1,0 +1,55 @@
+defaults:
+  - datasets: pickle
+  - tasks: oc20_omol
+  - optimizer: adamw
+  - _self_
+
+job:
+  device_type: CPU
+  scheduler:
+    mode: LOCAL
+    distributed_init_method: FILE
+  debug: True
+
+expected_loss: null
+
+model:
+  _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
+  checkpoint_location: ???
+  overrides:
+    backbone:
+      max_neighbors: 300
+      dataset_list: ["oc20", "omol"]
+  heads:
+    oc20_energy:
+      module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+    omol_energy:
+      module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+    forces:
+      module: fairchem.core.models.uma.escn_md.Linear_Force_Head
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${datasets.train_dataloader}
+  eval_dataloader: ${datasets.val_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model: ${model}
+    optimizer_fn: ${optimizer}
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 1
+      lr_min_factor: 0.01
+      epochs: 1
+    print_every: 1
+    clip_grad_norm: 100
+  max_epochs: ${runner.train_eval_unit.cosine_lr_scheduler_fn.epochs}
+  callbacks:
+    - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
+      expected_loss: ${expected_loss}
+      expected_max_steps: null
+      expected_max_epochs: null

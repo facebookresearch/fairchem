@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -5,7 +12,13 @@ import logging
 from pathlib import Path
 from urllib.request import urlretrieve
 
-from fairchem.core.common.tutorial_utils import fairchem_root
+
+def fairchem_root():
+    """Return the root directory of the installed fairchem-core package."""
+    import fairchem.core
+
+    return Path(fairchem.core.__file__).parent.parent
+
 
 S3_ROOT = "https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/"
 

@@ -1,11 +1,16 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
-import contextlib
 import os
 import platform
 import subprocess
 import sys
-from io import StringIO
 from pathlib import Path
 
 import ase
@@ -18,26 +23,13 @@ import torch
 import torch.cuda as tc
 import torch_geometric as tg
 from ase.db import connect
-from yaml import dump
 
 import fairchem.core as om
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
-
-
-def fairchem_root():
-    """Return the root directory of the installed fairchem-core package."""
-    return Path(om.__file__).parent.parent
-
-
-def fairchem_main():
-    """Return the path to fairchem main.py"""
-    return fairchem_root() / "../../main.py"
 
 
 def describe_fairchem():
     """Print some system information that could be useful in debugging."""
     print(sys.executable, sys.version)
-    print(f"fairchem is installed at {fairchem_root()}")
 
     commit_hash = (
         subprocess.check_output(
@@ -129,56 +121,3 @@ def train_test_val_split(
         val.write(row.toatoms(add_additional_information=True))
 
     return [Path(f).absolute() for f in files]
-
-
-def generate_yml_config(checkpoint_path, yml="run.yml", delete=(), update=()):
-    """Generate a yml config file from an existing checkpoint file.
-
-    checkpoint_path: string to path of an existing checkpoint
-    yml: name of file to write to.
-    pop: list of keys to remove from the config
-    update: dictionary of key:values to update
-
-    Use a dot notation in update.
-
-    Returns an absolute path to the generated yml file.
-    """
-
-    # You can't just read in the checkpoint with torch. The calculator does some things to it.
-    # Rather than recreate that here I just reuse the calculator machinery. I don't want to
-    # see the output though, so I capture it.
-
-    with contextlib.redirect_stdout(StringIO()) as _:
-        config = OCPCalculator(checkpoint_path=checkpoint_path).config
-
-    for key in delete:
-        if key in config and len(key.split(".")) == 1:
-            del config[key]
-        else:
-            keys = key.split(".")
-            if keys[0] in config:
-                d = config[keys[0]]
-            else:
-                continue
-            if isinstance(d, dict):
-                for k in keys[1:]:
-                    if isinstance(d[k], dict):
-                        d = d[k]
-                    else:
-                        if k in d:
-                            del d[k]
-
-    def nested_set(dic, keys, value):
-        for key in keys[:-1]:
-            dic = dic.setdefault(key, {})
-        dic[keys[-1]] = value
-
-    for _key in update:
-        keys = _key.split(".")
-        nested_set(config, keys, update[_key])
-
-    out = dump(config)
-    with open(yml, "wb") as f:
-        f.write(out.encode("utf-8"))
-
-    return Path(yml).absolute()

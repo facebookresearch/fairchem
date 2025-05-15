@@ -1,3 +1,9 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 from __future__ import annotations
 
 import os
@@ -9,7 +15,6 @@ from ase.db import connect
 
 from fairchem.core.datasets import create_dataset
 from fairchem.core.datasets.base_dataset import BaseDataset
-from fairchem.core.trainers.base_trainer import BaseTrainer
 
 
 @pytest.fixture()
@@ -20,7 +25,7 @@ def lmdb_database(structures):
         mod3 = []
         asedb_fn = f"{tmpdirname}/asedb.aselmdb"
         with connect(asedb_fn) as database:
-            for i, atoms in enumerate(structures):
+            for _, atoms in enumerate(structures):
                 database.write(atoms, data=atoms.info)
                 num_atoms.append(len(atoms))
                 mod2.append(len(atoms) % 2)
@@ -32,61 +37,6 @@ def lmdb_database(structures):
             mod3=mod3,
         )
         yield asedb_fn
-
-
-def test_real_dataset_config(lmdb_database):
-    class TestTrainer(BaseTrainer):
-        def __init__(self, config):
-            self.config = config
-
-        def train(self, x):
-            return None
-
-        def get_sampler(self, *args, **kwargs):
-            return None
-
-        def get_dataloader(self, *args, **kwargs):
-            return None
-
-    config = {
-        "model": {},
-        "optim": {"batch_size": 0},
-        "dataset": {
-            "format": "ase_db",
-            "src": str(lmdb_database),
-            "first_n": 2,
-            "key_mapping": {
-                "y": "energy",
-                "force": "forces",
-            },
-            "transforms": {
-                "normalizer": {
-                    "energy": {
-                        "mean": -0.7554450631141663,
-                        "stdev": 2.887317180633545,
-                    },
-                    "forces": {"mean": 0, "stdev": 2.887317180633545},
-                }
-            },
-        },
-        "val_dataset": {"src": str(lmdb_database)},
-        "test_dataset": {},
-        "relax_dataset": None,
-    }
-
-    t = TestTrainer(config)
-    t.load_datasets()
-    assert len(t.train_dataset) == 2
-    assert len(t.val_dataset) == 2
-
-    # modify the config for split and see if it works as expected
-    config["dataset"].pop("first_n")
-    config["dataset"]["train_split_settings"] = {"first_n": 2}
-
-    t = TestTrainer(config)
-    t.load_datasets()
-    assert len(t.train_dataset) == 2
-    assert len(t.val_dataset) == 3
 
 
 def test_subset_to(structures, lmdb_database):

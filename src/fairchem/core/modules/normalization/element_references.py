@@ -1,5 +1,5 @@
 """
-Copyright (c) Meta, Inc. and its affiliates.
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -24,6 +24,62 @@ from ._load_utils import _load_from_config
 
 if TYPE_CHECKING:
     from torch_geometric.data import Batch
+
+
+class ElementReferences(nn.Module):
+    def __init__(
+        self,
+        element_references: torch.Tensor,
+    ):
+        """
+        Args:
+            element_references (Tensor): tensor with reference value for each element
+        """
+        super().__init__()
+        self.register_buffer(name="element_references", tensor=element_references)
+
+    @staticmethod
+    def compute_references(batch, tensor, elem_refs, operation):
+        assert tensor.shape[0] == len(batch)
+        with torch.autocast(elem_refs.device.type, enabled=False):
+            refs = torch.zeros(
+                tensor.shape, dtype=elem_refs.dtype, device=tensor.device
+            ).scatter_reduce(
+                0,
+                batch.batch_full,
+                elem_refs[batch.atomic_numbers_full],
+                reduce="sum",
+            )
+            if operation == "subtract":
+                return tensor - refs
+            elif operation == "add":
+                return tensor + refs
+            else:
+                raise ValueError(f"Unknown operation: {operation}")
+
+    def apply_refs(
+        self,
+        batch: Batch,
+        tensor: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.compute_references(
+            batch,
+            tensor,
+            self.element_references,
+            operation="subtract",
+        )
+
+    def undo_refs(
+        self,
+        batch: Batch,
+        tensor: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.compute_references(
+            batch,
+            tensor,
+            self.element_references,
+            operation="add",
+        )
 
 
 class LinearReferences(nn.Module):
@@ -59,9 +115,11 @@ class LinearReferences(nn.Module):
         super().__init__()
         self.register_buffer(
             name="element_references",
-            tensor=element_references
-            if element_references is not None
-            else torch.zeros(max_num_elements + 1),
+            tensor=(
+                element_references
+                if element_references is not None
+                else torch.zeros(max_num_elements + 1)
+            ),
         )
 
     def _apply_refs(

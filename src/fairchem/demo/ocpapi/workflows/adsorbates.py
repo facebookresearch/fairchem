@@ -1,3 +1,9 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -68,7 +74,7 @@ def _setup_log_record_factory() -> None:
 
         # Prepend context to the current message
         record = old_factory(*args, **kwargs)
-        parts.append(record.msg)
+        parts.append(str(record.msg))
         record.msg = " ".join(parts)
         return record
 
@@ -758,7 +764,7 @@ async def _relax_binding_sites_on_slabs(
 
     # Make sure logs and progress bars work together while tqdm is
     # being used
-    with logging_redirect_tqdm():
+    with logging_redirect_tqdm():  # noqa SIM117
         # Start a progress bar to track relaxations of the individual
         # configurations
         with tqdm(
@@ -767,7 +773,7 @@ async def _relax_binding_sites_on_slabs(
             total=sum(len(adslab.adsorbate_configs) for adslab in adslabs),
             miniters=0,
             leave=False,
-        ) as pbar:
+        ) as pbar:  # SIM117
             # Start a task that refreshes the progress bar on a regular
             # schedule
             pbar_refresh_task: asyncio.Task = asyncio.create_task(

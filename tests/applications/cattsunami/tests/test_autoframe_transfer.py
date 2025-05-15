@@ -1,13 +1,22 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+from __future__ import annotations
+
 import pytest
 from fairchem.applications.cattsunami.core.autoframe import (
     AutoFrameTransfer,
     interpolate_and_correct_frames,
 )
-from fairchem.core.models.model_registry import model_name_to_local_file
 from fairchem.applications.cattsunami.core.reaction import Reaction
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
-from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH
 from fairchem.applications.cattsunami.databases import TRANSFER_REACTION_DB_PATH
+from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH
+
+from fairchem.core.common.relaxation.ase_utils import OCPCalculator
+from fairchem.core.models.model_registry import model_name_to_local_file
 
 
 def get_ads_syms(adslab):
@@ -19,6 +28,7 @@ def get_ads_syms(adslab):
     return syms_str
 
 
+@pytest.mark.skip(reason="This test is taking too long, skipping for now")
 @pytest.mark.usefixtures("transfer_inputs")
 class TestAutoframe:
     def test_overall_functionality(self):

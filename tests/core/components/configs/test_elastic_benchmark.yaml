@@ -1,0 +1,24 @@
+job:
+  device_type: CPU
+  scheduler:
+    mode: LOCAL
+
+test_data_path: None
+target_data_path: None
+
+runner:
+  _target_: fairchem.core.components.calculate.elasticity_runner.ElasticityRunner
+  calculator:
+    _target_: fairchem.core.OCPCalculator
+    model_name: "eSCN-L4-M2-Lay12-S2EF-OC20-2M"
+    local_cache: "."  # TODO lets set a default for this in .cache/fairchem
+  input_data:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      src: ${test_data_path}
+
+reducer:
+  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
+  target_data_path: ${target_data_path}
+  benchmark_name: "test-elasticity"
+  index_name: sid

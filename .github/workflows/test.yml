@@ -11,12 +11,12 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest  # TODO add macos tests too
+    runs-on: 32-core-ubuntu
+    continue-on-error: true
     strategy:
       max-parallel: 10
       matrix:
-        python_version: ['3.9', '3.12']
-        pip_develop: [true, false]
+        python_version: ['3.10', '3.12']
 
     steps:
       - uses: actions/checkout@v4
@@ -35,26 +35,12 @@ jobs:
             ${{ runner.os }}-
 
       - name: Install core dependencies and package
-        if: ${{ matrix.pip_develop}}
         run: |
           python -m pip install --upgrade pip
-          if [ -f packages/requirements.txt ]; then pip install -r packages/requirements.txt; fi
-          if [ -f packages/requirements-optional.txt ]; then pip install -r packages/requirements-optional.txt; fi
-          pip install -e packages/fairchem-core[dev]
-          pip install -e packages/fairchem-data-oc[dev]
-          pip install -e packages/fairchem-demo-ocpapi[dev]
-          pip install -e packages/fairchem-applications-cattsunami
-
-      - name: Install core dependencies and package
-        if: ${{ !matrix.pip_develop}}
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f packages/requirements.txt ]; then pip install -r packages/requirements.txt; fi
-          if [ -f packages/requirements-optional.txt ]; then pip install -r packages/requirements-optional.txt; fi
           pip install packages/fairchem-core[dev]
           pip install packages/fairchem-data-oc[dev]
           pip install packages/fairchem-demo-ocpapi[dev]
-          pip install packages/fairchem-applications-cattsunami
+          pip install -r tests/requirements.txt # pin test packages
 
       - name: Install additional dependencies
         run: |
@@ -67,9 +53,15 @@ jobs:
 
       - name: Test core with pytest
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN_OMAT_READONLY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/  --cov-report=xml --cov=fairchem -c ./packages/fairchem-core/pyproject.toml
+          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --cov-report=xml --cov=fairchem -c ./packages/fairchem-core/pyproject.toml
+
+      - name: Core GPU tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s
 
       - if: ${{ matrix.python_version == '3.12' }}
         name: codecov-report
@@ -79,3 +71,30 @@ jobs:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }} # required
           verbose: true # optional (default = false)
+
+  test_gpu:
+    runs-on: 4-core-ubuntu-gpu-t4
+    continue-on-error: true
+    strategy:
+      max-parallel: 10
+      matrix:
+        python_version: ['3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version:  ${{ matrix.python_version }}
+
+      - name: Install core dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          pip install packages/fairchem-core[dev]
+          pip install -r tests/requirements.txt # pin test packages
+
+      - name: Core GPU tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml

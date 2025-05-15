@@ -1,38 +1,91 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 from __future__ import annotations
 
 import sys
-from unittest.mock import patch
 
-from fairchem.core._cli import main
+import hydra
+import pytest
 
+from fairchem.core._cli import ALLOWED_TOP_LEVEL_KEYS, get_hydra_config_from_yaml, main
+from fairchem.core.common import distutils
 
-def fake_runner(config: dict):
-    assert config["world_size"] == 1
 
 def test_cli():
-    with patch("fairchem.core._cli.runner_wrapper",fake_runner):
-        sys_args = ["--debug",
-                    "--mode",
-                    "train",
-                    "--identifier",
-                    "test",
-                    "--config-yml",
-                    "configs/oc22/s2ef/equiformer_v2/equiformer_v2_N@18_L@6_M@2_e4_f100_121M.yml"]
-        sys.argv[1:] = sys_args
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = ["--config", "tests/core/test_cli.yml"]
+    sys.argv[1:] = sys_args
+    main()
+
+
+def test_cli_multi_rank_cpu():
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = ["--config", "tests/core/test_cli.yml", "job.scheduler.ranks_per_node=2"]
+    sys.argv[1:] = sys_args
+    main()
+
+
+def test_cli_run_reduce():
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = ["--config", "tests/core/test_cli_run_reduce.yml"]
+    sys.argv[1:] = sys_args
+    main()
+
+
+def test_cli_throws_error():
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = [
+        "--config",
+        "tests/core/test_cli.yml",
+        "runner.x=1000",
+        "runner.y=5",
+    ]
+    sys.argv[1:] = sys_args
+    with pytest.raises(ValueError) as error_info:
+        main()
+    assert "sum is greater than 1000" in str(error_info.value)
+
+
+def test_cli_throws_error_on_invalid_inputs():
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = [
+        "-c",
+        "tests/core/test_cli.yml",
+        "runner.x=1000",
+        "runner.a=5",  # a is not a valid input argument to runner
+    ]
+    sys.argv[1:] = sys_args
+    with pytest.raises(hydra.errors.ConfigCompositionException):
         main()
 
-def test_cli_multi_rank():
-    with patch("fairchem.core._cli.elastic_launch") as mock_elastic_launch:
-        sys_args = ["--debug",
-                    "--mode",
-                    "train",
-                    "--identifier",
-                    "test",
-                    "--config-yml",
-                    "configs/oc22/s2ef/equiformer_v2/equiformer_v2_N@18_L@6_M@2_e4_f100_121M.yml",
-                    "--cpu",
-                    "--num-gpus",
-                    "2"]
-        sys.argv[1:] = sys_args
+
+def test_cli_throws_error_on_disallowed_top_level_keys():
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    assert "x" not in ALLOWED_TOP_LEVEL_KEYS
+    sys_args = [
+        "-c",
+        "tests/core/test_cli.yml",
+        "+x=1000",  # this is not allowed because we are adding a key that is not in ALLOWED_TOP_LEVEL_KEYS
+    ]
+    sys.argv[1:] = sys_args
+    with pytest.raises(ValueError):
         main()
-        mock_elastic_launch.assert_called_once()
+
+
+def get_cfg_from_yaml():
+    yaml = "tests/core/test_cli.yml"
+    cfg = get_hydra_config_from_yaml(yaml)
+    # assert fields got initialized properly
+    assert cfg.job.run_name is not None
+    assert cfg.job.seed is not None
+    assert cfg.keys() == ALLOWED_TOP_LEVEL_KEYS

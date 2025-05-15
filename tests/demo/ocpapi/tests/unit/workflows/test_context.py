@@ -1,3 +1,9 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 from contextvars import ContextVar
 from unittest import TestCase as UnitTestCase
 from uuid import uuid4

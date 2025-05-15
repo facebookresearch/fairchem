@@ -1,0 +1,2 @@
+model_name: puma_md_mpa_0428
+ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/puma_md_mpa_9b2d.pt

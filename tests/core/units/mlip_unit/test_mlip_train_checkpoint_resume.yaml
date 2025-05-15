@@ -1,0 +1,65 @@
+defaults:
+  - datasets: pickle
+  - tasks: oc20_omol
+  - backbone: K2L2
+  - optimizer: adamw
+  - _self_
+
+job:
+  device_type: CPU
+  scheduler:
+    mode: LOCAL
+    distributed_init_method: FILE
+  debug: True
+
+
+num_experts: 0
+act_type: s2
+ff_type: grid
+moe_layer_type: pytorch
+max_neighbors: 20
+max_epochs: 1
+max_steps: null
+regress_stress: false
+direct_forces: true
+
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${datasets.train_dataloader}
+  eval_dataloader: ${datasets.val_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.models.base.HydraModel
+      backbone: ${backbone}
+      heads:
+        oc20_energy:
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+        omol_energy:
+          module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+        forces:
+          module: fairchem.core.models.uma.escn_md.Linear_Force_Head
+    optimizer_fn: ${optimizer}
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 1
+      lr_min_factor: 0.01
+      epochs: ${max_epochs}
+      steps: ${max_steps}
+    print_every: 1
+    clip_grad_norm: 100
+  max_epochs: ${max_epochs}
+  max_steps: ${max_steps}
+  callbacks:
+    - _target_: tests.core.units.mlip_unit.test_mlip_unit.TrainEndCallback
+      expected_loss: ${expected_loss}
+      expected_max_steps: ${max_steps}
+      expected_max_epochs: ${max_epochs}
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 0
+      max_saved_checkpoints: 10

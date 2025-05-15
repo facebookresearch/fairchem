@@ -9,15 +9,14 @@ license = {text = "MIT License"}
 dynamic = ["version", "readme"]
 requires-python = ">=3.9, <3.13"
 dependencies = [
-    "torch~=2.4.0",
-    "numpy >=1.26.0, <2.0.0",
+    "torch~=2.6.0",
+    "numpy>=2.0,<2.3",
     "lmdb",
-    "ase",
     "pymatgen>=2023.10.3",
     "pyyaml",
     "tensorboard",
     "wandb",
-    "numba",
+    "numba>=0.61.2",
     "e3nn>=0.5",
     "requests",
     "orjson",
@@ -25,9 +24,11 @@ dependencies = [
     "submitit",
     "hydra-core",
     "torchtnt",
-    "torch_geometric",
     "huggingface_hub>=0.27.1",
-    "pydantic>=2.10.0"
+    "pydantic>=2.10.0",
+    "torch_geometric@git+https://github.com/pyg-team/pytorch_geometric.git@2cc28ed9b6c9b649c873070e1e53e7523efd8708",
+    "ase@git+https://gitlab.com/ase/ase.git@4a5e1f69979f9f5463a82001245e5471364adcf1",
+    "ase-db-backends@git+https://gitlab.com/ase/ase-db-backends.git@2fda57e952c0d1cd2fd511eee5a2659f85ebe64a",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
@@ -39,7 +40,6 @@ quacc = ["quacc[phonons]>=0.13.0"]
 
 [project.scripts]
 fairchem = "fairchem.core._cli:main"
-fairchemv2 = "fairchem.core._cli_hydra:main"
 
 [project.urls]
 repository = "https://github.com/FAIR-Chem/fairchem"
@@ -82,3 +82,6 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["fairchem.core"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

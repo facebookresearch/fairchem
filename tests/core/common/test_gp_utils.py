@@ -1,9 +1,17 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
 from __future__ import annotations
 
 import pytest
 import torch
 import torch.nn as nn
+from torch import distributed as dist
 
+from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
     gather_from_model_parallel_region,
     gather_from_model_parallel_region_sum_grad,
@@ -15,18 +23,15 @@ from fairchem.core.common.test_utils import (
     spawn_multi_process,
 )
 
-from torch import distributed as dist
-
-from fairchem.core.common import gp_utils
-
 
 def _dummy_call(x):
     return x
 
 
 @pytest.mark.parametrize(
-    "world_size, input, expected_output", [(1, 5, [5]), (3, 0, [0, 0, 0])]
-)  # noqa: PT006
+    "world_size, input, expected_output",
+    [(1, 5, [5]), (3, 0, [0, 0, 0])],
+)
 def test_basic_setup(world_size: int, input: torch.Tensor, expected_output: list):
     config = PGConfig(
         backend="gloo", world_size=world_size, gp_group_size=1, use_gp=True
@@ -38,7 +43,7 @@ def test_basic_setup(world_size: int, input: torch.Tensor, expected_output: list
 
 
 @pytest.mark.parametrize(
-    "world_size, gp_size, input, expected_output",  # noqa: PT006
+    "world_size, gp_size, input, expected_output",
     [
         (
             2,
@@ -83,7 +88,7 @@ def scatter_gather_fn(input: torch.Tensor, dim: int = 0):
 
 
 @pytest.mark.parametrize(
-    "world_size, gp_size, input, expected_output",  # noqa: PT006
+    "world_size, gp_size, input, expected_output",
     [
         (
             2,
@@ -424,7 +429,6 @@ def embeddings_and_graph_init(atomic_numbers, edge_index):
 
 # test for one rank to return a product and rest return 0
 def simple_layer(x, edge_index, node_offset, n=3):
-
     if gp_utils.initialized():
         x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
         x_source = x_full[edge_index[0]]
@@ -463,13 +467,12 @@ class SimpleNet(nn.Module):
         self.n = n
 
     def forward(self, atomic_numbers, edge_index):
-
         node_embeddings, graph_dict = embeddings_and_graph_init(
             atomic_numbers, edge_index
         )
 
         all_node_embeddings = [node_embeddings]  # store for debugging
-        for layer_idx in range(self.nlayers):
+        for _ in range(self.nlayers):
             all_node_embeddings.append(
                 simple_layer(
                     all_node_embeddings[-1],
@@ -551,7 +554,7 @@ def compare_and_assert_dict(
             assert v1.isclose(d2[k1]).all(), f"{k1} failed closeness check"
 
 
-@pytest.mark.parametrize("nlayers", [1, 2, 3])  # noqa: PT006
+@pytest.mark.parametrize("nlayers", [1, 2, 3])
 def test_simple_energy(nlayers):
     # torch.autograd.set_detect_anomaly(True)
     atomic_numbers = torch.tensor([2.0, 3.0, 4.0], requires_grad=True)
@@ -574,7 +577,7 @@ def test_simple_energy(nlayers):
         compare_and_assert_dict(non_gp_results, rank_results)
 
 
-@pytest.mark.parametrize("nlayers", [1])  # noqa: PT006
+@pytest.mark.parametrize("nlayers", [1])
 def test_simple_energy_ddp(nlayers):
     atomic_numbers = torch.tensor([2.0, 3.0, 4.0], requires_grad=True)
     edge_index = torch.tensor([[0, 1], [0, 2]])
