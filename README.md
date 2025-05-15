@@ -120,15 +120,14 @@ dyn.run(steps=1000)
 ### Looking for Fairchem V1, models and code?
 Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators. 
 
-We plan to bring back the following models in compatible with Fairchem V2 soon:
+We plan to bring back the following models compatible with Fairchem V2 soon:
 * Gemnet-OC
 * EquiformersV2
 * ESEN
 
-We also be releasing and more detailed documentation on how to use Fairchem V2, stay tuned!
+We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned! 
 
 The old OCPCalculator, trainer code will NOT be revived. We apologize for the inconvenience and please raise Issues if you need help!
-
 In the meantime, you can still use models from fairchem version 1, by installing version 1,
 
 ```bash
