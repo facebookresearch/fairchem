@@ -29,12 +29,11 @@ def load_predict_unit(
 
     Args:
         path: Path to the checkpoint file
-        inference_settings: Settings for inference, if None settings will be guessed.
-            currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which
-            optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced
-            users can also pass in custom settings by passing an InferenceSettings object.
-        overrides: Dictionary of overrides for the model configuration
-        device: Device to load the model on, if None will use CUDA if available
+        inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
+            (optimized for speed but requires fixed atomic composition). Advanced use cases can
+            use a custom InferenceSettings object.
+        overrides: Optional dictionary of settings to override default inference settings.
+        device: Optional torch device to load the model onto. If None, uses the default device.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
