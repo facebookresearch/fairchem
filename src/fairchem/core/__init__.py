@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from fairchem.core._config import clear_cache
 from fairchem.core.common.calculator import FAIRChemCalculator
 
 try:
@@ -17,4 +18,4 @@ except PackageNotFoundError:
     # package is not installed
     __version__ = ""
 
-__all__ = ["FAIRChemCalculator"]
+__all__ = ["FAIRChemCalculator", "clear_cache"]
