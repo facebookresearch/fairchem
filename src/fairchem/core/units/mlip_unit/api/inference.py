@@ -9,6 +9,45 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
+
+from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import torch
+
+
+def load_predict_unit(
+    path: str | Path,
+    inference_settings: InferenceSettings | str = "default",
+    overrides: dict | None = None,
+    device: torch.device | None = None,
+) -> MLIPPredictUnit:
+    """Load a MLIPPredictUnit from a checkpoint file.
+
+    Args:
+        path: Path to the checkpoint file
+        inference_settings: Settings for inference, if None settings will be guessed.
+            currently the acceptable modes are "default" (general purpose but not the fastest), or "turbo" which
+            optimizes for speed for running simulations but the user must keep the atomic composition fixed. Advanced
+            users can also pass in custom settings by passing an InferenceSettings object.
+        overrides: Dictionary of overrides for the model configuration
+        device: Device to load the model on, if None will use CUDA if available
+
+    Returns:
+        A MLIPPredictUnit instance ready for inference
+    """
+    inference_settings = guess_inference_settings(inference_settings)
+    overrides = overrides or {"backbone": {"always_use_pbc": False}}
+
+    return MLIPPredictUnit(
+        path,
+        device=device,
+        inference_settings=inference_settings,
+        overrides={"backbone": {"always_use_pbc": False}},
+    )
 
 
 class UMATask(str, Enum):
@@ -96,6 +135,7 @@ def inference_settings_default():
         merge_mole=False,
         compile=False,
         wigner_cuda=False,
+        external_graph_gen=False,
         internal_graph_gen_version=2,
     )
 
