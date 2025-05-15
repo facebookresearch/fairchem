@@ -148,7 +148,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
     def log_MOLE_stats(self):
         if not self.training or self.num_experts == 0:
             return
-        if not hasattr(self, "fix"):
+        if not hasattr(self, "fig"):
             self.fig, self.axs = plt.subplots(2, 1)
         with torch.no_grad():
             if self.counter % 500 == 0:
