@@ -103,18 +103,17 @@ def update_configs(original_config, new_config):
     return updated_config
 
 
-def load_inference_model_and_tasks(
+def load_inference_model(
     checkpoint_location: str, overrides: dict | None = None, use_ema: bool = False
-) -> tuple[torch.nn.Module, DictConfig, Sequence[Task]]:
+) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint]:
     checkpoint: MLIPInferenceCheckpoint = torch.load(
         checkpoint_location, map_location="cpu", weights_only=False
     )
-    model_config = checkpoint.model_config
 
     if overrides is not None:
-        model_config = update_configs(model_config, overrides)
+        checkpoint.model_config = update_configs(checkpoint.model_config, overrides)
 
-    model = hydra.utils.instantiate(model_config)
+    model = hydra.utils.instantiate(checkpoint.model_config)
     if use_ema:
         model = torch.optim.swa_utils.AveragedModel(model)
         model_dict = model.state_dict()
@@ -132,21 +131,7 @@ def load_inference_model_and_tasks(
     else:
         load_state_dict(model, checkpoint.model_state_dict, strict=True)
 
-    tasks = [
-        hydra.utils.instantiate(task_config) for task_config in checkpoint.tasks_config
-    ]
-
-    return model, model_config, tasks
-
-
-def load_inference_model(
-    checkpoint_location: str, overrides: dict | None = None, use_ema: bool = False
-) -> torch.nn.Module:
-    # TODO clean this up, create a load_inference_checkpoint, a load_inference_model and load_tasks
-    model, _, _ = load_inference_model_and_tasks(
-        checkpoint_location, overrides=overrides, use_ema=use_ema
-    )
-    return model
+    return model, checkpoint
 
 
 def convert_train_checkpoint_to_inference_checkpoint(
@@ -173,15 +158,14 @@ def convert_train_checkpoint_to_inference_checkpoint(
 def initialize_finetuning_model(
     checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None
 ) -> torch.nn.Module:
-    model, model_config, _ = load_inference_model_and_tasks(
-        checkpoint_location, overrides
-    )
+    model, checkpoint = load_inference_model(checkpoint_location, overrides)
+
     logging.warning(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
     )
 
-    model_config["heads"] = deepcopy(heads)
-    model.finetune_model_full_config = model_config
+    checkpoint.model_config["heads"] = deepcopy(heads)
+    model.finetune_model_full_config = checkpoint.model_config
 
     model.output_heads = None
     model.heads = heads
@@ -895,14 +879,19 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 inference_settings.internal_graph_gen_version
             )
 
-        self.model, _, self.task_modules = load_inference_model_and_tasks(
+        self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
+        self.tasks = [
+            hydra.utils.instantiate(task_config)
+            for task_config in checkpoint.tasks_config
+        ]
+
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
-        self.tasks = {t.name: t for t in self.task_modules}
+        self.tasks = {t.name: t for t in self.tasks}
         self.model.eval()
 
         self.lazy_model_intialized = False
@@ -921,7 +910,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
 
     def move_to_device(self):
         self.model.to(self.device)
-        for task in self.task_modules:
+        for task in self.tasks:
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)
