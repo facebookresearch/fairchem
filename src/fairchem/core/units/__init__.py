@@ -7,10 +7,10 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
-    load_predict_unit,
 )
 from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
-__all__ = ["MLIPPredictUnit", "load_predict_unit", "InferenceSettings"]
+__all__ = ["MLIPPredictUnit", "InferenceSettings", "load_predict_unit"]

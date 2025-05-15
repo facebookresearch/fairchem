@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
-    load_predict_unit,
 )
 
-__all__ = ["load_predict_unit", "InferenceSettings"]
+__all__ = ["InferenceSettings"]
