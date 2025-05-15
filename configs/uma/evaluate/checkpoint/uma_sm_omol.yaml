@@ -1,0 +1,2 @@
+ckpt_path: ${cluster.checkpoint_root_dir}/202505-0619-0026-495f/uma_sm_omol_baseline_final.pt
+model_name: uma_sm_omol

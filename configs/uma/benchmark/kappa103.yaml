@@ -1,0 +1,47 @@
+defaults:
+  - cluster: h100
+  - checkpoint: uma_sm_mpa
+  - _self_
+
+benchmark_name: kappa103
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 103
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+  deterministic: False
+
+runner:
+  _target_: fairchem.core.components.calculate.kappa_runner.KappaRunner
+  calculator:
+    _target_: fairchem.core.common.calculator.FAIRChemCalculator
+    checkpoint_path: ${checkpoint.ckpt_path}
+    task_name: omat
+  input_data:
+    _target_: fairchem.core.components.calculate.kappa_runner.get_kappa103_data_list
+    reference_data_path: ${cluster.data_root_dir}/materials/kappa103/2024-11-09-phononDB-PBE-103-structures.extxyz
+    debug: ${cluster.debug}
+  displacement: 0.03
+
+reducer:
+  _target_: fairchem.core.components.benchmark.kappa_reducer.Kappa103Reducer
+  benchmark_name: ${benchmark_name}
+  target_data_path: ${cluster.data_root_dir}/materials/kappa103/2024-11-09-kappas-phononDB-PBE-noNAC.json.gz
