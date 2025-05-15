@@ -1,0 +1,15 @@
+runner:
+  _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
+  timeiters: 10
+  natoms_list: [100, 1000, 2000, 10000]
+  model_checkpoints: {
+    "uma_sm_cons": "/checkpoint/ocp/shared/temp/escn_md_k4L2_cons.pt",
+    "uma_md_cons": "/checkpoint/ocp/shared/temp/escn_md_K10L4_cons.pt"
+  }
+  run_dir_root: ${run_dir_root}
+  compile: False
+  overrides:
+    backbone:
+      activation_checkpointing: True
+      use_cuda_graph_wigner: True
+      max_neighbors: 200

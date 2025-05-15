@@ -18,7 +18,7 @@ demos, and application efforts for materials science and quantum chemistry.
 
 > :warning: **FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.**
 > If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
-> as detailed [here](#looking-for-fairchem-v1).
+> as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
 ### Read our latest release post!
 Read about the [UMA model and dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
@@ -116,19 +116,19 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
-### Why a single repository?
-A single repository simplifies testing and ensures consistency across our interconnected core, data and application
-packages.
-The repo is organized into several directories to help you find what you are looking for:
 
-- [`fairchem.core`](src/fairchem/core): State-of-the-art machine learning models for materials science and chemistry
-- [`fairchem.data`](src/fairchem/data): Dataset downloads and input generation codes
-- [`fairchem.demo`](src/fairchem/demo): Python API for the [Open Catalyst Demo](https://open-catalyst.metademolab.com/)
-- [`fairchem.applications`](src/fairchem/applications): Follow up applications and works (AdsorbML, CatTSunami, etc.)
+### Looking for Fairchem V1, models and code?
+Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators. 
 
-### Looking for fairchem v1?
+We plan to bring back the following models compatible with Fairchem V2 soon:
+* Gemnet-OC
+* EquiformersV2
+* ESEN
 
-You can still use models from fairchem version 1, by installing version 1,
+We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned! 
+
+The old OCPCalculator, trainer code will NOT be revived. We apologize for the inconvenience and please raise Issues if you need help!
+In the meantime, you can still use models from fairchem version 1, by installing version 1,
 
 ```bash
 pip install fairchem-core==1.10

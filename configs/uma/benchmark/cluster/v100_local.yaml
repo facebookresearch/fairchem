@@ -1,0 +1,10 @@
+data_root_dir: /large_experiments/opencatalyst/foundation_models/benchmark
+checkpoint_root_dir: /large_experiments/opencatalyst/foundation_models/checkpoints/uma
+run_dir: /checkpoint/${oc.env:USER}/
+account: null
+partition: scavenge
+qos: null
+mode: LOCAL
+device: CUDA
+debug: True
+mem_gb: 256

@@ -1,0 +1,59 @@
+defaults:
+  - cluster: h100
+  - checkpoint: uma_sm
+  - _self_
+
+benchmark_name: adsorption-0421
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 500
+    num_nodes: 1
+    ranks_per_node: 1
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+
+runner:
+  _target_: fairchem.core.components.calculate.adsorption_runner.AdsorptionRunner
+  calculator:
+    _target_: fairchem.core.common.calculator.FAIRChemCalculator
+    checkpoint_path: ${checkpoint.ckpt_path}
+    task_name: oc20
+  save_relaxed_atoms: False
+  relax_surface: True
+  fmax: 0.02
+  steps: 300
+  optimizer_cls:
+    _target_: ase.optimize.LBFGS
+    _partial_: True
+    maxstep: 0.2
+    memory: 50
+    damping: 1.2
+    alpha: 80
+  input_data:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      src: ${cluster.data_root_dir}/catalysis/is2re/is/data.aselmdb
+
+reducer:
+  _target_: fairchem.core.components.benchmark.adsorption_reducer.AdsorptionReducer
+  target_data_key: target
+  benchmark_name: ${benchmark_name}
+  index_name: sid
