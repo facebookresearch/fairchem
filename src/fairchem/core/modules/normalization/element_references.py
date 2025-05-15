@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -18,7 +17,7 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from fairchem.core.datasets import data_list_collater
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 
 from ._load_utils import _load_from_config
 
@@ -237,7 +236,7 @@ def fit_linear_references(
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        collate_fn=partial(data_list_collater, otf_graph=True),
+        collate_fn=atomicdata_list_to_batch,
         num_workers=num_workers,
         persistent_workers=num_workers > 0,
         generator=torch.Generator().manual_seed(seed),
@@ -282,7 +281,7 @@ def fit_linear_references(
             target_vectors[target][
                 i * batch_size : i * batch_size + next_batch_size
             ] = batch[target].to(torch.float64)
-        for j, data in enumerate(batch.to_data_list()):
+        for j, data in enumerate(batch.batch_to_atomicdata_list()):
             composition_matrix[i * batch_size + j] = torch.bincount(
                 data.atomic_numbers.int(),
                 minlength=max_num_elements,

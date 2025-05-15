@@ -25,10 +25,10 @@ from tqdm import tqdm
 
 from fairchem.core.common.registry import registry
 from fairchem.core.datasets._utils import rename_data_object_keys
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.base_dataset import BaseDataset
 from fairchem.core.datasets.target_metadata_guesser import guess_property_metadata
 from fairchem.core.modules.transforms import DataTransforms
-from fairchem.core.preprocessing import AtomsToGraphs
 
 
 def apply_one_tags(
@@ -83,13 +83,7 @@ class AseAtomsDataset(BaseDataset, ABC):
 
         a2g_args = config.get("a2g_args", {}) or {}
 
-        # set default to False if not set by user, assuming otf_graph will be used
-        if "r_edges" not in a2g_args:
-            a2g_args["r_edges"] = False
-
-        # Make sure we always include PBC info in the resulting atoms objects
-        a2g_args["r_pbc"] = True
-        self.a2g = AtomsToGraphs(**a2g_args)
+        self.a2g = lambda atoms, sid: AtomicData.from_ase(atoms, sid=sid, **a2g_args)
 
         self.key_mapping = self.config.get("key_mapping", None)
         self.transforms = DataTransforms(self.config.get("transforms", {}))

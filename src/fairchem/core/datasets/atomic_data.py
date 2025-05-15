@@ -73,7 +73,7 @@ def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
         )
 
     struct = AseAtomsAdaptor.get_structure(atoms)
-    
+
     # tol of 1e-8 should remove all self loops
     _c_index, _n_index, _offsets, n_distance = struct.get_neighbor_list(
         r=cutoff, numerical_tol=1e-8, exclude_self=True
@@ -522,6 +522,11 @@ class AtomicData:
     def __len__(self):
         return self.num_graphs
 
+    def get(self, key, default):
+        if key in self:
+            return self[key]
+        return default
+
     def __getitem__(self, idx):
         if isinstance(idx, str):
             return getattr(self, idx)
@@ -840,3 +845,12 @@ def atomicdata_list_to_batch(
     atomic_data_batch.assign_batch_stats(slices, cumsum, cat_dims, natoms_list)
 
     return atomic_data_batch.contiguous()
+
+
+def tensor_or_int_to_tensor(x, dtype=torch.int):
+    # if isinstance(x, int):
+    #     return torch.Tensor(x,dtype=dtype)
+    # elif isinstance(x,torch.Tensor):
+    #     #assert x.dtype==dtype, "Tensor is not of right dtype"
+    #     return x
+    raise ValueError(f"type({x}) is not an int or tensor")

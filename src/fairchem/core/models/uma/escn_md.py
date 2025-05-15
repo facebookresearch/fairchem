@@ -306,8 +306,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 dtype=data_dict["pos"].dtype,
                 device=data_dict["pos"].device,
             )
-            # num_batch = data_dict["num_graphs"]
-            num_batch = data_dict.get("num_graphs", len(data_dict["natoms"]))
+            num_batch = len(data_dict["natoms"])
             displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
             displacement.requires_grad = True
             symmetric_displacement = 0.5 * (

@@ -13,12 +13,10 @@ import torch
 from torch_geometric.data import Batch, Data
 
 if TYPE_CHECKING:
+    from torch_geometric.data import Batch, Data
     from torch_geometric.data.data import BaseData
 
-# from fairchem.experimental.foundation_models.atomic_data.atomic_data import (
-#     AtomicData,
-#     atomicdata_list_to_batch,
-# )
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 
 
 class MTCollater:
@@ -48,10 +46,7 @@ class MTCollater:
     ) -> BaseData:
         data_list = self._add_missing_attr(data_list, dataset_task_map)
 
-        # if isinstance(data_list[0], AtomicData):
-        #     batch = atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
-        # else:
-        batch = Batch.from_data_list(data_list, exclude_keys=exclude_keys)
+        batch = atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
 
         return batch
 
