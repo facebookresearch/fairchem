@@ -7,13 +7,10 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import torch
-from torch_geometric.data import Batch, Data
 
-if TYPE_CHECKING:
-    from torch_geometric.data.data import BaseData
+from fairchem.core.third_party.mace_torchgeometric.batch import Batch
+from fairchem.core.third_party.mace_torchgeometric.data import Data
 
 # from fairchem.experimental.foundation_models.atomic_data.atomic_data import (
 #     AtomicData,
@@ -42,18 +39,16 @@ class MTCollater:
 
     def data_list_collater(
         self,
-        data_list: list[BaseData],
+        data_list: list[Data],
         dataset_task_map: dict,
         exclude_keys: list,
-    ) -> BaseData:
+    ) -> Data:
         data_list = self._add_missing_attr(data_list, dataset_task_map)
 
         # if isinstance(data_list[0], AtomicData):
         #     batch = atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
         # else:
-        batch = Batch.from_data_list(data_list, exclude_keys=exclude_keys)
-
-        return batch
+        return Batch.from_data_list(data_list, exclude_keys=exclude_keys)
 
     # takes in the task config
     def _create_dataset_task_map(self, config):

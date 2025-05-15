@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import torch
@@ -19,11 +19,9 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from fairchem.core.datasets import data_list_collater
+from fairchem.core.third_party.mace_torchgeometric.batch import Batch
 
 from ._load_utils import _load_from_config
-
-if TYPE_CHECKING:
-    from torch_geometric.data import Batch
 
 
 class ElementReferences(nn.Module):

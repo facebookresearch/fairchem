@@ -10,7 +10,6 @@ from __future__ import annotations
 import copy
 import logging
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
@@ -19,9 +18,7 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import (
     load_model_and_weights_from_checkpoint,
 )
-
-if TYPE_CHECKING:
-    from torch_geometric.data import Batch
+from fairchem.core.third_party.mace_torchgeometric.batch import Batch
 
 
 class HeadInterface(metaclass=ABCMeta):

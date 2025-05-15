@@ -7,17 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+import numpy as np
 import torch
+from ase import Atoms
 
 from fairchem.core.common.utils import cg_change_mat, irreps_sum
-
-if TYPE_CHECKING:
-    from torch_geometric.data import Data
-
-import numpy as np
-from ase import Atoms
+from fairchem.core.third_party.mace_torchgeometric.data import Data
 
 
 def _get_molecule_cell(data_object: Data):
