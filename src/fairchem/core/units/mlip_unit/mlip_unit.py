@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import time
 from contextlib import nullcontext
 from copy import deepcopy
@@ -851,9 +852,12 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         device: str = "cpu",
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
+        seed: int | None = None,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
+
+        self._seed = seed
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -907,6 +911,20 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             torch.set_float32_matmul_precision("high")
+
+    @property
+    def seed(self) -> int:
+        return self._seed
+
+    @seed.setter
+    def seed(self, seed: int | None) -> None:
+        logging.info(f"Setting random seed to {seed}")
+        self._seed = seed
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
 
     def move_to_device(self):
         self.model.to(self.device)
