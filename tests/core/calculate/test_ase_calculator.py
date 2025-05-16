@@ -7,7 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -28,36 +29,30 @@ if TYPE_CHECKING:
 
 from fairchem.core.calculate import pretrained_mlip
 
-TASK_HAS_CHARGE_SPIN = {
-    "omol": True,
-    "omat": False,
-    "omc": False,
-    "odac": False,
-    "oc20": False,
-    "none": True,
-}
-
 
 @pytest.fixture(scope="module", params=pretrained_mlip.available_models)
 def mlip_predict_unit(request) -> MLIPPredictUnit:
     return pretrained_mlip.get_predict_unit(request.param)
 
 
-@pytest.fixture(scope="module", params=pretrained_mlip.available_models)
-def make_predict_unit(request) -> Callable:
-    def _make(**kwargs) -> MLIPPredictUnit:
-        return pretrained_mlip.get_predict_unit(model_name=request.param, **kwargs)
-
-    return _make
-
-
 @pytest.fixture(scope="module")
-def generate_calculators(mlip_predict_unit):
+def all_calculators(mlip_predict_unit):
     """Generate calculators for all available datasets in the mlip predict unit"""
 
     def _calc_generator():
         for dataset in mlip_predict_unit.datasets:
             yield FAIRChemCalculator(mlip_predict_unit, task_name=dataset)
+
+    return _calc_generator
+
+
+@pytest.fixture(scope="module")
+def omol_calculators(request):
+    def _calc_generator():
+        for model_name in pretrained_mlip.available_models:
+            predict_unit = pretrained_mlip.get_predict_unit(model_name)
+            if "omol" in predict_unit.datasets:
+                yield FAIRChemCalculator(predict_unit, task_name="omol")
 
     return _calc_generator
 
@@ -97,8 +92,8 @@ def large_bulk_atoms() -> Atoms:
 
 
 @pytest.mark.gpu()
-def test_calculator_setup(generate_calculators):
-    for calc in generate_calculators():
+def test_calculator_setup(all_calculators):
+    for calc in all_calculators():
         assert "energy" in calc.implemented_properties
         assert "forces" in calc.implemented_properties
         # assert "stress" in calc.implemented_properties
@@ -123,8 +118,8 @@ def test_calculator_setup(generate_calculators):
         "large_bulk_atoms",
     ],
 )
-def test_energy_calculation(request, atoms_fixture, generate_calculators):
-    for calc in generate_calculators():
+def test_energy_calculation(request, atoms_fixture, all_calculators):
+    for calc in all_calculators():
         atoms = request.getfixturevalue(atoms_fixture)
         atoms.calc = calc
         energy = atoms.get_potential_energy()
@@ -204,14 +199,14 @@ def test_large_bulk_system(large_bulk_atoms):
         (True, True, False),
     ],
 )
-def test_mixed_pbc_behavior(pbc, aperiodic_atoms, generate_calculators):
+def test_mixed_pbc_behavior(pbc, aperiodic_atoms, all_calculators):
     """Test guess_pbc behavior"""
     pbc = np.array(pbc)
     aperiodic_atoms.pbc = pbc
     if np.all(pbc):
         aperiodic_atoms.cell = [100.0, 100.0, 100.0]
 
-    for calc in generate_calculators():
+    for calc in all_calculators():
         if np.any(aperiodic_atoms.pbc) and not np.all(aperiodic_atoms.pbc):
             with pytest.raises(MixedPBCError):
                 aperiodic_atoms.calc = calc
@@ -223,93 +218,76 @@ def test_mixed_pbc_behavior(pbc, aperiodic_atoms, generate_calculators):
 
 
 @pytest.mark.gpu()
-def test_error_for_pbc_with_zero_cell(aperiodic_atoms, generate_calculators):
+def test_error_for_pbc_with_zero_cell(aperiodic_atoms, all_calculators):
     """Test error raised when pbc=True but atoms.cell is zero."""
     aperiodic_atoms.pbc = True  # Set PBC to True
 
-    for calc in generate_calculators():
+    for calc in all_calculators():
         with pytest.raises(AllZeroUnitCellError):
             aperiodic_atoms.calc = calc
             aperiodic_atoms.get_potential_energy()
 
 
-# setup tasks to charge spin mapping
+@pytest.mark.gpu()
+def test_omol_missing_spin_charge_logs_warning(
+    periodic_h2o_atoms, omol_calculators, caplog
+):
+    """Test that missing spin/charge in atoms.info logs a warning when task_name='omol'."""
 
-# @pytest.mark.gpu()
-# @pytest.mark.parametrize(
-#     "checkpoint",
-#     [checkpoint for checkpoint in HF_HUB_CHECKPOINTS if checkpoint["charge_spin"]],
-# )
-# def test_omol_missing_spin_charge_logs_warning(periodic_h2o_atoms, caplog, checkpoint):
-#     """Test that missing spin/charge in atoms.info logs a warning when task_name='omol'."""
-#     calc = FAIRChemCalculator(
-#         hf_hub_repo_id=checkpoint["repo_id"],
-#         hf_hub_filename=checkpoint["filename"],
-#         task_name=checkpoint["task_name"],
-#         device="cuda",
-#     )
-#     periodic_h2o_atoms.calc = calc
-#
-#     with caplog.at_level(logging.WARNING):
-#         _ = periodic_h2o_atoms.get_potential_energy()
-#
-#     assert "charge is not set in atoms.info" in caplog.text
-#     assert "spin multiplicity is not set in atoms.info" in caplog.text
-#
-#
-# @pytest.mark.gpu()
-# @pytest.mark.parametrize(
-#     "checkpoint",
-#     [checkpoint for checkpoint in HF_HUB_CHECKPOINTS if checkpoint["charge_spin"]],
-# )
-# def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, checkpoint):
-#     """Test that energy differs for H2O molecule with different charge and spin_multiplicity."""
-#     calc = FAIRChemCalculator(
-#         hf_hub_repo_id=checkpoint["repo_id"],
-#         hf_hub_filename=checkpoint["filename"],
-#         task_name=checkpoint["task_name"],
-#         device="cuda",
-#     )
-#
-#     # Test all combinations of charge and spin
-#     charges = [0, 1, -1]
-#     spins = [0, 1, 2]
-#     energy_results = {}
-#
-#     for charge in charges:
-#         for spin in spins:
-#             aperiodic_atoms.info["charge"] = charge
-#             aperiodic_atoms.info["spin"] = spin
-#             aperiodic_atoms.calc = calc
-#             energy = aperiodic_atoms.get_potential_energy()
-#             energy_results[(charge, spin)] = energy
-#
-#     # Ensure all combinations produce unique energies
-#     energy_values = list(energy_results.values())
-#     assert len(energy_values) == len(
-#         set(energy_values)
-#     ), "Energy values are not unique for different charge/spin combinations"
+    for calc in omol_calculators():
+        periodic_h2o_atoms.calc = calc
+
+        with caplog.at_level(logging.WARNING):
+            _ = periodic_h2o_atoms.get_potential_energy()
+
+        assert "charge is not set in atoms.info" in caplog.text
+        assert "spin multiplicity is not set in atoms.info" in caplog.text
 
 
-# TODO: the wigner matrices should be dependent on the RNG, but the energies
-# are not actually different using the above seed setting code. To be dug into in the future.
-# def test_random_seed_final_energy(bulk_atoms, tmp_path):
-#     seeds = [100, 200, 300, 200]
-#     results_by_seed = {}
-#     for seed in seeds:
-#         calc = FAIRChemCalculator(
-#             hf_hub_repo_id=HF_HUB_REPO_ID,
-#             hf_hub_filename=HF_HUB_FILENAMES[0],
-#             device="cuda",
-#             task_name="omat",
-#             seed=seed,
-#         )
-#         bulk_atoms.calc = calc
-#         energy = bulk_atoms.get_potential_energy()
-#         if seed in results_by_seed:
-#             assert results_by_seed[seed] == energy
-#         else:
-#             results_by_seed[seed] = energy
-#     for seed_a in set(seeds):
-#          for seed_b in set(seeds) - {seed_a}:
-#              assert results_by_seed[seed_a] != results_by_seed[seed_b]
+@pytest.mark.gpu()
+def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators):
+    """Test that energy differs for H2O molecule with different charge and spin_multiplicity."""
+
+    for calc in omol_calculators():
+        # Test all combinations of charge and spin
+        charges = [0, 1, -1]
+        spins = [0, 1, 2]
+        energy_results = {}
+
+        for charge in charges:
+            for spin in spins:
+                aperiodic_atoms.info["charge"] = charge
+                aperiodic_atoms.info["spin"] = spin
+                aperiodic_atoms.calc = calc
+                energy = aperiodic_atoms.get_potential_energy()
+                energy_results[(charge, spin)] = energy
+
+        # Ensure all combinations produce unique energies
+        energy_values = list(energy_results.values())
+        assert len(energy_values) == len(
+            set(energy_values)
+        ), "Energy values are not unique for different charge/spin combinations"
+
+
+def test_random_seed_final_energy():
+    seeds = [100, 200, 300, 200]
+    results_by_seed = {}
+
+    calc = FAIRChemCalculator(
+        pretrained_mlip.get_predict_unit("uma-sm"),
+        task_name="omat",
+    )
+
+    for seed in seeds:
+        calc.predictor.seed(seed)
+        atoms = bulk("Cu").repeat(2)  # recreate atoms to avoid caching previous result
+        atoms.calc = calc
+        energy = atoms.get_potential_energy()
+        if seed in results_by_seed:
+            assert results_by_seed[seed] == energy
+        else:
+            results_by_seed[seed] = energy
+
+    for seed_a in set(seeds):
+        for seed_b in set(seeds) - {seed_a}:
+            assert results_by_seed[seed_a] != results_by_seed[seed_b]
