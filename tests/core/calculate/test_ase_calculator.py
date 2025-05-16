@@ -269,6 +269,7 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
         ), "Energy values are not unique for different charge/spin combinations"
 
 
+@pytest.mark.gpu()
 def test_random_seed_final_energy():
     seeds = [100, 200, 300, 200]
     results_by_seed = {}
