@@ -164,9 +164,11 @@ class AtomicData:
     ):
         self.__keys__ = set(_REQUIRED_KEYS)
 
-        self.pos = pos
+        # this conversion must have been done somewhere in
+        # pytorch geoemtric data
+        self.pos = pos.to(torch.float32)
         self.atomic_numbers = atomic_numbers
-        self.cell = cell
+        self.cell = cell.to(self.pos.dtype)
         self.pbc = pbc
         self.natoms = natoms
         self.edge_index = edge_index
@@ -247,7 +249,7 @@ class AtomicData:
         # dtype checks
         assert (
             self.pos.dtype == self.cell.dtype == self.cell_offsets.dtype == torch.float
-        )
+        ), "Positions, cell, cell_offsets are all expected to be float32. Check data going into AtomicData is correct dtype"
         assert self.atomic_numbers.dtype == torch.long
         assert self.edge_index.dtype == torch.long
         assert self.pbc.dtype == torch.bool
@@ -398,8 +400,8 @@ class AtomicData:
             edge_index=edge_index,
             cell_offsets=cell_offsets,
             nedges=nedges,
-            charge=charge,
-            spin=spin,
+            charge=tensor_or_int_to_tensor(charge, torch.long),
+            spin=tensor_or_int_to_tensor(spin, torch.long),
             fixed=fixed,
             tags=tags,
             energy=energy,
@@ -408,14 +410,15 @@ class AtomicData:
             sid=sid,
         )
 
-        if r_data_keys is not None:
-            for data_key in r_data_keys:
-                data[data_key] = (
-                    atoms.info[data_key]
-                    if isinstance(atoms.info[data_key], (int, float, str))
-                    else torch.tensor(atoms.info[data_key])
-                )
-
+        # breakpoint()
+        # if r_data_keys is not None:
+        #     for data_key in r_data_keys:
+        #         data[data_key] = (
+        #             atoms.info[data_key]
+        #             if isinstance(atoms.info[data_key], (int, float, str))
+        #             else torch.tensor(atoms.info[data_key])
+        #         )
+        # breakpoint()
         return data
 
     def to_ase_single(self) -> ase.Atoms:
@@ -848,9 +851,9 @@ def atomicdata_list_to_batch(
 
 
 def tensor_or_int_to_tensor(x, dtype=torch.int):
-    # if isinstance(x, int):
-    #     return torch.Tensor(x,dtype=dtype)
-    # elif isinstance(x,torch.Tensor):
-    #     #assert x.dtype==dtype, "Tensor is not of right dtype"
-    #     return x
+    if isinstance(x, int):
+        return torch.Tensor(x, dtype=dtype)
+    elif isinstance(x, torch.Tensor):
+        assert x.dtype == dtype, "Tensor is not of right dtype"
+        return x
     raise ValueError(f"type({x}) is not an int or tensor")

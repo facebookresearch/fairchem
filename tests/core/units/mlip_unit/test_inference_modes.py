@@ -14,6 +14,7 @@ import torch
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -233,18 +234,28 @@ def mole_inference(
     torch.compiler.reset()
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
-    a2g = AtomsToGraphs(
-        max_neigh=10,
+    # a2g = AtomsToGraphs(
+    #     max_neigh=10,
+    #     radius=100,
+    #     r_energy=False,
+    #     r_forces=False,
+    #     r_distances=False,
+    #     r_edges=inference_mode.external_graph_gen,
+    #     r_pbc=True,
+    #     r_data_keys=["spin", "charge"],
+    # )
+
+    #TODO use partial?
+    a2g = lambda atoms: AtomicData.from_ase(atoms, max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        r_distances=False,
         r_edges=inference_mode.external_graph_gen,
-        r_pbc=True,
-        r_data_keys=["spin", "charge"],
-    )
+        r_data_keys=["spin", "charge"],)
 
-    sample = a2g.convert(db.get_atoms(0))
+
+    sample = a2g(db.get_atoms(0))
+    #breakpoint()
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -323,7 +334,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g.convert(db.get_atoms(0))
+    sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -336,7 +347,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     )
     _ = predictor.predict(batch.clone())
 
-    sample = a2g.convert(db.get_atoms(1))
+    sample = a2g(db.get_atoms(1))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -344,7 +355,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g.convert(db.get_atoms(0))
+    sample = a2g(db.get_atoms(0))
     sample["dataset"] = "not-oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -352,7 +363,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g.convert(db.get_atoms(0))
+    sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen

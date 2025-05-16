@@ -46,9 +46,7 @@ class MTCollater:
     ) -> BaseData:
         data_list = self._add_missing_attr(data_list, dataset_task_map)
 
-        batch = atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
-
-        return batch
+        return atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
 
     # takes in the task config
     def _create_dataset_task_map(self, config):

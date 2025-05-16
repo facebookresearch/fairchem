@@ -20,7 +20,6 @@ from typing import Any, Callable
 
 import ase
 import numpy as np
-from torch import tensor
 from tqdm import tqdm
 
 from fairchem.core.common.registry import registry
@@ -117,15 +116,14 @@ class AseAtomsDataset(BaseDataset, ABC):
             )
 
         sid = atoms.info.get("sid", self.ids[idx])
-        fid = atoms.info.get("fid", tensor([0]))
+        fid = atoms.info.get("fid", None)
+        if fid is not None:
+            sid = f"{sid}-frame-{fid}"
 
-        # Convert to data object
-        data_object = self.a2g.convert(atoms, sid)
-        data_object.fid = fid
-        data_object.natoms = len(atoms)
+        data_object = self.a2g(atoms, sid)
 
         # apply linear reference
-        if self.a2g.r_energy is True and self.lin_ref is not None:
+        if self.lin_ref is not None:
             data_object.energy -= sum(self.lin_ref[data_object.atomic_numbers.long()])
 
         # Transform data object
