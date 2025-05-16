@@ -886,22 +886,19 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
-        self.tasks = [
+        tasks = [
             hydra.utils.instantiate(task_config)
             for task_config in checkpoint.tasks_config
         ]
+        self.tasks = {t.name: t for t in tasks}
 
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
-        self.tasks = {t.name: t for t in self.tasks}
         self.model.eval()
 
         self.lazy_model_intialized = False
-
-        self.direct_forces = self.model.module.backbone.direct_forces
-
         self.inference_mode = inference_settings
 
         # store composition embedding of system the model was merged on
@@ -911,6 +908,10 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             torch.set_float32_matmul_precision("high")
+
+    @property
+    def direct_forces(self) -> bool:
+        return self.model.module.backbone.direct_forces
 
     def seed(self, seed: int | None) -> None:
         logging.info(f"Setting random seed to {seed}")
@@ -923,7 +924,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
 
     def move_to_device(self):
         self.model.to(self.device)
-        for task in self.tasks:
+        for task in self.tasks.values():
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)

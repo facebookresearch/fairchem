@@ -16,12 +16,10 @@ from huggingface_hub import hf_hub_download
 
 from fairchem.core import models
 from fairchem.core._config import CACHE_DIR
-from fairchem.core.units import load_predict_unit
+from fairchem.core.units.mlip_unit import load_predict_unit
 
 if TYPE_CHECKING:
-    import torch
-
-    from fairchem.core.units import InferenceSettings, MLIPPredictUnit
+    from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 
 @dataclass
@@ -34,7 +32,7 @@ class HuggingFaceCheckpoint:
 
 @dataclass
 class PretrainedModels:
-    checkpoints = dict[str, HuggingFaceCheckpoint]
+    checkpoints: dict[str, HuggingFaceCheckpoint]
 
 
 with (resources.files(models) / "pretrained_models.json").open("rb") as f:
@@ -52,7 +50,7 @@ def get_predict_unit(
     model_name: str,
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
-    device: torch.device | None = None,
+    device: str = "cuda",
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.

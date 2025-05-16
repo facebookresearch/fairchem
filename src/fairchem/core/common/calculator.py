@@ -66,7 +66,7 @@ class FAIRChemCalculator(Calculator):
             )
 
         # check that always_use_pbc is set to False
-        if predict_unit.model.backbone.always_use_pbc is True:
+        if predict_unit.model.module.backbone.always_use_pbc is True:
             logging.warning(
                 "The predict unit model has always_use_pbc set to True. Resetting to False."
             )
@@ -100,8 +100,8 @@ class FAIRChemCalculator(Calculator):
         # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
         a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
         self.a2g = AtomsToGraphs(
-            max_neigh=self.predictor.model.module.backbone.max_neigh,
-            radius=self.predictor.model.module.backbone.radius,
+            max_neigh=self.predictor.model.module.backbone.max_neighbors,
+            radius=self.predictor.model.module.backbone.cutoff,
             r_energy=False,
             r_forces=False,
             r_distances=False,
@@ -230,13 +230,13 @@ class FAIRChemCalculator(Calculator):
         if np.any(atoms.pbc) and not np.all(atoms.pbc):
             raise MixedPBCError
 
-        def _validate_charge_and_spin(self, atoms: Atoms) -> None:
-            """
-            Validate and set default values for charge and spin.
+    def _validate_charge_and_spin(self, atoms: Atoms) -> None:
+        """
+        Validate and set default values for charge and spin.
 
-            Args:
-                atoms (Atoms): The atomic structure containing charge and spin information.
-            """
+        Args:
+            atoms (Atoms): The atomic structure containing charge and spin information.
+        """
 
         if "charge" not in atoms.info:
             if self.task_name == UMATask.OMOL.value:
