@@ -28,7 +28,6 @@ def load_data(request):
     request.cls.ions = ions
     request.cls.vacuum = 15
     request.cls.solvent_depth = 10
-    request.cls.solvent_interstitial_gap = 2
 
 
 @pytest.mark.usefixtures("load_data")
@@ -44,7 +43,6 @@ class TestInterface:
             self.solvent,
             self.ions,
             vacuum_size=self.vacuum,
-            solvent_interstitial_gap=self.solvent_interstitial_gap,
             solvent_depth=self.solvent_depth,
             num_configurations=10,
         )
@@ -66,7 +64,6 @@ class TestInterface:
             self.solvent,
             self.ions,
             vacuum_size=self.vacuum,
-            solvent_interstitial_gap=self.solvent_interstitial_gap,
             solvent_depth=self.solvent_depth,
             num_configurations=10,
         )
