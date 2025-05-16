@@ -14,9 +14,9 @@ import ase.io.trajectory
 import numpy as np
 import torch
 from ase.geometry import wrap_positions
-from torch_geometric.data import Data
 
 from fairchem.core.common.utils import collate
+from fairchem.core.third_party.mace_torchgeometric.data import Data
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -178,7 +178,7 @@ class AtomsToGraphs:
             tasks. Common sids used in OCP datasets include unique strings or integers.
 
         Returns:
-            data (torch_geometric.data.Data): A torch geometic data object with positions, atomic_numbers, tags,
+            data (fairchem.core.third_party.mace_torchgeometric.data): A torch geometric* data object with positions, atomic_numbers, tags,
             and optionally, energy, forces, distances, edges, and periodic boundary conditions.
             Optional properties can included by setting r_property=True when constructing the class.
         """
@@ -294,7 +294,7 @@ class AtomsToGraphs:
             collate_and_save (bool): A boolean to collate and save or not. Default is False, so will not write a file.
 
         Returns:
-            data_list (list of torch_geometric.data.Data):
+            data_list (list of fairchem.core.third_party.mace_torchgeometric.data):
             A list of torch geometric data objects containing molecular graph info and properties.
         """
 

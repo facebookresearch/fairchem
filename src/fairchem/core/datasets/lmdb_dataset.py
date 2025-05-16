@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, TypeVar
 import lmdb
 import numpy as np
 import torch
-from torch_geometric.data import Batch
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.typing import assert_is_instance
@@ -22,11 +21,11 @@ from fairchem.core.common.utils import pyg2_data_transform
 from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.base_dataset import BaseDataset
 from fairchem.core.modules.transforms import DataTransforms
+from fairchem.core.third_party.mace_torchgeometric.batch import Batch
+from fairchem.core.third_party.mace_torchgeometric.data import Data
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from torch_geometric.data.data import BaseData
 
 T_co = TypeVar("T_co", covariant=True)
 
@@ -172,8 +171,8 @@ class LmdbDataset(BaseDataset):
 
 
 def data_list_collater(
-    data_list: list[BaseData], otf_graph: bool = False, to_dict: bool = False
-) -> BaseData | dict[str, torch.Tensor]:
+    data_list: list[Data], otf_graph: bool = False, to_dict: bool = False
+) -> Data | dict[str, torch.Tensor]:
     batch = Batch.from_data_list(data_list)
 
     if not otf_graph:

@@ -16,28 +16,15 @@ import numpy as np
 import torch
 import torch.distributed
 from torch.utils.data import BatchSampler, Dataset, DistributedSampler
-from typing_extensions import deprecated, override
+from typing_extensions import override
 
 from fairchem.core.common import distutils, gp_utils
-from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.base_dataset import (
     UnsupportedDatasetError,
 )
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-    from torch_geometric.data import Batch, Data
-
-
-@deprecated(
-    "OCPColatter is deprecated. Please use data_list_collater optionally with functools.partial to set defaults"
-)
-class OCPCollater:
-    def __init__(self, otf_graph: bool = False) -> None:
-        self.otf_graph = otf_graph
-
-    def __call__(self, data_list: list[Data]) -> Batch:
-        return data_list_collater(data_list, otf_graph=self.otf_graph)
 
 
 @numba.njit

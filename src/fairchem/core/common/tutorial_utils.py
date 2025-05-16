@@ -21,7 +21,6 @@ import psutil
 import pymatgen.core as pc
 import torch
 import torch.cuda as tc
-import torch_geometric as tg
 from ase.db import connect
 
 import fairchem.core as om
@@ -61,7 +60,6 @@ def describe_fairchem():
             "  __CUDA Device Total Memory [GB]:",
             torch.cuda.get_device_properties(0).total_memory / 1e9,
         )
-    print(f"torch geometric: {tg.__version__}")
     print()
     print(f"Platform: {platform.platform()}")
     print(f"  Processor: {platform.processor()}")

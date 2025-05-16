@@ -7,10 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import typing
-
-if typing.TYPE_CHECKING:
-    from torch_geometric.data import Data
+from fairchem.core.third_party.mace_torchgeometric.data import Data
 
 
 def rename_data_object_keys(
