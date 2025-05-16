@@ -65,13 +65,6 @@ class FAIRChemCalculator(Calculator):
                 "FAIRChemCalculator can only be used with external_graph_gen True inference settings."
             )
 
-        # check that always_use_pbc is set to False
-        if predict_unit.model.module.backbone.always_use_pbc is True:
-            logging.warning(
-                "The predict unit model has always_use_pbc set to True. Resetting to False."
-            )
-            predict_unit.model.module.backbone.always_use_pbc = False
-
         if predict_unit.model.module.backbone.direct_forces:
             logging.warning(
                 "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
