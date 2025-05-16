@@ -94,17 +94,24 @@ def large_bulk_atoms() -> Atoms:
 @pytest.mark.gpu()
 def test_calculator_setup(all_calculators):
     for calc in all_calculators():
-        assert "energy" in calc.implemented_properties
-        assert "forces" in calc.implemented_properties
-        # assert "stress" in calc.implemented_properties
+        implemented_properties = ["energy", "forces"]
 
         # all conservative UMA checkpoints should support E/F/S!
-        if not calc.predictor.direct_forces and calc.task_name is not None:
-            for key in ["energy", "forces", "stress"]:
-                assert key in calc.calc_property_to_model_key_mapping
-        else:
-            for key in ["energy", "forces"]:
-                assert key in calc.calc_property_to_model_key_mapping
+        if (
+            not calc.predictor.direct_forces
+            and len(calc.predictor.datasets) > 1
+            or calc.task_name != "omol"
+        ):
+            print(len(calc.predictor.datasets), calc.task_name)
+            implemented_properties.append("stress")
+
+        assert all(
+            prop in calc.implemented_properties for prop in implemented_properties
+        )
+        assert all(
+            prop in calc.calc_property_to_model_key_mapping
+            for prop in implemented_properties
+        )
 
 
 @pytest.mark.gpu()
