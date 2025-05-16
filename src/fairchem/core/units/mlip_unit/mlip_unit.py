@@ -913,7 +913,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
     def direct_forces(self) -> bool:
         return self.model.module.backbone.direct_forces
 
-    @property()
+    @property
     def datasets(self) -> list[str]:
         return self.predictor.model.module.backbone.dataset_list
 
