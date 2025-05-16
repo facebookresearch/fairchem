@@ -8,42 +8,133 @@
 <h4 align="center">
 
 ![tests](https://github.com/FAIR-Chem/fairchem/actions/workflows/test.yml/badge.svg?branch=main)
-[![documentation](https://github.com/FAIR-Chem/fairchem/actions/workflows/docs.yml/badge.svg?branch=main)](https://github.com/FAIR-Chem/fairchem/actions/workflows/docs.yml)
-[![Static Badge](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
+![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
+![Static Badge](https://img.shields.io/badge/python-3.10%2B-blue)
 
-</h4>
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1)
 
-`fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models, demos, and application efforts for materials science and quantum chemistry.
+`fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
+demos, and application efforts for materials science and quantum chemistry.
 
-`fairchem` provides training and evaluation code for tasks and models that take arbitrary
-chemical structures as input to predict energies / forces / positions / stresses,
-and can be used as a base scaffold for research projects. For an overview of
-tasks, data, and metrics, please read the documentations and respective papers:
- - [OC20](https://fair-chem.github.io/core/datasets/oc20.html)
- - [OC22](https://fair-chem.github.io/core/datasets/oc22.html)
- - [ODAC23](https://fair-chem.github.io/core/datasets/odac.html)
+> :warning: **FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.**
+> If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
+> as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
-## Acknowledgements
-
-- This codebase was initially forked from [CGCNN](https://github.com/txie-93/cgcnn)
-by [Tian Xie](http://txie.me), but has undergone significant changes since.
-- A lot of engineering ideas have been borrowed from [github.com/facebookresearch/mmf](https://github.com/facebookresearch/mmf).
-- The DimeNet++ implementation is based on the [author's Tensorflow implementation](https://github.com/klicperajo/dimenet) and the [DimeNet implementation in Pytorch Geometric](https://github.com/rusty1s/pytorch_geometric/blob/master/torch_geometric/nn/models/dimenet.py).
-
-## License
-
-`fairchem` is released under the [MIT](https://github.com/FAIR-Chem/fairchem/blob/main/LICENSE.md) license.
-
-## Citing `fairchem`
-
-If you use this codebase in your work, please consider citing:
-
-```bibtex
-@article{ocp_dataset,
-    author = {Chanussot*, Lowik and Das*, Abhishek and Goyal*, Siddharth and Lavril*, Thibaut and Shuaibi*, Muhammed and Riviere, Morgane and Tran, Kevin and Heras-Domingo, Javier and Ho, Caleb and Hu, Weihua and Palizhati, Aini and Sriram, Anuroop and Wood, Brandon and Yoon, Junwoong and Parikh, Devi and Zitnick, C. Lawrence and Ulissi, Zachary},
-    title = {Open Catalyst 2020 (OC20) Dataset and Community Challenges},
-    journal = {ACS Catalysis},
-    year = {2021},
-    doi = {10.1021/acscatal.0c04525},
-}
+### Installation
+Install fairchem-core using pip,
+```bash
+pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
 ```
+**The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
+
+### Quick Start
+The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
+A single uma model can be used for a wide range of applications in chemistry and materials science by picking the
+appropriate task name for domain specific prediction.
+
+#### Instantiate a calculator from a pretrained model
+Make sure you have a Hugging Face account, have already applied for model access to the
+[UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
+
+#### Set the task for your application and calculate
+
+- **oc20:** use this for catalysis
+- **omat:** use this for inorganic materials
+- **omol:** use this for molecules
+- **odac:** use this for MOFs
+- **omc:** use this for molecular crystals
+
+Relax an adsorbate on a catalytic surface,
+```python
+from ase.build import fcc100, add_adsorbate, molecule
+from ase.optimize import LBFGS
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
+
+# Set up your system as an ASE atoms object
+slab = fcc100("Cu", (3, 3, 3), vacuum=8, periodic=True)
+adsorbate = molecule("CO")
+add_adsorbate(slab, adsorbate, 2.0, "bridge")
+
+slab.calc = calc
+
+# Set up LBFGS dynamics object
+opt = LBFGS(slab)
+opt.run(0.05, 100)
+```
+
+Relax an inorganic crystal,
+```python
+from ase.build import bulk
+from ase.optimize import FIRE
+from ase.filters import FrechetCellFilter
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omat")
+
+atoms = bulk("Fe")
+atoms.calc = calc
+
+opt = LBFGS(FrechetCellFilter(atoms))
+opt.run(0.05, 100)
+```
+
+Run molecular MD,
+```python
+from ase import units
+from ase.io import Trajectory
+from ase.md.langevin import Langevin
+from ase.build import molecule
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omol")
+
+atoms = molecule("H2O")
+atoms.calc = calc
+
+dyn = Langevin(
+    atoms,
+    timestep=0.1 * units.fs,
+    temperature_K=400,
+    friction=0.001 / units.fs,
+)
+trajectory = Trajectory("my_md.traj", "w", atoms)
+dyn.attach(trajectory.write, interval=1)
+dyn.run(steps=1000)
+```
+
+
+### Looking for Fairchem V1, models and code?
+Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
+
+We plan to bring back the following models compatible with Fairchem V2 soon:
+* Gemnet-OC
+* EquiformersV2
+* ESEN
+
+We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
+
+The old OCPCalculator, trainer code will NOT be revived. We apologize for the inconvenience and please raise Issues if you need help!
+In the meantime, you can still use models from fairchem version 1, by installing version 1,
+
+```bash
+pip install fairchem-core==1.10
+```
+
+And using the `OCPCalculator`
+```python
+from fairchem.core import OCPCalculator
+
+calc = OCPCalculator(
+    model_name="EquiformerV2-31M-S2EF-OC20-All+MD",
+    local_cache="pretrained_models",
+    cpu=False,
+)
+```
+
+### LICENSE
+`fairchem` is available under a [MIT License](LICENSE.md).
