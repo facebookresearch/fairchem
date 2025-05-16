@@ -16,7 +16,7 @@ from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.optimize import BFGS
 
 from fairchem.core import FAIRChemCalculator
-from fairchem.core.common.calculator import (
+from fairchem.core.calculate.ase_calculator import (
     AllZeroUnitCellError,
     MixedPBCError,
 )
@@ -135,7 +135,7 @@ def test_energy_calculation(request, atoms_fixture, generate_calculators):
 def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
     calc = FAIRChemCalculator(
         mlip_predict_unit,
-        task_name=mlip_predict_unit.available_datasets[0],
+        task_name=mlip_predict_unit.datasets[0],
     )
 
     slab_atoms.calc = calc
@@ -151,16 +151,20 @@ def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("inference_settings", ["default", "turbo"])
-def test_calculator_configurations(inference_settings, make_predict_unit, slab_atoms):
+def test_calculator_configurations(inference_settings, slab_atoms):
     # turbo mode requires compilation and needs to reset here
-    torch.compiler.reset()
-    predict_unit = make_predict_unit(inference_settings=inference_settings)
+    if inference_settings == "turbo":
+        torch.compiler.reset()
+
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-sm", inference_settings=inference_settings
+    )
     calc = FAIRChemCalculator(
         predict_unit,
-        task_name=predict_unit.available_datasets[0],
+        task_name=predict_unit.datasets[0],
     )
     slab_atoms.calc = calc
-
+    assert predict_unit.model.module.otf_graph is True
     # Test energy calculation
     energy = slab_atoms.get_potential_energy()
     assert isinstance(energy, float)
