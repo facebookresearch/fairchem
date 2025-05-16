@@ -917,14 +917,13 @@ class MLIPPredictUnit(PredictUnit[Batch]):
     def datasets(self) -> list[str]:
         return self.model.module.backbone.dataset_list
 
-    def seed(self, seed: int | None) -> None:
+    def seed(self, seed: int):
         logging.info(f"Setting random seed to {seed}")
         self._seed = seed
-        if seed is not None:
-            random.seed(seed)
-            np.random.seed(seed)
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed_all(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
     def move_to_device(self):
         self.model.to(self.device)
