@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 from huggingface_hub import hf_hub_download
 
-from fairchem.core import models
+from fairchem.core import calculate
 from fairchem.core._config import CACHE_DIR
 from fairchem.core.units.mlip_unit import load_predict_unit
 
@@ -35,7 +35,7 @@ class PretrainedModels:
     checkpoints: dict[str, HuggingFaceCheckpoint]
 
 
-with (resources.files(models) / "pretrained_models.json").open("rb") as f:
+with (resources.files(calculate) / "pretrained_models.json").open("rb") as f:
     _MODEL_CKPTS = PretrainedModels(
         checkpoints={
             model_name: HuggingFaceCheckpoint(**hf_kwargs)
