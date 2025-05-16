@@ -915,7 +915,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
 
     @property
     def datasets(self) -> list[str]:
-        return self.predictor.model.module.backbone.dataset_list
+        return self.model.module.backbone.dataset_list
 
     def seed(self, seed: int | None) -> None:
         logging.info(f"Setting random seed to {seed}")
