@@ -1,0 +1,179 @@
+snapshot_dir: fm_training/dataset_sync_250225
+omol_snapshot_dir: omol/250430-release/launch/
+omol_preview_snapshot_dir: ${dataset.snapshot_dir}/omol/250303
+
+omol_preview:
+  splits:
+    val:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/val
+    val_metal_complexes:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - organometallics
+    val_electrolytes:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - elytes
+    val_biomolecules:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - biomolecules
+    val_neutralorganics:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - ani2x
+            - orbnet_denali
+            - geom_orca6
+            - trans1x
+            - rgd
+    metal_ligand_ood:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/metal_ligand_ood
+    test:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/test
+    test_metal_complexes:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - organometallics
+    test_electrolytes:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - elytes
+    test_biomolecules:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - biomolecules
+    test_neutralorganics:
+      src: ${cluster.data_root_dir}/${dataset.omol_preview_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - ani2x
+            - orbnet_denali
+            - geom_orca6
+            - trans1x
+            - rgd
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_data_keys: ['spin', 'charge']
+    r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omol_energy
+    forces: ${omol_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: omol
+
+omol:
+  splits:
+    val:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/val
+    val_metal_complexes:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - metal_complexes
+    val_electrolytes:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - elytes
+    val_biomolecules:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - biomolecules
+    val_neutralorganics:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - ani2x
+            - orbnet_denali
+            - geom_orca6
+            - trans1x
+            - rgd
+    metal_ligand_ood:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/metal_ligand_ood
+    test:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/test
+    test_metal_complexes:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - metal_complexes
+    test_electrolytes:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - elytes
+    test_biomolecules:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - biomolecules
+    test_neutralorganics:
+      src: ${cluster.data_root_dir}/${dataset.omol_snapshot_dir}/test
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - ani2x
+            - orbnet_denali
+            - geom_orca6
+            - trans1x
+            - rgd
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_data_keys: ['spin', 'charge']
+    r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omol_energy
+    forces: ${omol_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: omol
