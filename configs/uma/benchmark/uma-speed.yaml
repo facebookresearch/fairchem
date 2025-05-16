@@ -1,0 +1,21 @@
+#fairchem -c puma_speed.yaml +run_dir_root=/path/to/run_dir
+
+runner:
+  _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
+  timeiters: 10
+  natoms_list: [1000]
+  model_checkpoints: {
+    "uma_sm_cons": "/home/misko/checkpoints/uma_sm_130525.pt"
+  }
+  run_dir_root: ${run_dir_root}
+  # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
+  # for profiling, we substract the graph generation time by using external_graph_gen=True
+  inference_settings:
+    _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+    tf32: True
+    activation_checkpointing: True
+    merge_mole: True
+    compile: False
+    wigner_cuda: True
+    external_graph_gen: True
+    internal_graph_gen_version: 2

@@ -1,0 +1,11 @@
+data_root_dir: /checkpoint/ocp/shared/benchmark
+checkpoint_root_dir: /checkpoint/ocp/shared/uma_checkpoints
+run_dir: /checkpoint/ocp/shared/uma
+account: ocp
+qos: alignment_shared
+partition: learn
+mode: LOCAL
+device: CUDA
+ranks_per_node: 1
+debug: True
+mem_gb: 240
