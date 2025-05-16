@@ -82,18 +82,18 @@ class FAIRChemCalculator(Calculator):
         self.predictor.seed(seed)
 
         self.calc_property_to_model_key_mapping = {}
-        logging.debug(f"Available task names: {self.predictor.available_datasets}")
+        logging.debug(f"Available task names: {self.predictor.datasets}")
 
         if task_name is not None:
             assert (
-                task_name in self.predictor.available_datasets
-            ), f"Given: {task_name}, Valid options are {self.predictor.available_datasets}"
+                task_name in self.predictor.datasets
+            ), f"Given: {task_name}, Valid options are {self.predictor.datasets}"
             self._task_name = task_name
-        elif len(self.predictor.available_datasets) == 1:
-            self._task_name = self.predictor.available_datasets[0]
+        elif len(self.predictor.datasets) == 1:
+            self._task_name = self.predictor.datasets[0]
         else:
             raise RuntimeError(
-                f"A task name must be provided. Valid options are {self.predictor.available_datasets}"
+                f"A task name must be provided. Valid options are {self.predictor.datasets}"
             )
 
         self._reset_calc_key_mapping(self._task_name)

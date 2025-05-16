@@ -914,7 +914,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         return self.model.module.backbone.direct_forces
 
     @property()
-    def available_datasets(self) -> list[str]:
+    def datasets(self) -> list[str]:
         return self.predictor.model.module.backbone.dataset_list
 
     def seed(self, seed: int | None) -> None:
