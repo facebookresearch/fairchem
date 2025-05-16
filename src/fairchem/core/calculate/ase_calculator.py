@@ -60,9 +60,9 @@ class FAIRChemCalculator(Calculator):
         self.implemented_properties = []
 
         # check that external graph gen is not set!
-        if predict_unit.inference_mode.external_graph_gen is True:
+        if predict_unit.inference_mode.external_graph_gen is not False:
             raise RuntimeError(
-                "FAIRChemCalculator can not be used with external_graph_gen."
+                "FAIRChemCalculator can only be used with external_graph_gen True inference settings."
             )
 
         # check that always_use_pbc is set to False
