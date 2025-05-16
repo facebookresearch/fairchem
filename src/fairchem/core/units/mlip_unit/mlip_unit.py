@@ -913,6 +913,10 @@ class MLIPPredictUnit(PredictUnit[Batch]):
     def direct_forces(self) -> bool:
         return self.model.module.backbone.direct_forces
 
+    @property()
+    def available_datasets(self) -> list[str]:
+        return self.predictor.model.module.backbone.dataset_list
+
     def seed(self, seed: int | None) -> None:
         logging.info(f"Setting random seed to {seed}")
         self._seed = seed

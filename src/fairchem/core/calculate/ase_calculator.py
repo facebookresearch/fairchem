@@ -82,18 +82,18 @@ class FAIRChemCalculator(Calculator):
         self.predictor.seed(seed)
 
         self.calc_property_to_model_key_mapping = {}
-        logging.debug(f"Available task names: {self.available_tasks}")
+        logging.debug(f"Available task names: {self.predictor.available_datasets}")
 
         if task_name is not None:
             assert (
-                task_name in self.available_tasks
-            ), f"Given: {task_name}, Valid options are {self.available_tasks}"
+                task_name in self.predictor.available_datasets
+            ), f"Given: {task_name}, Valid options are {self.predictor.available_datasets}"
             self._task_name = task_name
-        elif len(self.available_tasks) == 1:
-            self._task_name = self.available_tasks[0]
+        elif len(self.predictor.available_datasets) == 1:
+            self._task_name = self.predictor.available_datasets[0]
         else:
             raise RuntimeError(
-                f"A task name must be provided. Valid options are {self.available_tasks}"
+                f"A task name must be provided. Valid options are {self.predictor.available_datasets}"
             )
 
         self._reset_calc_key_mapping(self._task_name)
@@ -113,10 +113,6 @@ class FAIRChemCalculator(Calculator):
     @property
     def task_name(self) -> str:
         return self._task_name
-
-    @property
-    def available_tasks(self) -> list[str]:
-        return self.predictor.model.module.backbone.dataset_list
 
     def _reset_calc_key_mapping(self, task_name: str) -> None:
         """
