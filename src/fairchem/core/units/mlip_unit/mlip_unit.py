@@ -852,7 +852,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         device: str = "cpu",
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
-        seed: int | None = None,
+        seed: int = 41,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
