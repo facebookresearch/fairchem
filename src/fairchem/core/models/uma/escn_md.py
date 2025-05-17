@@ -306,8 +306,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 dtype=data_dict["pos"].dtype,
                 device=data_dict["pos"].device,
             )
-            # num_batch = data_dict["num_graphs"]
-            num_batch = data_dict.get("num_graphs", len(data_dict["natoms"]))
+            num_batch = len(data_dict["natoms"])
             displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
             displacement.requires_grad = True
             symmetric_displacement = 0.5 * (
@@ -429,6 +428,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             spin=data_dict["spin"],
             dataset=data_dict.get("dataset", None),
         )
+
+        # print("charge spin dataset",data_dict["charge"],data_dict["spin"],data_dict['dataset'])
+        # print("CSD",csd_mixed_emb.abs().mean().item())
         self.set_MOLE_coefficients(
             atomic_numbers_full=data_dict["atomic_numbers_full"],
             batch_full=data_dict["batch_full"],
@@ -468,6 +470,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 wigner_and_M_mapping = wigner_and_M_mapping_full
                 wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
 
+        # print("wiggy",wigner_and_M_mapping.abs().mean().item())
         ###############################################################
         # Initialize node embeddings
         ###############################################################
@@ -483,6 +486,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
             x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
 
+        # print("xmessage",x_message.abs().mean().item())
         sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
         x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
 
@@ -519,6 +523,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["node_offset"],
             )
 
+        # print("xmessage",x_message.abs().mean().item())
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
@@ -535,6 +540,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     node_offset=graph_dict["node_offset"],
                 )
 
+        # print("xmessage",x_message.abs().mean().item())
         # Final layer norm
         x_message = self.norm(x_message)
         out = {
@@ -543,6 +549,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
+        # print("edge dist",graph_dict['edge_distance'].abs().mean().item())
+        # print("edge index",graph_dict['edge_index'].to(torch.float).abs().mean().item())
+        # breakpoint()
         return out
 
     def _init_gp_partitions(self, graph_dict, atomic_numbers_full):

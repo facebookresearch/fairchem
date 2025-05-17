@@ -35,7 +35,17 @@ def load_data(request) -> None:
         r_forces=True,
         r_distances=True,
     )
+    a2g2 = lambda atoms: AtomicData.from_ase(atoms, max_neigh=200,
+        radius=6,
+        r_energy=True,
+        r_forces=True,
+        #r_distances=False,
+        r_edges=False,
+        #r_pbc=True,
+        r_data_keys=["spin", "charge"],)
+    breakpoint()
     data_list = a2g.convert_all([atoms])
+    #TODO is this just 1 element?
     request.cls.data = data_list[0]
 
 

@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, TypeVar
 import lmdb
 import numpy as np
 import torch
-from torch_geometric.data import Batch
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.typing import assert_is_instance
 from fairchem.core.common.utils import pyg2_data_transform
 from fairchem.core.datasets._utils import rename_data_object_keys
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 from fairchem.core.datasets.base_dataset import BaseDataset
 from fairchem.core.modules.transforms import DataTransforms
 
@@ -174,7 +174,8 @@ class LmdbDataset(BaseDataset):
 def data_list_collater(
     data_list: list[BaseData], otf_graph: bool = False, to_dict: bool = False
 ) -> BaseData | dict[str, torch.Tensor]:
-    batch = Batch.from_data_list(data_list)
+    # batch = Batch.from_data_list(data_list)
+    batch = atomicdata_list_to_batch(data_list)
 
     if not otf_graph:
         try:

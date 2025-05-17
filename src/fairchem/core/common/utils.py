@@ -78,6 +78,7 @@ def pyg2_data_transform(data: Data):
     if we're on the new pyg (2.0 or later) and if the Data stored is in older format
     we need to convert the data to the new format
     """
+    breakpoint()
     if torch_geometric.__version__ >= "2.0" and "_store" not in data.__dict__:
         return Data(**{k: v for k, v in data.__dict__.items() if v is not None})
 
