@@ -20,6 +20,7 @@ from typing import Any, Callable
 
 import ase
 import numpy as np
+from torch import tensor
 from tqdm import tqdm
 
 from fairchem.core.common.registry import registry
@@ -28,6 +29,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.base_dataset import BaseDataset
 from fairchem.core.datasets.target_metadata_guesser import guess_property_metadata
 from fairchem.core.modules.transforms import DataTransforms
+from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 
 
 def apply_one_tags(
@@ -82,7 +84,24 @@ class AseAtomsDataset(BaseDataset, ABC):
 
         a2g_args = config.get("a2g_args", {}) or {}
 
-        self.a2g = lambda atoms, sid: AtomicData.from_ase(atoms, sid=sid, **a2g_args)
+        self.old = False
+
+        if not self.old:
+            self.a2g = lambda atoms, sid: AtomicData.from_ase(
+                atoms, sid=sid, **a2g_args
+            )
+
+        else:
+            ## OLD ###
+            # set default to False if not set by user, assuming otf_graph will be used
+            if "r_edges" not in a2g_args:
+                a2g_args["r_edges"] = False
+
+            # Make sure we always include PBC info in the resulting atoms objects
+            a2g_args["r_pbc"] = True
+            self.a2g = AtomsToGraphs(**a2g_args)
+            # OLD ##
+        # breakpoint()
 
         self.key_mapping = self.config.get("key_mapping", None)
         self.transforms = DataTransforms(self.config.get("transforms", {}))
@@ -116,15 +135,40 @@ class AseAtomsDataset(BaseDataset, ABC):
             )
 
         sid = atoms.info.get("sid", self.ids[idx])
-        fid = atoms.info.get("fid", None)
-        if fid is not None:
-            sid = f"{sid}-frame-{fid}"
 
-        data_object = self.a2g(atoms, sid)
+        if not self.old:
+            ####
+            fid = atoms.info.get("fid", None)
+            if fid is not None:
+                sid = f"{sid}-frame-{fid}"
 
-        # apply linear reference
-        if self.lin_ref is not None:
-            data_object.energy -= sum(self.lin_ref[data_object.atomic_numbers.long()])
+            data_object = self.a2g(atoms, sid)
+
+            # apply linear reference
+            if self.lin_ref is not None:
+                data_object.energy -= sum(
+                    self.lin_ref[data_object.atomic_numbers.long()]
+                )
+            ###
+        else:
+            ## OLD ###
+            fid = atoms.info.get("fid", tensor([0]))
+
+            # Convert to data object
+            data_object = self.a2g.convert(atoms, sid)
+            data_object.fid = fid
+            data_object.natoms = len(atoms)
+
+            # apply linear reference
+            if self.a2g.r_energy is True and self.lin_ref is not None:
+                data_object.energy -= sum(
+                    self.lin_ref[data_object.atomic_numbers.long()]
+                )
+
+            ####
+
+        print("SELF OLD", self.old)
+        # breakpoint()
 
         # Transform data object
         data_object = self.transforms(data_object)

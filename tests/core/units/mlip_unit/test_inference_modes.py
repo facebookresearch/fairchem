@@ -323,16 +323,25 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = AtomsToGraphs(
-        max_neigh=10,
+    # a2g = AtomsToGraphs(
+    #     max_neigh=10,
+    #     radius=100,
+    #     r_energy=False,
+    #     r_forces=False,
+    #     r_distances=False,
+    #     r_edges=inference_mode.external_graph_gen,
+    #     r_pbc=True,
+    #     r_data_keys=["spin", "charge"],
+    # )
+
+    #TODO use partial?
+    a2g = lambda atoms: AtomicData.from_ase(atoms, max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        r_distances=False,
         r_edges=inference_mode.external_graph_gen,
-        r_pbc=True,
-        r_data_keys=["spin", "charge"],
-    )
+        r_data_keys=["spin", "charge"],)
+
 
     sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
