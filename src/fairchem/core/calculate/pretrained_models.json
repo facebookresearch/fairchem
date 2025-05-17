@@ -1,0 +1,6 @@
+{
+  "uma-sm": {"filename": "uma_sm.pt", "repo_id": "facebook/UMA"},
+  "esen-md-direct-all-omol": {"filename": "esen_md_direct_all.pt", "repo_id": "facebook/OMol25", "subfolder": "checkpoints"},
+  "esen-sm-conserving-all-omol": {"filename": "esen_sm_conserving_all.pt", "repo_id": "facebook/OMol25", "subfolder": "checkpoints"},
+  "esen-sm-direct-all-omol": {"filename": "esen_sm_direct_all.pt", "repo_id": "facebook/OMol25", "subfolder": "checkpoints"}
+}

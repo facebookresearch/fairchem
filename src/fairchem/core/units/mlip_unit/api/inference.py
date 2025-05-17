@@ -96,6 +96,7 @@ def inference_settings_default():
         merge_mole=False,
         compile=False,
         wigner_cuda=False,
+        external_graph_gen=False,
         internal_graph_gen_version=2,
     )
 
@@ -111,6 +112,7 @@ def inference_settings_turbo():
         merge_mole=True,
         compile=True,
         wigner_cuda=True,
+        external_graph_gen=False,
         internal_graph_gen_version=2,
     )
 
