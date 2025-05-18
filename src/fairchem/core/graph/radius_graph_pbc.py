@@ -169,8 +169,9 @@ def radius_graph_pbc(
     if pbc is None:
         pbc = [True, True, True]
     else:
-        assert isinstance(pbc,torch.Tensor)
-        assert pbc.ndim==1 and pbc.shape[0]==3
+        assert isinstance(pbc, torch.Tensor)
+        assert pbc.ndim == 1
+        assert pbc.shape[0] == 3
         pbc = list(pbc)
     device = data.pos.device
     batch_size = len(data.natoms)

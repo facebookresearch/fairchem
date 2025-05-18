@@ -19,7 +19,6 @@ from huggingface_hub import hf_hub_download
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
     DEFAULT_CHARGE,
@@ -137,7 +136,7 @@ class FAIRChemCalculator(Calculator):
         self.seed = seed
 
         # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
-        #a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
+        # a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
         # self.a2g = AtomsToGraphs(
         #     max_neigh=self.max_neighbors,
         #     radius=self.cutoff,
@@ -149,14 +148,17 @@ class FAIRChemCalculator(Calculator):
         #     **a2g_kwargs,
         # )
 
-        self.a2g = lambda atoms: AtomicData.from_ase(atoms, max_neigh=10,
-                radius=100,
-                r_energy=False,
-                r_forces=False,
-                #r_distances=False,
-                r_edges=False,
-                #r_pbc=True,
-                r_data_keys=["spin", "charge"],)
+        self.a2g = lambda atoms: AtomicData.from_ase(
+            atoms,
+            max_neigh=10,
+            radius=100,
+            r_energy=False,
+            r_forces=False,
+            # r_distances=False,
+            r_edges=False,
+            # r_pbc=True,
+            r_data_keys=["spin", "charge"],
+        )
 
         if self.direct_force:
             logging.warning(

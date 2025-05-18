@@ -7,15 +7,13 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 import torch
 
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
-
 T_co = TypeVar("T_co", covariant=True)
-
 
 
 def data_list_collater(

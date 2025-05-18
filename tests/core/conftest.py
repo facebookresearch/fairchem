@@ -162,24 +162,6 @@ def torch_deterministic():
     torch.use_deterministic_algorithms(False)
 
 
-@pytest.fixture(scope="session")
-def tutorial_dataset_path(tmp_path_factory) -> Path:
-    """
-    Download the tutorial dataset and extract it to a temporary directory.
-    This directory will persist until restart to avoid eating bandwidth.
-    """
-    TUTORIAL_DATASET_URL = (
-        "http://dl.fbaipublicfiles.com/opencatalystproject/data/tutorial_data.tar.gz"
-    )
-
-    tmpdir = tmp_path_factory.getbasetemp()
-
-    response = requests.get(TUTORIAL_DATASET_URL, stream=True)
-    assert response.status_code == 200
-
-    tarfile.open(fileobj=response.raw, mode="r|gz").extractall(path=tmpdir)
-
-    return tmpdir
 
 
 @pytest.fixture(scope="session")

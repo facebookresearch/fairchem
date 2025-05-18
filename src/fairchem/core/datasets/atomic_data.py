@@ -310,6 +310,8 @@ class AtomicData:
             # create a molecule box with the molecule centered on it if specified
             atoms.center(vacuum=(molecule_cell_size))
             atoms.pbc = np.array([True, True, True])
+        elif np.all(~atoms.pbc):
+            pass  # This is fine
         elif not np.all(atoms.pbc) and atoms.cell.volume < 0.1:
             raise ValueError(
                 "atoms must either have a cell or have a cell created by setting <molecule_cell_size>."
