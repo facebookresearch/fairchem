@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -860,6 +860,25 @@ class MLIPTrainEvalUnit(TrainUnit[Batch], EvalUnit[Batch], Stateful):
         return self.finetune_model_full_config
 
 
+@contextmanager
+def tf32_context_manager():
+    # Store the original settings
+    original_allow_tf32_matmul = torch.backends.cuda.matmul.allow_tf32
+    original_allow_tf32_cudnn = torch.backends.cudnn.allow_tf32
+    original_float32_matmul_precision = torch.get_float32_matmul_precision()
+    try:
+        # Set the desired settings
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
+        yield
+    finally:
+        # Revert to the original settings
+        torch.backends.cuda.matmul.allow_tf32 = original_allow_tf32_matmul
+        torch.backends.cudnn.allow_tf32 = original_allow_tf32_cudnn
+        torch.set_float32_matmul_precision(original_float32_matmul_precision)
+
+
 class MLIPPredictUnit(PredictUnit[Batch]):
     def __init__(
         self,
@@ -913,11 +932,6 @@ class MLIPPredictUnit(PredictUnit[Batch]):
 
         # store composition embedding of system the model was merged on
         self.merged_on = None
-
-        if self.inference_mode.tf32:
-            torch.backends.cuda.matmul.allow_tf32 = True
-            torch.backends.cudnn.allow_tf32 = True
-            torch.set_float32_matmul_precision("high")
 
     def move_to_device(self):
         self.model.to(self.device)
@@ -993,9 +1007,12 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 ), f"Cannot run on merged model on system. Dataset is diferrent {self.merged_on[1]} vs {this_sys[1]}"
 
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
+        tf32_context = (
+            tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
+        )
 
         pred_output = {}
-        with inference_context:
+        with inference_context, tf32_context:
             output = self.model(data_device)
             for task_name, task in self.tasks.items():
                 pred_output[task_name] = task.normalizer.denorm(

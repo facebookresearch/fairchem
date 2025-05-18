@@ -8,7 +8,9 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from contextlib import suppress
+import random
 
+import numpy as np
 import pytest
 import torch
 
@@ -86,3 +88,19 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "inference_check" in item.keywords:
                 item.add_marker(skip_inference_check)
+
+def seed_everywhere(seed=0):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+@pytest.fixture(scope="function")
+def seed_fixture():
+    seed_everywhere(42)  # You can set your desired seed value here
+
+@pytest.fixture(scope="function")
+def compile_reset_state():
+    torch.compiler.reset()
+    yield
+    torch.compiler.reset()

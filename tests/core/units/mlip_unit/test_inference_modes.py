@@ -46,6 +46,7 @@ def test_direct_mole_inference_modes(
     direct_mole_checkpoint,
     fake_uma_dataset,
     torch_deterministic,
+    compile_reset_state
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -83,6 +84,7 @@ def test_conserving_mole_inference_modes(
     conserving_mole_checkpoint,
     fake_uma_dataset,
     torch_deterministic,
+    compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -123,6 +125,7 @@ def test_conserving_mole_inference_modes_gpu(
     external_graph_gen,
     conserving_mole_checkpoint,
     fake_uma_dataset,
+    compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -143,7 +146,7 @@ def test_conserving_mole_inference_modes_gpu(
 
 # Test the two main modes inference and MD on CPU for direct and convserving
 def test_conserving_mole_inference_mode_default(
-    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -155,7 +158,7 @@ def test_conserving_mole_inference_mode_default(
 
 
 def test_conserving_mole_inference_mode_md(
-    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -167,7 +170,7 @@ def test_conserving_mole_inference_mode_md(
 
 
 def test_direct_mole_inference_mode_default(
-    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -179,7 +182,7 @@ def test_direct_mole_inference_mode_default(
 
 
 def test_direct_mole_inference_mode_md(
-    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -195,7 +198,7 @@ def test_direct_mole_inference_mode_md(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_default_gpu(
-    conserving_mole_checkpoint, fake_uma_dataset
+    conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -210,7 +213,7 @@ def test_conserving_mole_inference_mode_default_gpu(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_md_gpu(
-    conserving_mole_checkpoint, fake_uma_dataset
+    conserving_mole_checkpoint, fake_uma_dataset,compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -231,7 +234,6 @@ def mole_inference(
     energy_rtol=1e-4,
     forces_rtol=1e-4,
 ):
-    torch.compiler.reset()
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
     # a2g = AtomsToGraphs(

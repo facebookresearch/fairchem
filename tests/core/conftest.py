@@ -226,3 +226,4 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
             "a2g_args": {"r_data_keys": ["energy", "forces", "stress"]},
         }
     )
+
