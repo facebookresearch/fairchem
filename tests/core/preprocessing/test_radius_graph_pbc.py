@@ -16,8 +16,8 @@ from ase.build import molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
-from fairchem.core.common.utils import radius_graph_pbc, radius_graph_pbc_v2
 from fairchem.core.datasets import data_list_collater
+from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 from fairchem.core.preprocessing import AtomsToGraphs
 
 

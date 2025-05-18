@@ -17,7 +17,7 @@ from torch.profiler import record_function
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import get_device_for_local_rank
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import cg_change_mat, conditional_grad, irreps_sum
+from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.common.rotation import (
@@ -41,6 +41,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
 from fairchem.core.models.uma.nn.radial import GaussianSmearing
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
 from .escn_md_block import eSCNMD_Block
 
@@ -351,13 +352,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
-                pbc = (True, True, True)
+                pbc = torch.ones(len(data_dict),3,dtype=torch.bool)
             else:
                 assert (
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert all(pbc) or not any(
+            assert pbc.all() or not any(
                 pbc
             ), "We can only accept pbc that is all true or all false"
             logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
