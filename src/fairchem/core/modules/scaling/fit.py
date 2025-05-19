@@ -18,10 +18,11 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
+from fairchem.experimental.legacy.utils import build_config
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 from fairchem.core.common.flags import flags
-from fairchem.core.common.utils import build_config, new_trainer_context, setup_logging
+from fairchem.core.common.utils import new_trainer_context, setup_logging
 from fairchem.core.modules.scaling import ScaleFactor
 from fairchem.core.modules.scaling.compat import load_scales_compat
 
