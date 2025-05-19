@@ -16,7 +16,7 @@ import pytest
 import torch
 from ase import build
 
-from fairchem.core.datasets.collater import data_list_collater
+from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.uma.escn_md import MLP_EFS_Head, eSCNMDBackbone
 

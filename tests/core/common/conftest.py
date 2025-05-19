@@ -10,8 +10,6 @@ from __future__ import annotations
 import pytest
 from ase import build
 
-from fairchem.core.datasets import data_list_collater
-
 
 @pytest.fixture()
 def atoms_list():
@@ -22,5 +20,3 @@ def atoms_list():
     for atoms in atoms_list:
         atoms.rattle(stdev=0.05, seed=0)
     return atoms_list
-
-

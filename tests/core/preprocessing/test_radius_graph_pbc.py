@@ -61,16 +61,19 @@ class TestRadiusGraphPBC:
     def test_radius_graph_pbc(self) -> None:
         data = self.data
         batch = data_list_collater([data] * 5)
-        generated_graphs=generate_graph(
-            data=batch, 
+        generated_graphs = generate_graph(
+            data=batch,
             cutoff=6,
             max_neighbors=2000,
             enforce_max_neighbors_strictly=False,
             radius_pbc_version=1,
-            pbc= torch.BoolTensor([[True, True, False]]*5),
-        ) 
+            pbc=torch.BoolTensor([[True, True, False]] * 5),
+        )
         assert check_features_match(
-            batch.edge_index, batch.cell_offsets, generated_graphs['edge_index'], generated_graphs['cell_offsets']
+            batch.edge_index,
+            batch.cell_offsets,
+            generated_graphs["edge_index"],
+            generated_graphs["cell_offsets"],
         )
 
     def test_bulk(self) -> None:
