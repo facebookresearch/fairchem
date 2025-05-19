@@ -93,7 +93,7 @@ def test_fit_linear_references(
     element_refs, dummy_binary_dataset, max_num_elements, dummy_element_refs
 ):
     # create the composition matrix
-    energy = np.array([d.energy for d in dummy_binary_dataset])
+    energy = np.array([d.energy for d in dummy_binary_dataset]).reshape(-1)
     cmatrix = np.vstack(
         [
             np.bincount(d.atomic_numbers.int().numpy(), minlength=max_num_elements + 1)
