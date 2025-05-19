@@ -8,17 +8,26 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING, Any, Callable
 
 import torch
-
-from fairchem.core.common.utils import save_checkpoint
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from torch.nn import Module
     from torch.utils.data import Dataset
+
+
+def save_checkpoint(
+    state,
+    checkpoint_dir: str = "checkpoints/",
+    checkpoint_file: str = "checkpoint.pt",
+) -> str:
+    filename = os.path.join(checkpoint_dir, checkpoint_file)
+    torch.save(state, filename)
+    return filename
 
 
 def _load_check_duplicates(config: dict, name: str) -> dict[str, torch.nn.Module]:
