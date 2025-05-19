@@ -20,7 +20,6 @@ YTOL = 0.999999
 
 class RotMatWignerCudaGraph:
     def __init__(self):
-        print("INIT CUDA GRAPH MOD")
         assert torch.cuda.is_initialized(), "Cuda Graphs can only be used with GPUs"
         # lazy graph capture
         self.graph_mod = None
@@ -46,7 +45,6 @@ class RotMatWignerCudaGraph:
         assert len(edge_dist_vec.shape) == 2
         assert edge_dist_vec.shape[1] == 3
 
-        print("CUDA GRAPH GET REGION")
         # if size of edge_dist_vec is less than max_edges, we pad up and select a subset,
         # otherwise we recompute the graph
         input_padded = edge_dist_vec
