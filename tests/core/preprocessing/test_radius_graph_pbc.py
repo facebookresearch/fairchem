@@ -7,8 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from functools import partial
 import os
+from functools import partial
 
 import pytest
 import torch
@@ -20,7 +20,6 @@ from ase.lattice.cubic import FaceCenteredCubic
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
-from fairchem.core.preprocessing import AtomsToGraphs
 
 
 @pytest.fixture(scope="class")
@@ -30,10 +29,9 @@ def load_data(request) -> None:
         index=0,
         format="json",
     )
-    request.cls.data = AtomicData.from_ase(atoms,max_neigh=200,
-        radius=6,
-        r_edges=True,
-        r_data_keys=["spin", "charge"])
+    request.cls.data = AtomicData.from_ase(
+        atoms, max_neigh=200, radius=6, r_edges=True, r_data_keys=["spin", "charge"]
+    )
 
 
 def check_features_match(
@@ -78,11 +76,14 @@ class TestRadiusGraphPBC:
         # Must be sufficiently large to ensure all edges are retained
         max_neigh = 2000
 
-        a2g = partial(AtomicData.from_ase,max_neigh=max_neigh,
-        radius=radius,
-        r_edges=True,
-        r_data_keys=["spin", "charge"])
-        
+        a2g = partial(
+            AtomicData.from_ase,
+            max_neigh=max_neigh,
+            radius=radius,
+            r_edges=True,
+            r_data_keys=["spin", "charge"],
+        )
+
         structure = FaceCenteredCubic("Pt", size=[1, 2, 3])
         data = a2g(structure)
         batch = data_list_collater([data])
@@ -153,7 +154,7 @@ class TestRadiusGraphPBC:
             batch,
             radius=radius,
             max_num_neighbors_threshold=max_neigh,
-            pbc=[False, True, True],
+            pbc=torch.BoolTensor([False, True, True]),
         )
         assert check_features_match(data.edge_index, data.cell_offsets, out[0], out[1])
 
@@ -166,7 +167,7 @@ class TestRadiusGraphPBC:
             batch,
             radius=radius,
             max_num_neighbors_threshold=max_neigh,
-            pbc=[False, False, True],
+            pbc=torch.BoolTensor([False, False, True]),
         )
         assert check_features_match(data.edge_index, data.cell_offsets, out[0], out[1])
 
@@ -179,7 +180,7 @@ class TestRadiusGraphPBC:
             batch,
             radius=radius,
             max_num_neighbors_threshold=max_neigh,
-            pbc=[True, False, True],
+            pbc=torch.BoolTensor([True, False, True]),
         )
         assert check_features_match(data.edge_index, data.cell_offsets, out[0], out[1])
 
@@ -192,7 +193,7 @@ class TestRadiusGraphPBC:
             batch,
             radius=radius,
             max_num_neighbors_threshold=max_neigh,
-            pbc=[True, True, True],
+            pbc=torch.BoolTensor([True, True, True]),
         )
 
         assert check_features_match(data.edge_index, data.cell_offsets, out[0], out[1])
@@ -227,13 +228,15 @@ class TestRadiusGraphPBC:
         max_neigh = 1000
         structure = molecule("CH3COOH")
         structure.cell = [[20, 0, 0], [0, 20, 0], [0, 0, 20]]
-        data = AtomicData.from_ase(structure,radius=radius, max_neigh=max_neigh)
+        data = AtomicData.from_ase(
+            structure, radius=radius, max_neigh=max_neigh, r_edges=True
+        )
         batch = data_list_collater([data])
         out = radius_graph_pbc(
             batch,
             radius=radius,
             max_num_neighbors_threshold=max_neigh,
-            pbc=[False, False, False],
+            pbc=torch.BoolTensor([False, False, False]),
         )
 
         assert check_features_match(data.edge_index, data.cell_offsets, out[0], out[1])
@@ -302,7 +305,6 @@ def test_simple_systems_nopbc(
     enforce_max_neighbors_strictly,
     torch_deterministic,
 ):
-
     data = AtomicData.from_ase(atoms)
 
     batch = data_list_collater([data])

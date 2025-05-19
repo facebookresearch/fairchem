@@ -166,17 +166,7 @@ def radius_graph_pbc(
     enforce_max_neighbors_strictly: bool = False,
     pbc=None,
 ):
-    if pbc is None:
-        pbc = [True, True, True]
-    else:
-        assert isinstance(pbc, torch.Tensor)
-        assert pbc.ndim == 1
-        assert pbc.shape[0] == 3
-        pbc = list(pbc)
-    device = data.pos.device
-    batch_size = len(data.natoms)
-
-    if hasattr(data, "pbc"):
+    if pbc is None and hasattr(data, "pbc"):
         data.pbc = torch.atleast_2d(data.pbc)
         for i in range(3):
             if not torch.any(data.pbc[:, i]).item():
@@ -187,6 +177,16 @@ def radius_graph_pbc(
                 raise RuntimeError(
                     "Different structures in the batch have different PBC configurations. This is not currently supported."
                 )
+    elif pbc is None:
+        pbc = torch.BoolTensor([True, True, True])
+
+    assert isinstance(pbc, torch.Tensor)
+    assert pbc.ndim == 1
+    assert pbc.shape[0] == 3
+    pbc = list(pbc)
+
+    device = data.pos.device
+    batch_size = len(data.natoms)
 
     # position of the atoms
     atom_pos = data.pos

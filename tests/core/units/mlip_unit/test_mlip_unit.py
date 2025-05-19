@@ -163,7 +163,9 @@ def test_full_conserving_mole_eval_from_cli(fake_uma_dataset, torch_deterministi
 
 
 @pytest.mark.gpu()
-def test_full_train_eval_from_cli_aselmdb_gpu(fake_uma_dataset,seed_fixture,compile_reset_state):
+def test_full_train_eval_from_cli_aselmdb_gpu(
+    fake_uma_dataset, seed_fixture, compile_reset_state
+):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",

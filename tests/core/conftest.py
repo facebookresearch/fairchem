@@ -7,18 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import tarfile
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
 from itertools import product
 from random import choice
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-import requests
 import torch
 from ase.db import connect
 from pymatgen.core import Structure
@@ -162,8 +156,6 @@ def torch_deterministic():
     torch.use_deterministic_algorithms(False)
 
 
-
-
 @pytest.fixture(scope="session")
 def dummy_element_refs():
     # create some dummy elemental energies from ionic radii (ignore deuterium and tritium included in pmg)
@@ -208,4 +200,3 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
             "a2g_args": {"r_data_keys": ["energy", "forces", "stress"]},
         }
     )
-

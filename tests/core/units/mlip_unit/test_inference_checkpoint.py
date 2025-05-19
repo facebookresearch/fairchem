@@ -22,7 +22,6 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.lmdb_dataset import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 from fairchem.core.units.mlip_unit.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 
@@ -44,15 +43,17 @@ def test_inference_checkpoint_direct(
     #     r_pbc=True,
     #     r_data_keys=["spin", "charge"],
     # )
-    a2g = lambda atoms: AtomicData.from_ase(atoms, max_neigh=10,
+    a2g = lambda atoms: AtomicData.from_ase(
+        atoms,
+        max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        #r_distances=False,
+        # r_distances=False,
         r_edges=False,
-        #r_pbc=True,
-        r_data_keys=["spin", "charge"],)
-
+        # r_pbc=True,
+        r_data_keys=["spin", "charge"],
+    )
 
     energies = []
     forces = []

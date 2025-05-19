@@ -10,12 +10,10 @@ from __future__ import annotations
 import os
 
 import pytest
-import torch
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
@@ -46,7 +44,7 @@ def test_direct_mole_inference_modes(
     direct_mole_checkpoint,
     fake_uma_dataset,
     torch_deterministic,
-    compile_reset_state
+    compile_reset_state,
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -84,7 +82,7 @@ def test_conserving_mole_inference_modes(
     conserving_mole_checkpoint,
     fake_uma_dataset,
     torch_deterministic,
-    compile_reset_state
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -125,7 +123,7 @@ def test_conserving_mole_inference_modes_gpu(
     external_graph_gen,
     conserving_mole_checkpoint,
     fake_uma_dataset,
-    compile_reset_state
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -146,7 +144,10 @@ def test_conserving_mole_inference_modes_gpu(
 
 # Test the two main modes inference and MD on CPU for direct and convserving
 def test_conserving_mole_inference_mode_default(
-    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
+    conserving_mole_checkpoint,
+    fake_uma_dataset,
+    torch_deterministic,
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -158,7 +159,10 @@ def test_conserving_mole_inference_mode_default(
 
 
 def test_conserving_mole_inference_mode_md(
-    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
+    conserving_mole_checkpoint,
+    fake_uma_dataset,
+    torch_deterministic,
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -213,7 +217,7 @@ def test_conserving_mole_inference_mode_default_gpu(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_md_gpu(
-    conserving_mole_checkpoint, fake_uma_dataset,compile_reset_state
+    conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -247,17 +251,19 @@ def mole_inference(
     #     r_data_keys=["spin", "charge"],
     # )
 
-    #TODO use partial?
-    a2g = lambda atoms: AtomicData.from_ase(atoms, max_neigh=10,
+    # TODO use partial?
+    a2g = lambda atoms: AtomicData.from_ase(
+        atoms,
+        max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
         r_edges=inference_mode.external_graph_gen,
-        r_data_keys=["spin", "charge"],)
-
+        r_data_keys=["spin", "charge"],
+    )
 
     sample = a2g(db.get_atoms(0))
-    #breakpoint()
+    # breakpoint()
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -336,14 +342,16 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     #     r_data_keys=["spin", "charge"],
     # )
 
-    #TODO use partial?
-    a2g = lambda atoms: AtomicData.from_ase(atoms, max_neigh=10,
+    # TODO use partial?
+    a2g = lambda atoms: AtomicData.from_ase(
+        atoms,
+        max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
         r_edges=inference_mode.external_graph_gen,
-        r_data_keys=["spin", "charge"],)
-
+        r_data_keys=["spin", "charge"],
+    )
 
     sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"

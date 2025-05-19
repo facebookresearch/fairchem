@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import os
@@ -92,12 +93,12 @@ def test_ase_dataset(ase_dataset, structures):
     dataset, mult = ase_dataset
     assert len(dataset) == mult * len(structures)
     for data in dataset:
-        #assert hasattr(data, "y") # part of pyg data , eventhough its None
+        # assert hasattr(data, "y") # part of pyg data , eventhough its None
         assert data.forces.shape == (data.natoms, 3)
-        assert data.stress.shape == (1,3, 3)
-        # TODO FIX THIS BEFORE MERGE? 
-        #assert data.tensor_property.shape == (6, 6)
-        #assert isinstance(data.extensive_property, int)
+        assert data.stress.shape == (1, 3, 3)
+        # TODO FIX THIS BEFORE MERGE?
+        # assert data.tensor_property.shape == (6, 6)
+        # assert isinstance(data.extensive_property, int)
 
 
 def test_ase_read_dataset(tmp_path, structures):
@@ -142,7 +143,7 @@ def test_ase_metadata_guesser(ase_dataset):
     assert metadata["targets"]["stress"]["extensive"] is False
     assert metadata["targets"]["stress"]["type"] == "per-image"
 
-    #TODO FIX BEFORE MERGE
+    # TODO FIX BEFORE MERGE
     # # Confirm extensive_property metadata guessed properly
     # assert metadata["targets"]["info.extensive_property"]["extensive"] is True
     # assert metadata["targets"]["info.extensive_property"]["shape"] == ()

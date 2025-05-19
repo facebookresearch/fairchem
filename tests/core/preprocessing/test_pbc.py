@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from functools import partial
 import os
 
 import numpy as np
@@ -17,7 +16,6 @@ from ase.io import read
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.graph.compute import get_pbc_distances
-from fairchem.core.preprocessing import AtomsToGraphs
 
 
 @pytest.fixture(scope="class")
@@ -27,9 +25,12 @@ def load_data(request) -> None:
         index=0,
         format="json",
     )
-    request.cls.data = AtomicData.from_ase(atoms,max_neigh=12,
-            radius=6,
-            r_edges=True,)
+    request.cls.data = AtomicData.from_ase(
+        atoms,
+        max_neigh=12,
+        radius=6,
+        r_edges=True,
+    )
 
 
 @pytest.mark.usefixtures("load_data")
