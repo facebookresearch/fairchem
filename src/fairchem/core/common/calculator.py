@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from functools import partial
 import logging
 import random
 from typing import TYPE_CHECKING
@@ -135,28 +136,10 @@ class FAIRChemCalculator(Calculator):
         self._reset_calc_key_mapping(self._task_name)
         self.seed = seed
 
-        # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
-        # a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
-        # self.a2g = AtomsToGraphs(
-        #     max_neigh=self.max_neighbors,
-        #     radius=self.cutoff,
-        #     r_energy=False,
-        #     r_forces=False,
-        #     r_distances=False,
-        #     r_edges=False,
-        #     r_pbc=True,
-        #     **a2g_kwargs,
-        # )
-
-        self.a2g = lambda atoms: AtomicData.from_ase(
-            atoms,
+        self.a2g = partial(AtomicData.from_ase,
             max_neigh=10,
             radius=100,
-            r_energy=False,
-            r_forces=False,
-            # r_distances=False,
             r_edges=False,
-            # r_pbc=True,
             r_data_keys=["spin", "charge"],
         )
 

@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from functools import partial
 import os
 
 import numpy as np
@@ -26,21 +27,9 @@ def load_data(request) -> None:
         index=0,
         format="json",
     )
-    # a2g = AtomsToGraphs(
-    #     max_neigh=12,
-    #     radius=6,
-    #     r_energy=True,
-    #     r_forces=True,
-    #     r_distances=True,
-    # )
-    a2g = lambda atoms: AtomicData.from_ase(
-            atoms,
-            max_neigh=12,
+    request.cls.data = AtomicData.from_ase(atoms,max_neigh=12,
             radius=6,
-            r_edges=True,
-            #r_data_keys=["spin", "charge"],
-    )
-    request.cls.data = a2g(atoms)
+            r_edges=True,)
 
 
 @pytest.mark.usefixtures("load_data")
