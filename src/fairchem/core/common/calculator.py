@@ -7,9 +7,9 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from functools import partial
 import logging
 import random
+from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -136,7 +136,8 @@ class FAIRChemCalculator(Calculator):
         self._reset_calc_key_mapping(self._task_name)
         self.seed = seed
 
-        self.a2g = partial(AtomicData.from_ase,
+        self.a2g = partial(
+            AtomicData.from_ase,
             max_neigh=10,
             radius=100,
             r_edges=False,

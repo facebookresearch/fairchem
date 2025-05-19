@@ -30,7 +30,6 @@ def load_data(request) -> None:
         index=0,
         format="json",
     )
-    breakpoint()
     request.cls.data = AtomicData.from_ase(atoms,max_neigh=200,
         radius=6,
         r_edges=True,
@@ -67,9 +66,8 @@ class TestRadiusGraphPBC:
             batch,
             radius=6,
             max_num_neighbors_threshold=2000,
-            pbc=torch.BoolTensor([True, True, True]),
+            pbc=torch.BoolTensor([True, True, False]),
         )
-
         assert check_features_match(
             batch.edge_index, batch.cell_offsets, edge_index, cell_offsets
         )

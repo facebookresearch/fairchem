@@ -81,9 +81,7 @@ class AseAtomsDataset(BaseDataset, ABC):
         super().__init__(config)
 
         a2g_args = config.get("a2g_args", {}) or {}
-        self.a2g = partial(AtomicData.from_ase,
-               **a2g_args
-            )
+        self.a2g = partial(AtomicData.from_ase, **a2g_args)
 
         self.key_mapping = self.config.get("key_mapping", None)
         self.transforms = DataTransforms(self.config.get("transforms", {}))
@@ -126,9 +124,7 @@ class AseAtomsDataset(BaseDataset, ABC):
 
         # apply linear reference
         if self.lin_ref is not None:
-            data_object.energy -= sum(
-                self.lin_ref[data_object.atomic_numbers.long()]
-            )
+            data_object.energy -= sum(self.lin_ref[data_object.atomic_numbers.long()])
 
         # Transform data object
         data_object = self.transforms(data_object)
