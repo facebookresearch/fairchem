@@ -177,6 +177,10 @@ def radius_graph_pbc(
                 raise RuntimeError(
                     "Different structures in the batch have different PBC configurations. This is not currently supported."
                 )
+    # elif pbc is not None and hasattr(data, "pbc"):
+    #     # This can be on a different device, deffering to a new PR to fix this TODO
+    #     if (pbc != data.pbc).all():
+    #         logging.warning("PBC provided to radius_graph_pbc differs from data.pbc")
     elif pbc is None:
         pbc = torch.BoolTensor([True, True, True])
 

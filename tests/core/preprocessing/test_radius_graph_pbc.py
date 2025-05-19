@@ -19,6 +19,7 @@ from ase.lattice.cubic import FaceCenteredCubic
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 
 
@@ -60,14 +61,16 @@ class TestRadiusGraphPBC:
     def test_radius_graph_pbc(self) -> None:
         data = self.data
         batch = data_list_collater([data] * 5)
-        edge_index, cell_offsets, neighbors = radius_graph_pbc(
-            batch,
-            radius=6,
-            max_num_neighbors_threshold=2000,
-            pbc=torch.BoolTensor([True, True, False]),
-        )
+        generated_graphs=generate_graph(
+            data=batch, 
+            cutoff=6,
+            max_neighbors=2000,
+            enforce_max_neighbors_strictly=False,
+            radius_pbc_version=1,
+            pbc= torch.BoolTensor([[True, True, False]]*5),
+        ) 
         assert check_features_match(
-            batch.edge_index, batch.cell_offsets, edge_index, cell_offsets
+            batch.edge_index, batch.cell_offsets, generated_graphs['edge_index'], generated_graphs['cell_offsets']
         )
 
     def test_bulk(self) -> None:
