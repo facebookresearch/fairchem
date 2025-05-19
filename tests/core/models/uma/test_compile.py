@@ -19,7 +19,6 @@ from ase import build
 from fairchem.core.datasets.collater import data_list_collater
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.uma.escn_md import MLP_EFS_Head, eSCNMDBackbone
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 
 MAX_ELEMENTS = 100
 DATASET_LIST = ["oc20", "omol", "osc", "omat", "odac"]

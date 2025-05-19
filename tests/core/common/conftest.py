@@ -11,7 +11,6 @@ import pytest
 from ase import build
 
 from fairchem.core.datasets import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 
 
 @pytest.fixture()
@@ -25,8 +24,3 @@ def atoms_list():
     return atoms_list
 
 
-@pytest.fixture()
-def batch(atoms_list):
-    breakpoint()
-    a2g = AtomsToGraphs(r_edges=False, r_pbc=True)
-    return data_list_collater([a2g.convert(atoms) for atoms in atoms_list])
