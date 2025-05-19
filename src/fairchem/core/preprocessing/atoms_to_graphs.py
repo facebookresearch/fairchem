@@ -211,7 +211,6 @@ class AtomsToGraphs:
         tags = torch.tensor(atoms.get_tags(), dtype=torch.int)
 
         # put the minimum data in torch geometric data object
-        breakpoint()
         data = Data(
             cell=cell,
             pos=positions,
@@ -219,7 +218,6 @@ class AtomsToGraphs:
             natoms=natoms,
             tags=tags,
         )
-        breakpoint()
 
         # Optionally add a systemid (sid) to the object
         if sid is not None:
@@ -275,7 +273,6 @@ class AtomsToGraphs:
                     if isinstance(atoms.info[data_key], (int, float, str))
                     else torch.tensor(atoms.info[data_key])
                 )
-        breakpoint()
 
         return data
 

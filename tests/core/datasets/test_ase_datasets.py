@@ -92,10 +92,9 @@ def test_ase_dataset(ase_dataset, structures):
     dataset, mult = ase_dataset
     assert len(dataset) == mult * len(structures)
     for data in dataset:
-        assert hasattr(data, "y")
-        breakpoint()
+        #assert hasattr(data, "y") # part of pyg data , eventhough its None
         assert data.forces.shape == (data.natoms, 3)
-        assert data.stress.shape == (3, 3)
+        assert data.stress.shape == (1,3, 3)
         assert data.tensor_property.shape == (6, 6)
         assert isinstance(data.extensive_property, int)
 

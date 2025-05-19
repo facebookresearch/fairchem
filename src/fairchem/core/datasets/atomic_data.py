@@ -469,7 +469,7 @@ class AtomicData:
 
         if self.sid is not None:
             atoms.info["sid"] = self.sid
-
+        breakpoint()
         return atoms
 
     def to_ase(self) -> list[ase.Atoms]:
