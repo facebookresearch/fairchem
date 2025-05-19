@@ -385,6 +385,22 @@ class AtomicData:
             forces = None
             stress = None
 
+        energy = (
+            torch.FloatTensor([atoms.info["energy"]])
+            if "energy" in atoms.info
+            else energy
+        )
+        forces = (
+            torch.FloatTensor(atoms.info["forces"])
+            if "forces" in atoms.info
+            else forces
+        )
+        stress = (
+            torch.FloatTensor(atoms.info["stress"]).view(1, 3, 3)
+            if "stress" in atoms.info
+            else stress
+        )
+
         # TODO another way to specify this is to spcify a key. maybe total_charge
         charge = torch.LongTensor(
             [
@@ -404,7 +420,6 @@ class AtomicData:
         # NOTE: code assumes these are ints.. not tensors
         # charge = atoms.info.get("charge", 0)
         # spin = atoms.info.get("spin", 0)
-
         data = cls(
             pos=pos,
             atomic_numbers=atomic_numbers,
@@ -469,7 +484,7 @@ class AtomicData:
 
         if self.sid is not None:
             atoms.info["sid"] = self.sid
-        breakpoint()
+
         return atoms
 
     def to_ase(self) -> list[ase.Atoms]:
