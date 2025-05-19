@@ -14,6 +14,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Ensure a full clone
 
     - name: Install pandoc
       run: sudo apt-get install pandoc
