@@ -1,2 +1,0 @@
-ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/puma_lg_0425_final.pt
-model_name: puma_lg_0425

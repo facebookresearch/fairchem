@@ -1,10 +1,10 @@
-include-paths: 
+include-paths:
   - src/fairchem/demo/ocpapi
   - packages/fairchem-demo-ocpapi
 tag-prefix: fairchem_demo_ocpapi
 tag-template: 'fairchem_demo_ocpapi-$RESOLVED_VERSION'
 name-template: 'fairchem_demo_ocpapi-$RESOLVED_VERSION'
-exclude-contributors: [github-actions] 
+exclude-contributors: [github-actions]
 categories:
   - title: New Features / Enhancements
     labels: [enhancement]
@@ -27,7 +27,6 @@ version-resolver:
   minor:
     labels:
       - 'minor'
-      - 'dependencies'
   patch:
     labels:
       - 'patch'

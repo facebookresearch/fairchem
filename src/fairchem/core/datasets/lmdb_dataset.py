@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING, TypeVar
 import lmdb
 import numpy as np
 import torch
-from torch_geometric.data import Batch
+import torch_geometric
+from torch_geometric.data import Batch, Data
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.typing import assert_is_instance
-from fairchem.core.common.utils import pyg2_data_transform
 from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.base_dataset import BaseDataset
 from fairchem.core.modules.transforms import DataTransforms
@@ -29,6 +29,17 @@ if TYPE_CHECKING:
     from torch_geometric.data.data import BaseData
 
 T_co = TypeVar("T_co", covariant=True)
+
+
+def pyg2_data_transform(data: Data):
+    """
+    if we're on the new pyg (2.0 or later) and if the Data stored is in older format
+    we need to convert the data to the new format
+    """
+    if torch_geometric.__version__ >= "2.0" and "_store" not in data.__dict__:
+        return Data(**{k: v for k, v in data.__dict__.items() if v is not None})
+
+    return data
 
 
 @registry.register_dataset("lmdb")

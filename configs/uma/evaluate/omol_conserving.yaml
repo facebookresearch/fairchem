@@ -1,0 +1,80 @@
+defaults:
+  - cluster: h100
+  - dataset: omol
+  - element_refs: uma_hof_lin_refs
+  - tasks: omol_conserving
+  - checkpoint: uma_sm_omol
+  - _self_
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 8
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
+  debug: ${cluster.debug}
+  run_dir: ${cluster.run_dir}
+  run_name: ${checkpoint.model_name}
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma-evals
+
+max_neighbors: 300
+cutoff_radius: 6
+max_atoms: 350
+
+cpu_graph: True
+normalizer_rmsd: 0.984507
+
+energy_coef: 20
+force_coef: 2
+
+omol_forces_key: omol_forces
+
+exclude_keys: [
+  "absolute_idx", # only ani has this
+  "target_pos", # only ani has this
+  "ref_energy", # only ani/geom have this
+  "pbc", # only ani/transition1x have this
+]
+
+eval_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omol_preview: ${dataset.omol_preview}
+    omol: ${dataset.omol}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${eval_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+runner:
+  _target_: fairchem.core.components.evaluate.eval_runner.EvalRunner
+  dataloader: ${eval_dataloader}
+  eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.load_inference_model
+      checkpoint_location: ${checkpoint.ckpt_path}
+      use_ema: True

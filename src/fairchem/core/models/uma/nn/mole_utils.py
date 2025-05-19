@@ -12,7 +12,6 @@ from contextlib import suppress
 
 import torch
 import torch.nn as nn
-from matplotlib import pyplot as plt
 
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
@@ -226,7 +225,6 @@ def convert_model_to_MOLE_model(
 
     # plotting
     model.counter = 0
-    model.fig, model.axs = plt.subplots(2, 1)
 
     # replace modules
     replacement_factory = functools.partial(
