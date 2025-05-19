@@ -376,7 +376,7 @@ class AtomicData:
                     stress = torch.FloatTensor(voigt_6_to_full_3x3_stress(stress)).view(
                         1, 3, 3
                     )
-                elif stress.shape in ((3, 3),(9,)):
+                elif stress.shape in ((3, 3), (9,)):
                     stress = torch.FloatTensor(stress).view(1, 3, 3)
                 else:
                     raise ValueError(f"Unknown stress shape, {stress.shape}")

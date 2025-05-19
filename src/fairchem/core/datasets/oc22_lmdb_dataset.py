@@ -18,7 +18,7 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.typing import assert_is_instance as aii
 from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.base_dataset import BaseDataset
-from fairchem.core.datasets.lmdb_dataset import pyg2_data_transform
+from fairchem.core.datasets.collaters.simple_collater import pyg2_data_transform
 from fairchem.core.modules.transforms import DataTransforms
 
 
