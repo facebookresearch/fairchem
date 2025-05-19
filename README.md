@@ -20,6 +20,8 @@ demos, and application efforts for materials science and quantum chemistry.
 > If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
 > as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
+> :warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!
+
 ### Read our latest release post!
 Read about the [UMA model and dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
