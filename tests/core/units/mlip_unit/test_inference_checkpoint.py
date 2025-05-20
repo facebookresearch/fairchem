@@ -12,6 +12,7 @@ python -m pytest tests/core/units/mlip_unit/test_inference_checkpoint.py::test_c
 
 from __future__ import annotations
 
+from functools import partial
 import os
 
 import numpy as np
@@ -33,25 +34,12 @@ def test_inference_checkpoint_direct(
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    # a2g = AtomsToGraphs(
-    #     max_neigh=10,
-    #     radius=100,
-    #     r_energy=False,
-    #     r_forces=False,
-    #     r_distances=False,
-    #     r_edges=True,
-    #     r_pbc=True,
-    #     r_data_keys=["spin", "charge"],
-    # )
-    a2g = lambda atoms: AtomicData.from_ase(
-        atoms,
+    a2g = partial(AtomicData.from_ase
         max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        # r_distances=False,
         r_edges=False,
-        # r_pbc=True,
         r_data_keys=["spin", "charge"],
     )
 
