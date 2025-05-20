@@ -37,7 +37,7 @@ If you want to explore model capabilities check out our
 ### Installation
 Install fairchem-core using pip,
 ```bash
-pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
+pip install fairchem-core
 ```
 **The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
 
@@ -47,7 +47,7 @@ A single uma model can be used for a wide range of applications in chemistry and
 appropriate task name for domain specific prediction.
 
 #### Instantiate a calculator from a pretrained model
-Make sure you have a Hugging Face account, have already applied for model access to the 
+Make sure you have a Hugging Face account, have already applied for model access to the
 [UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
 
 #### Set the task for your application and calculate
@@ -58,13 +58,14 @@ Make sure you have a Hugging Face account, have already applied for model access
 - **odac:** use this for MOFs
 - **omc:** use this for molecular crystals
 
-Relax adsorbate on a catalytic surface,
+Relax an adsorbate on a catalytic surface,
 ```python
 from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
-from fairchem.core import FAIRChemCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="oc20")
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
 slab = fcc100("Cu", (3, 3, 3), vacuum=8, periodic=True)
@@ -78,14 +79,15 @@ opt = LBFGS(slab)
 opt.run(0.05, 100)
 ```
 
-Or relax an inorganic crystal,
+Relax an inorganic crystal,
 ```python
 from ase.build import bulk
 from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
-from fairchem.core import FAIRChemCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="omat")
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
 atoms.calc = calc
@@ -100,9 +102,10 @@ from ase import units
 from ase.io import Trajectory
 from ase.md.langevin import Langevin
 from ase.build import molecule
-from fairchem.core import FAIRChemCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="omol")
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
 atoms.calc = calc
@@ -118,16 +121,35 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
+Calculate a spin gap
+```python
+from ase.build import molecule
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+
+#  singlet CH2
+singlet = molecule("CH2_s1A1d")
+singlet.info.update({"spin": 1, "charge": 0})
+singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
+
+#  triplet CH2
+triplet = molecule("CH2_s3B1d")
+triplet.info.update({"spin": 3, "charge": 0})
+triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
+
+triplet.get_potential_energy() - singlet.get_potential_energy()
+```
 
 ### Looking for Fairchem V1, models and code?
-Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators. 
+Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
 
 We plan to bring back the following models compatible with Fairchem V2 soon:
 * Gemnet-OC
 * EquiformersV2
 * ESEN
 
-We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned! 
+We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
 
 The old OCPCalculator, trainer code will NOT be revived. We apologize for the inconvenience and please raise Issues if you need help!
 In the meantime, you can still use models from fairchem version 1, by installing version 1,

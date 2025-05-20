@@ -8,15 +8,12 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-import random
 from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
-import torch
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
-from huggingface_hub import hf_hub_download
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
@@ -26,48 +23,31 @@ from fairchem.core.units.mlip_unit.api.inference import (
     DEFAULT_SPIN,
     DEFAULT_SPIN_OMOL,
     SPIN_RANGE,
-    InferenceSettings,
     UMATask,
-    guess_inference_settings,
 )
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from ase import Atoms
+
+    from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 
 class FAIRChemCalculator(Calculator):
     def __init__(
         self,
-        checkpoint_path: str | Path | None = None,
-        hf_hub_repo_id: str | None = "facebook/UMA",
-        hf_hub_filename: str | None = None,
+        predict_unit: MLIPPredictUnit,
         task_name: UMATask | None = None,
-        device: str = "cuda",
-        inference_settings: InferenceSettings | str = "default",
-        seed: int = 42,
-        max_neighbors: int | None = 100,
+        seed: int = 41,
     ):
         """
-        Initialize the FAIRChemCalculator, downloading model checkpoints as necessary.
+        Initialize the FAIRChemCalculator from a model MLIPPredictUnit
 
         Args:
-            checkpoint_path (str | Path | None): Path to the inference checkpoint file on the local disk. Ignored if
-            `hf_hub_repo_id` and `hf_hub_filename` are provided.
-            hf_hub_repo_id (str | None): Hugging Face Hub repository ID to download the checkpoint from.
-            hf_hub_filename (str | None): Filename of the checkpoint in the Hugging Face Hub repository.
-            task_name (UMATask | None): Name of the task to use if using a UMA checkpoint. Determines default key names
-            for energy, forces, and stress. Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'
-            device (str): Device to run the calculations on (e.g., "cuda" or "cpu"). Default is "cuda".
-            inference_settings (InferenceSettings | str): Defines the inference flags for the Calculator, currently the
-            acceptable modes are "default" (general purpose but not the fastest), or "turbo" which optimizes for speed
-            for running simulations but the user must keep the atomic composition fixed. Advanced users can also pass in
-            custom settings by passing an InferenceSettings object.
-            seed (int | None): Random seed for reproducibility. Default is 42.
-            max_neighbors (int | None): define a custom max neighbors per atom limit, defaults to 100, typically
-            fairchem models are trained with 300, but we find 100 is sufficient for most applications
+            predict_unit (MLIPPredictUnit): A pretrained MLIPPredictUnit.
+            task_name (UMATask, optional): Name of the task to use if using a UMA checkpoint.
+                Determines default key names for energy, forces, and stress.
+                Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
+            seed (int, optional): Random seed for reproducibility. Defaults to 42.
         Notes:
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge`
               and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
@@ -75,88 +55,54 @@ class FAIRChemCalculator(Calculator):
                 - `spin` must be an integer representing the spin multiplicity and can range from 0 to 100.
                 - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to
                 charge=`0` and spin=`1`.
-            - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy.
-            It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """
 
         super().__init__()
         self.implemented_properties = []
 
-        # Handle checkpoint download
-        if hf_hub_repo_id and hf_hub_filename:
-            logging.info(
-                f"Downloading checkpoint from Hugging Face Hub: repo_id={hf_hub_repo_id}, filename={hf_hub_filename}"
+        # check that external graph gen is not set!
+        if predict_unit.inference_mode.external_graph_gen is not False:
+            raise RuntimeError(
+                "FAIRChemCalculator can only be used with external_graph_gen True inference settings."
             )
-            checkpoint_path = hf_hub_download(
-                repo_id=hf_hub_repo_id, filename=hf_hub_filename
-            )
-        elif not checkpoint_path:
-            raise ValueError(
-                "Either `checkpoint_path` or both `hf_hub_repo_id` and `hf_hub_filename` must be provided."
-            )
-        self.inference_settings_obj = guess_inference_settings(inference_settings)
-        if self.inference_settings_obj.external_graph_gen:
+
+        if predict_unit.model.module.backbone.direct_forces:
             logging.warning(
-                "inference_settings.external_graph_gen not supported in the FAIRChemCalculator, this is always set to false here"
+                "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
+                "energy surface and energy conservation errors."
             )
 
-        self.inference_settings_obj.external_graph_gen = False
-
-        self.predictor = MLIPPredictUnit(
-            checkpoint_path,
-            device=device,
-            inference_settings=self.inference_settings_obj,
-            overrides={"backbone": {"always_use_pbc": False}},
-        )
+        self.predictor = predict_unit
+        self.predictor.seed(seed)
 
         self.calc_property_to_model_key_mapping = {}
-        logging.debug(f"Available task names: {self.available_tasks}")
-
-        self.max_neighbors = min(
-            max_neighbors, self.predictor.model.module.backbone.max_neighbors
-        )
-        assert self.max_neighbors > 0
-
-        self.cutoff = self.predictor.model.module.backbone.cutoff
-        self.direct_force = self.predictor.model.module.backbone.direct_forces
-        self.device = device
+        logging.debug(f"Available task names: {self.predictor.datasets}")
 
         if task_name is not None:
             assert (
-                task_name in self.available_tasks
-            ), f"Given: {task_name}, Valid options are {self.available_tasks}"
+                task_name in self.predictor.datasets
+            ), f"Given: {task_name}, Valid options are {self.predictor.datasets}"
             self._task_name = task_name
-        elif len(self.available_tasks) == 1:
-            self._task_name = self.available_tasks[0]
+        elif len(self.predictor.datasets) == 1:
+            self._task_name = self.predictor.datasets[0]
         else:
             raise RuntimeError(
-                f"A task name must be provided. Valid options are {self.available_tasks}"
+                f"A task name must be provided. Valid options are {self.predictor.datasets}"
             )
 
         self._reset_calc_key_mapping(self._task_name)
-        self.seed = seed
 
         self.a2g = partial(
             AtomicData.from_ase,
-            max_neigh=self.max_neighbors,
-            radius=self.cutoff,
+            max_neigh=self.predictor.model.module.backbone.max_neighbors,
+            radius=self.predictor.model.module.backbone.cutoff,
             r_edges=False,
             r_data_keys=["spin", "charge"],
         )
 
-        if self.direct_force:
-            logging.warning(
-                "This inference checkpoint is a direct-force model. This may lead to discontinuities in the potential "
-                "energy surface and energy conservation errors. Use with caution."
-            )
-
     @property
     def task_name(self) -> str:
         return self._task_name
-
-    @property
-    def available_tasks(self) -> list[str]:
-        return self.predictor.model.module.backbone.dataset_list
 
     def _reset_calc_key_mapping(self, task_name: str) -> None:
         """
@@ -180,25 +126,6 @@ class FAIRChemCalculator(Calculator):
                             implemented_properties.add("free_energy")
         self.implemented_properties = list(implemented_properties)
 
-    @property
-    def seed(self) -> int:
-        """
-        Get the current random seed.
-
-        Returns:
-            int: The current random seed.
-        """
-        return self._seed
-
-    @seed.setter
-    def seed(self, seed: int) -> None:
-        logging.info(f"Setting random seed to {seed}")
-        self._seed = seed
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
         """
         Check for any system changes since the last calculation.
@@ -214,54 +141,6 @@ class FAIRChemCalculator(Calculator):
         if (not state) and (self.atoms.info != atoms.info):
             state.append("info")
         return state
-
-    def _validate_charge_and_spin(self, atoms: Atoms) -> None:
-        """
-        Validate and set default values for charge and spin.
-
-        Args:
-            atoms (Atoms): The atomic structure containing charge and spin information.
-        """
-
-        if "charge" not in atoms.info:
-            if self.task_name == UMATask.OMOL.value:
-                logging.warning(
-                    "task_name='omol' detected, but charge is not set in atoms.info. Defaulting to charge=0. "
-                    "Ensure charge is an integer representing the total charge on the system and is within the range -100 to 100."
-                )
-            atoms.info["charge"] = DEFAULT_CHARGE
-
-        if "spin" not in atoms.info:
-            if self.task_name == UMATask.OMOL.value:
-                atoms.info["spin"] = DEFAULT_SPIN_OMOL
-                logging.warning(
-                    "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=1. "
-                    "Ensure spin is an integer representing the spin multiplicity from 0 to 100."
-                )
-            else:
-                atoms.info["spin"] = DEFAULT_SPIN
-
-        # Validate charge
-        charge = atoms.info["charge"]
-        if not isinstance(charge, int):
-            raise TypeError(
-                f"Invalid type for charge: {type(charge)}. Charge must be an integer representing the total charge on the system."
-            )
-        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for charge: {charge}. Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
-            )
-
-        # Validate spin
-        spin = atoms.info["spin"]
-        if not isinstance(spin, int):
-            raise TypeError(
-                f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
-            )
-        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for spin: {spin}. Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
-            )
 
     def calculate(
         self, atoms: Atoms, properties: list[str], system_changes: list[str]
@@ -336,6 +215,54 @@ class FAIRChemCalculator(Calculator):
             raise AllZeroUnitCellError
         if np.any(atoms.pbc) and not np.all(atoms.pbc):
             raise MixedPBCError
+
+    def _validate_charge_and_spin(self, atoms: Atoms) -> None:
+        """
+        Validate and set default values for charge and spin.
+
+        Args:
+            atoms (Atoms): The atomic structure containing charge and spin information.
+        """
+
+        if "charge" not in atoms.info:
+            if self.task_name == UMATask.OMOL.value:
+                logging.warning(
+                    "task_name='omol' detected, but charge is not set in atoms.info. Defaulting to charge=0. "
+                    "Ensure charge is an integer representing the total charge on the system and is within the range -100 to 100."
+                )
+            atoms.info["charge"] = DEFAULT_CHARGE
+
+        if "spin" not in atoms.info:
+            if self.task_name == UMATask.OMOL.value:
+                atoms.info["spin"] = DEFAULT_SPIN_OMOL
+                logging.warning(
+                    "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=1. "
+                    "Ensure spin is an integer representing the spin multiplicity from 0 to 100."
+                )
+            else:
+                atoms.info["spin"] = DEFAULT_SPIN
+
+        # Validate charge
+        charge = atoms.info["charge"]
+        if not isinstance(charge, int):
+            raise TypeError(
+                f"Invalid type for charge: {type(charge)}. Charge must be an integer representing the total charge on the system."
+            )
+        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for charge: {charge}. Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
+            )
+
+        # Validate spin
+        spin = atoms.info["spin"]
+        if not isinstance(spin, int):
+            raise TypeError(
+                f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
+            )
+        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for spin: {spin}. Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+            )
 
 
 class MixedPBCError(ValueError):
