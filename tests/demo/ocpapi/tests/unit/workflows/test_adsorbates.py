@@ -4,15 +4,17 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
+from __future__ import annotations
+
 import itertools
 from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import timedelta
 from functools import partial
 from typing import Any, Dict, Final, Iterable, List, Optional, Type, Union
-from unittest import IsolatedAsyncioTestCase
+from unittest import IsolatedAsyncioTestCase, mock
 from unittest import TestCase as UnitTestCase
-from unittest import mock
 
 from fairchem.demo.ocpapi.client import (
     Adsorbates,

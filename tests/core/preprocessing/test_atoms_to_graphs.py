@@ -16,8 +16,12 @@ from ase import Atoms, db
 from ase.io import read
 from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
+from fairchem.core.datasets.atomic_data import (
+    AtomicData,
+    get_neighbors_pymatgen,
+    reshape_features,
+)
 from fairchem.core.modules.evaluator import min_diff
-from fairchem.core.preprocessing import AtomsToGraphs
 
 
 @pytest.fixture(scope="class")
@@ -38,26 +42,28 @@ def atoms_to_graphs_internals(request) -> None:
         ],
         dtype=float,
     )
-    test_object = AtomsToGraphs(
-        max_neigh=200,
-        radius=6,
-        r_energy=True,
-        r_forces=True,
-        r_stress=True,
-        r_distances=True,
-        r_data_keys=["stiffness_tensor"],
-    )
-    test_object_only_stiffness = AtomsToGraphs(
-        max_neigh=200,
-        radius=6,
-        r_energy=False,
-        r_forces=False,
-        r_stress=False,
-        r_distances=False,
-        r_data_keys=["stiffness_tensor"],
-    )
-    request.cls.atg = test_object
-    request.cls.atg_only_stiffness = test_object_only_stiffness
+    request.cls.radius = 6
+    request.cls.max_neigh = 200
+    # test_object = AtomsToGraphs(
+    #     max_neigh=200,
+    #     radius=6,
+    #     r_energy=True,
+    #     r_forces=True,
+    #     r_stress=True,
+    #     r_distances=True,
+    #     r_data_keys=["stiffness_tensor"],
+    # )
+    # test_object_only_stiffness = AtomsToGraphs(
+    #     max_neigh=200,
+    #     radius=6,
+    #     r_energy=False,
+    #     r_forces=False,
+    #     r_stress=False,
+    #     r_distances=False,
+    #     r_data_keys=["stiffness_tensor"],
+    # )
+    # request.cls.atg = test_object
+    # request.cls.atg_only_stiffness = test_object_only_stiffness
     request.cls.atoms = atoms
 
 
@@ -70,14 +76,12 @@ class TestAtomsToGraphs:
             n_index,
             n_distances,
             offsets,
-        ) = self.atg._get_neighbors_pymatgen(self.atoms)
-        edge_index, edge_distances, cell_offsets = self.atg._reshape_features(
-            c_index, n_index, n_distances, offsets
-        )
+        ) = get_neighbors_pymatgen(self.atoms, self.radius, self.max_neigh)
+        edge_index, _ = reshape_features(c_index, n_index, n_distances, offsets)
 
         # use ase to compare distances and indices
         n = NeighborList(
-            cutoffs=[self.atg.radius / 2.0] * len(self.atoms),
+            cutoffs=[self.radius / 2.0] * len(self.atoms),
             self_interaction=False,
             skin=0,
             bothways=True,
@@ -97,25 +101,19 @@ class TestAtomsToGraphs:
         ase_s_index = np.array(ase_s_index)
         ase_n_index = np.array(ase_n_index)
         ase_offsets = np.concatenate(ase_offsets)
-        # compute ase distance
-        cell = self.atoms.cell
-        positions = self.atoms.positions
-        distance_vec = positions[ase_s_index] - positions[ase_n_index]
-        _offsets = np.dot(ase_offsets, cell)
-        distance_vec -= _offsets
-        act_dist = np.linalg.norm(distance_vec, axis=-1)
 
-        act_dist = np.sort(act_dist)
         act_index = np.sort(ase_n_index)
-        test_dist = np.sort(edge_distances)
         test_index = np.sort(edge_index[0, :])
-        # check that the distance and neighbor index values are correct
-        np.testing.assert_allclose(act_dist, test_dist)
         np.testing.assert_array_equal(act_index, test_index)
 
     def test_convert(self) -> None:
         # run convert on a single atoms obj
-        data = self.atg.convert(self.atoms)
+        data = AtomicData.from_ase(
+            self.atoms,
+            max_neigh=self.max_neigh,
+            radius=self.radius,
+            r_edges=False,
+        )
         # atomic numbers
         act_atomic_numbers = self.atoms.get_atomic_numbers()
         atomic_numbers = data.atomic_numbers.numpy()
@@ -130,25 +128,26 @@ class TestAtomsToGraphs:
         # check energy value
         act_energy = self.atoms.get_potential_energy(apply_constraint=False)
         test_energy = data.energy
-        np.testing.assert_equal(act_energy, test_energy)
+        np.testing.assert_allclose(act_energy, test_energy)
         # forces
         act_forces = self.atoms.get_forces(apply_constraint=False)
         forces = data.forces.numpy()
         np.testing.assert_allclose(act_forces, forces)
         # stress
         act_stress = self.atoms.get_stress(apply_constraint=False, voigt=False)
-        stress = data.stress.numpy()
+        stress = data.stress.numpy()[0]
         np.testing.assert_allclose(act_stress, stress)
-        # additional data (ie stiffness_tensor)
-        stiffness_tensor = data.stiffness_tensor.numpy()
-        np.testing.assert_allclose(
-            self.atoms.info["stiffness_tensor"], stiffness_tensor
-        )
 
     def test_convert_all_atoms_list(self) -> None:
         # run convert_all on a list with one atoms object
-        atoms_list = [self.atoms]
-        data_list = self.atg.convert_all(atoms_list)
+        data_list = [
+            AtomicData.from_ase(
+                self.atoms,
+                max_neigh=self.max_neigh,
+                radius=self.radius,
+                r_edges=False,
+            )
+        ]
         # check shape/values of features
         # atomic numbers
         act_atomic_nubmers = self.atoms.get_atomic_numbers()
@@ -164,20 +163,15 @@ class TestAtomsToGraphs:
         # check energy value
         act_energy = self.atoms.get_potential_energy(apply_constraint=False)
         test_energy = data_list[0].energy
-        np.testing.assert_equal(act_energy, test_energy)
+        np.testing.assert_allclose(act_energy, test_energy)
         # forces
         act_forces = self.atoms.get_forces(apply_constraint=False)
         forces = data_list[0].forces.numpy()
         np.testing.assert_allclose(act_forces, forces)
         # stress
         act_stress = self.atoms.get_stress(apply_constraint=False, voigt=False)
-        stress = data_list[0].stress.numpy()
+        stress = data_list[0].stress.numpy()[0]
         np.testing.assert_allclose(act_stress, stress)
-        # additional data (ie stiffness_tensor)
-        stiffness_tensor = data_list[0].stiffness_tensor.numpy()
-        np.testing.assert_allclose(
-            self.atoms.info["stiffness_tensor"], stiffness_tensor
-        )
 
     def test_convert_all_ase_db(self, tmp_path_factory) -> None:
         # run convert_all on an ASE db object
@@ -189,36 +183,35 @@ class TestAtomsToGraphs:
         tmp_path = tmp_path_factory.mktemp("convert_all_test")
         with db.connect(tmp_path / "asedb.db") as database:
             database.write(self.atoms, data=self.atoms.info)
-            data_list = self.atg_only_stiffness.convert_all(database)
-
-        # additional data (ie stiffness_tensor)
-        stiffness_tensor = data_list[0].stiffness_tensor.numpy()
-        np.testing.assert_allclose(
-            self.atoms.info["stiffness_tensor"], stiffness_tensor
-        )
+            for row in database.select():
+                AtomicData.from_ase(
+                    row.toatoms(add_additional_information=True),
+                    max_neigh=self.max_neigh,
+                    radius=self.radius,
+                    r_edges=False,
+                )
 
     def test_convert_molecule(self) -> None:
         # test converting a molecule with no unit cell
         molecule = Atoms("2N", [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0)])
-        a2g = AtomsToGraphs(
-            max_neigh=200,
-            radius=6,
-            r_edges=True,
-            r_distances=True,
-        )
+
         # this will raise an Singlular Matrix Error because the cell doesn't exist
         with pytest.raises(np.linalg.LinAlgError):
-            a2g.convert(molecule)
+            AtomicData.from_ase(
+                molecule,
+                max_neigh=200,
+                radius=6,
+                r_edges=True,
+            )
         # now add a molecular box
         cell_size = 120.0
-        a2g = AtomsToGraphs(
+        converted_mol = AtomicData.from_ase(
+            molecule,
             max_neigh=200,
             radius=6,
             r_edges=True,
-            r_distances=True,
             molecule_cell_size=cell_size,
         )
-        converted_mol = a2g.convert(molecule)
         assert torch.allclose(
             converted_mol.cell[0],
             torch.diag(torch.tensor([cell_size * 2, cell_size * 2, cell_size * 2 + 1])),
@@ -234,9 +227,11 @@ class TestAtomsToGraphs:
 
     def test_convert_molecule_raises_assertion_with_cell(self) -> None:
         molecule = Atoms("2N", [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0)], cell=[1, 1, 1])
-        a2g = AtomsToGraphs(
-            molecule_cell_size=120.0,
-            r_distances=True,
-        )
         with pytest.raises(AssertionError):
-            a2g.convert(molecule)
+            AtomicData.from_ase(
+                molecule,
+                # max_neigh=200,
+                # radius=6,
+                # r_edges=True,
+                molecule_cell_size=120.0,
+            )

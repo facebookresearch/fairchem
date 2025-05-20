@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
+from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -18,7 +19,7 @@ from ase.stress import full_3x3_to_voigt_6_stress
 from huggingface_hub import hf_hub_download
 
 from fairchem.core.datasets import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
     DEFAULT_CHARGE,
@@ -135,17 +136,12 @@ class FAIRChemCalculator(Calculator):
         self._reset_calc_key_mapping(self._task_name)
         self.seed = seed
 
-        # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
-        a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
-        self.a2g = AtomsToGraphs(
+        self.a2g = partial(
+            AtomicData.from_ase,
             max_neigh=self.max_neighbors,
             radius=self.cutoff,
-            r_energy=False,
-            r_forces=False,
-            r_distances=False,
             r_edges=False,
-            r_pbc=True,
-            **a2g_kwargs,
+            r_data_keys=["spin", "charge"],
         )
 
         if self.direct_force:
@@ -303,7 +299,7 @@ class FAIRChemCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # Convert using the current a2g object
-        data_object = self.a2g.convert(atoms)
+        data_object = self.a2g(atoms)
         data_object.dataset = self.task_name
 
         # Batch and predict

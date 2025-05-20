@@ -26,7 +26,8 @@ from fairchem.core.datasets.base_dataset import (
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
-    from torch_geometric.data import Batch, Data
+
+    from fairchem.core.datasets.atomic_data import AtomicData
 
 
 @deprecated(
@@ -36,7 +37,7 @@ class OCPCollater:
     def __init__(self, otf_graph: bool = False) -> None:
         self.otf_graph = otf_graph
 
-    def __call__(self, data_list: list[Data]) -> Batch:
+    def __call__(self, data_list: list[AtomicData]) -> AtomicData:
         return data_list_collater(data_list, otf_graph=self.otf_graph)
 
 

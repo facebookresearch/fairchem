@@ -7,18 +7,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import tarfile
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
 from itertools import product
 from random import choice
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
-import requests
 import torch
 from ase.db import connect
 from pymatgen.core import Structure
@@ -160,26 +154,6 @@ def torch_deterministic():
     yield True  # Usability: prints `torch_deterministic=True` if a test fails
     # Tear down
     torch.use_deterministic_algorithms(False)
-
-
-@pytest.fixture(scope="session")
-def tutorial_dataset_path(tmp_path_factory) -> Path:
-    """
-    Download the tutorial dataset and extract it to a temporary directory.
-    This directory will persist until restart to avoid eating bandwidth.
-    """
-    TUTORIAL_DATASET_URL = (
-        "http://dl.fbaipublicfiles.com/opencatalystproject/data/tutorial_data.tar.gz"
-    )
-
-    tmpdir = tmp_path_factory.getbasetemp()
-
-    response = requests.get(TUTORIAL_DATASET_URL, stream=True)
-    assert response.status_code == 200
-
-    tarfile.open(fileobj=response.raw, mode="r|gz").extractall(path=tmpdir)
-
-    return tmpdir
 
 
 @pytest.fixture(scope="session")
