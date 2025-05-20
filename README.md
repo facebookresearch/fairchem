@@ -37,7 +37,7 @@ If you want to explore model capabilities check out our
 ### Installation
 Install fairchem-core using pip,
 ```bash
-pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
+pip install fairchem-core
 ```
 **The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
 
@@ -121,6 +121,25 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
+Calculate a spin gap
+```python
+from ase.build import molecule
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+
+#  singlet CH2
+singlet = molecule("CH2_s1A1d")
+singlet.info.update({"spin": 1, "charge": 0})
+singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
+
+#  triplet CH2
+triplet = molecule("CH2_s3B1d")
+triplet.info.update({"spin": 3, "charge": 0})
+triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
+
+triplet.get_potential_energy() - singlet.get_potential_energy()
+```
 
 ### Looking for Fairchem V1, models and code?
 Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
