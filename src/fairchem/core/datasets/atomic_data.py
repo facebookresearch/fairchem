@@ -446,15 +446,6 @@ class AtomicData:
             sid=sid,
         )
 
-        # breakpoint()
-        # if r_data_keys is not None:
-        #     for data_key in r_data_keys:
-        #         data[data_key] = (
-        #             atoms.info[data_key]
-        #             if isinstance(atoms.info[data_key], (int, float, str))
-        #             else torch.tensor(atoms.info[data_key])
-        #         )
-        # breakpoint()
         return data
 
     def to_ase_single(self) -> ase.Atoms:
