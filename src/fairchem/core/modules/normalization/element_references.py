@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import torch
@@ -17,12 +17,9 @@ from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
 from ._load_utils import _load_from_config
-
-if TYPE_CHECKING:
-    from torch_geometric.data import Batch
 
 
 class ElementReferences(nn.Module):
@@ -58,7 +55,7 @@ class ElementReferences(nn.Module):
 
     def apply_refs(
         self,
-        batch: Batch,
+        batch: AtomicData,
         tensor: torch.Tensor,
     ) -> torch.Tensor:
         return self.compute_references(
@@ -70,7 +67,7 @@ class ElementReferences(nn.Module):
 
     def undo_refs(
         self,
-        batch: Batch,
+        batch: AtomicData,
         tensor: torch.Tensor,
     ) -> torch.Tensor:
         return self.compute_references(
@@ -122,7 +119,7 @@ class LinearReferences(nn.Module):
         )
 
     def _apply_refs(
-        self, target: torch.Tensor, batch: Batch, sign: int, reshaped: bool = True
+        self, target: torch.Tensor, batch: AtomicData, sign: int, reshaped: bool = True
     ) -> torch.Tensor:
         """Apply references batch-wise"""
         indices = batch.atomic_numbers.to(
@@ -137,14 +134,14 @@ class LinearReferences(nn.Module):
 
     @torch.autocast(device_type="cuda", enabled=False)
     def dereference(
-        self, target: torch.Tensor, batch: Batch, reshaped: bool = True
+        self, target: torch.Tensor, batch: AtomicData, reshaped: bool = True
     ) -> torch.Tensor:
         """Remove linear references"""
         return self._apply_refs(target, batch, -1, reshaped=reshaped)
 
     @torch.autocast(device_type="cuda", enabled=False)
     def forward(
-        self, target: torch.Tensor, batch: Batch, reshaped: bool = True
+        self, target: torch.Tensor, batch: AtomicData, reshaped: bool = True
     ) -> torch.Tensor:
         """Add linear references"""
         return self._apply_refs(target, batch, 1, reshaped=reshaped)
