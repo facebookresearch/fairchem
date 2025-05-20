@@ -1,7 +1,5 @@
 # Installation & License
 
-# Installation & License
-
 To install `fairchem-core` you will need to setup the `fairchem-core` environment. We support either pip or uv. Conda is no longer supported and has also been dropped by pytorch itself. Note you can still create environments with conda and use pip to install the packages.
 
 **Note FairchemV2 is a major breaking changing from FairchemV1. If you are looking for old V1 code, you will need install v1 (`pip install fairchem-core==1.10`)**
@@ -52,5 +50,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Model checkpoints
-The Open Catalyst Project and OpenDAC checkpoints are licensed under a CC-by license. The OMat24-trained checkpoints are available for use under a custom license available at https://huggingface.co/fairchem/OMAT24
+## Model checkpoints and datasets
+Please check each dataset and model for their own licenses.
