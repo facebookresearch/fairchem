@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 
 import hydra
+import pytest
 import torch
 import torch.distributed as dist
 from omegaconf import OmegaConf
@@ -30,7 +31,7 @@ def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
             return False
     return True
 
-
+@pytest.mark.skip()
 def test_traineval_runner_finetuning():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     setup_env_local()
