@@ -12,7 +12,7 @@ import numpy.testing as npt
 import pytest
 import torch
 
-from fairchem.core.datasets import data_list_collater
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 from fairchem.core.modules.normalization.element_references import (
     LinearReferences,
     create_element_references,
@@ -39,7 +39,7 @@ def test_apply_linear_references(
     max_noise = 0.05 * dummy_element_refs.mean()
 
     # check that removing element refs keeps only values within max noise
-    batch = data_list_collater(list(dummy_binary_dataset), otf_graph=True)
+    batch = atomicdata_list_to_batch(list(dummy_binary_dataset))
     energy = batch.energy.clone().view(len(batch), -1)
     deref_energy = element_refs["energy"].dereference(energy, batch)
     assert all(deref_energy <= max_noise)

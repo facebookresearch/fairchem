@@ -12,9 +12,8 @@ from functools import partial
 
 import pytest
 
-from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
@@ -251,8 +250,8 @@ def mole_inference(
         r_data_keys=["spin", "charge"],
     )
     sample["dataset"] = "oc20"
-    batch = data_list_collater(
-        [sample], otf_graph=not inference_mode.external_graph_gen
+    batch = atomicdata_list_to_batch(
+        [sample]
     )
 
     predictor_baseline = MLIPPredictUnit(
@@ -328,8 +327,8 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
     sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
-    batch = data_list_collater(
-        [sample], otf_graph=not inference_mode.external_graph_gen
+    batch = atomicdata_list_to_batch(
+        [sample]
     )
     device = "cuda"
     predictor = MLIPPredictUnit(
@@ -341,23 +340,23 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
     sample = a2g(db.get_atoms(1))
     sample["dataset"] = "oc20"
-    batch = data_list_collater(
-        [sample], otf_graph=not inference_mode.external_graph_gen
+    batch = atomicdata_list_to_batch(
+        [sample]
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
     sample = a2g(db.get_atoms(0))
     sample["dataset"] = "not-oc20"
-    batch = data_list_collater(
-        [sample], otf_graph=not inference_mode.external_graph_gen
+    batch = atomicdata_list_to_batch(
+        [sample], 
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
     sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
-    batch = data_list_collater(
-        [sample], otf_graph=not inference_mode.external_graph_gen
+    batch = atomicdata_list_to_batch(
+        [sample],
     )
     _ = predictor.predict(batch.clone())

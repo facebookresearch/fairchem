@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import torch
 
-from fairchem.core.datasets import data_list_collater
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
 from fairchem.core.modules.normalization.normalizer import (
     Normalizer,
     create_normalizer,
@@ -31,7 +31,7 @@ def normalizers(dummy_binary_dataset):
 
 
 def test_norm_denorm(normalizers, dummy_binary_dataset, dummy_element_refs):
-    batch = data_list_collater(list(dummy_binary_dataset), otf_graph=True)
+    batch = atomicdata_list_to_batch(list(dummy_binary_dataset))
     # test norm and denorm
     for target, normalizer in normalizers.items():
         normed = normalizer.norm(batch[target])
@@ -81,7 +81,7 @@ def test_create_normalizers(normalizers, dummy_binary_dataset, tmp_path):
     assert norm.state_dict() == sdict
 
     # from tensor directly
-    batch = data_list_collater(list(dummy_binary_dataset), otf_graph=True)
+    batch = atomicdata_list_to_batch(list(dummy_binary_dataset))
     norm = create_normalizer(tensor=batch.energy)
     assert isinstance(norm, Normalizer)
     # assert norm.state_dict() == sdict

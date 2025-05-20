@@ -21,8 +21,7 @@ import torch
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 
@@ -50,7 +49,7 @@ def test_inference_checkpoint_direct(
     while sample_idx < min(5, len(db)):
         sample = a2g.convert(db.get_atoms(sample_idx))
         sample["dataset"] = "oc20"
-        batch = data_list_collater([sample], otf_graph=False)
+        batch = atomicdata_list_to_batch([sample])
 
         out = predictor.predict(batch)
         energies.append(out["oc20_energy"])

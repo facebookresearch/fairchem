@@ -17,8 +17,7 @@ from ase.build import molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
-from fairchem.core.datasets import data_list_collater
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 
@@ -60,7 +59,7 @@ def check_features_match(
 class TestRadiusGraphPBC:
     def test_radius_graph_pbc(self) -> None:
         data = self.data
-        batch = data_list_collater([data] * 5)
+        batch = atomicdata_list_to_batch([data] * 5)
         generated_graphs = generate_graph(
             data=batch,
             cutoff=6,
@@ -92,7 +91,7 @@ class TestRadiusGraphPBC:
 
         structure = FaceCenteredCubic("Pt", size=[1, 2, 3])
         data = a2g(structure)
-        batch = data_list_collater([data])
+        batch = atomicdata_list_to_batch([data])
 
         # Ensure adequate distance between repeated cells
         structure.cell[0] *= radius
@@ -237,7 +236,7 @@ class TestRadiusGraphPBC:
         data = AtomicData.from_ase(
             structure, radius=radius, max_neigh=max_neigh, r_edges=True
         )
-        batch = data_list_collater([data])
+        batch = atomicdata_list_to_batch([data])
         out = radius_graph_pbc(
             batch,
             radius=radius,
@@ -313,7 +312,7 @@ def test_simple_systems_nopbc(
 ):
     data = AtomicData.from_ase(atoms)
 
-    batch = data_list_collater([data])
+    batch = atomicdata_list_to_batch([data])
 
     for radius_graph_pbc_fn in (radius_graph_pbc_v2, radius_graph_pbc):
         edge_index, _, _ = radius_graph_pbc_fn(
