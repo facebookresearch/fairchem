@@ -94,8 +94,8 @@ class FAIRChemCalculator(Calculator):
 
         self.a2g = partial(
             AtomicData.from_ase,
-            max_neigh=self.max_neighbors,
-            radius=self.cutoff,
+            max_neigh=self.predictor.model.module.backbone.max_neighbors,
+            radius=self.predictor.model.module.backbone.cutoff,
             r_edges=False,
             r_data_keys=["spin", "charge"],
         )
