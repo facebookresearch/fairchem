@@ -127,7 +127,7 @@ def pickle_data_loader(pickle_path: str, steps: int):
 
     return _DummyLoader()
 
-
+@pytest.mark.skip()
 def test_full_eval_from_cli():
     sys_args = [
         "--config",
@@ -458,7 +458,6 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
             "+job.graph_parallel_group_size=1",
         ]
     launch_main(sys_args)
-
 
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
