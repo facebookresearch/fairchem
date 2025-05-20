@@ -7,15 +7,15 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import typing
+from typing import TYPE_CHECKING
 
-if typing.TYPE_CHECKING:
-    from torch_geometric.data import Data
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
 
 
 def rename_data_object_keys(
-    data_object: Data, key_mapping: dict[str, str | list[str]]
-) -> Data:
+    data_object: AtomicData, key_mapping: dict[str, str | list[str]]
+) -> AtomicData:
     """Rename data object keys
 
     Args:

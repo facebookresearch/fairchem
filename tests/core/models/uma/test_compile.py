@@ -16,10 +16,10 @@ import pytest
 import torch
 from ase import build
 
-from fairchem.core.datasets.lmdb_dataset import data_list_collater
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.uma.escn_md import MLP_EFS_Head, eSCNMDBackbone
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
 
 MAX_ELEMENTS = 100
 DATASET_LIST = ["oc20", "omol", "osc", "omat", "odac"]
@@ -33,13 +33,14 @@ def seed_everywhere(seed=0):
 
 
 def ase_to_graph(atoms, neighbors: int, cutoff: float):
-    a2g = AtomsToGraphs(
-        max_neigh=neighbors, radius=cutoff, r_edges=True, r_distances=True
-    )
-    data_object = a2g.convert(atoms)
-    data_object.natoms = len(atoms)
-    data_object.charge = 0
-    data_object.spin = 0
+    data_object = AtomicData.from_ase(atoms,
+            max_neigh=neighbors,
+            radius=cutoff,
+            r_edges=True,
+        )
+    data_object.natoms = torch.tensor(len(atoms))
+    data_object.charge = torch.LongTensor([0])
+    data_object.spin = torch.LongTensor([0])
     data_object.dataset = "omol"
     data_object.pos.requires_grad = True
     data_loader = torch.utils.data.DataLoader(
@@ -107,6 +108,7 @@ def get_escn_md_full(
     model = HydraModelV2(backbone, heads).to(device)
     model.eval()
     return model
+
 
 # compile tests take a long time
 @pytest.mark.skip()

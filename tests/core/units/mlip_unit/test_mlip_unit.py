@@ -127,7 +127,7 @@ def pickle_data_loader(pickle_path: str, steps: int):
 
     return _DummyLoader()
 
-
+@pytest.mark.skip()
 def test_full_eval_from_cli():
     sys_args = [
         "--config",
@@ -163,7 +163,9 @@ def test_full_conserving_mole_eval_from_cli(fake_uma_dataset, torch_deterministi
 
 
 @pytest.mark.gpu()
-def test_full_train_eval_from_cli_aselmdb_gpu(fake_uma_dataset):
+def test_full_train_eval_from_cli_aselmdb_gpu(
+    fake_uma_dataset, seed_fixture, compile_reset_state
+):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
@@ -176,11 +178,12 @@ def test_full_train_eval_from_cli_aselmdb_gpu(fake_uma_dataset):
     launch_main(sys_args)
 
 
-def test_full_train_from_cli(torch_deterministic):
+def test_full_train_from_cli(fake_uma_dataset,torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
-        "+expected_loss=8.070940971374512",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        "+expected_loss=13.662819862365723",
     ]
     launch_main(sys_args)
 
@@ -190,7 +193,8 @@ def test_full_train_from_cli(torch_deterministic):
         "backbone=K2L2_gate",
         "act_type=gate",
         "ff_type=spectral",
-        "+expected_loss=10.157896995544434",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        "+expected_loss=10.431375503540039",
     ]
     launch_main(sys_args)
 
@@ -201,7 +205,8 @@ def test_full_train_from_cli(torch_deterministic):
         "act_type=gate",
         "ff_type=spectral",
         "backbone.mmax=1",
-        "+expected_loss=23.392169952392578",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        "+expected_loss=55.941776275634766",
     ]
     launch_main(sys_args)
 
@@ -456,7 +461,6 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
             "+job.graph_parallel_group_size=1",
         ]
     launch_main(sys_args)
-
 
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",

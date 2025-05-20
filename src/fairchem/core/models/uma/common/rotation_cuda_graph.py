@@ -44,6 +44,7 @@ class RotMatWignerCudaGraph:
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert len(edge_dist_vec.shape) == 2
         assert edge_dist_vec.shape[1] == 3
+
         # if size of edge_dist_vec is less than max_edges, we pad up and select a subset,
         # otherwise we recompute the graph
         input_padded = edge_dist_vec

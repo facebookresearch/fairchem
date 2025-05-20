@@ -4,13 +4,15 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
+from __future__ import annotations
+
 import time
 from typing import List
 from unittest import IsolatedAsyncioTestCase
 
 import pytest
 import requests
-
 from fairchem.demo.ocpapi.client import AdsorbateSlabConfigs, Client, Status
 from fairchem.demo.ocpapi.workflows import (
     Lifetime,
@@ -77,7 +79,7 @@ class TestAdsorbates(IsolatedAsyncioTestCase):
         # when there is a poor connection or the server is busy
         self.assertLess(took, 5)
 
-    @pytest.mark.ocpapi_integration_test
+    @pytest.mark.ocpapi_integration_test()
     async def test_find_adsorbate_binding_sites(self) -> None:
         # Run an end-to-end test to find adsorbate binding sites on the
         # surface of a bulk material.

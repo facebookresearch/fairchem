@@ -11,7 +11,6 @@ import bisect
 from typing import TypeVar
 
 import numpy as np
-import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import Dataset
 
@@ -67,16 +66,7 @@ class ConcatDataset(Dataset[T_co]):
         # TODO this should be ensured in the datasets themselves, rather than casting/redifining here?
         data_object.fixed = data_object.fixed.long()
         data_object.atomic_numbers = data_object.atomic_numbers.long()
-        if hasattr(data_object, "tags"):
-            data_object.tags = data_object.tags.long()
-        data_object.natoms = int(
-            data_object.natoms.item()
-            if torch.is_tensor(data_object)
-            else data_object.natoms
-        )
-        data_object.sid = str(
-            data_object.sid.item() if torch.is_tensor(data_object) else data_object.sid
-        )
+
         return data_object
 
     def _get_dataset_and_sample_index_list(self, sample_idxs: list):

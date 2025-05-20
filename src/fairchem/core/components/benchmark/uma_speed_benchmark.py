@@ -14,7 +14,6 @@ import random
 import timeit
 import uuid
 from collections import defaultdict
-from functools import partial
 
 import numpy as np
 import torch
@@ -24,7 +23,7 @@ from torch.profiler import ProfilerActivity, profile
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets import data_list_collater
-from fairchem.core.preprocessing import AtomsToGraphs
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
@@ -42,22 +41,20 @@ def seed_everywhere(seed):
 
 
 def ase_to_graph(atoms, neighbors: int, cutoff: float, external_graph=True):
-    a2g = AtomsToGraphs(
+    data_object = AtomicData.from_ase(
+        atoms,
         max_neigh=neighbors,
         radius=cutoff,
         r_edges=external_graph,
-        r_distances=external_graph,
-        r_pbc=True,
     )
-    data_object = a2g.convert(atoms)
-    data_object.natoms = len(atoms)
-    data_object.charge = 0
-    data_object.spin = 0
+    data_object.natoms = torch.tensor(len(atoms))
+    data_object.charge = torch.LongTensor([0])
+    data_object.spin = torch.LongTensor([0])
     data_object.dataset = "omat"
     data_object.pos.requires_grad = True
     data_loader = torch.utils.data.DataLoader(
         [data_object],
-        collate_fn=partial(data_list_collater, otf_graph=True),
+        collate_fn=data_list_collater,
         batch_size=1,
         shuffle=False,
     )
