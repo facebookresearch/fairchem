@@ -12,8 +12,8 @@ python -m pytest tests/core/units/mlip_unit/test_inference_checkpoint.py::test_c
 
 from __future__ import annotations
 
-from functools import partial
 import os
+from functools import partial
 
 import numpy as np
 import pytest
@@ -34,7 +34,7 @@ def test_inference_checkpoint_direct(
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = partial(AtomicData.from_ase
+    a2g = partial(AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
