@@ -313,6 +313,7 @@ def radius_graph_pbc(
 
 
 def canonical_pbc(data, pbc: torch.Tensor | None):
+    assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
     if pbc is None and hasattr(data, "pbc"):
         data.pbc = torch.atleast_2d(data.pbc)
         for i in range(3):
