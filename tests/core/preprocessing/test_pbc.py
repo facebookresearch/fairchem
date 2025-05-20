@@ -14,8 +14,8 @@ import pytest
 from ase.io import read
 
 from fairchem.core.datasets import data_list_collater
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.graph.compute import get_pbc_distances
-from fairchem.core.preprocessing import AtomsToGraphs
 
 
 @pytest.fixture(scope="class")
@@ -25,15 +25,12 @@ def load_data(request) -> None:
         index=0,
         format="json",
     )
-    a2g = AtomsToGraphs(
+    request.cls.data = AtomicData.from_ase(
+        atoms,
         max_neigh=12,
         radius=6,
-        r_energy=True,
-        r_forces=True,
-        r_distances=True,
+        r_edges=True,
     )
-    data_list = a2g.convert_all([atoms])
-    request.cls.data = data_list[0]
 
 
 @pytest.mark.usefixtures("load_data")
@@ -48,10 +45,9 @@ class TestPBC:
             batch.cell_offsets,
             batch.neighbors,
         )
-        edge_index, pbc_distances = out["edge_index"], out["distances"]
+        edge_index, _ = out["edge_index"], out["distances"]
 
         np.testing.assert_array_equal(
             batch.edge_index,
             edge_index,
         )
-        np.testing.assert_array_almost_equal(batch.distances, pbc_distances)

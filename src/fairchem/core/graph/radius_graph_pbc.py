@@ -164,26 +164,12 @@ def radius_graph_pbc(
     radius,
     max_num_neighbors_threshold,
     enforce_max_neighbors_strictly: bool = False,
-    pbc=None,
+    pbc: torch.Tensor | None = None,
 ):
-    if pbc is None:
-        pbc = [True, True, True]
-    else:
-        pbc = list(pbc)
+    pbc = canonical_pbc(data, pbc)
+
     device = data.pos.device
     batch_size = len(data.natoms)
-
-    if hasattr(data, "pbc"):
-        data.pbc = torch.atleast_2d(data.pbc)
-        for i in range(3):
-            if not torch.any(data.pbc[:, i]).item():
-                pbc[i] = False
-            elif torch.all(data.pbc[:, i]).item():
-                pbc[i] = True
-            else:
-                raise RuntimeError(
-                    "Different structures in the batch have different PBC configurations. This is not currently supported."
-                )
 
     # position of the atoms
     atom_pos = data.pos
@@ -326,14 +312,42 @@ def radius_graph_pbc(
     return edge_index, unit_cell, num_neighbors_image
 
 
+def canonical_pbc(data, pbc: torch.Tensor | None):
+    assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
+    if pbc is None and hasattr(data, "pbc"):
+        data.pbc = torch.atleast_2d(data.pbc)
+        for i in range(3):
+            if not torch.any(data.pbc[:, i]).item():
+                pbc[i] = False
+            elif torch.all(data.pbc[:, i]).item():
+                pbc[i] = True
+            else:
+                raise RuntimeError(
+                    "Different structures in the batch have different PBC configurations. This is not currently supported."
+                )
+    # elif pbc is not None and hasattr(data, "pbc"):
+    #     # This can be on a different device, deffering to a new PR to fix this TODO
+    #     if (pbc != data.pbc).all():
+    #         logging.warning("PBC provided to radius_graph_pbc differs from data.pbc")
+    elif pbc is None:
+        pbc = torch.BoolTensor([True, True, True])
+
+    assert isinstance(pbc, torch.Tensor)
+    assert pbc.ndim == 1
+    assert pbc.shape[0] == 3
+    return list(pbc)
+
+
 @torch.no_grad()
 def radius_graph_pbc_v2(
     data,
     radius,
     max_num_neighbors_threshold,
     enforce_max_neighbors_strictly: bool = False,
-    pbc=(True, True, True),
+    pbc: torch.Tensor | None = None,
 ):
+    pbc = canonical_pbc(data, pbc)
+
     device = data.pos.device
     batch_size = len(data.natoms)
     data_batch_idxs = (

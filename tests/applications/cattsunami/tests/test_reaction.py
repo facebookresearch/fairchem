@@ -4,11 +4,16 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
-from fairchem.applications.cattsunami.core import Reaction
+
+from __future__ import annotations
+
+import random
+
 import ase
+from fairchem.applications.cattsunami.core import Reaction
 from fairchem.applications.cattsunami.databases import DISSOCIATION_REACTION_DB_PATH
 from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH
-import random
+
 
 class TestReaction:
     def test_loading_from_id(self):

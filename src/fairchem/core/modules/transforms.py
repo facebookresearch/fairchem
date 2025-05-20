@@ -9,18 +9,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import torch
-
-from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
-
-if TYPE_CHECKING:
-    from torch_geometric.data import Data
-
 import numpy as np
+import torch
 from ase import Atoms
 
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
-def _get_molecule_cell(data_object: Data):
+
+def _get_molecule_cell(data_object: AtomicData):
     # create an Atoms object and center molecule in cell
     mol = Atoms(
         numbers=data_object.atomic_numbers,
@@ -43,7 +41,7 @@ def _get_molecule_cell(data_object: Data):
     return atomic_numbers, positions, cell
 
 
-def common_transform(data_object: Data, config) -> Data:
+def common_transform(data_object: AtomicData, config) -> AtomicData:
     data_object.dataset = config["dataset_name"]
 
     if not hasattr(data_object, "charge"):
@@ -70,7 +68,7 @@ def ensure_tensor(data_object, keys):
     return data_object
 
 
-def ani1x_transform(data_object: Data, config) -> Data:
+def ani1x_transform(data_object: AtomicData, config) -> AtomicData:
     # make periodic with molecule centered in large cell
     atomic_numbers, positions, cell = _get_molecule_cell(data_object)
     data_object.atomic_numbers = atomic_numbers
@@ -87,7 +85,7 @@ def ani1x_transform(data_object: Data, config) -> Data:
     return data_object
 
 
-def trans1x_transform(data_object: Data, config) -> Data:
+def trans1x_transform(data_object: AtomicData, config) -> AtomicData:
     # make periodic with molecule centered in large cell
     atomic_numbers, positions, cell = _get_molecule_cell(data_object)
     data_object.atomic_numbers = atomic_numbers
@@ -105,7 +103,7 @@ def trans1x_transform(data_object: Data, config) -> Data:
     return data_object
 
 
-def spice_transform(data_object: Data, config) -> Data:
+def spice_transform(data_object: AtomicData, config) -> AtomicData:
     # make periodic with molecule centered in large cell
     atomic_numbers, positions, cell = _get_molecule_cell(data_object)
     data_object.atomic_numbers = atomic_numbers
@@ -125,7 +123,7 @@ def spice_transform(data_object: Data, config) -> Data:
     return data_object
 
 
-def qmof_transform(data_object: Data, config) -> Data:
+def qmof_transform(data_object: AtomicData, config) -> AtomicData:
     # add fixed and cell
     data_object.fixed = torch.zeros(data_object.natoms, dtype=torch.float)
 
@@ -135,7 +133,7 @@ def qmof_transform(data_object: Data, config) -> Data:
     return data_object
 
 
-def qm9_transform(data_object: Data, config) -> Data:
+def qm9_transform(data_object: AtomicData, config) -> AtomicData:
     # make periodic with molecule centered in large cell
     atomic_numbers, positions, cell = _get_molecule_cell(data_object)
     data_object.atomic_numbers = atomic_numbers
@@ -151,7 +149,7 @@ def qm9_transform(data_object: Data, config) -> Data:
     return data_object
 
 
-def omol_transform(data_object: Data, config) -> Data:
+def omol_transform(data_object: AtomicData, config) -> AtomicData:
     # make periodic with molecule centered in large cell
     atomic_numbers, positions, cell = _get_molecule_cell(data_object)
     data_object.atomic_numbers = atomic_numbers
@@ -170,14 +168,14 @@ def omol_transform(data_object: Data, config) -> Data:
     return common_transform(data_object, config)
 
 
-def stress_reshape_transform(data_object: Data, config) -> Data:
+def stress_reshape_transform(data_object: AtomicData, config) -> AtomicData:
     for k in data_object.keys():  # noqa: SIM118
         if "stress" in k and ("iso" not in k and "aniso" not in k):
             data_object[k] = data_object[k].reshape(1, 9)
     return data_object
 
 
-def asedb_transform(data_object: Data, config) -> Data:
+def asedb_transform(data_object: AtomicData, config) -> AtomicData:
     data_object.dataset = config["dataset_name"]
     data_object.sid = str(
         data_object.sid.item() if torch.is_tensor(data_object) else data_object.sid
@@ -205,7 +203,7 @@ class DataTransforms:
         return data_object
 
 
-def decompose_tensor(data_object, config) -> Data:
+def decompose_tensor(data_object, config) -> AtomicData:
     tensor_key = config["tensor"]
     rank = config["rank"]
 

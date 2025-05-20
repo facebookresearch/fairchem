@@ -61,7 +61,7 @@ def generate_graph(
     max_neighbors: int,
     enforce_max_neighbors_strictly: bool,
     radius_pbc_version: int,
-    pbc: list[bool] = (True, True, True),
+    pbc: torch.Tensor,
 ) -> dict:
     """Generate a graph representation from atomic structure data.
 
@@ -106,7 +106,7 @@ def generate_graph(
                     cutoff,
                     max_neighbors,
                     enforce_max_neighbors_strictly,
-                    pbc=pbc,
+                    pbc=pbc[idx],
                 )
                 for idx in range(len(data))
             ]

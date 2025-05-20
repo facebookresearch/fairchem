@@ -4,6 +4,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,7 +27,7 @@ class GradSaveOptimizer(torch.optim.AdamW):
         self.save_step = 0
         # self.params = params
 
-    def step(self,closure=None):
+    def step(self, closure=None):
         if self.save_path:
             gp_size = 0
             gp_rank = 0

@@ -20,7 +20,7 @@ import numpy as np
 from tqdm import tqdm
 
 from fairchem.core.common.typing import assert_is_instance
-from fairchem.core.datasets.lmdb_dataset import LmdbDataset
+from fairchem.core.datasets.collaters.simple_collater import LmdbDataset
 
 
 def get_data(index):

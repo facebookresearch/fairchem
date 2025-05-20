@@ -4,6 +4,9 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
+from __future__ import annotations
+
 import argparse
 import multiprocessing as mp
 import os
@@ -22,7 +25,7 @@ def get_starting_structure_from_input_dir(input_dir):
     metadata = pickle.load(m)
     m.close()
     sorts = []
-    with open(sort_path, "r") as f:
+    with open(sort_path) as f:
         for line in f:
             sort, resort = line.split()
             sorts.append(int(sort))
