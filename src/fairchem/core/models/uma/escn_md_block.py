@@ -137,10 +137,9 @@ class Edgewise(torch.nn.Module):
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
-        new_embeddings = []
+        new_embeddings = None
         for idx in range(len(edge_index_partitions)):
-            new_embeddings.append(
-                torch.utils.checkpoint.checkpoint(
+            new_embeddings_chunk = torch.utils.checkpoint.checkpoint(
                     self.forward_chunk,
                     x,
                     x_edge_partitions[idx],
@@ -151,12 +150,15 @@ class Edgewise(torch.nn.Module):
                     node_offset,
                     use_reentrant=False,
                 )
-            )
+            if new_embeddings is None:
+                new_embeddings=new_embeddings_chunk
+            else:
+                new_embeddings=new_embeddings+new_embeddings_chunk
+        
+            #if len(new_embeddings) > 8:
+            #    new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
 
-            if len(new_embeddings) > 8:
-                new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
-
-        return torch.stack(new_embeddings).sum(axis=0)
+        return new_embeddings #torch.stack(new_embeddings).sum(axis=0)
 
     def forward_chunk(
         self,

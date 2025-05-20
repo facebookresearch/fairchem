@@ -80,7 +80,7 @@ def get_fcc_carbon_xtal(
     indices = np.random.choice(len(atoms), num_atoms, replace=False)
     sampled_atoms = atoms[indices]
     graph=ase_to_graph(sampled_atoms, neighbors, radius, external_graph)
-    pickle.dump(graph,fn)
+    pickle.dump(graph,open(fn,'wb'))
     return graph
 
 
