@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import pickle
 import functools
 import logging
 import os
@@ -68,13 +69,19 @@ def get_fcc_carbon_xtal(
     lattice_constant: float = 3.8,
     external_graph: bool = True,
 ):
+    fn=f'neigh{neighbors}_rad{radius}_numatomms{num_atoms}.pkl'
+    if os.path.exists(fn):
+        print("CACHED!")
+        return pickle.load(open(fn,'rb'))
     # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
     atoms = build.bulk("C", "fcc", a=lattice_constant)
     n_cells = int(np.ceil(np.cbrt(num_atoms)))
     atoms = atoms.repeat((n_cells, n_cells, n_cells))
     indices = np.random.choice(len(atoms), num_atoms, replace=False)
     sampled_atoms = atoms[indices]
-    return ase_to_graph(sampled_atoms, neighbors, radius, external_graph)
+    graph=ase_to_graph(sampled_atoms, neighbors, radius, external_graph)
+    pickle.dump(graph,fn)
+    return graph
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
@@ -107,12 +114,16 @@ def make_profile(data, predictor, name, save_loc):
     with profile(
         activities=activities,
         schedule=profile_schedule,
+        record_shapes=True,
+        profile_memory=True,
+        with_stack=True,
         on_trace_ready=tc,
     ) as p:
         for _ in range(total_profile_steps):
             predictor.predict(data)
             torch.cuda.synchronize()
             p.step()
+        p.export_memory_timeline(f"memory_usage.html", device="cuda:0")
 
 
 class InferenceBenchRunner(Runner):
