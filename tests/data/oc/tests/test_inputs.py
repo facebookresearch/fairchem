@@ -4,11 +4,13 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
+from __future__ import annotations
+
 import random
 
 import numpy as np
 import pytest
-
 from fairchem.data.oc.core import Adsorbate, AdsorbateSlabConfig, Bulk, Slab
 from fairchem.data.oc.utils.vasp import VASP_FLAGS, _clean_up_inputs
 

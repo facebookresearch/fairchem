@@ -307,8 +307,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 dtype=data_dict["pos"].dtype,
                 device=data_dict["pos"].device,
             )
-            # num_batch = data_dict["num_graphs"]
-            num_batch = data_dict.get("num_graphs", len(data_dict["natoms"]))
+            num_batch = len(data_dict["natoms"])
             displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
             displacement.requires_grad = True
             symmetric_displacement = 0.5 * (
@@ -353,14 +352,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
-                pbc = (True, True, True)
+                pbc = torch.ones(len(data_dict), 3, dtype=torch.bool)
             else:
                 assert (
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert all(pbc) or not any(
-                pbc
+            assert (
+                pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
             logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
@@ -430,6 +429,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             spin=data_dict["spin"],
             dataset=data_dict.get("dataset", None),
         )
+
         self.set_MOLE_coefficients(
             atomic_numbers_full=data_dict["atomic_numbers_full"],
             batch_full=data_dict["batch_full"],

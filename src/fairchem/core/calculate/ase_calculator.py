@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,7 +16,7 @@ from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
 
 from fairchem.core.datasets import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
     DEFAULT_CHARGE,
@@ -90,17 +91,13 @@ class FAIRChemCalculator(Calculator):
             )
 
         self._reset_calc_key_mapping(self._task_name)
-        # Even when our models may not use the charge/spin keys from atoms.info, they should still pull it
-        a2g_kwargs = {"r_data_keys": ["spin", "charge"]}
-        self.a2g = AtomsToGraphs(
-            max_neigh=self.predictor.model.module.backbone.max_neighbors,
-            radius=self.predictor.model.module.backbone.cutoff,
-            r_energy=False,
-            r_forces=False,
-            r_distances=False,
+
+        self.a2g = partial(
+            AtomicData.from_ase,
+            max_neigh=self.max_neighbors,
+            radius=self.cutoff,
             r_edges=False,
-            r_pbc=True,
-            **a2g_kwargs,
+            r_data_keys=["spin", "charge"],
         )
 
     @property
@@ -181,7 +178,7 @@ class FAIRChemCalculator(Calculator):
         Calculator.calculate(self, atoms, properties, system_changes)
 
         # Convert using the current a2g object
-        data_object = self.a2g.convert(atoms)
+        data_object = self.a2g(atoms)
         data_object.dataset = self.task_name
 
         # Batch and predict

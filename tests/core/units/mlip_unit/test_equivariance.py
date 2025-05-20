@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import os
+from functools import partial
 
 import pytest
 import torch
 from e3nn.o3 import rand_matrix
 
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.lmdb_dataset import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 # Test equivariance in both fp32 and fp64
@@ -77,14 +78,11 @@ def equivariance_on_pt(
 ):
     db = AseDBDataset(config={"src": os.path.join(data_root_dir, "oc20")})
 
-    a2g = AtomsToGraphs(
+    a2g = partial(
+        AtomicData.from_ase,
         max_neigh=10,
         radius=100,
-        r_energy=False,
-        r_forces=False,
-        r_distances=False,
         r_edges=False,
-        r_pbc=True,
         r_data_keys=["spin", "charge"],
     )
 
@@ -95,7 +93,7 @@ def equivariance_on_pt(
         predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
         predictor.model = predictor.model.to(dtype)
 
-        sample = a2g.convert(db.get_atoms(sample_idx))
+        sample = a2g(db.get_atoms(sample_idx))
         sample.pos += 500
         sample.cell *= 2000
         sample.cell = sample.cell.to(dtype)

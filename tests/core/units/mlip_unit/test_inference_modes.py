@@ -8,13 +8,13 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+from functools import partial
 
 import pytest
-import torch
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
@@ -45,6 +45,7 @@ def test_direct_mole_inference_modes(
     direct_mole_checkpoint,
     fake_uma_dataset,
     torch_deterministic,
+    compile_reset_state,
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -82,6 +83,7 @@ def test_conserving_mole_inference_modes(
     conserving_mole_checkpoint,
     fake_uma_dataset,
     torch_deterministic,
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -122,6 +124,7 @@ def test_conserving_mole_inference_modes_gpu(
     external_graph_gen,
     conserving_mole_checkpoint,
     fake_uma_dataset,
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -142,7 +145,10 @@ def test_conserving_mole_inference_modes_gpu(
 
 # Test the two main modes inference and MD on CPU for direct and convserving
 def test_conserving_mole_inference_mode_default(
-    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    conserving_mole_checkpoint,
+    fake_uma_dataset,
+    torch_deterministic,
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -154,7 +160,10 @@ def test_conserving_mole_inference_mode_default(
 
 
 def test_conserving_mole_inference_mode_md(
-    conserving_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    conserving_mole_checkpoint,
+    fake_uma_dataset,
+    torch_deterministic,
+    compile_reset_state,
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -166,7 +175,7 @@ def test_conserving_mole_inference_mode_md(
 
 
 def test_direct_mole_inference_mode_default(
-    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -178,7 +187,7 @@ def test_direct_mole_inference_mode_default(
 
 
 def test_direct_mole_inference_mode_md(
-    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic
+    direct_mole_checkpoint, fake_uma_dataset, torch_deterministic, compile_reset_state
 ):
     direct_mole_checkpoint_pt, _ = direct_mole_checkpoint
     mole_inference(
@@ -194,7 +203,7 @@ def test_direct_mole_inference_mode_md(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_default_gpu(
-    conserving_mole_checkpoint, fake_uma_dataset
+    conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -209,7 +218,7 @@ def test_conserving_mole_inference_mode_default_gpu(
 
 @pytest.mark.gpu()
 def test_conserving_mole_inference_mode_md_gpu(
-    conserving_mole_checkpoint, fake_uma_dataset
+    conserving_mole_checkpoint, fake_uma_dataset, compile_reset_state
 ):
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     mole_inference(
@@ -230,21 +239,17 @@ def mole_inference(
     energy_rtol=1e-4,
     forces_rtol=1e-4,
 ):
-    torch.compiler.reset()
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
-    a2g = AtomsToGraphs(
+    sample = AtomicData.from_ase(
+                db.get_atoms(0),
         max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        r_distances=False,
         r_edges=inference_mode.external_graph_gen,
-        r_pbc=True,
         r_data_keys=["spin", "charge"],
     )
-
-    sample = a2g.convert(db.get_atoms(0))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -312,18 +317,16 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = AtomsToGraphs(
+    a2g = partial(AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        r_distances=False,
         r_edges=inference_mode.external_graph_gen,
-        r_pbc=True,
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g.convert(db.get_atoms(0))
+    sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -336,7 +339,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     )
     _ = predictor.predict(batch.clone())
 
-    sample = a2g.convert(db.get_atoms(1))
+    sample = a2g(db.get_atoms(1))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -344,7 +347,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g.convert(db.get_atoms(0))
+    sample = a2g(db.get_atoms(0))
     sample["dataset"] = "not-oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
@@ -352,7 +355,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g.convert(db.get_atoms(0))
+    sample = a2g(db.get_atoms(0))
     sample["dataset"] = "oc20"
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen

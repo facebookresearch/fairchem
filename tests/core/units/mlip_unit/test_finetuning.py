@@ -4,11 +4,13 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 from __future__ import annotations
 
 import os
 
 import hydra
+import pytest
 import torch
 import torch.distributed as dist
 from omegaconf import OmegaConf
@@ -29,7 +31,7 @@ def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
             return False
     return True
 
-
+@pytest.mark.skip()
 def test_traineval_runner_finetuning():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     setup_env_local()

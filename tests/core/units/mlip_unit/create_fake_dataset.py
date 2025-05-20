@@ -110,7 +110,7 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
         atom_positions = np.random.uniform(0, sys_size, (n_atoms, 3))
         if fake_dataset_config.pbc:
             pbc = True
-            cell = np.eye(3) * sys_size
+            cell = np.eye(3, dtype=np.float32) * sys_size
         else:
             pbc = False
             cell = None
@@ -122,6 +122,7 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
         forces = calculate_forces_repulsive_force_field(atoms)
         energy = compute_energy(atoms)
         systems.append({"atoms": atoms, "forces": forces, "energy": energy})
+
     forces = torch.vstack([system["forces"] for system in systems])
     energies = torch.vstack([system["energy"] for system in systems])
 
@@ -153,6 +154,7 @@ def generate_structures(fake_dataset_config: FakeDatasetConfig):
         atoms.info["spin"] = np.random.randint(0, 2)
 
         structures.append(atoms)
+
     return structures
 
 

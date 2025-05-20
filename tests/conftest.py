@@ -4,21 +4,27 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
+
 # conftest.py
 from __future__ import annotations
 
+import random
 from contextlib import suppress
 
+import numpy as np
 import pytest
 import torch
 
-@pytest.fixture
+
+@pytest.fixture()
 def command_line_inference_checkpoint(request):
     return request.config.getoption("--inference-checkpoint")
 
-@pytest.fixture
+
+@pytest.fixture()
 def command_line_inference_dataset(request):
     return request.config.getoption("--inference-dataset")
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -28,14 +34,12 @@ def pytest_addoption(parser):
         help="skip ocpapi integration tests",
     )
     parser.addoption(
-        "--inference-checkpoint", 
-        action="store", 
-        help="inference checkpoint to run check on"
+        "--inference-checkpoint",
+        action="store",
+        help="inference checkpoint to run check on",
     )
     parser.addoption(
-        "--inference-dataset", 
-        action="store", 
-        help="inference dataset to run check on"
+        "--inference-dataset", action="store", help="inference dataset to run check on"
     )
 
 
@@ -82,7 +86,28 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(pytest.mark.skip(reason="skip all but inference check"))
     else:
         # Skip all tests marked with 'inference_check' by default
-        skip_inference_check = pytest.mark.skip(reason="skipping inference check by default")
+        skip_inference_check = pytest.mark.skip(
+            reason="skipping inference check by default"
+        )
         for item in items:
             if "inference_check" in item.keywords:
                 item.add_marker(skip_inference_check)
+
+
+def seed_everywhere(seed=0):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+@pytest.fixture(scope="function")
+def seed_fixture():
+    seed_everywhere(42)  # You can set your desired seed value here
+
+
+@pytest.fixture(scope="function")
+def compile_reset_state():
+    torch.compiler.reset()
+    yield
+    torch.compiler.reset()

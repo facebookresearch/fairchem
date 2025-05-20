@@ -13,6 +13,7 @@ python -m pytest tests/core/units/mlip_unit/test_inference_checkpoint.py::test_c
 from __future__ import annotations
 
 import os
+from functools import partial
 
 import numpy as np
 import pytest
@@ -20,8 +21,8 @@ import torch
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.lmdb_dataset import data_list_collater
-from fairchem.core.preprocessing.atoms_to_graphs import AtomsToGraphs
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.units.mlip_unit.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 
@@ -33,14 +34,12 @@ def test_inference_checkpoint_direct(
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = AtomsToGraphs(
+    a2g = partial(AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
         r_forces=False,
-        r_distances=False,
-        r_edges=True,
-        r_pbc=True,
+        r_edges=False,
         r_data_keys=["spin", "charge"],
     )
 

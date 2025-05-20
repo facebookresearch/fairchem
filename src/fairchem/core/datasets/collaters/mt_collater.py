@@ -7,18 +7,9 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import torch
-from torch_geometric.data import Batch, Data
 
-if TYPE_CHECKING:
-    from torch_geometric.data.data import BaseData
-
-# from fairchem.experimental.foundation_models.atomic_data.atomic_data import (
-#     AtomicData,
-#     atomicdata_list_to_batch,
-# )
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
 
 class MTCollater:
@@ -32,7 +23,7 @@ class MTCollater:
         self.task_config = task_config
         self.dataset_task_map = self._create_dataset_task_map(task_config)
 
-    def __call__(self, data_list: list[Data]) -> Batch:
+    def __call__(self, data_list: list[AtomicData]) -> AtomicData:
         batch = self.data_list_collater(
             data_list,
             dataset_task_map=self.dataset_task_map,
@@ -42,18 +33,13 @@ class MTCollater:
 
     def data_list_collater(
         self,
-        data_list: list[BaseData],
+        data_list: list[AtomicData],
         dataset_task_map: dict,
         exclude_keys: list,
-    ) -> BaseData:
+    ) -> AtomicData:
         data_list = self._add_missing_attr(data_list, dataset_task_map)
 
-        # if isinstance(data_list[0], AtomicData):
-        #     batch = atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
-        # else:
-        batch = Batch.from_data_list(data_list, exclude_keys=exclude_keys)
-
-        return batch
+        return atomicdata_list_to_batch(data_list, exclude_keys=exclude_keys)
 
     # takes in the task config
     def _create_dataset_task_map(self, config):
