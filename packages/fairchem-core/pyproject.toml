@@ -25,8 +25,6 @@ dependencies = [
     "hydra-core",
     "torchtnt",
     "huggingface_hub>=0.27.1",
-    "pydantic>=2.10.0",
-    "torch_geometric@git+https://github.com/pyg-team/pytorch_geometric.git@2cc28ed9b6c9b649c873070e1e53e7523efd8708",
     "ase>=3.25.0",
     "ase-db-backends>=0.10.0",
 ]
