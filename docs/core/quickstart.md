@@ -20,9 +20,10 @@ Using pre-trained models in ASE
 ```python
 from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
-from fairchem.core import FAIRChemCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-calc = FAIRChemCalculator(hf_hub_filename="uma_sm.pt", device="cuda", task_name="oc20")
+predictor =  pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
 slab = fcc100("Cu", (3, 3, 3), vacuum=8, periodic=True)
