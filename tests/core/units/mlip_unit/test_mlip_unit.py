@@ -178,10 +178,11 @@ def test_full_train_eval_from_cli_aselmdb_gpu(
     launch_main(sys_args)
 
 
-def test_full_train_from_cli(torch_deterministic):
+def test_full_train_from_cli(fake_uma_dataset,torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=13.662819862365723",
     ]
     launch_main(sys_args)
@@ -192,6 +193,7 @@ def test_full_train_from_cli(torch_deterministic):
         "backbone=K2L2_gate",
         "act_type=gate",
         "ff_type=spectral",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=10.431375503540039",
     ]
     launch_main(sys_args)
@@ -203,6 +205,7 @@ def test_full_train_from_cli(torch_deterministic):
         "act_type=gate",
         "ff_type=spectral",
         "backbone.mmax=1",
+        f"datasets.data_root_dir={fake_uma_dataset}",
         "+expected_loss=55.941776275634766",
     ]
     launch_main(sys_args)
