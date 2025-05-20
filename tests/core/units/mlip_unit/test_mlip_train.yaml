@@ -1,5 +1,5 @@
 defaults:
-  - datasets: pickle
+  - datasets: aselmdb
   - tasks: oc20_omol
   - backbone: K2L2
   - optimizer: adamw
