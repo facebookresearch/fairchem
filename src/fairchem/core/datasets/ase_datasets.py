@@ -122,10 +122,6 @@ class AseAtomsDataset(BaseDataset, ABC):
 
         data_object = self.a2g(atoms, sid=sid)
 
-        # apply linear reference
-        if self.lin_ref is not None:
-            data_object.energy -= sum(self.lin_ref[data_object.atomic_numbers.long()])
-
         # Transform data object
         data_object = self.transforms(data_object)
 
