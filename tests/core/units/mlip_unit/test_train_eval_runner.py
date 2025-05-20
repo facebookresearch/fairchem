@@ -32,7 +32,7 @@ def check_model_state_equal(old_state: dict, new_state: dict) -> bool:
     return True
 
 
-def test_traineval_runner_save_and_load_checkpoint():
+def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     assign_device_for_local_rank(True, 0)
     setup_env_local()
@@ -41,7 +41,8 @@ def test_traineval_runner_save_and_load_checkpoint():
     # remove callbacks for checking loss
     # TODO mock main to avoid repeating this code in other tests
     cfg = get_hydra_config_from_yaml(
-        config, ["expected_loss=null", "checkpoint_every=null"]
+        config, ["expected_loss=null", "checkpoint_every=null",
+        f"datasets.data_root_dir={fake_uma_dataset}",]
     )
     os.makedirs(cfg.job.run_dir, exist_ok=True)
     os.makedirs(os.path.join(cfg.job.run_dir, cfg.job.timestamp_id), exist_ok=True)
@@ -60,7 +61,8 @@ def test_traineval_runner_save_and_load_checkpoint():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     # use a different seed so the runner cannot have the same state
     new_cfg = get_hydra_config_from_yaml(
-        config, ["expected_loss=null", "checkpoint_every=null"]
+        config, ["expected_loss=null", "checkpoint_every=null",
+        f"datasets.data_root_dir={fake_uma_dataset}",]
     )
     new_cfg.job.seed = 999
     assert new_cfg.job.seed != cfg.job.seed
