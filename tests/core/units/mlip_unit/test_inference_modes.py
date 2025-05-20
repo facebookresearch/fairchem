@@ -361,3 +361,40 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     _ = predictor.predict(batch.clone())
+
+
+def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
+    direct_non_mole_inference_checkpoint_pt, _ = (
+        direct_checkpoint
+    )
+    inference_mode = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=False,
+        merge_mole=True,
+        compile=False,
+        external_graph_gen=True,
+    )
+
+    db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
+
+    a2g = partial(AtomicData.from_ase,
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=inference_mode.external_graph_gen,
+        r_data_keys=["spin", "charge"],
+    )
+
+    sample = a2g(db.get_atoms(0))
+    sample["dataset"] = "oc20"
+    batch = data_list_collater(
+        [sample], otf_graph=not inference_mode.external_graph_gen
+    )
+    device = "cpu"
+    predictor = MLIPPredictUnit(
+        direct_non_mole_inference_checkpoint_pt,
+        device=device,
+        inference_settings=inference_mode,
+    )
+    _ = predictor.predict(batch.clone())
