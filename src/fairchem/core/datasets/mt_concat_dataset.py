@@ -66,8 +66,6 @@ class ConcatDataset(Dataset[T_co]):
         # TODO this should be ensured in the datasets themselves, rather than casting/redifining here?
         data_object.fixed = data_object.fixed.long()
         data_object.atomic_numbers = data_object.atomic_numbers.long()
-        if hasattr(data_object, "tags"):
-            data_object.tags = data_object.tags.long()
 
         return data_object
 
