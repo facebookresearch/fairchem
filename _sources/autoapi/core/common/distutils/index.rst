@@ -5,7 +5,7 @@ core.common.distutils
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -19,7 +19,7 @@ Attributes
 
    core.common.distutils.T
    core.common.distutils.DISTRIBUTED_PORT
-   core.common.distutils.CURRENT_DEVICE_STR
+   core.common.distutils.CURRENT_DEVICE_TYPE_STR
 
 
 Functions
@@ -28,6 +28,7 @@ Functions
 .. autoapisummary::
 
    core.common.distutils.os_environ_get_or_throw
+   core.common.distutils.get_init_method
    core.common.distutils.setup
    core.common.distutils.cleanup
    core.common.distutils.initialized
@@ -54,11 +55,26 @@ Module Contents
    :value: 13356
 
 
-.. py:data:: CURRENT_DEVICE_STR
-   :value: 'CURRRENT_DEVICE'
+.. py:data:: CURRENT_DEVICE_TYPE_STR
+   :value: 'CURRRENT_DEVICE_TYPE'
 
 
 .. py:function:: os_environ_get_or_throw(x: str) -> str
+
+.. py:function:: get_init_method(init_method, world_size: int | None, rank: int | None = None, node_list: str | None = None, filename: str | None = None)
+
+   Get the initialization method for a distributed job based on the specified method type.
+
+   :param init_method: The initialization method type, either "tcp" or "file".
+   :param world_size: The total number of processes in the distributed job.
+   :param rank: The rank of the current process (optional).
+   :param node_list: The list of nodes for SLURM-based distributed job (optional, used with "tcp").
+   :param filename: The shared file path for file-based initialization (optional, used with "file").
+
+   :returns: The initialization method string to be used by PyTorch's distributed module.
+
+   :raises ValueError: If an invalid init_method is provided.
+
 
 .. py:function:: setup(config) -> None
 
@@ -87,9 +103,9 @@ Module Contents
    Gather a list of pickleable objects into rank 0
 
 
-.. py:function:: assign_device_for_local_rank(cpu: bool, local_rank: int)
+.. py:function:: assign_device_for_local_rank(cpu: bool, local_rank: int) -> None
 
-.. py:function:: get_device_for_local_rank()
+.. py:function:: get_device_for_local_rank() -> str
 
 .. py:function:: setup_env_local()
 

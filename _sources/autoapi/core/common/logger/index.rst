@@ -5,7 +5,7 @@ core.common.logger
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -181,7 +181,7 @@ Module Contents
 
 
 
-   .. py:method:: init_wandb(config: dict, run_id: str, run_name: str, log_dir: str, project: str, entity: str, group: str | None = None) -> None
+   .. py:method:: init_wandb(config: dict, run_id: str, run_name: str, log_dir: str, project: str, entity: str, group: str | None = None, job_type: str | None = None) -> None
       :classmethod:
 
 

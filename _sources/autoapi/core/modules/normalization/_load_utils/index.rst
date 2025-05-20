@@ -5,7 +5,7 @@ core.modules.normalization._load_utils
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -17,12 +17,15 @@ Functions
 
 .. autoapisummary::
 
+   core.modules.normalization._load_utils.save_checkpoint
    core.modules.normalization._load_utils._load_check_duplicates
    core.modules.normalization._load_utils._load_from_config
 
 
 Module Contents
 ---------------
+
+.. py:function:: save_checkpoint(state, checkpoint_dir: str = 'checkpoints/', checkpoint_file: str = 'checkpoint.pt') -> str
 
 .. py:function:: _load_check_duplicates(config: dict, name: str) -> dict[str, torch.nn.Module]
 

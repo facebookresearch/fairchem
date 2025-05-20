@@ -5,7 +5,7 @@ core.datasets._utils
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -23,7 +23,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: rename_data_object_keys(data_object: torch_geometric.data.Data, key_mapping: dict[str, str | list[str]]) -> torch_geometric.data.Data
+.. py:function:: rename_data_object_keys(data_object: fairchem.core.datasets.atomic_data.AtomicData, key_mapping: dict[str, str | list[str]]) -> fairchem.core.datasets.atomic_data.AtomicData
 
    Rename data object keys
 

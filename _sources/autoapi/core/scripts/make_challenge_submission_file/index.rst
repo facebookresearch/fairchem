@@ -5,11 +5,10 @@ core.scripts.make_challenge_submission_file
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Facebook, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
-
 
    ONLY for use in the NeurIPS 2021 Open Catalyst Challenge. For all other submissions
    please use make_submission_file.py.

@@ -5,7 +5,7 @@ core.common.data_parallel
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -39,7 +39,7 @@ Module Contents
    .. py:attribute:: otf_graph
 
 
-   .. py:method:: __call__(data_list: list[torch_geometric.data.Data]) -> torch_geometric.data.Batch
+   .. py:method:: __call__(data_list: list[fairchem.core.datasets.atomic_data.AtomicData]) -> fairchem.core.datasets.atomic_data.AtomicData
 
 
 .. py:function:: _balanced_partition(sizes: numpy.typing.NDArray[numpy.int_], num_parts: int)

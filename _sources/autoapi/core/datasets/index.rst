@@ -12,11 +12,10 @@ Submodules
 
    /autoapi/core/datasets/_utils/index
    /autoapi/core/datasets/ase_datasets/index
+   /autoapi/core/datasets/atomic_data/index
    /autoapi/core/datasets/base_dataset/index
    /autoapi/core/datasets/embeddings/index
-   /autoapi/core/datasets/lmdb_database/index
-   /autoapi/core/datasets/lmdb_dataset/index
-   /autoapi/core/datasets/oc22_lmdb_dataset/index
+   /autoapi/core/datasets/mt_concat_dataset/index
    /autoapi/core/datasets/target_metadata_guesser/index
 
 
@@ -28,8 +27,6 @@ Classes
    core.datasets.AseDBDataset
    core.datasets.AseReadDataset
    core.datasets.AseReadMultiStructureDataset
-   core.datasets.LMDBDatabase
-   core.datasets.LmdbDataset
 
 
 Functions
@@ -276,133 +273,5 @@ Package Contents
    :rtype: Subset
 
 
-.. py:class:: LMDBDatabase(filename: str | pathlib.Path | None = None, create_indices: bool = True, use_lock_file: bool = False, serial: bool = False, readonly: bool = False, *args, **kwargs)
-
-   Bases: :py:obj:`ase.db.core.Database`
-
-
-   Base class for all databases.
-
-
-   .. py:attribute:: readonly
-
-
-   .. py:attribute:: ids
-      :value: []
-
-
-
-   .. py:attribute:: deleted_ids
-      :value: []
-
-
-
-   .. py:method:: __enter__() -> typing_extensions.Self
-
-
-   .. py:method:: __exit__(exc_type, exc_value, tb) -> None
-
-
-   .. py:method:: close() -> None
-
-
-   .. py:method:: _write(atoms: ase.Atoms | ase.db.row.AtomsRow, key_value_pairs: dict, data: dict | None, idx: int | None = None) -> None
-
-
-   .. py:method:: _update(idx: int, key_value_pairs: dict | None = None, data: dict | None = None)
-
-
-   .. py:method:: _write_deleted_ids()
-
-
-   .. py:method:: delete(ids: list[int]) -> None
-
-      Delete rows.
-
-
-
-   .. py:method:: _get_row(idx: int, include_data: bool = True)
-
-
-   .. py:method:: _get_row_by_index(index: int, include_data: bool = True)
-
-      Auxiliary function to get the ith entry, rather than a specific id
-
-
-
-   .. py:method:: _select(keys, cmps: list[tuple[str, str, str]], explain: bool = False, verbosity: int = 0, limit: int | None = None, offset: int = 0, sort: str | None = None, include_data: bool = True, columns: str = 'all')
-
-
-   .. py:property:: metadata
-
-      Load the metadata from the DB if present
-
-
-   .. py:property:: _nextid
-
-      Get the id of the next row to be written
-
-
-   .. py:method:: count(selection=None, **kwargs) -> int
-
-      Count rows.
-
-      See the select() method for the selection syntax.  Use db.count() or
-      len(db) to count all rows.
-
-
-
-   .. py:method:: _load_ids() -> None
-
-      Load ids from the DB
-
-      Since ASE db ids are mostly 1-N integers, but can be missing entries
-      if ids have been deleted. To save space and operating under the assumption
-      that there will probably not be many deletions in most OCP datasets,
-      we just store the deleted ids.
-
-
-
-.. py:class:: LmdbDataset(config)
-
-   Bases: :py:obj:`fairchem.core.datasets.base_dataset.BaseDataset`
-
-
-   Base Dataset class for all OCP datasets.
-
-
-   .. py:attribute:: sharded
-      :type:  bool
-
-      Dataset class to load from LMDB files containing relaxation
-      trajectories or single point computations.
-      Useful for Structure to Energy & Force (S2EF), Initial State to
-      Relaxed State (IS2RS), and Initial State to Relaxed Energy (IS2RE) tasks.
-      The keys in the LMDB must be integers (stored as ascii objects) starting
-      from 0 through the length of the LMDB. For historical reasons any key named
-      "length" is ignored since that was used to infer length of many lmdbs in the same
-      folder, but lmdb lengths are now calculated directly from the number of keys.
-      :param config: Dataset configuration
-      :type config: dict
-
-
-   .. py:attribute:: path
-
-
-   .. py:attribute:: key_mapping
-
-
-   .. py:attribute:: transforms
-
-
-   .. py:method:: __getitem__(idx: int) -> T_co
-
-
-   .. py:method:: connect_db(lmdb_path: pathlib.Path | None = None) -> lmdb.Environment
-
-
-   .. py:method:: __del__()
-
-
-.. py:function:: data_list_collater(data_list: list[torch_geometric.data.data.BaseData], otf_graph: bool = False, to_dict: bool = False) -> torch_geometric.data.data.BaseData | dict[str, torch.Tensor]
+.. py:function:: data_list_collater(data_list: list[fairchem.core.datasets.atomic_data.AtomicData], otf_graph: bool = False, to_dict: bool = False) -> fairchem.core.datasets.atomic_data.AtomicData | dict[str, torch.Tensor]
 

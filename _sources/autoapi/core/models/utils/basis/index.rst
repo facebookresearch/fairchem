@@ -5,7 +5,7 @@ core.models.utils.basis
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -38,14 +38,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -54,8 +54,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class
@@ -81,14 +81,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -97,8 +97,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class
@@ -127,14 +127,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -143,8 +143,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class
@@ -180,14 +180,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -196,8 +196,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class
@@ -230,14 +230,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -246,8 +246,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class
@@ -283,14 +283,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -299,8 +299,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class
@@ -333,14 +333,14 @@ Module Contents
 
    Your models should also subclass this class.
 
-   Modules can also contain other Modules, allowing to nest them in
+   Modules can also contain other Modules, allowing them to be nested in
    a tree structure. You can assign the submodules as regular attributes::
 
        import torch.nn as nn
        import torch.nn.functional as F
 
        class Model(nn.Module):
-           def __init__(self):
+           def __init__(self) -> None:
                super().__init__()
                self.conv1 = nn.Conv2d(1, 20, 5)
                self.conv2 = nn.Conv2d(20, 20, 5)
@@ -349,8 +349,8 @@ Module Contents
                x = F.relu(self.conv1(x))
                return F.relu(self.conv2(x))
 
-   Submodules assigned in this way will be registered, and will have their
-   parameters converted too when you call :meth:`to`, etc.
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
 
    .. note::
        As per the example above, an ``__init__()`` call to the parent class

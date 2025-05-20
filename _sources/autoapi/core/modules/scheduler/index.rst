@@ -3,6 +3,14 @@ core.modules.scheduler
 
 .. py:module:: core.modules.scheduler
 
+.. autoapi-nested-parse::
+
+   Copyright (c) Meta Platforms, Inc. and affiliates.
+
+   This source code is licensed under the MIT license found in the
+   LICENSE file in the root directory of this source tree.
+
+
 
 Classes
 -------
@@ -13,8 +21,23 @@ Classes
    core.modules.scheduler.LRScheduler
 
 
+Functions
+---------
+
+.. autoapisummary::
+
+   core.modules.scheduler.warmup_lr_lambda
+
+
 Module Contents
 ---------------
+
+.. py:function:: warmup_lr_lambda(current_step: int, optim_config)
+
+   Returns a learning rate multiplier.
+   Till `warmup_steps`, learning rate linearly increases to `initial_lr`,
+   and then gets multiplied by `lr_gamma` every time a milestone is crossed.
+
 
 .. py:class:: CosineLRLambda(warmup_epochs: int, warmup_factor: float, epochs: int, lr_min_factor: float)
 

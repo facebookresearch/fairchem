@@ -3,6 +3,14 @@ core.scripts.download_large_files
 
 .. py:module:: core.scripts.download_large_files
 
+.. autoapi-nested-parse::
+
+   Copyright (c) Meta Platforms, Inc. and affiliates.
+
+   This source code is licensed under the MIT license found in the
+   LICENSE file in the root directory of this source tree.
+
+
 
 Attributes
 ----------
@@ -19,6 +27,7 @@ Functions
 
 .. autoapisummary::
 
+   core.scripts.download_large_files.fairchem_root
    core.scripts.download_large_files.parse_args
    core.scripts.download_large_files.change_path_for_pypi
    core.scripts.download_large_files.download_file_group
@@ -26,6 +35,11 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:function:: fairchem_root()
+
+   Return the root directory of the installed fairchem-core package.
+
 
 .. py:data:: S3_ROOT
    :value: 'https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/'

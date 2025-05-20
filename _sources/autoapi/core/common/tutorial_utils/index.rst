@@ -3,31 +3,26 @@ core.common.tutorial_utils
 
 .. py:module:: core.common.tutorial_utils
 
+.. autoapi-nested-parse::
+
+   Copyright (c) Meta Platforms, Inc. and affiliates.
+
+   This source code is licensed under the MIT license found in the
+   LICENSE file in the root directory of this source tree.
+
+
 
 Functions
 ---------
 
 .. autoapisummary::
 
-   core.common.tutorial_utils.fairchem_root
-   core.common.tutorial_utils.fairchem_main
    core.common.tutorial_utils.describe_fairchem
    core.common.tutorial_utils.train_test_val_split
-   core.common.tutorial_utils.generate_yml_config
 
 
 Module Contents
 ---------------
-
-.. py:function:: fairchem_root()
-
-   Return the root directory of the installed fairchem-core package.
-
-
-.. py:function:: fairchem_main()
-
-   Return the path to fairchem main.py
-
 
 .. py:function:: describe_fairchem()
 
@@ -45,19 +40,5 @@ Module Contents
    seed: an integer for the random number generator seed
 
    Returns the absolute path to files.
-
-
-.. py:function:: generate_yml_config(checkpoint_path, yml='run.yml', delete=(), update=())
-
-   Generate a yml config file from an existing checkpoint file.
-
-   checkpoint_path: string to path of an existing checkpoint
-   yml: name of file to write to.
-   pop: list of keys to remove from the config
-   update: dictionary of key:values to update
-
-   Use a dot notation in update.
-
-   Returns an absolute path to the generated yml file.
 
 

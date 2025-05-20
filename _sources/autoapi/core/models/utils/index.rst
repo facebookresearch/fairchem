@@ -12,5 +12,6 @@ Submodules
 
    /autoapi/core/models/utils/activations/index
    /autoapi/core/models/utils/basis/index
+   /autoapi/core/models/utils/irreps/index
 
 

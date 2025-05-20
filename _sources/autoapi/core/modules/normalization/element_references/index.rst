@@ -5,7 +5,7 @@ core.modules.normalization.element_references
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -17,6 +17,7 @@ Classes
 
 .. autoapisummary::
 
+   core.modules.normalization.element_references.ElementReferences
    core.modules.normalization.element_references.LinearReferences
 
 
@@ -32,6 +33,54 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:class:: ElementReferences(element_references: torch.Tensor)
+
+   Bases: :py:obj:`torch.nn.Module`
+
+
+   Base class for all neural network modules.
+
+   Your models should also subclass this class.
+
+   Modules can also contain other Modules, allowing them to be nested in
+   a tree structure. You can assign the submodules as regular attributes::
+
+       import torch.nn as nn
+       import torch.nn.functional as F
+
+       class Model(nn.Module):
+           def __init__(self) -> None:
+               super().__init__()
+               self.conv1 = nn.Conv2d(1, 20, 5)
+               self.conv2 = nn.Conv2d(20, 20, 5)
+
+           def forward(self, x):
+               x = F.relu(self.conv1(x))
+               return F.relu(self.conv2(x))
+
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
+
+   .. note::
+       As per the example above, an ``__init__()`` call to the parent class
+       must be made before assignment on the child.
+
+   :ivar training: Boolean represents whether this module is in training or
+                   evaluation mode.
+   :vartype training: bool
+
+
+   .. py:method:: compute_references(batch, tensor, elem_refs, operation)
+      :staticmethod:
+
+
+
+   .. py:method:: apply_refs(batch: fairchem.core.datasets.atomic_data.AtomicData, tensor: torch.Tensor) -> torch.Tensor
+
+
+   .. py:method:: undo_refs(batch: fairchem.core.datasets.atomic_data.AtomicData, tensor: torch.Tensor) -> torch.Tensor
+
 
 .. py:class:: LinearReferences(element_references: torch.Tensor | None = None, max_num_elements: int = 118)
 
@@ -56,19 +105,19 @@ Module Contents
    "Alternative reference scheme" section of the OC22 manuscript: https://arxiv.org/pdf/2206.08917
 
 
-   .. py:method:: _apply_refs(target: torch.Tensor, batch: torch_geometric.data.Batch, sign: int, reshaped: bool = True) -> torch.Tensor
+   .. py:method:: _apply_refs(target: torch.Tensor, batch: fairchem.core.datasets.atomic_data.AtomicData, sign: int, reshaped: bool = True) -> torch.Tensor
 
       Apply references batch-wise
 
 
 
-   .. py:method:: dereference(target: torch.Tensor, batch: torch_geometric.data.Batch, reshaped: bool = True) -> torch.Tensor
+   .. py:method:: dereference(target: torch.Tensor, batch: fairchem.core.datasets.atomic_data.AtomicData, reshaped: bool = True) -> torch.Tensor
 
       Remove linear references
 
 
 
-   .. py:method:: forward(target: torch.Tensor, batch: torch_geometric.data.Batch, reshaped: bool = True) -> torch.Tensor
+   .. py:method:: forward(target: torch.Tensor, batch: fairchem.core.datasets.atomic_data.AtomicData, reshaped: bool = True) -> torch.Tensor
 
       Add linear references
 

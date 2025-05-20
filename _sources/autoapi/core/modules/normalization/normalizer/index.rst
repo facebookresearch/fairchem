@@ -5,7 +5,7 @@ core.modules.normalization.normalizer
 
 .. autoapi-nested-parse::
 
-   Copyright (c) Meta, Inc. and its affiliates.
+   Copyright (c) Meta Platforms, Inc. and affiliates.
 
    This source code is licensed under the MIT license found in the
    LICENSE file in the root directory of this source tree.
@@ -70,9 +70,9 @@ Module Contents
                      in :attr:`state_dict` match the keys returned by this module's
                      :meth:`~torch.nn.Module.state_dict` function. Default: ``True``
       :type strict: bool, optional
-      :param assign: When ``False``, the properties of the tensors
-                     in the current module are preserved while when ``True``, the
-                     properties of the Tensors in the state dict are preserved. The only
+      :param assign: When set to ``False``, the properties of the tensors
+                     in the current module are preserved whereas setting it to ``True`` preserves
+                     properties of the Tensors in the state dict. The only
                      exception is the ``requires_grad`` field of :class:`~torch.nn.Parameter`s
                      for which the value from the module is preserved.
                      Default: ``False``
