@@ -476,9 +476,11 @@ def main(
     else:
         from torch.distributed.launcher.api import LaunchConfig, elastic_launch
 
-        assert (
-            (scheduler_cfg.num_nodes) <= 1
-        ), f"You cannot use more than one node (scheduler_cfg.num_nodes={scheduler_cfg.num_nodes}) in LOCAL mode"
+        if scheduler_cfg.num_nodes > 1:
+            cfg.job.scheduler.num_nodes = 1
+            logging.warning(
+                f"You cannot use more than one node (scheduler_cfg.num_nodes={scheduler_cfg.num_nodes}) in LOCAL mode, over-riding to 1 node"
+            )
         if scheduler_cfg.ranks_per_node > 1:
             logging.info(
                 f"Running in local mode with {scheduler_cfg.ranks_per_node} ranks using device_type:{cfg.job.device_type}"
