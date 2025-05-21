@@ -39,7 +39,6 @@ Install fairchem-core using pip,
 ```bash
 pip install fairchem-core
 ```
-**The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
 
 ### Quick Start
 The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
@@ -49,6 +48,10 @@ appropriate task name for domain specific prediction.
 #### Instantiate a calculator from a pretrained model
 Make sure you have a Hugging Face account, have already applied for model access to the
 [UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
+You can use the following to save an auth token,
+```bash
+huggingface-cli login
+```
 
 #### Set the task for your application and calculate
 
@@ -121,7 +124,7 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
-Calculate a spin gap
+Calculate a spin gap,
 ```python
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
@@ -146,7 +149,7 @@ Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tunin
 
 We plan to bring back the following models compatible with Fairchem V2 soon:
 * Gemnet-OC
-* EquiformersV2
+* EquiformerV2
 * ESEN
 
 We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
