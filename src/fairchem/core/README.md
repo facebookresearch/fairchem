@@ -1,7 +1,7 @@
 <h1 align="center"> <code>fairchem</code> by FAIR Chemistry </h1>
 
 <p align="center">
-  <img width="559" height="200" src="https://github.com/FAIR-Chem/fairchem/assets/45150244/5872c21c-8f39-41af-b703-af9817f0affe"?
+  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?
 </p>
 
 
@@ -20,12 +20,25 @@ demos, and application efforts for materials science and quantum chemistry.
 > If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
 > as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
+> :warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!
+
+### Read our latest release post!
+Read about the [UMA model and dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
+
+[![Meta FAIR Science Release](https://github.com/user-attachments/assets/acddd09b-ed6f-4d05-9a4b-9ba5e2301150)](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/?ref=shareable)
+
+### Try the demo!
+If you want to explore model capabilities check out our
+[educational demo](https://facebook-fairchem-uma-demo.hf.space/)
+
+[![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
+
+
 ### Installation
 Install fairchem-core using pip,
 ```bash
-pip install git+https://github.com/facebookresearch/fairchem.git@fairchem_core-2.0.0#subdirectory=packages/fairchem-core
+pip install fairchem-core
 ```
-**The PyPI install (pip install fairchem-core) is not available right now as we are waiting for a few dependencies to release their PyPI packages, will update this soon when it's available!**
 
 ### Quick Start
 The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
@@ -35,6 +48,10 @@ appropriate task name for domain specific prediction.
 #### Instantiate a calculator from a pretrained model
 Make sure you have a Hugging Face account, have already applied for model access to the
 [UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
+You can use the following to save an auth token,
+```bash
+huggingface-cli login
+```
 
 #### Set the task for your application and calculate
 
@@ -107,13 +124,32 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
+Calculate a spin gap,
+```python
+from ase.build import molecule
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+
+#  singlet CH2
+singlet = molecule("CH2_s1A1d")
+singlet.info.update({"spin": 1, "charge": 0})
+singlet.calc = FAIRChemCalculator(predictor, task_name="omol")
+
+#  triplet CH2
+triplet = molecule("CH2_s3B1d")
+triplet.info.update({"spin": 3, "charge": 0})
+triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
+
+triplet.get_potential_energy() - singlet.get_potential_energy()
+```
 
 ### Looking for Fairchem V1, models and code?
 Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
 
 We plan to bring back the following models compatible with Fairchem V2 soon:
 * Gemnet-OC
-* EquiformersV2
+* EquiformerV2
 * ESEN
 
 We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
