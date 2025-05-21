@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,
 )
+from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
 
 if TYPE_CHECKING:
     from pathlib import Path
