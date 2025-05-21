@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import warnings
 
 import numpy as np
 import torch
@@ -30,6 +31,14 @@ from fairchem.core.models.uma.nn.mole_utils import (
     recursive_replace_so2_MOLE,
     replace_linear_with_MOLE,
     replace_MOLE_with_linear,
+)
+
+# This will catch the warning despite its C++ origin
+# torch.Tensor.index_reduce is in beta
+warnings.filterwarnings(
+    "ignore",
+    message="index_reduce\\(\\) is in beta",
+    category=UserWarning,
 )
 
 
