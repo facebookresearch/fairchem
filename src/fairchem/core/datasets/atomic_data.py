@@ -12,7 +12,6 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import ase
@@ -121,51 +120,26 @@ def reshape_features(
     return edge_index, cell_offsets
 
 
-@dataclass
 class AtomicData:
-    # system
-    pos: torch.Tensor  # (num_node, 3)
-    atomic_numbers: torch.Tensor  # (num_node,)
-    cell: torch.Tensor  # (num_graph, 3, 3)
-    pbc: torch.Tensor  # (num_graph, 3)
-    natoms: torch.Tensor  # (1,)
-    charge: torch.Tensor  # (num_graph,)
-    spin: torch.Tensor  # (num_graph,)
-    # graph
-    edge_index: torch.Tensor  # (2, num_edge)
-    cell_offsets: torch.Tensor  # (num_edge, 3)
-    nedges: torch.Tensor  # (1,)
-    # extra
-    fixed: torch.Tensor  # (num_node,)
-    tags: torch.Tensor  # (num_node,)
-    # target
-    energy: torch.Tensor  # (num_graph,)
-    forces: torch.Tensor  # (num_node, 3)
-    stress: torch.Tensor  # (num_graph, 3, 3)
-    # batch
-    batch: torch.Tensor  # (num_node,)
-    # id
-    sid: list[str]
-
     def __init__(
         self,
-        pos,
-        atomic_numbers,
-        cell,
-        pbc,
-        natoms,
-        edge_index,
-        cell_offsets,
-        nedges,
-        charge,
-        spin,
-        fixed,
-        tags,
-        energy=None,
-        forces=None,
-        stress=None,
-        batch=None,
-        sid=None,
+        pos: torch.Tensor,  # (num_node, 3)
+        atomic_numbers: torch.Tensor,  # (num_node,)
+        cell: torch.Tensor,  # (num_graph, 3, 3)
+        pbc: torch.Tensor,  # (num_graph, 3)
+        natoms: torch.Tensor,  # (1,)
+        edge_index: torch.Tensor,  # (2, num_edge)
+        cell_offsets: torch.Tensor,  # (num_edge, 3)
+        nedges: torch.Tensor,  # (1,)
+        charge: torch.Tensor,  # (num_graph,)
+        spin: torch.Tensor,  # (num_graph,)
+        fixed: torch.Tensor,  # (num_node,)
+        tags: torch.Tensor,  # (num_node,)
+        energy: torch.Tensor | None = None,  # (num_graph,)
+        forces: torch.Tensor | None = None,  # (num_node, 3)
+        stress: torch.Tensor | None = None,  # (num_graph, 3, 3)
+        batch: torch.Tensor | None = None,  # (num_node,)
+        sid: list[str] | None = None,
     ):
         self.__keys__ = set(_REQUIRED_KEYS)
 
