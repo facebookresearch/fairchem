@@ -1,15 +1,11 @@
-[//]: # (<h1 align="center"> <code>fairchem</code> by FAIR Chemistry </h1>)
+<h1 align="center"> <code>fairchem</code> by FAIR Chemistry </h1>
 
-[//]: # ()
-[//]: # (<p align="center">)
+<p align="center">
+  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?
+</p>
 
-[//]: # (  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?)
 
-[//]: # (</p>)
-
-[//]: # ()
-[//]: # ()
-[//]: # (<h4 align="center">)
+<h4 align="center">
 
 ![tests](https://github.com/FAIR-Chem/fairchem/actions/workflows/test.yml/badge.svg?branch=main)
 ![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
