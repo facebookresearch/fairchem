@@ -11,8 +11,6 @@
 ![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
 ![Static Badge](https://img.shields.io/badge/python-3.10%2B-blue)
 
-
-# FAIR Chemistry
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
@@ -30,7 +28,7 @@ If you want to explore model capabilities check out our
 [educational demo](https://facebook-fairchem-uma-demo.hf.space/)
 
 # Installation
-Install fairchem-core using pip,
+Install fairchem-core using pip
 ```bash
 pip install fairchem-core
 ```
