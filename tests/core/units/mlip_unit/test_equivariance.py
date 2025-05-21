@@ -11,7 +11,7 @@ from e3nn.o3 import rand_matrix
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 # Test equivariance in both fp32 and fp64
 # If error in equivariance is due to numerical error in fp

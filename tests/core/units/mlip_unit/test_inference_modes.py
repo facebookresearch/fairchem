@@ -15,13 +15,11 @@ import pytest
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
     inference_settings_turbo,
-)
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    MLIPPredictUnit,
 )
 
 
@@ -242,7 +240,7 @@ def mole_inference(
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
     sample = AtomicData.from_ase(
-                db.get_atoms(0),
+        db.get_atoms(0),
         max_neigh=10,
         radius=100,
         r_energy=False,
@@ -317,7 +315,8 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = partial(AtomicData.from_ase,
+    a2g = partial(
+        AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
@@ -364,9 +363,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
 
 def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
-    direct_non_mole_inference_checkpoint_pt, _ = (
-        direct_checkpoint
-    )
+    direct_non_mole_inference_checkpoint_pt, _ = direct_checkpoint
     inference_mode = InferenceSettings(
         tf32=False,
         activation_checkpointing=False,
@@ -377,7 +374,8 @@ def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = partial(AtomicData.from_ase,
+    a2g = partial(
+        AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
