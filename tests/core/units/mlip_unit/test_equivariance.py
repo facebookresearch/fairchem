@@ -9,8 +9,7 @@ import torch
 from e3nn.o3 import rand_matrix
 
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 # Test equivariance in both fp32 and fp64
@@ -98,7 +97,7 @@ def equivariance_on_pt(
         sample.cell *= 2000
         sample.cell = sample.cell.to(dtype)
         sample["dataset"] = "oc20"
-        batch = data_list_collater([sample], otf_graph=True)
+        batch = atomicdata_list_to_batch([sample])
 
         original_positions = batch.pos.clone().to(dtype)
 

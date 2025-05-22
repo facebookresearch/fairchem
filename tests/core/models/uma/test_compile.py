@@ -16,8 +16,7 @@ import pytest
 import torch
 from ase import build
 
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.uma.escn_md import MLP_EFS_Head, eSCNMDBackbone
 
@@ -45,7 +44,7 @@ def ase_to_graph(atoms, neighbors: int, cutoff: float):
     data_object.pos.requires_grad = True
     data_loader = torch.utils.data.DataLoader(
         [data_object],
-        collate_fn=partial(data_list_collater, otf_graph=True),
+        collate_fn=atomicdata_list_to_batch,
         batch_size=1,
         shuffle=False,
     )
