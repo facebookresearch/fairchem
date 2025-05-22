@@ -13,7 +13,7 @@ copyright                   : "2024"  # Copyright year to be placed in the foote
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: auto
+  execute_notebooks: off
   timeout: 3600
 
 # Define the name of the latex output file for PDF builds
@@ -50,7 +50,8 @@ sphinx:
   - 'autoapi.extension'
   config:
     autosummary_generate: True
-    autoapi_dirs: ['../src/fairchem/core','../src/fairchem/data','../src/fairchem/applications/AdsorbML/adsorbml','../src/fairchem/applications/cattsunami','../src/fairchem/demo/ocpapi']
+    autoapi_dirs: ['../src/fairchem/core']
+    # autoapi_dirs: ['../src/fairchem/core','../src/fairchem/data','../src/fairchem/applications/AdsorbML/adsorbml','../src/fairchem/applications/cattsunami','../src/fairchem/demo/ocpapi']
     autoapi_python_use_implicit_namespaces: True
-    nb_execution_show_tb: True
-    nb_execution_raise_on_error: True
+    # nb_execution_show_tb: True
+    # nb_execution_raise_on_error: True
