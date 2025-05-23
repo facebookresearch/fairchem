@@ -887,22 +887,22 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         if "backbone" not in overrides:
             overrides["backbone"] = {}
         if inference_settings.activation_checkpointing is not None:
-            overrides["backbone"][
-                "activation_checkpointing"
-            ] = inference_settings.activation_checkpointing
+            overrides["backbone"]["activation_checkpointing"] = (
+                inference_settings.activation_checkpointing
+            )
         if inference_settings.wigner_cuda is not None:
-            overrides["backbone"][
-                "use_cuda_graph_wigner"
-            ] = inference_settings.wigner_cuda
+            overrides["backbone"]["use_cuda_graph_wigner"] = (
+                inference_settings.wigner_cuda
+            )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
             ] = not inference_settings.external_graph_gen
 
         if inference_settings.internal_graph_gen_version is not None:
-            overrides["backbone"][
-                "radius_pbc_version"
-            ] = inference_settings.internal_graph_gen_version
+            overrides["backbone"]["radius_pbc_version"] = (
+                inference_settings.internal_graph_gen_version
+            )
 
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
