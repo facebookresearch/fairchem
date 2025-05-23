@@ -46,7 +46,6 @@ from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     get_device_for_local_rank,
 )
-from fairchem.core._config import CACHE_DIR
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
