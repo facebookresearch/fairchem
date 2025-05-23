@@ -140,7 +140,7 @@ class AtomicData:
         stress: torch.Tensor | None = None,  # (num_graph, 3, 3)
         batch: torch.Tensor | None = None,  # (num_node,)
         sid: list[str] | None = None,
-        dataset: list[str] | None = None,
+        dataset: list[str] | str | None = None,
     ):
         self.__keys__ = set(_REQUIRED_KEYS)
 
@@ -158,8 +158,10 @@ class AtomicData:
         self.spin = spin
         self.fixed = fixed
         self.tags = tags
-        self.dataset = dataset
         self.sid = sid if sid is not None else [""]
+
+        if dataset is not None:
+            self.dataset = dataset
 
         # tagets
         if energy is not None:
@@ -178,7 +180,7 @@ class AtomicData:
         else:
             self.batch = torch.zeros_like(self.atomic_numbers)
 
-        # id  # TODO make this a str only no lists
+        # id
         if isinstance(sid, str):
             self.sid = [sid]
         elif isinstance(sid, list):
@@ -229,8 +231,12 @@ class AtomicData:
         assert int(self.batch.max()) + 1 == self.num_graphs
         assert len(self.sid) == self.num_graphs
 
-        if self.dataset is not None:
-            assert len(self.dataset) == self.num_graphs
+        if "dataset" in self.__keys__:
+            if isinstance(self.dataset, list):
+                assert len(self.dataset) == self.num_graphs
+            else:
+                assert isinstance(self.dataset, str)
+                assert self.num_graphs == 1
 
         # dtype checks
         assert (
@@ -426,7 +432,7 @@ class AtomicData:
             forces=forces,
             stress=stress,
             sid=[sid] if isinstance(sid, str) else sid,
-            dataset=[dataset] if isinstance(dataset, str) else dataset,
+            dataset=dataset,
         )
 
         return data
@@ -736,7 +742,9 @@ class AtomicData:
 
         data_dict["batch"] = torch.zeros_like(data_dict["atomic_numbers"])
         data_dict["sid"] = [self.sid[idx]]
-        data_dict["dataset"] = [self.dataset[idx]] if self.dataset is not None else None
+
+        if hasattr(self, "dataset"):
+            data_dict["dataset"] = self.dataset[idx]
 
         return AtomicData.from_dict(data_dict)
 
@@ -790,7 +798,7 @@ def atomicdata_list_to_batch(
     slices = {key: [0] for key in keys}
     cumsum = {key: [0] for key in keys}
     cat_dims = {}
-    natoms_list, sid_list, dataset_list = [], [], []
+    natoms_list, sid_list = [], []
 
     for i, data in enumerate(data_list):
         assert (
@@ -836,8 +844,6 @@ def atomicdata_list_to_batch(
 
         natoms_list.append(data.natoms.item())
         sid_list.extend(data.sid)
-        dataset_list.extend(data.dataset)
-
         item = torch.full((data.natoms,), i, dtype=torch.long, device=device)
         batch.append(item)
 
@@ -857,14 +863,6 @@ def atomicdata_list_to_batch(
 
     batched_data_dict["batch"] = torch.cat(batch, dim=-1)
     batched_data_dict["sid"] = sid_list
-
-    if all(dataset is not None for dataset in dataset_list):
-        batched_data_dict["dataset"] = dataset_list
-    elif all(dataset is None for dataset in dataset_list):
-        batched_data_dict["dataset"] = None
-    else:
-        raise RuntimeError("All data objects must have a `dataset` attribute defined.")
-
     atomic_data_batch = AtomicData.from_dict(batched_data_dict)
     atomic_data_batch.assign_batch_stats(slices, cumsum, cat_dims, natoms_list)
 
