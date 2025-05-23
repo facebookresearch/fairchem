@@ -991,7 +991,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
                 "with an appropriate checkpoint name."
             )
-        elif data.charge.item() != 0:
+        if data.charge.item() != 0:
             raise ValueError(
                 "This model cannot handle single atom systems with non-zero charge."
             )
