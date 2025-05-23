@@ -995,12 +995,17 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             raise ValueError(
                 "This model cannot handle single atom systems with non-zero charge."
             )
+        print(
+            "WARNING: Single atom systems are not handled by the model; "
+            "the precomputed DFT result is returned. "
+            "Spin multiplicity is ignored for monoatomic systems."
+        )
         elt = data.atomic_numbers.item()
         pred_output = self.populate_empty_prediction()
         for task_name, task in self.tasks.items():
             if task.property == "energy":
                 atom_refs = self.atom_refs[task_name.replace("_energy", "_elem_refs")]
-                pred_output[task_name] = torch.Tensor([atom_refs[elt]])
+                pred_output[task_name] = torch.Tensor([atom_refs.get(elt, 0.0)])
         return pred_output
 
     def predict(
