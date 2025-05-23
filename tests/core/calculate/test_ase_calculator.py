@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 import torch
+from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.optimize import BFGS
 
@@ -23,8 +24,6 @@ from fairchem.core.calculate.ase_calculator import (
 )
 
 if TYPE_CHECKING:
-    from ase import Atoms
-
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 from fairchem.core.calculate import pretrained_mlip
@@ -280,9 +279,9 @@ def test_single_atom_systems():
     predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cpu")
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
 
-    atom = Atoms('C', positions=[(0.,0.,0.)])
-    atom.info['charge'] = 0
-    atom.info['spin'] = 3
+    atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
+    atom.info["charge"] = 0
+    atom.info["spin"] = 3
     atom.calc = calc
 
     for task_name in ("omat", "omol", "oc20"):
@@ -293,20 +292,22 @@ def test_single_atom_systems():
 
         # Test forces are 0.0
         forces = atom.get_forces()
-        assert (forces==0.0).all()
+        assert (forces == 0.0).all()
+
 
 def test_single_atom_system_errors():
     """Test that a charged system with a single atom does not work."""
     predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cpu")
     calc = FAIRChemCalculator(predict_unit, task_name="omol")
 
-    atom = Atoms('C', positions=[(0.,0.,0.)])    
+    atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
     atom.calc = calc
-    atom.info['charge'] = -1
-    atom.info['spin'] = 4
+    atom.info["charge"] = -1
+    atom.info["spin"] = 4
 
     with pytest.raises(ValueError):
-        energy = atom.get_potential_energy()
+        atom.get_potential_energy()
+
 
 @pytest.mark.gpu()
 @pytest.mark.skip(
