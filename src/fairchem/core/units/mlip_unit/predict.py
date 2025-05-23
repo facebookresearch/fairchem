@@ -21,11 +21,12 @@ from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     get_device_for_local_rank,
 )
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
-from fairchem.core.units.mlip_unit.mlip_unit import Batch, load_inference_model
+from fairchem.core.units.mlip_unit.mlip_unit import load_inference_model
 
 
-class MLIPPredictUnit(PredictUnit[Batch]):
+class MLIPPredictUnit(PredictUnit[AtomicData]):
     def __init__(
         self,
         inference_model_path: str,
@@ -107,7 +108,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             if task.element_references is not None:
                 task.element_references.to(self.device)
 
-    def predict_step(self, state: State, data: Batch) -> dict[str, torch.tensor]:
+    def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)
 
     def get_composition_charge_spin_dataset(self, data):
@@ -127,7 +128,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         return comp_charge_spin, getattr(data, "dataset", [None])
 
     def predict(
-        self, data: Batch, undo_element_references: bool = True
+        self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
             # merge everything on CPU

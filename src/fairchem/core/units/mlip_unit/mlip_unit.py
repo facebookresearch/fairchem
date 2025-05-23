@@ -46,6 +46,7 @@ from fairchem.core.common.distutils import (
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
+from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
 from fairchem.core.modules.normalization.element_references import (  # noqa: TCH001
     ElementReferences,
@@ -56,9 +57,6 @@ from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
 from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
-
-# placeholder for fairchem data
-Batch = Any
 
 
 @dataclass
@@ -187,7 +185,7 @@ def initialize_finetuning_model(
     return model
 
 
-def get_output_mask(batch: Batch, task: Task) -> dict[str, torch.Tensor]:
+def get_output_mask(batch: AtomicData, task: Task) -> dict[str, torch.Tensor]:
     """Get a dictionary of boolean masks for each task and dataset in a batch.
 
     Comment(@abhshkdz): Structures in our `batch` are a mix from various
@@ -227,7 +225,9 @@ def get_output_mask(batch: Batch, task: Task) -> dict[str, torch.Tensor]:
     return output_masks
 
 
-def get_output_masks(batch: Batch, tasks: Sequence[Task]) -> dict[str, torch.Tensor]:
+def get_output_masks(
+    batch: AtomicData, tasks: Sequence[Task]
+) -> dict[str, torch.Tensor]:
     """Same as above but for a list of tasks."""
     output_masks = {}
     for task in tasks:
@@ -237,7 +237,7 @@ def get_output_masks(batch: Batch, tasks: Sequence[Task]) -> dict[str, torch.Ten
 
 
 def compute_loss(
-    tasks: Sequence[Task], predictions: dict[str, torch.Tensor], batch: Batch
+    tasks: Sequence[Task], predictions: dict[str, torch.Tensor], batch: AtomicData
 ) -> dict[str, float]:
     """Compute loss given a sequence of tasks
 
@@ -306,7 +306,7 @@ def compute_loss(
 def compute_metrics(
     task: Task,
     predictions: dict[str, torch.Tensor],
-    batch: Batch,
+    batch: AtomicData,
     dataset_name: str | None = None,
 ) -> dict[str:Metrics]:
     """Compute metrics and update running metrics for a given task
@@ -485,11 +485,11 @@ def set_sampler_state(state: State, epoch: int, step_start: int) -> None:
         )
     else:
         logging.warning(
-            "Batch sampler not found in dataloader, no dataloader state restored!!"
+            "AtomicData sampler not found in dataloader, no dataloader state restored!!"
         )
 
 
-class MLIPTrainEvalUnit(TrainUnit[Batch], EvalUnit[Batch], Stateful):
+class MLIPTrainEvalUnit(TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful):
     def __init__(
         self,
         job_config: DictConfig,
@@ -673,7 +673,7 @@ class MLIPTrainEvalUnit(TrainUnit[Batch], EvalUnit[Batch], Stateful):
         # https://github.com/pytorch/tnt/blob/master/torchtnt/framework/train.py#L187
         set_sampler_state(state, self.train_progress.num_epochs_completed, 0)
 
-    def train_step(self, state: State, data: Batch) -> None:
+    def train_step(self, state: State, data: AtomicData) -> None:
         try:
             device = get_device_for_local_rank()
             batch_on_device = data.to(device)
@@ -823,7 +823,7 @@ class MLIPTrainEvalUnit(TrainUnit[Batch], EvalUnit[Batch], Stateful):
             )
             self.ema_model.load_state_dict(state_dict["ema"])
 
-    def eval_step(self, state: State, data: Batch) -> None:
+    def eval_step(self, state: State, data: AtomicData) -> None:
         self.eval_unit.eval_step(state, data)
 
     def on_eval_epoch_start(self, state: State) -> None:
@@ -841,7 +841,7 @@ class MLIPTrainEvalUnit(TrainUnit[Batch], EvalUnit[Batch], Stateful):
         return self.finetune_model_full_config
 
 
-class MLIPEvalUnit(EvalUnit[Batch]):
+class MLIPEvalUnit(EvalUnit[AtomicData]):
     def __init__(
         self,
         job_config: DictConfig,
@@ -918,7 +918,7 @@ class MLIPEvalUnit(EvalUnit[Batch]):
         self.last_report = time.time()
         self.report_every = 180
 
-    def eval_step(self, state: State, data: Batch) -> None:
+    def eval_step(self, state: State, data: AtomicData) -> None:
         """Evaluates the model on a batch of data."""
         device = get_device_for_local_rank()
         data = data.to(device)
