@@ -986,13 +986,13 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         Populate output with single atom energies
         """
         if self.atom_refs is None:
-            raise RuntimeError(
+            raise ValueError(
                 "Single atom system but no atomic references present. "
                 "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
                 "with an appropriate checkpoint name."
             )
         elif data.charge.item() != 0:
-            raise RuntimeError(
+            raise ValueError(
                 "This model cannot handle single atom systems with non-zero charge."
             )
         elt = data.atomic_numbers.item()
