@@ -277,15 +277,14 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
 def test_single_atom_systems():
     """Test a system with a single atom. Single atoms do not currently use the model."""
     predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cpu")
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
 
     atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
     atom.info["charge"] = 0
     atom.info["spin"] = 3
-    atom.calc = calc
 
     for task_name in ("omat", "omol", "oc20"):
-        calc.task_name = task_name
+        calc = FAIRChemCalculator(predict_unit, task_name=task_name)
+        atom.calc = calc
         # Test energy calculation
         energy = atom.get_potential_energy()
         assert isinstance(energy, float)
