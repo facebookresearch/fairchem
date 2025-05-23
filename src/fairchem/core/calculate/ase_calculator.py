@@ -29,7 +29,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
 if TYPE_CHECKING:
     from ase import Atoms
 
-    from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
 class FAIRChemCalculator(Calculator):
