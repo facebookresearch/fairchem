@@ -873,7 +873,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
-        atom_refs: dict | None = None
+        atom_refs: dict | None = None,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
@@ -888,22 +888,22 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         if "backbone" not in overrides:
             overrides["backbone"] = {}
         if inference_settings.activation_checkpointing is not None:
-            overrides["backbone"]["activation_checkpointing"] = (
-                inference_settings.activation_checkpointing
-            )
+            overrides["backbone"][
+                "activation_checkpointing"
+            ] = inference_settings.activation_checkpointing
         if inference_settings.wigner_cuda is not None:
-            overrides["backbone"]["use_cuda_graph_wigner"] = (
-                inference_settings.wigner_cuda
-            )
+            overrides["backbone"][
+                "use_cuda_graph_wigner"
+            ] = inference_settings.wigner_cuda
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
             ] = not inference_settings.external_graph_gen
 
         if inference_settings.internal_graph_gen_version is not None:
-            overrides["backbone"]["radius_pbc_version"] = (
-                inference_settings.internal_graph_gen_version
-            )
+            overrides["backbone"][
+                "radius_pbc_version"
+            ] = inference_settings.internal_graph_gen_version
 
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
@@ -968,35 +968,39 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         )
         return comp_charge_spin, getattr(data, "dataset", [None])
 
-    def populate_empty_prediction(self)->dict:
+    def populate_empty_prediction(self) -> dict:
         """
         Populate preduction dict with zeroes for all values (with number of atoms = 1)
         """
         pred_output = {}
         for task_name, task in self.tasks.items():
-            if task.property == 'energy':
+            if task.property == "energy":
                 pred_output[task_name] = torch.Tensor([0.0])
-            elif task.property == 'forces':
-                pred_output[task_name] = torch.Tensor([[0.0]*3])
-            elif task.property == 'stress':
-                pred_output[task_name] = torch.Tensor([[0.0]*9])
+            elif task.property == "forces":
+                pred_output[task_name] = torch.Tensor([[0.0] * 3])
+            elif task.property == "stress":
+                pred_output[task_name] = torch.Tensor([[0.0] * 9])
         return pred_output
 
-    def get_single_atom_energies(self, data)->dict:
+    def get_single_atom_energies(self, data) -> dict:
         """
         Populate output with single atom energies
         """
         if self.atom_refs is None:
-            raise RuntimeError('Single atom system but no atomic references present. '
-            'Please call fairchem.core.pretrained_mlip.get_predict_unit() '
-            'with an appropriate checkpoint name.')
+            raise RuntimeError(
+                "Single atom system but no atomic references present. "
+                "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
+                "with an appropriate checkpoint name."
+            )
         elif data.charge.item() != 0:
-            raise RuntimeError('This model cannot handle single atom systems with non-zero charge.')
+            raise RuntimeError(
+                "This model cannot handle single atom systems with non-zero charge."
+            )
         elt = data.atomic_numbers.item()
         pred_output = self.populate_empty_prediction()
         for task_name, task in self.tasks.items():
-            if task.property == 'energy':
-                atom_refs = self.atom_refs[task_name.replace('_energy', '_elem_refs')]
+            if task.property == "energy":
+                atom_refs = self.atom_refs[task_name.replace("_energy", "_elem_refs")]
                 pred_output[task_name] = torch.Tensor([atom_refs[elt]])
         return pred_output
 

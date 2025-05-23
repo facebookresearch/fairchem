@@ -29,7 +29,7 @@ class HuggingFaceCheckpoint:
     repo_id: Literal["facebook/UMA"]
     subfolder: str | None = None  # specify a hf repo subfolder
     revision: str | None = None  # specify a version tag, branch, commit hash
-    atom_refs: str | None = None # specify an isolated atomic reference
+    atom_refs: str | None = None  # specify an isolated atomic reference
 
 
 @dataclass
@@ -80,9 +80,12 @@ def get_predict_unit(
         cache_dir=CACHE_DIR,
     )
     atom_refs = get_isolated_atomic_energies(model_name)
-    return load_predict_unit(checkpoint_path, inference_settings, overrides, device, atom_refs)
+    return load_predict_unit(
+        checkpoint_path, inference_settings, overrides, device, atom_refs
+    )
 
-def get_isolated_atomic_energies(model_name:str) -> dict:
+
+def get_isolated_atomic_energies(model_name: str) -> dict:
     """
     Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
 
