@@ -24,6 +24,7 @@ def load_predict_unit(
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
     device: str = "cuda",
+    atom_refs: dict | None = None
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -46,4 +47,5 @@ def load_predict_unit(
         device=device,
         inference_settings=inference_settings,
         overrides={"backbone": {"always_use_pbc": False}},
+        atom_refs=atom_refs,
     )

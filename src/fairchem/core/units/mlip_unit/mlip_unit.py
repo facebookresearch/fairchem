@@ -46,6 +46,7 @@ from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     get_device_for_local_rank,
 )
+from fairchem.core._config import CACHE_DIR
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
@@ -872,11 +873,13 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
+        atom_refs: dict | None = None
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.seed(seed)
+        self.atom_refs = atom_refs
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -965,6 +968,38 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         )
         return comp_charge_spin, getattr(data, "dataset", [None])
 
+    def populate_empty_prediction(self)->dict:
+        """
+        Populate preduction dict with zeroes for all values (with number of atoms = 1)
+        """
+        pred_output = {}
+        for task_name, task in self.tasks.items():
+            if task.property == 'energy':
+                pred_output[task_name] = torch.Tensor([0.0])
+            elif task.property == 'forces':
+                pred_output[task_name] = torch.Tensor([[0.0]*3])
+            elif task.property == 'stress':
+                pred_output[task_name] = torch.Tensor([[0.0]*9])
+        return pred_output
+
+    def get_single_atom_energies(self, data)->dict:
+        """
+        Populate output with single atom energies
+        """
+        if self.atom_refs is None:
+            raise RuntimeError('Single atom system but no atomic references present. '
+            'Please call fairchem.core.pretrained_mlip.get_predict_unit() '
+            'with an appropriate checkpoint name.')
+        elif data.charge.item() != 0:
+            raise RuntimeError('This model cannot handle single atom systems with non-zero charge.')
+        elt = data.atomic_numbers.item()
+        pred_output = self.populate_empty_prediction()
+        for task_name, task in self.tasks.items():
+            if task.property == 'energy':
+                atom_refs = self.atom_refs[task_name.replace('_energy', '_elem_refs')]
+                pred_output[task_name] = torch.Tensor([atom_refs[elt]])
+        return pred_output
+
     def predict(
         self, data: Batch, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
@@ -1017,18 +1052,20 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
         )
 
-        pred_output = {}
-        with inference_context, tf32_context:
-            output = self.model(data_device)
-            for task_name, task in self.tasks.items():
-                pred_output[task_name] = task.normalizer.denorm(
-                    output[task_name][task.property]
-                )
-                if undo_element_references and task.element_references is not None:
-                    pred_output[task_name] = task.element_references.undo_refs(
-                        data_device, pred_output[task_name]
+        if len(data.atomic_numbers) == 1:
+            pred_output = self.get_single_atom_energies(data)
+        else:
+            pred_output = {}
+            with inference_context, tf32_context:
+                output = self.model(data_device)
+                for task_name, task in self.tasks.items():
+                    pred_output[task_name] = task.normalizer.denorm(
+                        output[task_name][task.property]
                     )
-
+                    if undo_element_references and task.element_references is not None:
+                        pred_output[task_name] = task.element_references.undo_refs(
+                            data_device, pred_output[task_name]
+                        )
         return pred_output
 
 
