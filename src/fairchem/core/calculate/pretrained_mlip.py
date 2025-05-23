@@ -29,7 +29,7 @@ class HuggingFaceCheckpoint:
     repo_id: Literal["facebook/UMA"]
     subfolder: str | None = None  # specify a hf repo subfolder
     revision: str | None = None  # specify a version tag, branch, commit hash
-    atom_refs: str | None = None  # specify an isolated atomic reference
+    atom_refs: dict | None = None  # specify an isolated atomic reference
 
 
 @dataclass
@@ -99,8 +99,9 @@ def get_isolated_atomic_energies(model_name: str) -> dict:
     """
     model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
     atomic_refs_path = hf_hub_download(
-        filename=model_checkpoint.atom_refs,
+        filename=model_checkpoint.atom_refs["filename"],
         repo_id=model_checkpoint.repo_id,
+        subfolder=model_checkpoint.atom_refs["subfolder"],
         revision=model_checkpoint.revision,
         cache_dir=CACHE_DIR,
     )

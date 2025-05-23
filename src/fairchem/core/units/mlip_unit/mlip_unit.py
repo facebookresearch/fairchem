@@ -995,8 +995,8 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             raise ValueError(
                 "This model cannot handle single atom systems with non-zero charge."
             )
-        print(
-            "WARNING: Single atom systems are not handled by the model; "
+        logging.warning(
+            "Single atom systems are not handled by the model; "
             "the precomputed DFT result is returned. "
             "Spin multiplicity is ignored for monoatomic systems."
         )

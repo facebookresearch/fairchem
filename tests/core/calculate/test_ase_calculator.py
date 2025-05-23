@@ -278,20 +278,21 @@ def test_single_atom_systems():
     """Test a system with a single atom. Single atoms do not currently use the model."""
     predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cpu")
 
-    atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
-    atom.info["charge"] = 0
-    atom.info["spin"] = 3
+    for at_num in range(1,94):
+        atom = Atoms([at_num], positions=[(0.0, 0.0, 0.0)])
+        atom.info["charge"] = 0
+        atom.info["spin"] = 3
 
-    for task_name in ("omat", "omol", "oc20"):
-        calc = FAIRChemCalculator(predict_unit, task_name=task_name)
-        atom.calc = calc
-        # Test energy calculation
-        energy = atom.get_potential_energy()
-        assert isinstance(energy, float)
+        for task_name in ("omat", "omol", "oc20"):
+            calc = FAIRChemCalculator(predict_unit, task_name=task_name)
+            atom.calc = calc
+            # Test energy calculation
+            energy = atom.get_potential_energy()
+            assert isinstance(energy, float)
 
-        # Test forces are 0.0
-        forces = atom.get_forces()
-        assert (forces == 0.0).all()
+            # Test forces are 0.0
+            forces = atom.get_forces()
+            assert (forces == 0.0).all()
 
 
 def test_single_atom_system_errors():
