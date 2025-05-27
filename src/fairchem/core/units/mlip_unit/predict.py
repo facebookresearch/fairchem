@@ -10,7 +10,10 @@ from __future__ import annotations
 import logging
 import os
 import random
-from contextlib import contextmanager, nullcontext
+from collections import defaultdict
+from contextlib import nullcontext
+from functools import wraps
+from typing import TYPE_CHECKING, Sequence
 
 import hydra
 import numpy as np
@@ -24,6 +27,38 @@ from fairchem.core.common.distutils import (
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.mlip_unit import load_inference_model
+from fairchem.core.units.mlip_unit.utils import tf32_context_manager
+
+if TYPE_CHECKING:
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+
+def collate_predictions(predict_fn):
+    @wraps(predict_fn)
+    def collated_predict(
+        predict_unit, data: AtomicData, undo_element_references: bool = True
+    ):
+        # Get the full prediction dictionary from the original predict method
+        preds = predict_fn(predict_unit, data, undo_element_references)
+        collated_preds = defaultdict(list)
+        for i, dataset in enumerate(data.dataset):
+            for task in predict_unit.dataset_to_tasks[dataset]:
+                if task.level == "system":
+                    collated_preds[task.property].append(
+                        preds[task.name][i].unsqueeze(0)
+                    )
+                elif task.level == "atom":
+                    collated_preds[task.property].append(
+                        preds[task.name][data.batch == i]
+                    )
+                else:
+                    raise RuntimeError(
+                        f"Unrecognized task level={task.level} found in data batch at position {i}"
+                    )
+
+        return {prop: torch.cat(val) for prop, val in collated_preds.items()}
+
+    return collated_predict
 
 
 class MLIPPredictUnit(PredictUnit[AtomicData]):
@@ -73,6 +108,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         ]
         self.tasks = {t.name: t for t in tasks}
 
+        self.dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
+        assert set(self.datasets) == set(
+            self.dataset_to_tasks.keys()
+        ), "Found mismatch between datasets in backbone and datsets in Tasks"
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
@@ -127,6 +166,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         )
         return comp_charge_spin, getattr(data, "dataset", [None])
 
+    @collate_predictions
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
@@ -194,20 +234,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         return pred_output
 
 
-@contextmanager
-def tf32_context_manager():
-    # Store the original settings
-    original_allow_tf32_matmul = torch.backends.cuda.matmul.allow_tf32
-    original_allow_tf32_cudnn = torch.backends.cudnn.allow_tf32
-    original_float32_matmul_precision = torch.get_float32_matmul_precision()
-    try:
-        # Set the desired settings
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.set_float32_matmul_precision("high")
-        yield
-    finally:
-        # Revert to the original settings
-        torch.backends.cuda.matmul.allow_tf32 = original_allow_tf32_matmul
-        torch.backends.cudnn.allow_tf32 = original_allow_tf32_cudnn
-        torch.set_float32_matmul_precision(original_float32_matmul_precision)
+def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+    dset_to_tasks_map = defaultdict(list)
+    for task in tasks:
+        for dataset_name in task.datasets:
+            dset_to_tasks_map[dataset_name].append(task)
+    return dset_to_tasks_map
