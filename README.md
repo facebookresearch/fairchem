@@ -35,7 +35,9 @@ If you want to explore model capabilities check out our
 
 
 ### Installation
-Install fairchem-core using pip,
+Although not required, we highly recommend installing using a package manager and virtualenv such as [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer), it is much faster and better at resolving dependencies than standalone pip.
+
+Install fairchem-core using pip
 ```bash
 pip install fairchem-core
 ```
