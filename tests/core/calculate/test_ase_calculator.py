@@ -158,7 +158,7 @@ def test_calculator_configurations(inference_settings, slab_atoms):
         torch.compiler.reset()
 
     predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-latest", inference_settings=inference_settings
+        "uma-s-1", inference_settings=inference_settings
     )
     calc = FAIRChemCalculator(
         predict_unit,
@@ -181,7 +181,7 @@ def test_calculator_configurations(inference_settings, slab_atoms):
 @pytest.mark.gpu()
 def test_large_bulk_system(large_bulk_atoms):
     """Test a bulk system with 1000 atoms using the small model."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-latest", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
     large_bulk_atoms.calc = calc
 
@@ -285,7 +285,7 @@ def test_random_seed_final_energy():
     results_by_seed = {}
 
     calc = FAIRChemCalculator(
-        pretrained_mlip.get_predict_unit("uma-s-latest"),
+        pretrained_mlip.get_predict_unit("uma-s-1"),
         task_name="omat",
     )
 

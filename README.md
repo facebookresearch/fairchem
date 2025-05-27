@@ -69,7 +69,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-latest", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -91,7 +91,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-latest", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -109,7 +109,7 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-latest", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -131,7 +131,7 @@ dyn.run(steps=1000)
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-latest", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
