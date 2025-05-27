@@ -325,7 +325,7 @@ class AtomicData:
         atomic_numbers = np.array(atoms.get_atomic_numbers(), copy=True)
         pos = np.array(atoms.get_positions(), copy=True)
         pbc = np.array(atoms.pbc, copy=True)
-        cell = np.array(atoms.get_cell(complete=True), copy=True)
+        cell = np.array(atoms.get_cell(complete=False), copy=True)
         pos = wrap_positions(pos, cell, pbc=pbc, eps=0)
 
         # wrap positions for CPU graph Generation
