@@ -13,12 +13,10 @@ import time
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
-import hydra
 import numpy as np
 import torch
-from omegaconf import DictConfig
 from torch.distributed.checkpoint.format_utils import dcp_to_torch_save
 from torch.distributed.checkpoint.state_dict import (
     get_model_state_dict,
@@ -45,7 +43,6 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import load_state_dict, match_state_dict
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
 from fairchem.core.modules.normalization.element_references import (  # noqa: TCH001
@@ -57,6 +54,10 @@ from fairchem.core.units.mlip_unit._metrics import Metrics, get_metrics_fn
 from fairchem.core.units.mlip_unit.api.inference import (
     MLIPInferenceCheckpoint,
 )
+from fairchem.core.units.mlip_unit.utils import load_inference_model
+
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
 
 
 @dataclass
@@ -83,50 +84,6 @@ class Task:
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
-
-
-def update_configs(original_config, new_config):
-    updated_config = deepcopy(original_config)
-    for k, v in new_config.items():
-        is_dict_config = (isinstance(v, (dict, DictConfig))) and (
-            isinstance(updated_config[k], (dict, DictConfig))
-        )
-        if is_dict_config and k in updated_config:
-            updated_config[k] = update_configs(updated_config[k], v)
-        else:
-            updated_config[k] = v
-    return updated_config
-
-
-def load_inference_model(
-    checkpoint_location: str, overrides: dict | None = None, use_ema: bool = False
-) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint]:
-    checkpoint: MLIPInferenceCheckpoint = torch.load(
-        checkpoint_location, map_location="cpu", weights_only=False
-    )
-
-    if overrides is not None:
-        checkpoint.model_config = update_configs(checkpoint.model_config, overrides)
-
-    model = hydra.utils.instantiate(checkpoint.model_config)
-    if use_ema:
-        model = torch.optim.swa_utils.AveragedModel(model)
-        model_dict = model.state_dict()
-        ema_state_dict = checkpoint.ema_state_dict
-
-        n_averaged = ema_state_dict["n_averaged"]
-        del model_dict["n_averaged"]
-        del ema_state_dict["n_averaged"]
-
-        matched_dict = match_state_dict(model_dict, ema_state_dict)
-
-        matched_dict["n_averaged"] = n_averaged
-
-        load_state_dict(model, matched_dict, strict=True)
-    else:
-        load_state_dict(model, checkpoint.model_state_dict, strict=True)
-
-    return model, checkpoint
 
 
 def convert_train_checkpoint_to_inference_checkpoint(

@@ -26,8 +26,10 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
-from fairchem.core.units.mlip_unit.mlip_unit import load_inference_model
-from fairchem.core.units.mlip_unit.utils import tf32_context_manager
+from fairchem.core.units.mlip_unit.utils import (
+    load_inference_model,
+    tf32_context_manager,
+)
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
@@ -235,6 +237,15 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
 
 
 def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+    """Create a mapping from dataset names to their associated tasks.
+
+    Args:
+        tasks: A sequence of Task objects to be organized by dataset
+
+    Returns:
+        A dictionary mapping dataset names (str) to lists of Task objects
+        that are associated with that dataset
+    """
     dset_to_tasks_map = defaultdict(list)
     for task in tasks:
         for dataset_name in task.datasets:

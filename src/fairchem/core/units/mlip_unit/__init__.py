@@ -45,5 +45,5 @@ def load_predict_unit(
         path,
         device=device,
         inference_settings=inference_settings,
-        overrides={"backbone": {"always_use_pbc": False}},
+        overrides=overrides,
     )
