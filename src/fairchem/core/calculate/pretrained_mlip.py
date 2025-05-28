@@ -50,7 +50,7 @@ def get_predict_unit(
     model_name: str,
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
-    device: str = "cuda",
+    device: Literal["cuda", "cpu"] | None = None,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
