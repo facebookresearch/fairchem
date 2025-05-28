@@ -21,9 +21,16 @@ from fairchem.core.models.uma.nn.activation import (
 from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
+from fairchem.core.models.uma.nn.mole import MOLE
 from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+
+
+def set_mole_ac_start_index(module: nn.Module, index: int) -> None:
+    for submodule in module.modules():
+        if isinstance(submodule, MOLE):
+            submodule.global_mole_tensors.ac_start_idx = index
 
 
 class Edgewise(torch.nn.Module):
@@ -138,7 +145,11 @@ class Edgewise(torch.nn.Module):
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
         new_embeddings = []
+        ac_start_idx = 0
         for idx in range(len(edge_index_partitions)):
+            # here we need to update the ac_start_idx of the mole layers under here for this chunking to
+            # work properly with MoLE together
+            set_mole_ac_start_index(self, ac_start_idx)
             new_embeddings.append(
                 torch.utils.checkpoint.checkpoint(
                     self.forward_chunk,
@@ -152,10 +163,11 @@ class Edgewise(torch.nn.Module):
                     use_reentrant=False,
                 )
             )
+            ac_start_idx += edge_index_partitions[idx].shape[1]
 
             if len(new_embeddings) > 8:
                 new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
-
+        set_mole_ac_start_index(self, 0)
         return torch.stack(new_embeddings).sum(axis=0)
 
     def forward_chunk(
