@@ -15,7 +15,7 @@ def uma_predict_unit(request):
     return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
 
 
-@pytest.mark.cpu_and_gpu()
+@pytest.mark.gpu()
 def test_single_dataset_predict(uma_predict_unit):
     n = 10
     atomic_data_list = [
@@ -30,7 +30,7 @@ def test_single_dataset_predict(uma_predict_unit):
     assert preds["stress"].shape == (n, 9)
 
 
-@pytest.mark.cpu_and_gpu()
+@pytest.mark.gpu()
 def test_multiple_dataset_predict(uma_predict_unit):
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
