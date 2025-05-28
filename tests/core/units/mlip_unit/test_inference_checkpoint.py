@@ -49,13 +49,12 @@ def test_inference_checkpoint_direct(
 
     sample_idx = 0
     while sample_idx < min(5, len(db)):
-        sample = a2g.convert(db.get_atoms(sample_idx))
-        sample["dataset"] = "oc20"
+        sample = a2g(db.get_atoms(sample_idx), dataset="oc20")
         batch = data_list_collater([sample], otf_graph=False)
 
         out = predictor.predict(batch)
-        energies.append(out["oc20_energy"])
-        forces.append(out["forces"] if "forces" in out else out["oc20_forces"])
+        energies.append(out["energy"])
+        forces.append(out["forces"])
         sample_idx += 1
     forces = torch.vstack(forces)
     energies = torch.stack(energies)
