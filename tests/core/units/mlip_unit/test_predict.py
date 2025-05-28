@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import torch
 from ase.build import add_adsorbate, bulk, fcc100, molecule
 
 from fairchem.core import pretrained_mlip
@@ -10,22 +11,26 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 @pytest.fixture(scope="module")
 def uma_predict_unit(request):
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    return pretrained_mlip.get_predict_unit(uma_models[0])
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return pretrained_mlip.get_predict_unit(uma_models[0], device=device)
 
 
+@pytest.mark.cpu_and_gpu()
 def test_single_dataset_predict(uma_predict_unit):
+    n = 10
     atomic_data_list = [
-        AtomicData.from_ase(bulk("Pt"), dataset="omat") for _ in range(100)
+        AtomicData.from_ase(bulk("Pt"), dataset="omat") for _ in range(n)
     ]
     batch = atomicdata_list_to_batch(atomic_data_list)
 
     preds = uma_predict_unit.predict(batch)
 
-    assert preds["energy"].shape == (100,)
-    assert preds["forces"].shape == (100, 3)
-    assert preds["stress"].shape == (100, 9)
+    assert preds["energy"].shape == (n,)
+    assert preds["forces"].shape == (n, 3)
+    assert preds["stress"].shape == (n, 9)
 
 
+@pytest.mark.cpu_and_gpu()
 def test_multiple_dataset_predict(uma_predict_unit):
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
