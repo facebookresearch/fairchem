@@ -145,7 +145,7 @@ class FAIRChemCalculator(Calculator):
 
         # Our calculators won't work if natoms=0
         if len(atoms) == 0:
-            raise NoAtoms
+            raise ValueError("Atoms object has no atoms inside.")
 
         # Check if the atoms object has periodic boundary conditions (PBC) set correctly
         self._check_atoms_pbc(atoms)
@@ -260,17 +260,6 @@ class AllZeroUnitCellError(ValueError):
         self,
         message="Atoms object claims to have PBC set, but the unit cell is identically 0. Please ensure that the atoms"
         "object has a non-zero unit cell.",
-    ):
-        self.message = message
-        super().__init__(self.message)
-
-
-class NoAtoms(ValueError):
-    """Specific exception example."""
-
-    def __init__(
-        self,
-        message="Atoms object has no atoms inside.",
     ):
         self.message = message
         super().__init__(self.message)
