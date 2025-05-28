@@ -250,4 +250,4 @@ def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     for task in tasks:
         for dataset_name in task.datasets:
             dset_to_tasks_map[dataset_name].append(task)
-    return dset_to_tasks_map
+    return dict(dset_to_tasks_map)
