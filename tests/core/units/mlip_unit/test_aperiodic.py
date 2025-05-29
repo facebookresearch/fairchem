@@ -9,8 +9,7 @@ import pytest
 import torch
 
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
 
 
@@ -63,7 +62,7 @@ def test_conserving_mole_aperiodic_on_pt(
         sample1 = a2g(atoms1)
         sample1.cell = sample1.cell.to(dtype)
         sample1["dataset"] = "oc20"
-        batch1 = data_list_collater([sample1], otf_graph=True)
+        batch1 = atomicdata_list_to_batch([sample1])
 
         atoms2 = atoms.copy()
         # atoms2.center(2000)
@@ -71,7 +70,7 @@ def test_conserving_mole_aperiodic_on_pt(
         sample2 = a2g(atoms2)
         sample2.cell = sample2.cell.to(dtype)
         sample2["dataset"] = "oc20"
-        batch2 = data_list_collater([sample2], otf_graph=True)
+        batch2 = atomicdata_list_to_batch([sample2])
 
         original_positions1 = batch1.pos.clone().to(dtype)
         original_positions2 = batch2.pos.clone().to(dtype)

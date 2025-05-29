@@ -15,8 +15,7 @@ import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
 
-from fairchem.core.datasets import data_list_collater
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
     DEFAULT_CHARGE,
@@ -182,7 +181,7 @@ class FAIRChemCalculator(Calculator):
         data_object.dataset = self.task_name
 
         # Batch and predict
-        batch = data_list_collater([data_object], otf_graph=True)
+        batch = atomicdata_list_to_batch([data_object])
         pred = self.predictor.predict(
             batch,
         )

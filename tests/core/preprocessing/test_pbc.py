@@ -13,8 +13,7 @@ import numpy as np
 import pytest
 from ase.io import read
 
-from fairchem.core.datasets import data_list_collater
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.graph.compute import get_pbc_distances
 
 
@@ -37,7 +36,7 @@ def load_data(request) -> None:
 class TestPBC:
     def test_pbc_distances(self) -> None:
         data = self.data
-        batch = data_list_collater([data] * 5)
+        batch = atomicdata_list_to_batch([data] * 5)
         out = get_pbc_distances(
             batch.pos,
             batch.edge_index,
