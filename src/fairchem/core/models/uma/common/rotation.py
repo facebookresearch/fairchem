@@ -125,11 +125,16 @@ def rotation_to_wigner(
     Jd: list[torch.Tensor],
     rot_clip: bool = False,
 ) -> torch.Tensor:
+    torch.set_printoptions(threshold=10_000)
     """
     set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
     """
+    print("edge rot mat",edge_rot_mat)
     x = edge_rot_mat @ edge_rot_mat.new_tensor([0.0, 1.0, 0.0])
+    print("x",x)
     alpha, beta = o3.xyz_to_angles(x)
+    print("alpha",alpha)
+    print("beta",beta)
     R = (
         o3.angles_to_matrix(alpha, beta, torch.zeros_like(alpha)).transpose(-1, -2)
         @ edge_rot_mat
@@ -145,6 +150,8 @@ def rotation_to_wigner(
         beta_detach[yprod > YTOL] = 0.0
         beta_detach[yprod < -YTOL] = math.pi
         beta_detach = beta_detach[~mask]
+        print((~mask).sum())
+    print(mask)
 
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
     wigner = torch.zeros(
