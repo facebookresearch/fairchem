@@ -443,7 +443,12 @@ def reset_seeds(seed=0):
     ],
 )
 def test_ac_with_chunking_and_batching(
-    conserving_mole_checkpoint, monkeypatch, chunk_size, nsystems, natoms, merge_mole
+    conserving_mole_checkpoint,
+    monkeypatch,
+    chunk_size,
+    nsystems,
+    natoms,
+    merge_mole,
 ):
 
     monkeypatch.setattr(
@@ -459,6 +464,7 @@ def test_ac_with_chunking_and_batching(
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
+    reset_seeds(0)
     batch = get_batched_system(natoms, nsystems)
     device = "cpu"
     predictor_noac = MLIPPredictUnit(
