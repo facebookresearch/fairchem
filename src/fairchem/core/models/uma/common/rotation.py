@@ -151,7 +151,6 @@ def rotation_to_wigner(
         beta_detach[yprod < -YTOL] = math.pi
         beta_detach = beta_detach[~mask]
         print((~mask).sum())
-    print(mask)
 
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
     wigner = torch.zeros(
@@ -175,7 +174,7 @@ def rotation_to_wigner(
             end = start + block.size()[1]
             wigner[:, start:end, start:end] = block
             start = end
-
+            
     if rot_clip:
         return wigner
     else:
