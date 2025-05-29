@@ -22,6 +22,18 @@ parts:
 #    - file: core/common_tasks/workflows
   # - file: core/model_faq
   - file: core/generative_models
+- caption: Molecules & Molecular Crystals
+  chapters:
+  - file: molecules/datasets/summary
+    sections:
+    - file: molecules/datasets/omol25
+  - file: molecules/models
+  # - file: molecules/examples_tutorials/summary
+  #   sections: 
+  #   - file: molecules/examples_tutorials/bulk_stability
+  #   - file: molecules/examples_tutorials/phonons
+  #   - file: molecules/examples_tutorials/elastic
+  - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
   chapters:
   - url: https://opencatalystproject.org
