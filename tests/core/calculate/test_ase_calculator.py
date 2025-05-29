@@ -91,6 +91,14 @@ def large_bulk_atoms() -> Atoms:
     return bulk("Fe", "bcc", a=2.87).repeat((10, 10, 10))  # 10x10x10 unit cell
 
 
+def test_calculator_from_checkpoint():
+    calc = FAIRChemCalculator.from_model_checkpoint(
+        pretrained_mlip.available_models[0], task_name="omol"
+    )
+    assert "energy" in calc.implemented_properties
+    assert "forces" in calc.implemented_properties
+
+
 @pytest.mark.gpu()
 def test_calculator_setup(all_calculators):
     for calc in all_calculators():
