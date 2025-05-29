@@ -63,13 +63,13 @@ huggingface-cli login
 - **odac:** use this for MOFs
 - **omc:** use this for molecular crystals
 
-Relax an adsorbate on a catalytic surface,
+##### Relax an adsorbate on a catalytic surface,
 ```python
 from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -84,14 +84,14 @@ opt = LBFGS(slab)
 opt.run(0.05, 100)
 ```
 
-Relax an inorganic crystal,
+##### Relax an inorganic crystal,
 ```python
 from ase.build import bulk
 from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -101,7 +101,7 @@ opt = LBFGS(FrechetCellFilter(atoms))
 opt.run(0.05, 100)
 ```
 
-Run molecular MD,
+##### Run molecular MD,
 ```python
 from ase import units
 from ase.io import Trajectory
@@ -109,7 +109,7 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -126,12 +126,12 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
-Calculate a spin gap,
+##### Calculate a spin gap,
 ```python
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
