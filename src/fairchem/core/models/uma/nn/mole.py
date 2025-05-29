@@ -176,17 +176,18 @@ class MOLE(torch.nn.Module):
 
         out = []
         ac_start_idx = self.global_mole_tensors.ac_start_idx
-        assert self.global_mole_tensors.mole_sizes > 0
+        assert len(self.global_mole_tensors.mole_sizes) > 0
         start_idxs = [0] + torch.cumsum(
             self.global_mole_tensors.mole_sizes, dim=0
         ).tolist()
 
-        # for example if global_mole_tensors are [1000,1500,1900] and ac_start_idx = 1400
-        # first compute the cumsum start_idxs = [1000,2500,4400]
-        # (1000, 2500), (2500, 4400)
-        # then iterate until ac_start_idx > start_idx
-        # so ranges to compute on are (1400,2500), (2500,4400)
-
+        # Because activation checkpointing can chunk the inputs, we need to only compute
+        # the mole_size intervals that overlap with the current chunks
+        # for example if mole_sizes = [10,10,15]
+        # start_idxs -> [0,10,20,35]
+        # mole_intervals -> [(0,10),(10,20),(20,35)]
+        # if the input segment is (5,15) then we compute the following 2 segments
+        # (5,10),(10,15)
         input_segment = (ac_start_idx, ac_start_idx + x.shape[0])
         mole_intervals = list(zip(start_idxs, start_idxs[1:]))
         for n, mole_segment in enumerate(mole_intervals):
@@ -197,20 +198,6 @@ class MOLE(torch.nn.Module):
                 # print(f"interval to compute on: {(start,end)}")
                 out.append(F.linear(x[start:end], weights[n], bias=self.bias))
 
-        # for idx in range(len(self.global_mole_tensors.mole_sizes)):
-        #     end = start + self.global_mole_tensors.mole_sizes[idx].item()
-        #     # if the start index is range of the current chunk, then compute on it
-        #     _start = start + ac_start_idx
-        #     _end = min(end + ac_start_idx, x.shape[0])
-
-        #     if _start != _end and _start >= ac_start_idx:
-        #         # assert x.shape[0] > start
-        #         # offset start and end
-        #         out.append(F.linear(x[_start:_end], weights[idx], bias=self.bias))
-        #         # we are done if we get to the end of a chunk before the end of the full input
-        #         if _end == x.shape[0]:
-        #             break
-        #         start = end
-
-        # assert x.shape[0] == end
-        return torch.concatenate(out, dim=0)
+        result = torch.concatenate(out, dim=0)
+        assert result.shape[0] == x.shape[0]
+        return result
