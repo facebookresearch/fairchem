@@ -103,6 +103,51 @@ class FAIRChemCalculator(Calculator):
             r_data_keys=["spin", "charge"],
         )
 
+    @classmethod
+    def from_model_checkpoint(
+        cls,
+        name_or_path: str,
+        task_name: UMATask | None = None,
+        inference_settings: InferenceSettings | str = "default",
+        overrides: dict | None = None,
+        device: Literal["cuda", "cpu"] | None = None,
+        seed: int = 41,
+    ) -> FAIRChemCalculator:
+        """Instantiate a FAIRChemCalculator from a checkpoint file.
+
+        Args:
+            cls: The class reference
+            name_or_path: A model name from fairchem.core.pretrained.available_models or a path to the checkpoint
+                file
+            task_name: Task name
+            inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
+                (optimized for speed but requires fixed atomic composition). Advanced use cases can
+                use a custom InferenceSettings object.
+            overrides: Optional dictionary of settings to override default inference settings.
+            device: Optional torch device to load the model onto.
+            seed: Random seed for reproducibility. Defaults to 41.
+        """
+
+        if name_or_path in pretrained_mlip.available_models:
+            predict_unit = pretrained_mlip.get_predict_unit(
+                name_or_path,
+                inference_settings=inference_settings,
+                overrides=overrides,
+                device=device,
+            )
+        elif os.path.isfile(name_or_path):
+            predict_unit = pretrained_mlip.load_predict_unit(
+                name_or_path,
+                inference_settings=inference_settings,
+                overrides=overrides,
+                device=device,
+            )
+        else:
+            raise ValueError(
+                f"{name_or_path=} is not a valid model name or checkpoint path"
+            )
+        return cls(predict_unit=predict_unit, task_name=task_name, seed=seed)
+
     @property
     def task_name(self) -> str:
         return self._task_name
@@ -266,51 +311,6 @@ class FAIRChemCalculator(Calculator):
             raise ValueError(
                 f"Invalid value for spin: {spin}. Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
             )
-
-        @classmethod
-        def from_model_checkpoint(
-            cls,
-            name_or_path: str,
-            task_name: UMATask | None = None,
-            inference_settings: InferenceSettings | str = "default",
-            overrides: dict | None = None,
-            device: Literal["cuda", "cpu"] | None = None,
-            seed: int = 41,
-        ) -> FAIRChemCalculator:
-            """Instantiate a FAIRChemCalculator from a checkpoint file.
-
-            Args:
-                cls: The class reference
-                name_or_path: A model name from fairchem.core.pretrained.available_models or a path to the checkpoint
-                    file
-                task_name: Task name
-                inference_settings: Settings for inference. Can be "default" (general purpose) or "turbo"
-                    (optimized for speed but requires fixed atomic composition). Advanced use cases can
-                    use a custom InferenceSettings object.
-                overrides: Optional dictionary of settings to override default inference settings.
-                device: Optional torch device to load the model onto.
-                seed: Random seed for reproducibility. Defaults to 41.
-            """
-
-            if name_or_path in pretrained_mlip.available_models:
-                predict_unit = pretrained_mlip.get_predict_unit(
-                    name_or_path,
-                    inference_settings=inference_settings,
-                    overrides=overrides,
-                    device=device,
-                )
-            elif os.path.isfile(name_or_path):
-                predict_unit = pretrained_mlip.load_predict_unit(
-                    name_or_path,
-                    inference_settings=inference_settings,
-                    overrides=overrides,
-                    device=device,
-                )
-            else:
-                raise ValueError(
-                    f"{name_or_path=} is not a valid model name or checkpoint path"
-                )
-            return cls(predict_unit=predict_unit, task_name=task_name, seed=seed)
 
 
 class MixedPBCError(ValueError):
