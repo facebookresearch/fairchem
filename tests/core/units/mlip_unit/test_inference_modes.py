@@ -434,7 +434,8 @@ def reset_seeds(seed=0):
     # try very small chunk size to force ac to chunk
     "chunk_size, nsystems, natoms",
     [
-        (1024 * 128, 3, 1000),
+        (1024, 3, 100),
+        (1024 * 128, 5, 1000),
         (1000, 1, 1000),
         (1024 * 128, 1, 1000),
         (1024 * 128, 1, 10000),

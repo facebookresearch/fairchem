@@ -180,7 +180,6 @@ class MOLE(torch.nn.Module):
         start_idxs = [0] + torch.cumsum(
             self.global_mole_tensors.mole_sizes, dim=0
         ).tolist()
-
         # Because activation checkpointing can chunk the inputs, we need to only compute
         # the mole_size intervals that overlap with the current chunks
         # for example if mole_sizes = [10,10,15]

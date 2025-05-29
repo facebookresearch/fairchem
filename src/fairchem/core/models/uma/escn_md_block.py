@@ -145,11 +145,10 @@ class Edgewise(torch.nn.Module):
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
         new_embeddings = []
-        ac_start_idx = 0
+        # when chunking, we need to keep track of the start index of the chunk and give this information
+        # to the mole layers
+        ac_mole_start_idx = 0
         for idx in range(len(edge_index_partitions)):
-            # here we need to update the ac_start_idx of the mole layers under here for this chunking to
-            # work properly with MoLE together
-            set_mole_ac_start_index(self, ac_start_idx)
             new_embeddings.append(
                 torch.utils.checkpoint.checkpoint(
                     self.forward_chunk,
@@ -160,14 +159,14 @@ class Edgewise(torch.nn.Module):
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
                     node_offset,
+                    ac_mole_start_idx,
                     use_reentrant=False,
                 )
             )
-            ac_start_idx += edge_index_partitions[idx].shape[1]
+            ac_mole_start_idx += edge_index_partitions[idx].shape[1]
 
             if len(new_embeddings) > 8:
                 new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
-        set_mole_ac_start_index(self, 0)
         return torch.stack(new_embeddings).sum(axis=0)
 
     def forward_chunk(
@@ -179,7 +178,12 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
         node_offset: int = 0,
+        ac_mole_start_idx: int = 0,
     ):
+        # here we need to update the ac_start_idx of the mole layers under here for this chunking to
+        # work properly with MoLE together
+        set_mole_ac_start_index(self, ac_mole_start_idx)
+
         if gp_utils.initialized():
             x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
             x_source = x_full[edge_index[0]]
@@ -218,7 +222,8 @@ class Edgewise(torch.nn.Module):
         )
 
         new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
-
+        # reset ac start index
+        set_mole_ac_start_index(self, 0)
         return new_embedding
 
 
