@@ -417,9 +417,6 @@ def get_batched_system(
         indices = np.random.choice(len(atoms), num_atoms_per_system, replace=False)
         sampled_atoms = atoms[indices]
         ad = AtomicData.from_ase(sampled_atoms)
-        ad.natoms = torch.tensor(len(atoms))
-        ad.charge = torch.LongTensor([0])
-        ad.spin = torch.LongTensor([0])
         ad.dataset = "oc20"
         ad.pos.requires_grad = True
         atom_systems.append(ad)
@@ -435,10 +432,17 @@ def reset_seeds(seed=0):
 
 @pytest.mark.parametrize(
     # try very small chunk size to force ac to chunk
-    "chunk_size",
-    [1000, 1024 * 128],
+    "chunk_size, nsystems, natoms",
+    [
+        (1024 * 128, 3, 1000),
+        (1000, 1, 1000),
+        (1024 * 128, 1, 1000),
+        (1024 * 128, 1, 10000),
+    ],
 )
-def test_ac_with_large_system(conserving_mole_checkpoint, monkeypatch, chunk_size):
+def test_ac_with_large_system(
+    conserving_mole_checkpoint, monkeypatch, chunk_size, nsystems, natoms
+):
 
     monkeypatch.setattr(
         "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_CHUNK_SIZE", chunk_size
@@ -453,7 +457,7 @@ def test_ac_with_large_system(conserving_mole_checkpoint, monkeypatch, chunk_siz
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
-    batch = get_batched_system(10000, 1)
+    batch = get_batched_system(natoms, nsystems)
     device = "cpu"
     predictor_noac = MLIPPredictUnit(
         conserving_mole_checkpoint_pt,
