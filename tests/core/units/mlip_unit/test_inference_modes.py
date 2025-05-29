@@ -432,17 +432,18 @@ def reset_seeds(seed=0):
 
 @pytest.mark.parametrize(
     # try very small chunk size to force ac to chunk
-    "chunk_size, nsystems, natoms",
+    "chunk_size, nsystems, natoms, merge_mole",
     [
-        (1024, 3, 100),
-        (1024 * 128, 5, 1000),
-        (1000, 1, 1000),
-        (1024 * 128, 1, 1000),
-        (1024 * 128, 1, 10000),
+        (1024, 3, 100, False),  # batched + no merge
+        (1024 * 128, 5, 1000, False),  # batched + no merge
+        (1000, 1, 1000, False),  # unbatch + no merge
+        (1024 * 128, 1, 1000, False),  # unbatch + no merge
+        (1024 * 128, 1, 10000, False),  # unbatch + no merge
+        (1024, 1, 100, True),  # unbatched + merge mole
     ],
 )
-def test_ac_with_large_system(
-    conserving_mole_checkpoint, monkeypatch, chunk_size, nsystems, natoms
+def test_ac_with_chunking_and_batching(
+    conserving_mole_checkpoint, monkeypatch, chunk_size, nsystems, natoms, merge_mole
 ):
 
     monkeypatch.setattr(
@@ -452,7 +453,7 @@ def test_ac_with_large_system(
     ifs = InferenceSettings(
         tf32=True,
         activation_checkpointing=False,
-        merge_mole=False,
+        merge_mole=merge_mole,
         compile=False,
         wigner_cuda=False,
         external_graph_gen=False,
