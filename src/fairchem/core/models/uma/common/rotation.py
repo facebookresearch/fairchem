@@ -118,19 +118,6 @@ def _z_rot_mat(angle: torch.Tensor, lv: int) -> torch.Tensor:
     return M
 
 
-def xyz_to_angles(xyz):
-    xyz = torch.nn.functional.normalize(
-        xyz, p=2.0, dim=-1
-    )  # forward 0's instead of nan for zero-radius
-    xyz = xyz.clamp(-1, 1)
-    beta = torch.acos(xyz[..., 1])
-    # if torch.any(torch.abs(torch.atan2(xyz[..., 0], xyz[..., 2])) < 1e-8):
-    #     breakpoint()
-
-    alpha = torch.atan2(xyz[..., 0] + 1e-8, xyz[..., 2] + 1e-8)
-    return alpha, beta
-
-
 def rotation_to_wigner(
     edge_rot_mat: torch.Tensor,
     start_lmax: int,
@@ -142,8 +129,7 @@ def rotation_to_wigner(
     set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
     """
     x = edge_rot_mat @ edge_rot_mat.new_tensor([0.0, 1.0, 0.0])
-
-    alpha, beta = xyz_to_angles(x)
+    alpha, beta = o3.xyz_to_angles(x)
     R = (
         o3.angles_to_matrix(alpha, beta, torch.zeros_like(alpha)).transpose(-1, -2)
         @ edge_rot_mat
