@@ -177,9 +177,12 @@ class MOLE(torch.nn.Module):
         out = []
         ac_start_idx = self.global_mole_tensors.ac_start_idx
         assert len(self.global_mole_tensors.mole_sizes) > 0
+        # TODO: precompute these if needed but they should be small and on cpu
         start_idxs = [0] + torch.cumsum(
             self.global_mole_tensors.mole_sizes, dim=0
         ).tolist()
+        mole_intervals = list(zip(start_idxs, start_idxs[1:]))
+
         # Because activation checkpointing can chunk the inputs, we need to only compute
         # the mole_size intervals that overlap with the current chunks
         # for example if mole_sizes = [10,10,15]
@@ -188,15 +191,16 @@ class MOLE(torch.nn.Module):
         # if the input segment is (5,15) then we compute the following 2 segments
         # (5,10),(10,15)
         input_segment = (ac_start_idx, ac_start_idx + x.shape[0])
-        mole_intervals = list(zip(start_idxs, start_idxs[1:]))
+
         for n, mole_segment in enumerate(mole_intervals):
             interval_overlap = interval_intersection(input_segment, mole_segment)
             if interval_overlap is not None:
                 start = interval_overlap[0] - ac_start_idx
                 end = interval_overlap[1] - ac_start_idx
-                # print(f"interval to compute on: {(start,end)}")
                 out.append(F.linear(x[start:end], weights[n], bias=self.bias))
 
         result = torch.concatenate(out, dim=0)
-        assert result.shape[0] == x.shape[0]
+        assert (
+            result.shape[0] == x.shape[0]
+        ), f"result shape {result.shape}, does not match input shape {x.shape} at dim 0"
         return result
