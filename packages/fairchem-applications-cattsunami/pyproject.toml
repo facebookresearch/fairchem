@@ -8,7 +8,7 @@ dynamic = ["version", "readme"]
 description = "Accelerating Transition State Energy Calculations with Pre-trained Graph Neural Networks"
 license = {text = "MIT License"}
 dependencies = [
-    "fairchem-core>=2.0",
+    "fairchem-core",
     "fairchem-data-oc"
 ]
 
