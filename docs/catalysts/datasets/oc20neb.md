@@ -41,13 +41,14 @@ One more note: We have not prepared an lmdb for this dataset. This is because it
 ```{code-cell} ipython3
 from ase.io import read
 from ase.optimize import BFGS
-from ase.mep import NEB
+from ase.mep import DyNEB
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
 images = traj[0:10]
 predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 
-neb = NEB(images, k=1)
+neb = DyNEB(images, k=1)
 for image in images:
     image.calc = FAIRChemCalculator(predictor, task_name="oc20")
 

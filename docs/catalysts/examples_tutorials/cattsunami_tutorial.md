@@ -26,7 +26,7 @@ from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH, BULK_PKL_PATH
 import matplotlib.pyplot as plt
 from fairchem.applications.cattsunami.core.autoframe import AutoFrameDissociation
 from ase.io import read
-from ase.mep import NEB
+from ase.mep import DyNEB
 
 #Optional
 from x3dase.x3d import X3D
@@ -146,30 +146,27 @@ tags: ["skip-execution"]
 # But much longer on CPU
 # Remember that not all NEBs will converge -- the k, nframes would be adjusted to achieve convergence
 
-# fmax = 0.05 # [eV / ang**2]
-# delta_fmax_climb = 0.4
-# converged_idxs = []
+fmax = 0.05 # [eV / ang**2]
+delta_fmax_climb = 0.4
+converged_idxs = []
 
-# for idx, frame_set in enumerate(frame_sets):
-#     neb = OCPNEB(
-#         frame_set,
-#         checkpoint_path=checkpoint_path,
-#         k=1,
-#         batch_size=8,
-#         cpu = cpu,
-#     )
-#     optimizer = BFGS(
-#         neb,
-#         trajectory=f"ch_dissoc_on_Ru_{idx}.traj",
-#     )
-#     conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=200)
-#     if conv:
-#         neb.climb = True
-#         conv = optimizer.run(fmax=fmax, steps=300)
-#         if conv:
-#             converged_idxs.append(idx)
+for idx, frame_set in enumerate(frame_sets):
+    neb = DyNEB(frame_set, k=1)
+    for image in frame_set:
+        image.calc = FAIRChemCalculator(predictor, task_name="oc20")
+        
+    optimizer = BFGS(
+        neb,
+        trajectory=f"ch_dissoc_on_Ru_{idx}.traj",
+    )
+    conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=200)
+    if conv:
+        neb.climb = True
+        conv = optimizer.run(fmax=fmax, steps=300)
+        if conv:
+            converged_idxs.append(idx)
             
-# print(converged_idxs)
+print(converged_idxs)
 ```
 
 ```{code-cell} ipython3
@@ -177,7 +174,7 @@ tags: ["skip-execution"]
 fmax = 0.05 # [eV / ang**2]
 delta_fmax_climb = 0.4
 images = frame_sets[0]
-neb = NEB(images, k=1)
+neb = DyNEB(images, k=1)
 for image in images:
     image.calc = FAIRChemCalculator(predictor, task_name="oc20")
 
@@ -194,7 +191,10 @@ if conv:
 ## Visualize the results
 
 ```{code-cell} ipython3
-optimized_neb = read(f"ch_dissoc_on_Ru_{converged_idxs[0]}.traj", ":")[-1*nframes:]
+---
+tags: ["skip-execution"]
+---
+optimized_neb = read(f"ch_dissoc_on_Ru_0.traj", ":")[-1*nframes:]
 ```
 
 ```{code-cell} ipython3
