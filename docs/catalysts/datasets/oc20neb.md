@@ -44,17 +44,18 @@ from ase.optimize import BFGS
 from fairchem.applications.cattsunami.core import OCPNEB
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
-neb_frames = traj[0:10]
-neb = OCPNEB(
-    neb_frames,
-    checkpoint_path=YOUR_CHECKPOINT_PATH,
-    k=k,
-    batch_size=8,
-)
+images = traj[0:10]
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+
+neb = NEB(images, k=1)
+for image in images:
+    image.calc = FAIRChemCalculator(predictor, task_name="oc20")
+
 optimizer = BFGS(
     neb,
-    trajectory=f"test_neb.traj",
+    trajectory=f"neb.traj",
 )
+
 conv = optimizer.run(fmax=0.45, steps=200)
 if conv:
     neb.climb = True

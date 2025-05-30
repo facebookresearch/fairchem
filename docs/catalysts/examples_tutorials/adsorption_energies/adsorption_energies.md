@@ -134,6 +134,7 @@ t0 = time.time()
 os.makedirs(f"data/{bulk_src_id}_H", exist_ok=True)
 adslab = adslabs[0]
 adslab.calc = calc
+adslab.pbc = True
 opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/test.traj")
 opt.run(fmax=0.05, steps=100)
 

@@ -217,7 +217,8 @@ tags: ["skip-execution"]
 # If you run the above cell -- dont run this one
 fmax = 0.05 # [eV / ang**2]
 delta_fmax_climb = 0.4
-neb = NEB(frame_sets[0], k=1)
+images = frame_sets[0]
+neb = NEB(images, k=1)
 for image in images:
     image.calc = FAIRChemCalculator(predictor, task_name="oc20")
 
