@@ -467,13 +467,15 @@ def radius_graph_pbc_v2(
 
     # Compute the grid index for each dimension for each atom
     max_internal_cell = (
-        max(source_atom_pos.max(), target_atom_pos.max()) / grid_resolution
+        max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / grid_resolution
     )
     if max_internal_cell > 200:
         logging.warning(
-            "radius graph pbc: This system seems too big, are you using PBC with a large box instead of using PBC=False? Graph generation will be slower than it should be."
+            "radius graph pbc: The cell seems large, {data.cell}, are you using PBC with a large box instead of using PBC=False? Graph generation will be slower than it should be."
         )
-        grid_resolution = max(source_atom_pos.max(), target_atom_pos.max()) / 200
+        grid_resolution = (
+            max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / 200
+        )
     source_atom_grid = torch.floor(source_atom_pos / grid_resolution).long()
     target_atom_grid = torch.floor(target_atom_pos / grid_resolution).long()
 
