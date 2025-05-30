@@ -18,7 +18,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install pandoc
-      run: sudo apt-get install pandoc
+      run: sudo apt-get -y install pandoc
 
     # Install dependencies
     - name: Set up Python
