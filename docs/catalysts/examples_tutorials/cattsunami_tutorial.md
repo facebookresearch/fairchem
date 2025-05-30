@@ -26,13 +26,11 @@ from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH, BULK_PKL_PATH
 import matplotlib.pyplot as plt
 from fairchem.applications.cattsunami.core.autoframe import AutoFrameDissociation
 from ase.io import read
+from ase.mep import NEB
 
 #Optional
 from x3dase.x3d import X3D
 
-#Set random seed
-import numpy as np
-np.random.seed(22)
 ```
 
 ## Do enumerations in an AdsorbML style
