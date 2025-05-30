@@ -19,7 +19,7 @@ One of the most common tasks in computational catalysis is calculating the bindi
 
 
 ```{code-cell} ipython3
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 import ase.io
 from ase.optimize import BFGS
 import sys
@@ -38,13 +38,6 @@ from fairchem.data.oc.utils import DetectTrajAnomaly
 # If using a larger number of random samples this wouldn't be necessary
 import numpy as np
 np.random.seed(22)
-```
-
-```{code-cell} ipython3
-from fairchem.core.models.model_registry import model_name_to_local_file
-
-checkpoint_path = model_name_to_local_file('EquiformerV2-31M-S2EF-OC20-All+MD', local_cache='/tmp/fairchem_checkpoints/')
-checkpoint_path
 ```
 
 # Introduction
@@ -129,9 +122,9 @@ Running the model with BFGS prints at each relaxation step which is a lot to pri
 ```{code-cell} ipython3
 os.makedirs(f"data/{bulk_src_id}_{adsorbate_smiles_h}", exist_ok=True)
 
-# Define the calculator
-calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=False)   # if you have a GPU
-# calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=True)  # If you have CPU only
+# Define the 
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
 Now we setup and run the relaxation.

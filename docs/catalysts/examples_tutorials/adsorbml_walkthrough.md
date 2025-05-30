@@ -14,7 +14,6 @@ kernelspec:
 # AdsorbML tutorial
 
 ```{code-cell} ipython3
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
 import ase.io
 from ase.optimize import BFGS
 
@@ -63,24 +62,21 @@ random_adslabs = AdsorbateSlabConfig(slabs[0], adsorbate, mode="random_site_heur
 ## Run ML relaxations:
 
 There are 2 options for how to do this.
- 1. Using `OCPCalculator` as the calculator within the ASE framework
- 2. By writing objects to lmdb and relaxing them using `main.py` in the ocp repo
+ 1. Using `FAIRChemCalculator` as the calculator within the ASE framework
+ 2. By writing objects to aselmdb and relaxing them using `main.py` in the fairchem repo (see the batched inference tutorial)
  
 (1) is really only adequate for small stuff and it is what I will show here, but if you plan to run many relaxations, you should definitely use (2). More details about writing lmdbs has been provided [here](../core/lmdb_dataset_creation.md) - follow the IS2RS/IS2RE instructions. And more information about running relaxations once the lmdb has been written is [here](../core/model_training.md).
 
 You need to provide the calculator with a path to a model checkpoint file. That can be downloaded [here](../core/model_checkpoints)
 
 ```{code-cell} ipython3
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
-from fairchem.core.models.model_registry import model_name_to_local_file
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 import os
 
-checkpoint_path = model_name_to_local_file('EquiformerV2-31M-S2EF-OC20-All+MD', local_cache='/tmp/fairchem_checkpoints/')
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 os.makedirs(f"data/{bulk}_{adsorbate}", exist_ok=True)
-
-# Define the calculator
-calc = OCPCalculator(checkpoint_path=checkpoint_path) # if you have a gpu, add `cpu=False` to speed up calculations
 
 adslabs = [*heuristic_adslabs.atoms_list, *random_adslabs.atoms_list]
 # Set up the calculator

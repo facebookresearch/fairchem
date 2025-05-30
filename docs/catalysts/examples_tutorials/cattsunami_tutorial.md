@@ -19,7 +19,7 @@ tags: ["skip-execution"]
 ---
 from fairchem.applications.cattsunami.core import Reaction
 from fairchem.data.oc.core import Slab, Adsorbate, Bulk, AdsorbateSlabConfig
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 from ase.optimize import BFGS
 from x3dase.visualize import view_x3d_n
 from ase.io import read
@@ -94,11 +94,8 @@ product2_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = product2,
 tags: ["skip-execution"]
 ---
 # Instantiate the calculator
-# NOTE: If you have a GPU, use cpu = False
-# NOTE: Change the checkpoint path to locally downloaded files as needed
-checkpoint_path = model_name_to_local_file('EquiformerV2-31M-S2EF-OC20-All+MD', local_cache='/tmp/fairchem_checkpoints/')
-cpu = True
-calc = OCPCalculator(checkpoint_path = checkpoint_path, cpu = cpu)
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
 ```{code-cell} ipython3

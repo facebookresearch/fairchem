@@ -53,17 +53,13 @@ is just re1 + re2.
 
 Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state. You could also compute this using DFT.
 
-The first step is getting a checkpoint for the model we want to use. eSCN is currently the state of the art model [`arXiv`](https://arxiv.org/abs/2302.03655). This next cell will download the checkpoint if you don't have it already. However, we're going to use an older GemNet model (which still works pretty well!) just to keep the resources lower for this tutorial.
+The first step is getting a checkpoint for the model we want to use. UNA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
 
-The different models have different compute requirements. If you find your kernel is crashing, it probably means you have exceeded the allowed amount of memory. This checkpoint works fine in this example, but it may crash your kernel if you use it in the NRR example.
+This next cell will automatically download the checkpoint from huggingface and load it. 
+1. You need to first request access to the UMA model here: https://huggingface.co/facebook/UMA
+2. You also need to run `huggingface-cli login` and follow the instructions to get a token from huggingface to authenticate to the servers. 
 
-```{code-cell}
-from fairchem.core.models.model_registry import model_name_to_local_file
-
-checkpoint_path = model_name_to_local_file('EquiformerV2-31M-S2EF-OC20-All+MD', local_cache='/tmp/fairchem_checkpoints/')
-```
-
-Next we load the checkpoint. The output is somewhat verbose, but it can be informative for debugging purposes.
+If you find your kernel is crashing, it probably means you have exceeded the allowed amount of memory. This checkpoint works fine in this example, but it may crash your kernel if you use it in the NRR example.
 
 ```{code-cell}
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
@@ -83,6 +79,7 @@ from ase.optimize import BFGS
 re1 = -3.03
 
 slab = fcc111('Pt', size=(2, 2, 5), vacuum=10.0)
+slab.pbc=True
 
 adslab = slab.copy()
 add_adsorbate(adslab, 'O', height=1.2, position='fcc')
@@ -327,6 +324,7 @@ for nlayers in [3, 4, 5, 6, 7, 8]:
     slab = fcc111('Pt', size=(2, 2, nlayers), vacuum=10.0)
     add_adsorbate(slab, 'O', height=1.2, position='fcc')
 
+    slab.pbc=True
     slab.set_calculator(calc)
     opt = BFGS(slab, logfile=None)
     opt.run(fmax=0.05, steps=100)
@@ -348,7 +346,7 @@ for nlayers in [3, 4, 5, 6, 7, 8]:
     add_adsorbate(slab, 'O', height=1.2, position='fcc')
     
     slab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in slab]))
-
+    slab.pbc=True
     slab.set_calculator(calc)
     opt = BFGS(slab, logfile=None)
     opt.run(fmax=0.05, steps=100)
@@ -366,7 +364,7 @@ for size in [1, 2, 3, 4, 5]:
     add_adsorbate(slab, 'O', height=1.2, position='fcc')
     
     slab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in slab]))
-
+    slab.pbc=True
     slab.set_calculator(calc)
     opt = BFGS(slab, logfile=None)
     opt.run(fmax=0.05, steps=100)
