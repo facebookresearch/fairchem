@@ -149,9 +149,13 @@ def rotation_to_wigner(
         beta_detach[yprod < -YTOL] = math.pi
         beta_detach = beta_detach[~mask]
         for idx in range(alpha.shape[0]):
-            print("1,edge,x,alpha,beta",idx,edge_rot_mat[idx],x[idx],mask[idx],alpha[idx],beta[idx])
+            print("1,edge,x,alpha,beta",idx,edge_rot_mat[idx],x[idx],mask[idx],alpha[idx],beta[idx],flush=True)
             if mask[idx]:
-                torch.autograd.grad(alpha[idx]+beta[idx], x, create_graph=True,allow_unused=True)
+                try:
+                    torch.autograd.grad(alpha[idx]+beta[idx], x, create_graph=True,allow_unused=True)
+                except:
+                    print("FAILED AUTOGRAD!!!",idx,flush=True)
+            print("done",flush=True)
     else:
         for idx in range(alpha.shape[0]):
             print("2,edge,x,alpha,beta",idx,edge_rot_mat[idx],x[idx],alpha[idx],beta[idx])
