@@ -13,7 +13,7 @@ copyright                   : "2024"  # Copyright year to be placed in the foote
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: execution_mode
+  execute_notebooks: force
   timeout: 3600
   allow_errors: false
 
