@@ -82,6 +82,7 @@ adslabs = [*heuristic_adslabs.atoms_list, *random_adslabs.atoms_list]
 # Set up the calculator
 for idx, adslab in enumerate(adslabs):
     adslab.calc = calc
+    adslab.pbc = True
     opt = BFGS(adslab, trajectory=f"data/{bulk}_{adsorbate}/{idx}.traj")
     opt.run(fmax=0.05, steps=100) # For the AdsorbML results we used fmax = 0.02 and steps = 300, but we will use less strict values for brevity.
 ```

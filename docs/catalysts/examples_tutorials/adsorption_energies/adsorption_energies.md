@@ -197,6 +197,7 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
     for idx, adslab in enumerate(heuristic_adslabs_H.atoms_list[:4]):
         t0 = time.time()
         adslab.calc = calc
+        adslab.pbc = True
         print(f'Running data/{bulk_src_id}_H/{idx}')
         opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/{idx}.traj", logfile=f"data/{bulk_src_id}_H/{idx}.log")
         opt.run(fmax=0.05, steps=20)
@@ -206,6 +207,7 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list[:4]):
         t0 = time.time()
         adslab.calc = calc
+        adslab.pbc = True
         print(f'Running data/{bulk_src_id}_NNH/{idx}')
         opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/{bulk_src_id}_NNH/{idx}.log")
         opt.run(fmax=0.05, steps=50)
@@ -245,6 +247,7 @@ for bulk_src_id in tqdm(bulk_ids):
     for idx, adslab in enumerate(heuristic_adslabs_H.atoms_list):
         t0 = time.time()
         adslab.calc = calc
+        adslab.pbc = True
         print(f'Running data/{bulk_src_id}_H/{idx}')
         opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/{idx}.traj", logfile=f"data/{bulk_src_id}_H/{idx}.log")
         opt.run(fmax=0.05, steps=20)
@@ -253,6 +256,7 @@ for bulk_src_id in tqdm(bulk_ids):
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list):
         t0 = time.time()
         adslab.calc = calc
+        adslab.pbc = True
         print(f'Running data/{bulk_src_id}_NNH/{idx}')
         opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/{bulk_src_id}_NNH/{idx}.log")
         opt.run(fmax=0.05, steps=50)

@@ -29,7 +29,6 @@ from fairchem.data.oc.databases.pkls import ADSORBATE_PKL_PATH, BULK_PKL_PATH
 from fairchem.core.models.model_registry import model_name_to_local_file
 import matplotlib.pyplot as plt
 from fairchem.applications.cattsunami.core.autoframe import AutoFrameDissociation
-from fairchem.applications.cattsunami.core import OCPNEB
 from ase.io import read
 
 #Optional
@@ -218,13 +217,10 @@ tags: ["skip-execution"]
 # If you run the above cell -- dont run this one
 fmax = 0.05 # [eV / ang**2]
 delta_fmax_climb = 0.4
-neb = OCPNEB(
-    frame_sets[0],
-    checkpoint_path=checkpoint_path,
-    k=1,
-    batch_size=8,
-    cpu = cpu,
-)
+neb = NEB(frame_sets[0], k=1)
+for image in images:
+    image.calc = FAIRChemCalculator(predictor, task_name="oc20")
+
 optimizer = BFGS(
     neb,
     trajectory=f"ch_dissoc_on_Ru_0.traj",
