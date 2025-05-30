@@ -5,7 +5,7 @@
 
 #######################################################################################
 # Book settings
-title                       : "" # FAIR Chemistry Documentation  # The title of the book. Will be placed in the left navbar.
+title                       : "fairchem" # FAIR Chemistry Documentation  # The title of the book. Will be placed in the left navbar.
 author                      : FAIR Chemistry & Collaborators  # The author of the book
 copyright                   : "2024"  # Copyright year to be placed in the footer
 # logo                        : logo.png  # A path to the book logo - no logo looks better than old logo
@@ -13,8 +13,9 @@ copyright                   : "2024"  # Copyright year to be placed in the foote
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: on
+  execute_notebooks: execution_mode
   timeout: 3600
+  allow_errors: false
 
 # Define the name of the latex output file for PDF builds
 latex:
