@@ -22,6 +22,23 @@ with suppress(ModuleNotFoundError):
     fairchem_cpp_found = True
 
 
+def interval_intersection(interval1, interval2):
+    """
+    Compute intersection of two intervals [a, b] and [c, d]
+    Returns None if no intersection, otherwise returns [start, end]
+    """
+    a, b = interval1
+    c, d = interval2
+
+    start = max(a, c)
+    end = min(b, d)
+
+    if start <= end:
+        return [start, end]
+    else:
+        return None  # No intersection
+
+
 def _softmax(x):
     return torch.softmax(x, dim=1) + 0.005
 
@@ -41,8 +58,16 @@ def norm_str_to_fn(act):
 
 @dataclass
 class MOLEGlobals:
+    # the linear coefficient for each expert
     expert_mixing_coefficients: torch.Tensor
+    # if the input contains N separate systems, then the sizes represent the number of atoms in each system
+    # this is used to for the MoLE to assign the correct parameters for each system
     mole_sizes: torch.Tensor
+    # when using activation checkpointing, the inputs are chunked and given piecemeal so the start idx must be
+    # updated each time the chunked operation happens. It's better to make this an input but in order for
+    # the MolE interface to maintain functional equivalence to the Linear layer interface, this extra info
+    # needs to be added here instead. (TODO: is there a cleaner way to do this?)
+    ac_start_idx: int = 0
 
 
 def init_linear(num_experts, use_bias, out_features, in_features):
@@ -149,14 +174,33 @@ class MOLE(torch.nn.Module):
                 self.global_mole_tensors.expert_mixing_coefficients,
             )
 
-        start = 0
-        end = 0
         out = []
-        for idx in range(len(self.global_mole_tensors.mole_sizes)):
-            end = start + self.global_mole_tensors.mole_sizes[idx]
-            if start != end:
-                assert x.shape[0] > start
-                out.append(F.linear(x[start:end], weights[idx], bias=self.bias))
-                start = end
-        assert x.shape[0] == end
-        return torch.concatenate(out, dim=0)
+        ac_start_idx = self.global_mole_tensors.ac_start_idx
+        assert len(self.global_mole_tensors.mole_sizes) > 0
+        # TODO: precompute these if needed but they should be small and on cpu
+        start_idxs = [0] + torch.cumsum(
+            self.global_mole_tensors.mole_sizes, dim=0
+        ).tolist()
+        mole_intervals = list(zip(start_idxs, start_idxs[1:]))
+
+        # Because activation checkpointing can chunk the inputs, we need to only compute
+        # the mole_size intervals that overlap with the current chunks
+        # for example if mole_sizes = [10,10,15]
+        # start_idxs -> [0,10,20,35]
+        # mole_intervals -> [(0,10),(10,20),(20,35)]
+        # if the input segment is (5,15) then we compute the following 2 segments
+        # (5,10),(10,15)
+        input_segment = (ac_start_idx, ac_start_idx + x.shape[0])
+
+        for n, mole_segment in enumerate(mole_intervals):
+            interval_overlap = interval_intersection(input_segment, mole_segment)
+            if interval_overlap is not None:
+                start = interval_overlap[0] - ac_start_idx
+                end = interval_overlap[1] - ac_start_idx
+                out.append(F.linear(x[start:end], weights[n], bias=self.bias))
+
+        result = torch.concatenate(out, dim=0)
+        assert (
+            result.shape[0] == x.shape[0]
+        ), f"result shape {result.shape}, does not match input shape {x.shape} at dim 0"
+        return result
