@@ -37,7 +37,7 @@ result = elastic_tensor_flow(
     job_params={
         "all": dict(
             method="fairchem",
-            get_predict_unit_kwargs={"model_name": "uma-sm"},
+            get_predict_unit_kwargs={"model_name": "uma-s-1"},
             task_name="omat",
         ),
     },

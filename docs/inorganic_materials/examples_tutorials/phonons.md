@@ -43,7 +43,7 @@ result = phonon_flow(
     method="fairchem",
     job_params={
         "all": dict(
-            get_predict_unit_kwargs={"model_name": "uma-sm"},
+            get_predict_unit_kwargs={"model_name": "uma-s-1"},
             task_name="omat",
         ),
     },
