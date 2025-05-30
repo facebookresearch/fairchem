@@ -322,14 +322,23 @@ Slab thickness could be a factor. Here we relax the whole slab, and see by about
 ```{code-cell}
 for nlayers in [3, 4, 5, 6, 7, 8]:
     slab = fcc111('Pt', size=(2, 2, nlayers), vacuum=10.0)
-    add_adsorbate(slab, 'O', height=1.2, position='fcc')
 
     slab.pbc=True
     slab.set_calculator(calc)
-    opt = BFGS(slab, logfile=None)
-    opt.run(fmax=0.05, steps=100)
+    opt_slab = BFGS(slab, logfile=None)
+    opt_slab.run(fmax=0.05, steps=100)
     slab_e = slab.get_potential_energy()
-    print(f'nlayers = {nlayers}: {slab_e + re1:1.2f} eV')
+
+    adslab = slab.copy()
+    add_adsorbate(adslab, 'O', height=1.2, position='fcc')
+    
+    adslab.pbc=True
+    adslab.set_calculator(calc)
+    opt_adslab = BFGS(adslab, logfile=None)
+    opt_adslab.run(fmax=0.05, steps=100)
+    adslab_e = adslab.get_potential_energy()
+
+    print(f'nlayers = {nlayers}: {adslab_e - slab_e + re1:1.2f} eV')
 ```
 
 ## Effects of relaxation
@@ -343,15 +352,25 @@ from ase.constraints import FixAtoms
 
 for nlayers in [3, 4, 5, 6, 7, 8]:
     slab = fcc111('Pt', size=(2, 2, nlayers), vacuum=10.0)
-    add_adsorbate(slab, 'O', height=1.2, position='fcc')
-    
+
     slab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in slab]))
     slab.pbc=True
     slab.set_calculator(calc)
-    opt = BFGS(slab, logfile=None)
-    opt.run(fmax=0.05, steps=100)
+    opt_slab = BFGS(slab, logfile=None)
+    opt_slab.run(fmax=0.05, steps=100)
     slab_e = slab.get_potential_energy()
-    print(f'nlayers = {nlayers}: {slab_e + re1:1.2f} eV')
+
+    adslab = slab.copy()
+    add_adsorbate(adslab, 'O', height=1.2, position='fcc')
+    
+    adslab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in adslab]))
+    adslab.pbc=True
+    adslab.set_calculator(calc)
+    opt_adslab = BFGS(adslab, logfile=None)
+    opt_adslab.run(fmax=0.05, steps=100)
+    adslab_e = adslab.get_potential_energy()
+
+    print(f'nlayers = {nlayers}: {adslab_e - slab_e + re1:1.2f} eV')
 ```
 
 ## Unit cell size
@@ -360,16 +379,27 @@ Coverage effects are quite noticeable with oxygen. Here we consider larger unit 
 
 ```{code-cell}
 for size in [1, 2, 3, 4, 5]:
+
     slab = fcc111('Pt', size=(size, size, 5), vacuum=10.0)
-    add_adsorbate(slab, 'O', height=1.2, position='fcc')
-    
+
     slab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in slab]))
     slab.pbc=True
     slab.set_calculator(calc)
-    opt = BFGS(slab, logfile=None)
-    opt.run(fmax=0.05, steps=100)
+    opt_slab = BFGS(slab, logfile=None)
+    opt_slab.run(fmax=0.05, steps=100)
     slab_e = slab.get_potential_energy()
-    print(f'({size}x{size}): {slab_e + re1:1.2f} eV')
+
+    adslab = slab.copy()
+    add_adsorbate(adslab, 'O', height=1.2, position='fcc')
+    
+    adslab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in adslab]))
+    adslab.pbc=True
+    adslab.set_calculator(calc)
+    opt_adslab = BFGS(adslab, logfile=None)
+    opt_adslab.run(fmax=0.05, steps=100)
+    adslab_e = adslab.get_potential_energy()
+
+    print(f'({size}x{size}): {adslab_e - slab_e + re1:1.2f} eV')
 ```
 
 ## Summary

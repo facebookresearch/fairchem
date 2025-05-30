@@ -183,6 +183,13 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
     bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
     slab = Slab.from_bulk_get_specific_millers(bulk= bulk, specific_millers=(1, 1, 1))
 
+    slab_atoms = slab[0].atoms.copy()
+    slab_atoms.calc = calc
+    slab_atoms.pbc = True
+    opt = BFGS(slab_atoms, trajectory=f"data/{bulk_src_id}.traj", logfile=f"data/{bulk_src_id}.log")
+    opt.run(fmax=0.05, steps=20)
+    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id} slab relaxation')
+
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
     heuristic_adslabs_NNH = AdsorbateSlabConfig(slab[0], adsorbate_NNH, mode="heuristic")
@@ -232,6 +239,13 @@ for bulk_src_id in tqdm(bulk_ids):
     # Enumerate slabs and establish adsorbates
     bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
     slab = Slab.from_bulk_get_specific_millers(bulk= bulk, specific_millers=(1, 1, 1))
+
+    slab_atoms = slab[0].atoms.copy()
+    slab_atoms.calc = calc
+    slab_atoms.pbc = True
+    opt = BFGS(slab_atoms, trajectory=f"data/{bulk_src_id}.traj", logfile=f"data/{bulk_src_id}.log")
+    opt.run(fmax=0.05, steps=20)
+    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id} slab relaxation')
 
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
@@ -285,6 +299,8 @@ min_E = []
 for file_outer in glob("data/*"):
     ads = file_outer.split("_")[1]
     bulk = file_outer.split("/")[1].split("_")[0]
+
+    slab = ase.io.read(f"data/{bulk}.traj")
     results = []
     for file in glob(f"{file_outer}/*.traj"):
         rx_id = file.split("/")[-1].split(".")[0]
@@ -298,7 +314,7 @@ for file_outer in glob("data/*"):
             or detector.has_surface_changed()
             or detector.is_adsorbate_intercalated()
         )
-        rx_energy = traj[-1].get_potential_energy()
+        rx_energy = traj[-1].get_potential_energy() - slab.get_potential_energy()
         results.append({"relaxation_idx": rx_id, "relaxed_atoms": traj[-1],
                         "relaxed_energy_ml": rx_energy, "anomolous": anom})
     df = pd.DataFrame(results)
@@ -349,8 +365,8 @@ ax1.legend(
 )
 ax1.scatter(x, y)
 ax1.axis("square")
-ax1.set_xlim([-3.5, 2])
-ax1.set_ylim([-3.5, 2])
+#ax1.set_xlim([-3.5, 2])
+#ax1.set_ylim([-3.5, 2])
 ax1.set_xlabel("dE predicted OCP [eV]")
 ax1.set_ylabel("dE NRR paper [eV]");
 
@@ -379,8 +395,8 @@ ax2.legend(
 )
 ax2.scatter(x, y)
 ax2.axis("square")
-ax2.set_xlim([-3.5, 2])
-ax2.set_ylim([-3.5, 2])
+#ax2.set_xlim([-3.5, 2])
+#ax2.set_ylim([-3.5, 2])
 ax2.set_xlabel("dE predicted OCP [eV]")
 ax2.set_ylabel("dE NRR paper [eV]");
 f.set_figwidth(15)
