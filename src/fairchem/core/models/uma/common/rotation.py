@@ -125,15 +125,18 @@ def rotation_to_wigner(
     Jd: list[torch.Tensor],
     rot_clip: bool = False,
 ) -> torch.Tensor:
+    torch.set_printoptions(threshold=10_000)
     """
     set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
     """
+    #print("edge rot mat",edge_rot_mat)
     x = edge_rot_mat @ edge_rot_mat.new_tensor([0.0, 1.0, 0.0])
     alpha, beta = o3.xyz_to_angles(x)
     R = (
         o3.angles_to_matrix(alpha, beta, torch.zeros_like(alpha)).transpose(-1, -2)
         @ edge_rot_mat
     )
+    #o3.angles_to_matrix(alpha, beta, torch.zeros_like(alpha)).transpose(-1, -2) @ x[:,:,None] = [0,1,0]
     gamma = torch.atan2(R[..., 0, 2], R[..., 0, 0])
 
     if rot_clip:
@@ -145,6 +148,20 @@ def rotation_to_wigner(
         beta_detach[yprod > YTOL] = 0.0
         beta_detach[yprod < -YTOL] = math.pi
         beta_detach = beta_detach[~mask]
+        for idx in range(alpha.shape[0]):
+            print("1,edge,x,alpha,beta",idx,edge_rot_mat[idx],x[idx],mask[idx],alpha[idx],beta[idx],flush=True)
+            if mask[idx]:
+                #try:
+                torch.autograd.grad(alpha[idx]+beta[idx], x[idx], create_graph=True,allow_unused=True)
+                torch.autograd.grad(alpha[idx], x, create_graph=True,allow_unused=True)
+                torch.autograd.grad(beta[idx], x, create_graph=True,allow_unused=True)
+                torch.autograd.grad(alpha[idx]+beta[idx], x, create_graph=True,allow_unused=True)
+                #except:
+                #    print("FAILED AUTOGRAD!!!",idx,flush=True)
+            print("done",flush=True)
+    else:
+        for idx in range(alpha.shape[0]):
+            print("2,edge,x,alpha,beta",idx,edge_rot_mat[idx],x[idx],alpha[idx],beta[idx])
 
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
     wigner = torch.zeros(
@@ -168,7 +185,7 @@ def rotation_to_wigner(
             end = start + block.size()[1]
             wigner[:, start:end, start:end] = block
             start = end
-
+    #breakpoint()
     if rot_clip:
         return wigner
     else:
