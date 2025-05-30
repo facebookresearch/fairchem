@@ -28,7 +28,6 @@ from fairchem.applications.cattsunami.core.autoframe import AutoFrameDissociatio
 from ase.io import read
 
 #Optional
-from IPython.display import Image
 from x3dase.x3d import X3D
 
 #Set random seed
@@ -83,6 +82,7 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 reactant_energies = []
 for config in reactant_configs:
     config.calc = calc
+    config.pbc = True
     opt = BFGS(config)
     opt.run(fmax = 0.05, steps=200)
     reactant_energies.append(config.get_potential_energy())
@@ -93,6 +93,7 @@ for config in reactant_configs:
 product1_energies = []
 for config in product1_configs:
     config.calc = calc
+    config.pbc = True
     opt = BFGS(config)
     opt.run(fmax = 0.05, steps=200)
     product1_energies.append(config.get_potential_energy())
@@ -102,6 +103,7 @@ for config in product1_configs:
 product2_energies = []
 for config in product2_configs:
     config.calc = calc
+    config.pbc = True
     opt = BFGS(config)
     opt.run(fmax = 0.05, steps=200)
     product2_energies.append(config.get_potential_energy())
@@ -109,9 +111,8 @@ for config in product2_configs:
 
 ## Enumerate NEBs
 
-```{code-cell} ipython3
-Image(filename="dissociation_scheme.png")
-```
+
+![](dissociation_scheme.png)
 
 ```{code-cell} ipython3
 af = AutoFrameDissociation(

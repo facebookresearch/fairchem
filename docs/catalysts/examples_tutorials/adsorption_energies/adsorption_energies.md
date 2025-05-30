@@ -179,6 +179,12 @@ tinit = time.time()
 
 # Note we're just doing the first bulk_id! 
 for bulk_src_id in tqdm(bulk_ids[:1]): 
+
+    # Set up data directories
+    os.makedirs(f"data/slabs/", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_H", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_NNH", exist_ok=True)
+
     # Enumerate slabs and establish adsorbates
     bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
     slab = Slab.from_bulk_get_specific_millers(bulk= bulk, specific_millers=(1, 1, 1))
@@ -186,17 +192,15 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
     slab_atoms = slab[0].atoms.copy()
     slab_atoms.calc = calc
     slab_atoms.pbc = True
-    opt = BFGS(slab_atoms, trajectory=f"data/{bulk_src_id}.traj", logfile=f"data/{bulk_src_id}.log")
+    opt = BFGS(slab_atoms, trajectory=f"data/slabs/{bulk_src_id}.traj", logfile=f"data/slabs/{bulk_src_id}.log")
     opt.run(fmax=0.05, steps=20)
-    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id} slab relaxation')
+    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/slabs/{bulk_src_id} slab relaxation')
 
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
     heuristic_adslabs_NNH = AdsorbateSlabConfig(slab[0], adsorbate_NNH, mode="heuristic")
 
-    #Run relaxations
-    os.makedirs(f"data/{bulk_src_id}_H", exist_ok=True)
-    os.makedirs(f"data/{bulk_src_id}_NNH", exist_ok=True)
+
 
     print(f'{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}')
     print(f'{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}')
@@ -206,20 +210,20 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
         t0 = time.time()
         adslab.calc = calc
         adslab.pbc = True
-        print(f'Running data/{bulk_src_id}_H/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/{idx}.traj", logfile=f"data/{bulk_src_id}_H/{idx}.log")
+        print(f'Running data/adslabs/{bulk_src_id}_H/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_H/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_H/{idx}.log")
         opt.run(fmax=0.05, steps=20)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_H/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}')
         
     # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list[:4]):
         t0 = time.time()
         adslab.calc = calc
         adslab.pbc = True
-        print(f'Running data/{bulk_src_id}_NNH/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/{bulk_src_id}_NNH/{idx}.log")
+        print(f'Running data/adslabs/{bulk_src_id}_NNH/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_NNH/{idx}.log")
         opt.run(fmax=0.05, steps=50)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_NNH/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_NNH/{idx}')
 
 print(f'Elapsed time: {time.time() - tinit:1.1f} seconds')
 ```
@@ -236,6 +240,12 @@ from tqdm import tqdm
 tinit = time.time()
 
 for bulk_src_id in tqdm(bulk_ids): 
+
+    # Set up data directories
+    os.makedirs(f"data/slabs/", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_H", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_NNH", exist_ok=True)
+
     # Enumerate slabs and establish adsorbates
     bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
     slab = Slab.from_bulk_get_specific_millers(bulk= bulk, specific_millers=(1, 1, 1))
@@ -243,17 +253,13 @@ for bulk_src_id in tqdm(bulk_ids):
     slab_atoms = slab[0].atoms.copy()
     slab_atoms.calc = calc
     slab_atoms.pbc = True
-    opt = BFGS(slab_atoms, trajectory=f"data/{bulk_src_id}.traj", logfile=f"data/{bulk_src_id}.log")
+    opt = BFGS(slab_atoms, trajectory=f"data/slabs/{bulk_src_id}.traj", logfile=f"data/slabs/{bulk_src_id}.log")
     opt.run(fmax=0.05, steps=20)
     print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id} slab relaxation')
 
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
     heuristic_adslabs_NNH = AdsorbateSlabConfig(slab[0], adsorbate_NNH, mode="heuristic")
-
-    #Run relaxations
-    os.makedirs(f"data/{bulk_src_id}_H", exist_ok=True)
-    os.makedirs(f"data/{bulk_src_id}_NNH", exist_ok=True)
 
     print(f'{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}')
     print(f'{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}')
@@ -263,19 +269,19 @@ for bulk_src_id in tqdm(bulk_ids):
         t0 = time.time()
         adslab.calc = calc
         adslab.pbc = True
-        print(f'Running data/{bulk_src_id}_H/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/{idx}.traj", logfile=f"data/{bulk_src_id}_H/{idx}.log")
+        print(f'Running data/adslabs/{bulk_src_id}_H/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_H/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_H/{idx}.log")
         opt.run(fmax=0.05, steps=20)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_H/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}')
         
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list):
         t0 = time.time()
         adslab.calc = calc
         adslab.pbc = True
-        print(f'Running data/{bulk_src_id}_NNH/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/{bulk_src_id}_NNH/{idx}.log")
+        print(f'Running data/adslabs/{bulk_src_id}_NNH/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_NNH/{idx}.log")
         opt.run(fmax=0.05, steps=50)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_NNH/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_NNH/{idx}')
 
 print(f'Elapsed time: {time.time() - tinit:1.1f} seconds')
 ```
@@ -296,11 +302,11 @@ In this loop we find the most stable (most negative) adsorption energy for each 
 ```{code-cell} ipython3
 # Iterate over trajs to extract results
 min_E = []
-for file_outer in glob("data/*"):
+for file_outer in glob("data/adslabs/*"):
     ads = file_outer.split("_")[1]
-    bulk = file_outer.split("/")[1].split("_")[0]
+    bulk = file_outer.split("/")[-1].split("_")[0]
 
-    slab = ase.io.read(f"data/{bulk}.traj")
+    slab = ase.io.read(f"data/slabs/{bulk}.traj")
     results = []
     for file in glob(f"{file_outer}/*.traj"):
         rx_id = file.split("/")[-1].split(".")[0]
