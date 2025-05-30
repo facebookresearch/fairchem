@@ -66,9 +66,10 @@ checkpoint_path = model_name_to_local_file('EquiformerV2-31M-S2EF-OC20-All+MD', 
 Next we load the checkpoint. The output is somewhat verbose, but it can be informative for debugging purposes.
 
 ```{code-cell}
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
-calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=False)
-# calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=True)
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
 Next we can build a slab with an adsorbate on it. Here we use the ASE module to build a Pt slab. We use the experimental lattice constant that is the default. This can introduce some small errors with DFT since the lattice constant can differ by a few percent, and it is common to use DFT lattice constants. In this example, we do not constrain any layers.
@@ -82,13 +83,21 @@ from ase.optimize import BFGS
 re1 = -3.03
 
 slab = fcc111('Pt', size=(2, 2, 5), vacuum=10.0)
-add_adsorbate(slab, 'O', height=1.2, position='fcc')
+
+adslab = slab.copy()
+add_adsorbate(adslab, 'O', height=1.2, position='fcc')
 
 slab.set_calculator(calc)
 opt = BFGS(slab)
 opt.run(fmax=0.05, steps=100)
 slab_e = slab.get_potential_energy()
-slab_e + re1
+
+adslab.set_calculator(calc)
+opt = BFGS(adslab)
+opt.run(fmax=0.05, steps=100)
+adslab_e = adslab.get_potential_energy()
+# -7.204 is the reference energy  for O  (from  H2O-H2) in the OC20 reference scheme)
+adslab_e - slab_e - (-7.204) 
 ```
 
 It is good practice to look at your geometries to make sure they are what you expect.
@@ -100,6 +109,17 @@ from ase.visualize.plot import plot_atoms
 fig, axs = plt.subplots(1, 2)
 plot_atoms(slab, axs[0]);
 plot_atoms(slab, axs[1], rotation=('-90x'))
+axs[0].set_axis_off()
+axs[1].set_axis_off()
+```
+
+```{code-cell}
+import matplotlib.pyplot as plt
+from ase.visualize.plot import plot_atoms
+
+fig, axs = plt.subplots(1, 2)
+plot_atoms(adslab, axs[0]);
+plot_atoms(adslab, axs[1], rotation=('-90x'))
 axs[0].set_axis_off()
 axs[1].set_axis_off()
 ```
