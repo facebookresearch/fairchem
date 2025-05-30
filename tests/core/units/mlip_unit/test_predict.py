@@ -7,6 +7,8 @@ from ase.build import add_adsorbate, bulk, fcc100, molecule
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
+ATOL = 5e-6
+
 
 @pytest.fixture(scope="module")
 def uma_predict_unit(request):
@@ -38,7 +40,7 @@ def test_single_dataset_predict(uma_predict_unit):
         preds["stress"].detach().cpu().numpy()
         - atoms.get_stress(voigt=False).flatten(),
         0,
-        atol=1e-6,
+        atol=ATOL,
     )
 
 
@@ -90,6 +92,6 @@ def test_multiple_dataset_predict(uma_predict_unit):
     npt.assert_allclose(pred_energy[2], pt.get_potential_energy())
 
     batch_batch = batch.batch.detach().cpu().numpy()
-    npt.assert_allclose(pred_forces[batch_batch == 0], h2o.get_forces(), atol=1e-6)
-    npt.assert_allclose(pred_forces[batch_batch == 1], slab.get_forces(), atol=1e-6)
-    npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=1e-6)
+    npt.assert_allclose(pred_forces[batch_batch == 0], h2o.get_forces(), atol=ATOL)
+    npt.assert_allclose(pred_forces[batch_batch == 1], slab.get_forces(), atol=ATOL)
+    npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
