@@ -13,6 +13,7 @@ parts:
 - caption: AI/ML models & usage
   chapters:
   - file: core/intro
+  - file: core/uma
   - file: core/common_tasks/summary
     sections:
     - file: core/common_tasks/ase_dataset_creation
