@@ -75,10 +75,10 @@ def get_predict_unit(
         )
     try:
         model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
-    except KeyError:
+    except KeyError as err:
         raise KeyError(
             f"Model '{model_name}' not found. Available models: {available_models}"
-        )
+        ) from err
     checkpoint_path = hf_hub_download(
         filename=model_checkpoint.filename,
         repo_id=model_checkpoint.repo_id,

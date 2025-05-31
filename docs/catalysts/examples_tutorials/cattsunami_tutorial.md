@@ -191,9 +191,6 @@ if conv:
 ## Visualize the results
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
 optimized_neb = read(f"ch_dissoc_on_Ru_0.traj", ":")[-1*nframes:]
 ```
 

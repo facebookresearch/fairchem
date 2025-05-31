@@ -331,8 +331,8 @@ for file_outer in glob("data/adslabs/*"):
             or detector.has_surface_changed()
             or detector.is_adsorbate_intercalated()
         )
-        rx_energy = traj[-1].get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in traj[traj.get_tags()==2].get_chemical_symbols()])
-        
+        rx_energy = traj[-1].get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in traj[0][traj[0].get_tags()==2].get_chemical_symbols()])
+
         results.append({"relaxation_idx": rx_id, "relaxed_atoms": traj[-1],
                         "relaxed_energy_ml": rx_energy, "anomolous": anom})
     df = pd.DataFrame(results)
