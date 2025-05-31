@@ -872,13 +872,13 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
-        atom_refs: dict | None = None,
+        element_refs: dict | None = None,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.seed(seed)
-        self.atom_refs = atom_refs
+        self.element_refs = element_refs
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -967,7 +967,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         )
         return comp_charge_spin, getattr(data, "dataset", [None])
 
-    def populate_empty_prediction(self) -> dict:
+    def _populate_empty_prediction(self) -> dict:
         """
         Populate preduction dict with zeroes for all values (with number of atoms = 1)
         """
@@ -981,11 +981,11 @@ class MLIPPredictUnit(PredictUnit[Batch]):
                 pred_output[task_name] = torch.Tensor([[0.0] * 9])
         return pred_output
 
-    def get_single_atom_energies(self, data) -> dict:
+    def _get_single_atom_energies(self, data) -> dict:
         """
         Populate output with single atom energies
         """
-        if self.atom_refs is None:
+        if self.element_refs is None:
             raise ValueError(
                 "Single atom system but no atomic references present. "
                 "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
@@ -1001,11 +1001,11 @@ class MLIPPredictUnit(PredictUnit[Batch]):
             "Spin multiplicity is ignored for monoatomic systems."
         )
         elt = data.atomic_numbers.item()
-        pred_output = self.populate_empty_prediction()
+        pred_output = self._populate_empty_prediction()
         for task_name, task in self.tasks.items():
             if task.property == "energy":
-                atom_refs = self.atom_refs[task_name.replace("_energy", "_elem_refs")]
-                pred_output[task_name] = torch.Tensor([atom_refs.get(elt, 0.0)])
+                element_refs = self.element_refs[task_name.replace("_energy", "_elem_refs")]
+                pred_output[task_name] = torch.Tensor([element_refs.get(elt, 0.0)])
         return pred_output
 
     def predict(
@@ -1059,9 +1059,8 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         tf32_context = (
             tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
         )
-
-        if len(data.atomic_numbers) == 1:
-            pred_output = self.get_single_atom_energies(data)
+        if len(data.atomic_numbers) == 1 and data.nedges.item() == 0:
+            pred_output = self._get_single_atom_energies(data)
         else:
             pred_output = {}
             with inference_context, tf32_context:
