@@ -11,10 +11,9 @@ kernelspec:
   name: python3
 ---
 
-# UMA models overview
+# UMA Models
 
 [UMA](https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/) is an equivariant GNN that leverages a novel technique called Mixture of Linear Experts (MoLE) to give it the capacity to learn the largest multi-modal dataset to date (500M DFT examples), while preserving energy conservation and inference speed. Even a 6M active parameter (145M total) UMA model is able to acheieve SOTA accuracy on a wide range of domains such as materials, molecules and catalysis. 
-
 
 ## The UMA Mixture-of-Linear-Experts routing function
 
@@ -40,68 +39,3 @@ UMA is trained on 5 different DFT datasets with different levels of theory. An U
 | odac    | [ODac23](https://arxiv.org/abs/2311.00341) | PBE+D3 as implemented in VASP, with VASP5.4 pseudopotentials. | Direct air capture, carbon capture and storage, CO2 conversion, catalysis | UMA has not seen varying charge or spin multiplicity for the ODAC task, and expects total_charge=0 and spin multiplicity=0 as model inputs. The ODAC23 dataset only contains CO2/H2O water absorption, so anything more than might be inaccurate (e.g. hydrocarbons in MOFs). Further, there is a limited number of bare-MOF structures in the training data, so you should be careful if you are using a new MOF structure. |
 
 *Note: OC20 is was updated from the original OC20 and recomputed to produce total energies instead of adsorption energies.
-
-## Inference 
-
-Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
-
-For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface.
-
-```python
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
-
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-calc = FAIRChemCalculator(predictor, task_name="oc20")
-```
-
-### Batch Inference
-
-Coming soon!
-
-### Inference settings
-
-#### Default mode
-
-UMA is designed for both general purpose usage (single or batched systems) and single-system long rollout (MD simulations, Relaxations etc). For general purpose, we suggest using the [default settings](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L92). This is a good trade-off between accuracy, speed and memory consumption and should suffice for most applications. In this setting, on a single 80GB H100 GPU, we expect a user should be able to compute on systems as large 50-100k neighbors (depending on their atomic density). Batching is also supported in this mode.
-
-#### Turbo mode
-
-For long rollout trajectory use-cases where UMA can excel at such as MD or relaxations. We provide a special mode called **turbo** which optimizes for speed but restricts the user to use a single system where the atomic composition is held constant. Turbo mode is approximately 1.5-2x faster than default mode depending on the situation. Batching is not supported in this mode. It can be easily activated as shown below.
-
-```python
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda", inference_settings="turbo")
-```
-
-#### Custom modes for advanced users
-
-The advanced user might quickly see that **default** mode and **turbo** mode are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
-
-| Setting Flag  | Description |
-| ----- | ----- |
-| tf32 | enables torch [tf32](https://docs.pytorch.org/docs/stable/notes/cuda.html) format for matrix multiplication. This will speed up inference at a slight trade-off for precision. In our tests, this will make minimal difference to most applications. It is able to preserve equivariance, energy conservation for long rollouts. However, if you are computing higher order derivatives such as Hessians, we recommend turning this off |
-| activation_checkpointing | this uses a custom chunked activation checkpointing algorithm and allows significant savings in memory for a small inference speed boost. If you are predicting on systems >1000 atoms, we recommend leaving this on. However, if you want the absolute fastest inference possible for small systems, you can turn this off |
-| merge_mole | This is useful in long rollout applications where the system composition stays constant we pre-merge the MoLE weights, saving both memory and reducing some computation cost |
-| compile | This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems. |
-| wigner_cuda | This is a special mode that turns on cuda graphs for the internal Wigner matrix calculations and will lead to significant speed ups for smaller systems |
-| external_graph_gen | Only use this if you want to use an external graph generator. This should be rarely used except for development |
-
-For example, if I have a specific application that requires the fastest speed
-
-```python
-from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-
-settings = InferenceSettings(
-    tf32=True,
-    activation_checkpointing=True,
-    merge_mole=False,
-    compile=False,
-    wigner_cuda=False,
-    external_graph_gen=False,
-    internal_graph_gen_version=2,
-)
-
-predictor = pretrained_mlip.get_predict_unit("uma-sm", device="cuda", inference_settings=settings)
-```
-
-## Finetuning UMA
-Coming soon!

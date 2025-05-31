@@ -10,19 +10,18 @@ parts:
   - file: core/quickstart
   - url: https://facebook-fairchem-uma-demo.hf.space/
     title: UMA Demo
-- caption: AI/ML models & usage
+- caption: AI/ML Interatomic Potentials
   chapters:
   - file: core/intro
   - file: core/uma
   - file: core/common_tasks/summary
     sections:
+    - file: core/common_tasks/ase_calculator
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
     - file: core/common_tasks/evaluation
     - file: core/common_tasks/fine-tuning/fine-tuning
-    - file: core/common_tasks/ase_inference
     - file: core/common_tasks/batch_inference
-    # - file: core/common_tasks/embeddings/embeddings
     - file: core/common_tasks/workflows
     - file: core/model_faq
   - file: core/generative_models
@@ -55,9 +54,9 @@ parts:
   - file: catalysts/examples_tutorials/summary
     sections:
     - file: catalysts/examples_tutorials/adsorption_energies/adsorption_energies
+    - file: catalysts/examples_tutorials/intro
     - file: catalysts/examples_tutorials/fairchem_models_for_nebs
     - file: catalysts/examples_tutorials/molecular_dynamics
-    - file: catalysts/examples_tutorials/intro
     - file: catalysts/examples_tutorials/OCP-introduction
     - file: catalysts/examples_tutorials/adsorbml_walkthrough
     - file: catalysts/examples_tutorials/cattsunami_tutorial
