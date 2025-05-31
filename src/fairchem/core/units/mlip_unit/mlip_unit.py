@@ -1005,7 +1005,7 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         for task_name, task in self.tasks.items():
             if task.property == "energy":
                 element_refs = self.element_refs[task_name.replace("_energy", "_elem_refs")]
-                pred_output[task_name] = torch.Tensor([element_refs.get(elt, 0.0)])
+                pred_output[task_name] = torch.Tensor([element_refs.get(elt)])
         return pred_output
 
     def predict(
