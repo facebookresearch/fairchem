@@ -219,8 +219,8 @@ adslab = Atoms(sfcc['symbols'],
               pbc=True)
 
 # Grab just the metal surface atoms
-slab = adslab[adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0]]
-adsorbates = adslab[~(adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0])]
+slab = adslab[adslab.arrays['numbers']==adslab.arrays['numbers'][0]]
+adsorbates = adslab[~(adslab.arrays['numbers']==adslab.arrays['numbers'][0])]
 slab.set_calculator(calc)
 opt = BFGS(slab)
 opt.run(fmax=0.05, steps=100)
@@ -275,9 +275,9 @@ for metal in ['Cu', 'Ag', 'Pd', 'Pt', 'Rh', 'Ir']:
 
                 
                 # Grab just the metal surface atoms
-                adsorbates = adslab[~(adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0])]
+                adsorbates = adslab[~(adslab.arrays['numbers']==adslab.arrays['numbers'][0])]
 
-                slab = adslab[adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0]]
+                slab = adslab[adslab.arrays['numbers']==adslab.arrays['numbers'][0]]
                 slab.set_calculator(calc)
                 opt = BFGS(slab)
                 opt.run(fmax=0.05, steps=100)
