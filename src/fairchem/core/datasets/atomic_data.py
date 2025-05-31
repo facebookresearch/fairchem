@@ -166,13 +166,10 @@ class AtomicData:
         # tagets
         if energy is not None:
             self.energy = energy
-            self.__keys__.add("energy")
         if forces is not None:
             self.forces = forces
-            self.__keys__.add("forces")
         if stress is not None:
             self.stress = stress
-            self.__keys__.add("stress")
 
         # batch related
         if batch is not None:
@@ -196,6 +193,14 @@ class AtomicData:
         # self.custom_fields = {}
 
         self.validate()
+
+    @property
+    def task_name(self):
+        return getattr(self, "dataset", None)
+
+    @task_name.setter
+    def task_name(self, value):
+        self.dataset = value
 
     def assign_batch_stats(self, slices, cumsum, cat_dims, natoms_list):
         self.__slices__ = slices
@@ -287,11 +292,9 @@ class AtomicData:
         max_neigh: int | None = None,
         sid: str | None = None,
         molecule_cell_size: float | None = None,
-        r_energy: bool = True,
-        r_forces: bool = True,
         r_stress: bool = True,
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
-        dataset: str | None = None,
+        task_name: str | None = None,
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -432,7 +435,7 @@ class AtomicData:
             forces=forces,
             stress=stress,
             sid=[sid] if isinstance(sid, str) else sid,
-            dataset=dataset,
+            dataset=task_name,
         )
 
         return data
