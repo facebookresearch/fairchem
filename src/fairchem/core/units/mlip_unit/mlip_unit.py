@@ -1004,7 +1004,9 @@ class MLIPPredictUnit(PredictUnit[Batch]):
         pred_output = self._populate_empty_prediction()
         for task_name, task in self.tasks.items():
             if task.property == "energy":
-                element_refs = self.element_refs[task_name.replace("_energy", "_elem_refs")]
+                element_refs = self.element_refs[
+                    task_name.replace("_energy", "_elem_refs")
+                ]
                 pred_output[task_name] = torch.Tensor([element_refs.get(elt)])
         return pred_output
 
