@@ -297,6 +297,17 @@ As a post-processing step we check to see if:
 
 We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will ommit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
 
+To compute the adsorption energies using the total energy UMA-OC20 model, we'll need the gas-phase reference energies from OC20 (see the original paper!). You could also calculate these quickly in DFT using a linear combination of H2O, H2, N2, and CO.
+```{code-cell}
+# reference energies from a linear combination of H2O/N2/CO/H2!
+atomic_reference_energies = {
+            "H": -3.477,
+            "N": -8.083,
+            "O": -7.204,
+            "C": -7.282,
+}
+```
+
 In this loop we find the most stable (most negative) adsorption energy for each adsorbate on each surface and save them in a DataFrame.
 
 ```{code-cell} ipython3
@@ -320,7 +331,8 @@ for file_outer in glob("data/adslabs/*"):
             or detector.has_surface_changed()
             or detector.is_adsorbate_intercalated()
         )
-        rx_energy = traj[-1].get_potential_energy() - slab.get_potential_energy()
+        rx_energy = traj[-1].get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in traj[traj.get_tags()==2].get_chemical_symbols()])
+        
         results.append({"relaxation_idx": rx_id, "relaxed_atoms": traj[-1],
                         "relaxed_energy_ml": rx_energy, "anomolous": anom})
     df = pd.DataFrame(results)
