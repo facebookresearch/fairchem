@@ -232,7 +232,7 @@ opt.run(fmax=0.05, steps=100)
 re2 = adslab.get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
     
 nO = 0
-for atom in atoms:
+for atom in adslab:
     if atom.symbol == 'O':
         nO += 1
         re2 += re1 + re3
@@ -289,7 +289,7 @@ for metal in ['Cu', 'Ag', 'Pd', 'Pt', 'Rh', 'Ir']:
                 re2 = adslab.get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
 
                 nO = 0
-                for atom in atoms:
+                for atom in adslab:
                     if atom.symbol == 'O':
                         nO += 1
                         re2 += re1 + re3

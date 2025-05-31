@@ -178,7 +178,7 @@ from tqdm import tqdm
 tinit = time.time()
 
 # Note we're just doing the first bulk_id! 
-for bulk_src_id in tqdm(bulk_ids[:1]): 
+for bulk_src_id in tqdm(bulk_ids[:3]): 
 
     # Set up data directories
     os.makedirs(f"data/slabs/", exist_ok=True)
@@ -199,8 +199,6 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
     heuristic_adslabs_NNH = AdsorbateSlabConfig(slab[0], adsorbate_NNH, mode="heuristic")
-
-
 
     print(f'{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}')
     print(f'{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}')
@@ -239,6 +237,7 @@ import time
 from tqdm import tqdm
 tinit = time.time()
 
+# Note we're just doing the first bulk_id! 
 for bulk_src_id in tqdm(bulk_ids): 
 
     # Set up data directories
@@ -255,7 +254,7 @@ for bulk_src_id in tqdm(bulk_ids):
     slab_atoms.pbc = True
     opt = BFGS(slab_atoms, trajectory=f"data/slabs/{bulk_src_id}.traj", logfile=f"data/slabs/{bulk_src_id}.log")
     opt.run(fmax=0.05, steps=20)
-    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id} slab relaxation')
+    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/slabs/{bulk_src_id} slab relaxation')
 
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
@@ -264,7 +263,7 @@ for bulk_src_id in tqdm(bulk_ids):
     print(f'{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}')
     print(f'{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}')
 
-    # Set up the calculator
+    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_H.atoms_list):
         t0 = time.time()
         adslab.calc = calc
@@ -274,6 +273,7 @@ for bulk_src_id in tqdm(bulk_ids):
         opt.run(fmax=0.05, steps=20)
         print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}')
         
+    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list):
         t0 = time.time()
         adslab.calc = calc
