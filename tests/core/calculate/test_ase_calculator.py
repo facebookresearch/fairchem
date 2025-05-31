@@ -284,7 +284,7 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
 
 def test_single_atom_systems():
     """Test a system with a single atom. Single atoms do not currently use the model."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cpu")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
 
     for at_num in range(1,94):
         atom = Atoms([at_num], positions=[(0.0, 0.0, 0.0)])
@@ -305,7 +305,7 @@ def test_single_atom_systems():
 
 def test_single_atom_system_errors():
     """Test that a charged system with a single atom does not work."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cpu")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
     calc = FAIRChemCalculator(predict_unit, task_name="omol")
 
     atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
