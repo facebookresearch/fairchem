@@ -216,6 +216,9 @@ plt.savefig("CH_dissoc_on_Ru_0001.png")
 ```
 
 ```{code-cell} ipython3
+---
+tags: ["skip-execution"]
+---
 # Make an interative html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")

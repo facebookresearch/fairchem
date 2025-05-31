@@ -21,14 +21,15 @@ You do have to be careful in the details though. Some OCP model/checkpoint combi
 
 +++
 
-# Calculating adsorption energies
+# Calculating adsorption energies with OC20 models
 
-Calculating adsorption energy with OCP
-Adsorption energies are different than you might be used to in OCP. For example, you may want the adsorption energy of oxygen, and conventionally you would compute that from this reaction:
+Adsorption energies are always a reaction energy (an adsorbed species relative to some implied combination of reactants). There are many common schemes in the catalysis literature. 
+
+For example, you may want the adsorption energy of oxygen, and you might compute that from this reaction:
 
     1/2 O2 + slab -> slab-O
 
-This is not what is done in OCP. It is referenced to a different reaction
+DFT has known errors with the energy of a gas-phase O2 molecule, so it's more common to compute this energy relative to a linear combination of H2O and H2. The suggested reference scheme for consistency with OC20 is a reaction
 
     x CO + (x + y/2 - z) H2 + (z-x) H2O + w/2 N2 + * -> CxHyOzNw*
 
@@ -42,8 +43,8 @@ or alternatively,
 
 It is possible through thermodynamic cycles to compute other reactions. If we can look up rH1 below and compute rH2
 
-    H2 + 1/2 O2 -> H2O  re1 = -3.03 eV
-    H2O + * -> O* + H2  re2  # Get from OCP as a direct calculation
+    H2 + 1/2 O2 -> H2O  re1 = -3.03 eV, from exp
+    H2O + * -> O* + H2  re2  # Get from UMA 
 
 Then, the adsorption energy for
 
@@ -51,9 +52,9 @@ Then, the adsorption energy for
 
 is just re1 + re2.
 
-Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state. You could also compute this using DFT.
+Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state experimentally. You could also compute this using DFT, but you would probably get the wrong ansewr for this. 
 
-The first step is getting a checkpoint for the model we want to use. UNA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
+The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
 
 This next cell will automatically download the checkpoint from huggingface and load it. 
 1. You need to first request access to the UMA model here: https://huggingface.co/facebook/UMA
@@ -76,9 +77,18 @@ from ase.optimize import BFGS
 ```
 
 ```{code-cell}
+
+# reference energies from a linear combination of H2O/N2/CO/H2!
+atomic_reference_energies = {
+            "H": -3.477,
+            "N": -8.083,
+            "O": -7.204,
+            "C": -7.282,
+}
+
 re1 = -3.03
 
-slab = fcc111('Pt', size=(2, 2, 5), vacuum=10.0)
+slab = fcc111('Pt', size=(2, 2, 5), vacuum=20.0)
 slab.pbc=True
 
 adslab = slab.copy()
@@ -93,8 +103,9 @@ adslab.set_calculator(calc)
 opt = BFGS(adslab)
 opt.run(fmax=0.05, steps=100)
 adslab_e = adslab.get_potential_energy()
-# -7.204 is the reference energy  for O  (from  H2O-H2) in the OC20 reference scheme)
-adslab_e - slab_e - (-7.204) 
+
+# Energy for ((H2O-H2) + * -> *O) + (H2 + 1/2O2 -> H2) leads to 1/2O2 + * -> *O!
+adslab_e - slab_e - atomic_reference_energies['O'] + re1
 ```
 
 It is good practice to look at your geometries to make sure they are what you expect.
@@ -125,7 +136,7 @@ How did we do? We need a reference point. In the paper below, there is an atomic
 
     1/2 O2 -> O   D = 2.58 eV (expt)
 
-to get a comparable energy of about -1.68 eV. There is about ~0.6 eV difference (we predicted -2.3 eV above, and the reference comparison is -1.68 eV) to account for. The biggest difference is likely due to the differences in exchange-correlation functional. The reference data used the PBE functional, and eSCN was trained on *RPBE* data. To additional places where there are differences include:
+to get a comparable energy of about -1.68 eV. There is about ~0.2 eV difference (we predicted -1.47 eV above, and the reference comparison is -1.68 eV) to account for. The biggest difference is likely due to the differences in exchange-correlation functional. The reference data used the PBE functional, and eSCN was trained on *RPBE* data. To additional places where there are differences include:
 
 1. Difference in lattice constant
 2. The reference energy used for the experiment references. These can differ by up to 0.5 eV from comparable DFT calculations.
@@ -157,7 +168,7 @@ These are atomic adsorption energies:
 We have to do some work to get comparable numbers from OCP
 
     H2 + 1/2 O2 -> H2O  re1 = -3.03 eV
-    H2O + * -> O* + H2  re2   # Get from OCP
+    H2O + * -> O* + H2  re2   # Get from UMA
     O -> 1/2 O2         re3 = -2.58 eV
 
 Then, the adsorption energy for
@@ -202,16 +213,23 @@ re3 = -2.58  # O -> 1/2 O2         re3 = -2.58 eV
 
 from ase import Atoms
 
-atoms = Atoms(sfcc['symbols'],
+adslab = Atoms(sfcc['symbols'],
               positions=sfcc['pos'],
               cell=sfcc['cell'],
               pbc=True)
-    
-atoms.set_calculator(calc)
-opt = BFGS(atoms)
+
+# Grab just the metal surface atoms
+slab = adslab[adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0]]
+adsorbates = adslab[~(adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0])]
+slab.set_calculator(calc)
+opt = BFGS(slab)
+opt.run(fmax=0.05, steps=100)
+
+adslab.set_calculator(calc)
+opt = BFGS(adslab)
 
 opt.run(fmax=0.05, steps=100)
-re2 = atoms.get_potential_energy()
+re2 = adslab.get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
     
 nO = 0
 for atom in atoms:
@@ -250,17 +268,26 @@ for metal in ['Cu', 'Ag', 'Pd', 'Pt', 'Rh', 'Ir']:
                 
                 entry = s[metal][adsorbate][site][coverage]
                 
-                atoms = Atoms(entry['symbols'],
+                adslab = Atoms(entry['symbols'],
                               positions=entry['pos'],
                               cell=entry['cell'],
                               pbc=True)
-    
-                atoms.set_calculator(calc)
-                opt = BFGS(atoms, logfile=None)  # no logfile to suppress output
 
-                opt.run(fmax=0.05, steps=100)
                 
-                re2 = atoms.get_potential_energy()
+                # Grab just the metal surface atoms
+                adsorbates = adslab[~(adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0])]
+
+                slab = adslab[adslab.arrays['numbers']==adslabadslab.arrays['numbers'][0]]
+                slab.set_calculator(calc)
+                opt = BFGS(slab)
+                opt.run(fmax=0.05, steps=100)
+
+                adslab.set_calculator(calc)
+                opt = BFGS(adslab)
+                opt.run(fmax=0.05, steps=100)
+
+                re2 = adslab.get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
+
                 nO = 0
                 for atom in atoms:
                     if atom.symbol == 'O':
@@ -280,7 +307,7 @@ plt.plot(refdata['fcc'], data['fcc'], 'r.', label='fcc')
 plt.plot(refdata['hcp'], data['hcp'], 'b.', label='hcp')
 plt.plot([-5.5, -3.5], [-5.5, -3.5], 'k-')
 plt.xlabel('Ref. data (DFT)')
-plt.ylabel('OCP prediction');
+plt.ylabel('UMA-OC20 prediction');
 ```
 
 Next we compare the correlation between the hcp and fcc sites. Here we see the same trends. The data falls below the parity line because the hcp sites tend to be a little weaker binding than the fcc sites.
@@ -291,7 +318,7 @@ plt.plot(data['hcp'], data['fcc'], '.')
 plt.plot([-6, -1], [-6, -1], 'k-')
 plt.xlabel('$H_{ads, hcp}$')
 plt.ylabel('$H_{ads, fcc}$')
-plt.legend(['DFT (PBE)', 'OCP']);
+plt.legend(['DFT (PBE)', 'UMA-OC20']);
 ```
 
 ### Exercises
@@ -338,7 +365,7 @@ for nlayers in [3, 4, 5, 6, 7, 8]:
     opt_adslab.run(fmax=0.05, steps=100)
     adslab_e = adslab.get_potential_energy()
 
-    print(f'nlayers = {nlayers}: {adslab_e - slab_e + re1:1.2f} eV')
+    print(f'nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
 ```
 
 ## Effects of relaxation
@@ -370,7 +397,7 @@ for nlayers in [3, 4, 5, 6, 7, 8]:
     opt_adslab.run(fmax=0.05, steps=100)
     adslab_e = adslab.get_potential_energy()
 
-    print(f'nlayers = {nlayers}: {adslab_e - slab_e + re1:1.2f} eV')
+    print(f'nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
 ```
 
 ## Unit cell size
@@ -399,7 +426,7 @@ for size in [1, 2, 3, 4, 5]:
     opt_adslab.run(fmax=0.05, steps=100)
     adslab_e = adslab.get_potential_energy()
 
-    print(f'({size}x{size}): {adslab_e - slab_e + re1:1.2f} eV')
+    print(f'({size}x{size}): {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
 ```
 
 ## Summary
