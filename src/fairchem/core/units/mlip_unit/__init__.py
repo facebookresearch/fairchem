@@ -16,7 +16,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,
 )
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,5 +53,5 @@ def load_predict_unit(
         path,
         device=device,
         inference_settings=inference_settings,
-        overrides={"backbone": {"always_use_pbc": False}},
+        overrides=overrides,
     )

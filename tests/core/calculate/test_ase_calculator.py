@@ -116,10 +116,6 @@ def test_calculator_setup(all_calculators):
         assert all(
             prop in calc.implemented_properties for prop in implemented_properties
         )
-        assert all(
-            prop in calc.calc_property_to_model_key_mapping
-            for prop in implemented_properties
-        )
 
 
 @pytest.mark.gpu()

@@ -17,7 +17,7 @@ from omegaconf import OmegaConf
 
 from fairchem.core._cli import get_hydra_config_from_yaml
 from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
-from fairchem.core.units.mlip_unit.mlip_unit import update_configs
+from fairchem.core.units.mlip_unit.utils import update_configs
 
 
 def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
@@ -30,6 +30,7 @@ def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
             print(f"key: {key}")
             return False
     return True
+
 
 @pytest.mark.skip()
 def test_traineval_runner_finetuning():

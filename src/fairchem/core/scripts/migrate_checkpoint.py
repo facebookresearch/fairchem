@@ -15,7 +15,7 @@ import omegaconf
 import torch
 
 from fairchem.core.scripts.migrate_imports import mapping
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
 def find_new_module_name(module):
