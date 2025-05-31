@@ -90,6 +90,14 @@ def large_bulk_atoms() -> Atoms:
     return bulk("Fe", "bcc", a=2.87).repeat((10, 10, 10))  # 10x10x10 unit cell
 
 
+def test_calculator_from_checkpoint():
+    calc = FAIRChemCalculator.from_model_checkpoint(
+        pretrained_mlip.available_models[0], task_name="omol"
+    )
+    assert "energy" in calc.implemented_properties
+    assert "forces" in calc.implemented_properties
+
+
 @pytest.mark.gpu()
 def test_calculator_setup(all_calculators):
     for calc in all_calculators():
@@ -157,7 +165,7 @@ def test_calculator_configurations(inference_settings, slab_atoms):
         torch.compiler.reset()
 
     predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-sm", inference_settings=inference_settings
+        "uma-s-1", inference_settings=inference_settings
     )
     calc = FAIRChemCalculator(
         predict_unit,
@@ -180,7 +188,7 @@ def test_calculator_configurations(inference_settings, slab_atoms):
 @pytest.mark.gpu()
 def test_large_bulk_system(large_bulk_atoms):
     """Test a bulk system with 1000 atoms using the small model."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-sm", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
     large_bulk_atoms.calc = calc
 
@@ -319,7 +327,7 @@ def test_random_seed_final_energy():
     results_by_seed = {}
 
     calc = FAIRChemCalculator(
-        pretrained_mlip.get_predict_unit("uma-sm"),
+        pretrained_mlip.get_predict_unit("uma-s-1"),
         task_name="omat",
     )
 

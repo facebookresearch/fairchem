@@ -1,7 +1,8 @@
 {
-    "uma-sm": {
-        "filename": "uma_sm.pt",
+    "uma-s-1": {
+        "filename": "uma-s-1.pt",
         "repo_id": "facebook/UMA",
+        "subfolder": "checkpoints",
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
