@@ -73,7 +73,12 @@ def get_predict_unit(
         raise NotImplementedError(
             "uma-sm has been renamed to 'uma-s-1', please update and try again."
         )
-    model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
+    try:
+        model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
+    except KeyError as err:
+        raise KeyError(
+            f"Model '{model_name}' not found. Available models: {available_models}"
+        ) from err
     checkpoint_path = hf_hub_download(
         filename=model_checkpoint.filename,
         repo_id=model_checkpoint.repo_id,
