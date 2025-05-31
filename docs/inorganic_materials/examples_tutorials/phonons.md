@@ -43,8 +43,8 @@ result = phonon_flow(
     method="fairchem",
     job_params={
         "all": dict(
-            model_name="EquiformerV2-31M-OMAT24-MP-sAlex",
-            local_cache="./fairchem_checkpoint_cache/",
+            get_predict_unit_kwargs={"model_name": "uma-s-1"},
+            task_name="omat",
         ),
     },
     min_lengths=10.0, # set the minimum unit cell size smaller to be compatible with limited github runner ram
