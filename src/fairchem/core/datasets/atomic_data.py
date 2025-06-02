@@ -292,6 +292,8 @@ class AtomicData:
         max_neigh: int | None = None,
         sid: str | None = None,
         molecule_cell_size: float | None = None,
+        r_energy: bool = True,  # deprecated
+        r_force: bool = True,
         r_stress: bool = True,
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
