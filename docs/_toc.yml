@@ -53,11 +53,8 @@ parts:
   - file: catalysts/models
   - file: catalysts/examples_tutorials/summary
     sections:
-    - file: catalysts/examples_tutorials/adsorption_energies/adsorption_energies
-    - file: catalysts/examples_tutorials/intro
-    - file: catalysts/examples_tutorials/fairchem_models_for_nebs
-    - file: catalysts/examples_tutorials/molecular_dynamics
     - file: catalysts/examples_tutorials/OCP-introduction
+    - file: catalysts/examples_tutorials/adsorption_energies/adsorption_energies
     - file: catalysts/examples_tutorials/adsorbml_walkthrough
     - file: catalysts/examples_tutorials/cattsunami_tutorial
     - file: catalysts/examples_tutorials/ocpapi

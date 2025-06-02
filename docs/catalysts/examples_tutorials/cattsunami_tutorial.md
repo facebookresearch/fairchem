@@ -11,7 +11,14 @@ kernelspec:
   name: python3
 ---
 
-# CatTSunami Tutorial
+# Transition State Search (NEBs)
+
+FAIR chemistry models can be used to enumerate and study reaction pathways via transition state search tools built into ASE or in packages like Sella via the ASE interface. 
+
+The first section of this tutorial walks through how to use the CatTsunami tools to automatically enumerate a number of hypothetical initial/final configurations for various types of reactions on a heterogeneous catalyst surface. If you already have a NEB you're looking to optimize, you can jump straight to the last section (Run NEBs)!
+
+
+## Do enumerations in an AdsorbML style
 
 ```{code-cell} ipython3
 from fairchem.applications.cattsunami.core import Reaction
@@ -28,14 +35,6 @@ from fairchem.applications.cattsunami.core.autoframe import AutoFrameDissociatio
 from ase.io import read
 from ase.mep import DyNEB
 
-#Optional
-from x3dase.x3d import X3D
-
-```
-
-## Do enumerations in an AdsorbML style
-
-```{code-cell} ipython3
 # Instantiate the reaction class for the reaction of interest
 reaction = Reaction(reaction_str_from_db="*CH -> *C + *H",
                     reaction_db_path=DISSOCIATION_REACTION_DB_PATH,
@@ -109,7 +108,6 @@ for config in product2_configs:
 
 ## Enumerate NEBs
 
-
 ![](dissociation_scheme.png)
 
 ```{code-cell} ipython3
@@ -169,6 +167,8 @@ for idx, frame_set in enumerate(frame_sets):
 print(converged_idxs)
 ```
 
+This cell will run a shorter calculations for just a single one of the enumerated transition state pathways. You can adapt this code to run transition state searches via nudged elastic band (NEB) calculations for any reaction.
+
 ```{code-cell} ipython3
 # If you run the above cell -- dont run this one
 fmax = 0.05 # [eV / ang**2]
@@ -189,6 +189,8 @@ if conv:
 ```
 
 ## Visualize the results
+
+Finally, let's visualize the results!
 
 ```{code-cell} ipython3
 optimized_neb = read(f"ch_dissoc_on_Ru_0.traj", ":")[-1*nframes:]
@@ -212,10 +214,13 @@ plt.title(f"CH dissociation on Ru(0001), Ea = {max(es):1.2f} eV")
 plt.savefig("CH_dissoc_on_Ru_0001.png")
 ```
 
+To generalize an interactive visualization, use `ase gui` from the command line or the X3D package
 ```{code-cell} ipython3
 ---
 tags: ["skip-execution"]
 ---
+from x3dase.x3d import X3D
+
 # Make an interative html file of the optimized neb trajectory
 x3d = X3D(optimized_neb)
 x3d.write("optimized_neb_ch_disoc_on_Ru0001.html")
