@@ -477,7 +477,7 @@ def test_ac_with_chunking_and_batching(
     )
     reset_seeds(0)
     result_ac = predictor_ac.predict(batch.clone())
-    assert torch.allclose(result_ac["oc20_energy"], result_no_ac["oc20_energy"])
+    assert torch.allclose(result_ac["energy"], result_no_ac["energy"])
     assert torch.allclose(
-        result_ac["oc20_forces"], result_no_ac["oc20_forces"], rtol=1e-5, atol=1e-5
+        result_ac["forces"], result_no_ac["forces"], rtol=1e-5, atol=1e-5
     )
