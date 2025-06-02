@@ -1,6 +1,4 @@
 # Table of contents
-# Learn more at https://jupyterbook.org/customize/toc.html
-
 format: jb-book
 root: index
 parts:
@@ -31,11 +29,7 @@ parts:
     sections:
     - file: molecules/datasets/omol25
   - file: molecules/models
-  # - file: molecules/examples_tutorials/summary
-  #   sections: 
-  #   - file: molecules/examples_tutorials/bulk_stability
-  #   - file: molecules/examples_tutorials/phonons
-  #   - file: molecules/examples_tutorials/elastic
+ 
   - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
   chapters:
