@@ -21,7 +21,7 @@ You do have to be careful in the details though. Some OCP model/checkpoint combi
 
 +++
 
-# Calculating adsorption energies with OC20 models
+# Adsorption energies
 
 Adsorption energies are always a reaction energy (an adsorbed species relative to some implied combination of reactants). There are many common schemes in the catalysis literature. 
 
@@ -52,7 +52,7 @@ Then, the adsorption energy for
 
 is just re1 + re2.
 
-Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state experimentally. You could also compute this using DFT, but you would probably get the wrong ansewr for this. 
+Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state experimentally. You could also compute this using DFT, but you would probably get the wrong answer for this. 
 
 The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
 
