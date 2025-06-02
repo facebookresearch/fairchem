@@ -430,6 +430,8 @@ def reset_seeds(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
+# Put this on GPU for now until the atan2 bug is fixed
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     # try very small chunk size to force ac to chunk
     "chunk_size, nsystems, natoms, merge_mole",
@@ -457,7 +459,7 @@ def test_ac_with_chunking_and_batching(
     )
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     ifs = InferenceSettings(
-        tf32=True,
+        tf32=False,
         activation_checkpointing=False,
         merge_mole=merge_mole,
         compile=False,
@@ -467,7 +469,7 @@ def test_ac_with_chunking_and_batching(
     )
     reset_seeds(0)
     batch = get_batched_system(natoms, nsystems)
-    device = "cpu"
+    device = "cuda"
     predictor_noac = MLIPPredictUnit(
         conserving_mole_checkpoint_pt,
         device=device,
