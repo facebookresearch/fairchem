@@ -49,7 +49,7 @@ def test_inference_checkpoint_direct(
 
     sample_idx = 0
     while sample_idx < min(5, len(db)):
-        sample = a2g(db.get_atoms(sample_idx), dataset="oc20")
+        sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         batch = data_list_collater([sample], otf_graph=False)
 
         out = predictor.predict(batch)

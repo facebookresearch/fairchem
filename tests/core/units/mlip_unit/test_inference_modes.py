@@ -325,7 +325,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g(db.get_atoms(0), dataset="oc20")
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -337,21 +337,21 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     )
     _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(1), dataset="oc20")
+    sample = a2g(db.get_atoms(1), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(0), dataset="not-oc20")
+    sample = a2g(db.get_atoms(0), task_name="not-oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(0), dataset="oc20")
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -380,7 +380,7 @@ def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g(db.get_atoms(0), dataset="oc20")
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )

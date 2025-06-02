@@ -20,7 +20,7 @@ def uma_predict_unit(request):
 def test_single_dataset_predict(uma_predict_unit):
     n = 10
     atoms = bulk("Pt")
-    atomic_data_list = [AtomicData.from_ase(atoms, dataset="omat") for _ in range(n)]
+    atomic_data_list = [AtomicData.from_ase(atoms, task_name="omat") for _ in range(n)]
     batch = atomicdata_list_to_batch(atomic_data_list)
 
     preds = uma_predict_unit.predict(batch)
@@ -59,10 +59,13 @@ def test_multiple_dataset_predict(uma_predict_unit):
 
     atomic_data_list = [
         AtomicData.from_ase(
-            h2o, dataset="omol", r_data_keys=["spin", "charge"], molecule_cell_size=120
+            h2o,
+            task_name="omol",
+            r_data_keys=["spin", "charge"],
+            molecule_cell_size=120,
         ),
-        AtomicData.from_ase(slab, dataset="oc20"),
-        AtomicData.from_ase(pt, dataset="omat"),
+        AtomicData.from_ase(slab, task_name="oc20"),
+        AtomicData.from_ase(pt, task_name="omat"),
     ]
 
     batch = atomicdata_list_to_batch(atomic_data_list)

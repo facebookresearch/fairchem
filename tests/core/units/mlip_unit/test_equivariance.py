@@ -93,7 +93,7 @@ def equivariance_on_pt(
         predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
         predictor.model = predictor.model.to(dtype)
 
-        sample = a2g(db.get_atoms(sample_idx), dataset="oc20")
+        sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         sample.pos += 500
         sample.cell *= 2000
         sample.cell = sample.cell.to(dtype)

@@ -60,14 +60,14 @@ def test_conserving_mole_aperiodic_on_pt(
 
         atoms1 = atoms.copy()
         atoms1.center(50000)
-        sample1 = a2g(atoms1, dataset="oc20")
+        sample1 = a2g(atoms1, task_name="oc20")
         sample1.cell = sample1.cell.to(dtype)
         batch1 = data_list_collater([sample1], otf_graph=True)
 
         atoms2 = atoms.copy()
         # atoms2.center(2000)
         atoms2.pbc = np.array([False, False, False])
-        sample2 = a2g(atoms2, dataset="oc20")
+        sample2 = a2g(atoms2, task_name="oc20")
         sample2.cell = sample2.cell.to(dtype)
         batch2 = data_list_collater([sample2], otf_graph=True)
 
