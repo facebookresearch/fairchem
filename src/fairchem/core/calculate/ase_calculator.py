@@ -101,7 +101,7 @@ class FAIRChemCalculator(Calculator):
             AtomicData.from_ase,
             max_neigh=self.predictor.model.module.backbone.max_neighbors,
             radius=self.predictor.model.module.backbone.cutoff,
-            dataset=task_name,
+            task_name=task_name,
             r_edges=False,
             r_data_keys=["spin", "charge"],
         )
