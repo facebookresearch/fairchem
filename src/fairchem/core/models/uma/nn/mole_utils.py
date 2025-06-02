@@ -28,7 +28,7 @@ with suppress(ModuleNotFoundError):
 
 class MOLEInterface:
     def set_MOLE_coefficients(
-        self, atomic_numbers_full, batch_full, csd_mixed_emb
+        self, atomic_numbers_full, batch_full, csd_mixed_emb, datasets
     ) -> None:
         return None
 

@@ -434,6 +434,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             atomic_numbers_full=data_dict["atomic_numbers_full"],
             batch_full=data_dict["batch_full"],
             csd_mixed_emb=csd_mixed_emb,
+            datasets=data_dict['dataset']
         )
 
         with record_function("get_displacement_and_cell"):

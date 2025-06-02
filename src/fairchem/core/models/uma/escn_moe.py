@@ -41,6 +41,17 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
+average_system_size_by_dataset={
+    'omat':19.0,
+    'omol':52.0,
+    'oc20':77.0,
+    'omc':130.0,
+    'odac':178.0
+}
+
+def fix_mole_embeddings(embeddings, datasets):
+    avg_sys_sizes=torch.tensor([ average_system_size_by_dataset[dataset] for dataset in datasets]).to(embeddings.device)
+    return embeddings * (1-1/avg_sys_sizes).reshape(-1,1)
 
 @registry.register_model("escnmd_moe_backbone")
 class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
@@ -107,7 +118,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         new_model.eval()
         return new_model
 
-    def set_MOLE_coefficients(self, atomic_numbers_full, batch_full, csd_mixed_emb):
+    def set_MOLE_coefficients(self, atomic_numbers_full, batch_full, csd_mixed_emb, datasets):
         if self.num_experts == 0:
             return
         with torch.autocast(device_type=atomic_numbers_full.device.type, enabled=False):
@@ -124,6 +135,19 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     reduce="mean",
                     include_self=False,
                 )
+                composition_old = composition_by_atom.new_zeros(
+                    csd_mixed_emb.shape[0],
+                    self.sphere_channels,
+                ).index_reduce_(
+                    0,
+                    batch_full,
+                    composition_by_atom,
+                    reduce="mean",
+                )
+                composition = fix_mole_embeddings(composition, datasets)
+                for idx in range(len(datasets)):
+                    if datasets[idx]=='omol':
+                        composition[idx]=composition_old[idx]
                 embeddings.append(composition.unsqueeze(0))
 
             embeddings.append(csd_mixed_emb[None])
