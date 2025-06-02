@@ -20,7 +20,7 @@ import pandas as pd
 from ase.io import read
 from ase.optimize import BFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
-from ase.mep import NEB
+from ase.mep import DyNEB
 
 if TYPE_CHECKING:
     import ase
@@ -333,7 +333,7 @@ if __name__ == "__main__":
             
             for image in neb_frames:
                 image.calc = FAIRChemCalculator(predictor, task_name="oc20")
-            neb = NEB(neb_frames, k=k)
+            neb = DyNEB(neb_frames, k=k)
             
             # Optimize:
             optimizer = BFGS(
