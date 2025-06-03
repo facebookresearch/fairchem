@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>core.calculate.ase_calculator</title>
+    <title>core.calculate.ase_calculator &#8212; fairchem</title>
   
   
   
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title"></p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -179,17 +179,27 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../core/install.html">Installation &amp; License</a></li>
 
 <li class="toctree-l1"><a class="reference internal" href="../../../../core/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML models &amp; usage</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../../core/intro.html">GNNs for Chemistry</a></li>
 
 
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/ase_dataset_creation.html">Making datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/workflows.html">Workflows</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../../molecules/models.html">OMol25-trained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../molecules/FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
 <ul class="nav bd-sidenav">
@@ -206,6 +216,11 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../catalysts/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/OCP-introduction.html">Detailed intro</a></li>
+
+
+
+
 <li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Adsorption energies</a></li>
 
 
@@ -213,15 +228,8 @@
 
 
 
-<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/fairchem_models_for_nebs.html">Tutorial for using Fair Chemistry models to relax NEBs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/molecular_dynamics.html">Molecular dynamics</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/OCP-introduction.html">Detailed intro</a></li>
-
-
-
-
 <li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/cattsunami_tutorial.html">CatTSunami Tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/ocpapi.html">ocpapi</a></li>
 </ul>
 </details></li>
@@ -332,6 +340,48 @@
 <li class="toctree-l4"><a class="reference internal" href="../../units/mlip_unit/index.html">core.units.mlip_unit</a></li>
 </ul>
 </details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../data/om/index.html">data.om</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../cattsunami/databases/index.html">cattsunami.databases</a></li>
 </ul>
 </details></li>
 </ul>
@@ -541,10 +591,9 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.implemented_properties"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.implemented_properties</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.predictor"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.predictor</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.calc_property_to_model_key_mapping"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.calc_property_to_model_key_mapping</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.a2g"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.a2g</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.from_model_checkpoint"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.from_model_checkpoint()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.task_name"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.task_name</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._reset_calc_key_mapping"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._reset_calc_key_mapping()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.check_state"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.check_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.calculate"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.calculate()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._check_atoms_pbc()</span></code></a></li>
@@ -557,10 +606,6 @@ document.write(`
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.AllZeroUnitCellError"><code class="docutils literal notranslate"><span class="pre">AllZeroUnitCellError</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.AllZeroUnitCellError.message"><code class="docutils literal notranslate"><span class="pre">AllZeroUnitCellError.message</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.NoAtoms"><code class="docutils literal notranslate"><span class="pre">NoAtoms</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.NoAtoms.message"><code class="docutils literal notranslate"><span class="pre">NoAtoms.message</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -591,9 +636,6 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.calculate.ase_calculator.AllZeroUnitCellError" title="core.calculate.ase_calculator.AllZeroUnitCellError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AllZeroUnitCellError</span></code></a></p></td>
 <td><p>Specific exception example.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.calculate.ase_calculator.NoAtoms" title="core.calculate.ase_calculator.NoAtoms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">NoAtoms</span></code></a></p></td>
-<td><p>Specific exception example.</p></td>
-</tr>
 </tbody>
 </table>
 </div>
@@ -613,7 +655,7 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py class">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">FAIRChemCalculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predict_unit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.mlip_unit.MLIPPredictUnit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.api.inference.UMATask</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">41</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">FAIRChemCalculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predict_unit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.MLIPPredictUnit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.api.inference.UMATask</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">41</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">ase.calculators.calculator.Calculator</span></code></p>
 <p>Base-class for all ASE calculators.</p>
 <p>A calculator must raise PropertyNotImplementedError if asked for a
@@ -626,7 +668,7 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 ‘magmom’ and ‘magmoms’.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator.implemented_properties">
-<span class="sig-name descname"><span class="pre">implemented_properties</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator.implemented_properties" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">implemented_properties</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator.implemented_properties" title="Link to this definition">#</a></dt>
 <dd><p>Properties calculator can handle (energy, forces, …)</p>
 </dd></dl>
 
@@ -636,30 +678,36 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator.calc_property_to_model_key_mapping">
-<span class="sig-name descname"><span class="pre">calc_property_to_model_key_mapping</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator.calc_property_to_model_key_mapping" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator.a2g">
 <span class="sig-name descname"><span class="pre">a2g</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator.a2g" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator.from_model_checkpoint">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_model_checkpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name_or_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.api.inference.UMATask</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference_settings</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.api.inference.InferenceSettings</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overrides</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'cuda'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'cpu'</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">41</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#core.calculate.ase_calculator.FAIRChemCalculator" title="core.calculate.ase_calculator.FAIRChemCalculator"><span class="pre">FAIRChemCalculator</span></a></span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator.from_model_checkpoint" title="Link to this definition">#</a></dt>
+<dd><p>Instantiate a FAIRChemCalculator from a checkpoint file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cls</strong> – The class reference</p></li>
+<li><p><strong>name_or_path</strong> – A model name from fairchem.core.pretrained.available_models or a path to the checkpoint
+file</p></li>
+<li><p><strong>task_name</strong> – Task name</p></li>
+<li><p><strong>inference_settings</strong> – Settings for inference. Can be “default” (general purpose) or “turbo”
+(optimized for speed but requires fixed atomic composition). Advanced use cases can
+use a custom InferenceSettings object.</p></li>
+<li><p><strong>overrides</strong> – Optional dictionary of settings to override default inference settings.</p></li>
+<li><p><strong>device</strong> – Optional torch device to load the model onto.</p></li>
+<li><p><strong>seed</strong> – Random seed for reproducibility. Defaults to 41.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator.task_name">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">task_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator.task_name" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator._reset_calc_key_mapping">
-<span class="sig-name descname"><span class="pre">_reset_calc_key_mapping</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator._reset_calc_key_mapping" title="Link to this definition">#</a></dt>
-<dd><p>Create a map of calculator keys to predictor output keys based on whats available in the model.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>task_name</strong> (<em>str</em>) – The name of the task to use.</p>
-</dd>
-</dl>
-</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator.check_state">
@@ -688,7 +736,7 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>atoms</strong> (<em>Atoms</em>) – The atomic structure to calculate properties for.</p></li>
+<li><p><strong>atoms</strong> (<a class="reference internal" href="../../../ocpapi/client/index.html#ocpapi.client.Atoms" title="ocpapi.client.Atoms"><em>Atoms</em></a>) – The atomic structure to calculate properties for.</p></li>
 <li><p><strong>properties</strong> (<em>list</em><em>[</em><em>str</em><em>]</em>) – The list of properties to calculate.</p></li>
 <li><p><strong>system_changes</strong> (<em>list</em><em>[</em><em>str</em><em>]</em>) – The list of changes in the system.</p></li>
 </ul>
@@ -700,7 +748,8 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 <li><p><cite>spin</cite> must be an integer representing the spin multiplicity and can range from 0 to 100.</p></li>
 <li><p>If <cite>task_name=”omol”</cite>, and <cite>charge</cite> or <cite>spin</cite> are not set in <cite>atoms.info</cite>, they will default to <cite>0</cite>.</p></li>
 <li><p><cite>charge</cite> and <cite>spin</cite> are currently only used for the <cite>omol</cite> head.</p></li>
-<li><p>The <cite>free_energy</cite> is simply a copy of the <cite>energy</cite> and is not the actual electronic free energy. It is only set for ASE routines/optimizers that are hard-coded to use this rather than the <cite>energy</cite> key.</p></li>
+<li><p>The <cite>free_energy</cite> is simply a copy of the <cite>energy</cite> and is not the actual electronic free energy.
+It is only set for ASE routines/optimizers that are hard-coded to use this rather than the <cite>energy</cite> key.</p></li>
 </ul>
 </dd></dl>
 
@@ -721,7 +770,7 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 <dd><p>Validate and set default values for charge and spin.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>atoms</strong> (<em>Atoms</em>) – The atomic structure containing charge and spin information.</p>
+<dd class="field-odd"><p><strong>atoms</strong> (<a class="reference internal" href="../../../ocpapi/client/index.html#ocpapi.client.Atoms" title="ocpapi.client.Atoms"><em>Atoms</em></a>) – The atomic structure containing charge and spin information.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -730,7 +779,7 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.MixedPBCError">
-<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">MixedPBCError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Attempted</span> <span class="pre">to</span> <span class="pre">guess</span> <span class="pre">PBC</span> <span class="pre">for</span> <span class="pre">an</span> <span class="pre">atoms</span> <span class="pre">object,</span> <span class="pre">but</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">PBC</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">True</span> <span class="pre">for</span> <span class="pre">some</span> <span class="pre">dimensions</span> <span class="pre">but</span> <span class="pre">not</span> <span class="pre">others.</span> <span class="pre">Please</span> <span class="pre">ensure</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">PBC</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">True</span> <span class="pre">for</span> <span class="pre">all</span> <span class="pre">dimensions.'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.MixedPBCError" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">MixedPBCError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Attempted</span> <span class="pre">to</span> <span class="pre">guess</span> <span class="pre">PBC</span> <span class="pre">for</span> <span class="pre">an</span> <span class="pre">atoms</span> <span class="pre">object,</span> <span class="pre">but</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">PBC</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">True</span> <span class="pre">for</span> <span class="pre">somedimensions</span> <span class="pre">but</span> <span class="pre">not</span> <span class="pre">others.</span> <span class="pre">Please</span> <span class="pre">ensure</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">PBC</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">True</span> <span class="pre">for</span> <span class="pre">all</span> <span class="pre">dimensions.'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.MixedPBCError" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">ValueError</span></code></p>
 <p>Specific exception example.</p>
 <dl class="py attribute">
@@ -742,24 +791,12 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.AllZeroUnitCellError">
-<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">AllZeroUnitCellError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Atoms</span> <span class="pre">object</span> <span class="pre">claims</span> <span class="pre">to</span> <span class="pre">have</span> <span class="pre">PBC</span> <span class="pre">set,</span> <span class="pre">but</span> <span class="pre">the</span> <span class="pre">unit</span> <span class="pre">cell</span> <span class="pre">is</span> <span class="pre">identically</span> <span class="pre">0.</span> <span class="pre">Please</span> <span class="pre">ensure</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">a</span> <span class="pre">non-zero</span> <span class="pre">unit</span> <span class="pre">cell.'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.AllZeroUnitCellError" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">AllZeroUnitCellError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Atoms</span> <span class="pre">object</span> <span class="pre">claims</span> <span class="pre">to</span> <span class="pre">have</span> <span class="pre">PBC</span> <span class="pre">set,</span> <span class="pre">but</span> <span class="pre">the</span> <span class="pre">unit</span> <span class="pre">cell</span> <span class="pre">is</span> <span class="pre">identically</span> <span class="pre">0.</span> <span class="pre">Please</span> <span class="pre">ensure</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">atomsobject</span> <span class="pre">has</span> <span class="pre">a</span> <span class="pre">non-zero</span> <span class="pre">unit</span> <span class="pre">cell.'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.AllZeroUnitCellError" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">ValueError</span></code></p>
 <p>Specific exception example.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.AllZeroUnitCellError.message">
 <span class="sig-name descname"><span class="pre">message</span></span><a class="headerlink" href="#core.calculate.ase_calculator.AllZeroUnitCellError.message" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
-<dl class="py exception">
-<dt class="sig sig-object py" id="core.calculate.ase_calculator.NoAtoms">
-<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">NoAtoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">no</span> <span class="pre">atoms</span> <span class="pre">inside.'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.NoAtoms" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">ValueError</span></code></p>
-<p>Specific exception example.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.calculate.ase_calculator.NoAtoms.message">
-<span class="sig-name descname"><span class="pre">message</span></span><a class="headerlink" href="#core.calculate.ase_calculator.NoAtoms.message" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -837,10 +874,9 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.implemented_properties"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.implemented_properties</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.predictor"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.predictor</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.calc_property_to_model_key_mapping"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.calc_property_to_model_key_mapping</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.a2g"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.a2g</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.from_model_checkpoint"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.from_model_checkpoint()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.task_name"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.task_name</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._reset_calc_key_mapping"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._reset_calc_key_mapping()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.check_state"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.check_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.calculate"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.calculate()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._check_atoms_pbc()</span></code></a></li>
@@ -853,10 +889,6 @@ properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges�
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.AllZeroUnitCellError"><code class="docutils literal notranslate"><span class="pre">AllZeroUnitCellError</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.AllZeroUnitCellError.message"><code class="docutils literal notranslate"><span class="pre">AllZeroUnitCellError.message</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.NoAtoms"><code class="docutils literal notranslate"><span class="pre">NoAtoms</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.NoAtoms.message"><code class="docutils literal notranslate"><span class="pre">NoAtoms.message</span></code></a></li>
 </ul>
 </li>
 </ul>

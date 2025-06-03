@@ -54,7 +54,7 @@ Module Contents
 
 
 .. py:data:: _OPTIONAL_KEYS
-   :value: ['energy', 'forces', 'stress']
+   :value: ['energy', 'forces', 'stress', 'dataset']
 
 
 .. py:function:: size_repr(key: str, item: torch.Tensor, indent=0) -> str
@@ -71,77 +71,48 @@ Module Contents
    takes in np.arrays and returns torch tensors
 
 
-.. py:class:: AtomicData(pos, atomic_numbers, cell, pbc, natoms, edge_index, cell_offsets, nedges, charge, spin, fixed, tags, energy=None, forces=None, stress=None, batch=None, sid=None)
+.. py:class:: AtomicData(pos: torch.Tensor, atomic_numbers: torch.Tensor, cell: torch.Tensor, pbc: torch.Tensor, natoms: torch.Tensor, edge_index: torch.Tensor, cell_offsets: torch.Tensor, nedges: torch.Tensor, charge: torch.Tensor, spin: torch.Tensor, fixed: torch.Tensor, tags: torch.Tensor, energy: torch.Tensor | None = None, forces: torch.Tensor | None = None, stress: torch.Tensor | None = None, batch: torch.Tensor | None = None, sid: list[str] | None = None, dataset: list[str] | str | None = None)
+
+   .. py:attribute:: __keys__
+
 
    .. py:attribute:: pos
-      :type:  torch.Tensor
 
 
    .. py:attribute:: atomic_numbers
-      :type:  torch.Tensor
 
 
    .. py:attribute:: cell
-      :type:  torch.Tensor
 
 
    .. py:attribute:: pbc
-      :type:  torch.Tensor
 
 
    .. py:attribute:: natoms
-      :type:  torch.Tensor
-
-
-   .. py:attribute:: charge
-      :type:  torch.Tensor
-
-
-   .. py:attribute:: spin
-      :type:  torch.Tensor
 
 
    .. py:attribute:: edge_index
-      :type:  torch.Tensor
 
 
    .. py:attribute:: cell_offsets
-      :type:  torch.Tensor
 
 
    .. py:attribute:: nedges
-      :type:  torch.Tensor
+
+
+   .. py:attribute:: charge
+
+
+   .. py:attribute:: spin
 
 
    .. py:attribute:: fixed
-      :type:  torch.Tensor
 
 
    .. py:attribute:: tags
-      :type:  torch.Tensor
-
-
-   .. py:attribute:: energy
-      :type:  torch.Tensor
-
-
-   .. py:attribute:: forces
-      :type:  torch.Tensor
-
-
-   .. py:attribute:: stress
-      :type:  torch.Tensor
-
-
-   .. py:attribute:: batch
-      :type:  torch.Tensor
 
 
    .. py:attribute:: sid
-      :type:  list[str]
-
-
-   .. py:attribute:: __keys__
 
 
    .. py:attribute:: __slices__
@@ -164,6 +135,9 @@ Module Contents
 
 
 
+   .. py:property:: task_name
+
+
    .. py:method:: assign_batch_stats(slices, cumsum, cat_dims, natoms_list)
 
 
@@ -173,7 +147,7 @@ Module Contents
    .. py:method:: validate()
 
 
-   .. py:method:: from_ase(input_atoms: ase.Atoms, r_edges: bool = False, radius: float = 6.0, max_neigh: Optional[float] = None, sid: Optional[str] = None, molecule_cell_size: Optional[float] = None, r_energy: bool = True, r_forces: bool = True, r_stress: bool = True, r_data_keys=None) -> AtomicData
+   .. py:method:: from_ase(input_atoms: ase.Atoms, r_edges: bool = False, radius: float = 6.0, max_neigh: int | None = None, sid: str | None = None, molecule_cell_size: float | None = None, r_energy: bool = True, r_forces: bool = True, r_stress: bool = True, r_data_keys: list[str] | None = None, task_name: str | None = None) -> AtomicData
       :classmethod:
 
 

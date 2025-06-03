@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>ocpapi</title>
+    <title>ocpapi &#8212; fairchem</title>
   
   
   
@@ -62,7 +62,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="FAQ" href="../FAQ.html" />
-    <link rel="prev" title="CatTSunami Tutorial" href="cattsunami_tutorial.html" />
+    <link rel="prev" title="Transition State Search (NEBs)" href="cattsunami_tutorial.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title"></p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -179,17 +179,27 @@
 <li class="toctree-l1"><a class="reference internal" href="../../core/install.html">Installation &amp; License</a></li>
 
 <li class="toctree-l1"><a class="reference internal" href="../../core/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML models &amp; usage</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../core/intro.html">GNNs for Chemistry</a></li>
 
 
+<li class="toctree-l1"><a class="reference internal" href="../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">Making datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Workflows</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">OMol25-trained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
 <ul class="current nav bd-sidenav">
@@ -206,6 +216,11 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../models.html">Pretrained models</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Examples &amp; Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="OCP-introduction.html">Detailed intro</a></li>
+
+
+
+
 <li class="toctree-l2"><a class="reference internal" href="adsorption_energies/adsorption_energies.html">Adsorption energies</a></li>
 
 
@@ -213,15 +228,8 @@
 
 
 
-<li class="toctree-l2"><a class="reference internal" href="fairchem_models_for_nebs.html">Tutorial for using Fair Chemistry models to relax NEBs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="molecular_dynamics.html">Molecular dynamics</a></li>
-<li class="toctree-l2"><a class="reference internal" href="OCP-introduction.html">Detailed intro</a></li>
-
-
-
-
 <li class="toctree-l2"><a class="reference internal" href="adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cattsunami_tutorial.html">CatTSunami Tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">ocpapi</a></li>
 </ul>
 </details></li>
@@ -332,6 +340,48 @@
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/units/mlip_unit/index.html">core.units.mlip_unit</a></li>
 </ul>
 </details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/om/index.html">data.om</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cattsunami/databases/index.html">cattsunami.databases</a></li>
 </ul>
 </details></li>
 </ul>
@@ -572,8 +622,37 @@ document.write(`
 <p>Ensure you have Python 3.9.1 or newer, and install <code class="docutils literal notranslate"><span class="pre">ocpapi</span></code> using:</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>%%sh
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%</span><span class="k">sh</span>
 pip install -q ocpapi
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><span class=" -Color -Color-Yellow">  DEPRECATION: Building &#39;ocpapi&#39; using the legacy setup.py bdist_wheel mechanism, which will be</span>
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> removed in a future version. pip 25.3 will enforce this behaviour change. A possible replacement is
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> to use the standardized build interface by setting the `--use-pep517` option, (possibly combined wi
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>th `--no-build-isolation`), or adding a `pyproject.toml` file to the source tree of &#39;ocpapi&#39;. Discus
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>sion can be found at https://github.com/pypa/pip/issues/6334
+
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span><span class=" -Color -Color-Red">ERROR: pip&#39;s dependency resolver does not currently take into account all the packages that are</span>
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> installed. This behaviour is the source of the following dependency conflicts.
+pymatgen 2025.1.9 re
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>quires requests&gt;=2.32, but you have requests 2.31.0 which is incompatible.
+
 </pre></div>
 </div>
 </div>
@@ -587,7 +666,7 @@ pip install -q ocpapi
 <p>This package relies heavily on <a class="reference external" href="https://docs.python.org/3/library/asyncio.html">asyncio</a>. The examples throughout this document can be copied to a python repl launched with:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>%%sh
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%</span><span class="k">sh</span>
 $ python -m asyncio
 </pre></div>
 </div>
@@ -596,10 +675,10 @@ $ python -m asyncio
 <p>Alternatively, an async function can be run in a script by wrapping it with <a class="reference external" href="https://docs.python.org/3/library/asyncio-runner.html#asyncio.run">asyncio.run()</a>:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>import asyncio
-from fairchem.demo.ocpapi import find_adsorbate_binding_sites
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_adsorbate_binding_sites</span>
 
-asyncio.run(find_adsorbate_binding_sites(...))
+<span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">find_adsorbate_binding_sites</span><span class="p">(</span><span class="o">...</span><span class="p">))</span>
 </pre></div>
 </div>
 </div>
@@ -610,12 +689,12 @@ asyncio.run(find_adsorbate_binding_sites(...))
 <h3>Search over all surfaces<a class="headerlink" href="#search-over-all-surfaces" title="Link to this heading">#</a></h3>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import find_adsorbate_binding_sites
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_adsorbate_binding_sites</span>
 
-results = await find_adsorbate_binding_sites(
-    adsorbate=&quot;*OH&quot;,
-    bulk=&quot;mp-126&quot;,
-)
+<span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">(</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;*OH&quot;</span><span class="p">,</span>
+    <span class="n">bulk</span><span class="o">=</span><span class="s2">&quot;mp-126&quot;</span><span class="p">,</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -655,15 +734,15 @@ results = await find_adsorbate_binding_sites(
 </ol>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import Client
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">Client</span>
 
-client = Client()
+<span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">()</span>
 
-bulks = await client.get_bulks()
-print({b.src_id: b.formula for b in bulks.bulks_supported})
+<span class="n">bulks</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_bulks</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">({</span><span class="n">b</span><span class="o">.</span><span class="n">src_id</span><span class="p">:</span> <span class="n">b</span><span class="o">.</span><span class="n">formula</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">bulks</span><span class="o">.</span><span class="n">bulks_supported</span><span class="p">})</span>
 
-adsorbates = await client.get_adsorbates()
-print(adsorbates.adsorbates_supported)
+<span class="n">adsorbates</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">get_adsorbates</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">adsorbates</span><span class="o">.</span><span class="n">adsorbates_supported</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -675,13 +754,13 @@ print(adsorbates.adsorbates_supported)
 <p>Run relaxations for all slabs that are generated:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import find_adsorbate_binding_sites, keep_all_slabs
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">,</span> <span class="n">keep_all_slabs</span>
 
-results = await find_adsorbate_binding_sites(
-    adsorbate=&quot;*OH&quot;,
-    bulk=&quot;mp-126&quot;,
-    adslab_filter=keep_all_slabs(),
-)
+<span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">(</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;*OH&quot;</span><span class="p">,</span>
+    <span class="n">bulk</span><span class="o">=</span><span class="s2">&quot;mp-126&quot;</span><span class="p">,</span>
+    <span class="n">adslab_filter</span><span class="o">=</span><span class="n">keep_all_slabs</span><span class="p">(),</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -689,14 +768,14 @@ results = await find_adsorbate_binding_sites(
 <p>Run relaxations only for slabs with Miller Indices in the input set:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import find_adsorbate_binding_sites, keep_slabs_with_miller_indices
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">,</span> <span class="n">keep_slabs_with_miller_indices</span>
 
-results = await find_adsorbate_binding_sites(
-    adsorbate=&quot;*OH&quot;,
-    bulk=&quot;mp-126&quot;,
-    adslab_filter=keep_slabs_with_miller_indices([(1, 0, 0), (1, 1, 1)]),
-)
-print(results)
+<span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">(</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;*OH&quot;</span><span class="p">,</span>
+    <span class="n">bulk</span><span class="o">=</span><span class="s2">&quot;mp-126&quot;</span><span class="p">,</span>
+    <span class="n">adslab_filter</span><span class="o">=</span><span class="n">keep_slabs_with_miller_indices</span><span class="p">([(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]),</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -708,8 +787,8 @@ print(results)
 <p>Assuming <code class="docutils literal notranslate"><span class="pre">results</span></code> was generated with the <code class="docutils literal notranslate"><span class="pre">find_adsorbate_binding_sites</span></code> method used above, it is an <code class="docutils literal notranslate"><span class="pre">AdsorbateBindingSites</span></code> object. This can be saved to file with:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>with open(&quot;results.json&quot;, &quot;w&quot;) as f:
-    f.write(results.to_json())
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;results.json&quot;</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">results</span><span class="o">.</span><span class="n">to_json</span><span class="p">())</span>
 </pre></div>
 </div>
 </div>
@@ -717,10 +796,10 @@ print(results)
 <p>Similarly, results can be read back from file to an <code class="docutils literal notranslate"><span class="pre">AdsorbateBindingSites</span></code> object with:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import AdsorbateBindingSites
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdsorbateBindingSites</span>
 
-with open(&quot;results.json&quot;, &quot;r&quot;) as f:
-    results = AdsorbateBindingSites.from_json(f.read())
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;results.json&quot;</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="n">AdsorbateBindingSites</span><span class="o">.</span><span class="n">from_json</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
 </pre></div>
 </div>
 </div>
@@ -732,10 +811,10 @@ with open(&quot;results.json&quot;, &quot;r&quot;) as f:
 <p>Extending the examples above, the URLs to visualize the results of relaxations on each Pt surface can be obtained with:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>print([
-    slab.ui_url
-    for slab in results.slabs
-])
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">([</span>
+    <span class="n">slab</span><span class="o">.</span><span class="n">ui_url</span>
+    <span class="k">for</span> <span class="n">slab</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">slabs</span>
+<span class="p">])</span>
 </pre></div>
 </div>
 </div>
@@ -754,19 +833,19 @@ with open(&quot;results.json&quot;, &quot;r&quot;) as f:
 <p>A specific model type can be requested with:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import find_adsorbate_binding_sites
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_adsorbate_binding_sites</span>
 
-results = await find_adsorbate_binding_sites(
-    adsorbate=&quot;*OH&quot;,
-    bulk=&quot;mp-126&quot;,
-    model=&quot;gemnet_oc_base_s2ef_all_md&quot;,
-    adslab_filter=keep_slabs_with_miller_indices([(1, 1, 1)]),
+<span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">(</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;*OH&quot;</span><span class="p">,</span>
+    <span class="n">bulk</span><span class="o">=</span><span class="s2">&quot;mp-126&quot;</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;gemnet_oc_base_s2ef_all_md&quot;</span><span class="p">,</span>
+    <span class="n">adslab_filter</span><span class="o">=</span><span class="n">keep_slabs_with_miller_indices</span><span class="p">([(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]),</span>
 
-)
-print([
-    slab.ui_url
-    for slab in results.slabs
-])
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">([</span>
+    <span class="n">slab</span><span class="o">.</span><span class="n">ui_url</span>
+    <span class="k">for</span> <span class="n">slab</span> <span class="ow">in</span> <span class="n">results</span><span class="o">.</span><span class="n">slabs</span>
+<span class="p">])</span>
 </pre></div>
 </div>
 </div>
@@ -783,16 +862,16 @@ print([
 <p>For example, the following would generate an <code class="docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object for the first relaxed adsorbate configuration on the first slab generated for *OH binding on Pt:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from fairchem.demo.ocpapi import find_adsorbate_binding_sites
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.demo.ocpapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_adsorbate_binding_sites</span>
 
-results = await find_adsorbate_binding_sites(
-    adsorbate=&quot;*OH&quot;,
-    bulk=&quot;mp-126&quot;,
-    adslab_filter=keep_slabs_with_miller_indices([(1, 1, 1)]),
-)
+<span class="n">results</span> <span class="o">=</span> <span class="k">await</span> <span class="n">find_adsorbate_binding_sites</span><span class="p">(</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="s2">&quot;*OH&quot;</span><span class="p">,</span>
+    <span class="n">bulk</span><span class="o">=</span><span class="s2">&quot;mp-126&quot;</span><span class="p">,</span>
+    <span class="n">adslab_filter</span><span class="o">=</span><span class="n">keep_slabs_with_miller_indices</span><span class="p">([(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)]),</span>
+<span class="p">)</span>
 
-ase_atoms = results.slabs[0].configs[0].to_ase_atoms()
-print(ase_atoms)
+<span class="n">ase_atoms</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">slabs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">configs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_ase_atoms</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ase_atoms</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -803,9 +882,9 @@ print(ase_atoms)
 <p>From an <code class="docutils literal notranslate"><span class="pre">ase.Atoms</span></code> object (see previous section), is is possible to <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write">write to other structure formats</a>. Extending the example above, the <code class="docutils literal notranslate"><span class="pre">ase_atoms</span></code> object could be written to a <a class="reference external" href="https://www.vasp.at/wiki/index.php/POSCAR">VASP POSCAR file</a> with:</p>
 <div class="cell tag_skip-execution docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>from ase.io import write
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">write</span>
 
-write(&quot;POSCAR&quot;, ase_atoms, &quot;vasp&quot;)
+<span class="n">write</span><span class="p">(</span><span class="s2">&quot;POSCAR&quot;</span><span class="p">,</span> <span class="n">ase_atoms</span><span class="p">,</span> <span class="s2">&quot;vasp&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -866,7 +945,7 @@ write(&quot;POSCAR&quot;, ase_atoms, &quot;vasp&quot;)
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">CatTSunami Tutorial</p>
+        <p class="prev-next-title">Transition State Search (NEBs)</p>
       </div>
     </a>
     <a class="right-next"

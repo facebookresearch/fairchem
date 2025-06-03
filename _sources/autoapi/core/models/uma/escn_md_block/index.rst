@@ -23,8 +23,18 @@ Classes
    core.models.uma.escn_md_block.eSCNMD_Block
 
 
+Functions
+---------
+
+.. autoapisummary::
+
+   core.models.uma.escn_md_block.set_mole_ac_start_index
+
+
 Module Contents
 ---------------
+
+.. py:function:: set_mole_ac_start_index(module: torch.nn.Module, index: int) -> None
 
 .. py:class:: Edgewise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, edge_channels_list, mappingReduced, SO3_grid, cutoff, activation_checkpoint_chunk_size: int | None, act_type: str = 'gate')
 
@@ -108,7 +118,7 @@ Module Contents
    .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0)
 
 
-   .. py:method:: forward_chunk(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0)
+   .. py:method:: forward_chunk(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0, ac_mole_start_idx: int = 0)
 
 
 .. py:class:: SpectralAtomwise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, SO3_grid)

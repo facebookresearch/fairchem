@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>core.units.mlip_unit.mlip_unit</title>
+    <title>core.units.mlip_unit.mlip_unit &#8212; fairchem</title>
   
   
   
@@ -61,7 +61,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/core/units/mlip_unit/mlip_unit/index';</script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../search.html" />
-    <link rel="next" title="Notebook execution times" href="../../../../../execution_time.html" />
+    <link rel="next" title="core.units.mlip_unit.predict" href="../predict/index.html" />
     <link rel="prev" title="core.units.mlip_unit.api.inference" href="../api/inference/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title"></p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -179,17 +179,27 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../../../core/install.html">Installation &amp; License</a></li>
 
 <li class="toctree-l1"><a class="reference internal" href="../../../../../core/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
-<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML models &amp; usage</span></p>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../../../core/intro.html">GNNs for Chemistry</a></li>
 
 
+<li class="toctree-l1"><a class="reference internal" href="../../../../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/ase_dataset_creation.html">Making datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/workflows.html">Workflows</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../../../molecules/models.html">OMol25-trained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../../molecules/FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
 <ul class="nav bd-sidenav">
@@ -206,6 +216,11 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../catalysts/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/OCP-introduction.html">Detailed intro</a></li>
+
+
+
+
 <li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Adsorption energies</a></li>
 
 
@@ -213,15 +228,8 @@
 
 
 
-<li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/fairchem_models_for_nebs.html">Tutorial for using Fair Chemistry models to relax NEBs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/molecular_dynamics.html">Molecular dynamics</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/OCP-introduction.html">Detailed intro</a></li>
-
-
-
-
 <li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/cattsunami_tutorial.html">CatTSunami Tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../catalysts/examples_tutorials/ocpapi.html">ocpapi</a></li>
 </ul>
 </details></li>
@@ -332,6 +340,48 @@
 <li class="toctree-l4 current active"><a class="reference internal" href="../index.html">core.units.mlip_unit</a></li>
 </ul>
 </details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../data/om/index.html">data.om</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../../cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../cattsunami/databases/index.html">cattsunami.databases</a></li>
 </ul>
 </details></li>
 </ul>
@@ -535,11 +585,9 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Batch"><code class="docutils literal notranslate"><span class="pre">Batch</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec"><code class="docutils literal notranslate"><span class="pre">OutputSpec</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dim"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dtype"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dtype</span></code></a></li>
@@ -564,8 +612,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.eval_on_free_atoms"><code class="docutils literal notranslate"><span class="pre">Task.eval_on_free_atoms</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.update_configs"><code class="docutils literal notranslate"><span class="pre">update_configs()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.load_inference_model"><code class="docutils literal notranslate"><span class="pre">load_inference_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.initialize_finetuning_model"><code class="docutils literal notranslate"><span class="pre">initialize_finetuning_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.get_output_mask"><code class="docutils literal notranslate"><span class="pre">get_output_mask()</span></code></a></li>
@@ -611,22 +657,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.get_finetune_model_config"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.get_finetune_model_config()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.tf32_context_manager"><code class="docutils literal notranslate"><span class="pre">tf32_context_manager()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.tasks"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.tasks</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.device"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.device</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.lazy_model_intialized"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.lazy_model_intialized</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.inference_mode"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.inference_mode</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.merged_on"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.merged_on</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.direct_forces"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.direct_forces</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.datasets"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.datasets</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.seed"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.seed()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.move_to_device"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.move_to_device()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict_step"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.predict_step()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.get_composition_charge_spin_dataset"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.get_composition_charge_spin_dataset()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.predict()</span></code></a></li>
-</ul>
-</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit"><code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit.job_config"><code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit.job_config</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit.model"><code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit.model</span></code></a></li>
@@ -662,17 +692,6 @@ document.write(`
 <p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
 <p>This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.</p>
-<section id="attributes">
-<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
-<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Batch" title="core.units.mlip_unit.mlip_unit.Batch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Batch</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-</tbody>
-</table>
-</div>
-</section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -689,10 +708,7 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit" title="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit</span></code></a></p></td>
 <td><p>The TrainUnit is an interface that can be used to organize your training logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">train_step</span></code> which</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit" title="core.units.mlip_unit.mlip_unit.MLIPPredictUnit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPPredictUnit</span></code></a></p></td>
-<td><p>The PredictUnit is an interface that can be used to organize your prediction logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">predict_step</span></code> which</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit" title="core.units.mlip_unit.mlip_unit.MLIPEvalUnit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit" title="core.units.mlip_unit.mlip_unit.MLIPEvalUnit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code></a></p></td>
 <td><p>The EvalUnit is an interface that can be used to organize your evaluation logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">eval_step</span></code> which</p></td>
 </tr>
 </tbody>
@@ -703,12 +719,6 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.update_configs" title="core.units.mlip_unit.mlip_unit.update_configs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">update_configs</span></code></a>(original_config, new_config)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.load_inference_model" title="core.units.mlip_unit.mlip_unit.load_inference_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_inference_model</span></code></a>(→ tuple[torch.nn.Module, ...)</p></td>
-<td><p></p></td>
-</tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint" title="core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
@@ -742,20 +752,12 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.set_sampler_state" title="core.units.mlip_unit.mlip_unit.set_sampler_state"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_sampler_state</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.tf32_context_manager" title="core.units.mlip_unit.mlip_unit.tf32_context_manager"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tf32_context_manager</span></code></a>()</p></td>
-<td><p></p></td>
-</tr>
 </tbody>
 </table>
 </div>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py data">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.Batch">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">Batch</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Batch" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.OutputSpec">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">OutputSpec</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.OutputSpec" title="Link to this definition">#</a></dt>
@@ -857,16 +859,6 @@ errors defaults to ‘strict’.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.update_configs">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">update_configs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">original_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">new_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.update_configs" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.load_inference_model">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">load_inference_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overrides</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_ema</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.nn.Module</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">fairchem.core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.load_inference_model" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint">
 <span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">convert_train_checkpoint_to_inference_checkpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dcp_checkpoint_loc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint_loc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -878,7 +870,7 @@ errors defaults to ‘strict’.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.get_output_mask">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">get_output_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.get_output_mask" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">get_output_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.get_output_mask" title="Link to this definition">#</a></dt>
 <dd><p>Get a dictionary of boolean masks for each task and dataset in a batch.</p>
 <p>Comment(&#64;abhshkdz): Structures in our <cite>batch</cite> are a mix from various
 sources, e.g. OC20, OC22, etc. That means for each loss computation,
@@ -894,13 +886,13 @@ indexing map. s.t. we can index like batch.oc20_forces[oc20_map].</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.get_output_masks">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">get_output_masks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.get_output_masks" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">get_output_masks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.get_output_masks" title="Link to this definition">#</a></dt>
 <dd><p>Same as above but for a list of tasks.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.compute_loss">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">compute_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.compute_loss" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">compute_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.compute_loss" title="Link to this definition">#</a></dt>
 <dd><p>Compute loss given a sequence of tasks</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -918,7 +910,7 @@ indexing map. s.t. we can index like batch.oc20_forces[oc20_map].</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.compute_metrics">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">compute_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict[str:Metrics]</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.compute_metrics" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">compute_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict[str:Metrics]</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.compute_metrics" title="Link to this definition">#</a></dt>
 <dd><p>Compute metrics and update running metrics for a given task</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -964,7 +956,7 @@ indexing map. s.t. we can index like batch.oc20_forces[oc20_map].</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">MLIPTrainEvalUnit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">omegaconf.DictConfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.nn.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cosine_lr_scheduler_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bf16</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_every</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip_grad_norm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ema_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.999</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_strategy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.TrainStrategy" title="core.units.mlip_unit.mlip_unit.TrainStrategy"><span class="pre">TrainStrategy</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">TrainStrategy.DDP</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_checksums_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">profile_flops</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.TrainUnit</span></code>[<a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Batch" title="core.units.mlip_unit.mlip_unit.Batch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Batch</span></code></a>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.EvalUnit</span></code>[<a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Batch" title="core.units.mlip_unit.mlip_unit.Batch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Batch</span></code></a>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.distributed.checkpoint.stateful.Stateful</span></code></p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.TrainUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.EvalUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.distributed.checkpoint.stateful.Stateful</span></code></p>
 <p>The TrainUnit is an interface that can be used to organize your training logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">train_step</span></code> which
 is an abstract method where you can define the code you want to run each iteration of the dataloader.</p>
 <p>To use the TrainUnit, create a class which subclasses TrainUnit. Then implement the <code class="docutils literal notranslate"><span class="pre">train_step</span></code> method on your class, and optionally
@@ -1133,7 +1125,7 @@ implement any of the hooks, which allow you to control the behavior of the loop 
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.train_step">
-<span class="sig-name descname"><span class="pre">train_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.train_step" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">train_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.train_step" title="Link to this definition">#</a></dt>
 <dd><p>Core required method for user to implement. This method will be called at each iteration of the
 train dataloader, and can return any data the user wishes.</p>
 <dl class="field-list simple">
@@ -1191,7 +1183,7 @@ is also called during <cite>torch.distributed.checkpoint.load</cite>.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.eval_step">
-<span class="sig-name descname"><span class="pre">eval_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.eval_step" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">eval_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.eval_step" title="Link to this definition">#</a></dt>
 <dd><p>Core required method for user to implement. This method will be called at each iteration of the
 eval dataloader, and can return any data the user wishes.
 Optionally can be decorated with <code class="docutils literal notranslate"><span class="pre">&#64;torch.inference_mode()</span></code> for improved performance.</p>
@@ -1234,119 +1226,10 @@ Optionally can be decorated with <code class="docutils literal notranslate"><spa
 
 </dd></dl>
 
-<dl class="py function">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.tf32_context_manager">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">tf32_context_manager</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.tf32_context_manager" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">MLIPPredictUnit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inference_model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overrides</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference_settings</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.api.inference.InferenceSettings</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">41</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.PredictUnit</span></code>[<a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Batch" title="core.units.mlip_unit.mlip_unit.Batch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Batch</span></code></a>]</p>
-<p>The PredictUnit is an interface that can be used to organize your prediction logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">predict_step</span></code> which
-is an abstract method where you can define the code you want to run each iteration of the dataloader.</p>
-<p>To use the PredictUnit, create a class which subclasses <code class="xref py py-class docutils literal notranslate"><span class="pre">PredictUnit</span></code>.
-Then implement the <code class="docutils literal notranslate"><span class="pre">predict_step</span></code> method on your class, and then you can optionally implement any of the hooks which allow you to control the behavior of the loop at different points.
-In addition, you can override <code class="docutils literal notranslate"><span class="pre">get_next_predict_batch</span></code> to modify the default batch fetching behavior.
-Below is a simple example of a user’s subclass of <code class="xref py py-class docutils literal notranslate"><span class="pre">PredictUnit</span></code> that implements a basic <code class="docutils literal notranslate"><span class="pre">predict_step</span></code>.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torchtnt.framework.unit</span><span class="w"> </span><span class="kn">import</span> <span class="n">PredictUnit</span>
-
-<span class="n">Batch</span> <span class="o">=</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">]</span>
-<span class="c1"># specify type of the data in each batch of the dataloader to allow for typechecking</span>
-
-<span class="k">class</span><span class="w"> </span><span class="nc">MyPredictUnit</span><span class="p">(</span><span class="n">PredictUnit</span><span class="p">[</span><span class="n">Batch</span><span class="p">]):</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">module</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
-    <span class="p">):</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">module</span> <span class="o">=</span> <span class="n">module</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">predict_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state</span><span class="p">:</span> <span class="n">State</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Batch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">:</span>
-        <span class="n">inputs</span><span class="p">,</span> <span class="n">targets</span> <span class="o">=</span> <span class="n">data</span>
-        <span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">module</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">outputs</span>
-
-<span class="n">predict_unit</span> <span class="o">=</span> <span class="n">MyPredictUnit</span><span class="p">(</span><span class="n">module</span><span class="o">=...</span><span class="p">)</span>
-</pre></div>
-</div>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.tasks">
-<span class="sig-name descname"><span class="pre">tasks</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.tasks" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.device">
-<span class="sig-name descname"><span class="pre">device</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.device" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.lazy_model_intialized">
-<span class="sig-name descname"><span class="pre">lazy_model_intialized</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.lazy_model_intialized" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.inference_mode">
-<span class="sig-name descname"><span class="pre">inference_mode</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.inference_mode" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.merged_on">
-<span class="sig-name descname"><span class="pre">merged_on</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.merged_on" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.direct_forces">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">direct_forces</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.direct_forces" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.datasets">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">datasets</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.datasets" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.seed">
-<span class="sig-name descname"><span class="pre">seed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.seed" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.move_to_device">
-<span class="sig-name descname"><span class="pre">move_to_device</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.move_to_device" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict_step">
-<span class="sig-name descname"><span class="pre">predict_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict_step" title="Link to this definition">#</a></dt>
-<dd><p>Core required method for user to implement. This method will be called at each iteration of the
-predict dataloader, and can return any data the user wishes.
-Optionally can be decorated with <code class="docutils literal notranslate"><span class="pre">&#64;torch.inference_mode()</span></code> for improved performance.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>state</strong> – a <code class="xref py py-class docutils literal notranslate"><span class="pre">State</span></code> object containing metadata about the prediction run.</p></li>
-<li><p><strong>data</strong> – one batch of prediction data.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.get_composition_charge_spin_dataset">
-<span class="sig-name descname"><span class="pre">get_composition_charge_spin_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.get_composition_charge_spin_dataset" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undo_element_references</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-</dd></dl>
-
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPEvalUnit">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">MLIPEvalUnit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">omegaconf.DictConfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.nn.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bf16</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.EvalUnit</span></code>[<a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Batch" title="core.units.mlip_unit.mlip_unit.Batch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Batch</span></code></a>]</p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.EvalUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>]</p>
 <p>The EvalUnit is an interface that can be used to organize your evaluation logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">eval_step</span></code> which
 is an abstract method where you can define the code you want to run each iteration of the dataloader.</p>
 <p>To use the EvalUnit, create a class which subclasses <code class="xref py py-class docutils literal notranslate"><span class="pre">EvalUnit</span></code>.
@@ -1437,7 +1320,7 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPEvalUnit.eval_step">
-<span class="sig-name descname"><span class="pre">eval_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Batch</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit.eval_step" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">eval_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torchtnt.framework.State</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit.eval_step" title="Link to this definition">#</a></dt>
 <dd><p>Evaluates the model on a batch of data.</p>
 </dd></dl>
 
@@ -1492,11 +1375,11 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
       </div>
     </a>
     <a class="right-next"
-       href="../../../../../execution_time.html"
+       href="../predict/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Notebook execution times</p>
+        <p class="prev-next-title">core.units.mlip_unit.predict</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -1516,11 +1399,9 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Batch"><code class="docutils literal notranslate"><span class="pre">Batch</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec"><code class="docutils literal notranslate"><span class="pre">OutputSpec</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dim"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dtype"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dtype</span></code></a></li>
@@ -1545,8 +1426,6 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.eval_on_free_atoms"><code class="docutils literal notranslate"><span class="pre">Task.eval_on_free_atoms</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.update_configs"><code class="docutils literal notranslate"><span class="pre">update_configs()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.load_inference_model"><code class="docutils literal notranslate"><span class="pre">load_inference_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.initialize_finetuning_model"><code class="docutils literal notranslate"><span class="pre">initialize_finetuning_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.get_output_mask"><code class="docutils literal notranslate"><span class="pre">get_output_mask()</span></code></a></li>
@@ -1590,22 +1469,6 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_eval_epoch_start()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_end"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_eval_epoch_end()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.get_finetune_model_config"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.get_finetune_model_config()</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.tf32_context_manager"><code class="docutils literal notranslate"><span class="pre">tf32_context_manager()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.tasks"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.tasks</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.device"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.device</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.lazy_model_intialized"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.lazy_model_intialized</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.inference_mode"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.inference_mode</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.merged_on"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.merged_on</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.direct_forces"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.direct_forces</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.datasets"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.datasets</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.seed"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.seed()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.move_to_device"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.move_to_device()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict_step"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.predict_step()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.get_composition_charge_spin_dataset"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.get_composition_charge_spin_dataset()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPPredictUnit.predict"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnit.predict()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit"><code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code></a><ul class="nav section-nav flex-column">

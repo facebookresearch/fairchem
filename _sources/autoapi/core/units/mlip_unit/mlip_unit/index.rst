@@ -12,14 +12,6 @@ core.units.mlip_unit.mlip_unit
 
 
 
-Attributes
-----------
-
-.. autoapisummary::
-
-   core.units.mlip_unit.mlip_unit.Batch
-
-
 Classes
 -------
 
@@ -29,7 +21,6 @@ Classes
    core.units.mlip_unit.mlip_unit.TrainStrategy
    core.units.mlip_unit.mlip_unit.Task
    core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
-   core.units.mlip_unit.mlip_unit.MLIPPredictUnit
    core.units.mlip_unit.mlip_unit.MLIPEvalUnit
 
 
@@ -38,8 +29,6 @@ Functions
 
 .. autoapisummary::
 
-   core.units.mlip_unit.mlip_unit.update_configs
-   core.units.mlip_unit.mlip_unit.load_inference_model
    core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint
    core.units.mlip_unit.mlip_unit.initialize_finetuning_model
    core.units.mlip_unit.mlip_unit.get_output_mask
@@ -51,13 +40,10 @@ Functions
    core.units.mlip_unit.mlip_unit._get_optimizer_wd
    core.units.mlip_unit.mlip_unit._reshard_fsdp
    core.units.mlip_unit.mlip_unit.set_sampler_state
-   core.units.mlip_unit.mlip_unit.tf32_context_manager
 
 
 Module Contents
 ---------------
-
-.. py:data:: Batch
 
 .. py:class:: OutputSpec
 
@@ -148,15 +134,11 @@ Module Contents
 
 
 
-.. py:function:: update_configs(original_config, new_config)
-
-.. py:function:: load_inference_model(checkpoint_location: str, overrides: dict | None = None, use_ema: bool = False) -> tuple[torch.nn.Module, fairchem.core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint]
-
 .. py:function:: convert_train_checkpoint_to_inference_checkpoint(dcp_checkpoint_loc: str, checkpoint_loc: str) -> None
 
 .. py:function:: initialize_finetuning_model(checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None) -> torch.nn.Module
 
-.. py:function:: get_output_mask(batch: Batch, task: Task) -> dict[str, torch.Tensor]
+.. py:function:: get_output_mask(batch: fairchem.core.datasets.atomic_data.AtomicData, task: Task) -> dict[str, torch.Tensor]
 
    Get a dictionary of boolean masks for each task and dataset in a batch.
 
@@ -172,12 +154,12 @@ Module Contents
    indexing map. s.t. we can index like batch.oc20_forces[oc20_map].
 
 
-.. py:function:: get_output_masks(batch: Batch, tasks: Sequence[Task]) -> dict[str, torch.Tensor]
+.. py:function:: get_output_masks(batch: fairchem.core.datasets.atomic_data.AtomicData, tasks: Sequence[Task]) -> dict[str, torch.Tensor]
 
    Same as above but for a list of tasks.
 
 
-.. py:function:: compute_loss(tasks: Sequence[Task], predictions: dict[str, torch.Tensor], batch: Batch) -> dict[str, float]
+.. py:function:: compute_loss(tasks: Sequence[Task], predictions: dict[str, torch.Tensor], batch: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, float]
 
    Compute loss given a sequence of tasks
 
@@ -188,7 +170,7 @@ Module Contents
    :returns: dictionary of losses for each task
 
 
-.. py:function:: compute_metrics(task: Task, predictions: dict[str, torch.Tensor], batch: Batch, dataset_name: str | None = None) -> dict[str:Metrics]
+.. py:function:: compute_metrics(task: Task, predictions: dict[str, torch.Tensor], batch: fairchem.core.datasets.atomic_data.AtomicData, dataset_name: str | None = None) -> dict[str:Metrics]
 
    Compute metrics and update running metrics for a given task
 
@@ -213,7 +195,7 @@ Module Contents
 
 .. py:class:: MLIPTrainEvalUnit(job_config: omegaconf.DictConfig, model: torch.nn.Module, optimizer_fn: callable, cosine_lr_scheduler_fn: callable, tasks: list[Task], bf16: bool = False, print_every: int = 10, clip_grad_norm: float | None = None, ema_decay: float = 0.999, train_strategy: TrainStrategy = TrainStrategy.DDP, debug_checksums_save_path: str | None = None, profile_flops: bool = False)
 
-   Bases: :py:obj:`torchtnt.framework.TrainUnit`\ [\ :py:obj:`Batch`\ ], :py:obj:`torchtnt.framework.EvalUnit`\ [\ :py:obj:`Batch`\ ], :py:obj:`torch.distributed.checkpoint.stateful.Stateful`
+   Bases: :py:obj:`torchtnt.framework.TrainUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`torchtnt.framework.EvalUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`torch.distributed.checkpoint.stateful.Stateful`
 
 
    The TrainUnit is an interface that can be used to organize your training logic. The core of it is the ``train_step`` which
@@ -344,7 +326,7 @@ Module Contents
 
 
 
-   .. py:method:: train_step(state: torchtnt.framework.State, data: Batch) -> None
+   .. py:method:: train_step(state: torchtnt.framework.State, data: fairchem.core.datasets.atomic_data.AtomicData) -> None
 
       Core required method for user to implement. This method will be called at each iteration of the
       train dataloader, and can return any data the user wishes.
@@ -386,7 +368,7 @@ Module Contents
 
 
 
-   .. py:method:: eval_step(state: torchtnt.framework.State, data: Batch) -> None
+   .. py:method:: eval_step(state: torchtnt.framework.State, data: fairchem.core.datasets.atomic_data.AtomicData) -> None
 
       Core required method for user to implement. This method will be called at each iteration of the
       eval dataloader, and can return any data the user wishes.
@@ -416,99 +398,9 @@ Module Contents
    .. py:method:: get_finetune_model_config() -> omegaconf.DictConfig | None
 
 
-.. py:function:: tf32_context_manager()
-
-.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings | None = None, seed: int = 41)
-
-   Bases: :py:obj:`torchtnt.framework.PredictUnit`\ [\ :py:obj:`Batch`\ ]
-
-
-   The PredictUnit is an interface that can be used to organize your prediction logic. The core of it is the ``predict_step`` which
-   is an abstract method where you can define the code you want to run each iteration of the dataloader.
-
-   To use the PredictUnit, create a class which subclasses :class:`~torchtnt.framework.unit.PredictUnit`.
-   Then implement the ``predict_step`` method on your class, and then you can optionally implement any of the hooks which allow you to control the behavior of the loop at different points.
-   In addition, you can override ``get_next_predict_batch`` to modify the default batch fetching behavior.
-   Below is a simple example of a user's subclass of :class:`~torchtnt.framework.unit.PredictUnit` that implements a basic ``predict_step``.
-
-   .. code-block:: python
-
-     from torchtnt.framework.unit import PredictUnit
-
-     Batch = Tuple[torch.tensor, torch.tensor]
-     # specify type of the data in each batch of the dataloader to allow for typechecking
-
-     class MyPredictUnit(PredictUnit[Batch]):
-         def __init__(
-             self,
-             module: torch.nn.Module,
-         ):
-             super().__init__()
-             self.module = module
-
-         def predict_step(self, state: State, data: Batch) -> torch.tensor:
-             inputs, targets = data
-             outputs = self.module(inputs)
-             return outputs
-
-     predict_unit = MyPredictUnit(module=...)
-
-
-   .. py:attribute:: tasks
-
-
-   .. py:attribute:: device
-
-
-   .. py:attribute:: lazy_model_intialized
-      :value: False
-
-
-
-   .. py:attribute:: inference_mode
-
-
-   .. py:attribute:: merged_on
-      :value: None
-
-
-
-   .. py:property:: direct_forces
-      :type: bool
-
-
-
-   .. py:property:: datasets
-      :type: list[str]
-
-
-
-   .. py:method:: seed(seed: int)
-
-
-   .. py:method:: move_to_device()
-
-
-   .. py:method:: predict_step(state: torchtnt.framework.State, data: Batch) -> dict[str, torch.tensor]
-
-      Core required method for user to implement. This method will be called at each iteration of the
-      predict dataloader, and can return any data the user wishes.
-      Optionally can be decorated with ``@torch.inference_mode()`` for improved performance.
-
-      :param state: a :class:`~torchtnt.framework.state.State` object containing metadata about the prediction run.
-      :param data: one batch of prediction data.
-
-
-
-   .. py:method:: get_composition_charge_spin_dataset(data)
-
-
-   .. py:method:: predict(data: Batch, undo_element_references: bool = True) -> dict[str, torch.tensor]
-
-
 .. py:class:: MLIPEvalUnit(job_config: omegaconf.DictConfig, model: torch.nn.Module, tasks: Sequence[Task], bf16: bool = False)
 
-   Bases: :py:obj:`torchtnt.framework.EvalUnit`\ [\ :py:obj:`Batch`\ ]
+   Bases: :py:obj:`torchtnt.framework.EvalUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ]
 
 
    The EvalUnit is an interface that can be used to organize your evaluation logic. The core of it is the ``eval_step`` which
@@ -589,7 +481,7 @@ Module Contents
 
 
 
-   .. py:method:: eval_step(state: torchtnt.framework.State, data: Batch) -> None
+   .. py:method:: eval_step(state: torchtnt.framework.State, data: fairchem.core.datasets.atomic_data.AtomicData) -> None
 
       Evaluates the model on a batch of data.
 

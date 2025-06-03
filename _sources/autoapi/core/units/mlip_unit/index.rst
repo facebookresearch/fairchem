@@ -21,6 +21,8 @@ Submodules
    /autoapi/core/units/mlip_unit/_metrics/index
    /autoapi/core/units/mlip_unit/api/index
    /autoapi/core/units/mlip_unit/mlip_unit/index
+   /autoapi/core/units/mlip_unit/predict/index
+   /autoapi/core/units/mlip_unit/utils/index
 
 
 Functions
@@ -34,7 +36,7 @@ Functions
 Package Contents
 ----------------
 
-.. py:function:: load_predict_unit(path: str | pathlib.Path, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings | str = 'default', overrides: dict | None = None, device: str = 'cuda') -> fairchem.core.units.mlip_unit.mlip_unit.MLIPPredictUnit
+.. py:function:: load_predict_unit(path: str | pathlib.Path, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None) -> fairchem.core.units.mlip_unit.predict.MLIPPredictUnit
 
    Load a MLIPPredictUnit from a checkpoint file.
 

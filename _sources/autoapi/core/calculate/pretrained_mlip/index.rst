@@ -73,7 +73,7 @@ Module Contents
 
 .. py:data:: available_models
 
-.. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: str = 'cuda') -> fairchem.core.units.mlip_unit.MLIPPredictUnit
+.. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None) -> fairchem.core.units.mlip_unit.MLIPPredictUnit
 
    Retrieves a prediction unit for a specified model.
 

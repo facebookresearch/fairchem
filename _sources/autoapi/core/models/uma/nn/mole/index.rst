@@ -36,6 +36,7 @@ Functions
 
 .. autoapisummary::
 
+   core.models.uma.nn.mole.interval_intersection
    core.models.uma.nn.mole._softmax
    core.models.uma.nn.mole._pnorm
    core.models.uma.nn.mole.norm_str_to_fn
@@ -53,6 +54,12 @@ Module Contents
    :value: True
 
 
+.. py:function:: interval_intersection(interval1, interval2)
+
+   Compute intersection of two intervals [a, b] and [c, d]
+   Returns None if no intersection, otherwise returns [start, end]
+
+
 .. py:function:: _softmax(x)
 
 .. py:function:: _pnorm(x)
@@ -67,6 +74,12 @@ Module Contents
 
    .. py:attribute:: mole_sizes
       :type:  torch.Tensor
+
+
+   .. py:attribute:: ac_start_idx
+      :type:  int
+      :value: 0
+
 
 
 .. py:function:: init_linear(num_experts, use_bias, out_features, in_features)
