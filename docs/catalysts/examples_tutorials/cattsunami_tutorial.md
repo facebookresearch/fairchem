@@ -59,13 +59,13 @@ slab = Slab.from_bulk_get_specific_millers(bulk = bulk, specific_millers=(0,0,1)
 # For AdsorbML num_sites = 100, but we use 5 here for brevity. This should be increased for practical use.
 reactant_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = reactant,
                                        mode="random_site_heuristic_placement",
-                                       num_sites = 5).atoms_list
+                                       num_sites = 100).atoms_list
 product1_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = product1,
                                       mode="random_site_heuristic_placement",
-                                      num_sites = 5).atoms_list
+                                      num_sites = 100).atoms_list
 product2_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = product2,
                                       mode="random_site_heuristic_placement",
-                                      num_sites = 5).atoms_list
+                                      num_sites = 100).atoms_list
 ```
 
 ```{code-cell} ipython3
@@ -125,7 +125,9 @@ af = AutoFrameDissociation(
 ```
 
 ```{code-cell} ipython3
+import numpy as np
 nframes = 10
+np.random.seed(42) # set the seed to make the random generation deterministic for the tutorial!
 frame_sets, mapping_idxs = af.get_neb_frames(calc,
                                n_frames = nframes,
                                n_pdt1_sites=4, # = 5 in the above fig (step 1)
