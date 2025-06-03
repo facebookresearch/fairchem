@@ -18,7 +18,7 @@ parts:
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
     - file: core/common_tasks/evaluation
-    - file: core/common_tasks/fine-tuning/fine-tuning
+    - file: core/common_tasks/fine_tuning
     - file: core/common_tasks/batch_inference
     - file: core/common_tasks/workflows
     - file: core/model_faq
@@ -29,7 +29,6 @@ parts:
     sections:
     - file: molecules/datasets/omol25
   - file: molecules/models
- 
   - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
   chapters:

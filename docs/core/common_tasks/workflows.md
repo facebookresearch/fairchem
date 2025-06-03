@@ -1,3 +1,25 @@
 # Workflows
 
-This repo is not integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. More details/tutorials to be provided here soon!
+This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc) and simply specify the `fairchem` model type. Below is an example that uses the default elastic_tensor_flow flow. 
+
+```{code-cell} ipython3
+from ase.build import bulk
+from quacc.recipes.mlp.elastic import elastic_tensor_flow
+
+# Make an Atoms object of a bulk Cu structure
+atoms = bulk("Cu")
+
+# Run an elastic property calculation with our favorite MLP potential
+result = elastic_tensor_flow(
+    atoms,
+    job_params={
+        "all": dict(
+            method="fairchem",
+            get_predict_unit_kwargs={"model_name": "uma-s-1"},
+            task_name="omat",
+        ),
+    },
+)
+```
+
+One of the nice things about QuAcc is that you can use plugins for whatever your favorite workflow engine is (fireworks, parssl, prefect, etc). Some of these methods can scale to hundreds of thousands of parallel calculations and are used by the FAIR chemistry team regularly!

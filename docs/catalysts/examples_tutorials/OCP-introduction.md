@@ -12,7 +12,7 @@ kernelspec:
   name: python3
 ---
 
-Detailed intro
+Intro to  adsorption energies
 ==================================================
 
 To introduce OCP we start with using it to calculate adsorption energies for a simple, atomic adsorbate where we specify the site we want to the adsorption energy for. Conceptually, you do this like you would do it with density functional theory. You create a slab model for the surface, place an adsorbate on it as an initial guess, run a relaxation to get the lowest energy geometry, and then compute the adsorption energy using reference states for the adsorbate.
