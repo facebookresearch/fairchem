@@ -39,7 +39,7 @@ class FAIRChemCalculator(Calculator):
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,
-        task_name: UMATask | None = None,
+        task_name: UMATask | str | None = None,
         seed: int = 41,
     ):
         """
@@ -47,7 +47,7 @@ class FAIRChemCalculator(Calculator):
 
         Args:
             predict_unit (MLIPPredictUnit): A pretrained MLIPPredictUnit.
-            task_name (UMATask, optional): Name of the task to use if using a UMA checkpoint.
+            task_name (UMATask or str, optional): Name of the task to use if using a UMA checkpoint.
                 Determines default key names for energy, forces, and stress.
                 Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
             seed (int, optional): Random seed for reproducibility. Defaults to 42.
@@ -80,6 +80,9 @@ class FAIRChemCalculator(Calculator):
 
         self.calc_property_to_model_key_mapping = {}
         logging.debug(f"Available task names: {self.predictor.datasets}")
+
+        if isinstance(task_name, UMATask):
+            task_name = task_name.value
 
         if task_name is not None:
             assert (
