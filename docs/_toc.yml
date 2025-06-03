@@ -6,6 +6,7 @@ parts:
   chapters:
   - file: core/install
   - file: core/quickstart
+  - file: core/fairchemv1_v2
   - url: https://facebook-fairchem-uma-demo.hf.space/
     title: UMA Demo
 - caption: AI/ML Interatomic Potentials

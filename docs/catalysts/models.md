@@ -6,7 +6,6 @@
 3. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
 4. The UMA model is most likely to be updated in the future.
 
-
 ## Legacy FAIRChemV1 Models Trained on Open Catalyst 2020 (OC20)
 
 This page summarizes all the pretrained models released as part of the [Open Catalyst Project](https://opencatalystproject.org/), and are only available if you install fairchem<=2.0

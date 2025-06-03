@@ -1,21 +1,36 @@
-# Datasets in `fairchem`:
-`fairchem` provides training and evaluation code for tasks and models that take arbitrary
-chemical structures as input to predict energies / forces / positions / stresses,
-and can be used as a base scaffold for research projects. For an overview of
-tasks, data, and metrics, please read the documentations and respective papers:
- - [OC20](catalysts/datasets/oc20)
- - [OC22](catalysts/datasets/oc22)
- - [ODAC23](dac/datasets/odac)
- - [OC20Dense](catalysts/datasets/oc20dense)
- - [OC20NEB](catalysts/datasets/oc20neb)
- - [OMat24](inorganic_materials/datasets/omat24)
- - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
+# `fairchem` v1->v2
+Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
 
-# Projects and models built on `fairchem` version v2:
+We plan to bring back the following models compatible with Fairchem V2 soon:
+* Gemnet-OC
+* EquiformerV2
+* ESEN
+
+We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
+
+The old OCPCalculator, trainer code will NOT be revived. We apologize for the inconvenience and please raise Issues if you need help!
+In the meantime, you can still use models from fairchem version 1, by installing version 1,
+
+```bash
+pip install fairchem-core==1.10
+```
+
+And using the `OCPCalculator`
+```python
+from fairchem.core import OCPCalculator
+
+calc = OCPCalculator(
+    model_name="EquiformerV2-31M-S2EF-OC20-All+MD",
+    local_cache="pretrained_models",
+    cpu=False,
+)
+```
+
+## Projects and models built on `fairchem` version v2:
 
 - UMA (Universal Model for Atoms) [[`arXiv`](https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/)] [[`code`](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/core/models/uma)]
 
-# Projects and models built on `fairchem` version v1:
+## Projects and models built on `fairchem` version v1:
 
 You can still find these in the v1 version of fairchem github.
 However, many of these implementations are no longer actively supported.
