@@ -23,7 +23,7 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-from fairchem.core.units.mlip_unit.mlip_unit import InferenceSettings, MLIPPredictUnit
+from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 
 
 @pytest.mark.inference_check()
@@ -34,7 +34,8 @@ def test_inference_checkpoint_direct(
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = partial(AtomicData.from_ase,
+    a2g = partial(
+        AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
@@ -48,13 +49,12 @@ def test_inference_checkpoint_direct(
 
     sample_idx = 0
     while sample_idx < min(5, len(db)):
-        sample = a2g.convert(db.get_atoms(sample_idx))
-        sample["dataset"] = "oc20"
+        sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         batch = data_list_collater([sample], otf_graph=False)
 
         out = predictor.predict(batch)
-        energies.append(out["oc20_energy"])
-        forces.append(out["forces"] if "forces" in out else out["oc20_forces"])
+        energies.append(out["energy"])
+        forces.append(out["forces"])
         sample_idx += 1
     forces = torch.vstack(forces)
     energies = torch.stack(energies)
