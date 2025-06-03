@@ -22,7 +22,7 @@ parts:
     - file: core/common_tasks/fine_tuning
     - file: core/common_tasks/batch_inference
     - file: core/common_tasks/workflows
-    - file: core/model_faq
+    - file: core/uma_faq
   - file: core/generative_models
 - caption: Molecules & Molecular Crystals
   chapters:
