@@ -178,7 +178,7 @@ calc = OCPCalculator(
 ### LICENSE
 `fairchem` is available under a [MIT License](LICENSE.md).
 
-You are welcome to use our code for your own research and development, please use the relevant [Zenodo citation](https://zenodo.org/records/15587498):
+You are welcome to use our code for your own research and development, please use the relevant [Zenodo citation](https://zenodo.org/records/15587498) in your papers. If you are using our models or datasets please cite those in addition to this repo citation.
 ```
 Muhammed Shuaibi, Abhishek Das, anuroopsriram, Misko, Luis Barroso-Luque, Ray, Siddharth Goyal, zulissimeta, Brandon Wood, Tian Xie, Junwoong Yoon, Brook Wander, Adeesh Kolluru, Richard Barnes, Ethan Sunshine, Kevin Tran, Xiang, Daniel Levine, Nima Shoghi, … vbttchr. (2025). facebookresearch/fairchem: fairchem-core-2.2.0 (fairchem_core-2.2.0). Zenodo. https://doi.org/10.5281/zenodo.15587498
 ```
