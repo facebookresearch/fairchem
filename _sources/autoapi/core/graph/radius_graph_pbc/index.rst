@@ -23,6 +23,7 @@ Functions
    core.graph.radius_graph_pbc.get_max_neighbors_mask
    core.graph.radius_graph_pbc.radius_graph_pbc
    core.graph.radius_graph_pbc.canonical_pbc
+   core.graph.radius_graph_pbc.box_size_warning
    core.graph.radius_graph_pbc.radius_graph_pbc_v2
 
 
@@ -54,6 +55,8 @@ Module Contents
 .. py:function:: radius_graph_pbc(data, radius, max_num_neighbors_threshold, enforce_max_neighbors_strictly: bool = False, pbc: torch.Tensor | None = None)
 
 .. py:function:: canonical_pbc(data, pbc: torch.Tensor | None)
+
+.. py:function:: box_size_warning(cell, pos, pbc)
 
 .. py:function:: radius_graph_pbc_v2(data, radius, max_num_neighbors_threshold, enforce_max_neighbors_strictly: bool = False, pbc: torch.Tensor | None = None)
 

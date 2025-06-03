@@ -593,6 +593,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.get_max_neighbors_mask"><code class="docutils literal notranslate"><span class="pre">get_max_neighbors_mask()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.radius_graph_pbc"><code class="docutils literal notranslate"><span class="pre">radius_graph_pbc()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.canonical_pbc"><code class="docutils literal notranslate"><span class="pre">canonical_pbc()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.box_size_warning"><code class="docutils literal notranslate"><span class="pre">box_size_warning()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.radius_graph_pbc_v2"><code class="docutils literal notranslate"><span class="pre">radius_graph_pbc_v2()</span></code></a></li>
 </ul>
 </li>
@@ -634,7 +635,10 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.graph.radius_graph_pbc.canonical_pbc" title="core.graph.radius_graph_pbc.canonical_pbc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">canonical_pbc</span></code></a>(data, pbc)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.graph.radius_graph_pbc.radius_graph_pbc_v2" title="core.graph.radius_graph_pbc.radius_graph_pbc_v2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">radius_graph_pbc_v2</span></code></a>(data, radius, ...[, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.graph.radius_graph_pbc.box_size_warning" title="core.graph.radius_graph_pbc.box_size_warning"><code class="xref py py-obj docutils literal notranslate"><span class="pre">box_size_warning</span></code></a>(cell, pos, pbc)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.graph.radius_graph_pbc.radius_graph_pbc_v2" title="core.graph.radius_graph_pbc.radius_graph_pbc_v2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">radius_graph_pbc_v2</span></code></a>(data, radius, ...[, ...])</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -681,6 +685,11 @@ rounding errors, slab relaxation, temperature, etc.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="core.graph.radius_graph_pbc.canonical_pbc">
 <span class="sig-prename descclassname"><span class="pre">core.graph.radius_graph_pbc.</span></span><span class="sig-name descname"><span class="pre">canonical_pbc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pbc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.graph.radius_graph_pbc.canonical_pbc" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.graph.radius_graph_pbc.box_size_warning">
+<span class="sig-prename descclassname"><span class="pre">core.graph.radius_graph_pbc.</span></span><span class="sig-name descname"><span class="pre">box_size_warning</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cell</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pbc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.graph.radius_graph_pbc.box_size_warning" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -745,6 +754,7 @@ rounding errors, slab relaxation, temperature, etc.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.get_max_neighbors_mask"><code class="docutils literal notranslate"><span class="pre">get_max_neighbors_mask()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.radius_graph_pbc"><code class="docutils literal notranslate"><span class="pre">radius_graph_pbc()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.canonical_pbc"><code class="docutils literal notranslate"><span class="pre">canonical_pbc()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.box_size_warning"><code class="docutils literal notranslate"><span class="pre">box_size_warning()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.graph.radius_graph_pbc.radius_graph_pbc_v2"><code class="docutils literal notranslate"><span class="pre">radius_graph_pbc_v2()</span></code></a></li>
 </ul>
 </li>
