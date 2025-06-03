@@ -34,6 +34,8 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
 
 ```{code-cell} ipython3
+!wget https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/desorption_id_83_2409_9_111-4_neb1.0.traj
+
 from ase.io import read
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
