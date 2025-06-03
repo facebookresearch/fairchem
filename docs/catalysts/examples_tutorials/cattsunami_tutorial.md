@@ -59,13 +59,13 @@ slab = Slab.from_bulk_get_specific_millers(bulk = bulk, specific_millers=(0,0,1)
 # For AdsorbML num_sites = 100, but we use 5 here for brevity. This should be increased for practical use.
 reactant_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = reactant,
                                        mode="random_site_heuristic_placement",
-                                       num_sites = 100).atoms_list
+                                       num_sites = 10).atoms_list
 product1_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = product1,
                                       mode="random_site_heuristic_placement",
-                                      num_sites = 100).atoms_list
+                                      num_sites = 10).atoms_list
 product2_configs = AdsorbateSlabConfig(slab = slab[0], adsorbate = product2,
                                       mode="random_site_heuristic_placement",
-                                      num_sites = 100).atoms_list
+                                      num_sites = 10).atoms_list
 ```
 
 ```{code-cell} ipython3
