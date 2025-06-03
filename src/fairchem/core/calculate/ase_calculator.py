@@ -39,7 +39,7 @@ class FAIRChemCalculator(Calculator):
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,
-        task_name: UMATask | None = None,
+        task_name: UMATask | str | None = None,
         seed: int = 41,
     ):
         """
@@ -47,7 +47,7 @@ class FAIRChemCalculator(Calculator):
 
         Args:
             predict_unit (MLIPPredictUnit): A pretrained MLIPPredictUnit.
-            task_name (UMATask, optional): Name of the task to use if using a UMA checkpoint.
+            task_name (UMATask or str, optional): Name of the task to use if using a UMA checkpoint.
                 Determines default key names for energy, forces, and stress.
                 Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
             seed (int, optional): Random seed for reproducibility. Defaults to 42.
@@ -73,6 +73,9 @@ class FAIRChemCalculator(Calculator):
                 "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
                 "energy surface and energy conservation errors."
             )
+
+        if isinstance(task_name, UMATask):
+            task_name = task_name.value
 
         if task_name is not None:
             assert (
