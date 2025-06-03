@@ -482,7 +482,7 @@ def radius_graph_pbc_v2(
     max_internal_cell = (
         max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / grid_resolution
     )
-    if max_internal_cell > 0:
+    if max_internal_cell > 200:
         box_size_warning(data.cell, data.pos, pbc)
         grid_resolution = max(
             grid_resolution,
