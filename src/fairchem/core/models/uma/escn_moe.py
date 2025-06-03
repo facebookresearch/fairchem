@@ -304,7 +304,7 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         # run the internal head
         head_output = self.head(data, emb)
 
-        # check that all the dataset names is a strict subset of dataset names
+        # check that all the input dataset names is a strict subset of dataset names
         assert (
             set(data.dataset) <= set(self.dataset_names)
         ), f"Input dataset names: {set(data.dataset)} must be a strict subset of model's valid datset names: {set(self.dataset_names)} "
