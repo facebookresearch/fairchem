@@ -10,6 +10,7 @@
 ![tests](https://github.com/FAIR-Chem/fairchem/actions/workflows/test.yml/badge.svg?branch=main)
 ![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
 ![Static Badge](https://img.shields.io/badge/python-3.10%2B-blue)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15587498.svg)](https://doi.org/10.5281/zenodo.15587498)
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1)
 
@@ -176,3 +177,8 @@ calc = OCPCalculator(
 
 ### LICENSE
 `fairchem` is available under a [MIT License](LICENSE.md).
+
+You are welcome to use our code for your own research and development, please use the relevant [Zenodo citation](https://zenodo.org/records/15587498):
+```
+Muhammed Shuaibi, Abhishek Das, anuroopsriram, Misko, Luis Barroso-Luque, Ray, Siddharth Goyal, zulissimeta, Brandon Wood, Tian Xie, Junwoong Yoon, Brook Wander, Adeesh Kolluru, Richard Barnes, Ethan Sunshine, Kevin Tran, Xiang, Daniel Levine, Nima Shoghi, … vbttchr. (2025). facebookresearch/fairchem: fairchem-core-2.2.0 (fairchem_core-2.2.0). Zenodo. https://doi.org/10.5281/zenodo.15587498
+```
