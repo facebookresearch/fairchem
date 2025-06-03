@@ -24,7 +24,7 @@ demos, and application efforts for materials science and quantum chemistry.
 > :warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!
 
 ### Read our latest release post!
-Read about the [UMA model and dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
+Read about the [UMA model and OMOL25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
 [![Meta FAIR Science Release](https://github.com/user-attachments/assets/acddd09b-ed6f-4d05-9a4b-9ba5e2301150)](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/?ref=shareable)
 
