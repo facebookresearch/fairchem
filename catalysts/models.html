@@ -180,7 +180,8 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../core/install.html">Installation &amp; License</a></li>
 
-<li class="toctree-l1"><a class="reference internal" href="../core/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -191,15 +192,26 @@
 <li class="toctree-l1"><a class="reference internal" href="../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_dataset_creation.html">Making datasets</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/batch_inference.html">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../core/generative_models.html">Generative Models</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omol25.html">OMol25</a></li>
+</ul>
+</details></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/models.html">OMol25-trained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/FAQ.html">FAQ</a></li>
 </ul>
@@ -218,12 +230,8 @@
 </details></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="examples_tutorials/OCP-introduction.html">Detailed intro</a></li>
-
-
-
-
-<li class="toctree-l2"><a class="reference internal" href="examples_tutorials/adsorption_energies/adsorption_energies.html">Adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples_tutorials/OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples_tutorials/adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
 
 
 
@@ -587,7 +595,7 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#open-catalyst-2020-oc20">Open Catalyst 2020 (OC20)</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#legacy-fairchemv1-models-trained-on-open-catalyst-2020-oc20">Legacy FAIRChemV1 Models Trained on Open Catalyst 2020 (OC20)</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef-models-optimized-for-efwt">S2EF models: optimized for EFwT</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef-models-optimized-for-force-only">S2EF models: optimized for force only</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#is2re-models">IS2RE models</a></li>
@@ -610,10 +618,16 @@ document.write(`
                   
   <section class="tex2jax_ignore mathjax_ignore" id="pretrained-models">
 <h1>Pretrained models<a class="headerlink" href="#pretrained-models" title="Link to this heading">#</a></h1>
-<p>This page summarizes all the pretrained models released as part of the <a class="reference external" href="https://opencatalystproject.org/">Open Catalyst Project</a>. All models were trained using this codebase.</p>
-<hr class="docutils" />
-<section id="open-catalyst-2020-oc20">
-<h2>Open Catalyst 2020 (OC20)<a class="headerlink" href="#open-catalyst-2020-oc20" title="Link to this heading">#</a></h2>
+<p><strong>2025 recommendation:</strong> We now suggest using the <a class="reference internal" href="../core/uma.html"><span class="doc std std-doc">UMA model</span></a>, trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints</p>
+<ol class="arabic simple">
+<li><p>It is state-of-the-art in out-of-domain prediction accuracy</p></li>
+<li><p>It predicts total energies of a system, which are helpful for predicting properties beyond adsorption energies, and removes some ambiguity when your catalyst surface may reconstruct.</p></li>
+<li><p>The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc.</p></li>
+<li><p>The UMA model is most likely to be updated in the future.</p></li>
+</ol>
+<section id="legacy-fairchemv1-models-trained-on-open-catalyst-2020-oc20">
+<h2>Legacy FAIRChemV1 Models Trained on Open Catalyst 2020 (OC20)<a class="headerlink" href="#legacy-fairchemv1-models-trained-on-open-catalyst-2020-oc20" title="Link to this heading">#</a></h2>
+<p>This page summarizes all the pretrained models released as part of the <a class="reference external" href="https://opencatalystproject.org/">Open Catalyst Project</a>, and are only available if you install fairchem&lt;=2.0</p>
 <ul class="simple">
 <li><p>All configurations for these models are available in the <a class="reference external" href="https://github.com/FAIR-Chem/fairchem/tree/main/configs"><code class="docutils literal notranslate"><span class="pre">configs/</span></code></a> directory.</p></li>
 <li><p>All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see <a class="reference external" href="https://arxiv.org/abs/2010.09990">https://arxiv.org/abs/2010.09990</a> and https://github.com/FAIR-Chem/fairchem/blob/main/DATASET.md.</p></li>
@@ -1164,7 +1178,7 @@ OC22 dataset or pretrained models, as well as the original paper for each model:
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#open-catalyst-2020-oc20">Open Catalyst 2020 (OC20)</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#legacy-fairchemv1-models-trained-on-open-catalyst-2020-oc20">Legacy FAIRChemV1 Models Trained on Open Catalyst 2020 (OC20)</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef-models-optimized-for-efwt">S2EF models: optimized for EFwT</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef-models-optimized-for-force-only">S2EF models: optimized for force only</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#is2re-models">IS2RE models</a></li>

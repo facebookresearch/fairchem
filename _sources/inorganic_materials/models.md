@@ -1,13 +1,20 @@
 
 # Pretrained models
 
+**2025 recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
+1. It is state-of-the-art in out-of-domain prediction accuracy
+2. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
+3. The UMA model is most likely to be updated in the future.
+
+## Legacy OMat pretrained models
+
+These checkpoints are included here for baselining and model reproducibility. 
+
 * All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/FAIR-Chem/fairchem/tree/main/configs/omat24) directory.
 * All models are equiformerV2 S2EFS models
 
 **Note** in order to download any of the model checkpoints from the links below, you will need to first request access
-through the [OMMAT24 Hugging Face page](https://huggingface.co/fairchem/OMAT24).
-
-### OMat pretrained models
+through the [OMAT24 Hugging Face page](https://huggingface.co/fairchem/OMAT24).
 
 These checkpoints are trained on OMat24 only. Note that predictions are *not* Materials Project compatible.
 
@@ -18,7 +25,7 @@ These checkpoints are trained on OMat24 only. Note that predictions are *not* Ma
 | EquiformerV2-153M-OMat | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_153M_omat.pt) | [config](https://github.com/FAIR-Chem/fairchem/tree/main/configs/omat24/all/eqV2_153M.yml)  |
 
 
-### MPTrj only models
+## MPTrj only models
 These models are trained only on the [MPTrj]() dataset.
 
 | Model Name                | Checkpoint	| Config                                                                          |
@@ -29,7 +36,7 @@ These models are trained only on the [MPTrj]() dataset.
 | EquiformerV2-153M-DeNS-MP | [checkpoint](https://huggingface.co/fairchem/OMAT24/blob/main/eqV2_dens_153M_mp.pt) | [config](https://github.com/FAIR-Chem/fairchem/tree/main/configs/omat24/mptrj/eqV2_153M_dens_mptrj.yml) |
 
 
-### Finetuned OMat models
+## Finetuned OMat models
 These models are finetuned from the OMat pretrained checkpoints using MPTrj or MPTrj and sub-sampled trajectories
 from the 3D PBE Alexandria dataset, which we call Alex.
 

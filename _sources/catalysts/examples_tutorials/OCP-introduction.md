@@ -12,7 +12,7 @@ kernelspec:
   name: python3
 ---
 
-Detailed intro
+Intro to  adsorption energies
 ==================================================
 
 To introduce OCP we start with using it to calculate adsorption energies for a simple, atomic adsorbate where we specify the site we want to the adsorption energy for. Conceptually, you do this like you would do it with density functional theory. You create a slab model for the surface, place an adsorbate on it as an initial guess, run a relaxation to get the lowest energy geometry, and then compute the adsorption energy using reference states for the adsorbate.
@@ -21,7 +21,7 @@ You do have to be careful in the details though. Some OCP model/checkpoint combi
 
 +++
 
-# Adsorption energies
+## Intro to Adsorption energies
 
 Adsorption energies are always a reaction energy (an adsorbed species relative to some implied combination of reactants). There are many common schemes in the catalysis literature. 
 
@@ -155,7 +155,7 @@ See [convergence study](#Convergence-study) for some additional studies of facto
 
 +++
 
-# Trends in adsorption energies across metals.
+## Trends in adsorption energies across metals.
 
 Xu, Z., & Kitchin, J. R. (2014). Probing the coverage dependence of site and adsorbate configurational correlations on (111) surfaces of late transition metals. J. Phys. Chem. C, 118(44), 25597–25602. http://dx.doi.org/10.1021/jp508805h
 
@@ -240,7 +240,7 @@ for atom in adslab:
 print(re2 / nO)
 ```
 
-## Site correlations
+### Site correlations
 
 This cell reproduces a portion of a figure in the paper. We compare oxygen adsorption energies in the fcc and hcp sites across metals and coverages. These adsorption energies are highly correlated with each other because the adsorption sites are so similar.
 
@@ -328,13 +328,13 @@ plt.legend(['DFT (PBE)', 'UMA-OC20']);
 
 +++
 
-# Next steps
+## Next steps
 
 In the next step, we consider some more complex adsorbates in nitrogen reduction, and how we can leverage OCP to automate the search for the most stable adsorbate geometry. See [the next step](./NRR/NRR_example-gemnet).
 
 +++
 
-# Convergence study
+### Convergence study
 
 In [Calculating adsorption energies](#Calculating-adsorption-energies) we discussed some possible reasons we might see a discrepancy. Here we investigate some factors that impact the computed energies.
 
@@ -342,7 +342,7 @@ In this section, the energies refer to the reaction 1/2 O2 -> O*.
 
 +++
 
-## Effects of number of layers
+### Effects of number of layers
 
 Slab thickness could be a factor. Here we relax the whole slab, and see by about 4 layers the energy is converged to ~0.02 eV.
 
@@ -368,7 +368,7 @@ for nlayers in [3, 4, 5, 6, 7, 8]:
     print(f'nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
 ```
 
-## Effects of relaxation
+### Effects of relaxation
 
 It is common to only relax a few layers, and constrain lower layers to bulk coordinates. We do that here. We only relax the adsorbate and the top layer.
 
@@ -400,7 +400,7 @@ for nlayers in [3, 4, 5, 6, 7, 8]:
     print(f'nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
 ```
 
-## Unit cell size
+### Unit cell size
 
 Coverage effects are quite noticeable with oxygen. Here we consider larger unit cells. This effect is large, and the results don't look right, usually adsorption energies get more favorable at lower coverage, not less. This suggests fine-tuning could be important even at low coverages.
 

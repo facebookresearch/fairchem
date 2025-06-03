@@ -61,7 +61,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'core/install';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Quick Start" href="quickstart.html" />
+    <link rel="next" title="UMA Quick Start w/ ASE" href="quickstart.html" />
     <link rel="prev" title="Read our latest release post!" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -178,7 +178,8 @@
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Installation &amp; License</a></li>
 
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -189,15 +190,26 @@
 <li class="toctree-l1"><a class="reference internal" href="uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_dataset_creation.html">Making datasets</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/batch_inference.html">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="generative_models.html">Generative Models</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omol25.html">OMol25</a></li>
+</ul>
+</details></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/models.html">OMol25-trained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/FAQ.html">FAQ</a></li>
 </ul>
@@ -216,12 +228,8 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../catalysts/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../catalysts/examples_tutorials/OCP-introduction.html">Detailed intro</a></li>
-
-
-
-
-<li class="toctree-l2"><a class="reference internal" href="../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalysts/examples_tutorials/OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
 
 
 
@@ -697,7 +705,7 @@ document.write(`
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Quick Start</p>
+        <p class="prev-next-title">UMA Quick Start w/ ASE</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>

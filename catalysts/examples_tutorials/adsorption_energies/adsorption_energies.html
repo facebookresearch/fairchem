@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Adsorption energies &#8212; fairchem</title>
+    <title>Expert adsorption energies &#8212; fairchem</title>
   
   
   
@@ -62,7 +62,7 @@
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
     <link rel="next" title="AdsorbML tutorial" href="../adsorbml_walkthrough.html" />
-    <link rel="prev" title="Detailed intro" href="../OCP-introduction.html" />
+    <link rel="prev" title="Intro to adsorption energies" href="../OCP-introduction.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -178,7 +178,8 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../../core/install.html">Installation &amp; License</a></li>
 
-<li class="toctree-l1"><a class="reference internal" href="../../../core/quickstart.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -189,15 +190,26 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_dataset_creation.html">Making datasets</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/batch_inference.html">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../core/generative_models.html">Generative Models</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../molecules/datasets/omol25.html">OMol25</a></li>
+</ul>
+</details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../molecules/models.html">OMol25-trained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../molecules/FAQ.html">FAQ</a></li>
 </ul>
@@ -216,12 +228,8 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../models.html">Pretrained models</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="../summary.html">Examples &amp; Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="../OCP-introduction.html">Detailed intro</a></li>
-
-
-
-
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Expert adsorption energies</a></li>
 
 
 
@@ -575,7 +583,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Adsorption energies</h1>
+    <h1>Expert adsorption energies</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -585,7 +593,7 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Adsorption energies</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Expert adsorption energies</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#enumerate-the-adsorbate-slab-configurations-to-run-relaxations-on">Enumerate the adsorbate-slab configurations to run relaxations on</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#work-out-a-single-example">Work out a single example</a><ul class="nav section-nav flex-column">
@@ -610,8 +618,8 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="adsorption-energies">
-<h1>Adsorption energies<a class="headerlink" href="#adsorption-energies" title="Link to this heading">#</a></h1>
+  <section class="tex2jax_ignore mathjax_ignore" id="expert-adsorption-energies">
+<h1>Expert adsorption energies<a class="headerlink" href="#expert-adsorption-energies" title="Link to this heading">#</a></h1>
 <p>One of the most common tasks in computational catalysis is calculating the binding energies or adsorption energies of small molecules on catalyst surfaces.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
@@ -773,52 +781,52 @@ document.write(`
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-BFGS:    0 19:31:23     -130.573874        0.743498
+BFGS:    0 20:49:01     -130.573875        0.743498
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 19:31:24     -130.593842        0.705499
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 20:49:01     -130.593844        0.705499
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 19:31:24     -130.713449        0.528266
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 20:49:01     -130.713451        0.528267
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 19:31:24     -130.723151        0.223309
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 20:49:02     -130.723150        0.223309
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 19:31:24     -130.725650        0.206689
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 20:49:02     -130.725652        0.206689
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 19:31:24     -130.739412        0.090831
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 20:49:02     -130.739413        0.090831
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 19:31:24     -130.740176        0.095083
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 20:49:02     -130.740176        0.095083
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 19:31:24     -130.741184        0.096397
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 20:49:02     -130.741182        0.096397
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 19:31:24     -130.742677        0.086663
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 20:49:02     -130.742677        0.086663
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 19:31:24     -130.744012        0.071405
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 20:49:02     -130.744012        0.071405
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 19:31:25     -130.744715        0.071938
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 20:49:02     -130.744713        0.071938
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 19:31:25     -130.745220        0.078278
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 20:49:02     -130.745219        0.078278
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 19:31:25     -130.745959        0.087573
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 20:49:02     -130.745959        0.087573
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   13 19:31:25     -130.746790        0.070049
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   13 20:49:03     -130.746790        0.070052
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   14 19:31:25     -130.747348        0.043506
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   14 20:49:03     -130.747348        0.043502
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 2.3 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 2.2 seconds
 </pre></div>
 </div>
 </div>
@@ -954,7 +962,7 @@ BFGS:    0 19:31:23     -130.573874        0.743498
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|          | 0/3 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.6 seconds for data/slabs/oqmd-349719 slab relaxation
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.5 seconds for data/slabs/oqmd-349719 slab relaxation
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>9 H slabs to compute for oqmd-349719
@@ -982,15 +990,15 @@ Running data/adslabs/oqmd-349719_NNH/0
 Running data/adslabs/oqmd-349719_NNH/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.3 seconds for data/adslabs/oqmd-349719_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-349719_NNH/1
 Running data/adslabs/oqmd-349719_NNH/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.3 seconds for data/adslabs/oqmd-349719_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-349719_NNH/2
 Running data/adslabs/oqmd-349719_NNH/3
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 33%|███▎      | 1/3 [00:40&lt;01:20, 40.22s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 33%|███▎      | 1/3 [00:40&lt;01:20, 40.44s/it]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-349719_NNH/3
@@ -1012,7 +1020,7 @@ Running data/adslabs/oqmd-345911_H/1
 Running data/adslabs/oqmd-345911_H/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.4 seconds for data/adslabs/oqmd-345911_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.5 seconds for data/adslabs/oqmd-345911_H/2
 Running data/adslabs/oqmd-345911_H/3
 </pre></div>
 </div>
@@ -1032,7 +1040,7 @@ Running data/adslabs/oqmd-345911_NNH/2
 Running data/adslabs/oqmd-345911_NNH/3
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 67%|██████▋   | 2/3 [01:25&lt;00:42, 42.93s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 67%|██████▋   | 2/3 [01:25&lt;00:43, 43.04s/it]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-345911_NNH/3
@@ -1046,11 +1054,11 @@ Running data/adslabs/oqmd-345911_NNH/3
 Running data/adslabs/mp-2677_H/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.0 seconds for data/adslabs/mp-2677_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 0.9 seconds for data/adslabs/mp-2677_H/0
 Running data/adslabs/mp-2677_H/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.3 seconds for data/adslabs/mp-2677_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/mp-2677_H/1
 Running data/adslabs/mp-2677_H/2
 </pre></div>
 </div>
@@ -1058,30 +1066,30 @@ Running data/adslabs/mp-2677_H/2
 Running data/adslabs/mp-2677_H/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.3 seconds for data/adslabs/mp-2677_H/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/mp-2677_H/3
 Running data/adslabs/mp-2677_NNH/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.5 seconds for data/adslabs/mp-2677_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.3 seconds for data/adslabs/mp-2677_NNH/0
 Running data/adslabs/mp-2677_NNH/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.9 seconds for data/adslabs/mp-2677_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.6 seconds for data/adslabs/mp-2677_NNH/1
 Running data/adslabs/mp-2677_NNH/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.6 seconds for data/adslabs/mp-2677_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.2 seconds for data/adslabs/mp-2677_NNH/2
 Running data/adslabs/mp-2677_NNH/3
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 3/3 [01:55&lt;00:00, 37.19s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 3/3 [01:54&lt;00:00, 36.55s/it]
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 3/3 [01:55&lt;00:00, 38.47s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 3/3 [01:54&lt;00:00, 38.04s/it]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/mp-2677_NNH/3
-Elapsed time: 115.4 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/mp-2677_NNH/3
+Elapsed time: 114.1 seconds
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>
@@ -1294,7 +1302,7 @@ Elapsed time: 115.4 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/a2f4f700ae5a26cfa028f88abff732f83ce0df1075565caba8af848384956cd3.png" src="../../../_images/a2f4f700ae5a26cfa028f88abff732f83ce0df1075565caba8af848384956cd3.png" />
+<img alt="../../../_images/ae92ccdd1f1cf0362ee69bf6d1c1f01d26479081d859ef8609bfce33284eaa08.png" src="../../../_images/ae92ccdd1f1cf0362ee69bf6d1c1f01d26479081d859ef8609bfce33284eaa08.png" />
 </div>
 </div>
 </section>
@@ -1348,7 +1356,7 @@ Elapsed time: 115.4 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/4ecde10ccac87f0272237631c6507244e8df0131ebd072ea8db3ae87153fc1c5.png" src="../../../_images/4ecde10ccac87f0272237631c6507244e8df0131ebd072ea8db3ae87153fc1c5.png" />
+<img alt="../../../_images/cdde0ea44a73b985e1f0aaf7d8abdee004c9539e8846657bd0fdb7dbe26e3b96.png" src="../../../_images/cdde0ea44a73b985e1f0aaf7d8abdee004c9539e8846657bd0fdb7dbe26e3b96.png" />
 </div>
 </div>
 </section>
@@ -1389,7 +1397,7 @@ Elapsed time: 115.4 seconds
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Detailed intro</p>
+        <p class="prev-next-title">Intro to  adsorption energies</p>
       </div>
     </a>
     <a class="right-next"
@@ -1417,7 +1425,7 @@ Elapsed time: 115.4 seconds
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Adsorption energies</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Expert adsorption energies</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#enumerate-the-adsorbate-slab-configurations-to-run-relaxations-on">Enumerate the adsorbate-slab configurations to run relaxations on</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#work-out-a-single-example">Work out a single example</a><ul class="nav section-nav flex-column">

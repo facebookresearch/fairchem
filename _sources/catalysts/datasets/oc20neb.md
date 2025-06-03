@@ -1,5 +1,18 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
 
-# Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
+Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
+======================================================
 
 ## Overview
 This is a validation dataset which was used to assess model performance in [CatTSunami: Accelerating Transition State Energy Calculations with Pre-trained Graph Neural Networks](https://arxiv.org/abs/2405.02078). It is comprised of 932 NEB relaxation trajectories. There are three different types of reactions represented: desorptions, dissociations, and transfers. NEB calculations allow us to find transition states. The rate of reaction is determined by the transition state energy, so access to transition states is very important for catalysis research. For more information, check out the paper.
@@ -21,6 +34,8 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
 
 ```{code-cell} ipython3
+!wget https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/desorption_id_83_2409_9_111-4_neb1.0.traj
+
 from ase.io import read
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")

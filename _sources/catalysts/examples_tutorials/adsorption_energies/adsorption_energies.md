@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-Adsorption energies
+Expert adsorption energies
 ======================================================
 
 
