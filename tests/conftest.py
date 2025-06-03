@@ -46,6 +46,9 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
+    config.addinivalue_line(
+        "markers", "cpu_and_gpu: mark test to run on both GPU and CPU workers"
+    )
 
 
 def pytest_runtest_setup(item):

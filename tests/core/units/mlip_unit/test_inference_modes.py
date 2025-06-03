@@ -8,24 +8,22 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
-from functools import partial
 import random
+from functools import partial
 
-from ase import build
 import numpy as np
 import pytest
 import torch
+from ase import build
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
     inference_settings_turbo,
-)
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    MLIPPredictUnit,
 )
 
 
@@ -331,8 +329,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -344,24 +341,21 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     )
     _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(1))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(1), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "not-oc20"
+    sample = a2g(db.get_atoms(0), task_name="not-oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -390,8 +384,7 @@ def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -410,7 +403,7 @@ def get_batched_system(
     lattice_constant: float = 3.8,
 ):
     atom_systems = []
-    for i in range(systems):
+    for _ in range(systems):
         atoms = build.bulk("C", "fcc", a=lattice_constant)
         n_cells = int(np.ceil(np.cbrt(num_atoms_per_system)))
         atoms = atoms.repeat((n_cells, n_cells, n_cells))
@@ -453,7 +446,6 @@ def test_ac_with_chunking_and_batching(
     natoms,
     merge_mole,
 ):
-
     monkeypatch.setattr(
         "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_CHUNK_SIZE", chunk_size
     )
@@ -485,7 +477,7 @@ def test_ac_with_chunking_and_batching(
     )
     reset_seeds(0)
     result_ac = predictor_ac.predict(batch.clone())
-    assert torch.allclose(result_ac["oc20_energy"], result_no_ac["oc20_energy"])
+    assert torch.allclose(result_ac["energy"], result_no_ac["energy"])
     assert torch.allclose(
-        result_ac["oc20_forces"], result_no_ac["oc20_forces"], rtol=1e-5, atol=1e-5
+        result_ac["forces"], result_no_ac["forces"], rtol=1e-5, atol=1e-5
     )
