@@ -8,20 +8,22 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+import random
 from functools import partial
 
+import numpy as np
 import pytest
+import torch
+from ase import build
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.ase_datasets import AseDBDataset
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
     inference_settings_turbo,
-)
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    MLIPPredictUnit,
 )
 
 
@@ -242,7 +244,7 @@ def mole_inference(
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
     sample = AtomicData.from_ase(
-                db.get_atoms(0),
+        db.get_atoms(0),
         max_neigh=10,
         radius=100,
         r_energy=False,
@@ -317,7 +319,8 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = partial(AtomicData.from_ase,
+    a2g = partial(
+        AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
@@ -326,8 +329,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -339,24 +341,21 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
     )
     _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(1))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(1), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "not-oc20"
+    sample = a2g(db.get_atoms(0), task_name="not-oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
     with pytest.raises(AssertionError):
         _ = predictor.predict(batch.clone())
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -364,9 +363,7 @@ def test_mole_merge_inference_fail(conserving_mole_checkpoint, fake_uma_dataset)
 
 
 def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
-    direct_non_mole_inference_checkpoint_pt, _ = (
-        direct_checkpoint
-    )
+    direct_non_mole_inference_checkpoint_pt, _ = direct_checkpoint
     inference_mode = InferenceSettings(
         tf32=False,
         activation_checkpointing=False,
@@ -377,7 +374,8 @@ def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
 
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    a2g = partial(AtomicData.from_ase,
+    a2g = partial(
+        AtomicData.from_ase,
         max_neigh=10,
         radius=100,
         r_energy=False,
@@ -386,8 +384,7 @@ def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
         r_data_keys=["spin", "charge"],
     )
 
-    sample = a2g(db.get_atoms(0))
-    sample["dataset"] = "oc20"
+    sample = a2g(db.get_atoms(0), task_name="oc20")
     batch = data_list_collater(
         [sample], otf_graph=not inference_mode.external_graph_gen
     )
@@ -398,3 +395,89 @@ def test_mole_merge_on_non_mole_model(direct_checkpoint, fake_uma_dataset):
         inference_settings=inference_mode,
     )
     _ = predictor.predict(batch.clone())
+
+
+def get_batched_system(
+    num_atoms_per_system: int,
+    systems: int,
+    lattice_constant: float = 3.8,
+):
+    atom_systems = []
+    for _ in range(systems):
+        atoms = build.bulk("C", "fcc", a=lattice_constant)
+        n_cells = int(np.ceil(np.cbrt(num_atoms_per_system)))
+        atoms = atoms.repeat((n_cells, n_cells, n_cells))
+        indices = np.random.choice(len(atoms), num_atoms_per_system, replace=False)
+        sampled_atoms = atoms[indices]
+        ad = AtomicData.from_ase(sampled_atoms)
+        ad.dataset = "oc20"
+        ad.pos.requires_grad = True
+        atom_systems.append(ad)
+    return atomicdata_list_to_batch(atom_systems)
+
+
+def reset_seeds(seed=0):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+# Put this on GPU for now until the atan2 bug is fixed
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    # try very small chunk size to force ac to chunk
+    "chunk_size, nsystems, natoms, merge_mole",
+    [
+        # disable these for now until we fix the atan2 issue
+        (1024, 3, 100, False),  # batched + no merge
+        (1024 * 128, 5, 1000, False),  # batched + no merge
+        (1000, 1, 1000, False),  # unbatch + no merge
+        (1024 * 128, 1, 1000, False),  # unbatch + no merge
+        (1024 * 128, 1, 10000, False),  # unbatch + no merge
+        (1024, 1, 100, True),  # unbatched + merge mole
+    ],
+)
+def test_ac_with_chunking_and_batching(
+    conserving_mole_checkpoint,
+    monkeypatch,
+    chunk_size,
+    nsystems,
+    natoms,
+    merge_mole,
+):
+    monkeypatch.setattr(
+        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_CHUNK_SIZE", chunk_size
+    )
+    conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    ifs = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=False,
+        merge_mole=merge_mole,
+        compile=False,
+        wigner_cuda=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+    reset_seeds(0)
+    batch = get_batched_system(natoms, nsystems)
+    device = "cuda"
+    predictor_noac = MLIPPredictUnit(
+        conserving_mole_checkpoint_pt,
+        device=device,
+        inference_settings=ifs,
+    )
+    reset_seeds(0)
+    result_no_ac = predictor_noac.predict(batch.clone())
+    ifs.activation_checkpointing = True
+    predictor_ac = MLIPPredictUnit(
+        conserving_mole_checkpoint_pt,
+        device=device,
+        inference_settings=ifs,
+    )
+    reset_seeds(0)
+    result_ac = predictor_ac.predict(batch.clone())
+    assert torch.allclose(result_ac["energy"], result_no_ac["energy"])
+    assert torch.allclose(
+        result_ac["forces"], result_no_ac["forces"], rtol=1e-5, atol=1e-5
+    )

@@ -12,7 +12,6 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import ase
@@ -44,7 +43,7 @@ _REQUIRED_KEYS = [
     "tags",
 ]
 
-_OPTIONAL_KEYS = ["energy", "forces", "stress"]
+_OPTIONAL_KEYS = ["energy", "forces", "stress", "dataset"]
 
 # TODO: potential future keys
 # ["virials", "atom_attr", "edge_attr"]
@@ -121,51 +120,27 @@ def reshape_features(
     return edge_index, cell_offsets
 
 
-@dataclass
 class AtomicData:
-    # system
-    pos: torch.Tensor  # (num_node, 3)
-    atomic_numbers: torch.Tensor  # (num_node,)
-    cell: torch.Tensor  # (num_graph, 3, 3)
-    pbc: torch.Tensor  # (num_graph, 3)
-    natoms: torch.Tensor  # (1,)
-    charge: torch.Tensor  # (num_graph,)
-    spin: torch.Tensor  # (num_graph,)
-    # graph
-    edge_index: torch.Tensor  # (2, num_edge)
-    cell_offsets: torch.Tensor  # (num_edge, 3)
-    nedges: torch.Tensor  # (1,)
-    # extra
-    fixed: torch.Tensor  # (num_node,)
-    tags: torch.Tensor  # (num_node,)
-    # target
-    energy: torch.Tensor  # (num_graph,)
-    forces: torch.Tensor  # (num_node, 3)
-    stress: torch.Tensor  # (num_graph, 3, 3)
-    # batch
-    batch: torch.Tensor  # (num_node,)
-    # id
-    sid: list[str]
-
     def __init__(
         self,
-        pos,
-        atomic_numbers,
-        cell,
-        pbc,
-        natoms,
-        edge_index,
-        cell_offsets,
-        nedges,
-        charge,
-        spin,
-        fixed,
-        tags,
-        energy=None,
-        forces=None,
-        stress=None,
-        batch=None,
-        sid=None,
+        pos: torch.Tensor,  # (num_node, 3)
+        atomic_numbers: torch.Tensor,  # (num_node,)
+        cell: torch.Tensor,  # (num_graph, 3, 3)
+        pbc: torch.Tensor,  # (num_graph, 3)
+        natoms: torch.Tensor,  # (1,)
+        edge_index: torch.Tensor,  # (2, num_edge)
+        cell_offsets: torch.Tensor,  # (num_edge, 3)
+        nedges: torch.Tensor,  # (1,)
+        charge: torch.Tensor,  # (num_graph,)
+        spin: torch.Tensor,  # (num_graph,)
+        fixed: torch.Tensor,  # (num_node,)
+        tags: torch.Tensor,  # (num_node,)
+        energy: torch.Tensor | None = None,  # (num_graph,)
+        forces: torch.Tensor | None = None,  # (num_node, 3)
+        stress: torch.Tensor | None = None,  # (num_graph, 3, 3)
+        batch: torch.Tensor | None = None,  # (num_node,)
+        sid: list[str] | None = None,
+        dataset: list[str] | str | None = None,
     ):
         self.__keys__ = set(_REQUIRED_KEYS)
 
@@ -183,17 +158,18 @@ class AtomicData:
         self.spin = spin
         self.fixed = fixed
         self.tags = tags
+        self.sid = sid if sid is not None else [""]
+
+        if dataset is not None:
+            self.dataset = dataset
 
         # tagets
         if energy is not None:
             self.energy = energy
-            self.__keys__.add("energy")
         if forces is not None:
             self.forces = forces
-            self.__keys__.add("forces")
         if stress is not None:
             self.stress = stress
-            self.__keys__.add("stress")
 
         # batch related
         if batch is not None:
@@ -217,6 +193,14 @@ class AtomicData:
         # self.custom_fields = {}
 
         self.validate()
+
+    @property
+    def task_name(self):
+        return getattr(self, "dataset", None)
+
+    @task_name.setter
+    def task_name(self, value):
+        self.dataset = value
 
     def assign_batch_stats(self, slices, cumsum, cat_dims, natoms_list):
         self.__slices__ = slices
@@ -250,6 +234,14 @@ class AtomicData:
         assert self.tags.shape[0] == self.pos.shape[0]
         assert self.batch.shape == self.atomic_numbers.shape
         assert int(self.batch.max()) + 1 == self.num_graphs
+        assert len(self.sid) == self.num_graphs
+
+        if "dataset" in self.__keys__:
+            if isinstance(self.dataset, list):
+                assert len(self.dataset) == self.num_graphs
+            else:
+                assert isinstance(self.dataset, str)
+                assert self.num_graphs == 1
 
         # dtype checks
         assert (
@@ -297,13 +289,14 @@ class AtomicData:
         input_atoms: ase.Atoms,
         r_edges: bool = False,
         radius: float = 6.0,
-        max_neigh: Optional[float] = None,
-        sid: Optional[str] = None,
-        molecule_cell_size: Optional[float] = None,
-        r_energy: bool = True,
+        max_neigh: int | None = None,
+        sid: str | None = None,
+        molecule_cell_size: float | None = None,
+        r_energy: bool = True,  # deprecated
         r_forces: bool = True,
         r_stress: bool = True,
-        r_data_keys=None,  # NOT USED, compat for now
+        r_data_keys: list[str] | None = None,  # NOT USED, compat for now
+        task_name: str | None = None,
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -443,7 +436,8 @@ class AtomicData:
             energy=energy,
             forces=forces,
             stress=stress,
-            sid=sid,
+            sid=[sid] if isinstance(sid, str) else sid,
+            dataset=task_name,
         )
 
         return data
@@ -513,6 +507,7 @@ class AtomicData:
             stress=dictionary.get("stress", None),
             batch=dictionary.get("batch", None),
             sid=dictionary.get("sid", None),
+            dataset=dictionary.get("dataset", None),
         )
 
         # TODO: may require validation for them in the future
@@ -750,8 +745,11 @@ class AtomicData:
 
             data_dict[key] = item
 
-        data_dict["sid"] = [self.sid[idx]]
         data_dict["batch"] = torch.zeros_like(data_dict["atomic_numbers"])
+        data_dict["sid"] = [self.sid[idx]]
+
+        if hasattr(self, "dataset"):
+            data_dict["dataset"] = self.dataset[idx]
 
         return AtomicData.from_dict(data_dict)
 
@@ -805,8 +803,8 @@ def atomicdata_list_to_batch(
     slices = {key: [0] for key in keys}
     cumsum = {key: [0] for key in keys}
     cat_dims = {}
-    natoms_list = []
-    sid_list = []
+    natoms_list, sid_list = [], []
+
     for i, data in enumerate(data_list):
         assert (
             data.num_graphs == 1
@@ -850,8 +848,7 @@ def atomicdata_list_to_batch(
             cumsum[key].append(inc + cumsum[key][-1])
 
         natoms_list.append(data.natoms.item())
-        sid_list = sid_list + data.sid
-
+        sid_list.extend(data.sid)
         item = torch.full((data.natoms,), i, dtype=torch.long, device=device)
         batch.append(item)
 
