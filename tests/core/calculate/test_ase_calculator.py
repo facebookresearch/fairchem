@@ -21,6 +21,7 @@ from fairchem.core.calculate.ase_calculator import (
     AllZeroUnitCellError,
     MixedPBCError,
 )
+from fairchem.core.units.mlip_unit.api.inference import UMATask
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -97,6 +98,32 @@ def test_calculator_from_checkpoint():
     )
     assert "energy" in calc.implemented_properties
     assert "forces" in calc.implemented_properties
+
+
+def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
+    calc_omol = FAIRChemCalculator.from_model_checkpoint(
+        pretrained_mlip.available_models[0], task_name="omol"
+    )
+    calc_omol_uma_task = FAIRChemCalculator.from_model_checkpoint(
+        pretrained_mlip.available_models[0], task_name=UMATask.OMOL
+    )
+    calculators = [calc_omol, calc_omol_uma_task]
+    energies = []
+    for calc in calculators:
+        atoms = aperiodic_atoms
+        atoms.calc = calc
+        energy = atoms.get_potential_energy()
+        energies.append(energy)
+    np.testing.assert_allclose(energies[0], energies[1])
+
+
+def test_calculator_unknown_task_raises_error(aperiodic_atoms):
+    with pytest.raises(AssertionError):
+        calc_omol = FAIRChemCalculator.from_model_checkpoint(
+            pretrained_mlip.available_models[0], task_name="ommmmmol"
+        )
+        atoms = aperiodic_atoms
+        atoms.calc = calc_omol
 
 
 @pytest.mark.gpu()
