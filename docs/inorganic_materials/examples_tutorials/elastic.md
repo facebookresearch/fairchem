@@ -37,8 +37,8 @@ result = elastic_tensor_flow(
     job_params={
         "all": dict(
             method="fairchem",
-            model_name="EquiformerV2-31M-OMAT24-MP-sAlex",
-            local_cache="./fairchem_checkpoint_cache/",
+            get_predict_unit_kwargs={"model_name": "uma-s-1"},
+            task_name="omat",
         ),
     },
 )

@@ -19,7 +19,7 @@ One of the most common tasks in computational catalysis is calculating the bindi
 
 
 ```{code-cell} ipython3
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
 import ase.io
 from ase.optimize import BFGS
 import sys
@@ -38,13 +38,6 @@ from fairchem.data.oc.utils import DetectTrajAnomaly
 # If using a larger number of random samples this wouldn't be necessary
 import numpy as np
 np.random.seed(22)
-```
-
-```{code-cell} ipython3
-from fairchem.core.models.model_registry import model_name_to_local_file
-
-checkpoint_path = model_name_to_local_file('EquiformerV2-31M-S2EF-OC20-All+MD', local_cache='/tmp/fairchem_checkpoints/')
-checkpoint_path
 ```
 
 # Introduction
@@ -129,9 +122,9 @@ Running the model with BFGS prints at each relaxation step which is a lot to pri
 ```{code-cell} ipython3
 os.makedirs(f"data/{bulk_src_id}_{adsorbate_smiles_h}", exist_ok=True)
 
-# Define the calculator
-calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=False)   # if you have a GPU
-# calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=True)  # If you have CPU only
+# Define the 
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
 Now we setup and run the relaxation.
@@ -141,6 +134,7 @@ t0 = time.time()
 os.makedirs(f"data/{bulk_src_id}_H", exist_ok=True)
 adslab = adslabs[0]
 adslab.calc = calc
+adslab.pbc = True
 opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/test.traj")
 opt.run(fmax=0.05, steps=100)
 
@@ -184,18 +178,27 @@ from tqdm import tqdm
 tinit = time.time()
 
 # Note we're just doing the first bulk_id! 
-for bulk_src_id in tqdm(bulk_ids[:1]): 
+for bulk_src_id in tqdm(bulk_ids[:3]): 
+
+    # Set up data directories
+    os.makedirs(f"data/slabs/", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_H", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_NNH", exist_ok=True)
+
     # Enumerate slabs and establish adsorbates
     bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
     slab = Slab.from_bulk_get_specific_millers(bulk= bulk, specific_millers=(1, 1, 1))
 
+    slab_atoms = slab[0].atoms.copy()
+    slab_atoms.calc = calc
+    slab_atoms.pbc = True
+    opt = BFGS(slab_atoms, trajectory=f"data/slabs/{bulk_src_id}.traj", logfile=f"data/slabs/{bulk_src_id}.log")
+    opt.run(fmax=0.05, steps=20)
+    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/slabs/{bulk_src_id} slab relaxation')
+
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
     heuristic_adslabs_NNH = AdsorbateSlabConfig(slab[0], adsorbate_NNH, mode="heuristic")
-
-    #Run relaxations
-    os.makedirs(f"data/{bulk_src_id}_H", exist_ok=True)
-    os.makedirs(f"data/{bulk_src_id}_NNH", exist_ok=True)
 
     print(f'{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}')
     print(f'{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}')
@@ -204,19 +207,21 @@ for bulk_src_id in tqdm(bulk_ids[:1]):
     for idx, adslab in enumerate(heuristic_adslabs_H.atoms_list[:4]):
         t0 = time.time()
         adslab.calc = calc
-        print(f'Running data/{bulk_src_id}_H/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/{idx}.traj", logfile=f"data/{bulk_src_id}_H/{idx}.log")
+        adslab.pbc = True
+        print(f'Running data/adslabs/{bulk_src_id}_H/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_H/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_H/{idx}.log")
         opt.run(fmax=0.05, steps=20)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_H/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}')
         
     # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list[:4]):
         t0 = time.time()
         adslab.calc = calc
-        print(f'Running data/{bulk_src_id}_NNH/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/{bulk_src_id}_NNH/{idx}.log")
+        adslab.pbc = True
+        print(f'Running data/adslabs/{bulk_src_id}_NNH/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_NNH/{idx}.log")
         opt.run(fmax=0.05, steps=50)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_NNH/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_NNH/{idx}')
 
 print(f'Elapsed time: {time.time() - tinit:1.1f} seconds')
 ```
@@ -232,38 +237,51 @@ import time
 from tqdm import tqdm
 tinit = time.time()
 
+# Note we're just doing the first bulk_id! 
 for bulk_src_id in tqdm(bulk_ids): 
+
+    # Set up data directories
+    os.makedirs(f"data/slabs/", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_H", exist_ok=True)
+    os.makedirs(f"data/adslabs/{bulk_src_id}_NNH", exist_ok=True)
+
     # Enumerate slabs and establish adsorbates
     bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
     slab = Slab.from_bulk_get_specific_millers(bulk= bulk, specific_millers=(1, 1, 1))
+
+    slab_atoms = slab[0].atoms.copy()
+    slab_atoms.calc = calc
+    slab_atoms.pbc = True
+    opt = BFGS(slab_atoms, trajectory=f"data/slabs/{bulk_src_id}.traj", logfile=f"data/slabs/{bulk_src_id}.log")
+    opt.run(fmax=0.05, steps=20)
+    print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/slabs/{bulk_src_id} slab relaxation')
 
     # Perform heuristic placements
     heuristic_adslabs_H = AdsorbateSlabConfig(slab[0], adsorbate_H, mode="heuristic")
     heuristic_adslabs_NNH = AdsorbateSlabConfig(slab[0], adsorbate_NNH, mode="heuristic")
 
-    #Run relaxations
-    os.makedirs(f"data/{bulk_src_id}_H", exist_ok=True)
-    os.makedirs(f"data/{bulk_src_id}_NNH", exist_ok=True)
-
     print(f'{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}')
     print(f'{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}')
 
-    # Set up the calculator
+    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_H.atoms_list):
         t0 = time.time()
         adslab.calc = calc
-        print(f'Running data/{bulk_src_id}_H/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_H/{idx}.traj", logfile=f"data/{bulk_src_id}_H/{idx}.log")
+        adslab.pbc = True
+        print(f'Running data/adslabs/{bulk_src_id}_H/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_H/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_H/{idx}.log")
         opt.run(fmax=0.05, steps=20)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_H/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}')
         
+    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list):
         t0 = time.time()
         adslab.calc = calc
-        print(f'Running data/{bulk_src_id}_NNH/{idx}')
-        opt = BFGS(adslab, trajectory=f"data/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/{bulk_src_id}_NNH/{idx}.log")
+        adslab.pbc = True
+        print(f'Running data/adslabs/{bulk_src_id}_NNH/{idx}')
+        opt = BFGS(adslab, trajectory=f"data/adslabs/{bulk_src_id}_NNH/{idx}.traj", logfile=f"data/adslabs/{bulk_src_id}_NNH/{idx}.log")
         opt.run(fmax=0.05, steps=50)
-        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/{bulk_src_id}_NNH/{idx}')
+        print(f'  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_NNH/{idx}')
 
 print(f'Elapsed time: {time.time() - tinit:1.1f} seconds')
 ```
@@ -279,14 +297,27 @@ As a post-processing step we check to see if:
 
 We check these because they affect our referencing scheme and may result in energies that don't mean what we think, e.g. they aren't just adsorption, but include contributions from other things like desorption, dissociation or reconstruction. For (4), the relaxed surface should really be supplied as well. It will be necessary when correcting the SP / RX energies later. Since we don't have it here, we will ommit supplying it, and the detector will instead compare the initial and final slab from the adsorbate-slab relaxation trajectory. If a relaxed slab is provided, the detector will compare it and the slab after the adsorbate-slab relaxation. The latter is more correct!
 
+To compute the adsorption energies using the total energy UMA-OC20 model, we'll need the gas-phase reference energies from OC20 (see the original paper!). You could also calculate these quickly in DFT using a linear combination of H2O, H2, N2, and CO.
+```{code-cell}
+# reference energies from a linear combination of H2O/N2/CO/H2!
+atomic_reference_energies = {
+            "H": -3.477,
+            "N": -8.083,
+            "O": -7.204,
+            "C": -7.282,
+}
+```
+
 In this loop we find the most stable (most negative) adsorption energy for each adsorbate on each surface and save them in a DataFrame.
 
 ```{code-cell} ipython3
 # Iterate over trajs to extract results
 min_E = []
-for file_outer in glob("data/*"):
+for file_outer in glob("data/adslabs/*"):
     ads = file_outer.split("_")[1]
-    bulk = file_outer.split("/")[1].split("_")[0]
+    bulk = file_outer.split("/")[-1].split("_")[0]
+
+    slab = ase.io.read(f"data/slabs/{bulk}.traj")
     results = []
     for file in glob(f"{file_outer}/*.traj"):
         rx_id = file.split("/")[-1].split(".")[0]
@@ -300,7 +331,8 @@ for file_outer in glob("data/*"):
             or detector.has_surface_changed()
             or detector.is_adsorbate_intercalated()
         )
-        rx_energy = traj[-1].get_potential_energy()
+        rx_energy = traj[-1].get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in traj[0][traj[0].get_tags()==2].get_chemical_symbols()])
+
         results.append({"relaxation_idx": rx_id, "relaxed_atoms": traj[-1],
                         "relaxed_energy_ml": rx_energy, "anomolous": anom})
     df = pd.DataFrame(results)
@@ -351,8 +383,8 @@ ax1.legend(
 )
 ax1.scatter(x, y)
 ax1.axis("square")
-ax1.set_xlim([-3.5, 2])
-ax1.set_ylim([-3.5, 2])
+#ax1.set_xlim([-3.5, 2])
+#ax1.set_ylim([-3.5, 2])
 ax1.set_xlabel("dE predicted OCP [eV]")
 ax1.set_ylabel("dE NRR paper [eV]");
 
@@ -381,8 +413,8 @@ ax2.legend(
 )
 ax2.scatter(x, y)
 ax2.axis("square")
-ax2.set_xlim([-3.5, 2])
-ax2.set_ylim([-3.5, 2])
+#ax2.set_xlim([-3.5, 2])
+#ax2.set_ylim([-3.5, 2])
 ax2.set_xlabel("dE predicted OCP [eV]")
 ax2.set_ylabel("dE NRR paper [eV]");
 f.set_figwidth(15)

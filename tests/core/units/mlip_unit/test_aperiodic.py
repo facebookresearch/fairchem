@@ -11,7 +11,7 @@ import torch
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
 # variance in numerical error below num_tol
@@ -60,17 +60,15 @@ def test_conserving_mole_aperiodic_on_pt(
 
         atoms1 = atoms.copy()
         atoms1.center(50000)
-        sample1 = a2g(atoms1)
+        sample1 = a2g(atoms1, task_name="oc20")
         sample1.cell = sample1.cell.to(dtype)
-        sample1["dataset"] = "oc20"
         batch1 = data_list_collater([sample1], otf_graph=True)
 
         atoms2 = atoms.copy()
         # atoms2.center(2000)
         atoms2.pbc = np.array([False, False, False])
-        sample2 = a2g(atoms2)
+        sample2 = a2g(atoms2, task_name="oc20")
         sample2.cell = sample2.cell.to(dtype)
-        sample2["dataset"] = "oc20"
         batch2 = data_list_collater([sample2], otf_graph=True)
 
         original_positions1 = batch1.pos.clone().to(dtype)
@@ -84,8 +82,8 @@ def test_conserving_mole_aperiodic_on_pt(
             out1 = predictor_v1.predict(batch1)
             batch2.pos = original_positions2.clone()
             out2 = predictor_v2.predict(batch2)
-            energies.append(out1["oc20_energy"] - out2["oc20_energy"])
-            forces.append(out1.get("forces", out2.get("oc20_forces")))
+            energies.append(out1["energy"] - out2["energy"])
+            forces.append(out1.get("forces") - out2.get("forces"))
 
         force_var = torch.stack(forces).var(dim=0).max()
         energy_var = torch.stack(energies).var()

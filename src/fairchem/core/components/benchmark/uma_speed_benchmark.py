@@ -24,12 +24,10 @@ from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     inference_settings_default,
-)
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    MLIPPredictUnit,
 )
 
 

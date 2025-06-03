@@ -1,6 +1,4 @@
 # Table of contents
-# Learn more at https://jupyterbook.org/customize/toc.html
-
 format: jb-book
 root: index
 parts:
@@ -8,20 +6,31 @@ parts:
   chapters:
   - file: core/install
   - file: core/quickstart
-- caption: AI/ML models & usage
+  - url: https://facebook-fairchem-uma-demo.hf.space/
+    title: UMA Demo
+- caption: AI/ML Interatomic Potentials
   chapters:
   - file: core/intro
+  - file: core/uma
   - file: core/common_tasks/summary
     sections:
+    - file: core/common_tasks/ase_calculator
     - file: core/common_tasks/ase_dataset_creation
-    # - file: core/common_tasks/training
-#    - file: core/common_tasks/evaluation
-    # - file: core/common_tasks/fine-tuning/fine-tuning
-    # - file: core/common_tasks/inference
-    # - file: core/common_tasks/embeddings/embeddings
-#    - file: core/common_tasks/workflows
-  # - file: core/model_faq
+    - file: core/common_tasks/training
+    - file: core/common_tasks/evaluation
+    - file: core/common_tasks/fine-tuning/fine-tuning
+    - file: core/common_tasks/batch_inference
+    - file: core/common_tasks/workflows
+    - file: core/model_faq
   - file: core/generative_models
+- caption: Molecules & Molecular Crystals
+  chapters:
+  - file: molecules/datasets/summary
+    sections:
+    - file: molecules/datasets/omol25
+  - file: molecules/models
+ 
+  - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
   chapters:
   - url: https://opencatalystproject.org
@@ -38,11 +47,8 @@ parts:
   - file: catalysts/models
   - file: catalysts/examples_tutorials/summary
     sections:
-    - file: catalysts/examples_tutorials/adsorption_energies/adsorption_energies
-    - file: catalysts/examples_tutorials/fairchem_models_for_nebs
-    - file: catalysts/examples_tutorials/molecular_dynamics
-    - file: catalysts/examples_tutorials/intro
     - file: catalysts/examples_tutorials/OCP-introduction
+    - file: catalysts/examples_tutorials/adsorption_energies/adsorption_energies
     - file: catalysts/examples_tutorials/adsorbml_walkthrough
     - file: catalysts/examples_tutorials/cattsunami_tutorial
     - file: catalysts/examples_tutorials/ocpapi
