@@ -73,9 +73,12 @@ pd.DataFrame(top_candidates)
 
 ## Write VASP input files
 
-If you want to verify the results, you should run VASP. This assumes you have access to VASP pseudopotentials. The default VASP flags (which are equivalent to those used to make OC20) are located in `ocdata.utils.vasp`. Alternatively, you may pass your own vasp flags to the `write_vasp_input_files` function as `vasp_flags`
+If you want to verify the results, you should run VASP. This assumes you have access to VASP pseudopotentials. The default VASP flags (which are equivalent to those used to make OC20) are located in `ocdata.utils.vasp`. Alternatively, you may pass your own vasp flags to the `write_vasp_input_files` function as `vasp_flags`. Note that to run this you need access to the VASP pseudopotentials and need to have those set up in ASE. 
 
 ```{code-cell} ipython3
+---
+tags: ["skip-execution"]
+---
 import os
 from fairchem.data.oc.utils.vasp import write_vasp_input_files
 
