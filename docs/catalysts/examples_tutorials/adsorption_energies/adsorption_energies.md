@@ -216,10 +216,10 @@ for bulk_src_id in tqdm(bulk_ids[:3]):
         slab[0],
         adsorbate_H,
         mode="random_site_heuristic_placement",
-        num_configurations=10,
+        num_sites=10,
     )
     heuristic_adslabs_NNH = AdsorbateSlabConfig(
-        slab[0], adsorbate_NNH, mode="random_site_heuristic_placement"
+        slab[0], adsorbate_NNH, mode="random_site_heuristic_placement", num_sites=10,
     )
 
     print(f"{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}")
