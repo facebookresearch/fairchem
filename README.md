@@ -1,5 +1,3 @@
-# `fairchem` by the FAIR Chemistry team
-
 <p align="center">
   <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?
 </p>
@@ -14,6 +12,8 @@
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1)
 </h4>
+
+# `fairchem` by the FAIR Chemistry team
 
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
