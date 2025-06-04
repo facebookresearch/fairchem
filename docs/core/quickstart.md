@@ -13,7 +13,7 @@ kernelspec:
 
 # UMA Quick Start w/ ASE
 The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
-A single uma model can be used for a wide range of applications in chemistry and materials science by picking the
+A single UMA model can be used for a wide range of applications in chemistry and materials science by picking the
 appropriate task name for domain specific prediction.
 
 1. Make sure you have a Hugging Face account, have already applied for model access to the
