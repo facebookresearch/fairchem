@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.7
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -16,10 +16,12 @@ Inference using ASE and Predictor Interface
 
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
-For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface but using the predictor directly. 
+For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface but using the predictor directly.
 
 ```{code-cell} python3
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
+from __future__ import annotations
+
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
@@ -34,7 +36,9 @@ UMA is designed for both general-purpose usage (single or batched systems) and s
 For long rollout trajectory use-cases, such as molecular dynamics (MD) or relaxations, we provide a special mode called **turbo**, which optimizes for speed but restricts the user to using a single system where the atomic composition is held constant. Turbo mode is approximately 1.5-2x faster than default mode, depending on the situation. However, batching is not supported in this mode. It can be easily activated as shown below.
 
 ```{code-cell} python3
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda", inference_settings="turbo")
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1", device="cuda", inference_settings="turbo"
+)
 ```
 
 ## Custom modes for advanced users
@@ -65,5 +69,7 @@ settings = InferenceSettings(
     internal_graph_gen_version=2,
 )
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda", inference_settings=settings)
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1", device="cuda", inference_settings=settings
+)
 ```
