@@ -19,8 +19,10 @@ Python library for programmatic use of the [Open Catalyst Demo](https://open-cat
 Ensure you have Python 3.9.1 or newer, and install `ocpapi` using:
 
 ```{code-cell} ipython3
-%%sh
-pip install -q ocpapi
+---
+tags: ["skip-execution"]
+---
+! pip install -q ocpapi
 ```
 
 ## Quickstart
