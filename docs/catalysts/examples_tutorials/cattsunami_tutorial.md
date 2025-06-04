@@ -125,9 +125,9 @@ af = AutoFrameDissociation(
 ```
 
 ```{code-cell} ipython3
-import numpy as np
+import random
 nframes = 10
-np.random.seed(42) # set the seed to make the random generation deterministic for the tutorial!
+random.seed(42) # set the seed to make the random generation deterministic for the tutorial!
 frame_sets, mapping_idxs = af.get_neb_frames(calc,
                                n_frames = nframes,
                                n_pdt1_sites=4, # = 5 in the above fig (step 1)

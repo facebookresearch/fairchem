@@ -1,10 +1,15 @@
 # Pretrained models
 
-This page summarizes all the pretrained models released as part of the [Open Catalyst Project](https://opencatalystproject.org/). All models were trained using this codebase.
+**2025 recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
+1. It is state-of-the-art in out-of-domain prediction accuracy
+2. It predicts total energies of a system, which are helpful for predicting properties beyond adsorption energies, and removes some ambiguity when your catalyst surface may reconstruct. 
+3. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
+4. The UMA model is most likely to be updated in the future.
 
-* * *
+## Legacy FAIRChemV1 Models Trained on Open Catalyst 2020 (OC20)
 
-## Open Catalyst 2020 (OC20)
+This page summarizes all the pretrained models released as part of the [Open Catalyst Project](https://opencatalystproject.org/), and are only available if you install fairchem<=2.0
+
 
 * All configurations for these models are available in the [`configs/`](https://github.com/FAIR-Chem/fairchem/tree/main/configs) directory.
 * All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/FAIR-Chem/fairchem/blob/main/DATASET.md.

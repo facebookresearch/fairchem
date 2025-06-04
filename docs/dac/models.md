@@ -1,6 +1,12 @@
 
 # Pretrained models
 
+**2025 recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
+1. It is state-of-the-art in out-of-domain prediction accuracy
+2. It predicts total energies of a system, which are helpful for predicting properties beyond adsorption energies, and removes some ambiguity when your MOF may reconstruct. 
+3. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
+4. The UMA model is most likely to be updated in the future.
+
 ## ODAC23
 * All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/FAIR-Chem/fairchem/tree/main/configs/odac) directory.
 
