@@ -244,7 +244,7 @@ This is a very exciting and interesting research area\! We expect that OCP model
 
 ### What DFT settings should I use to verify the single-points? How would I reproduce these energies with DFT?
 
-The [Open Catalyst Dataset repo](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main) can be used to create DFT inputs. Specifically, the DFT settings are provided [here](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/blob/main/ocdata/utils/vasp.py#L20-L35) to ensure consistency with the underlying OC20 DFT-level theory.
+The [Open Catalyst Dataset repo](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/oc) can be used to create DFT inputs. Specifically, the DFT settings are provided [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/data/oc/utils/vasp.py) to ensure consistency with the underlying OC20 DFT-level theory.
 
 
 ### What does the “shift” mean in the surface information? 
