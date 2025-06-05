@@ -5,5 +5,4 @@ license: "MIT"
 type: software
 message: "If you use this software, please cite it as below."
 doi: 10.5281/zenodo.15587497
-repository-code: 'https://github.com/facebookresearch/fairchem'
-url: 'https://fair-chem.github.io/'
+url: 'https://github.com/facebookresearch/fairchem'
