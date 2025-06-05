@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Batch inference &#8212; fairchem</title>
+    <title>Batch inference with UMA models &#8212; `fairchem`</title>
   
   
   
@@ -61,8 +61,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'core/common_tasks/batch_inference';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Workflows" href="workflows.html" />
-    <link rel="prev" title="Fine-tuning" href="fine_tuning.html" />
+    <link rel="next" title="FAIRChem &amp; Custom Datasets" href="ase_dataset_creation.html" />
+    <link rel="prev" title="Inference using ASE and Predictor Interface" href="ase_calculator.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">fairchem</p>
+    <p class="title logo__title">`fairchem`</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,16 +170,15 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../../index.html">
-                    Read our latest release post!
+                    fairchem by the FAIR Chemistry team
                 </a>
             </li>
         </ul>
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../install.html">Installation &amp; License</a></li>
-
 <li class="toctree-l1"><a class="reference internal" href="../quickstart.html">UMA Quick Start w/ ASE</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -193,11 +192,11 @@
 
 
 
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Batch inference with UMA models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="evaluation.html">Evaluation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="workflows.html">Workflows</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../uma_faq.html">FAQ</a></li>
 </ul>
@@ -208,6 +207,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">OMol25-trained models</a></li>
@@ -570,7 +570,9 @@ document.write(`
   </button>
 `);
 </script>
-
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
 </div></div>
       
     </div>
@@ -581,11 +583,21 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Batch inference</h1>
+    <h1>Batch inference with UMA models</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
             
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#generate-batches-at-runtime">Generate batches at runtime</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-inference-using-a-dataset-and-a-dataloader">Batch inference using a dataset and a dataloader</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inference-over-heterogenous-batches">Inference over heterogenous batches</a></li>
+</ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -595,9 +607,98 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="batch-inference">
-<h1>Batch inference<a class="headerlink" href="#batch-inference" title="Link to this heading">#</a></h1>
-<p>If you have many small systems that need to be evaluated or relaxed in parallel, it sometimes makes more sense to make model predictions as batches to improve GPU utilization. More details to be provided here soon!</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="batch-inference-with-uma-models">
+<h1>Batch inference with UMA models<a class="headerlink" href="#batch-inference-with-uma-models" title="Link to this heading">#</a></h1>
+<p>If your application requires predictions over many systems you can run batch inference using
+UMA models to use compute more efficiently and improve GPU utilization. Below we show some easy ways to run batch
+inference over batches created at runtime or loading from a dataset. If you want to learn more about the different
+inference settings supported have a look at the
+<a class="reference external" href="https://fair-chem.github.io/core/common_tasks/ase_calculator.html">Prediction interface documentation</a></p>
+<section id="generate-batches-at-runtime">
+<h2>Generate batches at runtime<a class="headerlink" href="#generate-batches-at-runtime" title="Link to this heading">#</a></h2>
+<p>The recommended way to create batches at runtime is to convert ASE <code class="docutils literal notranslate"><span class="pre">Atoms</span></code> objects into <code class="docutils literal notranslate"><span class="pre">AtomicData</span></code>
+as follows,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">bulk</span><span class="p">,</span> <span class="n">molecule</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_mlip</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets.atomic_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">AtomicData</span><span class="p">,</span> <span class="n">atomicdata_list_to_batch</span>
+
+<span class="n">atoms_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">bulk</span><span class="p">(</span><span class="s2">&quot;Pt&quot;</span><span class="p">),</span> <span class="n">bulk</span><span class="p">(</span><span class="s2">&quot;Cu&quot;</span><span class="p">),</span> <span class="n">bulk</span><span class="p">(</span><span class="s2">&quot;NaCl&quot;</span><span class="p">,</span> <span class="n">crystalstructure</span><span class="o">=</span><span class="s2">&quot;rocksalt&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">2.0</span><span class="p">)]</span>
+
+<span class="c1"># you need to assign the task_name desired</span>
+<span class="n">atomic_data_list</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">AtomicData</span><span class="o">.</span><span class="n">from_ase</span><span class="p">(</span><span class="n">atoms</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">atoms</span> <span class="ow">in</span> <span class="n">atoms_list</span>
+<span class="p">]</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">atomicdata_list_to_batch</span><span class="p">(</span><span class="n">atomic_data_list</span><span class="p">)</span>
+
+<span class="n">predictor</span> <span class="o">=</span> <span class="n">pretrained_mlip</span><span class="o">.</span><span class="n">get_predict_unit</span><span class="p">(</span><span class="s2">&quot;uma-s-1&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+<span class="n">preds</span> <span class="o">=</span> <span class="n">predictor</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The predictions are returned in a dictionary with single <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> value for each property predicted.
+system level properties can be accessed using the same index for the system in the <code class="docutils literal notranslate"><span class="pre">atomic_data_list</span></code>, atom level
+properties like forces can be obtained for a single system in the batch using the <code class="docutils literal notranslate"><span class="pre">batch.batch</span></code> attribute,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># energy of the first system in the batch</span>
+<span class="n">preds</span><span class="p">[</span><span class="s2">&quot;energy&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+
+<span class="c1"># forces of the first system in the batch</span>
+<span class="n">preds</span><span class="p">[</span><span class="s2">&quot;forces&quot;</span><span class="p">][</span><span class="n">batch</span><span class="o">.</span><span class="n">batch</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="batch-inference-using-a-dataset-and-a-dataloader">
+<h2>Batch inference using a dataset and a dataloader<a class="headerlink" href="#batch-inference-using-a-dataset-and-a-dataloader" title="Link to this heading">#</a></h2>
+<p>If you are running predictions over more structures than you can fit in memory, you can run inference using
+a torch Dataloader,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataLoader</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">AseDBDataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets.atomic_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">atomicdata_list_to_batch</span>
+
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">AseDBDataset</span><span class="p">(</span>
+    <span class="n">config</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">src</span><span class="o">=</span><span class="s2">&quot;path/to/your/dataset.aselmdb&quot;</span><span class="p">,</span> <span class="n">a2g_args</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omol&quot;</span><span class="p">))</span>
+<span class="p">)</span>
+<span class="n">loader</span> <span class="o">=</span> <span class="n">DataLoader</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">collate_fn</span><span class="o">=</span><span class="n">atomicdata_list_to_batch</span><span class="p">)</span>
+<span class="n">predictor</span> <span class="o">=</span> <span class="n">pretrained_mlip</span><span class="o">.</span><span class="n">get_predict_unit</span><span class="p">(</span><span class="s2">&quot;uma-s-1&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">loader</span><span class="p">:</span>
+    <span class="n">preds</span> <span class="o">=</span> <span class="n">predictor</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="inference-over-heterogenous-batches">
+<h2>Inference over heterogenous batches<a class="headerlink" href="#inference-over-heterogenous-batches" title="Link to this heading">#</a></h2>
+<p>For the odd cases where you want to batch systems to be computed with different task predictions
+(ie molecules and materials), you can take advantage of UMA models and do it in a single batch
+as follows,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">bulk</span><span class="p">,</span> <span class="n">molecule</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_mlip</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets.atomic_data</span><span class="w"> </span><span class="kn">import</span> <span class="n">AtomicData</span><span class="p">,</span> <span class="n">atomicdata_list_to_batch</span>
+
+<span class="c1"># a molecule</span>
+<span class="n">h2o</span> <span class="o">=</span> <span class="n">molecule</span><span class="p">(</span><span class="s2">&quot;H2O&quot;</span><span class="p">)</span>
+<span class="n">h2o</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;charge&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;spin&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">})</span>
+
+<span class="c1"># a bulk</span>
+<span class="n">pt</span> <span class="o">=</span> <span class="n">bulk</span><span class="p">(</span><span class="s2">&quot;Pt&quot;</span><span class="p">)</span>
+
+<span class="c1"># a catalytic surface</span>
+<span class="n">slab</span> <span class="o">=</span> <span class="n">fcc100</span><span class="p">(</span><span class="s2">&quot;Cu&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">vacuum</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span> <span class="n">periodic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">adsorbate</span> <span class="o">=</span> <span class="n">molecule</span><span class="p">(</span><span class="s2">&quot;CO&quot;</span><span class="p">)</span>
+<span class="n">add_adsorbate</span><span class="p">(</span><span class="n">slab</span><span class="p">,</span> <span class="n">adsorbate</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="s2">&quot;bridge&quot;</span><span class="p">)</span>
+
+<span class="n">atomic_data_list</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="c1"># note that we put the molecule in a large box</span>
+    <span class="n">AtomicData</span><span class="o">.</span><span class="n">from_ase</span><span class="p">(</span>
+        <span class="n">h2o</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omol&quot;</span><span class="p">,</span> <span class="n">r_data_keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;spin&quot;</span><span class="p">,</span> <span class="s2">&quot;charge&quot;</span><span class="p">],</span> <span class="n">molecule_cell_size</span><span class="o">=</span><span class="mi">12</span>
+    <span class="p">),</span>
+    <span class="n">AtomicData</span><span class="o">.</span><span class="n">from_ase</span><span class="p">(</span><span class="n">pt</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">),</span>
+    <span class="n">AtomicData</span><span class="o">.</span><span class="n">from_ase</span><span class="p">(</span><span class="n">slab</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;oc20&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">batch</span> <span class="o">=</span> <span class="n">atomicdata_list_to_batch</span><span class="p">(</span><span class="n">atomic_data_list</span><span class="p">)</span>
+
+<span class="n">predictions</span> <span class="o">=</span> <span class="n">predictor</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">batch</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
 </section>
 
     <script type="text/x-thebe-config">
@@ -631,20 +732,20 @@ document.write(`
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="fine_tuning.html"
+       href="ase_calculator.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Fine-tuning</p>
+        <p class="prev-next-title">Inference using ASE and Predictor Interface</p>
       </div>
     </a>
     <a class="right-next"
-       href="workflows.html"
+       href="ase_dataset_creation.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Workflows</p>
+        <p class="prev-next-title">FAIRChem &amp; Custom Datasets</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -654,6 +755,23 @@ document.write(`
             </div>
             
             
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#generate-batches-at-runtime">Generate batches at runtime</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#batch-inference-using-a-dataset-and-a-dataloader">Batch inference using a dataset and a dataloader</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inference-over-heterogenous-batches">Inference over heterogenous batches</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
               
             
           </div>

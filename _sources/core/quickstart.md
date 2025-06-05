@@ -13,22 +13,19 @@ kernelspec:
 
 # UMA Quick Start w/ ASE
 The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
-A single uma model can be used for a wide range of applications in chemistry and materials science by picking the
+A single UMA model can be used for a wide range of applications in chemistry and materials science by picking the
 appropriate task name for domain specific prediction.
 
-## Instantiate a calculator from a pretrained model
-Make sure you have a Hugging Face account, have already applied for model access to the
+1. Make sure you have a Hugging Face account, have already applied for model access to the
 [UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
-
-## Set the task for your application and calculate
-
+2. Set the task for your application and calculate
 - **oc20:** use this for catalysis
 - **omat:** use this for inorganic materials
 - **omol:** use this for molecules
 - **odac:** use this for MOFs
 - **omc:** use this for molecular crystals
 
-## Relax an adsorbate on a catalytic surface,
+## Relax an adsorbate on a catalytic surface
 ```python
 from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
@@ -49,7 +46,7 @@ opt = LBFGS(slab)
 opt.run(0.05, 100)
 ```
 
-## Relax an inorganic crystal,
+## Relax an inorganic crystal
 ```python
 from ase.build import bulk
 from ase.optimize import FIRE
@@ -66,7 +63,7 @@ opt = LBFGS(FrechetCellFilter(atoms))
 opt.run(0.05, 100)
 ```
 
-## Run molecular MD,
+## Run molecular MD
 ```python
 from ase import units
 from ase.io import Trajectory

@@ -20,15 +20,17 @@ The latest UMA models are now total-energy models, and the results for the adsor
 ## Define desired adsorbate+slab system
 
 ```{code-cell} ipython3
-import ase.io
-from fairchem.data.oc.core import Adsorbate, AdsorbateSlabConfig, Bulk, Slab
+from __future__ import annotations
+
 import pandas as pd
+from fairchem.data.oc.core import Adsorbate, Bulk, Slab
+
 bulk_src_id = "mp-30"
 adsorbate_smiles = "*CO"
 
-bulk = Bulk(bulk_src_id_from_db = bulk_src_id)
+bulk = Bulk(bulk_src_id_from_db=bulk_src_id)
 adsorbate = Adsorbate(adsorbate_smiles_from_db=adsorbate_smiles)
-slabs = Slab.from_bulk_get_specific_millers(bulk = bulk, specific_millers=(1,1,1))
+slabs = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1, 1, 1))
 
 # There may be multiple slabs with this miller index.
 # For demonstrative purposes we will take the first entry.
@@ -40,8 +42,8 @@ slab = slabs[0]
 Now that we've defined the bulk, slab, and adsorbates of interest, we can quickly use the pre-trained UMA model as a calculator and the helper script `fairchem.core.components.calculate.recipes.adsorbml.run_adsorbml`. More details on the automated pipeline can be found at https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/adsorbml.py#L316.
 
 ```{code-cell} ipython3
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
 from ase.optimize import LBFGS
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.components.calculate.recipes.adsorbml import run_adsorbml
 
 predictor = pretrained_mlip.get_predict_unit("uma-s-1")
@@ -53,9 +55,9 @@ outputs = run_adsorbml(
     calculator=calc,
     optimizer_cls=LBFGS,
     fmax=0.02,
-    steps=20,         # Increase to 200 for practical application, 20 is used for demonstrations
-    num_placements=10, # Increase to 100 for practical application, 10 is used for demonstrations
-    reference_ml_energies=True, #True if using a total energy model (i.e. UMA)
+    steps=20,  # Increase to 200 for practical application, 20 is used for demonstrations
+    num_placements=10,  # Increase to 100 for practical application, 10 is used for demonstrations
+    reference_ml_energies=True,  # True if using a total energy model (i.e. UMA)
     relaxed_slab_atoms=None,
     place_on_relaxed_slab=False,
 )
@@ -73,13 +75,13 @@ pd.DataFrame(top_candidates)
 
 ## Write VASP input files
 
-If you want to verify the results, you should run VASP. This assumes you have access to VASP pseudopotentials. The default VASP flags (which are equivalent to those used to make OC20) are located in `ocdata.utils.vasp`. Alternatively, you may pass your own vasp flags to the `write_vasp_input_files` function as `vasp_flags`. Note that to run this you need access to the VASP pseudopotentials and need to have those set up in ASE. 
+If you want to verify the results, you should run VASP. This assumes you have access to VASP pseudopotentials. The default VASP flags (which are equivalent to those used to make OC20) are located in `ocdata.utils.vasp`. Alternatively, you may pass your own vasp flags to the `write_vasp_input_files` function as `vasp_flags`. Note that to run this you need access to the VASP pseudopotentials and need to have those set up in ASE.
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: [skip-execution]
+
 import os
+
 from fairchem.data.oc.utils.vasp import write_vasp_input_files
 
 # Grab the 5 systems with the lowest energy
@@ -88,5 +90,5 @@ top_5_candidates = top_candidates[:5]
 # Write the inputs
 for idx, config in enumerate(top_5_candidates):
     os.makedirs(f"data/{idx}", exist_ok=True)
-    write_vasp_input_files(config["atoms"], outdir = f"data/{idx}/")
+    write_vasp_input_files(config["atoms"], outdir=f"data/{idx}/")
 ```

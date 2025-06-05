@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>UMA Quick Start w/ ASE &#8212; fairchem</title>
+    <title>UMA Quick Start w/ ASE &#8212; `fairchem`</title>
   
   
   
@@ -61,7 +61,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'core/quickstart';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="fairchem v1-&gt;v2" href="fairchemv1_v2.html" />
+    <link rel="next" title="fairchem&gt;=2.0" href="fairchemv1_v2.html" />
     <link rel="prev" title="Installation &amp; License" href="install.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">fairchem</p>
+    <p class="title logo__title">`fairchem`</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,16 +170,15 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../index.html">
-                    Read our latest release post!
+                    fairchem by the FAIR Chemistry team
                 </a>
             </li>
         </ul>
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation &amp; License</a></li>
-
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">UMA Quick Start w/ ASE</a></li>
-<li class="toctree-l1"><a class="reference internal" href="fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -193,11 +192,11 @@
 
 
 
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/evaluation.html">Evaluation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/batch_inference.html">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/workflows.html">Workflows</a></li>
 <li class="toctree-l2"><a class="reference internal" href="uma_faq.html">FAQ</a></li>
 </ul>
@@ -208,6 +207,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/models.html">OMol25-trained models</a></li>
@@ -593,11 +593,9 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#instantiate-a-calculator-from-a-pretrained-model">Instantiate a calculator from a pretrained model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#set-the-task-for-your-application-and-calculate">Set the task for your application and calculate</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-adsorbate-on-a-catalytic-surface">Relax an adsorbate on a catalytic surface,</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-inorganic-crystal">Relax an inorganic crystal,</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-molecular-md">Run molecular MD,</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-adsorbate-on-a-catalytic-surface">Relax an adsorbate on a catalytic surface</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-inorganic-crystal">Relax an inorganic crystal</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-molecular-md">Run molecular MD</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#calculate-a-spin-gap">Calculate a spin gap</a></li>
 </ul>
             </nav>
@@ -613,15 +611,13 @@ document.write(`
   <section class="tex2jax_ignore mathjax_ignore" id="uma-quick-start-w-ase">
 <h1>UMA Quick Start w/ ASE<a class="headerlink" href="#uma-quick-start-w-ase" title="Link to this heading">#</a></h1>
 <p>The easiest way to use pretrained models is via the <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/">ASE</a> <code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator</span></code>.
-A single uma model can be used for a wide range of applications in chemistry and materials science by picking the
+A single UMA model can be used for a wide range of applications in chemistry and materials science by picking the
 appropriate task name for domain specific prediction.</p>
-<section id="instantiate-a-calculator-from-a-pretrained-model">
-<h2>Instantiate a calculator from a pretrained model<a class="headerlink" href="#instantiate-a-calculator-from-a-pretrained-model" title="Link to this heading">#</a></h2>
-<p>Make sure you have a Hugging Face account, have already applied for model access to the
-<a class="reference external" href="https://huggingface.co/facebook/UMA">UMA model repository</a>, and have logged in to Hugging Face using an access token.</p>
-</section>
-<section id="set-the-task-for-your-application-and-calculate">
-<h2>Set the task for your application and calculate<a class="headerlink" href="#set-the-task-for-your-application-and-calculate" title="Link to this heading">#</a></h2>
+<ol class="arabic simple">
+<li><p>Make sure you have a Hugging Face account, have already applied for model access to the
+<a class="reference external" href="https://huggingface.co/facebook/UMA">UMA model repository</a>, and have logged in to Hugging Face using an access token.</p></li>
+<li><p>Set the task for your application and calculate</p></li>
+</ol>
 <ul class="simple">
 <li><p><strong>oc20:</strong> use this for catalysis</p></li>
 <li><p><strong>omat:</strong> use this for inorganic materials</p></li>
@@ -629,9 +625,8 @@ appropriate task name for domain specific prediction.</p>
 <li><p><strong>odac:</strong> use this for MOFs</p></li>
 <li><p><strong>omc:</strong> use this for molecular crystals</p></li>
 </ul>
-</section>
 <section id="relax-an-adsorbate-on-a-catalytic-surface">
-<h2>Relax an adsorbate on a catalytic surface,<a class="headerlink" href="#relax-an-adsorbate-on-a-catalytic-surface" title="Link to this heading">#</a></h2>
+<h2>Relax an adsorbate on a catalytic surface<a class="headerlink" href="#relax-an-adsorbate-on-a-catalytic-surface" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">fcc100</span><span class="p">,</span> <span class="n">add_adsorbate</span><span class="p">,</span> <span class="n">molecule</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">LBFGS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_mlip</span><span class="p">,</span> <span class="n">FAIRChemCalculator</span>
@@ -653,7 +648,7 @@ appropriate task name for domain specific prediction.</p>
 </div>
 </section>
 <section id="relax-an-inorganic-crystal">
-<h2>Relax an inorganic crystal,<a class="headerlink" href="#relax-an-inorganic-crystal" title="Link to this heading">#</a></h2>
+<h2>Relax an inorganic crystal<a class="headerlink" href="#relax-an-inorganic-crystal" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">bulk</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">FIRE</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.filters</span><span class="w"> </span><span class="kn">import</span> <span class="n">FrechetCellFilter</span>
@@ -671,7 +666,7 @@ appropriate task name for domain specific prediction.</p>
 </div>
 </section>
 <section id="run-molecular-md">
-<h2>Run molecular MD,<a class="headerlink" href="#run-molecular-md" title="Link to this heading">#</a></h2>
+<h2>Run molecular MD<a class="headerlink" href="#run-molecular-md" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase</span><span class="w"> </span><span class="kn">import</span> <span class="n">units</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">Trajectory</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.md.langevin</span><span class="w"> </span><span class="kn">import</span> <span class="n">Langevin</span>
@@ -763,7 +758,7 @@ appropriate task name for domain specific prediction.</p>
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -783,11 +778,9 @@ appropriate task name for domain specific prediction.</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#instantiate-a-calculator-from-a-pretrained-model">Instantiate a calculator from a pretrained model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#set-the-task-for-your-application-and-calculate">Set the task for your application and calculate</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-adsorbate-on-a-catalytic-surface">Relax an adsorbate on a catalytic surface,</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-inorganic-crystal">Relax an inorganic crystal,</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-molecular-md">Run molecular MD,</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-adsorbate-on-a-catalytic-surface">Relax an adsorbate on a catalytic surface</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#relax-an-inorganic-crystal">Relax an inorganic crystal</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-molecular-md">Run molecular MD</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#calculate-a-spin-gap">Calculate a spin gap</a></li>
 </ul>
   </nav></div>

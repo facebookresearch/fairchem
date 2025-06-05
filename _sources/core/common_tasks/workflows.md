@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.7
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -14,9 +14,11 @@ kernelspec:
 Workflows
 ------------------
 
-This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc) and simply specify the `fairchem` model type. Below is an example that uses the default elastic_tensor_flow flow. 
+This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc) and simply specify the `fairchem` model type. Below is an example that uses the default elastic_tensor_flow flow.
 
 ```{code-cell} ipython3
+from __future__ import annotations
+
 from ase.build import bulk
 from quacc.recipes.mlp.elastic import elastic_tensor_flow
 

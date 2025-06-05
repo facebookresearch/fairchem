@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Installation &amp; License &#8212; fairchem</title>
+    <title>Installation &amp; License &#8212; `fairchem`</title>
   
   
   
@@ -62,7 +62,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="UMA Quick Start w/ ASE" href="quickstart.html" />
-    <link rel="prev" title="Read our latest release post!" href="../index.html" />
+    <link rel="prev" title="fairchem by the FAIR Chemistry team" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">fairchem</p>
+    <p class="title logo__title">`fairchem`</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,16 +170,15 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../index.html">
-                    Read our latest release post!
+                    fairchem by the FAIR Chemistry team
                 </a>
             </li>
         </ul>
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Installation &amp; License</a></li>
-
 <li class="toctree-l1"><a class="reference internal" href="quickstart.html">UMA Quick Start w/ ASE</a></li>
-<li class="toctree-l1"><a class="reference internal" href="fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -193,11 +192,11 @@
 
 
 
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/evaluation.html">Evaluation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/batch_inference.html">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/workflows.html">Workflows</a></li>
 <li class="toctree-l2"><a class="reference internal" href="uma_faq.html">FAQ</a></li>
 </ul>
@@ -208,6 +207,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/models.html">OMol25-trained models</a></li>
@@ -593,14 +593,13 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Installation &amp; License</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#repository-software">Repository software</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#model-checkpoints-and-datasets">Model checkpoints and datasets</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#repository-software">Repository software</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#model-checkpoints-and-datasets">Model checkpoints and datasets</a></li>
 </ul>
 </li>
 </ul>
-
             </nav>
         </div>
     </div>
@@ -613,6 +612,8 @@ document.write(`
                   
   <section class="tex2jax_ignore mathjax_ignore" id="installation-license">
 <h1>Installation &amp; License<a class="headerlink" href="#installation-license" title="Link to this heading">#</a></h1>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
 <p>To install <code class="docutils literal notranslate"><span class="pre">fairchem-core</span></code> you will need to setup the <code class="docutils literal notranslate"><span class="pre">fairchem-core</span></code> environment. We support either pip or uv. Conda is no longer supported and has also been dropped by pytorch itself. Note you can still create environments with conda and use pip to install the packages.</p>
 <p><strong>Note FairchemV2 is a major breaking changing from FairchemV1. If you are looking for old V1 code, you will need install v1 (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">fairchem-core==1.10</span></code>)</strong></p>
 <p>We recommend installing fairchem inside a virtual enviornment instead of directly onto your system. For example, you can create one like so using your favorite venv tool:</p>
@@ -626,10 +627,10 @@ document.write(`
 </div>
 <p>In V2, we removed all dependencies on 3rd party libraries such as torch-geometric, pyg, torch-scatter, torch-sparse etc that made installation difficult. So no additional steps are required!</p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="license">
-<h1>License<a class="headerlink" href="#license" title="Link to this heading">#</a></h1>
+<section id="license">
+<h2>License<a class="headerlink" href="#license" title="Link to this heading">#</a></h2>
 <section id="repository-software">
-<h2>Repository software<a class="headerlink" href="#repository-software" title="Link to this heading">#</a></h2>
+<h3>Repository software<a class="headerlink" href="#repository-software" title="Link to this heading">#</a></h3>
 <p>The software in this repo is licensed under an MIT license unless otherwise specified.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MIT</span> <span class="n">License</span>
 
@@ -656,8 +657,9 @@ document.write(`
 </div>
 </section>
 <section id="model-checkpoints-and-datasets">
-<h2>Model checkpoints and datasets<a class="headerlink" href="#model-checkpoints-and-datasets" title="Link to this heading">#</a></h2>
+<h3>Model checkpoints and datasets<a class="headerlink" href="#model-checkpoints-and-datasets" title="Link to this heading">#</a></h3>
 <p>Please check each dataset and model for their own licenses.</p>
+</section>
 </section>
 </section>
 
@@ -697,7 +699,7 @@ document.write(`
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Read our latest release post!</p>
+        <p class="prev-next-title"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> by the FAIR Chemistry team</p>
       </div>
     </a>
     <a class="right-next"
@@ -725,14 +727,13 @@ document.write(`
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Installation &amp; License</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a><ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#repository-software">Repository software</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#model-checkpoints-and-datasets">Model checkpoints and datasets</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#repository-software">Repository software</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#model-checkpoints-and-datasets">Model checkpoints and datasets</a></li>
 </ul>
 </li>
 </ul>
-
   </nav></div>
 
 </div></div>

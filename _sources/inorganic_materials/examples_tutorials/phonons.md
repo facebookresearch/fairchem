@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.7
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -31,6 +31,8 @@ We can run a similarly straightforward calculation that
 Note that this analysis assumes that all vibrational modes are harmonic, which is a pretty reasonable approximately for low/moderate temperature materials, but becomes less realistic at high temperatures.
 
 ```{code-cell} ipython3
+from __future__ import annotations
+
 from ase.build import bulk
 from quacc.recipes.mlp.phonons import phonon_flow
 
@@ -47,7 +49,7 @@ result = phonon_flow(
             task_name="omat",
         ),
     },
-    min_lengths=10.0, # set the minimum unit cell size smaller to be compatible with limited github runner ram
+    min_lengths=10.0,  # set the minimum unit cell size smaller to be compatible with limited github runner ram
 )
 ```
 

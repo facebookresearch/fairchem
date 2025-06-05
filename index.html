@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Read our latest release post! &#8212; fairchem</title>
+    <title>fairchem by the FAIR Chemistry team &#8212; `fairchem`</title>
   
   
   
@@ -153,7 +153,7 @@
   
   
   
-    <p class="title logo__title">fairchem</p>
+    <p class="title logo__title">`fairchem`</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -173,16 +173,15 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1 current active">
                 <a class="reference internal" href="#">
-                    Read our latest release post!
+                    fairchem by the FAIR Chemistry team
                 </a>
             </li>
         </ul>
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="core/install.html">Installation &amp; License</a></li>
-
 <li class="toctree-l1"><a class="reference internal" href="core/quickstart.html">UMA Quick Start w/ ASE</a></li>
-<li class="toctree-l1"><a class="reference internal" href="core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> v1-&gt;v2</a></li>
+<li class="toctree-l1"><a class="reference internal" href="core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
@@ -196,11 +195,11 @@
 
 
 
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/training.html">Training</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/evaluation.html">Evaluation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/batch_inference.html">Batch inference</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/workflows.html">Workflows</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/uma_faq.html">FAQ</a></li>
 </ul>
@@ -211,6 +210,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="molecules/models.html">OMol25-trained models</a></li>
@@ -586,7 +586,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Read our latest release post!</h1>
+    <h1>fairchem by the FAIR Chemistry team</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -596,13 +596,10 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Read our latest release post!</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#try-the-demo">Try the demo!</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#read-our-latest-release-post">Read our latest release post!</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#try-the-demo">Try the demo!</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
 </ul>
-</li>
-</ul>
-
             </nav>
         </div>
     </div>
@@ -613,37 +610,47 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <h1 align="center"> <code>fairchem</code> by FAIR Chemistry </h1>
-<p align="center">
+  <p align="center">
   <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?
 </p>
 <h4 align="center">
 <p><img alt="tests" src="https://github.com/FAIR-Chem/fairchem/actions/workflows/test.yml/badge.svg?branch=main" />
 <img alt="PyPI - Version" src="https://img.shields.io/pypi/v/fairchem-core" />
-<img alt="Static Badge" src="https://img.shields.io/badge/python-3.10%2B-blue" /></p>
+<img alt="Static Badge" src="https://img.shields.io/badge/python-3.10%2B-blue" />
+<a class="reference external" href="https://doi.org/10.5281/zenodo.15587498"><img alt="DOI" src="https://zenodo.org/badge/DOI/10.5281/zenodo.15587498.svg" /></a></p>
+<p><a class="reference external" href="https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1"><img alt="Open in GitHub Codespaces" src="https://github.com/codespaces/badge.svg" /></a></p>
+</h4>
+<section class="tex2jax_ignore mathjax_ignore" id="fairchem-by-the-fair-chemistry-team">
+<h1><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> by the FAIR Chemistry team<a class="headerlink" href="#fairchem-by-the-fair-chemistry-team" title="Link to this heading">#</a></h1>
 <p><code class="docutils literal notranslate"><span class="pre">fairchem</span></code> is the <a class="reference external" href="https://ai.meta.com/research/">FAIR</a> Chemistry’s centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.</p>
-<p><strong>FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.</strong></p>
 <blockquote>
-<div><p>If you want to use an older model or code from version 1 you will need to install <a class="reference external" href="https://pypi.org/project/fairchem-core/1.10.0/">version 1</a>,
+<div><p>:warning: <strong>FAIRChem version 2 is a breaking change from version 1 and is not compatible with our previous pretrained models and code.</strong>
+If you want to use an older model or code from version 1 you will need to install <a class="reference external" href="https://pypi.org/project/fairchem-core/1.10.0/">version 1</a>,
 as detailed <a class="reference internal" href="#looking-for-fairchem-v1-models-and-code"><span class="xref myst">here</span></a>.</p>
 </div></blockquote>
-<section class="tex2jax_ignore mathjax_ignore" id="read-our-latest-release-post">
-<h1>Read our latest release post!<a class="headerlink" href="#read-our-latest-release-post" title="Link to this heading">#</a></h1>
-<p>Read about the <a class="reference external" href="https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/">UMA model and dataset</a> release.</p>
+<blockquote>
+<div><p>:warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!</p>
+</div></blockquote>
+<section id="read-our-latest-release-post">
+<h2>Read our latest release post!<a class="headerlink" href="#read-our-latest-release-post" title="Link to this heading">#</a></h2>
+<p>Read about the <a class="reference external" href="https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/">UMA model and OMol25 dataset</a> release.</p>
 <p><a class="reference external" href="https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/?ref=shareable"><img alt="Meta FAIR Science Release" src="https://github.com/user-attachments/assets/acddd09b-ed6f-4d05-9a4b-9ba5e2301150" /></a></p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="try-the-demo">
-<h1>Try the demo!<a class="headerlink" href="#try-the-demo" title="Link to this heading">#</a></h1>
+<section id="try-the-demo">
+<h2>Try the demo!<a class="headerlink" href="#try-the-demo" title="Link to this heading">#</a></h2>
 <p>If you want to explore model capabilities check out our
 <a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">educational demo</a></p>
+<p><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/"><img alt="Educational Demo" src="https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec" /></a></p>
 </section>
-<section class="tex2jax_ignore mathjax_ignore" id="installation">
-<h1>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h1>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
+<p>Although not required, we highly recommend installing using a package manager and virtualenv such as <a class="reference external" href="https://docs.astral.sh/uv/getting-started/installation/#standalone-installer">uv</a>, it is much faster and better at resolving dependencies than standalone pip.</p>
 <p>Install fairchem-core using pip</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>fairchem-core
 </pre></div>
 </div>
+</section>
 <div class="toctree-wrapper compound">
 </div>
 <div class="toctree-wrapper compound">
@@ -719,13 +726,10 @@ as detailed <a class="reference internal" href="#looking-for-fairchem-v1-models-
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Read our latest release post!</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#try-the-demo">Try the demo!</a></li>
-<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#read-our-latest-release-post">Read our latest release post!</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#try-the-demo">Try the demo!</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#installation">Installation</a></li>
 </ul>
-</li>
-</ul>
-
   </nav></div>
 
 </div></div>
