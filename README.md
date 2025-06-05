@@ -1,5 +1,3 @@
-<h1 align="center"> <code>fairchem</code> by FAIR Chemistry </h1>
-
 <p align="center">
   <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?
 </p>
@@ -13,6 +11,11 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15587498.svg)](https://doi.org/10.5281/zenodo.15587498)
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1)
+</h4>
+
+# `fairchem` by the FAIR Chemistry team
+
+</h1>
 
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
@@ -23,19 +26,19 @@ demos, and application efforts for materials science and quantum chemistry.
 
 > :warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!
 
-### Read our latest release post!
-Read about the [UMA model and OMOL25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
+## Read our latest release post!
+Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
 [![Meta FAIR Science Release](https://github.com/user-attachments/assets/acddd09b-ed6f-4d05-9a4b-9ba5e2301150)](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/?ref=shareable)
 
-### Try the demo!
+## Try the demo!
 If you want to explore model capabilities check out our
 [educational demo](https://facebook-fairchem-uma-demo.hf.space/)
 
 [![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
 
 
-### Installation
+## Installation
 Although not required, we highly recommend installing using a package manager and virtualenv such as [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer), it is much faster and better at resolving dependencies than standalone pip.
 
 Install fairchem-core using pip
@@ -43,12 +46,12 @@ Install fairchem-core using pip
 pip install fairchem-core
 ```
 
-### Quick Start
+## Quick Start
 The easiest way to use pretrained models is via the [ASE](https://wiki.fysik.dtu.dk/ase/) `FAIRChemCalculator`.
 A single uma model can be used for a wide range of applications in chemistry and materials science by picking the
 appropriate task name for domain specific prediction.
 
-#### Instantiate a calculator from a pretrained model
+### Instantiate a calculator from a pretrained model
 Make sure you have a Hugging Face account, have already applied for model access to the
 [UMA model repository](https://huggingface.co/facebook/UMA), and have logged in to Hugging Face using an access token.
 You can use the following to save an auth token,
@@ -56,7 +59,7 @@ You can use the following to save an auth token,
 huggingface-cli login
 ```
 
-#### Set the task for your application and calculate
+### Set the task for your application and calculate
 
 - **oc20:** use this for catalysis
 - **omat:** use this for inorganic materials
@@ -64,7 +67,7 @@ huggingface-cli login
 - **odac:** use this for MOFs
 - **omc:** use this for molecular crystals
 
-##### Relax an adsorbate on a catalytic surface,
+#### Relax an adsorbate on a catalytic surface,
 ```python
 from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
@@ -85,7 +88,7 @@ opt = LBFGS(slab)
 opt.run(0.05, 100)
 ```
 
-##### Relax an inorganic crystal,
+#### Relax an inorganic crystal,
 ```python
 from ase.build import bulk
 from ase.optimize import FIRE
@@ -102,7 +105,7 @@ opt = LBFGS(FrechetCellFilter(atoms))
 opt.run(0.05, 100)
 ```
 
-##### Run molecular MD,
+#### Run molecular MD,
 ```python
 from ase import units
 from ase.io import Trajectory
@@ -127,7 +130,7 @@ dyn.attach(trajectory.write, interval=1)
 dyn.run(steps=1000)
 ```
 
-##### Calculate a spin gap,
+#### Calculate a spin gap,
 ```python
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
@@ -147,38 +150,5 @@ triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
-### Looking for Fairchem V1, models and code?
-Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
-
-We plan to bring back the following models compatible with Fairchem V2 soon:
-* Gemnet-OC
-* EquiformerV2
-* ESEN
-
-We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
-
-The old OCPCalculator, trainer code will NOT be revived. We apologize for the inconvenience and please raise Issues if you need help!
-In the meantime, you can still use models from fairchem version 1, by installing version 1,
-
-```bash
-pip install fairchem-core==1.10
-```
-
-And using the `OCPCalculator`
-```python
-from fairchem.core import OCPCalculator
-
-calc = OCPCalculator(
-    model_name="EquiformerV2-31M-S2EF-OC20-All+MD",
-    local_cache="pretrained_models",
-    cpu=False,
-)
-```
-
 ### LICENSE
-`fairchem` is available under a [MIT License](LICENSE.md).
-
-You are welcome to use our code for your own research and development, please use the relevant [Zenodo citation](https://zenodo.org/records/15587498) in your papers. If you are using our models or datasets please cite those in addition to this repo citation.
-```
-Muhammed Shuaibi, Abhishek Das, anuroopsriram, Misko, Luis Barroso-Luque, Ray, Siddharth Goyal, zulissimeta, Brandon Wood, Tian Xie, Junwoong Yoon, Brook Wander, Adeesh Kolluru, Richard Barnes, Ethan Sunshine, Kevin Tran, Xiang, Daniel Levine, Nima Shoghi, … vbttchr. (2025). facebookresearch/fairchem: fairchem-core-2.2.0 (fairchem_core-2.2.0). Zenodo. https://doi.org/10.5281/zenodo.15587498
-```
+`fairchem` is available under a [MIT License](LICENSE.md). Models/checkpoint licenses vary by application area. 
