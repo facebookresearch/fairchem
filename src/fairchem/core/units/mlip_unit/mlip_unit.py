@@ -62,6 +62,9 @@ from fairchem.core.units.mlip_unit.utils import load_inference_model
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
+UNIT_RESUME_CONFIG = "resume.yaml"
+UNIT_INFERENCE_CHECKPOINT = "inference_ckpt.pt"
+
 
 @dataclass
 class OutputSpec:
@@ -810,7 +813,7 @@ class MLIPTrainEvalUnit(
         return self.finetune_model_full_config
 
     def save_state(self, checkpoint_location: str) -> None:
-        # save a "train_state.yaml" that can be easily used for resuming runs
+        # save a resume config that can be easily used for resuming runs
         os.makedirs(checkpoint_location, exist_ok=True)
         config = OmegaConf.load(self.job_config.metadata.config_path)
         config.job.runner_state_path = checkpoint_location
@@ -819,7 +822,7 @@ class MLIPTrainEvalUnit(
         if finetune_model_full_config is not None:
             config.runner.train_eval_unit.model = finetune_model_full_config
 
-        OmegaConf.save(config, os.path.join(checkpoint_location, "train_state.yaml"))
+        OmegaConf.save(config, os.path.join(checkpoint_location, UNIT_RESUME_CONFIG))
 
         # calls train_eval_unit.save_state
         state = {"unit_state": self.state_dict(), "config": config}
@@ -833,7 +836,7 @@ class MLIPTrainEvalUnit(
         ):
             convert_train_checkpoint_to_inference_checkpoint(
                 checkpoint_location,
-                os.path.join(checkpoint_location, "inference_ckpt.pt"),
+                os.path.join(checkpoint_location, UNIT_INFERENCE_CHECKPOINT),
             )
 
         logging.info(f"Saved dcp checkpoint to {checkpoint_location}")
