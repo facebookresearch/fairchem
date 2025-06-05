@@ -62,7 +62,10 @@ from fairchem.core.units.mlip_unit.utils import load_inference_model
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
+# this is a config generated on the fly and can be used to resume a run for a given checkpoint
 UNIT_RESUME_CONFIG = "resume.yaml"
+
+# this represents the inference only checkpoint generated at each checkpoint
 UNIT_INFERENCE_CHECKPOINT = "inference_ckpt.pt"
 
 
