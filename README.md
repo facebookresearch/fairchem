@@ -5,12 +5,12 @@
 
 <h4 align="center">
 
-![tests](https://github.com/FAIR-Chem/fairchem/actions/workflows/test.yml/badge.svg?branch=main)
+![tests](https://github.com/facebookresearch/fairchem/actions/workflows/test.yml/badge.svg?branch=main)
 ![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
 ![Static Badge](https://img.shields.io/badge/python-3.10%2B-blue)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15587498.svg)](https://doi.org/10.5281/zenodo.15587498)
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/facebookresearch/fairchem?quickstart=1)
 </h4>
 
 # `fairchem` by the FAIR Chemistry team
