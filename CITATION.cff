@@ -2,7 +2,6 @@ cff-version: 1.2.0
 title: "FAIRChem"
 version: 2.2.0
 license: "MIT"
-type: software
 message: "If you use this software, please cite it as below."
 doi: 10.5281/zenodo.15587497
-url: 'https://github.com/facebookresearch/fairchem'
+url: "https://github.com/facebookresearch/fairchem"
