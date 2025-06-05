@@ -15,6 +15,9 @@ kernelspec:
 
 [UMA](https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/) is an equivariant GNN that leverages a novel technique called Mixture of Linear Experts (MoLE) to give it the capacity to learn the largest multi-modal dataset to date (500M DFT examples), while preserving energy conservation and inference speed. Even a 6M active parameter (145M total) UMA model is able to acheieve SOTA accuracy on a wide range of domains such as materials, molecules and catalysis. 
 
+![UMA model architecture](uma.svg "UMA model architecture")
+
+
 ## The UMA Mixture-of-Linear-Experts routing function
 
 The UMA model uses a Mixture-of-Linear-Expert (MoLE) architecture to achieve very high parameter count with fast inference speeds with a single output head. In order to route the model to the correct set parameters, the model must be given a set of inputs.  The following information are required for the input to the model.
@@ -24,7 +27,6 @@ The UMA model uses a Mixture-of-Linear-Expert (MoLE) architecture to achieve ver
 * spin - total spin multiplicity of the system (only used for omol task and defaults to 1)
 * elemental composition - The unordered total elemental composition of the system. Each element has an atom embedding and the composition embedding is the mean over all the atom embeddings. For example H2O2 would be assigned the same embedding regardless of its conformer configuration.
 
-![UMA model architecture](https://github.com/facebookresearch/fairchem/blob/main/docs/core/uma.svg "UMA model architecture")
 
 ### The UMA task
 
