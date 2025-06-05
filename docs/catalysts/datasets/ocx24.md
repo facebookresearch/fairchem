@@ -2,7 +2,7 @@
 In this work, we seek to directly bridge the gap between computational descriptors and experimental outcomes for heterogeneous catalysis. We consider two important green chemistries: the hydrogen evolution reaction and the electrochemical reduction of carbon dioxide. To do this, we created a curated dataset of experimental results with materials synthesized and tested in a reproducible manner under industrially relevant conditions. We used this data to build models to directly predict experimental outcomes using computational features. For more information, please read the manuscript [paper](http://arxiv.org/abs/2411.11783).
 
 ## Experimental datasets
-To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data is all publically available [here](https://github.com/FAIR-Chem/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
+To support this work, we performed X-ray fluorescence (XRF), X-ray diffraction (XRD), and electrochemical testing. Summaries of this data is all publically available [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/applications/ocx/data/experimental_data).
 
 ## Computational datasets
 |Splits |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |

@@ -40,7 +40,7 @@ quacc = ["quacc[phonons]>=0.15.3"]
 fairchem = "fairchem.core._cli:main"
 
 [project.urls]
-repository = "https://github.com/FAIR-Chem/fairchem"
+repository = "https://github.com/facebookresearch/fairchem"
 home = "https://opencatalystproject.org/"
 documentation = "https://fair-chem.github.io/"
 
