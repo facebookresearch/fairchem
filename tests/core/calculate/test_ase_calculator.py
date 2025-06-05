@@ -53,7 +53,7 @@ def omol_calculators(request):
         for model_name in pretrained_mlip.available_models:
             predict_unit = pretrained_mlip.get_predict_unit(model_name)
             if "omol" in predict_unit.datasets:
-                yield FAIRChemCalculator(predict_unit, task_name="omol")
+                yield FAIRChemCalculator(predict_unit)
 
     return _calc_generator
 
