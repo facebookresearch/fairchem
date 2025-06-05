@@ -42,7 +42,9 @@ def all_calculators(mlip_predict_unit):
 
     def _calc_generator():
         for dataset in mlip_predict_unit.datasets:
-            yield FAIRChemCalculator(mlip_predict_unit, task_name=dataset)
+            # check that all single task models load without specifying task name
+            task_name = dataset if len(mlip_predict_unit.datasets) > 1 else None
+            yield FAIRChemCalculator(mlip_predict_unit, task_name=task_name)
 
     return _calc_generator
 
@@ -117,13 +119,19 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
     np.testing.assert_allclose(energies[0], energies[1])
 
 
-def test_calculator_unknown_task_raises_error(aperiodic_atoms):
+def test_no_task_name_single_task():
+    for model_name in pretrained_mlip.available_models:
+        predict_unit = pretrained_mlip.get_predict_unit(model_name)
+        if len(predict_unit.datasets) == 1:
+            calc = FAIRChemCalculator(predict_unit)
+            assert calc.task_name == predict_unit.datasets[0]
+
+
+def test_calculator_unknown_task_raises_error():
     with pytest.raises(AssertionError):
-        calc_omol = FAIRChemCalculator.from_model_checkpoint(
+        FAIRChemCalculator.from_model_checkpoint(
             pretrained_mlip.available_models[0], task_name="ommmmmol"
         )
-        atoms = aperiodic_atoms
-        atoms.calc = calc_omol
 
 
 @pytest.mark.gpu()
