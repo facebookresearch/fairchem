@@ -90,7 +90,7 @@ class FAIRChemCalculator(Calculator):
             )
 
         self.implemented_properties = [
-            task.property for task in predict_unit.dataset_to_tasks[task_name]
+            task.property for task in predict_unit.dataset_to_tasks[self.task_name]
         ]
         if "energy" in self.implemented_properties:
             self.implemented_properties.append(
