@@ -624,7 +624,7 @@ class MLIPTrainEvalUnit(
             self.load_scheduler(len(state.train_state.dataloader))
 
         if self.lazy_state_location is not None:
-            self._lazy_load_state(self.lazy_state_location)
+            self._execute_load_state(self.lazy_state_location)
 
         self.previous_wall_time = time.time()
         # this should only be non-zero if we are resuming from a run
@@ -843,7 +843,7 @@ class MLIPTrainEvalUnit(
         # lazily load state, save the state and load on the first train step
         self.lazy_state_location = checkpoint_location
 
-    def _lazy_load_state(self, checkpoint_location: str | None) -> None:
+    def _execute_load_state(self, checkpoint_location: str | None) -> None:
         state = {"unit_state": self.state_dict()}
         dcp.load(state_dict=state, checkpoint_id=checkpoint_location)
         self.load_state_dict(state["unit_state"])
