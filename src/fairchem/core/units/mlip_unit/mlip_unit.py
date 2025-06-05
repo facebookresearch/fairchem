@@ -831,7 +831,6 @@ class MLIPTrainEvalUnit(
             and distutils.is_master()
             and os.path.exists(checkpoint_location)
         ):
-            # TODO: create a protocol for this function, Runner are not suppose to know about functions of train_eval_unit
             convert_train_checkpoint_to_inference_checkpoint(
                 checkpoint_location,
                 os.path.join(checkpoint_location, "inference_ckpt.pt"),
