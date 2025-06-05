@@ -74,7 +74,7 @@ The models used here have \>100 million free fitted parameters that are fit to t
 
 ### Can I run these models on my own computer? How long would it take?
 
-Yes\! All of the models and pre-trained checkpoints are open source and freely available at [https://github.com/Open-Catalyst-Project/ocp](https://github.com/Open-Catalyst-Project/ocp). They can run on CPUs with \~16Gb of RAM, and CUDA-compatible GPUs with \>16Gb of memory. Each energy/force call usually takes O(1s) on a cpu core, and O(50ms) on a GPU, averaged over a reasonable batch size. Of course, this depends on your precise setup and your mileage may vary.
+Yes\! All of the models and pre-trained checkpoints are open source and freely available at [https://fair-chem.github.io/](https://fair-chem.github.io/); models/datasets have varying licenses. They can run on CPUs with \~16Gb of RAM, and CUDA-compatible GPUs with \>16Gb of memory. Each energy/force call usually takes O(1s) on a cpu core, and O(50ms) on a GPU, averaged over a reasonable batch size. Of course, this depends on your precise setup and your mileage may vary.
 
 ### What about the CO2 emissions associated with training and serving ML models? I heard those were significant. 
 
@@ -82,12 +82,12 @@ Very relevant question\! Greenhouse gas emissions for training and using large M
 
 ### I ran a prediction but the structures/energies look strange to me. What should I do?
 
-Please let us know by posting as a [github issue](https://github.com/FAIR-Chem/fairchem/issues)  with your inputs, results page link, and structure so we can look into the problem on our end.
+Please let us know by posting as a [github issue](https://github.com/facebookresearch/fairchem/issues)  with your inputs, results page link, and structure so we can look into the problem on our end.
 
 Alternatively, a few things to try:
 
 * First, try a couple of the ML models available on this website for the same surface/adsorbate and see if the results differ. This gives you an idea of whether it is specific to a model, or something about the surface/adsorbate that leads to problems.  
-* Second, you can download the structures and try other ML models from [https://github.com/Open-Catalyst-Project/ocp](https://github.com/Open-Catalyst-Project/ocp) to see if the problems are consistent.   
+* Second, you can download the structures and try other ML models from [https://fair-chem.github.io/](https://fair-chem.github.io/) to see if the problems are consistent.   
 * Finally, if you have access to VASP you can try running the relaxations yourself to verify the results.
 
 ### Do you have any estimates on how much I should trust these predictions? Why aren’t there error bars? 
@@ -136,11 +136,11 @@ The stability of more complex catalyst interfaces is a very interesting research
 If you know the crystal structure of composition of your catalyst but it’s not present in the drop-down list, it’s probably because the structure is either not in the Materials Project, or it’s predicted to be unstable by more than 0.1 eV/atom, or our calculations failed when we relaxed the inputs with DFT/RPBE. 
 
 * You can use the new [Open Catalyst API](ocpapi) to enumerate surfaces and perform the adsorbate placement using python or your web browser. Make sure you have an RPBE-relaxed structure before starting this process\!  
-* You can also do these by hand using the [Open Catalyst Project tools](tutorials/NRR/NRR_example)
+* You can also do these by hand using the [Open Catalyst Project tools](tutorials/adsorption_energies/adsorption_energies)
 
 ### I think my material is more complex than the surfaces shown here (surface segregation, additional terminations, etc); what should I do?
 
-The models used here may be able to predict the adsorption on more complex surfaces (for example, solid solutions, single atom alloys, segregated materials, etc), but the models have not been validated in these situations. We recommend downloading and using the pre-trained models on your own machine using the ASE calculator interface and using them to predict the adsorption energy [calculations/adsorption_energies]. If you find the models work well for your application, we’d love to hear from you\! And if they don’t, feel free to reach out via a [github issue](https://github.com/FAIR-Chem/fairchem/issues).
+The models used here may be able to predict the adsorption on more complex surfaces (for example, solid solutions, single atom alloys, segregated materials, etc), but the models have not been validated in these situations. We recommend downloading and using the pre-trained models on your own machine using the ASE calculator interface and using them to predict the adsorption energy [calculations/adsorption_energies]. If you find the models work well for your application, we’d love to hear from you\! And if they don’t, feel free to reach out via a [github issue](https://github.com/facebookresearch/fairchem/issues).
 
 We’re considering allowing predictions on more diverse surfaces, but there are some computational nuances that make doing so a bit difficult. Feel free to email the team \[EMAIL ADDRESS\] if you have a specific use case or are interested in getting updates\!
 
@@ -219,11 +219,11 @@ The bulk materials for this demo were prepared by:
 2. Filtering the materials to negative formation energies and energies above the phase diagram hull less than 0.1 eV/atom  
 3. Isotropic relaxations of the structures with DFT and the RPBE functional, which had a small failure rate.
 
-We’re interested in adding the ability to upload custom bulk structures, but making sure the materials are not strained from the perspective of the RPBE functional is a bit nuanced and it’s hard to know how well our models will work on very different structures. If you’re interested in this feature, reach out via a [github issue](https://github.com/FAIR-Chem/fairchem/issues)!
+We’re interested in adding the ability to upload custom bulk structures, but making sure the materials are not strained from the perspective of the RPBE functional is a bit nuanced and it’s hard to know how well our models will work on very different structures. If you’re interested in this feature, reach out via a [github issue](https://github.com/facebookresearch/fairchem/issues)!
 
 ### Where did the list of adsorbates come from? How did you select them? Why can’t you select or add your own?
 
-These adsorbates were the original 82 adsorbates used to construct OC20, which allows us to have some intuition and statistics on how well the models may work. We’re considering allowing users to upload custom adsorbate structures. If you’re interested in this feature, reach out as a [github issue](https://github.com/FAIR-Chem/fairchem/issues)!  
+These adsorbates were the original 82 adsorbates used to construct OC20, which allows us to have some intuition and statistics on how well the models may work. We’re considering allowing users to upload custom adsorbate structures. If you’re interested in this feature, reach out as a [github issue](https://github.com/facebookresearch/fairchem/issues)!  
 
 ### My favorite catalyst composition/surface/adsorbate is missing. What should I do?
 
@@ -244,7 +244,7 @@ This is a very exciting and interesting research area\! We expect that OCP model
 
 ### What DFT settings should I use to verify the single-points? How would I reproduce these energies with DFT?
 
-The [Open Catalyst Dataset repo](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main) can be used to create DFT inputs. Specifically, the DFT settings are provided [here](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/blob/main/ocdata/utils/vasp.py#L20-L35) to ensure consistency with the underlying OC20 DFT-level theory.
+The [Open Catalyst Dataset repo](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/oc) can be used to create DFT inputs. Specifically, the DFT settings are provided [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/data/oc/utils/vasp.py) to ensure consistency with the underlying OC20 DFT-level theory.
 
 
 ### What does the “shift” mean in the surface information? 
