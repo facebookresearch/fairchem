@@ -1,10 +1,10 @@
-# `fairchem` v1->v2
-Fairchem V2 is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
+# `fairchem>=2.0`
+`fairchem==2.0` is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
 
 We plan to bring back the following models compatible with Fairchem V2 soon:
 * Gemnet-OC
 * EquiformerV2
-* ESEN
+* eSEN
 
 We will also be releasing more detailed documentation on how to use Fairchem V2, stay tuned!
 

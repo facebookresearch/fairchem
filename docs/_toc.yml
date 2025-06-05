@@ -29,6 +29,7 @@ parts:
   - file: molecules/datasets/summary
     sections:
     - file: molecules/datasets/omol25
+    - file: molecules/datasets/omc25
   - file: molecules/models
   - file: molecules/FAQ
 - caption: Heterogeneous Catalysis

@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.7
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -21,6 +21,8 @@ We're going to start simple here - let's run a local relaxation (optimize the un
 This code will download the appropriate checkpoint from huggingface_hub automatically; if you don't have the right access token specified, you'll hit an permission or 401 error.
 
 ```{code-cell} ipython3
+from __future__ import annotations
+
 import pprint
 
 from ase.build import bulk

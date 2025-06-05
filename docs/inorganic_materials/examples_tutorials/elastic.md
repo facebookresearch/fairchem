@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.7
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -25,6 +25,8 @@ We don't have to change much code from above, we just use a built-in recipe to c
 For more documentation, see the quacc docs for [quacc.recipes.mlp.elastic_tensor_flow](https://quantum-accelerators.github.io/quacc/reference/quacc/recipes/mlp/elastic.html#quacc.recipes.mlp.elastic.elastic_tensor_flow)
 
 ```{code-cell} ipython3
+from __future__ import annotations
+
 from ase.build import bulk
 from quacc.recipes.mlp.elastic import elastic_tensor_flow
 
