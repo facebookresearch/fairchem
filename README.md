@@ -15,6 +15,8 @@
 
 # `fairchem` by the FAIR Chemistry team
 
+</h1>
+
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models,
 demos, and application efforts for materials science and quantum chemistry.
 
