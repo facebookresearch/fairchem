@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>FAQ &#8212; `fairchem`</title>
+    <title>FAQ &#8212; fairchem</title>
   
   
   
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">`fairchem`</p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,7 +170,7 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../index.html">
-                    fairchem by the FAIR Chemistry team
+                    fairchem by FAIR Chemistry
                 </a>
             </li>
         </ul>
@@ -210,7 +210,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../molecules/models.html">OMol25-trained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../molecules/models.html">Pretrained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../molecules/FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
@@ -452,7 +452,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem" target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
    class="btn btn-sm btn-source-repository-button dropdown-item"
    title="Source repository"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -469,7 +469,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem/issues/new?title=Issue%20on%20page%20%2Fcatalysts/FAQ.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fcatalysts/FAQ.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -728,7 +728,7 @@ document.write(`
 </section>
 <section id="can-i-run-these-models-on-my-own-computer-how-long-would-it-take">
 <h3>Can I run these models on my own computer? How long would it take?<a class="headerlink" href="#can-i-run-these-models-on-my-own-computer-how-long-would-it-take" title="Link to this heading">#</a></h3>
-<p>Yes! All of the models and pre-trained checkpoints are open source and freely available at <a class="github reference external" href="https://github.com/Open-Catalyst-Project/ocp">Open-Catalyst-Project/ocp</a>. They can run on CPUs with ~16Gb of RAM, and CUDA-compatible GPUs with &gt;16Gb of memory. Each energy/force call usually takes O(1s) on a cpu core, and O(50ms) on a GPU, averaged over a reasonable batch size. Of course, this depends on your precise setup and your mileage may vary.</p>
+<p>Yes! All of the models and pre-trained checkpoints are open source and freely available at <a class="reference external" href="https://fair-chem.github.io/">https://fair-chem.github.io/</a>; models/datasets have varying licenses. They can run on CPUs with ~16Gb of RAM, and CUDA-compatible GPUs with &gt;16Gb of memory. Each energy/force call usually takes O(1s) on a cpu core, and O(50ms) on a GPU, averaged over a reasonable batch size. Of course, this depends on your precise setup and your mileage may vary.</p>
 </section>
 <section id="what-about-the-co2-emissions-associated-with-training-and-serving-ml-models-i-heard-those-were-significant">
 <h3>What about the CO2 emissions associated with training and serving ML models? I heard those were significant.<a class="headerlink" href="#what-about-the-co2-emissions-associated-with-training-and-serving-ml-models-i-heard-those-were-significant" title="Link to this heading">#</a></h3>
@@ -736,11 +736,11 @@ document.write(`
 </section>
 <section id="i-ran-a-prediction-but-the-structures-energies-look-strange-to-me-what-should-i-do">
 <h3>I ran a prediction but the structures/energies look strange to me. What should I do?<a class="headerlink" href="#i-ran-a-prediction-but-the-structures-energies-look-strange-to-me-what-should-i-do" title="Link to this heading">#</a></h3>
-<p>Please let us know by posting as a <a class="reference external" href="https://github.com/FAIR-Chem/fairchem/issues">github issue</a>  with your inputs, results page link, and structure so we can look into the problem on our end.</p>
+<p>Please let us know by posting as a <a class="reference external" href="https://github.com/facebookresearch/fairchem/issues">github issue</a>  with your inputs, results page link, and structure so we can look into the problem on our end.</p>
 <p>Alternatively, a few things to try:</p>
 <ul class="simple">
 <li><p>First, try a couple of the ML models available on this website for the same surface/adsorbate and see if the results differ. This gives you an idea of whether it is specific to a model, or something about the surface/adsorbate that leads to problems.</p></li>
-<li><p>Second, you can download the structures and try other ML models from <a class="github reference external" href="https://github.com/Open-Catalyst-Project/ocp">Open-Catalyst-Project/ocp</a> to see if the problems are consistent.</p></li>
+<li><p>Second, you can download the structures and try other ML models from <a class="reference external" href="https://fair-chem.github.io/">https://fair-chem.github.io/</a> to see if the problems are consistent.</p></li>
 <li><p>Finally, if you have access to VASP you can try running the relaxations yourself to verify the results.</p></li>
 </ul>
 </section>
@@ -791,12 +791,12 @@ document.write(`
 <p>If you know the crystal structure of composition of your catalyst but it’s not present in the drop-down list, it’s probably because the structure is either not in the Materials Project, or it’s predicted to be unstable by more than 0.1 eV/atom, or our calculations failed when we relaxed the inputs with DFT/RPBE.</p>
 <ul class="simple">
 <li><p>You can use the new <a class="reference internal" href="../autoapi/ocpapi/index.html#module-ocpapi" title="ocpapi"><span class="xref myst py py-mod">Open Catalyst API</span></a> to enumerate surfaces and perform the adsorbate placement using python or your web browser. Make sure you have an RPBE-relaxed structure before starting this process!</p></li>
-<li><p>You can also do these by hand using the <a class="reference internal" href="#tutorials/NRR/NRR_example"><span class="xref myst">Open Catalyst Project tools</span></a></p></li>
+<li><p>You can also do these by hand using the <a class="reference internal" href="#tutorials/adsorption_energies/adsorption_energies"><span class="xref myst">Open Catalyst Project tools</span></a></p></li>
 </ul>
 </section>
 <section id="i-think-my-material-is-more-complex-than-the-surfaces-shown-here-surface-segregation-additional-terminations-etc-what-should-i-do">
 <h3>I think my material is more complex than the surfaces shown here (surface segregation, additional terminations, etc); what should I do?<a class="headerlink" href="#i-think-my-material-is-more-complex-than-the-surfaces-shown-here-surface-segregation-additional-terminations-etc-what-should-i-do" title="Link to this heading">#</a></h3>
-<p>The models used here may be able to predict the adsorption on more complex surfaces (for example, solid solutions, single atom alloys, segregated materials, etc), but the models have not been validated in these situations. We recommend downloading and using the pre-trained models on your own machine using the ASE calculator interface and using them to predict the adsorption energy [calculations/adsorption_energies]. If you find the models work well for your application, we’d love to hear from you! And if they don’t, feel free to reach out via a <a class="reference external" href="https://github.com/FAIR-Chem/fairchem/issues">github issue</a>.</p>
+<p>The models used here may be able to predict the adsorption on more complex surfaces (for example, solid solutions, single atom alloys, segregated materials, etc), but the models have not been validated in these situations. We recommend downloading and using the pre-trained models on your own machine using the ASE calculator interface and using them to predict the adsorption energy [calculations/adsorption_energies]. If you find the models work well for your application, we’d love to hear from you! And if they don’t, feel free to reach out via a <a class="reference external" href="https://github.com/facebookresearch/fairchem/issues">github issue</a>.</p>
 <p>We’re considering allowing predictions on more diverse surfaces, but there are some computational nuances that make doing so a bit difficult. Feel free to email the team [EMAIL ADDRESS] if you have a specific use case or are interested in getting updates!</p>
 </section>
 <section id="im-interested-in-electrochemistry-but-i-dont-see-any-solvent-effects-or-water-layer-what-should-i-do">
@@ -871,11 +871,11 @@ Adding these three reactions together we get (notice all the gas phase energies 
 <li><p>Filtering the materials to negative formation energies and energies above the phase diagram hull less than 0.1 eV/atom</p></li>
 <li><p>Isotropic relaxations of the structures with DFT and the RPBE functional, which had a small failure rate.</p></li>
 </ol>
-<p>We’re interested in adding the ability to upload custom bulk structures, but making sure the materials are not strained from the perspective of the RPBE functional is a bit nuanced and it’s hard to know how well our models will work on very different structures. If you’re interested in this feature, reach out via a <a class="reference external" href="https://github.com/FAIR-Chem/fairchem/issues">github issue</a>!</p>
+<p>We’re interested in adding the ability to upload custom bulk structures, but making sure the materials are not strained from the perspective of the RPBE functional is a bit nuanced and it’s hard to know how well our models will work on very different structures. If you’re interested in this feature, reach out via a <a class="reference external" href="https://github.com/facebookresearch/fairchem/issues">github issue</a>!</p>
 </section>
 <section id="where-did-the-list-of-adsorbates-come-from-how-did-you-select-them-why-cant-you-select-or-add-your-own">
 <h3>Where did the list of adsorbates come from? How did you select them? Why can’t you select or add your own?<a class="headerlink" href="#where-did-the-list-of-adsorbates-come-from-how-did-you-select-them-why-cant-you-select-or-add-your-own" title="Link to this heading">#</a></h3>
-<p>These adsorbates were the original 82 adsorbates used to construct OC20, which allows us to have some intuition and statistics on how well the models may work. We’re considering allowing users to upload custom adsorbate structures. If you’re interested in this feature, reach out as a <a class="reference external" href="https://github.com/FAIR-Chem/fairchem/issues">github issue</a>!</p>
+<p>These adsorbates were the original 82 adsorbates used to construct OC20, which allows us to have some intuition and statistics on how well the models may work. We’re considering allowing users to upload custom adsorbate structures. If you’re interested in this feature, reach out as a <a class="reference external" href="https://github.com/facebookresearch/fairchem/issues">github issue</a>!</p>
 </section>
 <section id="my-favorite-catalyst-composition-surface-adsorbate-is-missing-what-should-i-do">
 <h3>My favorite catalyst composition/surface/adsorbate is missing. What should I do?<a class="headerlink" href="#my-favorite-catalyst-composition-surface-adsorbate-is-missing-what-should-i-do" title="Link to this heading">#</a></h3>
@@ -896,7 +896,7 @@ Adding these three reactions together we get (notice all the gas phase energies 
 </section>
 <section id="what-dft-settings-should-i-use-to-verify-the-single-points-how-would-i-reproduce-these-energies-with-dft">
 <h3>What DFT settings should I use to verify the single-points? How would I reproduce these energies with DFT?<a class="headerlink" href="#what-dft-settings-should-i-use-to-verify-the-single-points-how-would-i-reproduce-these-energies-with-dft" title="Link to this heading">#</a></h3>
-<p>The <a class="reference external" href="https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main">Open Catalyst Dataset repo</a> can be used to create DFT inputs. Specifically, the DFT settings are provided <a class="reference external" href="https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/blob/main/ocdata/utils/vasp.py#L20-L35">here</a> to ensure consistency with the underlying OC20 DFT-level theory.</p>
+<p>The <a class="reference external" href="https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/oc">Open Catalyst Dataset repo</a> can be used to create DFT inputs. Specifically, the DFT settings are provided <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/data/oc/utils/vasp.py">here</a> to ensure consistency with the underlying OC20 DFT-level theory.</p>
 </section>
 <section id="what-does-the-shift-mean-in-the-surface-information">
 <h3>What does the “shift” mean in the surface information?<a class="headerlink" href="#what-does-the-shift-mean-in-the-surface-information" title="Link to this heading">#</a></h3>

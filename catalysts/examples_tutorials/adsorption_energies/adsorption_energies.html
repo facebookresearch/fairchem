@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Expert adsorption energies &#8212; `fairchem`</title>
+    <title>Expert adsorption energies &#8212; fairchem</title>
   
   
   
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">`fairchem`</p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,7 +170,7 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../../../index.html">
-                    fairchem by the FAIR Chemistry team
+                    fairchem by FAIR Chemistry
                 </a>
             </li>
         </ul>
@@ -210,7 +210,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../molecules/models.html">OMol25-trained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../molecules/models.html">Pretrained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../molecules/FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
@@ -452,7 +452,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem" target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
    class="btn btn-sm btn-source-repository-button dropdown-item"
    title="Source repository"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -469,7 +469,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem/issues/new?title=Issue%20on%20page%20%2Fcatalysts/examples_tutorials/adsorption_energies/adsorption_energies.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fcatalysts/examples_tutorials/adsorption_energies/adsorption_energies.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -789,22 +789,22 @@ document.write(`
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>                Step[ FC]     Time          Energy          fmax
-BFGSLineSearch:    0[  0] 14:02:34     -130.573875       0.7435
+BFGSLineSearch:    0[  0] 20:26:41     -130.573874       0.7435
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  2] 14:02:34     -130.717336       0.3625
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  2] 20:26:41     -130.717336       0.3625
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[  3] 14:02:34     -130.733200       0.1240
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[  3] 20:26:42     -130.733198       0.1240
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[  4] 14:02:35     -130.740953       0.1000
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[  4] 20:26:42     -130.740951       0.1000
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[  6] 14:02:35     -130.744373       0.0592
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[  6] 20:26:42     -130.744375       0.0594
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[  8] 14:02:35     -130.747317       0.0456
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[  8] 20:26:42     -130.747302       0.0468
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 1.6 seconds
@@ -885,14 +885,18 @@ BFGSLineSearch:    0[  0] 14:02:34     -130.573875       0.7435
 <p>It is somewhat time consuming to run this, so in this cell we only run one example, and just the first 4 configurations for each adsorbate.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">random</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">tqdm</span><span class="w"> </span><span class="kn">import</span> <span class="n">tqdm</span>
 
 <span class="n">tinit</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 
+<span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">bulk_ids</span><span class="p">)</span>
+
 <span class="c1"># Note we&#39;re just doing the first bulk_id!</span>
-<span class="k">for</span> <span class="n">bulk_src_id</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">bulk_ids</span><span class="p">[:</span><span class="mi">3</span><span class="p">]):</span>
+<span class="k">for</span> <span class="n">bulk_src_id</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">bulk_ids</span><span class="p">[:</span><span class="mi">4</span><span class="p">]):</span>
 
     <span class="c1"># Set up data directories</span>
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="s2">&quot;data/slabs/&quot;</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -921,10 +925,10 @@ BFGSLineSearch:    0[  0] 14:02:34     -130.573875       0.7435
         <span class="n">slab</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
         <span class="n">adsorbate_H</span><span class="p">,</span>
         <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;random_site_heuristic_placement&quot;</span><span class="p">,</span>
-        <span class="n">num_sites</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">num_sites</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="n">heuristic_adslabs_NNH</span> <span class="o">=</span> <span class="n">AdsorbateSlabConfig</span><span class="p">(</span>
-        <span class="n">slab</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">adsorbate_NNH</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;random_site_heuristic_placement&quot;</span><span class="p">,</span> <span class="n">num_sites</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="n">slab</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">adsorbate_NNH</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;random_site_heuristic_placement&quot;</span><span class="p">,</span> <span class="n">num_sites</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">heuristic_adslabs_H</span><span class="o">.</span><span class="n">atoms_list</span><span class="p">)</span><span class="si">}</span><span class="s2"> H slabs to compute for </span><span class="si">{</span><span class="n">bulk_src_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
@@ -968,279 +972,691 @@ BFGSLineSearch:    0[  0] 14:02:34     -130.573875       0.7435
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|          | 0/3 [00:00&lt;?, ?it/s]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|          | 0/4 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.7 seconds for data/slabs/oqmd-349719 slab relaxation
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/slabs/oqmd-349496 slab relaxation
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>10 H slabs to compute for oqmd-349719
-10 NNH slabs to compute for oqmd-349719
-Running data/adslabs/oqmd-349719_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>20 H slabs to compute for oqmd-349496
+20 NNH slabs to compute for oqmd-349496
+Running data/adslabs/oqmd-349496_H/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.9 seconds for data/adslabs/oqmd-349719_H/0
-Running data/adslabs/oqmd-349719_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.3 seconds for data/adslabs/oqmd-349496_H/0
+Running data/adslabs/oqmd-349496_H/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 0.8 seconds for data/adslabs/oqmd-349719_H/1
-Running data/adslabs/oqmd-349719_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-349496_H/1
+Running data/adslabs/oqmd-349496_H/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-349719_H/2
-Running data/adslabs/oqmd-349719_H/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/oqmd-349496_H/2
+Running data/adslabs/oqmd-349496_H/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.8 seconds for data/adslabs/oqmd-349719_H/3
-Running data/adslabs/oqmd-349719_H/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.4 seconds for data/adslabs/oqmd-349496_H/3
+Running data/adslabs/oqmd-349496_H/4
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.6 seconds for data/adslabs/oqmd-349719_H/4
-Running data/adslabs/oqmd-349719_H/5
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.5 seconds for data/adslabs/oqmd-349496_H/4
+Running data/adslabs/oqmd-349496_H/5
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/oqmd-349719_H/5
-Running data/adslabs/oqmd-349719_H/6
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.8 seconds for data/adslabs/oqmd-349496_H/5
+Running data/adslabs/oqmd-349496_H/6
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.3 seconds for data/adslabs/oqmd-349719_H/6
-Running data/adslabs/oqmd-349719_H/7
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.1 seconds for data/adslabs/oqmd-349496_H/6
+Running data/adslabs/oqmd-349496_H/7
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.1 seconds for data/adslabs/oqmd-349719_H/7
-Running data/adslabs/oqmd-349719_H/8
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.2 seconds for data/adslabs/oqmd-349496_H/7
+Running data/adslabs/oqmd-349496_H/8
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.7 seconds for data/adslabs/oqmd-349719_H/8
-Running data/adslabs/oqmd-349719_H/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.4 seconds for data/adslabs/oqmd-349496_H/8
+Running data/adslabs/oqmd-349496_H/9
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.4 seconds for data/adslabs/oqmd-349719_H/9
-Running data/adslabs/oqmd-349719_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.8 seconds for data/adslabs/oqmd-349496_H/9
+Running data/adslabs/oqmd-349496_H/10
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.2 seconds for data/adslabs/oqmd-349719_NNH/0
-Running data/adslabs/oqmd-349719_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.9 seconds for data/adslabs/oqmd-349496_H/10
+Running data/adslabs/oqmd-349496_H/11
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.5 seconds for data/adslabs/oqmd-349719_NNH/1
-Running data/adslabs/oqmd-349719_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.9 seconds for data/adslabs/oqmd-349496_H/11
+Running data/adslabs/oqmd-349496_H/12
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 17.2 seconds for data/adslabs/oqmd-349719_NNH/2
-Running data/adslabs/oqmd-349719_NNH/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.3 seconds for data/adslabs/oqmd-349496_H/12
+Running data/adslabs/oqmd-349496_H/13
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.1 seconds for data/adslabs/oqmd-349719_NNH/3
-Running data/adslabs/oqmd-349719_NNH/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/oqmd-349496_H/13
+Running data/adslabs/oqmd-349496_H/14
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-349719_NNH/4
-Running data/adslabs/oqmd-349719_NNH/5
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.9 seconds for data/adslabs/oqmd-349496_H/14
+Running data/adslabs/oqmd-349496_H/15
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 17.4 seconds for data/adslabs/oqmd-349719_NNH/5
-Running data/adslabs/oqmd-349719_NNH/6
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.5 seconds for data/adslabs/oqmd-349496_H/15
+Running data/adslabs/oqmd-349496_H/16
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.6 seconds for data/adslabs/oqmd-349719_NNH/6
-Running data/adslabs/oqmd-349719_NNH/7
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.8 seconds for data/adslabs/oqmd-349496_H/16
+Running data/adslabs/oqmd-349496_H/17
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-349719_NNH/7
-Running data/adslabs/oqmd-349719_NNH/8
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.9 seconds for data/adslabs/oqmd-349496_H/17
+Running data/adslabs/oqmd-349496_H/18
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.3 seconds for data/adslabs/oqmd-349719_NNH/8
-Running data/adslabs/oqmd-349719_NNH/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/oqmd-349496_H/18
+Running data/adslabs/oqmd-349496_H/19
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 33%|███▎      | 1/3 [01:54&lt;03:48, 114.37s/it]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.6 seconds for data/adslabs/oqmd-349496_H/19
+Running data/adslabs/oqmd-349496_NNH/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.6 seconds for data/adslabs/oqmd-349719_NNH/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.8 seconds for data/adslabs/oqmd-349496_NNH/0
+Running data/adslabs/oqmd-349496_NNH/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.7 seconds for data/slabs/oqmd-345911 slab relaxation
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.5 seconds for data/adslabs/oqmd-349496_NNH/1
+Running data/adslabs/oqmd-349496_NNH/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>10 H slabs to compute for oqmd-345911
-10 NNH slabs to compute for oqmd-345911
-Running data/adslabs/oqmd-345911_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-349496_NNH/2
+Running data/adslabs/oqmd-349496_NNH/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.0 seconds for data/adslabs/oqmd-345911_H/0
-Running data/adslabs/oqmd-345911_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.7 seconds for data/adslabs/oqmd-349496_NNH/3
+Running data/adslabs/oqmd-349496_NNH/4
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/oqmd-345911_H/1
-Running data/adslabs/oqmd-345911_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.7 seconds for data/adslabs/oqmd-349496_NNH/4
+Running data/adslabs/oqmd-349496_NNH/5
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.9 seconds for data/adslabs/oqmd-345911_H/2
-Running data/adslabs/oqmd-345911_H/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.1 seconds for data/adslabs/oqmd-349496_NNH/5
+Running data/adslabs/oqmd-349496_NNH/6
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.5 seconds for data/adslabs/oqmd-345911_H/3
-Running data/adslabs/oqmd-345911_H/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.1 seconds for data/adslabs/oqmd-349496_NNH/6
+Running data/adslabs/oqmd-349496_NNH/7
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.5 seconds for data/adslabs/oqmd-345911_H/4
-Running data/adslabs/oqmd-345911_H/5
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.3 seconds for data/adslabs/oqmd-349496_NNH/7
+Running data/adslabs/oqmd-349496_NNH/8
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-345911_H/5
-Running data/adslabs/oqmd-345911_H/6
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.3 seconds for data/adslabs/oqmd-349496_NNH/8
+Running data/adslabs/oqmd-349496_NNH/9
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.6 seconds for data/adslabs/oqmd-345911_H/6
-Running data/adslabs/oqmd-345911_H/7
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.1 seconds for data/adslabs/oqmd-349496_NNH/9
+Running data/adslabs/oqmd-349496_NNH/10
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.0 seconds for data/adslabs/oqmd-345911_H/7
-Running data/adslabs/oqmd-345911_H/8
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.8 seconds for data/adslabs/oqmd-349496_NNH/10
+Running data/adslabs/oqmd-349496_NNH/11
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-345911_H/8
-Running data/adslabs/oqmd-345911_H/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.1 seconds for data/adslabs/oqmd-349496_NNH/11
+Running data/adslabs/oqmd-349496_NNH/12
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/oqmd-345911_H/9
-Running data/adslabs/oqmd-345911_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.2 seconds for data/adslabs/oqmd-349496_NNH/12
+Running data/adslabs/oqmd-349496_NNH/13
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.1 seconds for data/adslabs/oqmd-345911_NNH/0
-Running data/adslabs/oqmd-345911_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.1 seconds for data/adslabs/oqmd-349496_NNH/13
+Running data/adslabs/oqmd-349496_NNH/14
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 12.9 seconds for data/adslabs/oqmd-345911_NNH/1
-Running data/adslabs/oqmd-345911_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 13.8 seconds for data/adslabs/oqmd-349496_NNH/14
+Running data/adslabs/oqmd-349496_NNH/15
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-345911_NNH/2
-Running data/adslabs/oqmd-345911_NNH/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.9 seconds for data/adslabs/oqmd-349496_NNH/15
+Running data/adslabs/oqmd-349496_NNH/16
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.3 seconds for data/adslabs/oqmd-345911_NNH/3
-Running data/adslabs/oqmd-345911_NNH/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.4 seconds for data/adslabs/oqmd-349496_NNH/16
+Running data/adslabs/oqmd-349496_NNH/17
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.2 seconds for data/adslabs/oqmd-345911_NNH/4
-Running data/adslabs/oqmd-345911_NNH/5
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.0 seconds for data/adslabs/oqmd-349496_NNH/17
+Running data/adslabs/oqmd-349496_NNH/18
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.3 seconds for data/adslabs/oqmd-345911_NNH/5
-Running data/adslabs/oqmd-345911_NNH/6
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.5 seconds for data/adslabs/oqmd-349496_NNH/18
+Running data/adslabs/oqmd-349496_NNH/19
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.3 seconds for data/adslabs/oqmd-345911_NNH/6
-Running data/adslabs/oqmd-345911_NNH/7
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 25%|██▌       | 1/4 [03:24&lt;10:14, 204.88s/it]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.6 seconds for data/adslabs/oqmd-345911_NNH/7
-Running data/adslabs/oqmd-345911_NNH/8
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.4 seconds for data/adslabs/oqmd-349496_NNH/19
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 13.7 seconds for data/adslabs/oqmd-345911_NNH/8
-Running data/adslabs/oqmd-345911_NNH/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.5 seconds for data/slabs/oqmd-346818 slab relaxation
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 67%|██████▋   | 2/3 [03:56&lt;01:59, 119.12s/it]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>20 H slabs to compute for oqmd-346818
+20 NNH slabs to compute for oqmd-346818
+Running data/adslabs/oqmd-346818_H/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.9 seconds for data/adslabs/oqmd-345911_NNH/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.0 seconds for data/adslabs/oqmd-346818_H/0
+Running data/adslabs/oqmd-346818_H/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.6 seconds for data/slabs/mp-2677 slab relaxation
-10 H slabs to compute for mp-2677
-10 NNH slabs to compute for mp-2677
-Running data/adslabs/mp-2677_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-346818_H/1
+Running data/adslabs/oqmd-346818_H/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.1 seconds for data/adslabs/mp-2677_H/0
-Running data/adslabs/mp-2677_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.7 seconds for data/adslabs/oqmd-346818_H/2
+Running data/adslabs/oqmd-346818_H/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.7 seconds for data/adslabs/mp-2677_H/1
-Running data/adslabs/mp-2677_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.7 seconds for data/adslabs/oqmd-346818_H/3
+Running data/adslabs/oqmd-346818_H/4
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.5 seconds for data/adslabs/mp-2677_H/2
-Running data/adslabs/mp-2677_H/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.4 seconds for data/adslabs/oqmd-346818_H/4
+Running data/adslabs/oqmd-346818_H/5
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/mp-2677_H/3
-Running data/adslabs/mp-2677_H/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.1 seconds for data/adslabs/oqmd-346818_H/5
+Running data/adslabs/oqmd-346818_H/6
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.4 seconds for data/adslabs/mp-2677_H/4
-Running data/adslabs/mp-2677_H/5
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.3 seconds for data/adslabs/oqmd-346818_H/6
+Running data/adslabs/oqmd-346818_H/7
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.6 seconds for data/adslabs/mp-2677_H/5
-Running data/adslabs/mp-2677_H/6
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.1 seconds for data/adslabs/oqmd-346818_H/7
+Running data/adslabs/oqmd-346818_H/8
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.5 seconds for data/adslabs/mp-2677_H/6
-Running data/adslabs/mp-2677_H/7
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.6 seconds for data/adslabs/oqmd-346818_H/8
+Running data/adslabs/oqmd-346818_H/9
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.4 seconds for data/adslabs/mp-2677_H/7
-Running data/adslabs/mp-2677_H/8
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.7 seconds for data/adslabs/oqmd-346818_H/9
+Running data/adslabs/oqmd-346818_H/10
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/mp-2677_H/8
-Running data/adslabs/mp-2677_H/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/oqmd-346818_H/10
+Running data/adslabs/oqmd-346818_H/11
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.5 seconds for data/adslabs/mp-2677_H/9
-Running data/adslabs/mp-2677_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.1 seconds for data/adslabs/oqmd-346818_H/11
+Running data/adslabs/oqmd-346818_H/12
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/mp-2677_NNH/0
-Running data/adslabs/mp-2677_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.2 seconds for data/adslabs/oqmd-346818_H/12
+Running data/adslabs/oqmd-346818_H/13
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.3 seconds for data/adslabs/mp-2677_NNH/1
-Running data/adslabs/mp-2677_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/oqmd-346818_H/13
+Running data/adslabs/oqmd-346818_H/14
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/mp-2677_NNH/2
-Running data/adslabs/mp-2677_NNH/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.4 seconds for data/adslabs/oqmd-346818_H/14
+Running data/adslabs/oqmd-346818_H/15
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.3 seconds for data/adslabs/mp-2677_NNH/3
-Running data/adslabs/mp-2677_NNH/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.2 seconds for data/adslabs/oqmd-346818_H/15
+Running data/adslabs/oqmd-346818_H/16
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/mp-2677_NNH/4
-Running data/adslabs/mp-2677_NNH/5
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.2 seconds for data/adslabs/oqmd-346818_H/16
+Running data/adslabs/oqmd-346818_H/17
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.1 seconds for data/adslabs/mp-2677_NNH/5
-Running data/adslabs/mp-2677_NNH/6
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/oqmd-346818_H/17
+Running data/adslabs/oqmd-346818_H/18
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.0 seconds for data/adslabs/mp-2677_NNH/6
-Running data/adslabs/mp-2677_NNH/7
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.3 seconds for data/adslabs/oqmd-346818_H/18
+Running data/adslabs/oqmd-346818_H/19
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.5 seconds for data/adslabs/mp-2677_NNH/7
-Running data/adslabs/mp-2677_NNH/8
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.3 seconds for data/adslabs/oqmd-346818_H/19
+Running data/adslabs/oqmd-346818_NNH/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.2 seconds for data/adslabs/mp-2677_NNH/8
-Running data/adslabs/mp-2677_NNH/9
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.7 seconds for data/adslabs/oqmd-346818_NNH/0
+Running data/adslabs/oqmd-346818_NNH/1
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 3/3 [05:13&lt;00:00, 99.60s/it] 
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.2 seconds for data/adslabs/oqmd-346818_NNH/1
+Running data/adslabs/oqmd-346818_NNH/2
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 3/3 [05:13&lt;00:00, 104.40s/it]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.7 seconds for data/adslabs/oqmd-346818_NNH/2
+Running data/adslabs/oqmd-346818_NNH/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.7 seconds for data/adslabs/mp-2677_NNH/9
-Elapsed time: 313.2 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-346818_NNH/3
+Running data/adslabs/oqmd-346818_NNH/4
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.3 seconds for data/adslabs/oqmd-346818_NNH/4
+Running data/adslabs/oqmd-346818_NNH/5
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.6 seconds for data/adslabs/oqmd-346818_NNH/5
+Running data/adslabs/oqmd-346818_NNH/6
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.2 seconds for data/adslabs/oqmd-346818_NNH/6
+Running data/adslabs/oqmd-346818_NNH/7
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.0 seconds for data/adslabs/oqmd-346818_NNH/7
+Running data/adslabs/oqmd-346818_NNH/8
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.5 seconds for data/adslabs/oqmd-346818_NNH/8
+Running data/adslabs/oqmd-346818_NNH/9
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.7 seconds for data/adslabs/oqmd-346818_NNH/9
+Running data/adslabs/oqmd-346818_NNH/10
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-346818_NNH/10
+Running data/adslabs/oqmd-346818_NNH/11
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.4 seconds for data/adslabs/oqmd-346818_NNH/11
+Running data/adslabs/oqmd-346818_NNH/12
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.5 seconds for data/adslabs/oqmd-346818_NNH/12
+Running data/adslabs/oqmd-346818_NNH/13
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.7 seconds for data/adslabs/oqmd-346818_NNH/13
+Running data/adslabs/oqmd-346818_NNH/14
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.7 seconds for data/adslabs/oqmd-346818_NNH/14
+Running data/adslabs/oqmd-346818_NNH/15
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.9 seconds for data/adslabs/oqmd-346818_NNH/15
+Running data/adslabs/oqmd-346818_NNH/16
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 12.1 seconds for data/adslabs/oqmd-346818_NNH/16
+Running data/adslabs/oqmd-346818_NNH/17
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.1 seconds for data/adslabs/oqmd-346818_NNH/17
+Running data/adslabs/oqmd-346818_NNH/18
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.9 seconds for data/adslabs/oqmd-346818_NNH/18
+Running data/adslabs/oqmd-346818_NNH/19
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 50%|█████     | 2/4 [06:35&lt;06:33, 196.63s/it]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.2 seconds for data/adslabs/oqmd-346818_NNH/19
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.8 seconds for data/slabs/oqmd-343039 slab relaxation
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>20 H slabs to compute for oqmd-343039
+20 NNH slabs to compute for oqmd-343039
+Running data/adslabs/oqmd-343039_H/0
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.5 seconds for data/adslabs/oqmd-343039_H/0
+Running data/adslabs/oqmd-343039_H/1
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.5 seconds for data/adslabs/oqmd-343039_H/1
+Running data/adslabs/oqmd-343039_H/2
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.4 seconds for data/adslabs/oqmd-343039_H/2
+Running data/adslabs/oqmd-343039_H/3
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.1 seconds for data/adslabs/oqmd-343039_H/3
+Running data/adslabs/oqmd-343039_H/4
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.6 seconds for data/adslabs/oqmd-343039_H/4
+Running data/adslabs/oqmd-343039_H/5
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.4 seconds for data/adslabs/oqmd-343039_H/5
+Running data/adslabs/oqmd-343039_H/6
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.2 seconds for data/adslabs/oqmd-343039_H/6
+Running data/adslabs/oqmd-343039_H/7
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.3 seconds for data/adslabs/oqmd-343039_H/7
+Running data/adslabs/oqmd-343039_H/8
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.6 seconds for data/adslabs/oqmd-343039_H/8
+Running data/adslabs/oqmd-343039_H/9
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 0.9 seconds for data/adslabs/oqmd-343039_H/9
+Running data/adslabs/oqmd-343039_H/10
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.7 seconds for data/adslabs/oqmd-343039_H/10
+Running data/adslabs/oqmd-343039_H/11
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.0 seconds for data/adslabs/oqmd-343039_H/11
+Running data/adslabs/oqmd-343039_H/12
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.9 seconds for data/adslabs/oqmd-343039_H/12
+Running data/adslabs/oqmd-343039_H/13
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.0 seconds for data/adslabs/oqmd-343039_H/13
+Running data/adslabs/oqmd-343039_H/14
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.4 seconds for data/adslabs/oqmd-343039_H/14
+Running data/adslabs/oqmd-343039_H/15
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-343039_H/15
+Running data/adslabs/oqmd-343039_H/16
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.0 seconds for data/adslabs/oqmd-343039_H/16
+Running data/adslabs/oqmd-343039_H/17
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.7 seconds for data/adslabs/oqmd-343039_H/17
+Running data/adslabs/oqmd-343039_H/18
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.0 seconds for data/adslabs/oqmd-343039_H/18
+Running data/adslabs/oqmd-343039_H/19
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.3 seconds for data/adslabs/oqmd-343039_H/19
+Running data/adslabs/oqmd-343039_NNH/0
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.9 seconds for data/adslabs/oqmd-343039_NNH/0
+Running data/adslabs/oqmd-343039_NNH/1
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.3 seconds for data/adslabs/oqmd-343039_NNH/1
+Running data/adslabs/oqmd-343039_NNH/2
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-343039_NNH/2
+Running data/adslabs/oqmd-343039_NNH/3
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.5 seconds for data/adslabs/oqmd-343039_NNH/3
+Running data/adslabs/oqmd-343039_NNH/4
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-343039_NNH/4
+Running data/adslabs/oqmd-343039_NNH/5
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.3 seconds for data/adslabs/oqmd-343039_NNH/5
+Running data/adslabs/oqmd-343039_NNH/6
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.0 seconds for data/adslabs/oqmd-343039_NNH/6
+Running data/adslabs/oqmd-343039_NNH/7
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.5 seconds for data/adslabs/oqmd-343039_NNH/7
+Running data/adslabs/oqmd-343039_NNH/8
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.2 seconds for data/adslabs/oqmd-343039_NNH/8
+Running data/adslabs/oqmd-343039_NNH/9
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-343039_NNH/9
+Running data/adslabs/oqmd-343039_NNH/10
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.2 seconds for data/adslabs/oqmd-343039_NNH/10
+Running data/adslabs/oqmd-343039_NNH/11
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.0 seconds for data/adslabs/oqmd-343039_NNH/11
+Running data/adslabs/oqmd-343039_NNH/12
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.3 seconds for data/adslabs/oqmd-343039_NNH/12
+Running data/adslabs/oqmd-343039_NNH/13
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.8 seconds for data/adslabs/oqmd-343039_NNH/13
+Running data/adslabs/oqmd-343039_NNH/14
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.4 seconds for data/adslabs/oqmd-343039_NNH/14
+Running data/adslabs/oqmd-343039_NNH/15
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.3 seconds for data/adslabs/oqmd-343039_NNH/15
+Running data/adslabs/oqmd-343039_NNH/16
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.7 seconds for data/adslabs/oqmd-343039_NNH/16
+Running data/adslabs/oqmd-343039_NNH/17
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.6 seconds for data/adslabs/oqmd-343039_NNH/17
+Running data/adslabs/oqmd-343039_NNH/18
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.8 seconds for data/adslabs/oqmd-343039_NNH/18
+Running data/adslabs/oqmd-343039_NNH/19
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span> 75%|███████▌  | 3/4 [08:51&lt;02:48, 168.74s/it]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.0 seconds for data/adslabs/oqmd-343039_NNH/19
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.5 seconds for data/slabs/oqmd-344251 slab relaxation
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>20 H slabs to compute for oqmd-344251
+20 NNH slabs to compute for oqmd-344251
+Running data/adslabs/oqmd-344251_H/0
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.7 seconds for data/adslabs/oqmd-344251_H/0
+Running data/adslabs/oqmd-344251_H/1
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.3 seconds for data/adslabs/oqmd-344251_H/1
+Running data/adslabs/oqmd-344251_H/2
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.0 seconds for data/adslabs/oqmd-344251_H/2
+Running data/adslabs/oqmd-344251_H/3
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.8 seconds for data/adslabs/oqmd-344251_H/3
+Running data/adslabs/oqmd-344251_H/4
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.4 seconds for data/adslabs/oqmd-344251_H/4
+Running data/adslabs/oqmd-344251_H/5
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/oqmd-344251_H/5
+Running data/adslabs/oqmd-344251_H/6
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.0 seconds for data/adslabs/oqmd-344251_H/6
+Running data/adslabs/oqmd-344251_H/7
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.5 seconds for data/adslabs/oqmd-344251_H/7
+Running data/adslabs/oqmd-344251_H/8
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.7 seconds for data/adslabs/oqmd-344251_H/8
+Running data/adslabs/oqmd-344251_H/9
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.9 seconds for data/adslabs/oqmd-344251_H/9
+Running data/adslabs/oqmd-344251_H/10
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.6 seconds for data/adslabs/oqmd-344251_H/10
+Running data/adslabs/oqmd-344251_H/11
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.6 seconds for data/adslabs/oqmd-344251_H/11
+Running data/adslabs/oqmd-344251_H/12
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.0 seconds for data/adslabs/oqmd-344251_H/12
+Running data/adslabs/oqmd-344251_H/13
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.4 seconds for data/adslabs/oqmd-344251_H/13
+Running data/adslabs/oqmd-344251_H/14
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.5 seconds for data/adslabs/oqmd-344251_H/14
+Running data/adslabs/oqmd-344251_H/15
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-344251_H/15
+Running data/adslabs/oqmd-344251_H/16
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.8 seconds for data/adslabs/oqmd-344251_H/16
+Running data/adslabs/oqmd-344251_H/17
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 1.9 seconds for data/adslabs/oqmd-344251_H/17
+Running data/adslabs/oqmd-344251_H/18
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.9 seconds for data/adslabs/oqmd-344251_H/18
+Running data/adslabs/oqmd-344251_H/19
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.1 seconds for data/adslabs/oqmd-344251_H/19
+Running data/adslabs/oqmd-344251_NNH/0
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.6 seconds for data/adslabs/oqmd-344251_NNH/0
+Running data/adslabs/oqmd-344251_NNH/1
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.2 seconds for data/adslabs/oqmd-344251_NNH/1
+Running data/adslabs/oqmd-344251_NNH/2
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.2 seconds for data/adslabs/oqmd-344251_NNH/2
+Running data/adslabs/oqmd-344251_NNH/3
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.4 seconds for data/adslabs/oqmd-344251_NNH/3
+Running data/adslabs/oqmd-344251_NNH/4
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.3 seconds for data/adslabs/oqmd-344251_NNH/4
+Running data/adslabs/oqmd-344251_NNH/5
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 11.9 seconds for data/adslabs/oqmd-344251_NNH/5
+Running data/adslabs/oqmd-344251_NNH/6
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.9 seconds for data/adslabs/oqmd-344251_NNH/6
+Running data/adslabs/oqmd-344251_NNH/7
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.0 seconds for data/adslabs/oqmd-344251_NNH/7
+Running data/adslabs/oqmd-344251_NNH/8
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.5 seconds for data/adslabs/oqmd-344251_NNH/8
+Running data/adslabs/oqmd-344251_NNH/9
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.6 seconds for data/adslabs/oqmd-344251_NNH/9
+Running data/adslabs/oqmd-344251_NNH/10
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 12.8 seconds for data/adslabs/oqmd-344251_NNH/10
+Running data/adslabs/oqmd-344251_NNH/11
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 11.2 seconds for data/adslabs/oqmd-344251_NNH/11
+Running data/adslabs/oqmd-344251_NNH/12
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 9.9 seconds for data/adslabs/oqmd-344251_NNH/12
+Running data/adslabs/oqmd-344251_NNH/13
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 13.7 seconds for data/adslabs/oqmd-344251_NNH/13
+Running data/adslabs/oqmd-344251_NNH/14
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.2 seconds for data/adslabs/oqmd-344251_NNH/14
+Running data/adslabs/oqmd-344251_NNH/15
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 10.5 seconds for data/adslabs/oqmd-344251_NNH/15
+Running data/adslabs/oqmd-344251_NNH/16
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 12.4 seconds for data/adslabs/oqmd-344251_NNH/16
+Running data/adslabs/oqmd-344251_NNH/17
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.7 seconds for data/adslabs/oqmd-344251_NNH/17
+Running data/adslabs/oqmd-344251_NNH/18
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.8 seconds for data/adslabs/oqmd-344251_NNH/18
+Running data/adslabs/oqmd-344251_NNH/19
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 4/4 [13:00&lt;00:00, 200.46s/it]
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 4/4 [13:00&lt;00:00, 195.10s/it]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.4 seconds for data/adslabs/oqmd-344251_NNH/19
+Elapsed time: 780.4 seconds
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>
@@ -1496,7 +1912,7 @@ Elapsed time: 313.2 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/22ad3cb0df9c90e7d24f8175677bf4311adc576a998832c1ff7b266470dd4953.png" src="../../../_images/22ad3cb0df9c90e7d24f8175677bf4311adc576a998832c1ff7b266470dd4953.png" />
+<img alt="../../../_images/ed0395cef5eb3a8d9f5f9a87fcf9b6bea8b3ac53a7517cc2ee374998a3d17bdf.png" src="../../../_images/ed0395cef5eb3a8d9f5f9a87fcf9b6bea8b3ac53a7517cc2ee374998a3d17bdf.png" />
 </div>
 </div>
 </section>
@@ -1550,7 +1966,7 @@ Elapsed time: 313.2 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/f03f9f13b62020f79041cc0ee591136012ffea934c24cb5707df8be2a95a8f3d.png" src="../../../_images/f03f9f13b62020f79041cc0ee591136012ffea934c24cb5707df8be2a95a8f3d.png" />
+<img alt="../../../_images/6500fed58fe68474df2e95c2e1785d4e7b9a53d7114eddf6934cef8b3e241037.png" src="../../../_images/6500fed58fe68474df2e95c2e1785d4e7b9a53d7114eddf6934cef8b3e241037.png" />
 </div>
 </div>
 </section>

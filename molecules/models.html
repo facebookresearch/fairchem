@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>OMol25-trained models &#8212; `fairchem`</title>
+    <title>Pretrained models &#8212; fairchem</title>
   
   
   
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">`fairchem`</p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,7 +170,7 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../index.html">
-                    fairchem by the FAIR Chemistry team
+                    fairchem by FAIR Chemistry
                 </a>
             </li>
         </ul>
@@ -210,7 +210,7 @@
 <li class="toctree-l2"><a class="reference internal" href="datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">OMol25-trained models</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Pretrained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
@@ -452,7 +452,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem" target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
    class="btn btn-sm btn-source-repository-button dropdown-item"
    title="Source repository"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -469,7 +469,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem/issues/new?title=Issue%20on%20page%20%2Fmolecules/models.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fmolecules/models.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -583,7 +583,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>OMol25-trained models</h1>
+    <h1>Pretrained models</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -593,6 +593,7 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#baseline-models-in-the-omol25-paper">Baseline models in the OMol25 paper</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#citing">Citing</a></li>
 </ul>
@@ -606,14 +607,23 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="omol25-trained-models">
-<h1>OMol25-trained models<a class="headerlink" href="#omol25-trained-models" title="Link to this heading">#</a></h1>
+  <section class="tex2jax_ignore mathjax_ignore" id="pretrained-models">
+<h1>Pretrained models<a class="headerlink" href="#pretrained-models" title="Link to this heading">#</a></h1>
+<p><strong>2025 recommendation:</strong> We suggest using the <a class="reference internal" href="../core/uma.html"><span class="doc std std-doc">UMA model</span></a>, trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints</p>
+<ol class="arabic simple">
+<li><p>It is state-of-the-art in out-of-domain prediction accuracy</p></li>
+<li><p>The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc.</p></li>
+<li><p>The UMA model is most likely to be updated in the future.</p></li>
+</ol>
+<section id="baseline-models-in-the-omol25-paper">
+<h2>Baseline models in the OMol25 paper<a class="headerlink" href="#baseline-models-in-the-omol25-paper" title="Link to this heading">#</a></h2>
 <p>As part of the OMol25 release, we released two sets of models:</p>
 <ol class="arabic simple">
 <li><p>[preferred] UMA models trained on a range of FAIR chemistry datasets, available at <a class="reference external" href="https://huggingface.co/facebook/UMA">HuggingFace</a></p></li>
 <li><p>eSEN models trained only on OMol25, available at <a class="reference external" href="https://huggingface.co/facebook/OMol25/tree/main">HuggingFace</a></p></li>
 </ol>
 <p>The UMA models will continue to be updated regularly and we expect those to remain the default and performant option for the forseeable future. The OMol25-only eSEN models are provided mostly as a base-line for models trained only on OMol25.</p>
+</section>
 <section id="license">
 <h2>License<a class="headerlink" href="#license" title="Link to this heading">#</a></h2>
 <p>Both models require users to agree to the FAIR Chemistry License as part of the HuggingFace model gating process.</p>
@@ -699,6 +709,7 @@ document.write(`
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#baseline-models-in-the-omol25-paper">Baseline models in the OMol25 paper</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#license">License</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#citing">Citing</a></li>
 </ul>

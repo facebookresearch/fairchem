@@ -180,14 +180,18 @@ The goal here is to relax each candidate adsorption geometry and save the result
 It is somewhat time consuming to run this, so in this cell we only run one example, and just the first 4 configurations for each adsorbate.
 
 ```{code-cell} ipython3
+import random
 import time
 
 from tqdm import tqdm
 
 tinit = time.time()
 
+random.seed(42)
+random.shuffle(bulk_ids)
+
 # Note we're just doing the first bulk_id!
-for bulk_src_id in tqdm(bulk_ids[:3]):
+for bulk_src_id in tqdm(bulk_ids[:4]):
 
     # Set up data directories
     os.makedirs("data/slabs/", exist_ok=True)
@@ -216,10 +220,10 @@ for bulk_src_id in tqdm(bulk_ids[:3]):
         slab[0],
         adsorbate_H,
         mode="random_site_heuristic_placement",
-        num_sites=10,
+        num_sites=20,
     )
     heuristic_adslabs_NNH = AdsorbateSlabConfig(
-        slab[0], adsorbate_NNH, mode="random_site_heuristic_placement", num_sites=10,
+        slab[0], adsorbate_NNH, mode="random_site_heuristic_placement", num_sites=20,
     )
 
     print(f"{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}")

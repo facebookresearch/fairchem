@@ -1,5 +1,5 @@
 # `fairchem>=2.0`
-`fairchem==2.0` is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
+`fairchem>=2.0` is a major upgrade and we completely rewrote the trainer, fine-tuning, models and calculators.
 
 We plan to bring back the following models compatible with Fairchem V2 soon:
 * Gemnet-OC
@@ -35,7 +35,7 @@ calc = OCPCalculator(
 You can still find these in the v1 version of fairchem github.
 However, many of these implementations are no longer actively supported.
 
-- GemNet-dT [[`arXiv`](https://arxiv.org/abs/2106.08903)] [[`code`](https://github.com/FAIR-Chem/fairchem/blob/main/src/fairchem/core/models/gemnet)]
+- GemNet-dT [[`arXiv`](https://arxiv.org/abs/2106.08903)] [[`code`](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/models/gemnet)]
 - PaiNN [[`arXiv`](https://arxiv.org/abs/2102.03150)] [[`code`](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/painn)]
 - Graph Parallelism [[`arXiv`](https://arxiv.org/abs/2203.09697)] [[`code`](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/gemnet_gp)]
 - GemNet-OC [[`arXiv`](https://arxiv.org/abs/2204.02782)] [[`code`](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/gemnet_oc)]
@@ -45,7 +45,7 @@ However, many of these implementations are no longer actively supported.
 - EquiformerV2 [[`arXiv`](https://arxiv.org/abs/2306.12059)] [[`code`](https://github.com/facebookresearch/fairchem/tree/fairchem_core-1.10.0/src/fairchem/core/models/equiformer_v2)]
 - SchNet [[`arXiv`](https://arxiv.org/abs/1706.08566)]
 - DimeNet++ [[`arXiv`](https://arxiv.org/abs/2011.14115)] 
-- CGCNN [[`arXiv`](https://arxiv.org/abs/1710.10324)] [[`code`](https://github.com/FAIR-Chem/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/cgcnn.py)]
-- DimeNet [[`arXiv`](https://arxiv.org/abs/2003.03123)] [[`code`](https://github.com/FAIR-Chem/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/dimenet.py)]
-- SpinConv [[`arXiv`](https://arxiv.org/abs/2106.09575)] [[`code`](https://github.com/FAIR-Chem/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/spinconv.py)]
-- ForceNet [[`arXiv`](https://arxiv.org/abs/2103.01436)] [[`code`](https://github.com/FAIR-Chem/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/forcenet.py)]
+- CGCNN [[`arXiv`](https://arxiv.org/abs/1710.10324)] [[`code`](https://github.com/facebookresearch/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/cgcnn.py)]
+- DimeNet [[`arXiv`](https://arxiv.org/abs/2003.03123)] [[`code`](https://github.com/facebookresearch/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/dimenet.py)]
+- SpinConv [[`arXiv`](https://arxiv.org/abs/2106.09575)] [[`code`](https://github.com/facebookresearch/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/spinconv.py)]
+- ForceNet [[`arXiv`](https://arxiv.org/abs/2103.01436)] [[`code`](https://github.com/facebookresearch/fairchem/blob/e7a8745eb307e8a681a1aa9d30c36e8c41e9457e/ocpmodels/models/forcenet.py)]

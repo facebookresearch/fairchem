@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Phonons &#8212; `fairchem`</title>
+    <title>Phonons &#8212; fairchem</title>
   
   
   
@@ -150,7 +150,7 @@
   
   
   
-    <p class="title logo__title">`fairchem`</p>
+    <p class="title logo__title">fairchem</p>
   
 </a></div>
         <div class="sidebar-primary-item">
@@ -170,7 +170,7 @@
         <ul class="nav bd-sidenav bd-sidenav__home-link">
             <li class="toctree-l1">
                 <a class="reference internal" href="../../index.html">
-                    fairchem by the FAIR Chemistry team
+                    fairchem by FAIR Chemistry
                 </a>
             </li>
         </ul>
@@ -210,7 +210,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">OMol25-trained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">Pretrained models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
@@ -452,7 +452,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem" target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
    class="btn btn-sm btn-source-repository-button dropdown-item"
    title="Source repository"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -469,7 +469,7 @@
       
       
       
-      <li><a href="https://github.com/FAIR-Chem/fairchem/issues/new?title=Issue%20on%20page%20%2Finorganic_materials/examples_tutorials/phonons.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Finorganic_materials/examples_tutorials/phonons.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -631,7 +631,7 @@ We can run a similarly straightforward calculation that</p></li>
     <span class="n">method</span><span class="o">=</span><span class="s2">&quot;fairchem&quot;</span><span class="p">,</span>
     <span class="n">job_params</span><span class="o">=</span><span class="p">{</span>
         <span class="s2">&quot;all&quot;</span><span class="p">:</span> <span class="nb">dict</span><span class="p">(</span>
-            <span class="n">get_predict_unit_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;model_name&quot;</span><span class="p">:</span> <span class="s2">&quot;uma-s-1&quot;</span><span class="p">},</span>
+            <span class="n">name_or_path</span><span class="o">=</span><span class="s2">&quot;uma-s-1&quot;</span><span class="p">,</span>
             <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">,</span>
         <span class="p">),</span>
     <span class="p">},</span>
@@ -652,18 +652,18 @@ WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Setting random seed to 41
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-05-14-14-31-350410-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-05-20-44-26-612083-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-05-14-14-31-350410-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-05-20-44-26-612083-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-05-14-14-32-164468-53545
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-05-20-44-27-398303-53545
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/seekpath/hpkot/__init__.py:172: DeprecationWarning: dict interface is deprecated. Use attribute interface instead
   conv_lattice = dataset[&quot;std_lattice&quot;]
-INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-05-14-14-32-164468-53545
+INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-05-20-44-27-398303-53545
 </pre></div>
 </div>
 </div>
