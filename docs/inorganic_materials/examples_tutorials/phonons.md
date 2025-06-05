@@ -18,7 +18,7 @@ Phonon calculations are very important for inorganic materials science to
 * Calculate thermal conductivity
 * Understand the vibrational modes, and thus entropy and free energy, of a material
 * Predict the stability of a material at finite temperature (e.g. 300 K)
-among many others! 
+among many others!
 We can run a similarly straightforward calculation that
 1. Runs a relaxation on the unit cell and atoms
 2. Repeats the unit cell a number of times to make it sufficiently large to capture many interesting vibrational models
@@ -45,7 +45,7 @@ result = phonon_flow(
     method="fairchem",
     job_params={
         "all": dict(
-            get_predict_unit_kwargs={"model_name": "uma-s-1"},
+            name_or_path="uma-s-1",
             task_name="omat",
         ),
     },
