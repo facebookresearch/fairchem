@@ -39,7 +39,7 @@ pip install fairchem-core
 
 ## Repository software
 
-If you use `fairchem` in your applications please cite the appriate version from our [zenodo records](https://zenodo.org/records/15587498).
+If you use `fairchem` in your applications please cite the folowing [10.5281/zenodo.15587497](https://doi.org/10.5281/zenodo.15587497).
 
 The software in this repo is licensed under an MIT license unless otherwise specified.
 
