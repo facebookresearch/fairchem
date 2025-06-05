@@ -21,7 +21,6 @@ from fairchem.core.components.runner import Runner
 
 if TYPE_CHECKING:
     import torch
-    from torch.distributed.checkpoint.stateful import Stateful
     from torchtnt.framework import EvalUnit, TrainUnit
     from torchtnt.framework.state import State
     from torchtnt.framework.unit import TTrainUnit
@@ -124,7 +123,7 @@ class TrainEvalRunner(Runner):
         self,
         train_dataloader: torch.utils.data.dataloader,
         eval_dataloader: torch.utils.data.dataloader,
-        train_eval_unit: Union[TrainUnit, EvalUnit, Stateful, Checkpointable],
+        train_eval_unit: Union[TrainUnit, EvalUnit, Checkpointable],
         callbacks: list[Callback] | None = None,
         max_epochs: int | None = 1,
         evaluate_every_n_steps: Optional[int] = None,
