@@ -17,6 +17,7 @@ from omegaconf import OmegaConf
 
 from fairchem.core._cli import get_hydra_config_from_yaml
 from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
+from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 from fairchem.core.units.mlip_unit.utils import update_configs
 
 
@@ -64,7 +65,7 @@ def test_traineval_runner_finetuning():
         finetune_config,
         [
             "expected_loss=null",
-            f"model.checkpoint_location={ch_path}/inference_ckpt.pt",
+            f"model.checkpoint_location={ch_path}/{UNIT_INFERENCE_CHECKPOINT}",
         ],
     )
     finetune_runner = hydra.utils.instantiate(finetune_cfg.runner)
@@ -85,8 +86,12 @@ def test_traineval_runner_finetuning():
     fch_path = finetune_cfg.job.metadata.checkpoint_dir
     finetune_runner.save_state(fch_path)
 
-    starting_ckpt = torch.load(f"{ch_path}/inference_ckpt.pt", weights_only=False)
-    finetune_ckpt = torch.load(f"{fch_path}/inference_ckpt.pt", weights_only=False)
+    starting_ckpt = torch.load(
+        f"{ch_path}/{UNIT_INFERENCE_CHECKPOINT}", weights_only=False
+    )
+    finetune_ckpt = torch.load(
+        f"{fch_path}/{UNIT_INFERENCE_CHECKPOINT}", weights_only=False
+    )
 
     # backbone config of finetuned model inference checkpoint should match the starting checkpoint without overrides
     start_model_config = starting_ckpt.model_config

@@ -1,0 +1,56 @@
+cff-version: 1.2.0
+title: "FAIRChem"
+version: 2.2.0
+message: "If you use this software, please cite it as below."
+doi: 10.5281/zenodo.15587498
+url: "https://github.com/facebookresearch/fairchem"
+license:
+- MIT
+authors:
+- affiliation: FAIR, Meta
+  family-names: Muhammed Shuaibi
+- affiliation: FAIR, Meta AI
+  family-names: Abhishek Das
+- affiliation: FAIR, Meta
+  family-names: Anuroop Sriram
+- family-names: Misko
+- affiliation: FAIR, Meta AI
+  family-names: Luis Barroso-Luque
+- family-names: Ray Gao
+- family-names: Siddharth Goyal
+- affiliation: FAIR, Meta AI
+  family-names: Zachary Ulissi
+- affiliation: FAIR, Meta
+  family-names: Brandon Wood
+- affiliation: Microsoft
+  family-names: Tian Xie
+- affiliation: Carnegie Mellon University
+  family-names: Junwoong Yoon
+- family-names: Brook Wander
+- affiliation: Radical AI
+  family-names: Adeesh Kolluru
+- family-names: Richard Barnes
+- affiliation: Carnegie Mellon University
+  family-names: Ethan Sunshine
+- affiliation: Toyota Research Institute
+  family-names: Kevin Tran
+- family-names: Xiang
+- affiliation: FAIR, Meta AI
+  family-names: Daniel Levine
+- family-names: Nima Shoghi
+- family-names: Ilias Chair
+- affiliation: FAIR, Meta AI
+- family-names: Janice Lan
+- affiliation: Georgia Institute of Technology
+  family-names: Kaylee Tian
+- affiliation: Carnegie Mellon University
+  family-names: Joseph Musielewicz
+- family-names: clz55
+- family-names: Weihua Hu
+- affiliation: FAIR, Meta AI
+- family-names: Kyle Michel
+- family-names: willis
+- family-names: vbttchr
+message: If you use this software, please cite it using the metadata from this file.
+repository-code: https://github.com/facebookresearch/fairchem
+type: software

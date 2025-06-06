@@ -17,12 +17,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import torch
 from ase.io import read
 from ase.optimize import BFGS
-from fairchem.applications.cattsunami.core.ocpneb import OCPNEB
-
-from fairchem.core.common.relaxation.ase_utils import OCPCalculator
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+from ase.mep import DyNEB
 
 if TYPE_CHECKING:
     import ase
@@ -292,7 +290,7 @@ def get_single_point(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint_path")
+    parser.add_argument("--checkpoint")
     parser.add_argument("--k")
     parser.add_argument("--fmax")
     parser.add_argument("--output_file_path")
@@ -302,7 +300,6 @@ if __name__ == "__main__":
     parser.add_argument("--trajectory_path")
     parser.add_argument("--vasp_command", default=None)
     parser.add_argument("--get_ts_sp", action="store_true", default=False)
-    parser.add_argument("--cpu", action="store_true", default=False)
 
     # Unpack arguments
     args = parser.parse_args()
@@ -312,7 +309,10 @@ if __name__ == "__main__":
     delta_fmax_climb = float(args.delta_fmax_climb)
     k = float(args.k)
     fmax = float(args.fmax)
-    calc = OCPCalculator(checkpoint_path=checkpoint_path, cpu=args.cpu)
+
+    predictor = pretrained_mlip.get_predict_unit(args.checkpoint)
+    calc = FAIRChemCalculator(predictor, task_name="oc20")
+
     model_id = checkpoint_path.split("/")[-1].split(".")[0]
     vasp_command = args.vasp_command
     os.makedirs(f"{args.output_file_path}/{model_id}", exist_ok=True)
@@ -330,16 +330,12 @@ if __name__ == "__main__":
             neb_frames = read(args.trajectory_path + "/" + file, index=":")[0:10]
 
             conv = False
-            torch.cuda.empty_cache()
-
+            
+            for image in neb_frames:
+                image.calc = FAIRChemCalculator(predictor, task_name="oc20")
+            neb = DyNEB(neb_frames, k=k)
+            
             # Optimize:
-            neb = OCPNEB(
-                neb_frames,
-                checkpoint_path=checkpoint_path,
-                k=k,
-                batch_size=int(args.batch_size),
-                cpu=args.cpu,
-            )
             optimizer = BFGS(
                 neb,
                 trajectory=f"{args.output_file_path}/{model_id}/{neb_id}-k_now.traj",

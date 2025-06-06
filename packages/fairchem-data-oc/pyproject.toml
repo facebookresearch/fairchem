@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.urls]
-repository = "https://github.com/FAIR-Chem/fairchem/tree/main/src/fairchem/data/oc"
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/oc"
 documentation = "https://fair-chem.github.io/"
 
 [tool.hatch.version]

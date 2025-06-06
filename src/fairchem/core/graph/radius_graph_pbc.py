@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import math
 
 import numpy as np
@@ -338,6 +339,19 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     return list(pbc)
 
 
+def box_size_warning(cell, pos, pbc):
+    if hasattr(box_size_warning, "already_printed"):
+        return
+    box_size_warning.already_printed = True
+    logging.warning(
+        f"PBCv2: graph generation encountered a very large box. The size of the cell is {cell} and min/max positions are {pos.min(),pos.max()}. Performance will be slower than optimal."
+    )
+    if any(pbc):
+        logging.warning(
+            "PBCv2: Does this system require PBC=True or will PBC=False work?"
+        )
+
+
 @torch.no_grad()
 def radius_graph_pbc_v2(
     data,
@@ -465,6 +479,15 @@ def radius_graph_pbc_v2(
     # is grid_resolution.
 
     # Compute the grid index for each dimension for each atom
+    max_internal_cell = (
+        max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / grid_resolution
+    )
+    if max_internal_cell > 200:
+        box_size_warning(data.cell, data.pos, pbc)
+        grid_resolution = max(
+            grid_resolution,
+            max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / 200,
+        )
     source_atom_grid = torch.floor(source_atom_pos / grid_resolution).long()
     target_atom_grid = torch.floor(target_atom_pos / grid_resolution).long()
 
@@ -567,7 +590,7 @@ def radius_graph_pbc_v2(
     cum_sum_grid_cell_offset = torch.repeat_interleave(
         cum_sum_grid_cell_atom_count, grid_cell_atom_count, dim=0
     )
-    grid_cell_offset = (
+    grid_cell_offset = (  # If this OOMs it could be because boxsize is large and PBC is on
         torch.arange(num_grid_cells, device=device) * max_atoms_per_grid_cell
     )
     grid_cell_offset = torch.repeat_interleave(
