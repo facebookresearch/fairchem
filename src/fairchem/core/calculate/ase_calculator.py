@@ -207,29 +207,63 @@ class FAIRChemCalculator(Calculator):
         # Standard call to check system_changes etc
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        # Convert using the current a2g object
-        data_object = self.a2g(atoms)
+        if len(atoms) == 1 and sum(atoms.pbc) == 0:
+            self.results = self._get_single_atom_energies(atoms)
+        else:
+            # Convert using the current a2g object
+            data_object = self.a2g(atoms)
 
-        # Batch and predict
-        batch = data_list_collater([data_object], otf_graph=True)
-        pred = self.predictor.predict(batch)
+            # Batch and predict
+            batch = data_list_collater([data_object], otf_graph=True)
+            pred = self.predictor.predict(batch)
 
-        # Collect the results into self.results
-        self.results = {}
-        for calc_key in self.implemented_properties:
-            if calc_key == "energy":
-                energy = float(pred[calc_key].detach().cpu().numpy()[0])
+            # Collect the results into self.results
+            self.results = {}
+            for calc_key in self.implemented_properties:
+                if calc_key == "energy":
+                    energy = float(pred[calc_key].detach().cpu().numpy()[0])
 
-                self.results["energy"] = self.results["free_energy"] = (
-                    energy  # Free energy is a copy of energy
-                )
-            if calc_key == "forces":
-                forces = pred[calc_key].detach().cpu().numpy()
-                self.results["forces"] = forces
-            if calc_key == "stress":
-                stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
-                stress_voigt = full_3x3_to_voigt_6_stress(stress)
-                self.results["stress"] = stress_voigt
+                    self.results["energy"] = self.results["free_energy"] = (
+                        energy  # Free energy is a copy of energy
+                    )
+                if calc_key == "forces":
+                    forces = pred[calc_key].detach().cpu().numpy()
+                    self.results["forces"] = forces
+                if calc_key == "stress":
+                    stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
+                    stress_voigt = full_3x3_to_voigt_6_stress(stress)
+                    self.results["stress"] = stress_voigt
+
+
+    def _get_single_atom_energies(self, atoms) -> dict:
+        """
+        Populate output with single atom energies
+        """
+        if self.predictor.element_refs is None:
+            raise ValueError(
+                "Single atom system but no atomic references present. "
+                "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
+                "with an appropriate checkpoint name."
+            )
+        if atoms.info['charge'] != 0:
+            raise ValueError(
+                "This model cannot handle single atom systems with non-zero charge."
+            )
+        logging.warning(
+            "Single atom systems are not handled by the model; "
+            "the precomputed DFT result is returned. "
+            "Spin multiplicity is ignored for monoatomic systems."
+        )
+        elt = atoms.get_atomic_numbers()[0]
+        results = {}
+        
+        element_refs = self.predictor.element_refs[ self.task_name + "_elem_refs" ]
+        print(element_refs)
+        results["energy"] = element_refs[int(elt)]
+        results["forces"] = np.array([[0.0]*3])
+        stress_voigt = full_3x3_to_voigt_6_stress(np.zeros((3,3)))
+        results["stress"] = stress_voigt
+        return results
 
     def _check_atoms_pbc(self, atoms) -> None:
         """
