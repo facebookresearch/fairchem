@@ -59,10 +59,34 @@ class RenameUnpickler(pickle.Unpickler):
         return super().find_class(find_new_module_name(module), name)
 
 
+def gererate_stress_task_config(dataset_name, rmsd):
+    return {
+        "_target_": "fairchem.core.units.mlip_unit.mlip_unit.Task",
+        "name": f"{dataset_name}_stress",
+        "level": "system",
+        "property": "stress",
+        "loss_fn": {
+            "_target_": "fairchem.core.modules.loss.DDPMTLoss",
+            "loss_fn": {"_target_": "fairchem.core.modules.loss.MAELoss"},
+            "reduction": "mean",
+            "coefficient": 1,
+        },
+        "out_spec": {"dim": [1, 9], "dtype": "float32"},
+        "normalizer": {
+            "_target_": "fairchem.core.modules.normalization.normalizer.Normalizer",
+            "mean": 0.0,
+            "rmsd": rmsd,  # 1.423
+        },
+        "datasets": [dataset_name],
+        "metrics": ["mae"],
+    }
+
+
 def migrate_checkpoint(
     checkpoint_path: torch.nn.Module,
     rm_static_keys: bool = True,
-    task_add_stress: str | None = None,
+    map_undefined_stress_to: str | None = None,
+    add_stress: bool = False,
 ) -> dict:
     """
     Migrates a checkpoint by updating module imports and configurations.
@@ -86,8 +110,8 @@ def migrate_checkpoint(
     checkpoint.tasks_config = update_config(checkpoint.tasks_config)
     checkpoint.model_config = update_config(checkpoint.model_config)
 
-    if task_add_stress is not None:
-        target_stress_task = f"{task_add_stress}_stress"
+    if map_undefined_stress_to is not None:
+        target_stress_task = f"{map_undefined_stress_to}_stress"
         output_dataset_names = set()
         datasets_with_stress = set()
         target_stress_config = None
@@ -108,6 +132,23 @@ def migrate_checkpoint(
             task_config.name = f"{dataset_name}_stress"
             task_config.datasets = [dataset_name]
             checkpoint.tasks_config.append(task_config)
+
+    if add_stress:
+        checkpoint.model_config["backbone"]["regress_stress"] = True
+        output_dataset_names = set()
+        datasets_with_stress = set()
+        datasets_to_rmsd = {}
+        # find output datasets
+        for task in checkpoint.tasks_config:
+            if "_energy" in task.name:
+                output_dataset_names.add(task.name.replace("_energy", ""))
+                datasets_to_rmsd[task.name.replace("_energy", "")] = task["normalizer"][
+                    "rmsd"
+                ]
+        for dataset_name in output_dataset_names - datasets_with_stress:
+            checkpoint.tasks_config.append(
+                gererate_stress_task_config(dataset_name, datasets_to_rmsd["omol"])
+            )
 
     # remove keys for registered buffers that are no longer saved
     if rm_static_keys:
@@ -149,6 +190,9 @@ if __name__ == "__main__":
         "--remove-static-keys", default=True, action=argparse.BooleanOptionalAction
     )
     parser.add_argument(
+        "--add-stress", default=True, action=argparse.BooleanOptionalAction
+    )
+    parser.add_argument(
         "--map-undefined-stress-to", type=str, required=False, default=None
     )
     args = parser.parse_args()
@@ -162,8 +206,18 @@ if __name__ == "__main__":
         args.checkpoint_in,
         args.remove_static_keys,
         args.map_undefined_stress_to,
+        add_stress=args.add_stress,
     )
     torch.save(checkpoint, args.checkpoint_out)
 
     # test to see if checkpoint loads
     MLIPPredictUnit(args.checkpoint_out, device="cpu")
+
+    # task_name="omol"
+    # calc = FAIRChemCalculator.from_model_checkpoint(args.checkpoint_out,task_name)
+    # atoms = molecule("H2O")
+    # atoms.set_cell([100.0, 100.0, 100.0])  # Define a cubic cell
+    # atoms.set_pbc(False)  # Enable periodic boundary conditions
+    # atoms.calc = calc
+    # energy = atoms.get_potential_energy()
+    # stress=atoms.get_stress(task_name)
