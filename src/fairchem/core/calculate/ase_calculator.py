@@ -257,7 +257,7 @@ class FAIRChemCalculator(Calculator):
             energy = element_refs.get(int(elt), {}).get(atoms.info["charge"])
         except AttributeError:
             energy = element_refs[int(elt)]
-        if energy is None or energy == 0.0:
+        if energy is None:
             raise ValueError("This model has not stored this element with this charge.")
         results["energy"] = energy
         results["forces"] = np.array([[0.0] * 3])
