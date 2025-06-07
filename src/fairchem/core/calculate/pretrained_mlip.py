@@ -13,6 +13,7 @@ from importlib import resources
 from typing import TYPE_CHECKING, Literal
 
 from huggingface_hub import hf_hub_download
+from omegaconf import OmegaConf
 
 from fairchem.core import calculate
 from fairchem.core._config import CACHE_DIR
@@ -28,6 +29,7 @@ class HuggingFaceCheckpoint:
     repo_id: Literal["facebook/UMA"]
     subfolder: str | None = None  # specify a hf repo subfolder
     revision: str | None = None  # specify a version tag, branch, commit hash
+    atom_refs: dict | None = None  # specify an isolated atomic reference
 
 
 @dataclass
@@ -86,4 +88,30 @@ def get_predict_unit(
         revision=model_checkpoint.revision,
         cache_dir=CACHE_DIR,
     )
-    return load_predict_unit(checkpoint_path, inference_settings, overrides, device)
+    atom_refs = get_isolated_atomic_energies(model_name)
+    return load_predict_unit(
+        checkpoint_path, inference_settings, overrides, device, atom_refs
+    )
+
+
+def get_isolated_atomic_energies(model_name: str) -> dict:
+    """
+    Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
+
+    Args:
+        model_name: Name of the model to load from available pretrained models.
+    Returns:
+        Atomic element reference data
+
+    Raises:
+        KeyError: If the specified model_name is not found in available models.
+    """
+    model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
+    atomic_refs_path = hf_hub_download(
+        filename=model_checkpoint.atom_refs["filename"],
+        repo_id=model_checkpoint.repo_id,
+        subfolder=model_checkpoint.atom_refs["subfolder"],
+        revision=model_checkpoint.revision,
+        cache_dir=CACHE_DIR,
+    )
+    return OmegaConf.load(atomic_refs_path)

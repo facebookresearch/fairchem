@@ -71,11 +71,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
+        element_refs: dict | None = None,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.seed(seed)
+        self.element_refs = element_refs
 
         if inference_settings is None:
             inference_settings = InferenceSettings()

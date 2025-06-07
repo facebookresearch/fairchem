@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 import torch
+from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.optimize import BFGS
 
@@ -24,8 +25,6 @@ from fairchem.core.calculate.ase_calculator import (
 from fairchem.core.units.mlip_unit.api.inference import UMATask
 
 if TYPE_CHECKING:
-    from ase import Atoms
-
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 from fairchem.core.calculate import pretrained_mlip
@@ -312,6 +311,41 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
         assert len(energy_values) == len(
             set(energy_values)
         ), "Energy values are not unique for different charge/spin combinations"
+
+
+def test_single_atom_systems():
+    """Test a system with a single atom. Single atoms do not currently use the model."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+
+    for at_num in range(1,84):
+        atom = Atoms([at_num], positions=[(0.0, 0.0, 0.0)])
+        atom.info["charge"] = 0
+        atom.info["spin"] = 3
+
+        for task_name in ("omat", "omol", "oc20"):
+            calc = FAIRChemCalculator(predict_unit, task_name=task_name)
+            atom.calc = calc
+            # Test energy calculation
+            energy = atom.get_potential_energy()
+            assert isinstance(energy, float)
+
+            # Test forces are 0.0
+            forces = atom.get_forces()
+            assert (forces == 0.0).all()
+
+
+def test_single_atom_system_errors():
+    """Test that a charged system with a single atom does not work."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
+    atom.calc = calc
+    atom.info["charge"] = -1
+    atom.info["spin"] = 4
+
+    with pytest.raises(ValueError):
+        atom.get_potential_energy()
 
 
 @pytest.mark.gpu()
