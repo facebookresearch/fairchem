@@ -234,7 +234,6 @@ class FAIRChemCalculator(Calculator):
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
 
-
     def _get_single_atom_energies(self, atoms) -> dict:
         """
         Populate output with single atom energies
@@ -245,10 +244,6 @@ class FAIRChemCalculator(Calculator):
                 "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
                 "with an appropriate checkpoint name."
             )
-        if atoms.info['charge'] != 0:
-            raise ValueError(
-                "This model cannot handle single atom systems with non-zero charge."
-            )
         logging.warning(
             "Single atom systems are not handled by the model; "
             "the precomputed DFT result is returned. "
@@ -256,13 +251,17 @@ class FAIRChemCalculator(Calculator):
         )
         elt = atoms.get_atomic_numbers()[0]
         results = {}
-        
-        element_refs = self.predictor.element_refs[ self.task_name + "_elem_refs" ]
-        print(element_refs)
-        results["energy"] = element_refs[int(elt)]
-        results["forces"] = np.array([[0.0]*3])
-        stress_voigt = full_3x3_to_voigt_6_stress(np.zeros((3,3)))
-        results["stress"] = stress_voigt
+
+        element_refs = self.predictor.element_refs[self.task_name + "_elem_refs"]
+        try:
+            energy = element_refs.get(int(elt), {}).get(atoms.info["charge"])
+        except AttributeError:
+            energy = element_refs[int(elt)]
+        if energy is None or energy == 0.0:
+            raise ValueError("This model has not stored this element with this charge.")
+        results["energy"] = energy
+        results["forces"] = np.array([[0.0] * 3])
+        results["stress"] = np.array([0.0] * 6)
         return results
 
     def _check_atoms_pbc(self, atoms) -> None:
