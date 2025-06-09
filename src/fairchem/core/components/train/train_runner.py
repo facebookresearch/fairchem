@@ -10,26 +10,49 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Protocol, Union, runtime_checkable
 
-import torch
-import torch.distributed.checkpoint as dcp
-from omegaconf import OmegaConf
 from torchtnt.framework.callback import Callback
 from torchtnt.framework.fit import fit
 
 from fairchem.core.common import distutils
 from fairchem.core.common.utils import get_subdirectories_sorted_by_time
 from fairchem.core.components.runner import Runner
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    convert_train_checkpoint_to_inference_checkpoint,
-)
 
 if TYPE_CHECKING:
-    from torch.distributed.checkpoint.stateful import Stateful
+    import torch
     from torchtnt.framework import EvalUnit, TrainUnit
     from torchtnt.framework.state import State
     from torchtnt.framework.unit import TTrainUnit
+
+
+@runtime_checkable
+class Checkpointable(Protocol):
+    """
+    Protocol that Units used by this trainer should implement if they want save and resume functionality
+    This is in addition to Pytorch's Stateful protocol because it allows units implement custom logic
+    that's required for checkpointing
+    """
+
+    def save_state(self, checkpoint_location: str) -> None:
+        """
+        Save the unit state to a checkpoint path
+
+        Args:
+            checkpoint_location: The checkpoint path to save to
+        """
+
+        ...
+
+    def load_state(self, checkpoint_location: str | None) -> None:
+        """
+        Loads the state given a checkpoint path
+
+        Args:
+            checkpoint_location: The checkpoint path to restore from
+        """
+
+        ...
 
 
 def get_most_recent_viable_checkpoint_path(checkpoint_dir: str | None) -> str | None:
@@ -100,12 +123,11 @@ class TrainEvalRunner(Runner):
         self,
         train_dataloader: torch.utils.data.dataloader,
         eval_dataloader: torch.utils.data.dataloader,
-        train_eval_unit: Union[TrainUnit, EvalUnit, Stateful],
+        train_eval_unit: Union[TrainUnit, EvalUnit, Checkpointable],
         callbacks: list[Callback] | None = None,
         max_epochs: int | None = 1,
         evaluate_every_n_steps: Optional[int] = None,
         max_steps: int | None = None,
-        save_inference_ckpt: bool = True,
     ):
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
@@ -114,7 +136,6 @@ class TrainEvalRunner(Runner):
         self.max_epochs = max_epochs
         self.max_steps = max_steps
         self.evaluate_every_n_steps = evaluate_every_n_steps
-        self.save_inference_ckpt = save_inference_ckpt
 
         checkpoint_callbacks = [
             c for c in callbacks if isinstance(c, TrainCheckpointCallback)
@@ -163,39 +184,7 @@ class TrainEvalRunner(Runner):
                 )
                 return False
 
-        # save a "train_state.yaml" that can be easily used for resuming runs
-        os.makedirs(checkpoint_location, exist_ok=True)
-        config = OmegaConf.load(self.job_config.metadata.config_path)
-        config.job.runner_state_path = checkpoint_location
-        # TODO: TrainEvalRunner shouldn't know about this and we need to potentially create
-        # a protocol that includes this kind of information. the reason these patches exist
-        # is because the model backbone config of the finetuning model is stored in the
-        # starting checkpoint and we need to decouple it from the finetuning checkpoints,
-        # such that the finetuning checkpoint can be used on its own without relying on knowing the
-        # path to the starting checkpoint.
-        finetune_model_full_config = self.train_eval_unit.get_finetune_model_config()
-        if finetune_model_full_config is not None:
-            config.runner.train_eval_unit.model = finetune_model_full_config
-
-        OmegaConf.save(config, os.path.join(checkpoint_location, "train_state.yaml"))
-
-        # calls train_eval_unit.save_state
-        state = {"unit_state": self.train_eval_unit.state_dict(), "config": config}
-        dcp.save(state, checkpoint_id=checkpoint_location)
-
-        # warning this can be VERY SLOW for large models, better not to do this at every checkpoint
-        if (
-            self.save_inference_ckpt
-            and distutils.is_master()
-            and os.path.exists(checkpoint_location)
-        ):
-            # TODO: create a protocol for this function, Runner are not suppose to know about functions of train_eval_unit
-            convert_train_checkpoint_to_inference_checkpoint(
-                checkpoint_location,
-                os.path.join(checkpoint_location, "inference_ckpt.pt"),
-            )
-
-        logging.info(f"Saved dcp checkpoint to {checkpoint_location}")
+        self.train_eval_unit.save_state(checkpoint_location)
         return True
 
     def load_state(self, checkpoint_location: str | None) -> None:
@@ -218,11 +207,4 @@ class TrainEvalRunner(Runner):
                 logging.info("No existing checkpoints found, starting from scratch")
                 return
 
-        # HACK: we need to do this to trigger the loading of the scheduler before the loading the checkpoint
-        # find a more elegant way to doing this, this currently breaks the train/eval interface
-        self.train_eval_unit.load_scheduler(len(self.train_dataloader))
-
-        state = {"unit_state": self.train_eval_unit.state_dict()}
-        dcp.load(state_dict=state, checkpoint_id=checkpoint_to_load)
-        self.train_eval_unit.load_state_dict(state["unit_state"])
-        logging.info(f"Done loading checkpoint from {checkpoint_to_load}")
+        self.train_eval_unit.load_state(checkpoint_to_load)

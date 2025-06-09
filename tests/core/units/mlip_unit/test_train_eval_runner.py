@@ -41,8 +41,12 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     # remove callbacks for checking loss
     # TODO mock main to avoid repeating this code in other tests
     cfg = get_hydra_config_from_yaml(
-        config, ["expected_loss=null", "checkpoint_every=null",
-        f"datasets.data_root_dir={fake_uma_dataset}",]
+        config,
+        [
+            "expected_loss=null",
+            "checkpoint_every=null",
+            f"datasets.data_root_dir={fake_uma_dataset}",
+        ],
     )
     os.makedirs(cfg.job.run_dir, exist_ok=True)
     os.makedirs(os.path.join(cfg.job.run_dir, cfg.job.timestamp_id), exist_ok=True)
@@ -61,8 +65,12 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     # use a different seed so the runner cannot have the same state
     new_cfg = get_hydra_config_from_yaml(
-        config, ["expected_loss=null", "checkpoint_every=null",
-        f"datasets.data_root_dir={fake_uma_dataset}",]
+        config,
+        [
+            "expected_loss=null",
+            "checkpoint_every=null",
+            f"datasets.data_root_dir={fake_uma_dataset}",
+        ],
     )
     new_cfg.job.seed = 999
     assert new_cfg.job.seed != cfg.job.seed
@@ -73,8 +81,8 @@ def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     new_state = new_runner.train_eval_unit.state_dict()
     # the states should be different here because we started with a different seed
     assert not check_model_state_equal(new_state["model"], old_state["model"])
-    # now the states should be the same after loading
-    new_runner.load_state(ch_path)
+    # now the states should be the same after loading, we call the _execute_load_state function to force loading
+    new_runner.train_eval_unit._execute_load_state(ch_path)
     new_state_loaded = new_runner.train_eval_unit.state_dict()
     assert check_model_state_equal(old_state["model"], new_state_loaded["model"])
 
