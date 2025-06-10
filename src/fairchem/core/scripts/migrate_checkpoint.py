@@ -151,6 +151,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--map-undefined-stress-to", type=str, required=False, default=None
     )
+    parser.add_argument("--model-version", type=float, default=1.0)
     args = parser.parse_args()
 
     if os.path.exists(args.checkpoint_out):
