@@ -15,6 +15,12 @@ from tqdm import tqdm
 
 from fairchem.core.datasets import AseDBDataset
 
+DATA_TASK_TEMPLATE_YAML = (
+    "configs/uma/finetune/data/uma_conserving_data_task_template.yaml"
+)
+
+OUTPUT_YAML_NAME = "uma_conserving_data_task.yaml"
+
 
 def compute_normalizer_and_linear_reference(train_path, num_workers):
     """
@@ -134,6 +140,30 @@ def launch_processing(data_dir, output_dir, num_workers):
             failed_log.write("\n".join(failed))
 
 
+def create_yaml(
+    train_path: str,
+    force_rms: float,
+    linref_coeff: list,
+    output_dir: str,
+    dataset_name: str,
+    val_path: str | None = None,
+    template_path: str = DATA_TASK_TEMPLATE_YAML,
+):
+    with open(template_path) as file:
+        template = yaml.safe_load(file)
+        template["dataset_name"] = dataset_name
+        template["normalizer_rmsd"] = force_rms
+        template["elem_refs"] = linref_coeff
+        template["train_dataset"]["splits"]["train"]["src"] = train_path
+        if val_path is not None:
+            template["val_dataset"]["splits"]["val"]["src"] = val_path
+        else:
+            del template["val_dataset"]
+
+        with open(output_dir / OUTPUT_YAML_NAME, "w") as yaml_file:
+            yaml.dump(template, yaml_file, default_flow_style=False, sort_keys=False)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -146,6 +176,12 @@ if __name__ == "__main__":
         "--val-dir",
         type=str,
         help="Directory of ASE atoms objects to convert for validation. Optional.",
+    )
+    parser.add_argument(
+        "--dataset-name",
+        type=str,
+        default="finetune_dataset",
+        help="Optional name for the dataset",
     )
     parser.add_argument(
         "--output-dir",
@@ -167,46 +203,59 @@ if __name__ == "__main__":
     force_rms, linref_coeff = compute_normalizer_and_linear_reference(
         train_path, args.num_workers
     )
-
-    config_yaml = {
-        "train": {
-            "splits": {"train": {"src": str(train_path.absolute())}},
-            "format": "ase_db",
-            "a2g_args": {
-                "r_energy": True,
-                "r_forces": True,
-                "r_stress": "${regress_stress}",
-                "r_edges": "${cpu_graph}",
-                "radius": "${cutoff_radius}",
-                "max_neigh": "${max_neighbors}",
-                "r_data_keys": ["charge", "spin"],
-            },
-        },
-    }
-
+    val_path = None
     if args.val_dir:
         val_path = args.output_dir / "val"
         launch_processing(args.val_dir, val_path, args.num_workers)
-        config_yaml.update(
-            {
-                "val": {
-                    "splits": {"val": {"src": str(val_path.absolute())}},
-                    "format": "ase_db",
-                    "a2g_args": {
-                        "r_energy": True,
-                        "r_forces": True,
-                        "r_stress": "${regress_stress}",
-                        "r_edges": "${cpu_graph}",
-                        "radius": "${cutoff_radius}",
-                        "max_neigh": "${max_neighbors}",
-                        "r_data_keys": ["charge", "spin"],
-                    },
-                },
-            }
-        )
 
-    config_yaml["normalizer_rmsd"] = force_rms.item()
-    config_yaml["elem_refs"] = linref_coeff
+    create_yaml(
+        train_path=str(train_path),
+        force_rms=float(force_rms),
+        linref_coeff=linref_coeff,
+        output_dir=args.output_dir,
+        dataset_name=args.dataset_name,
+        val_path=str(val_path) if val_path else None,
+    )
 
-    with open(args.output_dir / "dataset.yaml", "w") as yaml_file:
-        yaml.dump(config_yaml, yaml_file, default_flow_style=False, sort_keys=False)
+    # config_yaml = {
+    #     "train": {
+    #         "splits": {"train": {"src": str(train_path.absolute())}},
+    #         "format": "ase_db",
+    #         "a2g_args": {
+    #             "r_energy": True,
+    #             "r_forces": True,
+    #             "r_stress": "${regress_stress}",
+    #             "r_edges": "${cpu_graph}",
+    #             "radius": "${cutoff_radius}",
+    #             "max_neigh": "${max_neighbors}",
+    #             "r_data_keys": ["charge", "spin"],
+    #         },
+    #     },
+    # }
+
+    # if args.val_dir:
+    #     val_path = args.output_dir / "val"
+    #     launch_processing(args.val_dir, val_path, args.num_workers)
+    #     config_yaml.update(
+    #         {
+    #             "val": {
+    #                 "splits": {"val": {"src": str(val_path.absolute())}},
+    #                 "format": "ase_db",
+    #                 "a2g_args": {
+    #                     "r_energy": True,
+    #                     "r_forces": True,
+    #                     "r_stress": "${regress_stress}",
+    #                     "r_edges": "${cpu_graph}",
+    #                     "radius": "${cutoff_radius}",
+    #                     "max_neigh": "${max_neighbors}",
+    #                     "r_data_keys": ["charge", "spin"],
+    #                 },
+    #             },
+    #         }
+    #     )
+
+    # config_yaml["normalizer_rmsd"] = force_rms.item()
+    # config_yaml["elem_refs"] = linref_coeff
+
+    # with open(args.output_dir / "dataset.yaml", "w") as yaml_file:
+    #     yaml.dump(config_yaml, yaml_file, default_flow_style=False, sort_keys=False)
