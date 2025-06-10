@@ -124,7 +124,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     batch_full,
                     composition_by_atom,
                     reduce="mean",
-                    include_self=np.isclose(self.model_version, 1.0),
+                    include_self=np.isclose(self.model_version, 1.0).item(),
                 )
                 embeddings.append(composition.unsqueeze(0))
 
