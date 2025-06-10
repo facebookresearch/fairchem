@@ -238,7 +238,7 @@ class FAIRChemCalculator(Calculator):
         """
         Populate output with single atom energies
         """
-        if self.predictor.iso_atom_refs is None:
+        if self.predictor.atom_refs is None:
             raise ValueError(
                 "Single atom system but no atomic references present. "
                 "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
