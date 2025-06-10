@@ -238,7 +238,7 @@ class FAIRChemCalculator(Calculator):
         """
         Populate output with single atom energies
         """
-        if self.predictor.element_refs is None:
+        if self.predictor.iso_atom_refs is None:
             raise ValueError(
                 "Single atom system but no atomic references present. "
                 "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
@@ -252,11 +252,11 @@ class FAIRChemCalculator(Calculator):
         elt = atoms.get_atomic_numbers()[0]
         results = {}
 
-        element_refs = self.predictor.element_refs[self.task_name + "_elem_refs"]
+        atom_refs = self.predictor.atom_refs[self.task_name]
         try:
-            energy = element_refs.get(int(elt), {}).get(atoms.info["charge"])
+            energy = atom_refs.get(int(elt), {}).get(atoms.info["charge"])
         except AttributeError:
-            energy = element_refs[int(elt)]
+            energy = atom_refs[int(elt)]
         if energy is None:
             raise ValueError("This model has not stored this element with this charge.")
         results["energy"] = energy
