@@ -12,6 +12,10 @@ import tempfile
 
 import pytest
 
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    UNIT_INFERENCE_CHECKPOINT,
+    UNIT_RESUME_CONFIG,
+)
 from tests.core.testing_utils import launch_main
 from tests.core.units.mlip_unit.create_fake_dataset import (
     create_fake_uma_dataset,
@@ -54,8 +58,8 @@ def direct_mole_checkpoint(fake_uma_dataset):
     # Now resume from checkpoint_step and should get the same result
     # TODO, should get the run config and get checkpoint location from there
     checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
-    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
-    inference_checkpoint_pt = os.path.join(checkpoint_dir, "inference_ckpt.pt")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
     assert os.path.isdir(checkpoint_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     assert os.path.isfile(inference_checkpoint_pt)
@@ -93,8 +97,8 @@ def direct_checkpoint(fake_uma_dataset):
     # Now resume from checkpoint_step and should get the same result
     # TODO, should get the run config and get checkpoint location from there
     checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
-    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
-    inference_checkpoint_pt = os.path.join(checkpoint_dir, "inference_ckpt.pt")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
     assert os.path.isdir(checkpoint_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     assert os.path.isfile(inference_checkpoint_pt)
@@ -132,8 +136,8 @@ def conserving_mole_checkpoint(fake_uma_dataset):
     # Now resume from checkpoint_step and should get the same result
     # TODO, should get the run config and get checkpoint location from there
     checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
-    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
-    inference_checkpoint_pt = os.path.join(checkpoint_dir, "inference_ckpt.pt")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
     assert os.path.isdir(checkpoint_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     assert os.path.isfile(inference_checkpoint_pt)
