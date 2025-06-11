@@ -13,7 +13,9 @@ import pickle
 
 import omegaconf
 import torch
+from ase.build import molecule
 
+from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
 from fairchem.core.scripts.migrate_imports import mapping
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
@@ -32,12 +34,6 @@ def find_new_module_name(module):
 
 def update_config(config_or_data):
     if isinstance(config_or_data, (omegaconf.dictconfig.DictConfig, dict)):
-        if (
-            "model" in config_or_data
-            and config_or_data["model"]
-            == "fairchem.experimental.foundation_models.models.message_passing.escn_omol.eSCNMDBackbone"
-        ):
-            config_or_data["use_dataset_embedding"] = False
         for k, v in config_or_data.items():
             config_or_data[k] = update_config(v)
     elif isinstance(config_or_data, (omegaconf.listconfig.ListConfig, list)):
@@ -63,6 +59,7 @@ def migrate_checkpoint(
     checkpoint_path: torch.nn.Module,
     rm_static_keys: bool = True,
     task_add_stress: str | None = None,
+    model_version: float = 1.0,
 ) -> dict:
     """
     Migrates a checkpoint by updating module imports and configurations.
@@ -85,6 +82,21 @@ def migrate_checkpoint(
     checkpoint = torch.load(checkpoint_path, pickle_module=pickle)
     checkpoint.tasks_config = update_config(checkpoint.tasks_config)
     checkpoint.model_config = update_config(checkpoint.model_config)
+
+    if (
+        checkpoint.model_config["backbone"]["model"]
+        == "fairchem.experimental.foundation_models.models.message_passing.escn_omol.eSCNMDBackbone"
+    ):
+        checkpoint.model_config["backbone"]["use_dataset_embedding"] = False
+
+    if (
+        checkpoint.model_config["backbone"]["model"]
+        == "fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone"
+    ):
+        if "model_version" in checkpoint.model_config["backbone"]:
+            assert checkpoint.model_config["backbone"]["model_version"] == model_version
+        print("Setting model version to", model_version)
+        checkpoint.model_config["backbone"]["model_version"] = model_version
 
     if task_add_stress is not None:
         target_stress_task = f"{task_add_stress}_stress"
@@ -163,8 +175,17 @@ if __name__ == "__main__":
         args.checkpoint_in,
         args.remove_static_keys,
         args.map_undefined_stress_to,
+        model_version=args.model_version,
     )
     torch.save(checkpoint, args.checkpoint_out)
 
     # test to see if checkpoint loads
     MLIPPredictUnit(args.checkpoint_out, device="cpu")
+    task_name = "omol"
+    calc = FAIRChemCalculator.from_model_checkpoint(args.checkpoint_out, task_name)
+    atoms = molecule("H2O")
+    atoms.set_cell([100.0, 100.0, 100.0])  # Define a cubic cell
+    atoms.set_pbc(False)  # Enable periodic boundary conditions
+    atoms.calc = calc
+    energy = atoms.get_potential_energy()
+    stress = atoms.get_stress(task_name)
