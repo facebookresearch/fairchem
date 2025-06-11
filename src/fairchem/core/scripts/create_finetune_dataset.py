@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import glob
+import logging
 import multiprocessing as mp
 import os
 import random
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -15,11 +17,11 @@ from tqdm import tqdm
 
 from fairchem.core.datasets import AseDBDataset
 
-DATA_TASK_TEMPLATE_YAML = (
-    "configs/uma/finetune/data/uma_conserving_data_task_template.yaml"
-)
+logging.basicConfig(level=logging.INFO)
 
-OUTPUT_YAML_NAME = "uma_conserving_data_task.yaml"
+TEMPLATE_DIR = Path("configs/uma/finetune")
+DATA_TASK_YAML = Path("data/uma_conserving_data_task_template.yaml")
+UMA_SM_FINETUNE_YAML = Path("uma_sm_finetune_template.yaml")
 
 
 def compute_normalizer_and_linear_reference(train_path, num_workers):
@@ -147,9 +149,9 @@ def create_yaml(
     output_dir: str,
     dataset_name: str,
     val_path: str | None = None,
-    template_path: str = DATA_TASK_TEMPLATE_YAML,
 ):
-    with open(template_path) as file:
+    data_task_yaml = TEMPLATE_DIR / DATA_TASK_YAML
+    with open(data_task_yaml) as file:
         template = yaml.safe_load(file)
         template["dataset_name"] = dataset_name
         template["normalizer_rmsd"] = force_rms
@@ -160,8 +162,13 @@ def create_yaml(
         else:
             del template["val_dataset"]
 
-        with open(output_dir / OUTPUT_YAML_NAME, "w") as yaml_file:
+        os.makedirs(output_dir / "data", exist_ok=True)
+        with open(output_dir / DATA_TASK_YAML, "w") as yaml_file:
             yaml.dump(template, yaml_file, default_flow_style=False, sort_keys=False)
+
+        shutil.copy2(
+            TEMPLATE_DIR / UMA_SM_FINETUNE_YAML, output_dir / UMA_SM_FINETUNE_YAML
+        )
 
 
 if __name__ == "__main__":
@@ -216,46 +223,7 @@ if __name__ == "__main__":
         dataset_name=args.dataset_name,
         val_path=str(val_path) if val_path else None,
     )
-
-    # config_yaml = {
-    #     "train": {
-    #         "splits": {"train": {"src": str(train_path.absolute())}},
-    #         "format": "ase_db",
-    #         "a2g_args": {
-    #             "r_energy": True,
-    #             "r_forces": True,
-    #             "r_stress": "${regress_stress}",
-    #             "r_edges": "${cpu_graph}",
-    #             "radius": "${cutoff_radius}",
-    #             "max_neigh": "${max_neighbors}",
-    #             "r_data_keys": ["charge", "spin"],
-    #         },
-    #     },
-    # }
-
-    # if args.val_dir:
-    #     val_path = args.output_dir / "val"
-    #     launch_processing(args.val_dir, val_path, args.num_workers)
-    #     config_yaml.update(
-    #         {
-    #             "val": {
-    #                 "splits": {"val": {"src": str(val_path.absolute())}},
-    #                 "format": "ase_db",
-    #                 "a2g_args": {
-    #                     "r_energy": True,
-    #                     "r_forces": True,
-    #                     "r_stress": "${regress_stress}",
-    #                     "r_edges": "${cpu_graph}",
-    #                     "radius": "${cutoff_radius}",
-    #                     "max_neigh": "${max_neighbors}",
-    #                     "r_data_keys": ["charge", "spin"],
-    #                 },
-    #             },
-    #         }
-    #     )
-
-    # config_yaml["normalizer_rmsd"] = force_rms.item()
-    # config_yaml["elem_refs"] = linref_coeff
-
-    # with open(args.output_dir / "dataset.yaml", "w") as yaml_file:
-    #     yaml.dump(config_yaml, yaml_file, default_flow_style=False, sort_keys=False)
+    logging.info(f"Generated dataset and data config yaml in {args.output_dir}")
+    logging.info(
+        "To run finetuning, run fairchem -c </path/to/uma_sm_finetune_template.yaml>"
+    )
