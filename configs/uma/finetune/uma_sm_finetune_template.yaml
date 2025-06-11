@@ -1,21 +1,15 @@
 defaults:
-  - cluster: h100_local
-  - tasks: uma_conserving_stress
+  - data: uma_conserving_data_task
   - _self_
 
 job:
-  device_type: ${cluster.device}
+  device_type: CUDA
   scheduler:
-    mode: ${cluster.mode}
-    ranks_per_node: ${cluster.ranks_per_node}
+    mode: LOCAL
+    ranks_per_node: 1
     num_nodes: 1
-    slurm:
-      account: ${cluster.account}
-      qos: ${cluster.qos}
-      mem_gb: ${cluster.mem_gb}
-      cpus_per_task: ${cluster.cpus_per_task}
-  debug: ${cluster.debug}
-  run_dir: ${cluster.run_dir}
+  debug: True
+  run_dir: /tmp/uma_finetune_runs/
   run_name: uma_finetune
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
@@ -24,9 +18,7 @@ job:
     project: uma_finetune
 
 
-snapshot_dir: fm_training/dataset_sync_250225
-# starting_checkpoint: "/home/rgao/.cache/huggingface/hub/models--facebook--UMA/blobs/3b6953c0efa36f5bb5ef6de058226d97aaa1d225e3c745f2ce77d12037ef4994"
-starting_checkpoint: "/checkpoint/ocp/shared/uma/release/uma_sm_converted.pt"
+starting_checkpoint: ??
 max_neighbors: 300
 cutoff_radius: 6
 epochs: null
@@ -34,54 +26,13 @@ steps: 1000000
 max_atoms: 350
 min_atoms: 0
 cpu_graph: True
-
 regress_stress: True
-
-
-omc_train:
-  splits:
-    train:
-      sample_n: 10000
-      src: ${cluster.data_root_dir}/${snapshot_dir}/csp/250225/val/
-  format: ase_db
-  a2g_args:
-    r_forces: True
-    r_energy: True
-    r_edges: ${cpu_graph}
-    r_stress: ${regress_stress}
-    max_neigh: ${max_neighbors}
-    radius: ${cutoff_radius}
-  transforms:
-    common_transform:
-      dataset_name: ${tasks.dataset_name}
-    stress_reshape_transform:
-      dataset_name: ${tasks.dataset_name}
-
-omc_val:
-  splits:
-    val:
-      sample_n: 10
-      src: ${cluster.data_root_dir}/${snapshot_dir}/csp/250225/val/
-  format: ase_db
-  a2g_args:
-    r_energy: True
-    r_forces: True
-    r_edges: ${cpu_graph}
-    r_stress: ${regress_stress}
-    max_neigh: ${max_neighbors}
-    radius: ${cutoff_radius}
-  transforms:
-    common_transform:
-      dataset_name: ${tasks.dataset_name}
-    stress_reshape_transform:
-      dataset_name: ${tasks.dataset_name}
-
 
 
 train_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    omc: ${omc_train}
+    finetune_dataset: ${data.train_dataset}
   combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
 
 train_dataloader:
@@ -97,12 +48,12 @@ train_dataloader:
   num_workers: ${cluster.dataloader_workers}
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
-    tasks: ${tasks.tasks_list}
+    tasks: ${data.tasks_list}
 
 val_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
   dataset_configs:
-    omc: ${omc_val}
+    finetune_dataset: ${data.val_dataset}
   combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
 
 eval_dataloader:
@@ -118,7 +69,7 @@ eval_dataloader:
   num_workers: ${cluster.dataloader_workers}
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
-    tasks: ${tasks.tasks_list}
+    tasks: ${data.tasks_list}
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
@@ -127,7 +78,7 @@ runner:
   train_eval_unit:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
     job_config: ${job}
-    tasks: ${tasks.tasks_list}
+    tasks: ${data.tasks_list}
     model:
       _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
       checkpoint_location: ${starting_checkpoint}
@@ -139,14 +90,6 @@ runner:
       heads:
         energyandforcehead:
           module: fairchem.core.models.uma.escn_md.MLP_EFS_Head
-
-        # energyandforcehead:
-        #   module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
-        #   head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
-        #   head_kwargs:
-        #     wrap_property: False
-        #   dataset_names:
-        #     - ${tasks.dataset_name}
     optimizer_fn:
       _target_: torch.optim.AdamW
       _partial_: true
