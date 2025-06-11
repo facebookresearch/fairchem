@@ -144,11 +144,11 @@ def launch_processing(data_dir, output_dir, num_workers):
 
 def create_yaml(
     train_path: str,
+    val_path: str,
     force_rms: float,
     linref_coeff: list,
     output_dir: str,
     dataset_name: str,
-    val_path: str | None = None,
 ):
     data_task_yaml = TEMPLATE_DIR / DATA_TASK_YAML
     with open(data_task_yaml) as file:
@@ -157,10 +157,7 @@ def create_yaml(
         template["normalizer_rmsd"] = force_rms
         template["elem_refs"] = linref_coeff
         template["train_dataset"]["splits"]["train"]["src"] = train_path
-        if val_path is not None:
-            template["val_dataset"]["splits"]["val"]["src"] = val_path
-        else:
-            del template["val_dataset"]
+        template["val_dataset"]["splits"]["val"]["src"] = val_path
 
         os.makedirs(output_dir / "data", exist_ok=True)
         with open(output_dir / DATA_TASK_YAML, "w") as yaml_file:
@@ -182,7 +179,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val-dir",
         type=str,
-        help="Directory of ASE atoms objects to convert for validation. Optional.",
+        required=True,
+        help="Directory of ASE atoms objects to convert for validation.",
     )
     parser.add_argument(
         "--dataset-name",
@@ -210,10 +208,8 @@ if __name__ == "__main__":
     force_rms, linref_coeff = compute_normalizer_and_linear_reference(
         train_path, args.num_workers
     )
-    val_path = None
-    if args.val_dir:
-        val_path = args.output_dir / "val"
-        launch_processing(args.val_dir, val_path, args.num_workers)
+    val_path = args.output_dir / "val"
+    launch_processing(args.val_dir, val_path, args.num_workers)
 
     create_yaml(
         train_path=str(train_path),
@@ -221,7 +217,7 @@ if __name__ == "__main__":
         linref_coeff=linref_coeff,
         output_dir=args.output_dir,
         dataset_name=args.dataset_name,
-        val_path=str(val_path) if val_path else None,
+        val_path=val_path,
     )
     logging.info(f"Generated dataset and data config yaml in {args.output_dir}")
     logging.info(
