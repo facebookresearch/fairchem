@@ -16,6 +16,7 @@ from ase.io import read
 from tqdm import tqdm
 
 from fairchem.core.datasets import AseDBDataset
+from fairchem.core.units.mlip_unit.api.inference import UMATask
 
 logging.basicConfig(level=logging.INFO)
 
@@ -149,6 +150,7 @@ def create_yaml(
     linref_coeff: list,
     output_dir: str,
     dataset_name: str,
+    regress_stress: bool,
 ):
     data_task_yaml = TEMPLATE_DIR / DATA_TASK_YAML
     with open(data_task_yaml) as file:
@@ -158,11 +160,21 @@ def create_yaml(
         template["elem_refs"] = linref_coeff
         template["train_dataset"]["splits"]["train"]["src"] = train_path
         template["val_dataset"]["splits"]["val"]["src"] = val_path
-
+        if not regress_stress:
+            # remove the stress task
+            template["tasks_list"].pop()
         os.makedirs(output_dir / "data", exist_ok=True)
         with open(output_dir / DATA_TASK_YAML, "w") as yaml_file:
             yaml.dump(template, yaml_file, default_flow_style=False, sort_keys=False)
 
+    if not regress_stress:
+        uma_finetune_yaml = TEMPLATE_DIR / UMA_SM_FINETUNE_YAML
+        with open(uma_finetune_yaml) as file:
+            template_ft = yaml.safe_load(file)
+            template_ft["regress_stress"] = False
+        with open(output_dir / UMA_SM_FINETUNE_YAML, "w") as yaml_file:
+            yaml.dump(template_ft, yaml_file, default_flow_style=False, sort_keys=False)
+    else:
         shutil.copy2(
             TEMPLATE_DIR / UMA_SM_FINETUNE_YAML, output_dir / UMA_SM_FINETUNE_YAML
         )
@@ -183,10 +195,17 @@ if __name__ == "__main__":
         help="Directory of ASE atoms objects to convert for validation.",
     )
     parser.add_argument(
-        "--dataset-name",
+        "--task-to-finetune",
         type=str,
-        default="finetune_dataset",
-        help="Optional name for the dataset",
+        required=True,
+        choices=[t.value for t in UMATask],
+        help="choose a uma task to finetune",
+    )
+    parser.add_argument(
+        "--regress-stress",
+        type=bool,
+        default=False,
+        help="Allow for stress regression tasks, will only work if your dataset has stress labels",
     )
     parser.add_argument(
         "--output-dir",
@@ -213,13 +232,14 @@ if __name__ == "__main__":
 
     create_yaml(
         train_path=str(train_path),
+        val_path=str(val_path),
         force_rms=float(force_rms),
         linref_coeff=linref_coeff,
         output_dir=args.output_dir,
-        dataset_name=args.dataset_name,
-        val_path=val_path,
+        dataset_name=args.task_to_finetune,
+        regress_stress=args.regress_stress,
     )
     logging.info(f"Generated dataset and data config yaml in {args.output_dir}")
     logging.info(
-        "To run finetuning, run fairchem -c </path/to/uma_sm_finetune_template.yaml>"
+        f"To run finetuning, run fairchem -c {args.output_dir}/{UMA_SM_FINETUNE_YAML}"
     )

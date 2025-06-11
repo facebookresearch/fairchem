@@ -18,7 +18,7 @@ job:
     project: uma_finetune
 
 
-starting_checkpoint: ??
+base_model_name: uma-s-1
 max_neighbors: 300
 cutoff_radius: 6
 epochs: null
@@ -81,7 +81,9 @@ runner:
     tasks: ${data.tasks_list}
     model:
       _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
-      checkpoint_location: ${starting_checkpoint}
+      checkpoint_location:
+        _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+        model_name: ${base_model_name}
       overrides:
         backbone:
           max_neighbors: ${max_neighbors}
