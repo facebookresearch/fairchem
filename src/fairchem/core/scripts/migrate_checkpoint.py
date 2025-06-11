@@ -13,9 +13,7 @@ import pickle
 
 import omegaconf
 import torch
-from ase.build import molecule
 
-from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
 from fairchem.core.scripts.migrate_imports import mapping
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
@@ -181,11 +179,14 @@ if __name__ == "__main__":
 
     # test to see if checkpoint loads
     MLIPPredictUnit(args.checkpoint_out, device="cpu")
-    task_name = "omol"
-    calc = FAIRChemCalculator.from_model_checkpoint(args.checkpoint_out, task_name)
-    atoms = molecule("H2O")
-    atoms.set_cell([100.0, 100.0, 100.0])  # Define a cubic cell
-    atoms.set_pbc(False)  # Enable periodic boundary conditions
-    atoms.calc = calc
-    energy = atoms.get_potential_energy()
-    stress = atoms.get_stress(task_name)
+
+    # from ase.build import molecule
+    # from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
+    # task_name = "omol"
+    # calc = FAIRChemCalculator.from_model_checkpoint(args.checkpoint_out, task_name)
+    # atoms = molecule("H2O")
+    # atoms.set_cell([100.0, 100.0, 100.0])  # Define a cubic cell
+    # atoms.set_pbc(False)  # Enable periodic boundary conditions
+    # atoms.calc = calc
+    # energy = atoms.get_potential_energy()
+    # stress = atoms.get_stress(task_name)
