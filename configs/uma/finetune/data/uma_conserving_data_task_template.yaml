@@ -14,7 +14,6 @@ train_dataset:
     r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
     radius: ${cutoff_radius}
-    r_data_keys": ["charge", "spin"]
   transforms:
     common_transform:
       dataset_name: ${data.dataset_name}
@@ -33,7 +32,6 @@ val_dataset:
     r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
     radius: ${cutoff_radius}
-    r_data_keys": ["charge", "spin"]
   transforms:
     common_transform:
       dataset_name: ${data.dataset_name}

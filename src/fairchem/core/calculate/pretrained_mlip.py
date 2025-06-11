@@ -48,6 +48,23 @@ with (resources.files(calculate) / "pretrained_models.json").open("rb") as f:
 available_models = tuple(_MODEL_CKPTS.checkpoints.keys())
 
 
+def pretrained_checkpoint_path_from_name(model_name: str):
+    try:
+        model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
+    except KeyError as err:
+        raise KeyError(
+            f"Model '{model_name}' not found. Available models: {available_models}"
+        ) from err
+    checkpoint_path = hf_hub_download(
+        filename=model_checkpoint.filename,
+        repo_id=model_checkpoint.repo_id,
+        subfolder=model_checkpoint.subfolder,
+        revision=model_checkpoint.revision,
+        cache_dir=CACHE_DIR,
+    )
+    return checkpoint_path
+
+
 def get_predict_unit(
     model_name: str,
     inference_settings: InferenceSettings | str = "default",
