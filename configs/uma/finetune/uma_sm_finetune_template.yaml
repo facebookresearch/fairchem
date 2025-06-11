@@ -21,8 +21,8 @@ job:
 base_model_name: uma-s-1
 max_neighbors: 300
 cutoff_radius: 6
-epochs: null
-steps: 1000000
+epochs: 1
+steps: null
 max_atoms: 350
 min_atoms: 0
 cpu_graph: True
