@@ -114,3 +114,4 @@ runner:
     - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
       checkpoint_every_n_steps: 5000
       max_saved_checkpoints: 5
+    - _target_: torchtnt.framework.callbacks.TQDMProgressBar
