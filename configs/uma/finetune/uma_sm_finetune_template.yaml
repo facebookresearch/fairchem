@@ -109,9 +109,9 @@ runner:
     clip_grad_norm: 100
   max_epochs: ${epochs}
   max_steps: ${steps}
-  evaluate_every_n_steps: 10000
+  evaluate_every_n_steps: 100
   callbacks:
     - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
-      checkpoint_every_n_steps: 5000
+      checkpoint_every_n_steps: 1000
       max_saved_checkpoints: 5
     - _target_: torchtnt.framework.callbacks.TQDMProgressBar
