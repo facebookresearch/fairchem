@@ -53,6 +53,7 @@ def get_predict_unit(
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
+    cache_dir: str = CACHE_DIR,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
@@ -64,6 +65,7 @@ def get_predict_unit(
             use a custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
+        cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
@@ -86,20 +88,21 @@ def get_predict_unit(
         repo_id=model_checkpoint.repo_id,
         subfolder=model_checkpoint.subfolder,
         revision=model_checkpoint.revision,
-        cache_dir=CACHE_DIR,
+        cache_dir=cache_dir,
     )
-    atom_refs = get_isolated_atomic_energies(model_name)
+    atom_refs = get_isolated_atomic_energies(model_name, cache_dir)
     return load_predict_unit(
         checkpoint_path, inference_settings, overrides, device, atom_refs
     )
 
 
-def get_isolated_atomic_energies(model_name: str) -> dict:
+def get_isolated_atomic_energies(model_name: str, cache_dir: str = CACHE_DIR) -> dict:
     """
     Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
 
     Args:
         model_name: Name of the model to load from available pretrained models.
+        cache_dir: Path to folder where files will be stored. Default is "~/.cache/fairchem"
     Returns:
         Atomic element reference data
 
@@ -112,6 +115,6 @@ def get_isolated_atomic_energies(model_name: str) -> dict:
         repo_id=model_checkpoint.repo_id,
         subfolder=model_checkpoint.atom_refs["subfolder"],
         revision=model_checkpoint.revision,
-        cache_dir=CACHE_DIR,
+        cache_dir=cache_dir,
     )
     return OmegaConf.load(atomic_refs_path)
