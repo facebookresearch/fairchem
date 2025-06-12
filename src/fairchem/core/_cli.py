@@ -17,12 +17,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
+import clusterscope
 import hydra
 import numpy as np
 import torch
 from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
-import clusterscope
 
 from fairchem.core.common import gp_utils
 
@@ -425,9 +425,9 @@ def main(
     scheduler_cfg = cfg.job.scheduler
     logging.info(f"Running fairchemv2 cli with {cfg}")
     if scheduler_cfg.mode == SchedulerType.SLURM:  # Run on cluster
-        assert (
-            os.getenv("SLURM_SUBMIT_HOST") is None
-        ), "SLURM DID NOT SUBMIT JOB!! Please do not submit jobs from an active slurm job (srun or otherwise)"
+        assert os.getenv("SLURM_SUBMIT_HOST") is None, (
+            "SLURM DID NOT SUBMIT JOB!! Please do not submit jobs from an active slurm job (srun or otherwise)"
+        )
         executor = AutoExecutor(folder=log_dir, slurm_max_num_timeout=3)
         executor.update_parameters(
             name=cfg.job.run_name,
