@@ -43,7 +43,7 @@ same procedure as described in our manuscript.
 |          Total           |   1,077,382    | 185.8 GB  |
 
 ### OMat24 val split (this is a 1M subset used to train eqV2 models from the 5M val split)
-**_NOTE:_** The original validation sets contained a duplicated structures. Corrected validation sets were uploaded on 20/12/24. Please see this [issue](https://github.com/FAIR-Chem/fairchem/issues/942)
+**_NOTE:_** The original validation sets contained a duplicated structures. Corrected validation sets were uploaded on 20/12/24. Please see this [issue](https://github.com/facebookresearch/fairchem/issues/942)
 for more details, an re-download the correct version of the validation sets if needed.
 
 |       Sub-dataset       |   Size    | File Size |                                                                                                                                      Download |

@@ -6,6 +6,7 @@ parts:
   chapters:
   - file: core/install
   - file: core/quickstart
+  - file: core/fairchemv1_v2
   - url: https://facebook-fairchem-uma-demo.hf.space/
     title: UMA Demo
 - caption: AI/ML Interatomic Potentials
@@ -15,21 +16,21 @@ parts:
   - file: core/common_tasks/summary
     sections:
     - file: core/common_tasks/ase_calculator
+    - file: core/common_tasks/batch_inference
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
     - file: core/common_tasks/evaluation
-    - file: core/common_tasks/fine-tuning/fine-tuning
-    - file: core/common_tasks/batch_inference
+    - file: core/common_tasks/fine_tuning
     - file: core/common_tasks/workflows
-    - file: core/model_faq
+    - file: core/uma_faq
   - file: core/generative_models
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
     sections:
     - file: molecules/datasets/omol25
+    - file: molecules/datasets/omc25
   - file: molecules/models
- 
   - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
   chapters:
@@ -60,7 +61,7 @@ parts:
     - file: inorganic_materials/datasets/omat24
   - file: inorganic_materials/models
   - file: inorganic_materials/examples_tutorials/summary
-    sections: 
+    sections:
     - file: inorganic_materials/examples_tutorials/bulk_stability
     - file: inorganic_materials/examples_tutorials/phonons
     - file: inorganic_materials/examples_tutorials/elastic

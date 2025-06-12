@@ -1,11 +1,27 @@
-# Inference using ASE and Predictor Interface
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.17.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
+Inference using ASE and Predictor Interface
+------------------
 
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
-For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface but using the predictor directly. 
+For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface but using the predictor directly.
 
-```python
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
+```{code-cell} python3
+from __future__ import annotations
+
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
@@ -15,15 +31,17 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 UMA is designed for both general-purpose usage (single or batched systems) and single-system long rollout (MD simulations, relaxations, etc.). For general-purpose use, we suggest using the [default settings](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L92). This is a good trade-off between accuracy, speed, and memory consumption and should suffice for most applications. In this setting, on a single 80GB H100 GPU, we expect a user should be able to compute on systems as large as 50k-100k neighbors (depending on their atomic density). Batching is also supported in this mode.
 
-#### Turbo mode
+## Turbo mode
 
 For long rollout trajectory use-cases, such as molecular dynamics (MD) or relaxations, we provide a special mode called **turbo**, which optimizes for speed but restricts the user to using a single system where the atomic composition is held constant. Turbo mode is approximately 1.5-2x faster than default mode, depending on the situation. However, batching is not supported in this mode. It can be easily activated as shown below.
 
-```python
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda", inference_settings="turbo")
+```{code-cell} python3
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1", device="cuda", inference_settings="turbo"
+)
 ```
 
-#### Custom modes for advanced users
+## Custom modes for advanced users
 
 The advanced user might quickly see that **default** mode and **turbo** mode are special cases of our [inference settings api](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L47). You can customize it for your application if you understand what you are doing. The following table provides more information.
 
@@ -38,7 +56,7 @@ The advanced user might quickly see that **default** mode and **turbo** mode are
 
 For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
 
-```python
+```{code-cell} python3
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 settings = InferenceSettings(
@@ -51,5 +69,7 @@ settings = InferenceSettings(
     internal_graph_gen_version=2,
 )
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda", inference_settings=settings)
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1", device="cuda", inference_settings=settings
+)
 ```

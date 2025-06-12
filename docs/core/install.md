@@ -1,5 +1,7 @@
 # Installation & License
 
+## Installation
+
 To install `fairchem-core` you will need to setup the `fairchem-core` environment. We support either pip or uv. Conda is no longer supported and has also been dropped by pytorch itself. Note you can still create environments with conda and use pip to install the packages.
 
 **Note FairchemV2 is a major breaking changing from FairchemV1. If you are looking for old V1 code, you will need install v1 (`pip install fairchem-core==1.10`)**
@@ -20,9 +22,9 @@ pip install fairchem-core
 In V2, we removed all dependencies on 3rd party libraries such as torch-geometric, pyg, torch-scatter, torch-sparse etc that made installation difficult. So no additional steps are required!
 
 
-# License
+## License
 
-## Repository software
+### Repository software
 
 The software in this repo is licensed under an MIT license unless otherwise specified. 
 
@@ -50,5 +52,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Model checkpoints and datasets
+### Model checkpoints and datasets
+
 Please check each dataset and model for their own licenses.
