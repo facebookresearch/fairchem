@@ -22,6 +22,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
+import clusterscope
 
 from fairchem.core.common import gp_utils
 
@@ -39,7 +40,6 @@ from submitit.slurm.slurm import SlurmJobEnvironment
 from fairchem.core.common import distutils
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
-    get_cluster_name,
     get_commit_hash,
     get_timestamp_uid,
     setup_env_vars,
@@ -181,7 +181,7 @@ class JobConfig:
                 CHECKPOINT_DIR_NAME,
                 PREEMPTION_STATE_DIR_NAME,
             ),
-            cluster_name=get_cluster_name(),
+            cluster_name=clusterscope.cluster(),
         )
 
 
