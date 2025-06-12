@@ -11,7 +11,9 @@ from ase.build import bulk
 from ase.io import write
 from sklearn.model_selection import train_test_split
 
+from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
 from fairchem.core.common.utils import get_timestamp_uid
+from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 
 
@@ -226,7 +228,7 @@ def test_e2e_finetuning_bulks():
             "--output-dir",
             generated_dataset_dir,
             "--task-to-finetune",
-            "omol",
+            "omat",
         ]
         subprocess.run(create_dataset_command, check=True)
         # finetune for 1 epoch
@@ -240,6 +242,14 @@ def test_e2e_finetuning_bulks():
             f"+job.timestamp_id={job_dir_id}",
         ]
         subprocess.run(train_cmd, check=True)
-        checkpoint_dir = os.path.join(run_dir, job_dir_id, "checkpoints", "final")
-        assert os.path.exists(os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT))
+        checkpoint_path = os.path.join(
+            run_dir, job_dir_id, "checkpoints", "final", UNIT_INFERENCE_CHECKPOINT
+        )
+        assert os.path.exists(checkpoint_path)
         # try loading this checkpoint and run inference
+        predictor = load_predict_unit(checkpoint_path)
+        calc = FAIRChemCalculator(predictor, task_name="omat")
+        atoms = bulk("Fe")
+        atoms.calc = calc
+        energy = atoms.get_potential_energy()
+        assert energy < 0
