@@ -26,7 +26,7 @@ def load_inference_model(
     overrides: dict | None = None,
     use_ema: bool = False,
     return_checkpoint: bool = True,
-) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint]:
+) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint] | torch.nn.Module:
     checkpoint: MLIPInferenceCheckpoint = torch.load(
         checkpoint_location, map_location="cpu", weights_only=False
     )
@@ -52,10 +52,7 @@ def load_inference_model(
     else:
         load_state_dict(model, checkpoint.model_state_dict, strict=True)
 
-    if return_checkpoint is True:
-        return model, checkpoint
-    else:
-        return model
+    return (model, checkpoint) if return_checkpoint is True else model
 
 
 @contextmanager
