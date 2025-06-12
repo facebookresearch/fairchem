@@ -8,10 +8,7 @@ train_dataset:
       src: ??
   format: ase_db
   a2g_args:
-    r_forces: True
-    r_energy: True
     r_edges: ${cpu_graph}
-    r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
     radius: ${cutoff_radius}
   transforms:
@@ -26,10 +23,7 @@ val_dataset:
       src: ??
   format: ase_db
   a2g_args:
-    r_energy: True
-    r_forces: True
     r_edges: ${cpu_graph}
-    r_stress: ${regress_stress}
     max_neigh: ${max_neighbors}
     radius: ${cutoff_radius}
   transforms:
