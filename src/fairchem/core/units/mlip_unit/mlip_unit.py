@@ -401,7 +401,9 @@ def _get_consine_lr_scheduler(
     scheduler_steps = int(epochs * n_iters_per_epoch) if steps is None else steps
     # fixed function for constructing a LambdaLR scheduler
     lambda_fn = CosineLRLambda(
-        warmup_epochs=int(warmup_epochs * n_iters_per_epoch),
+        warmup_epochs=max(
+            int(warmup_epochs * n_iters_per_epoch), 1
+        ),  # this cannot be 0
         warmup_factor=warmup_factor,
         epochs=scheduler_steps,
         lr_min_factor=lr_min_factor,
