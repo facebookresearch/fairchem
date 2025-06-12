@@ -8,7 +8,6 @@ train_dataset:
       src: ??
   format: ase_db
   a2g_args:
-    r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
     radius: ${cutoff_radius}
   transforms:
@@ -23,7 +22,6 @@ val_dataset:
       src: ??
   format: ase_db
   a2g_args:
-    r_edges: ${cpu_graph}
     max_neigh: ${max_neighbors}
     radius: ${cutoff_radius}
   transforms:

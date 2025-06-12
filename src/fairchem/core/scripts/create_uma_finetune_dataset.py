@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import shutil
 from pathlib import Path
 
 import yaml
@@ -29,6 +28,7 @@ def create_yaml(
     output_dir: str,
     dataset_name: str,
     regress_stress: bool,
+    base_model_name: str,
 ):
     data_task_yaml = TEMPLATE_DIR / DATA_TASK_YAML
     with open(data_task_yaml) as file:
@@ -38,6 +38,9 @@ def create_yaml(
         template["elem_refs"] = linref_coeff
         template["train_dataset"]["splits"]["train"]["src"] = train_path
         template["val_dataset"]["splits"]["val"]["src"] = val_path
+        # add extra large vaccum box for molecules
+        # if dataset_name == str(UMATask.OMOL):
+        #     template["train_dataset"]["a2g_args"]["molecule_cell_size"] = 1000.0
         if not regress_stress:
             # remove the stress task
             template["tasks_list"].pop()
@@ -45,17 +48,13 @@ def create_yaml(
         with open(output_dir / DATA_TASK_YAML, "w") as yaml_file:
             yaml.dump(template, yaml_file, default_flow_style=False, sort_keys=False)
 
-    if not regress_stress:
-        uma_finetune_yaml = TEMPLATE_DIR / UMA_SM_FINETUNE_YAML
-        with open(uma_finetune_yaml) as file:
-            template_ft = yaml.safe_load(file)
-            template_ft["regress_stress"] = False
-        with open(output_dir / UMA_SM_FINETUNE_YAML, "w") as yaml_file:
-            yaml.dump(template_ft, yaml_file, default_flow_style=False, sort_keys=False)
-    else:
-        shutil.copy2(
-            TEMPLATE_DIR / UMA_SM_FINETUNE_YAML, output_dir / UMA_SM_FINETUNE_YAML
-        )
+    uma_finetune_yaml = TEMPLATE_DIR / UMA_SM_FINETUNE_YAML
+    with open(uma_finetune_yaml) as file:
+        template_ft = yaml.safe_load(file)
+        template_ft["regress_stress"] = regress_stress
+        template_ft["base_model_name"] = base_model_name
+    with open(output_dir / UMA_SM_FINETUNE_YAML, "w") as yaml_file:
+        yaml.dump(template_ft, yaml_file, default_flow_style=False, sort_keys=False)
 
 
 if __name__ == "__main__":
@@ -84,6 +83,12 @@ if __name__ == "__main__":
         type=bool,
         default=False,
         help="Allow for stress regression tasks, will only work if your dataset has stress labels",
+    )
+    parser.add_argument(
+        "--base-model",
+        type=str,
+        default="uma-s-1",
+        help="Name of base uma model",
     )
     parser.add_argument(
         "--output-dir",
@@ -116,6 +121,7 @@ if __name__ == "__main__":
         output_dir=args.output_dir,
         dataset_name=args.task_to_finetune,
         regress_stress=args.regress_stress,
+        base_model_name=args.base_model,
     )
     logging.info(f"Generated dataset and data config yaml in {args.output_dir}")
     logging.info(

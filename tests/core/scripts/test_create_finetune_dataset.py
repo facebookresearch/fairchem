@@ -6,9 +6,13 @@ import subprocess
 import tempfile
 
 import numpy as np
+import pytest
 from ase.build import bulk
 from ase.io import write
 from sklearn.model_selection import train_test_split
+
+from fairchem.core.common.utils import get_timestamp_uid
+from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 
 
 def generate_random_bulk_structure():
@@ -25,7 +29,7 @@ def generate_random_bulk_structure():
     structure = random.choice(crystal_structures)
 
     # Generate base structure with random lattice parameter
-    base_a = random.uniform(3.0, 5.0)  # Lattice parameter in Angstroms
+    base_a = random.uniform(3.0, 4.0)  # Lattice parameter in Angstroms
 
     try:
         atoms = bulk(element, structure, a=base_a, cubic=True)
@@ -200,3 +204,42 @@ def test_create_finetune_dataset():
         assert os.path.exists(
             os.path.join(tmpdirname, "dataset", "train", "data.0000.aselmdb")
         )
+        assert os.path.exists(
+            os.path.join(tmpdirname, "dataset", "val", "data.0000.aselmdb")
+        )
+
+
+@pytest.mark.gpu()
+def test_e2e_finetuning_bulks():
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        # create a bulks dataset
+        create_dataset(n_structures=100, train_ratio=0.8, output_dir=tmpdirname)
+        # create the ase dataset and yaml
+        generated_dataset_dir = os.path.join(tmpdirname, "dataset")
+        create_dataset_command = [
+            "python",
+            "src/fairchem/core/scripts/create_uma_finetune_dataset.py",
+            "--train-dir",
+            f"{tmpdirname}/train",
+            "--val-dir",
+            f"{tmpdirname}/val",
+            "--output-dir",
+            generated_dataset_dir,
+            "--task-to-finetune",
+            "omol",
+        ]
+        subprocess.run(create_dataset_command, check=True)
+        # finetune for 1 epoch
+        job_dir_id = get_timestamp_uid()
+        run_dir = os.path.join(tmpdirname, "run_dir")
+        train_cmd = [
+            "fairchem",
+            "-c",
+            f"{generated_dataset_dir}/uma_sm_finetune_template.yaml",
+            f"job.run_dir={run_dir}",
+            f"+job.timestamp_id={job_dir_id}",
+        ]
+        subprocess.run(train_cmd, check=True)
+        checkpoint_dir = os.path.join(run_dir, job_dir_id, "checkpoints", "final")
+        assert os.path.exists(os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT))
+        # try loading this checkpoint and run inference

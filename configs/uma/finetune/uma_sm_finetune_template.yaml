@@ -25,7 +25,6 @@ epochs: 1
 steps: null
 max_atoms: 350
 min_atoms: 0
-cpu_graph: True
 regress_stress: True
 
 
@@ -45,7 +44,7 @@ train_dataloader:
     min_atoms: ${min_atoms}
     shuffle: True
     seed: 0
-  num_workers: 4
+  num_workers: 0
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${data.tasks_list}
@@ -66,7 +65,7 @@ eval_dataloader:
     min_atoms: ${min_atoms}
     shuffle: False
     seed: 0
-  num_workers: 4
+  num_workers: 0
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${data.tasks_list}
@@ -86,6 +85,7 @@ runner:
         model_name: ${base_model_name}
       overrides:
         backbone:
+          otf_graph: True
           max_neighbors: ${max_neighbors}
           regress_stress: ${regress_stress}
         pass_through_head_outputs: True
