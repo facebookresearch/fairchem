@@ -56,11 +56,13 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         moe_layer_type: str = "pytorch",
         moe_single: bool = False,
         moe_type: str = "so2",
+        model_version: float = 1.0,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.parent_kwargs = kwargs
         self.num_experts = num_experts
+        self.model_version = model_version
         if num_experts > 0:
             convert_model_to_MOLE_model(
                 model=self,
@@ -122,9 +124,9 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     batch_full,
                     composition_by_atom,
                     reduce="mean",
+                    include_self=np.isclose(self.model_version, 1.0).item(),
                 )
                 embeddings.append(composition.unsqueeze(0))
-
             embeddings.append(csd_mixed_emb[None])
 
             expert_mixing_coefficients_before_norm = self.routing_mlp(
