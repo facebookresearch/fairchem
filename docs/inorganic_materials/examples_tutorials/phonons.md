@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.7
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -18,7 +18,7 @@ Phonon calculations are very important for inorganic materials science to
 * Calculate thermal conductivity
 * Understand the vibrational modes, and thus entropy and free energy, of a material
 * Predict the stability of a material at finite temperature (e.g. 300 K)
-among many others! 
+among many others!
 We can run a similarly straightforward calculation that
 1. Runs a relaxation on the unit cell and atoms
 2. Repeats the unit cell a number of times to make it sufficiently large to capture many interesting vibrational models
@@ -31,6 +31,8 @@ We can run a similarly straightforward calculation that
 Note that this analysis assumes that all vibrational modes are harmonic, which is a pretty reasonable approximately for low/moderate temperature materials, but becomes less realistic at high temperatures.
 
 ```{code-cell} ipython3
+from __future__ import annotations
+
 from ase.build import bulk
 from quacc.recipes.mlp.phonons import phonon_flow
 
@@ -43,11 +45,11 @@ result = phonon_flow(
     method="fairchem",
     job_params={
         "all": dict(
-            get_predict_unit_kwargs={"model_name": "uma-s-1"},
+            name_or_path="uma-s-1",
             task_name="omat",
         ),
     },
-    min_lengths=10.0, # set the minimum unit cell size smaller to be compatible with limited github runner ram
+    min_lengths=10.0,  # set the minimum unit cell size smaller to be compatible with limited github runner ram
 )
 ```
 

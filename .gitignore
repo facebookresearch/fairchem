@@ -117,7 +117,7 @@ env.yml
 
 docs/legacy_tutorials/videos/
 
-# No ASE dbs, or OCP LMDBs!
+# No ASE dbs, or OG LMDBs!
 /*.pt
 *.lmdb
 *.lmdb-lock

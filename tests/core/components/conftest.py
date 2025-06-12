@@ -18,7 +18,7 @@ from pymatgen.core.periodic_table import Element
 
 from fairchem.core.datasets import AseDBDataset
 
-# these are copied verbatim from https://github.com/FAIR-Chem/fairchem/blob/main/tests/core/conftest.py
+# these are copied verbatim from https://github.com/facebookresearch/fairchem/blob/main/tests/core/conftest.py
 
 
 @pytest.fixture(scope="session")
