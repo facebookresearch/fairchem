@@ -35,7 +35,7 @@ runner:
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: ${cluster.data_root_dir}/osc/7bt-polymorphs/7bt-polymorphs-is.aselmdb
+      src: ${cluster.data_root_dir}/omc/7bt-polymorphs/7bt-polymorphs-is.aselmdb
   save_relaxed_atoms: True
   calculate_properties: [ "energy" ]
   save_target_properties: ["energy", "molecule_id", "atoms_relaxed"]

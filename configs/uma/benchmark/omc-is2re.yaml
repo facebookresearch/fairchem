@@ -35,7 +35,7 @@ runner:
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:
-      src: ${cluster.data_root_dir}/osc/is2re
+      src: ${cluster.data_root_dir}/omc/is2re-v2
   save_relaxed_atoms: False
   calculate_properties: [ "energy" ]
   save_target_properties: [ "energy" ]
