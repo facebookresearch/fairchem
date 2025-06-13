@@ -3,7 +3,7 @@ defaults:
   - checkpoint: uma_sm
   - _self_
 
-benchmark_name: omc-is2reis
+benchmark_name: omc-is2re
 
 job:
   run_name: ${checkpoint.model_name}
