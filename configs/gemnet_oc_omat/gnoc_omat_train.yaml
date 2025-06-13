@@ -1,0 +1,153 @@
+defaults:
+  - cluster: h100
+  - backbone: gemnet_oc_omat/backbone
+  - element_refs: uma_v1_hof_lin_refs
+  - tasks: tasks
+  - _self_
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: LOCAL
+    ranks_per_node: 1
+    num_nodes: 1
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
+  debug: true
+  run_dir: ./debug_runs
+  run_name: gnoc_omat_debug
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma
+
+epochs: null
+steps: 100
+max_atoms: 200
+bf16: False
+
+train_dataset:
+  _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+  config:
+    src: /data/adeesh/datasets/omat24/aimd-from-PBE-3000-npt/
+    dataset_names: ["omat"]
+    a2g_args:
+      r_energy: true
+      r_forces: true
+      r_stress: false
+      r_edges: true
+      radius: 12.0
+      max_neigh: 30
+    key_mapping:
+      energy: omat_energy
+      forces: omat_forces
+      stress: omat_stress
+    transforms:
+      common_transform:
+        dataset_name: omat
+      stress_reshape_transform:
+        dataset_name: omat
+
+val_dataset:
+  _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+  config:
+    src: /data/adeesh/datasets/omat24/aimd-from-PBE-3000-npt/
+    dataset_names: ["omat"]
+    a2g_args:
+      r_energy: true
+      r_forces: true
+      r_stress: false
+      r_edges: true
+      radius: 12.0
+      max_neigh: 30
+    key_mapping:
+      energy: omat_energy
+      forces: omat_forces
+      stress: omat_stress
+    transforms:
+      common_transform:
+        dataset_name: omat
+      stress_reshape_transform:
+        dataset_name: omat
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: []
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: []
+
+heads:
+  omat_energy:
+    module: fairchem.core.models.gemnet_oc.gemnet_oc.GemNetOCEnergyAndGradForceHead
+    num_global_out_layers: 2
+    output_init: HeOrthogonal
+  omat_forces:
+    module: fairchem.core.models.gemnet_oc.gemnet_oc.GemNetOCForceHead
+    num_global_out_layers: 2
+    output_init: HeOrthogonal
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.models.base.HydraModel
+      backbone: ${backbone}
+      heads: ${heads}
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 5.e-4
+      weight_decay: 0
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 1.0
+      lr_min_factor: 0.01
+      epochs: ${epochs}
+      steps: ${steps}
+    print_every: 5
+    clip_grad_norm: 10
+    bf16: ${bf16}
+  max_epochs: ${epochs}
+  max_steps: ${steps}
+  evaluate_every_n_steps: 10
+  callbacks:
+    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
+      job_config: ${job}
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 50
+      max_saved_checkpoints: 2 

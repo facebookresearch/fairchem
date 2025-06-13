@@ -170,8 +170,8 @@ def get_output_mask(batch: AtomicData, task: Task) -> dict[str, torch.Tensor]:
     if "forces" in task.name:
         output_masks[task.name] = output_masks[task.name].all(dim=1)
 
-    for dset in set(batch.dataset_name):
-        dset_mask = torch.from_numpy(np.array(batch.dataset_name) == dset).to(
+    for dset in set(batch.dataset):
+        dset_mask = torch.from_numpy(np.array(batch.dataset) == dset).to(
             batch.pos.device
         )
         if task.level == "atom":
@@ -963,7 +963,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         self.total_loss_metrics += Metrics(metric=total_loss, total=total_loss, numel=1)
 
         # get the datasets with split names
-        datasets_in_batch = set(data.dataset_name)
+        datasets_in_batch = set(data.dataset)
 
         # run each evaluation
         for task in self.tasks:
