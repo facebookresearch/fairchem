@@ -107,7 +107,8 @@ class TrainCheckpointCallback(Callback):
                     self.checkpoint_dir
                 )
                 for dir, _ in checkpoint_dirs_by_time[: -self.max_saved_checkpoints]:
-                    shutil.rmtree(dir)
+                    if not os.path.islink(dir):
+                        shutil.rmtree(dir)
 
     def on_train_end(self, state: State, unit: TTrainUnit) -> None:
         if self.checkpoint_every_n_steps is not None:
@@ -173,6 +174,11 @@ class TrainEvalRunner(Runner):
                 self.job_config.metadata.checkpoint_dir
             )
             if most_recent_checkpoint_path:
+                if os.path.lexists(checkpoint_location):
+                    logging.warning(
+                        f"Checkpoint location {checkpoint_location} already exists, removing it"
+                    )
+                    os.remove(checkpoint_location)
                 os.symlink(most_recent_checkpoint_path, checkpoint_location)
                 logging.info(
                     f"When the job resumes from preemption, it will be using the state found at {most_recent_checkpoint_path}, which has been symlinked to {checkpoint_location}"
