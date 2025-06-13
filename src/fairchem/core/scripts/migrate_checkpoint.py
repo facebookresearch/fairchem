@@ -126,7 +126,8 @@ def migrate_checkpoint(
         rename_keys = {
             # "module.backbone.routing_mlp": "module.backbone.mole_coefficient_mlp",
             # "module.backbone.moe_coefficient_mlp": "module.backbone.mole_coefficient_mlp",
-            "module.backbone.dataset_embedding.dataset_emb_dict.osc.weight": "module.backbone.dataset_embedding.dataset_emb_dict.omc.weight"
+            "backbone.dataset_embedding.dataset_emb_dict.osc.weight": "backbone.dataset_embedding.dataset_emb_dict.omc.weight",
+            "module.backbone.dataset_embedding.dataset_emb_dict.osc.weight": "module.backbone.dataset_embedding.dataset_emb_dict.omc.weight",
         }
         for state_dict_name in ["model_state_dict", "ema_state_dict"]:
             state_dict = getattr(checkpoint, state_dict_name)
