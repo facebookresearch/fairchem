@@ -11,7 +11,13 @@ on:
 jobs:
   test:
     runs-on: 32-core-ubuntu
-    environment: 'external-pr-testing'
+    environment: >-
+      ${{
+        (github.event.pull_request.author_association == 'OWNER' ||
+         github.event.pull_request.author_association == 'MEMBER')
+        && 'internal-testing'
+        || 'external-pr-testing'
+      }}
     continue-on-error: true
     strategy:
       max-parallel: 10
