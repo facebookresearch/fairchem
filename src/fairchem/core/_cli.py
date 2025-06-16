@@ -413,7 +413,6 @@ def _runner_wrapper(config: DictConfig, run_type: RunType = RunType.RUN):
 def main(
     args: argparse.Namespace | None = None, override_args: list[str] | None = None
 ):
-aaa
     if args is None:
         parser = argparse.ArgumentParser()
         parser.add_argument("-c", "--config", type=str, required=True)
