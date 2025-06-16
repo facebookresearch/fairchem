@@ -15,7 +15,12 @@ jobs:
     runs-on: 4-core-ubuntu-gpu-t4
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        # Optional: get full history if needed
+        fetch-depth: 0
 
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
