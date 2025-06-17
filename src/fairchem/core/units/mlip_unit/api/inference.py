@@ -91,8 +91,8 @@ class InferenceSettings:
 # not optimized for speed
 def inference_settings_default():
     return InferenceSettings(
-        tf32=True,
-        activation_checkpointing=True,
+        tf32=False,
+        activation_checkpointing=False,
         merge_mole=False,
         compile=False,
         wigner_cuda=False,
