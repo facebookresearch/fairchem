@@ -21,8 +21,6 @@ Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In
 
 ```python
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
-import warnings
-warnings.filterwarnings('ignore')
 
 predictor = pretrained_mlip.get_predict_unit("uma-s-1", device = "cpu")
 calc = FAIRChemCalculator(predictor, task_name = "odac")
