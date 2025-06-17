@@ -127,3 +127,7 @@ $$ E_{\mathrm{MOF,deform}} = –1077.116 – (–1077.393) =  0.277 \text{ eV} \
 $$ E_{\mathrm{ads}} = –0.974 + 0.277 = –0.697 \text{ eV}$$
 
 $E_{\mathrm{int}}$ is equivalent to $E_{\mathrm{ads}}$ when the MOF is assumed to be rigid. In this case, failure to consider adsorbate-induced deformation would result in an overestimation of the adsorption energy magnitude.
+
+## Acknowledgements & Authors
+
+Logan Brabson and Sihoon Choi (Georgia Tech) and the OpenDAC project. 

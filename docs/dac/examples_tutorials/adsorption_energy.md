@@ -76,3 +76,7 @@ E_ads = (
 
 print(f"Adsorption energy of CO2 in Mg-MOF-74: {E_ads:.3f} eV")
 ```
+
+## Acknowledgements & Authors
+
+Logan Brabson and Sihoon Choi (Georgia Tech) and the OpenDAC project. 
