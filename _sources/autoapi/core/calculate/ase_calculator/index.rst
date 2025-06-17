@@ -120,6 +120,12 @@ Module Contents
 
 
 
+   .. py:method:: _get_single_atom_energies(atoms) -> dict
+
+      Populate output with single atom energies
+
+
+
    .. py:method:: _check_atoms_pbc(atoms) -> None
 
       Check for invalid PBC conditions

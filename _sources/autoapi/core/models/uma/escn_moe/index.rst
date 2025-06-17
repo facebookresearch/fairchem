@@ -25,7 +25,7 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: eSCNMDMoeBackbone(num_experts: int = 8, moe_dropout: float = 0.0, use_global_embedding: bool = False, use_composition_embedding: bool = False, moe_expert_coefficient_norm: str = 'softmax', act=torch.nn.SiLU, layers_moe=None, moe_layer_type: str = 'pytorch', moe_single: bool = False, moe_type: str = 'so2', **kwargs)
+.. py:class:: eSCNMDMoeBackbone(num_experts: int = 8, moe_dropout: float = 0.0, use_global_embedding: bool = False, use_composition_embedding: bool = False, moe_expert_coefficient_norm: str = 'softmax', act=torch.nn.SiLU, layers_moe=None, moe_layer_type: str = 'pytorch', moe_single: bool = False, moe_type: str = 'so2', model_version: float = 1.0, **kwargs)
 
    Bases: :py:obj:`fairchem.core.models.uma.escn_md.eSCNMDBackbone`, :py:obj:`fairchem.core.models.uma.nn.mole_utils.MOLEInterface`
 
@@ -66,6 +66,9 @@ Module Contents
 
 
    .. py:attribute:: num_experts
+
+
+   .. py:attribute:: model_version
 
 
    .. py:method:: merge_MOLE_model(data)

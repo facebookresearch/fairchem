@@ -85,7 +85,7 @@ Module Contents
 
 
 
-.. py:function:: migrate_checkpoint(checkpoint_path: torch.nn.Module, rm_static_keys: bool = True, task_add_stress: str | None = None) -> dict
+.. py:function:: migrate_checkpoint(checkpoint_path: torch.nn.Module, rm_static_keys: bool = True, task_add_stress: str | None = None, model_version: float = 1.0) -> dict
 
    Migrates a checkpoint by updating module imports and configurations.
 

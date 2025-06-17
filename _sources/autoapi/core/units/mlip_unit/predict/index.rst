@@ -34,7 +34,7 @@ Module Contents
 
 .. py:function:: collate_predictions(predict_fn)
 
-.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41)
+.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None)
 
    Bases: :py:obj:`torchtnt.framework.PredictUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ]
 
@@ -68,6 +68,9 @@ Module Contents
              return outputs
 
      predict_unit = MyPredictUnit(module=...)
+
+
+   .. py:attribute:: atom_refs
 
 
    .. py:attribute:: tasks

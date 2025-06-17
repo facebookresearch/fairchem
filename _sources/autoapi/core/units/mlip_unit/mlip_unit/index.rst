@@ -12,6 +12,15 @@ core.units.mlip_unit.mlip_unit
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG
+   core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT
+
+
 Classes
 -------
 
@@ -44,6 +53,14 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: UNIT_RESUME_CONFIG
+   :value: 'resume.yaml'
+
+
+.. py:data:: UNIT_INFERENCE_CHECKPOINT
+   :value: 'inference_ckpt.pt'
+
 
 .. py:class:: OutputSpec
 
@@ -193,9 +210,9 @@ Module Contents
 
 .. py:function:: set_sampler_state(state: torchtnt.framework.State, epoch: int, step_start: int) -> None
 
-.. py:class:: MLIPTrainEvalUnit(job_config: omegaconf.DictConfig, model: torch.nn.Module, optimizer_fn: callable, cosine_lr_scheduler_fn: callable, tasks: list[Task], bf16: bool = False, print_every: int = 10, clip_grad_norm: float | None = None, ema_decay: float = 0.999, train_strategy: TrainStrategy = TrainStrategy.DDP, debug_checksums_save_path: str | None = None, profile_flops: bool = False)
+.. py:class:: MLIPTrainEvalUnit(job_config: omegaconf.DictConfig, model: torch.nn.Module, optimizer_fn: callable, cosine_lr_scheduler_fn: callable, tasks: list[Task], bf16: bool = False, print_every: int = 10, clip_grad_norm: float | None = None, ema_decay: float = 0.999, train_strategy: TrainStrategy = TrainStrategy.DDP, debug_checksums_save_path: str | None = None, profile_flops: bool = False, save_inference_ckpt: bool = True)
 
-   Bases: :py:obj:`torchtnt.framework.TrainUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`torchtnt.framework.EvalUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`torch.distributed.checkpoint.stateful.Stateful`
+   Bases: :py:obj:`torchtnt.framework.TrainUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`torchtnt.framework.EvalUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`torch.distributed.checkpoint.stateful.Stateful`, :py:obj:`fairchem.core.components.train.train_runner.Checkpointable`
 
 
    The TrainUnit is an interface that can be used to organize your training logic. The core of it is the ``train_step`` which
@@ -252,6 +269,9 @@ Module Contents
    .. py:attribute:: profile_flops
 
 
+   .. py:attribute:: save_inference_ckpt
+
+
    .. py:attribute:: bf16
 
 
@@ -303,6 +323,11 @@ Module Contents
 
 
    .. py:attribute:: scheduler
+      :value: None
+
+
+
+   .. py:attribute:: lazy_state_location
       :value: None
 
 
@@ -396,6 +421,25 @@ Module Contents
 
 
    .. py:method:: get_finetune_model_config() -> omegaconf.DictConfig | None
+
+
+   .. py:method:: save_state(checkpoint_location: str) -> None
+
+      Save the unit state to a checkpoint path
+
+      :param checkpoint_location: The checkpoint path to save to
+
+
+
+   .. py:method:: load_state(checkpoint_location: str | None) -> None
+
+      Loads the state given a checkpoint path
+
+      :param checkpoint_location: The checkpoint path to restore from
+
+
+
+   .. py:method:: _execute_load_state(checkpoint_location: str | None) -> None
 
 
 .. py:class:: MLIPEvalUnit(job_config: omegaconf.DictConfig, model: torch.nn.Module, tasks: Sequence[Task], bf16: bool = False)

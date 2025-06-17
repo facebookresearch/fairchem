@@ -36,6 +36,7 @@ Functions
 .. autoapisummary::
 
    core.calculate.pretrained_mlip.get_predict_unit
+   core.calculate.pretrained_mlip.get_isolated_atomic_energies
 
 
 Module Contents
@@ -63,6 +64,12 @@ Module Contents
 
 
 
+   .. py:attribute:: atom_refs
+      :type:  dict | None
+      :value: None
+
+
+
 .. py:class:: PretrainedModels
 
    .. py:attribute:: checkpoints
@@ -73,7 +80,7 @@ Module Contents
 
 .. py:data:: available_models
 
-.. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None) -> fairchem.core.units.mlip_unit.MLIPPredictUnit
+.. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, cache_dir: str = CACHE_DIR) -> fairchem.core.units.mlip_unit.MLIPPredictUnit
 
    Retrieves a prediction unit for a specified model.
 
@@ -83,8 +90,21 @@ Module Contents
                               use a custom InferenceSettings object.
    :param overrides: Optional dictionary of settings to override default inference settings.
    :param device: Optional torch device to load the model onto. If None, uses the default device.
+   :param cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
 
    :returns: An initialized MLIPPredictUnit ready for making predictions.
+
+   :raises KeyError: If the specified model_name is not found in available models.
+
+
+.. py:function:: get_isolated_atomic_energies(model_name: str, cache_dir: str = CACHE_DIR) -> dict
+
+   Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
+
+   :param model_name: Name of the model to load from available pretrained models.
+   :param cache_dir: Path to folder where files will be stored. Default is "~/.cache/fairchem"
+
+   :returns: Atomic element reference data
 
    :raises KeyError: If the specified model_name is not found in available models.
 

@@ -17,6 +17,7 @@ Classes
 
 .. autoapisummary::
 
+   core.components.train.train_runner.Checkpointable
    core.components.train.train_runner.TrainCheckpointCallback
    core.components.train.train_runner.TrainEvalRunner
 
@@ -31,6 +32,32 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:class:: Checkpointable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Protocol that Units used by this trainer should implement if they want save and resume functionality
+   This is in addition to Pytorch's Stateful protocol because it allows units implement custom logic
+   that's required for checkpointing
+
+
+   .. py:method:: save_state(checkpoint_location: str) -> None
+
+      Save the unit state to a checkpoint path
+
+      :param checkpoint_location: The checkpoint path to save to
+
+
+
+   .. py:method:: load_state(checkpoint_location: str | None) -> None
+
+      Loads the state given a checkpoint path
+
+      :param checkpoint_location: The checkpoint path to restore from
+
+
 
 .. py:function:: get_most_recent_viable_checkpoint_path(checkpoint_dir: str | None) -> str | None
 
@@ -116,7 +143,7 @@ Module Contents
 
 
 
-.. py:class:: TrainEvalRunner(train_dataloader: torch.utils.data.dataloader, eval_dataloader: torch.utils.data.dataloader, train_eval_unit: Union[torchtnt.framework.TrainUnit, torchtnt.framework.EvalUnit, torch.distributed.checkpoint.stateful.Stateful], callbacks: list[torchtnt.framework.callback.Callback] | None = None, max_epochs: int | None = 1, evaluate_every_n_steps: Optional[int] = None, max_steps: int | None = None, save_inference_ckpt: bool = True)
+.. py:class:: TrainEvalRunner(train_dataloader: torch.utils.data.dataloader, eval_dataloader: torch.utils.data.dataloader, train_eval_unit: Union[torchtnt.framework.TrainUnit, torchtnt.framework.EvalUnit, Checkpointable], callbacks: list[torchtnt.framework.callback.Callback] | None = None, max_epochs: int | None = 1, evaluate_every_n_steps: Optional[int] = None, max_steps: int | None = None)
 
    Bases: :py:obj:`fairchem.core.components.runner.Runner`
 
@@ -156,9 +183,6 @@ Module Contents
 
 
    .. py:attribute:: evaluate_every_n_steps
-
-
-   .. py:attribute:: save_inference_ckpt
 
 
    .. py:attribute:: checkpoint_callback

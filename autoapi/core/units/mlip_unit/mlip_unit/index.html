@@ -266,7 +266,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../dac/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../dac/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../dac/examples_tutorials/adsorption_energies.html">Adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../dac/examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
 </ul>
 </details></li>
 </ul>
@@ -593,9 +593,12 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG"><code class="docutils literal notranslate"><span class="pre">UNIT_RESUME_CONFIG</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT"><code class="docutils literal notranslate"><span class="pre">UNIT_INFERENCE_CHECKPOINT</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec"><code class="docutils literal notranslate"><span class="pre">OutputSpec</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dim"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dtype"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dtype</span></code></a></li>
@@ -635,6 +638,7 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.job_config"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.job_config</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.tasks"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.tasks</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.profile_flops"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.profile_flops</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_inference_ckpt"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.save_inference_ckpt</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.bf16"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.bf16</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.autocast_enabled"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.autocast_enabled</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.autocast_dtype"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.autocast_dtype</span></code></a></li>
@@ -652,6 +656,7 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.eval_unit"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.eval_unit</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.cosine_lr_scheduler_fn"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.cosine_lr_scheduler_fn</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.scheduler"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.scheduler</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.lazy_state_location"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.lazy_state_location</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_scheduler"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.load_scheduler()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_train_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_train_start()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_train_epoch_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_train_epoch_start()</span></code></a></li>
@@ -663,6 +668,9 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_eval_epoch_start()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_end"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_eval_epoch_end()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.get_finetune_model_config"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.get_finetune_model_config()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_state"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.save_state()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_state"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.load_state()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit._execute_load_state"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit._execute_load_state()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit"><code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code></a><ul class="nav section-nav flex-column">
@@ -700,6 +708,20 @@ document.write(`
 <p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
 <p>This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG" title="core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG"><code class="xref py py-obj docutils literal notranslate"><span class="pre">UNIT_RESUME_CONFIG</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT" title="core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">UNIT_INFERENCE_CHECKPOINT</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -766,6 +788,16 @@ LICENSE file in the root directory of this source tree.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG">
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">UNIT_RESUME_CONFIG</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'resume.yaml'</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT">
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">UNIT_INFERENCE_CHECKPOINT</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'inference_ckpt.pt'</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.OutputSpec">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">OutputSpec</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.OutputSpec" title="Link to this definition">#</a></dt>
@@ -963,8 +995,8 @@ indexing map. s.t. we can index like batch.oc20_forces[oc20_map].</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">MLIPTrainEvalUnit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">omegaconf.DictConfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.nn.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cosine_lr_scheduler_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bf16</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_every</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip_grad_norm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ema_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.999</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_strategy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.TrainStrategy" title="core.units.mlip_unit.mlip_unit.TrainStrategy"><span class="pre">TrainStrategy</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">TrainStrategy.DDP</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_checksums_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">profile_flops</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.TrainUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.EvalUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.distributed.checkpoint.stateful.Stateful</span></code></p>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">MLIPTrainEvalUnit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">omegaconf.DictConfig</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.nn.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cosine_lr_scheduler_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bf16</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">print_every</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip_grad_norm</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ema_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.999</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_strategy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.TrainStrategy" title="core.units.mlip_unit.mlip_unit.TrainStrategy"><span class="pre">TrainStrategy</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">TrainStrategy.DDP</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug_checksums_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">profile_flops</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_inference_ckpt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.TrainUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torchtnt.framework.EvalUnit</span></code>[<code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></code>], <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.distributed.checkpoint.stateful.Stateful</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.train.train_runner.Checkpointable</span></code></p>
 <p>The TrainUnit is an interface that can be used to organize your training logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">train_step</span></code> which
 is an abstract method where you can define the code you want to run each iteration of the dataloader.</p>
 <p>To use the TrainUnit, create a class which subclasses TrainUnit. Then implement the <code class="docutils literal notranslate"><span class="pre">train_step</span></code> method on your class, and optionally
@@ -1017,6 +1049,11 @@ implement any of the hooks, which allow you to control the behavior of the loop 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.profile_flops">
 <span class="sig-name descname"><span class="pre">profile_flops</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.profile_flops" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_inference_ckpt">
+<span class="sig-name descname"><span class="pre">save_inference_ckpt</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_inference_ckpt" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -1102,6 +1139,11 @@ implement any of the hooks, which allow you to control the behavior of the loop 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.scheduler">
 <span class="sig-name descname"><span class="pre">scheduler</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.scheduler" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.lazy_state_location">
+<span class="sig-name descname"><span class="pre">lazy_state_location</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.lazy_state_location" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -1230,6 +1272,33 @@ Optionally can be decorated with <code class="docutils literal notranslate"><spa
 <dl class="py method">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.get_finetune_model_config">
 <span class="sig-name descname"><span class="pre">get_finetune_model_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">omegaconf.DictConfig</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.get_finetune_model_config" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the unit state to a checkpoint path</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>checkpoint_location</strong> – The checkpoint path to save to</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_state">
+<span class="sig-name descname"><span class="pre">load_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_state" title="Link to this definition">#</a></dt>
+<dd><p>Loads the state given a checkpoint path</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>checkpoint_location</strong> – The checkpoint path to restore from</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit._execute_load_state">
+<span class="sig-name descname"><span class="pre">_execute_load_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit._execute_load_state" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -1407,9 +1476,12 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG"><code class="docutils literal notranslate"><span class="pre">UNIT_RESUME_CONFIG</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT"><code class="docutils literal notranslate"><span class="pre">UNIT_INFERENCE_CHECKPOINT</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec"><code class="docutils literal notranslate"><span class="pre">OutputSpec</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dim"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dim</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.OutputSpec.dtype"><code class="docutils literal notranslate"><span class="pre">OutputSpec.dtype</span></code></a></li>
@@ -1449,6 +1521,7 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.job_config"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.job_config</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.tasks"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.tasks</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.profile_flops"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.profile_flops</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_inference_ckpt"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.save_inference_ckpt</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.bf16"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.bf16</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.autocast_enabled"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.autocast_enabled</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.autocast_dtype"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.autocast_dtype</span></code></a></li>
@@ -1466,6 +1539,7 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.eval_unit"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.eval_unit</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.cosine_lr_scheduler_fn"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.cosine_lr_scheduler_fn</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.scheduler"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.scheduler</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.lazy_state_location"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.lazy_state_location</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_scheduler"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.load_scheduler()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_train_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_train_start()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_train_epoch_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_train_epoch_start()</span></code></a></li>
@@ -1477,6 +1551,9 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_start"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_eval_epoch_start()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_end"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.on_eval_epoch_end()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.get_finetune_model_config"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.get_finetune_model_config()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_state"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.save_state()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_state"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit.load_state()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit._execute_load_state"><code class="docutils literal notranslate"><span class="pre">MLIPTrainEvalUnit._execute_load_state()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.MLIPEvalUnit"><code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code></a><ul class="nav section-nav flex-column">

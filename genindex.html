@@ -265,7 +265,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="dac/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="dac/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="dac/examples_tutorials/adsorption_energies.html">Adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dac/examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
 </ul>
 </details></li>
 </ul>
@@ -870,10 +870,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.BalancedBatchSampler._dist_enabled">_dist_enabled() (core.common.data_parallel.BalancedBatchSampler static method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer._elemental_references_path">_elemental_references_path (core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor.ScaleFactor._enforce_consistency">_enforce_consistency() (core.modules.scaling.scale_factor.ScaleFactor method)</a>
 
       <ul>
@@ -889,6 +889,8 @@ document.write(`
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel._ensure_supported">_ensure_supported() (in module core.common.data_parallel)</a>
 </li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._ensure_system_deleted">_ensure_system_deleted() (in module ocpapi.workflows.adsorbates)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit._execute_load_state">_execute_load_state() (core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig._find_combos_to_check">_find_combos_to_check() (data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig method)</a>
 
@@ -964,6 +966,8 @@ document.write(`
         <li><a href="autoapi/data/oc/core/index.html#data.oc.core.AdsorbateSlabConfig._get_scaled_normal">(data.oc.core.AdsorbateSlabConfig method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FAIRChemCalculator._get_single_atom_energies">_get_single_atom_energies() (core.calculate.ase_calculator.FAIRChemCalculator method)</a>
+</li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._get_slabs">_get_slabs() (in module ocpapi.workflows.adsorbates)</a>
 </li>
       <li><a href="autoapi/core/_cli/index.html#core._cli._get_slurm_env">_get_slurm_env() (in module core._cli)</a>
@@ -1402,8 +1406,6 @@ document.write(`
         <li><a href="autoapi/adsorbml/scripts/dense_eval/index.html#module-adsorbml.scripts.dense_eval">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     adsorbml.scripts.process_mlrs
 
@@ -1411,6 +1413,8 @@ document.write(`
         <li><a href="autoapi/adsorbml/scripts/process_mlrs/index.html#module-adsorbml.scripts.process_mlrs">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     adsorbml.scripts.utils
 
@@ -1541,6 +1545,12 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.assign_device_for_local_rank">assign_device_for_local_rank() (in module core.common.distutils)</a>
 </li>
+      <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs">atom_refs (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.atom_refs">(core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.atomic_numbers">atomic_numbers (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
       <li><a href="autoapi/core/datasets/embeddings/index.html#core.datasets.embeddings.ATOMIC_RADII">ATOMIC_RADII (in module core.datasets.embeddings)</a>
@@ -1938,6 +1948,8 @@ document.write(`
       <li><a href="autoapi/core/_cli/index.html#core._cli.CHECKPOINT_DIR_NAME">CHECKPOINT_DIR_NAME (in module core._cli)</a>
 </li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.checkpoint_every_n_steps">checkpoint_every_n_steps (core.components.train.train_runner.TrainCheckpointCallback attribute)</a>
+</li>
+      <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.Checkpointable">Checkpointable (class in core.components.train.train_runner)</a>
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.PretrainedModels.checkpoints">checkpoints (core.calculate.pretrained_mlip.PretrainedModels attribute)</a>
 </li>
@@ -4391,8 +4403,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.get_class">get_class() (core.common.registry.Registry class method)</a>
 </li>
-      <li><a href="autoapi/core/common/utils/index.html#core.common.utils.get_cluster_name">get_cluster_name() (in module core.common.utils)</a>
-</li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.get_commit_hash">get_commit_hash() (in module core.common.utils)</a>
 </li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.get_commit_hash_for_repo">get_commit_hash_for_repo() (in module core.common.utils)</a>
@@ -4479,6 +4489,8 @@ document.write(`
         <li><a href="autoapi/data/oc/core/ion/index.html#data.oc.core.ion.Ion.get_ion_concentration">(data.oc.core.ion.Ion method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.get_isolated_atomic_energies">get_isolated_atomic_energies() (in module core.calculate.pretrained_mlip)</a>
+</li>
       <li><a href="autoapi/core/components/calculate/kappa_runner/index.html#core.components.calculate.kappa_runner.get_kappa103_data_list">get_kappa103_data_list() (in module core.components.calculate.kappa_runner)</a>
 </li>
   </ul></td>
@@ -5089,6 +5101,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.lazy_model_intialized">lazy_model_intialized (core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.lazy_state_location">lazy_state_location (core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit attribute)</a>
+</li>
       <li><a href="autoapi/data/oc/utils/geometry/index.html#data.oc.utils.geometry.BoxGeometry.length">length (data.oc.utils.geometry.BoxGeometry attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.level">level (core.units.mlip_unit.mlip_unit.Task attribute)</a>
@@ -5232,7 +5246,11 @@ document.write(`
 </li>
         <li><a href="autoapi/core/components/runner/index.html#core.components.runner.Runner.load_state">(core.components.runner.Runner method)</a>
 </li>
+        <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.Checkpointable.load_state">(core.components.train.train_runner.Checkpointable method)</a>
+</li>
         <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainEvalRunner.load_state">(core.components.train.train_runner.TrainEvalRunner method)</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.load_state">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
   </ul></td>
@@ -5758,6 +5776,8 @@ document.write(`
       <li><a href="autoapi/core/models/uma/nn/mole_utils/index.html#core.models.uma.nn.mole_utils.model_search_and_replace">model_search_and_replace() (in module core.models.uma.nn.mole_utils)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint.model_state_dict">model_state_dict (core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint attribute)</a>
+</li>
+      <li><a href="autoapi/core/models/uma/escn_moe/index.html#core.models.uma.escn_moe.eSCNMDMoeBackbone.model_version">model_version (core.models.uma.escn_moe.eSCNMDMoeBackbone attribute)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.Models">Models (class in ocpapi)</a>
 
@@ -7368,7 +7388,7 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/nve_md_runner/index.html#core.components.calculate.nve_md_runner.NVEMDRunner.save_frequency">save_frequency (core.components.calculate.nve_md_runner.NVEMDRunner attribute)</a>
 </li>
-      <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainEvalRunner.save_inference_ckpt">save_inference_ckpt (core.components.train.train_runner.TrainEvalRunner attribute)</a>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_inference_ckpt">save_inference_ckpt (core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit attribute)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/benchmark_reducer/index.html#core.components.benchmark.benchmark_reducer.BenchmarkReducer.save_metrics">save_metrics() (core.components.benchmark.benchmark_reducer.BenchmarkReducer method)</a>
 
@@ -7453,7 +7473,11 @@ document.write(`
 </li>
         <li><a href="autoapi/core/components/runner/index.html#core.components.runner.Runner.save_state">(core.components.runner.Runner method)</a>
 </li>
+        <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.Checkpointable.save_state">(core.components.train.train_runner.Checkpointable method)</a>
+</li>
         <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainEvalRunner.save_state">(core.components.train.train_runner.TrainEvalRunner method)</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.save_state">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/models/uma/nn/activation/index.html#core.models.uma.nn.activation.GateActivation.scalar_act">scalar_act (core.models.uma.nn.activation.GateActivation attribute)</a>
@@ -7652,6 +7676,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/benchmark/omc_polymorph_reducer/index.html#core.components.benchmark.omc_polymorph_reducer.sklearn_scipy_installed">sklearn_scipy_installed (in module core.components.benchmark.omc_polymorph_reducer)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.Slab">Slab (class in data.oc.core)</a>
 
       <ul>
@@ -7664,8 +7690,6 @@ document.write(`
         <li><a href="autoapi/ocpapi/client/models/index.html#ocpapi.client.models.Slab">(class in ocpapi.client.models)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig.slab">slab (data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig attribute)</a>
 
       <ul>
@@ -8236,6 +8260,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.UniqueKeyLoader">UniqueKeyLoader (class in core.common.utils)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT">UNIT_INFERENCE_CHECKPOINT (in module core.units.mlip_unit.mlip_unit)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG">UNIT_RESUME_CONFIG (in module core.units.mlip_unit.mlip_unit)</a>
+</li>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.unregister">unregister() (core.common.registry.Registry class method)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.UnsupportedAdsorbateException">UnsupportedAdsorbateException</a>, <a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.UnsupportedAdsorbateException">[1]</a>, <a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.UnsupportedAdsorbateException">[2]</a>
@@ -8246,10 +8274,10 @@ document.write(`
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.UnsupportedModelException">UnsupportedModelException</a>, <a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.UnsupportedModelException">[1]</a>, <a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.UnsupportedModelException">[2]</a>
 </li>
-      <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.unwrap_atoms">unwrap_atoms() (in module cattsunami.core.autoframe)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.unwrap_atoms">unwrap_atoms() (in module cattsunami.core.autoframe)</a>
+</li>
       <li><a href="autoapi/core/modules/evaluator/index.html#core.modules.evaluator.Evaluator.update">update() (core.modules.evaluator.Evaluator method)</a>
 
       <ul>

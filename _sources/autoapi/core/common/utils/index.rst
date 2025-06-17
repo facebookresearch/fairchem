@@ -55,7 +55,6 @@ Functions
    core.common.utils.get_checkpoint_format
    core.common.utils.get_deep
    core.common.utils.get_subdirectories_sorted_by_time
-   core.common.utils.get_cluster_name
 
 
 Module Contents
@@ -174,6 +173,4 @@ Module Contents
    :returns: A list of tuples containing the subdirectory path and its last modification time.
    :rtype: list
 
-
-.. py:function:: get_cluster_name() -> str
 

@@ -266,7 +266,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../dac/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../dac/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../dac/examples_tutorials/adsorption_energies.html">Adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../dac/examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
 </ul>
 </details></li>
 </ul>
@@ -604,6 +604,7 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.task_name"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.task_name</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.check_state"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.check_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.calculate"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._get_single_atom_energies"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._get_single_atom_energies()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._check_atoms_pbc()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._validate_charge_and_spin"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._validate_charge_and_spin()</span></code></a></li>
 </ul>
@@ -762,6 +763,12 @@ It is only set for ASE routines/optimizers that are hard-coded to use this rathe
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator._get_single_atom_energies">
+<span class="sig-name descname"><span class="pre">_get_single_atom_energies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator._get_single_atom_energies" title="Link to this definition">#</a></dt>
+<dd><p>Populate output with single atom energies</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc">
 <span class="sig-name descname"><span class="pre">_check_atoms_pbc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc" title="Link to this definition">#</a></dt>
 <dd><p>Check for invalid PBC conditions</p>
@@ -887,6 +894,7 @@ It is only set for ASE routines/optimizers that are hard-coded to use this rathe
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.task_name"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.task_name</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.check_state"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.check_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator.calculate"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._get_single_atom_energies"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._get_single_atom_energies()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._check_atoms_pbc()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._validate_charge_and_spin"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._validate_charge_and_spin()</span></code></a></li>
 </ul>
