@@ -23,8 +23,6 @@ max_neighbors: 300
 cutoff_radius: 6
 epochs: 1
 steps: null
-max_atoms: 350
-min_atoms: 0
 regress_stress: True
 
 
@@ -38,10 +36,9 @@ train_dataloader:
   _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
   dataset: ${train_dataset}
   batch_sampler_fn:
-    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _target_: fairchem.core.common.data_parallel.BalancedBatchSampler
     _partial_: True
-    max_atoms: ${max_atoms}
-    min_atoms: ${min_atoms}
+    batch_size: 1
     shuffle: True
     seed: 0
   num_workers: 0
@@ -59,10 +56,9 @@ eval_dataloader:
   _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
   dataset: ${val_dataset}
   batch_sampler_fn:
-    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _target_: fairchem.core.common.data_parallel.BalancedBatchSampler
     _partial_: True
-    max_atoms: ${max_atoms}
-    min_atoms: ${min_atoms}
+    batch_size: 1
     shuffle: False
     seed: 0
   num_workers: 0
