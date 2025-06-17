@@ -90,6 +90,7 @@ def write_ase_db(mp_arg):
 
     successful = []
     failed = []
+    natoms = []
     with connect(str(db_file)) as db:
         for file in tqdm(file_list, position=worker_id):
             atoms_list = read(file, ":")
@@ -101,11 +102,12 @@ def write_ase_db(mp_arg):
                     assert "energy" in atoms.calc.results, "Missing energy result"
                     assert "forces" in atoms.calc.results, "Missing forces result"
                     db.write(atoms, data=atoms.info)
+                    natoms.append(len(atoms))
                     successful.append(f"{file},{i}")
                 except AssertionError as e:
                     failed.append(f"{file},{i}: {e!s}")
 
-    return db_file, successful, failed
+    return db_file, natoms, successful, failed
 
 
 def launch_processing(data_dir, output_dir, num_workers):
@@ -125,8 +127,10 @@ def launch_processing(data_dir, output_dir, num_workers):
         outputs = pool.map(write_ase_db, mp_args)
 
     # Log results
+    natoms = []
     for output in outputs:
-        db_file, successful, failed = output
+        db_file, _natoms, successful, failed = output
+        natoms.extend(_natoms)
         log_file = db_file.with_suffix(".log")
         failed_file = db_file.with_suffix(".failed")
 
@@ -134,6 +138,7 @@ def launch_processing(data_dir, output_dir, num_workers):
             log.write("\n".join(successful))
         with open(failed_file, "w") as failed_log:
             failed_log.write("\n".join(failed))
+    np.savez_compressed(output_dir / "metadata.npz", natoms=natoms)
 
 
 if __name__ == "__main__":
