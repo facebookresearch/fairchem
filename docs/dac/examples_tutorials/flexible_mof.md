@@ -55,7 +55,7 @@ First, we obtain the energy of the empty MOF from relaxation of only the MOF: $E
 import ase.io
 from ase.optimize import BFGS
 
-mof = ase.io.read("WOBHEB_0.11.cif")
+mof = ase.io.read("structures/WOBHEB_0.11.cif")
 mof.calc = calc
 relax = BFGS(mof)
 relax.run(fmax=0.05)
@@ -66,7 +66,7 @@ print(f"Energy of empty MOF: {E_mof_empty:.3f} eV")
 Next, we add the H<sub>2</sub>O guest molecule and relax the MOF + adsorbate to obtain $E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}})$.
 
 ```{code-cell}
-mof_h2o = ase.io.read("WOBHEB_H2O.cif")
+mof_h2o = ase.io.read("structures/WOBHEB_H2O.cif")
 mof_h2o.calc = calc
 relax = BFGS(mof_h2o)
 relax.run(fmax=0.05)
@@ -118,6 +118,7 @@ $E_{\mathrm{int}}$ describes host host–guest interactions for the MOF in the a
 $$ E_{\mathrm{ads}} = E_{\mathrm{int}} + E_{\mathrm{MOF,deform}} \tag{4}$$
 
 For H<sub>2</sub>O adsorption in `WOBHEB_0.11`, we have
+
 
 $$ E_{\mathrm{int}} = –1092.314 – (–1077.116) – (–14.224) =  –0.974 \text{ eV}$$
 

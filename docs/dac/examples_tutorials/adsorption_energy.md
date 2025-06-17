@@ -52,9 +52,9 @@ import matplotlib.pyplot as plt
 from ase.io import read
 from ase.visualize.plot import plot_atoms
 
-mof_co2 = read("OPAGIX_w_CO2.cif")
-mof = read("OPAGIX.cif")
-co2 = read("co2.xyz")
+mof_co2 = read("structures/OPAGIX_w_CO2.cif")
+mof = read("structures/OPAGIX.cif")
+co2 = read("structures/co2.xyz")
 
 fig, ax = plt.subplots(figsize=(5, 4.5), dpi=250)
 plot_atoms(mof_co2, ax)
