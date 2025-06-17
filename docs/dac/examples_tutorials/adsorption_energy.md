@@ -35,10 +35,10 @@ pip install fairchem-core
 Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In this example, we'll employ UMA to determine the CO<sub>2</sub> adsorption energies.
 
 ```{code-cell}
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device = "cpu")
-calc = FAIRChemCalculator(predictor, task_name = "odac")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+calc = FAIRChemCalculator(predictor, task_name="odac")
 ```
 
 ## CO<sub>2</sub> Adsorption Energy in Mg-MOF-74
@@ -49,20 +49,17 @@ Our goal is to verify if we can achieve a similar value by performing a simple s
 
 ```{code-cell}
 import matplotlib.pyplot as plt
-
 from ase.io import read
 from ase.visualize.plot import plot_atoms
 
-mof_co2 = read('OPAGIX_w_CO2.cif')
-mof = read('OPAGIX.cif')
-co2 = read('co2.xyz')
+mof_co2 = read("OPAGIX_w_CO2.cif")
+mof = read("OPAGIX.cif")
+co2 = read("co2.xyz")
 
-fig, ax = plt.subplots(figsize = (5, 4.5), dpi = 250)
+fig, ax = plt.subplots(figsize=(5, 4.5), dpi=250)
 plot_atoms(mof_co2, ax)
 ax.set_axis_off()
 ```
-
-+++
 
 The final step in calculating the adsorption energy involves connecting the `FAIRChemCalculator` to each relaxed structure: `OPAGIX+CO2`, `OPAGIX`, and `CO2`. The structures used here are already relaxed from ODAC23. For simplicity, we assume here that further relaxations can be neglected. We will show how to go beyond this assumption in the next section.
 
@@ -71,7 +68,11 @@ mof_co2.calc = calc
 mof.calc = calc
 co2.calc = calc
 
-E_ads = mof_co2.get_potential_energy() - mof.get_potential_energy() - co2.get_potential_energy()
+E_ads = (
+    mof_co2.get_potential_energy()
+    - mof.get_potential_energy()
+    - co2.get_potential_energy()
+)
 
-print(f'Adsorption energy of CO2 in Mg-MOF-74: {E_ads:.3f} eV')
+print(f"Adsorption energy of CO2 in Mg-MOF-74: {E_ads:.3f} eV")
 ```

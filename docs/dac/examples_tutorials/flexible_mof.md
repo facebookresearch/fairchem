@@ -33,7 +33,17 @@ The first outcome requires no additional computation because the MOF rigidity as
 
 To ensure the most energetically favorable empty MOF geometry is found, an addition empty MOF relaxation should be performed after MOF + adsorbate relaxation. The guest molecule should be removed, and the MOF should be relaxed starting from its geometry in the adsorbed state. If all deformation is reversible, the MOF will return to its original empty geometry. Otherwise, the lowest energy (most favorable) MOF geometry should be taken as the reference energy, $E_{\mathrm{MOF}}$, in Eqn. 1.
 
-### H<sub>2</sub>O Adsorption Energy in Flexible WOBHEB with UMA
+## Initialize the UMA calculator
+
+
+```{code-cell}
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
+
+predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+calc = FAIRChemCalculator(predictor, task_name="odac")
+```
+
+## H<sub>2</sub>O Adsorption Energy in Flexible WOBHEB with UMA
 
 The first part of this tutorial demonstrates how to perform a single point adsorption energy calculation using UMA. To treat MOFs as flexible, we perform all calculations on geometries determined by geometry optimization. The following example corresponds to the figure shown above (H<sub>2</sub>O adsorption in `WOBHEB_0.11_0`).
 
@@ -42,29 +52,27 @@ The first part of this tutorial demonstrates how to perform a single point adsor
 First, we obtain the energy of the empty MOF from relaxation of only the MOF: $E_{\mathrm{MOF}}(r_{\mathrm{MOF}})$
 
 ```{code-cell}
+import ase.io
 from ase.optimize import BFGS
-mof = read('WOBHEB_0.11.cif')
+
+mof = ase.io.read("WOBHEB_0.11.cif")
 mof.calc = calc
 relax = BFGS(mof)
-relax.run(fmax = 0.05)
+relax.run(fmax=0.05)
 E_mof_empty = mof.get_potential_energy()
-print(f'Energy of empty MOF: {E_mof_empty:.3f} eV')
+print(f"Energy of empty MOF: {E_mof_empty:.3f} eV")
 ```
-
-+++
 
 Next, we add the H<sub>2</sub>O guest molecule and relax the MOF + adsorbate to obtain $E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}})$.
 
 ```{code-cell}
-mof_h2o = read('WOBHEB_H2O.cif')
+mof_h2o = ase.io.read("WOBHEB_H2O.cif")
 mof_h2o.calc = calc
 relax = BFGS(mof_h2o)
-relax.run(fmax = 0.05)
+relax.run(fmax=0.05)
 E_combo = mof_h2o.get_potential_energy()
-print(f'Energy of MOF + H2O: {E_combo:.3f} eV')
+print(f"Energy of MOF + H2O: {E_combo:.3f} eV")
 ```
-
-+++
 
 We can now isolate the MOF atoms from the relaxed MOF + H<sub>2</sub>O geometry and see that the MOF has adopted a geometry that is less energetically favorable than the empty MOF by ~0.2 eV. The energy of the MOF in the adsorbed state corresponds to $E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}})$.
 
@@ -72,21 +80,17 @@ We can now isolate the MOF atoms from the relaxed MOF + H<sub>2</sub>O geometry 
 mof_adsorbed_state = mof_h2o[:-3]
 mof_adsorbed_state.calc = calc
 E_mof_adsorbed_state = mof_adsorbed_state.get_potential_energy()
-print(f'Energy of MOF in the adsorbed state: {E_mof_adsorbed_state:.3f} eV')
+print(f"Energy of MOF in the adsorbed state: {E_mof_adsorbed_state:.3f} eV")
 ```
-
-+++
 
 H<sub>2</sub>O adsorption in this MOF appears to correspond to Case #2 as outlined above. We can now perform re-relaxation of the empty MOF starting from the $r_{\mathrm{MOF+H2O}}$ geometry.
 
 ```{code-cell}
 relax = BFGS(mof_adsorbed_state)
-relax.run(fmax = 0.05)
+relax.run(fmax=0.05)
 E_mof_rerelax = mof_adsorbed_state.get_potential_energy()
-print(f'Energy of re-relaxed empty MOF: {E_mof_rerelax:.3f} eV')
+print(f"Energy of re-relaxed empty MOF: {E_mof_rerelax:.3f} eV")
 ```
-
-+++
 
 The MOF returns to its original empty reference energy upon re-relaxation, confirming that this deformation is physically relevant and is induced by the adsorbate molecule. In Case #3, this re-relaxed energy will be more negative (more favorable) than the original empty MOF relaxation. Thus, we take the reference empty MOF energy ($E_{\mathrm{MOF}}$ in Eqn. 1) to be the minimum of the original empty MOF energy and the re-relaxed MOf energy:
 
@@ -100,10 +104,8 @@ E_h2o = h2o.get_potential_energy()
 
 # compute adsorption energy
 E_ads = E_combo - E_mof - E_h2o
-print(f'Adsorption energy of H2O in WOBHEB_0.11_0: {E_ads:.3f} eV')
+print(f"Adsorption energy of H2O in WOBHEB_0.11_0: {E_ads:.3f} eV")
 ```
-
-+++
 
 This adsorption energy closely matches that from DFT (–0.699 eV) [[1]](https://arxiv.org/abs/2506.09256). The strong adsorption energy is a consequence of both H<sub>2</sub>O chemisorption and MOF deformation. We can decompose the adsorption energy into contributions from these two factors. Assuming rigid H<sub>2</sub>O molecules, we define $E_{\mathrm{int}}$ and $E_{\mathrm{MOF,deform}}$, respectively, as
 
