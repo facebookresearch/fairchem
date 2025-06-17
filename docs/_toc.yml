@@ -75,7 +75,6 @@ parts:
   - file: dac/examples_tutorials/summary
     sections:
     - file: dac/examples_tutorials/adsorption_energy
-    - file: dac/examples_tutorials/flexible_mofs
 - caption: Learn More
   chapters:
   - file: core/intro_series
