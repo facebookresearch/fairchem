@@ -5,19 +5,14 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
+  pull_request_target:
+    branches: [main]
   push:
     branches: [main]
 
 jobs:
   test:
     runs-on: 32-core-ubuntu
-    environment: >-
-      ${{
-        (github.event.pull_request.author_association == 'OWNER' ||
-         github.event.pull_request.author_association == 'MEMBER')
-        && 'internal-testing'
-        || 'external-pr-testing'
-      }}
     continue-on-error: true
     strategy:
       max-parallel: 10
@@ -25,7 +20,13 @@ jobs:
         python_version: ['3.10', '3.12']
 
     steps:
-      - uses: actions/checkout@v4
+      # Check out the PR code (not the base branch)
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Optional: get full history if needed
+          fetch-depth: 0
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
         with:
