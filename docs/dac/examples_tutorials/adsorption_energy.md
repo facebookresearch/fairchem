@@ -1,4 +1,18 @@
-# Adsorption Energies
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.17.1
+kernelspec:
+  name: python3
+  language: python
+  display_name: Python 3 (ipykernel)
+---
+
+Adsorption Energies
+======================================================
 
 Pre-trained ODAC models are versatile across various MOF-related tasks. To begin, we'll start with a fundamental application: calculating the adsorption energy for a single CO<sub>2</sub> molecule. This serves as an excellent and simple demonstration of what you can achieve with these datasets and models.
 
@@ -10,16 +24,17 @@ Each term on the right-hand side represents the energy of the relaxed state of t
 
 ## Loading Pre-trained Models
 
-To leverage the ODAC pre-trained models, ensure you have fairchem version 2 installed; more details are available [here](https://fair-chem.github.io/core/fairchemv1_v2.html). You can install the required version using pip:
+To leverage the ODAC pre-trained models, ensure you have fairchem version 2 installed; more details are available [here](../../core/fairchemv1_v2.html). You can install the required version using pip if you haven't already:
 
-```
-pip install farichem-core
+```{code-cell}
+:tags: [skip-execution]
+
+pip install fairchem-core
 ```
 
 Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In this example, we'll employ UMA to determine the CO<sub>2</sub> adsorption energies.
 
-
-```python
+```{code-cell}
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
 predictor = pretrained_mlip.get_predict_unit("uma-s-1", device = "cpu")
@@ -32,8 +47,7 @@ Let's apply our knowledge to Mg-MOF-74, a widely studied MOF known for its excel
 
 Our goal is to verify if we can achieve a similar value by performing a simple single-point calculation using UMA. In the ODAC23 dataset, all MOF structures are identified by their CSD (Cambridge Structural Database) code. For Mg-MOF-74, this code is **OPAGIX**. We've extracted a specific `OPAGIX+CO2` configuration from the dataset, which exhibits the lowest adsorption energy among its counterparts.
 
-
-```python
+```{code-cell}
 import matplotlib.pyplot as plt
 
 from ase.io import read
@@ -48,16 +62,11 @@ plot_atoms(mof_co2, ax)
 ax.set_axis_off()
 ```
 
-
-    
-![png](./mg-mof-74.png)
-    
-
++++
 
 The final step in calculating the adsorption energy involves connecting the `FAIRChemCalculator` to each relaxed structure: `OPAGIX+CO2`, `OPAGIX`, and `CO2`. The structures used here are already relaxed from ODAC23. For simplicity, we assume here that further relaxations can be neglected. We will show how to go beyond this assumption in the next section.
 
-
-```python
+```{code-cell}
 mof_co2.calc = calc
 mof.calc = calc
 co2.calc = calc
@@ -66,5 +75,3 @@ E_ads = mof_co2.get_potential_energy() - mof.get_potential_energy() - co2.get_po
 
 print(f'Adsorption energy of CO2 in Mg-MOF-74: {E_ads:.3f} eV')
 ```
-
-    Adsorption energy of CO2 in Mg-MOF-74: -0.488 eV
