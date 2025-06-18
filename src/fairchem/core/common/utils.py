@@ -444,24 +444,6 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         key=lambda x: x[1],
     )
 
-
-def get_cluster_name() -> str:
-    try:
-        return (
-            subprocess.check_output(
-                "scontrol show config | awk -F= '/ClusterName/ {print $2}' | xargs",
-                shell=True,
-            )
-            .decode()
-            .strip()
-        )
-    except subprocess.CalledProcessError as e:
-        logging.warning(
-            f"scontrol command failed, couldn't find cluster name, returning empty str as cluster name {e!s}"
-        )
-        return ""
-
-
 def segment_coo(src, index, dim_size=None):
     """
     This function performs a segment-wise summation of the src tensor along the first dimension,
