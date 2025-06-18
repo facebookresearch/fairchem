@@ -56,6 +56,8 @@ relaxed_frames = traj[-10:]
 One more note: We have not prepared an lmdb for this dataset. This is because it is NEB calculations are not supported directly in ocp. You must use the ase native OCP class along with ase infrastructure to run NEB calculations. Here is an example of a use:
 
 ```{code-cell} ipython3
+import os 
+
 from ase.io import read
 from ase.mep import DyNEB
 from ase.optimize import BFGS

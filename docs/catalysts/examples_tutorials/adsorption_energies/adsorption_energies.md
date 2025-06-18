@@ -180,6 +180,8 @@ The goal here is to relax each candidate adsorption geometry and save the result
 It is somewhat time consuming to run this. We're going to use a small number of bulks for the testing of this documentation, but otherwise run all of the results for the actual documentation.
 
 ```{code-cell} ipython3
+import os
+
 if os.environ.get("FAST_DOCS", "false").lower() == "true":
     num_bulks = 1
     num_sites = 5

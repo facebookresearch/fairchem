@@ -20,6 +20,8 @@ The first section of this tutorial walks through how to use the CatTsunami tools
 Since the NEB calculations here can be a bit time consuming, we'll use a small number of steps during the documentation testing, and otherwise use a reasonable guess.
 
 ```{code-cell} ipython3
+import os
+
 # Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
 if os.environ.get("FAST_DOCS", "false").lower() == "true":
     optimization_steps = 20
