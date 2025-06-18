@@ -7,22 +7,21 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-import typing
-from e3nn import o3
 
 import numpy as np
 import torch
 import torch.nn as nn
+from e3nn import o3
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import (
     conditional_grad,
     segment_coo,
 )
+from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.modules.scaling.compat import load_scales_compat
-from fairchem.core.graph.compute import generate_graph
 
 from .initializers import get_initializer
 from .interaction_indices import get_mixed_triplets, get_quadruplets, get_triplets
@@ -30,7 +29,7 @@ from .layers.atom_update_block import OutputBlock
 from .layers.base_layers import Dense, ResidualLayer
 from .layers.efficient import BasisEmbedding
 from .layers.embedding_block import AtomEmbedding, EdgeEmbedding
-from .layers.force_scaler import ForceScaler
+from .layers.force_scaler import ForceStressScaler
 from .layers.interaction_block import InteractionBlock
 from .layers.radial_basis import RadialBasis
 from .layers.spherical_basis import CircularBasisLayer, SphericalBasisLayer
@@ -48,6 +47,7 @@ DTYPE_DICT = {
     "float32": torch.float32,
     "float64": torch.float64,
 }
+
 
 @registry.register_model("gemnet_oc_backbone")
 class GemNetOCBackbone(nn.Module):
@@ -286,7 +286,7 @@ class GemNetOCBackbone(nn.Module):
         self.regress_stress = regress_stress
         self.forces_coupled = forces_coupled
         self.regress_forces = regress_forces
-        self.force_scaler = ForceScaler(enabled=scale_backprop_forces)
+        self.scaler = ForceStressScaler(enabled=scale_backprop_forces)
 
         self.init_basis_functions(
             num_radial,
@@ -962,7 +962,9 @@ class GemNetOCBackbone(nn.Module):
                 self.max_neighbors_aint,
             )
         else:
-            main_graph = self.generate_graph_dict(data_dict, self.cutoff, self.max_neighbors)
+            main_graph = self.generate_graph_dict(
+                data_dict, self.cutoff, self.max_neighbors
+            )
             a2a_graph = {}
             a2ee2a_graph = {}
         if self.quad_interaction:
@@ -1009,7 +1011,9 @@ class GemNetOCBackbone(nn.Module):
         # Symmetrize edges for swapping in symmetric message passing
         main_graph, id_swap = self.symmetrize_edges(main_graph, data_dict["batch"])
 
-        trip_idx_e2e = get_triplets(main_graph, num_atoms=num_atoms, use_torch_sparse=self.use_torch_sparse)
+        trip_idx_e2e = get_triplets(
+            main_graph, num_atoms=num_atoms, use_torch_sparse=self.use_torch_sparse
+        )
 
         # Additional indices for quadruplets
         if self.quad_interaction:
@@ -1199,9 +1203,14 @@ class GemNetOCBackbone(nn.Module):
         # OTF graph construction
         if otf_graph:
             pbc = None
-            if getattr(self, 'always_use_pbc', False):
+            if getattr(self, "always_use_pbc", False):
                 # Always use PBC for internal graph gen
-                pbc = torch.ones(len(data_dict["pos"]), 3, dtype=torch.bool, device=data_dict["pos"].device)
+                pbc = torch.ones(
+                    len(data_dict["pos"]),
+                    3,
+                    dtype=torch.bool,
+                    device=data_dict["pos"].device,
+                )
             else:
                 # Use PBC from input data
                 assert (
@@ -1211,13 +1220,17 @@ class GemNetOCBackbone(nn.Module):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            logging.debug(f"Using radius graph gen version {getattr(self, 'radius_pbc_version', 1)}")
+            logging.debug(
+                f"Using radius graph gen version {getattr(self, 'radius_pbc_version', 1)}"
+            )
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=cutoff,
                 max_neighbors=max_neighbors,
-                enforce_max_neighbors_strictly=getattr(self, 'enforce_max_neighbors_strictly', True),
-                radius_pbc_version=getattr(self, 'radius_pbc_version', 1),
+                enforce_max_neighbors_strictly=getattr(
+                    self, "enforce_max_neighbors_strictly", True
+                ),
+                radius_pbc_version=getattr(self, "radius_pbc_version", 1),
                 pbc=pbc,
             )
         else:
@@ -1252,7 +1265,6 @@ class GemNetOCBackbone(nn.Module):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: dict) -> dict[str, torch.Tensor]:
-        
         self.dtype = data_dict["pos"].dtype
 
         if (self.dtype != torch.float32) and (data_dict["pos"].dtype != self.dtype):
@@ -1267,9 +1279,11 @@ class GemNetOCBackbone(nn.Module):
         num_atoms = atomic_numbers.shape[0]
 
         data_dict["tags"] = torch.ones(num_atoms, dtype=torch.long, device=pos.device)
-        
+
         if self.regress_stress and not self.direct_stress:
-            displacement = torch.zeros(batch.max() + 1, 3, 3, device=pos.device, dtype=self.dtype)
+            displacement = torch.zeros(
+                batch.max() + 1, 3, 3, device=pos.device, dtype=self.dtype
+            )
             displacement.requires_grad_(True)
             displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
             pos.requires_grad_(True)
@@ -1279,7 +1293,6 @@ class GemNetOCBackbone(nn.Module):
             data_dict["pos"] = pos
             data_dict["cell"] = cell
             data_dict["displacement"] = displacement
- 
 
         (
             main_graph,
@@ -1356,13 +1369,12 @@ class GemNetOCBackbone(nn.Module):
             "xs_F": xs_F,
             "edge_vec": main_graph["vector"],
             "edge_idx": idx_t,
-            "num_neighbors": main_graph["num_neighbors"]
+            "num_neighbors": main_graph["num_neighbors"],
         }
 
     @property
     def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())
-
 
 
 @registry.register_model("gemnet_oc_force_head_dtype")
@@ -1426,8 +1438,12 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
                     continuous_indexing=True,
                 )
                 # Aggregate forces for coupled/symmetric edges (mean aggregation)
-                F_st_agg = torch.zeros(int(nEdges / 2), 1, device=F_st.device, dtype=F_st.dtype)
-                count = torch.zeros(int(nEdges / 2), 1, device=F_st.device, dtype=F_st.dtype)
+                F_st_agg = torch.zeros(
+                    int(nEdges / 2), 1, device=F_st.device, dtype=F_st.dtype
+                )
+                count = torch.zeros(
+                    int(nEdges / 2), 1, device=F_st.device, dtype=F_st.dtype
+                )
                 ones = torch.ones_like(F_st)
                 F_st_agg.scatter_add_(0, id_undir.unsqueeze(-1), F_st)
                 count.scatter_add_(0, id_undir.unsqueeze(-1), ones)
@@ -1437,10 +1453,21 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
             # map forces in edge directions
             F_st_vec = F_st[:, :, None] * emb["edge_vec"][:, None, :]
             # (nEdges, 1, 3)
-            F_t = torch.zeros(data_dict["atomic_numbers"].long().shape[0], 1, 3, device=F_st_vec.device, dtype=F_st_vec.dtype)
-            F_t.scatter_add_(0, emb["edge_idx"].unsqueeze(-1).unsqueeze(-1).expand(-1, 1, 3), F_st_vec)
+            F_t = torch.zeros(
+                data_dict["atomic_numbers"].long().shape[0],
+                1,
+                3,
+                device=F_st_vec.device,
+                dtype=F_st_vec.dtype,
+            )
+            F_t.scatter_add_(
+                0,
+                emb["edge_idx"].unsqueeze(-1).unsqueeze(-1).expand(-1, 1, 3),
+                F_st_vec,
+            )
             return {"forces": F_t.squeeze(1)}  # (num_atoms, 3)
         return {}
+
 
 @registry.register_model("gemnet_oc_energy_and_grad_force_head_dtype")
 class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
@@ -1456,7 +1483,7 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
 
         self.regress_forces = backbone.regress_forces
         self.direct_forces = backbone.direct_forces
-        self.force_scaler = backbone.force_scaler
+        self.scaler = backbone.scaler
 
         self.dtype = DTYPE_DICT[dtype] if dtype is not None else torch.float32
         if dtype is not None:
@@ -1515,9 +1542,15 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
         outputs = {"energy": E_t_agg.squeeze(1)}  # (num_molecules)
 
         if self.regress_forces and not self.direct_forces:
-            F_t = self.force_scaler.calc_forces_and_update(outputs["energy"], data_dict["pos"])
+            F_t, virials = self.scaler.calc_and_update(
+                outputs["energy"],
+                data_dict["pos"],
+                data_dict["displacement"],
+                self.training,
+            )
             outputs["forces"] = F_t.squeeze(1)
         return outputs
+
 
 @registry.register_model("gemnet_oc_energy_and_grad_force_stress_head_dtype")
 class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
@@ -1533,7 +1566,7 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
 
         self.regress_forces = backbone.regress_forces
         self.direct_forces = backbone.direct_forces
-        self.grad_scaler = backbone.grad_scaler
+        self.scaler = backbone.scaler
 
         self.dtype = DTYPE_DICT[dtype] if dtype is not None else torch.float32
         if dtype is not None:
@@ -1592,14 +1625,22 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
         outputs = {"energy": E_t_agg.squeeze(1)}  # (num_molecules)
 
         if self.regress_forces and not self.direct_forces:
-            F_t, virials = self.grad_scaler.calc_and_update(outputs["energy"], data.pos, data.displacement, self.training)
+            F_t, virials = self.scaler.calc_and_update(
+                outputs["energy"],
+                data_dict["pos"],
+                data_dict["displacement"],
+                self.training,
+            )
             outputs["forces"] = F_t.squeeze(1)
 
             volume = torch.linalg.det(data_dict["cell"]).abs().unsqueeze(-1)
             stress = virials / volume.view(-1, 1, 1)
-            stress = torch.where(torch.abs(stress) < 1e10, stress, torch.zeros_like(stress))
+            stress = torch.where(
+                torch.abs(stress) < 1e10, stress, torch.zeros_like(stress)
+            )
             outputs["stress"] = stress
         return outputs
+
 
 @registry.register_model("rank2_decomp_head_dtype")
 class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
@@ -1703,7 +1744,6 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
     def forward(
         self, data_dict, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-
         edge_distance_vec = emb["edge_vec"]
         x_edge = torch.cat(emb["xs_F"], dim=-1).to(self.dtype)
         edge_index = emb["edge_idx"]
@@ -1728,18 +1768,63 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
                 edge_irrep2 = self.out_mlp_irrep2_final(edge_irrep2)
 
             # Edge to node aggregation using scatter operations
-            node_scalar = torch.zeros(emb["xs_E"][0].shape[0], edge_scalar.shape[1], device=edge_scalar.device, dtype=edge_scalar.dtype)
-            count_scalar = torch.zeros(emb["xs_E"][0].shape[0], 1, device=edge_scalar.device, dtype=edge_scalar.dtype)
-            ones_scalar = torch.ones(edge_scalar.shape[0], 1, device=edge_scalar.device, dtype=edge_scalar.dtype)
-            node_scalar.scatter_add_(0, edge_index.unsqueeze(-1).expand(-1, edge_scalar.shape[1]), edge_scalar)
+            node_scalar = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                edge_scalar.shape[1],
+                device=edge_scalar.device,
+                dtype=edge_scalar.dtype,
+            )
+            count_scalar = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                1,
+                device=edge_scalar.device,
+                dtype=edge_scalar.dtype,
+            )
+            ones_scalar = torch.ones(
+                edge_scalar.shape[0],
+                1,
+                device=edge_scalar.device,
+                dtype=edge_scalar.dtype,
+            )
+            node_scalar.scatter_add_(
+                0,
+                edge_index.unsqueeze(-1).expand(-1, edge_scalar.shape[1]),
+                edge_scalar,
+            )
             count_scalar.scatter_add_(0, edge_index.unsqueeze(-1), ones_scalar)
             node_scalar = node_scalar / count_scalar.clamp(min=1)  # mean aggregation
-            
-            node_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], edge_irrep2.shape[1], edge_irrep2.shape[2], device=edge_irrep2.device, dtype=edge_irrep2.dtype)
-            count_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
-            ones_irrep2 = torch.ones(edge_irrep2.shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
-            node_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1).expand(-1, edge_irrep2.shape[1], edge_irrep2.shape[2]), edge_irrep2)
-            count_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1), ones_irrep2)
+
+            node_irrep2 = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                edge_irrep2.shape[1],
+                edge_irrep2.shape[2],
+                device=edge_irrep2.device,
+                dtype=edge_irrep2.dtype,
+            )
+            count_irrep2 = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                1,
+                1,
+                device=edge_irrep2.device,
+                dtype=edge_irrep2.dtype,
+            )
+            ones_irrep2 = torch.ones(
+                edge_irrep2.shape[0],
+                1,
+                1,
+                device=edge_irrep2.device,
+                dtype=edge_irrep2.dtype,
+            )
+            node_irrep2.scatter_add_(
+                0,
+                edge_index.unsqueeze(-1)
+                .unsqueeze(-1)
+                .expand(-1, edge_irrep2.shape[1], edge_irrep2.shape[2]),
+                edge_irrep2,
+            )
+            count_irrep2.scatter_add_(
+                0, edge_index.unsqueeze(-1).unsqueeze(-1), ones_irrep2
+            )
             node_irrep2 = node_irrep2 / count_irrep2.clamp(min=1)  # mean aggregation
         else:
             # Edge to node aggregation first, then MLP
@@ -1748,18 +1833,55 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
             )  # (nEdges, 5, emb_size)
 
             # Edge to node aggregation using scatter operations
-            node_scalar = torch.zeros(emb["xs_E"][0].shape[0], x_edge.shape[1], device=x_edge.device, dtype=x_edge.dtype)
-            count_scalar = torch.zeros(emb["xs_E"][0].shape[0], 1, device=x_edge.device, dtype=x_edge.dtype)
-            ones_scalar = torch.ones(x_edge.shape[0], 1, device=x_edge.device, dtype=x_edge.dtype)
-            node_scalar.scatter_add_(0, edge_index.unsqueeze(-1).expand(-1, x_edge.shape[1]), x_edge)
+            node_scalar = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                x_edge.shape[1],
+                device=x_edge.device,
+                dtype=x_edge.dtype,
+            )
+            count_scalar = torch.zeros(
+                emb["xs_E"][0].shape[0], 1, device=x_edge.device, dtype=x_edge.dtype
+            )
+            ones_scalar = torch.ones(
+                x_edge.shape[0], 1, device=x_edge.device, dtype=x_edge.dtype
+            )
+            node_scalar.scatter_add_(
+                0, edge_index.unsqueeze(-1).expand(-1, x_edge.shape[1]), x_edge
+            )
             count_scalar.scatter_add_(0, edge_index.unsqueeze(-1), ones_scalar)
             node_scalar = node_scalar / count_scalar.clamp(min=1)  # mean aggregation
-            
-            node_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], edge_irrep2.shape[1], edge_irrep2.shape[2], device=edge_irrep2.device, dtype=edge_irrep2.dtype)
-            count_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
-            ones_irrep2 = torch.ones(edge_irrep2.shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
-            node_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1).expand(-1, edge_irrep2.shape[1], edge_irrep2.shape[2]), edge_irrep2)
-            count_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1), ones_irrep2)
+
+            node_irrep2 = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                edge_irrep2.shape[1],
+                edge_irrep2.shape[2],
+                device=edge_irrep2.device,
+                dtype=edge_irrep2.dtype,
+            )
+            count_irrep2 = torch.zeros(
+                emb["xs_E"][0].shape[0],
+                1,
+                1,
+                device=edge_irrep2.device,
+                dtype=edge_irrep2.dtype,
+            )
+            ones_irrep2 = torch.ones(
+                edge_irrep2.shape[0],
+                1,
+                1,
+                device=edge_irrep2.device,
+                dtype=edge_irrep2.dtype,
+            )
+            node_irrep2.scatter_add_(
+                0,
+                edge_index.unsqueeze(-1)
+                .unsqueeze(-1)
+                .expand(-1, edge_irrep2.shape[1], edge_irrep2.shape[2]),
+                edge_irrep2,
+            )
+            count_irrep2.scatter_add_(
+                0, edge_index.unsqueeze(-1).unsqueeze(-1), ones_irrep2
+            )
             node_irrep2 = node_irrep2 / count_irrep2.clamp(min=1)  # mean aggregation
 
             with torch.cuda.amp.autocast(False):
@@ -1774,25 +1896,52 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
         # Final aggregation from nodes to molecules
         batch_size = data_dict["batch"].max() + 1
         if self.extensive:
-            scalar = torch.zeros(batch_size, device=node_scalar.device, dtype=node_scalar.dtype)
+            scalar = torch.zeros(
+                batch_size, device=node_scalar.device, dtype=node_scalar.dtype
+            )
             scalar.scatter_add_(0, data_dict["batch"], node_scalar.view(-1))
-            
-            irrep2 = torch.zeros(batch_size, 5, device=node_irrep2.device, dtype=node_irrep2.dtype)
-            irrep2.scatter_add_(0, data_dict["batch"].unsqueeze(-1).expand(-1, 5), node_irrep2.view(-1, 5))
+
+            irrep2 = torch.zeros(
+                batch_size, 5, device=node_irrep2.device, dtype=node_irrep2.dtype
+            )
+            irrep2.scatter_add_(
+                0,
+                data_dict["batch"].unsqueeze(-1).expand(-1, 5),
+                node_irrep2.view(-1, 5),
+            )
         else:
             # For mean aggregation
-            scalar = torch.zeros(batch_size, device=node_scalar.device, dtype=node_scalar.dtype)
-            count_scalar_final = torch.zeros(batch_size, device=node_scalar.device, dtype=node_scalar.dtype)
+            scalar = torch.zeros(
+                batch_size, device=node_scalar.device, dtype=node_scalar.dtype
+            )
+            count_scalar_final = torch.zeros(
+                batch_size, device=node_scalar.device, dtype=node_scalar.dtype
+            )
             ones_scalar_final = torch.ones_like(node_scalar.view(-1))
             scalar.scatter_add_(0, data_dict["batch"], node_scalar.view(-1))
             count_scalar_final.scatter_add_(0, data_dict["batch"], ones_scalar_final)
             scalar = scalar / count_scalar_final.clamp(min=1)
-            
-            irrep2 = torch.zeros(batch_size, 5, device=node_irrep2.device, dtype=node_irrep2.dtype)
-            count_irrep2_final = torch.zeros(batch_size, 1, device=node_irrep2.device, dtype=node_irrep2.dtype)
-            ones_irrep2_final = torch.ones(node_irrep2.shape[0], 1, device=node_irrep2.device, dtype=node_irrep2.dtype)
-            irrep2.scatter_add_(0, data_dict["batch"].unsqueeze(-1).expand(-1, 5), node_irrep2.view(-1, 5))
-            count_irrep2_final.scatter_add_(0, data_dict["batch"].unsqueeze(-1), ones_irrep2_final)
+
+            irrep2 = torch.zeros(
+                batch_size, 5, device=node_irrep2.device, dtype=node_irrep2.dtype
+            )
+            count_irrep2_final = torch.zeros(
+                batch_size, 1, device=node_irrep2.device, dtype=node_irrep2.dtype
+            )
+            ones_irrep2_final = torch.ones(
+                node_irrep2.shape[0],
+                1,
+                device=node_irrep2.device,
+                dtype=node_irrep2.dtype,
+            )
+            irrep2.scatter_add_(
+                0,
+                data_dict["batch"].unsqueeze(-1).expand(-1, 5),
+                node_irrep2.view(-1, 5),
+            )
+            count_irrep2_final.scatter_add_(
+                0, data_dict["batch"].unsqueeze(-1), ones_irrep2_final
+            )
             irrep2 = irrep2 / count_irrep2_final.clamp(min=1)
 
         return {

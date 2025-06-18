@@ -11,11 +11,11 @@ import logging
 import torch
 
 
-class ForceScaler:
+class ForceStressScaler:
     """
-    Scales up the energy and then scales down the forces
+    Scales up the energy and then scales down the forces/stresses
     to prevent NaNs and infs in calculations using AMP.
-    Inspired by torch.GradScaler("cuda", args...).
+    Inspired by torch.cuda.amp.GradScaler.
     """
 
     def __init__(
@@ -42,6 +42,7 @@ class ForceScaler:
         return forces / self.scale_factor if self.enabled else forces
 
     def calc_forces(self, energy, pos):
+        """Calculate forces only"""
         energy_scaled = self.scale(energy)
         forces_scaled = -torch.autograd.grad(
             energy_scaled,
@@ -53,6 +54,7 @@ class ForceScaler:
         return self.unscale(forces_scaled)
 
     def calc_forces_and_update(self, energy, pos):
+        """Calculate forces with scaling update"""
         if self.enabled:
             found_nans_or_infs = True
             force_iters = 0
@@ -82,6 +84,60 @@ class ForceScaler:
         else:
             forces = self.calc_forces(energy, pos)
         return forces
+
+    def calc_forces_and_stresses(self, energy, pos, displacement, training=None):
+        """Calculate both forces and stresses"""
+        energy_scaled = self.scale(energy)
+
+        forces_scaled, virials_scaled = torch.autograd.grad(
+            [energy_scaled],
+            [pos, displacement],
+            grad_outputs=[torch.ones_like(energy_scaled)],
+            create_graph=True,
+            allow_unused=True,
+        )
+
+        # (nAtoms, 3)
+        return -self.unscale(forces_scaled), self.unscale(virials_scaled)
+
+    def calc_and_update(self, energy, pos, displacement, training=None):
+        """Calculate forces and stresses with scaling update"""
+        if self.enabled:
+            found_nans_or_infs = True
+            force_iters = 0
+
+            # Re-calculate forces until everything is nice and finite.
+            while found_nans_or_infs:
+                forces, virials = self.calc_forces_and_stresses(
+                    energy, pos, displacement, training
+                )
+
+                found_nans_or_infs = not (
+                    torch.all(forces.isfinite()) and torch.all(virials.isfinite())
+                )
+                if found_nans_or_infs:
+                    self.finite_force_results = 0
+
+                    # Prevent infinite loop
+                    force_iters += 1
+                    if force_iters == self.max_force_iters:
+                        logging.warning(
+                            "Too many non-finite force/virial results in a batch. "
+                            "Breaking scaling loop."
+                        )
+                        break
+
+                    # Delete graph to save memory
+                    del forces
+                    del virials
+                else:
+                    self.finite_force_results += 1
+                self.update()
+        else:
+            forces, virials = self.calc_forces_and_stresses(
+                energy, pos, displacement, training
+            )
+        return forces, virials
 
     def update(self) -> None:
         if self.finite_force_results == 0:
