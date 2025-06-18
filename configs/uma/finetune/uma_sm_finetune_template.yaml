@@ -89,6 +89,7 @@ runner:
           otf_graph: True
           max_neighbors: ${max_neighbors}
           regress_stress: ${data.regress_stress}
+          always_use_pbc: False
         pass_through_head_outputs: ${data.pass_through_head_outputs}
       heads: ${data.heads}
     optimizer_fn:
