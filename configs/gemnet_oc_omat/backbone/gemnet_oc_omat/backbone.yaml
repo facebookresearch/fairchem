@@ -41,7 +41,9 @@ output_init: HeOrthogonal
 activation: silu
 
 regress_forces: True
+regress_stress: True
 direct_forces: True
+direct_stress: True
 forces_coupled: True
 
 quad_interaction: False
@@ -53,6 +55,6 @@ num_atom_emb_layers: 2
 num_global_out_layers: 2
 qint_tags: [1, 2]
 otf_graph: True
-use_pbc_single: True 
+use_pbc_single: True
 
 use_torch_sparse: False

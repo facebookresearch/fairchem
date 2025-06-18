@@ -245,7 +245,14 @@ def compute_loss(
 
         # this is related to how Hydra outputs stuff in nested dicts:
         # ie: oc20_energy.energy
-        pred_for_task = predictions[task.name][task.property]
+        # Special handling for stress tasks that access decomposed outputs from omat_stress head
+        if task.name in ["omat_stress_isotropic", "omat_stress_anisotropic"]:
+            pred_for_task = predictions["omat_stress"][task.property]
+            # Fix shape mismatch for isotropic component: [3] -> [3, 1]
+            if task.name == "omat_stress_isotropic" and pred_for_task.ndim == 1:
+                pred_for_task = pred_for_task.unsqueeze(-1)
+        else:
+            pred_for_task = predictions[task.name][task.property]
         if task.level == "atom":
             pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
         else:
@@ -255,6 +262,10 @@ def compute_loss(
             mult_mask = free_mask & output_mask
         else:
             mult_mask = output_mask
+            # Fix mask shape for stress tasks: should only cover batch dimension
+            if "stress" in task.name and mult_mask.ndim > 1:
+                mult_mask = mult_mask.all(dim=tuple(range(1, mult_mask.ndim)))
+
         loss_dict[task.name] = task.loss_fn(
             pred_for_task,
             target,
@@ -310,7 +321,14 @@ def compute_metrics(
         return {metric_name: Metrics() for metric_name in task.metrics}
 
     target_masked = batch[task.name][output_mask]
-    pred = predictions[task.name][task.property].clone()
+    # Special handling for stress tasks that access decomposed outputs from omat_stress head
+    if task.name in ["omat_stress_isotropic", "omat_stress_anisotropic"]:
+        pred = predictions["omat_stress"][task.property].clone()
+        # Fix shape mismatch for isotropic component: [3] -> [3, 1]
+        if task.name == "omat_stress_isotropic" and pred.ndim == 1:
+            pred = pred.unsqueeze(-1)
+    else:
+        pred = predictions[task.name][task.property].clone()
     # denormalize the prediction
     pred = task.normalizer.denorm(pred)
     # undo element references for energy tasks

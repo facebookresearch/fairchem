@@ -38,7 +38,7 @@ train_dataset:
     a2g_args:
       r_energy: true
       r_forces: true
-      r_stress: false
+      r_stress: true
       r_edges: true
       radius: 12.0
       max_neigh: 30
@@ -46,11 +46,21 @@ train_dataset:
       energy: omat_energy
       forces: omat_forces
       stress: omat_stress
+      stress_isotropic: omat_stress_isotropic
+      stress_anisotropic: omat_stress_anisotropic
     transforms:
       common_transform:
         dataset_name: omat
       stress_reshape_transform:
         dataset_name: omat
+      decompose_tensor:
+        tensor: stress
+        rank: 2
+        decomposition:
+          stress_isotropic:
+            irrep_dim: 0
+          stress_anisotropic:
+            irrep_dim: 2
 
 val_dataset:
   _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
@@ -60,7 +70,7 @@ val_dataset:
     a2g_args:
       r_energy: true
       r_forces: true
-      r_stress: false
+      r_stress: true
       r_edges: true
       radius: 12.0
       max_neigh: 30
@@ -68,11 +78,21 @@ val_dataset:
       energy: omat_energy
       forces: omat_forces
       stress: omat_stress
+      stress_isotropic: omat_stress_isotropic
+      stress_anisotropic: omat_stress_anisotropic
     transforms:
       common_transform:
         dataset_name: omat
       stress_reshape_transform:
         dataset_name: omat
+      decompose_tensor:
+        tensor: stress
+        rank: 2
+        decomposition:
+          stress_isotropic:
+            irrep_dim: 0
+          stress_anisotropic:
+            irrep_dim: 2
 
 train_dataloader:
   _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
@@ -113,6 +133,11 @@ heads:
     module: fairchem.core.models.gemnet_oc.gemnet_oc.GemNetOCForceHead
     num_global_out_layers: 2
     output_init: HeOrthogonal
+  omat_stress:
+    module: fairchem.core.models.gemnet_oc.gemnet_oc.Rank2DecompositionEdgeBlock
+    output_name: omat_stress
+    num_global_out_layers: 2
+    output_init: HeOrthogonal
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
@@ -150,4 +175,4 @@ runner:
       job_config: ${job}
     - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
       checkpoint_every_n_steps: 50
-      max_saved_checkpoints: 2 
+      max_saved_checkpoints: 2

@@ -6,15 +6,17 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import torch
-import warnings
 
 from fairchem.core.common.utils import segment_coo
 
 # Try to import actual torch_sparse, with fallback to None if not available
 try:
     import torch_sparse
+
     TORCH_SPARSE_AVAILABLE = True
 except ImportError:
     torch_sparse = None
@@ -24,11 +26,11 @@ except ImportError:
 def get_sparse_tensor_class(use_torch_sparse: bool = False):
     """
     Get the appropriate SparseTensor class based on the flag.
-    
+
     Args:
         use_torch_sparse: If True, use actual torch_sparse.SparseTensor.
                          If False, use custom implementation.
-    
+
     Returns:
         SparseTensor class to use
     """
@@ -37,7 +39,7 @@ def get_sparse_tensor_class(use_torch_sparse: bool = False):
             warnings.warn(
                 "torch_sparse is not available. Falling back to custom implementation. "
                 "To use torch_sparse, install it with: pip install torch-sparse",
-                RuntimeWarning
+                RuntimeWarning,
             )
             return CustomSparseTensor
         return torch_sparse.SparseTensor
@@ -48,13 +50,14 @@ def get_sparse_tensor_class(use_torch_sparse: bool = False):
 class CustomSparseTensor:
     """
     A simplified implementation of SparseTensor from torch_sparse.
-    
+
     This class provides the basic functionality needed for the gemnet_oc model.
     """
+
     def __init__(self, row, col, value=None, sparse_sizes=None):
         """
         Initialize a CustomSparseTensor.
-        
+
         Args:
             row: Row indices
             col: Column indices
@@ -64,15 +67,15 @@ class CustomSparseTensor:
         self.row = row
         self.col = col
         self.value = value if value is not None else torch.ones_like(row)
-        
+
         if sparse_sizes is None:
             sparse_sizes = (row.max().item() + 1, col.max().item() + 1)
         self.sparse_sizes = sparse_sizes
-    
+
     def __getitem__(self, idx):
         """
         Get a slice of the sparse tensor.
-        
+
         This is used for operations like adj[idx_t] in the code.
         The result should have:
         - value() returning the original values from the selected rows
@@ -84,16 +87,23 @@ class CustomSparseTensor:
             result_rows = []
             result_cols = []
             result_values = []
-            
+
             for i, target_row in enumerate(idx):
                 # Find all entries with this row index
                 mask = self.row == target_row
                 if torch.any(mask):
                     # Add entries with row index set to position in idx
-                    result_rows.append(torch.full((mask.sum(),), i, dtype=self.row.dtype, device=self.row.device))
+                    result_rows.append(
+                        torch.full(
+                            (mask.sum(),),
+                            i,
+                            dtype=self.row.dtype,
+                            device=self.row.device,
+                        )
+                    )
                     result_cols.append(self.col[mask])
                     result_values.append(self.value[mask])
-            
+
             if result_rows:
                 new_rows = torch.cat(result_rows)
                 new_cols = torch.cat(result_cols)
@@ -102,24 +112,28 @@ class CustomSparseTensor:
                 # No matches found
                 new_rows = torch.empty(0, dtype=self.row.dtype, device=self.row.device)
                 new_cols = torch.empty(0, dtype=self.col.dtype, device=self.col.device)
-                new_values = torch.empty(0, dtype=self.value.dtype, device=self.value.device)
-            
+                new_values = torch.empty(
+                    0, dtype=self.value.dtype, device=self.value.device
+                )
+
             return CustomSparseStorage(
                 row=new_rows,
                 col=new_cols,
                 value=new_values,
-                sparse_sizes=(idx.size(0), self.sparse_sizes[1])
+                sparse_sizes=(idx.size(0), self.sparse_sizes[1]),
             )
         else:
             # For single index
             mask = self.row == idx
             return CustomSparseStorage(
-                row=torch.zeros_like(self.row[mask]),  # All rows become 0 for single index
+                row=torch.zeros_like(
+                    self.row[mask]
+                ),  # All rows become 0 for single index
                 col=self.col[mask],
                 value=self.value[mask],
-                sparse_sizes=(1, self.sparse_sizes[1])
+                sparse_sizes=(1, self.sparse_sizes[1]),
             )
-    
+
     def coo(self):
         """Return the COO representation of the sparse tensor."""
         return self.row, self.col, self.value
@@ -129,6 +143,7 @@ class CustomSparseStorage:
     """
     A helper class to mimic the storage object of torch_sparse.SparseTensor.
     """
+
     def __init__(self, row, col, value, sparse_sizes):
         self._row = row
         self.col = col
@@ -136,11 +151,11 @@ class CustomSparseStorage:
         self.sparse_sizes = sparse_sizes
         # For compatibility with torch_sparse, storage should point to itself
         self.storage = self
-    
+
     def value(self):
         """Return the values."""
         return self._value
-    
+
     def row(self):
         """Return the row indices."""
         return self._row
@@ -149,13 +164,13 @@ class CustomSparseStorage:
 # For backward compatibility - use get_sparse_tensor_class() instead
 def SparseTensor(*args, **kwargs):
     """
-    Backward compatibility function. 
+    Backward compatibility function.
     Use get_sparse_tensor_class() for new code.
     """
     warnings.warn(
         "Direct use of SparseTensor is deprecated. Use get_sparse_tensor_class() instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     return CustomSparseTensor(*args, **kwargs)
 
@@ -164,39 +179,56 @@ def segment_csr(src, indptr, reduce="sum"):
     """
     This function performs a segment-wise reduction of the src tensor along the first dimension,
     where the segments are defined by the indptr tensor.
-    
+
     Args:
         src: Source tensor of shape [N, *]
         indptr: Index pointer tensor of shape [M+1] where M is the number of segments
         reduce: Reduction method ('sum', 'mean', 'min', 'max')
-    
+
     Returns:
         Tensor of shape [M, *] with segment-wise reduction
     """
-    
+
     # Create output tensor with proper gradient requirements
     dim_size = indptr.size(0) - 1
     out_shape = [dim_size] + list(src.shape[1:])
-    
+
     if reduce == "sum" or reduce == "mean":
-        out = torch.zeros(out_shape, dtype=src.dtype, device=src.device, requires_grad=src.requires_grad)
+        out = torch.zeros(
+            out_shape,
+            dtype=src.dtype,
+            device=src.device,
+            requires_grad=src.requires_grad,
+        )
     elif reduce == "min":
-        out = torch.full(out_shape, float('inf'), dtype=src.dtype, device=src.device, requires_grad=src.requires_grad)
+        out = torch.full(
+            out_shape,
+            float("inf"),
+            dtype=src.dtype,
+            device=src.device,
+            requires_grad=src.requires_grad,
+        )
     elif reduce == "max":
-        out = torch.full(out_shape, float('-inf'), dtype=src.dtype, device=src.device, requires_grad=src.requires_grad)
+        out = torch.full(
+            out_shape,
+            float("-inf"),
+            dtype=src.dtype,
+            device=src.device,
+            requires_grad=src.requires_grad,
+        )
     else:
         raise ValueError(f"Unsupported reduction: {reduce}")
-    
+
     # Perform segment-wise reduction
     for i in range(dim_size):
         start_idx = indptr[i].item()
         end_idx = indptr[i + 1].item()
-        
+
         if start_idx == end_idx:
             continue
-        
+
         segment = src[start_idx:end_idx]
-        
+
         if reduce == "sum":
             out[i] = torch.sum(segment, dim=0)
         elif reduce == "mean":
@@ -205,7 +237,7 @@ def segment_csr(src, indptr, reduce="sum"):
             out[i] = torch.min(segment, dim=0)[0]
         elif reduce == "max":
             out[i] = torch.max(segment, dim=0)[0]
-    
+
     return out
 
 
@@ -383,35 +415,35 @@ def repeat_blocks(
 def masked_select_sparsetensor_flat(src, mask, use_torch_sparse: bool = False):
     """
     Apply a mask to a SparseTensor.
-    
+
     Args:
         src: Source SparseTensor (either CustomSparseTensor or torch_sparse.SparseTensor)
         mask: Boolean mask to apply
         use_torch_sparse: Whether to use torch_sparse or custom implementation
-        
+
     Returns:
         Masked SparseTensor
     """
-    if use_torch_sparse and TORCH_SPARSE_AVAILABLE and hasattr(src, 'coo'):
+    if use_torch_sparse and TORCH_SPARSE_AVAILABLE and hasattr(src, "coo"):
         # For actual torch_sparse.SparseTensor
         row, col, value = src.coo()
-    elif hasattr(src, 'coo'):
+    elif hasattr(src, "coo"):
         # For CustomSparseTensor
         row, col, value = src.coo()
     else:
         # Fallback for other implementations
         row, col, value = src.row, src.col, src.value
-    
+
     row = row[mask]
     col = col[mask]
     value = value[mask]
-    
+
     # Get sparse_sizes - handle both property and method
-    if hasattr(src.sparse_sizes, '__call__'):
+    if callable(src.sparse_sizes):
         sparse_sizes = src.sparse_sizes()  # torch_sparse.SparseTensor
     else:
-        sparse_sizes = src.sparse_sizes    # CustomSparseTensor
-    
+        sparse_sizes = src.sparse_sizes  # CustomSparseTensor
+
     SparseTensorClass = get_sparse_tensor_class(use_torch_sparse)
     return SparseTensorClass(row=row, col=col, value=value, sparse_sizes=sparse_sizes)
 

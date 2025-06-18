@@ -347,43 +347,6 @@ class GemNetOCBackbone(nn.Module):
             )
         self.out_blocks = torch.nn.ModuleList(out_blocks)
 
-        out_mlp_E = [
-            Dense(
-                emb_size_atom * (num_blocks + 1),
-                emb_size_atom,
-                activation=activation,
-            )
-        ] + [
-            ResidualLayer(
-                emb_size_atom,
-                activation=activation,
-            )
-            for _ in range(num_global_out_layers)
-        ]
-        self.out_mlp_E = torch.nn.Sequential(*out_mlp_E)
-        self.out_energy = Dense(emb_size_atom, 1, bias=False, activation=None)
-        if direct_forces:
-            out_mlp_F = [
-                Dense(
-                    emb_size_edge * (num_blocks + 1),
-                    emb_size_edge,
-                    activation=activation,
-                )
-            ] + [
-                ResidualLayer(
-                    emb_size_edge,
-                    activation=activation,
-                )
-                for _ in range(num_global_out_layers)
-            ]
-            self.out_mlp_F = torch.nn.Sequential(*out_mlp_F)
-            self.out_forces = Dense(emb_size_edge, 1, bias=False, activation=None)
-
-        out_initializer = get_initializer(output_init)
-        self.out_energy.reset_parameters(out_initializer)
-        if direct_forces:
-            self.out_forces.reset_parameters(out_initializer)
-
         load_scales_compat(self, scale_file)
 
     def set_cutoffs(self, cutoff, cutoff_qint, cutoff_aeaint, cutoff_aint):
@@ -1270,7 +1233,7 @@ class GemNetOCBackbone(nn.Module):
 
         if self.regress_stress and not self.direct_stress:
             displacement = torch.zeros(
-                batch.max() + 1, 3, 3, device=pos.device, dtype=self.dtype
+                batch.max() + 1, 3, 3, device=pos.device, dtype=pos.dtype
             )
             displacement.requires_grad_(True)
             displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
@@ -1380,8 +1343,6 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
 
         emb_size_edge = backbone.edge_emb.dense.linear.out_features
         if self.direct_forces:
-            backbone.out_mlp_F = None
-            backbone.out_forces = None
             out_mlp_F = [
                 Dense(
                     emb_size_edge * (len(backbone.int_blocks) + 1),
@@ -1469,9 +1430,6 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
         self.direct_forces = backbone.direct_forces
         self.scaler = backbone.scaler
 
-        backbone.out_mlp_E = None
-        backbone.out_energy = None
-
         out_mlp_E = [
             Dense(
                 backbone.atom_emb.emb_size * (len(backbone.int_blocks) + 1),
@@ -1543,9 +1501,6 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
         self.regress_forces = backbone.regress_forces
         self.direct_forces = backbone.direct_forces
         self.scaler = backbone.scaler
-
-        backbone.out_mlp_E = None
-        backbone.out_energy = None
 
         out_mlp_E = [
             Dense(

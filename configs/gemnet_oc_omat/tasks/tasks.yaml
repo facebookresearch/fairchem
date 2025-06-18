@@ -30,8 +30,8 @@
   name: omat_forces
   level: atom
   property: forces
-  train_on_free_atoms: True
-  eval_on_free_atoms: True
+  train_on_free_atoms: true
+  eval_on_free_atoms: true
   loss_fn:
     _target_: fairchem.core.modules.loss.DDPMTLoss
     loss_fn:
@@ -50,4 +50,48 @@
   metrics:
     - mae
     - cosine_similarity
-    - magnitude_error 
+    - magnitude_error
+
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: omat_stress_isotropic
+  level: system
+  property: omat_stress_isotropic
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.MAELoss
+    reduction: mean
+    coefficient: 1
+  out_spec:
+    dim: [1]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: 1.423
+  datasets:
+    - omat
+  metrics:
+    - mae
+
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: omat_stress_anisotropic
+  level: system
+  property: omat_stress_anisotropic
+  loss_fn:
+    _target_: fairchem.core.modules.loss.DDPMTLoss
+    loss_fn:
+      _target_: fairchem.core.modules.loss.L2NormLoss
+    reduction: mean
+    coefficient: 1
+  out_spec:
+    dim: [5]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: 1.423
+  datasets:
+    - omat
+  metrics:
+    - mae

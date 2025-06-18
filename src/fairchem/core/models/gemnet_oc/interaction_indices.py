@@ -9,7 +9,12 @@ from __future__ import annotations
 import torch
 
 from fairchem.core.common.utils import segment_coo
-from .utils import get_inner_idx, masked_select_sparsetensor_flat, get_sparse_tensor_class
+
+from .utils import (
+    get_inner_idx,
+    get_sparse_tensor_class,
+    masked_select_sparsetensor_flat,
+)
 
 
 def get_triplets(graph, num_atoms: int, use_torch_sparse: bool = False):
@@ -159,7 +164,9 @@ def get_mixed_triplets(
 
     idx = {}
     if return_adj:
-        idx["adj_edges"] = masked_select_sparsetensor_flat(adj_edges, mask, use_torch_sparse)
+        idx["adj_edges"] = masked_select_sparsetensor_flat(
+            adj_edges, mask, use_torch_sparse
+        )
         idx["in"] = idx["adj_edges"].storage.value().clone()
         idx["out"] = idx["adj_edges"].storage.row()
     else:
