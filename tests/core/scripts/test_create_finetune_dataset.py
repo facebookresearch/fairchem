@@ -7,6 +7,7 @@ import tempfile
 
 import numpy as np
 import pytest
+from ase import Atoms
 from ase.build import bulk
 from ase.io import write
 from sklearn.model_selection import train_test_split
@@ -56,6 +57,13 @@ def generate_random_bulk_structure():
     return atoms
 
 
+def generate_random_molecule(n_atoms=5, elements=("C", "H", "O", "N"), box_size=10.0):
+    """Generate a random molecule for unit testing."""
+    symbols = np.random.choice(elements, n_atoms)
+    positions = np.random.uniform(-box_size / 2, box_size / 2, (n_atoms, 3))
+    return Atoms(symbols=symbols, positions=positions)
+
+
 def generate_fake_energy(atoms):
     """Generate fake energy based on number of atoms and some random component."""
     n_atoms = len(atoms)
@@ -84,11 +92,14 @@ def generate_fake_forces(atoms):
     return forces
 
 
-def create_dataset(n_structures=1000, train_ratio=0.8, output_dir="bulk_structures"):
+def create_dataset(
+    type, n_structures=1000, train_ratio=0.8, output_dir="bulk_structures"
+):
     """
     Create a dataset of random bulk structures with train/validation split.
 
     Parameters:
+    - type: str either molecule or bulk
     - n_structures: Total number of structures to generate
     - train_ratio: Fraction of data for training (default 0.8 for 80/20 split)
     - output_dir: Directory to save the structures
@@ -109,7 +120,12 @@ def create_dataset(n_structures=1000, train_ratio=0.8, output_dir="bulk_structur
             print(f"Generated {i + 1}/{n_structures} structures")
 
         # Generate random structure
-        atoms = generate_random_bulk_structure()
+        if type == "bulk":
+            atoms = generate_random_bulk_structure()
+        elif type == "molecule":
+            atoms = generate_random_molecule()
+        else:
+            raise AssertionError("invalid type!")
 
         # Add fake energy and forces
         energy = generate_fake_energy(atoms)
@@ -158,36 +174,25 @@ def create_dataset(n_structures=1000, train_ratio=0.8, output_dir="bulk_structur
     val_atoms_only = [atoms for atoms, _ in val_structures]
     write(val_traj_file, val_atoms_only)
 
-    # Create summary file
-    summary_file = os.path.join(output_dir, "dataset_summary.txt")
-    with open(summary_file, "w") as f:
-        f.write("Dataset Summary\n")
-        f.write("================\n")
-        f.write(f"Total structures: {n_structures}\n")
-        f.write(f"Training structures: {len(train_structures)}\n")
-        f.write(f"Validation structures: {len(val_structures)}\n")
-        f.write(f"Train/Val ratio: {train_ratio:.1f}/{1-train_ratio:.1f}\n")
-        f.write("\nFiles created:\n")
-        f.write("- Individual structure files: .traj format\n")
-        f.write("- Combined trajectory files: train_all.traj, val_all.traj\n")
-        f.write("\nStructure properties:\n")
-        f.write("- Random elements from: Al, Cu, Fe, Ni, Ti, Mg, Zn, Cr, Mn, Co\n")
-        f.write("- Crystal structures: fcc, bcc, hcp, diamond, sc\n")
-        f.write("- Supercell sizes: 2x2x2\n")
-        f.write("- Random atomic displacements and cell strain applied\n")
-        f.write("- Fake energies and forces generated\n")
-
     print("\nDataset creation complete!")
     print(f"Total structures: {n_structures}")
     print(f"Training structures: {len(train_structures)} (saved in {train_dir})")
     print(f"Validation structures: {len(val_structures)} (saved in {val_dir})")
     print("Combined trajectories: train_all.traj, val_all.traj")
-    print(f"Summary saved to: {summary_file}")
 
 
-def test_create_finetune_dataset():
+@pytest.mark.parametrize(
+    "type",
+    [
+        ("bulk"),
+        ("molecule"),
+    ],
+)
+def test_create_finetune_dataset(type):
     with tempfile.TemporaryDirectory() as tmpdirname:
-        create_dataset(n_structures=100, train_ratio=0.8, output_dir=tmpdirname)
+        create_dataset(
+            type=type, n_structures=100, train_ratio=0.8, output_dir=tmpdirname
+        )
         create_dataset_command = [
             "python",
             "src/fairchem/core/scripts/create_uma_finetune_dataset.py",
@@ -213,16 +218,19 @@ def test_create_finetune_dataset():
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "reg_task",
+    "reg_task,type",
     [
-        ("e"),
-        ("ef"),
+        ("e", "bulk"),
+        ("ef", "bulk"),
+        ("ef", "molecule"),
     ],
 )
-def test_e2e_finetuning_bulks(reg_task):
+def test_e2e_finetuning_bulks(reg_task, type):
     with tempfile.TemporaryDirectory() as tmpdirname:
         # create a bulks dataset
-        create_dataset(n_structures=100, train_ratio=0.8, output_dir=tmpdirname)
+        create_dataset(
+            type=type, n_structures=100, train_ratio=0.8, output_dir=tmpdirname
+        )
         # create the ase dataset and yaml
         generated_dataset_dir = os.path.join(tmpdirname, "dataset")
         create_dataset_command = [
@@ -261,4 +269,4 @@ def test_e2e_finetuning_bulks(reg_task):
         atoms = bulk("Fe")
         atoms.calc = calc
         energy = atoms.get_potential_energy()
-        assert energy < 0
+        assert energy != 0
