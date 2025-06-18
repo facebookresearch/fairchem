@@ -74,7 +74,7 @@ parts:
   - file: dac/models
   - file: dac/examples_tutorials/summary
     sections:
-    - file: dac/examples_tutorials/adsorption_energies
+    - file: dac/examples_tutorials/adsorption_energy
 - caption: Learn More
   chapters:
   - file: core/intro_series
