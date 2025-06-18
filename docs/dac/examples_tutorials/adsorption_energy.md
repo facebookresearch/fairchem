@@ -29,7 +29,7 @@ To leverage the ODAC pre-trained models, ensure you have fairchem version 2 inst
 ```{code-cell}
 :tags: [skip-execution]
 
-pip install fairchem-core
+!pip install fairchem-core
 ```
 
 Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In this example, we'll employ UMA to determine the CO<sub>2</sub> adsorption energies.
