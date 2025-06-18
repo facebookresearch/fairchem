@@ -66,7 +66,6 @@ This is the difference in energy between a triplet and single ground state for a
 
 We don't set a device here, so we get a warning about using a CPU device. You can ignore that. If a CUDA environment is available, a GPU may be used to speed up the calculations.
 
-CPU timing
 
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
@@ -127,7 +126,7 @@ from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -290,7 +289,7 @@ axs[1].set_axis_off()
 from ase import Atoms
 from ase.optimize import BFGS
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 from ase.vibrations import Vibrations
@@ -320,7 +319,7 @@ from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 
 cu = Atoms(
     [Atom("Cu", [0.000, 0.000, 0.000])],
@@ -423,7 +422,7 @@ Phonons have applications in computing the stability and free energy of solids. 
 from ase.build import bulk
 from ase.phonons import Phonons
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 # Setup crystal
