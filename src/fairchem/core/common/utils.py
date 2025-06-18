@@ -462,87 +462,8 @@ def get_cluster_name() -> str:
         return ""
 
 
-def scatter_det(src, index, dim=-1, dim_size=None, reduce="sum"):
+def segment_coo(src, index, dim_size=None):
     """
-    A deterministic version of scatter operations using PyTorch's native functions.
-    
-    This is a compatibility function that mimics torch_scatter's scatter function
-    but uses PyTorch's native scatter operations with deterministic algorithms.
-    
-    Args:
-        src: Source tensor
-        index: Index tensor
-        dim: Dimension along which to index
-        dim_size: Size of the output tensor in dimension dim
-        reduce: Reduction method ('sum', 'mean', 'min', 'max')
-    
-    Returns:
-        Scattered tensor
-    """
-    from fairchem.core.common.registry import registry
-
-    deterministic = registry.get("set_deterministic_scatter", no_warning=True)
-    if deterministic:
-        torch.use_deterministic_algorithms(mode=True)
-    
-    # Handle dimension size
-    if dim_size is None:
-        dim_size = index.max().item() + 1 if index.numel() > 0 else 0
-    
-    # Create output tensor with proper gradient requirements
-    shape = list(src.size())
-    shape[dim] = dim_size
-    out = torch.zeros(shape, dtype=src.dtype, device=src.device, requires_grad=src.requires_grad)
-    
-    # Use PyTorch's native scatter operations to preserve gradients
-    # Expand index to match src dimensions if needed
-    if index.dim() != src.dim():
-        # Create index with same number of dimensions as src
-        index_shape = [1] * src.dim()
-        index_shape[dim] = index.size(0)
-        index_expanded = index.view(index_shape).expand_as(src)
-    else:
-        index_expanded = index
-    
-    if reduce == "sum":
-        out = out.scatter_add(dim, index_expanded, src)
-    elif reduce == "mean":
-        # For mean, we need to count and then divide
-        count = torch.zeros(shape, dtype=torch.float, device=src.device)
-        ones = torch.ones_like(src, dtype=torch.float, device=src.device)
-        count = count.scatter_add(dim, index_expanded, ones)
-        out = out.scatter_add(dim, index_expanded, src)
-        count = torch.where(count == 0, torch.ones_like(count), count)  # Avoid division by zero
-        out = out / count
-    elif reduce == "min" or reduce == "max":
-        # For min/max, use scatter_reduce if available
-        if hasattr(torch, 'scatter_reduce'):
-            # Initialize with extreme values
-            fill_value = float('inf') if reduce == "min" else float('-inf')
-            out = out.fill_(fill_value)
-            out = torch.scatter_reduce(out, dim, index_expanded, src, reduce, include_self=False)
-        else:
-            # Fallback: use a simpler approach that preserves gradients
-            fill_value = float('inf') if reduce == "min" else float('-inf')
-            out = out.fill_(fill_value)
-            # Use scatter with the expanded index
-            if reduce == "min":
-                # For min, we need to handle duplicates properly
-                # This is a simplified version that may not handle all edge cases
-                out = out.scatter(dim, index_expanded, src)
-            else:  # reduce == "max"
-                out = out.scatter(dim, index_expanded, src)
-    
-    if deterministic:
-        torch.use_deterministic_algorithms(mode=False)
-    
-    return out
-
-
-def segment_coo_det(src, index, dim_size=None):
-    """
-    A deterministic version of segment_coo from torch_scatter.
-    
     This function performs a segment-wise summation of the src tensor along the first dimension,
     where the indices for the segments are given by the index tensor.
     
@@ -554,11 +475,6 @@ def segment_coo_det(src, index, dim_size=None):
     Returns:
         Tensor of shape [dim_size, *] with segment-wise summation
     """
-    from fairchem.core.common.registry import registry
-
-    deterministic = registry.get("set_deterministic_scatter", no_warning=True)
-    if deterministic:
-        torch.use_deterministic_algorithms(mode=True)
     
     # Handle dimension size
     if dim_size is None:
@@ -575,8 +491,5 @@ def segment_coo_det(src, index, dim_size=None):
         # For multi-dimensional src, expand index to match src dimensions
         index_expanded = index.view(-1, *([1] * (src.dim() - 1))).expand_as(src)
         out = out.scatter_add(0, index_expanded, src)
-    
-    if deterministic:
-        torch.use_deterministic_algorithms(mode=False)
     
     return out

@@ -54,3 +54,5 @@ num_global_out_layers: 2
 qint_tags: [1, 2]
 otf_graph: True
 use_pbc_single: True 
+
+use_torch_sparse: False

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.common.utils import segment_coo_det
-from .utils import get_inner_idx, masked_select_sparsetensor_flat, SparseTensor
+from fairchem.core.common.utils import segment_coo
+from .utils import get_inner_idx, masked_select_sparsetensor_flat, get_sparse_tensor_class
 
 
-def get_triplets(graph, num_atoms: int):
+def get_triplets(graph, num_atoms: int, use_torch_sparse: bool = False):
     """
     Get all input edges b->a for each output edge c->a.
     It is possible that b=c, as long as the edges are distinct
@@ -24,6 +24,8 @@ def get_triplets(graph, num_atoms: int):
         Contains the graph's edge_index.
     num_atoms: int
         Total number of atoms.
+    use_torch_sparse: bool
+        Whether to use torch_sparse or custom implementation.
 
     Returns
     -------
@@ -41,7 +43,8 @@ def get_triplets(graph, num_atoms: int):
 
     value = torch.arange(num_edges, device=idx_s.device, dtype=idx_s.dtype)
     # Possibly contains multiple copies of the same edge (for periodic interactions)
-    adj = SparseTensor(
+    SparseTensorClass = get_sparse_tensor_class(use_torch_sparse)
+    adj = SparseTensorClass(
         row=idx_t,
         col=idx_s,
         value=value,
@@ -73,6 +76,7 @@ def get_mixed_triplets(
     to_outedge=False,
     return_adj=False,
     return_agg_idx=False,
+    use_torch_sparse=False,
 ):
     """
     Get all output edges (ingoing or outgoing) for each incoming edge.
@@ -124,7 +128,8 @@ def get_mixed_triplets(
         idx_in_s.size(0), device=idx_in_s.device, dtype=idx_in_s.dtype
     )
     # This exploits that SparseTensor can have multiple copies of the same edge!
-    adj_in = SparseTensor(
+    SparseTensorClass = get_sparse_tensor_class(use_torch_sparse)
+    adj_in = SparseTensorClass(
         row=idx_in_t,
         col=idx_in_s,
         value=value_in,
@@ -154,7 +159,7 @@ def get_mixed_triplets(
 
     idx = {}
     if return_adj:
-        idx["adj_edges"] = masked_select_sparsetensor_flat(adj_edges, mask)
+        idx["adj_edges"] = masked_select_sparsetensor_flat(adj_edges, mask, use_torch_sparse)
         idx["in"] = idx["adj_edges"].storage.value().clone()
         idx["out"] = idx["adj_edges"].storage.row()
     else:
@@ -172,6 +177,7 @@ def get_quadruplets(
     main_graph,
     qint_graph,
     num_atoms,
+    use_torch_sparse=False,
 ):
     """
     Get all d->b for each edge c->a and connection b->a
@@ -225,6 +231,7 @@ def get_quadruplets(
         num_atoms,
         to_outedge=True,
         return_adj=True,
+        use_torch_sparse=use_torch_sparse,
     )
     # Input triplets d->b->a
 
@@ -233,6 +240,7 @@ def get_quadruplets(
         main_graph,
         num_atoms,
         to_outedge=False,
+        use_torch_sparse=use_torch_sparse,
     )
     # Output triplets c->a<-b
 
@@ -240,7 +248,7 @@ def get_quadruplets(
     # Repeat indices by counting the number of input triplets per
     # intermediate edge ba. segment_coo assumes sorted idx['triplet_in']['out']
     ones = idx["triplet_in"]["out"].new_ones(1).expand_as(idx["triplet_in"]["out"])
-    num_trip_in_per_inter = segment_coo_det(
+    num_trip_in_per_inter = segment_coo(
         ones, idx["triplet_in"]["out"], dim_size=idx_qint_s.size(0)
     )
 

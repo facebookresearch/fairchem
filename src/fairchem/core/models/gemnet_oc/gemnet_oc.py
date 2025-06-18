@@ -17,8 +17,7 @@ import torch.nn as nn
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import (
     conditional_grad,
-    scatter_det,
-    segment_coo_det,
+    segment_coo,
 )
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 from fairchem.core.models.base import BackboneInterface, HeadInterface
@@ -240,6 +239,7 @@ class GemNetOCBackbone(nn.Module):
         num_elements: int = 119,
         otf_graph: bool = False,
         scale_file: str | None = None,
+        use_torch_sparse: bool = False,
         **kwargs,  # backwards compatibility with deprecated arguments
     ) -> None:
         if qint_tags is None:
@@ -266,6 +266,7 @@ class GemNetOCBackbone(nn.Module):
         self.quad_interaction = quad_interaction
         self.qint_tags = torch.tensor(qint_tags)
         self.otf_graph = otf_graph
+        self.use_torch_sparse = use_torch_sparse
         if not rbf_spherical:
             rbf_spherical = rbf
 
@@ -789,7 +790,7 @@ class GemNetOCBackbone(nn.Module):
         # segment_coo assumes sorted batch_edge
         # Factor 2 since this is only one half of the edges
         ones = batch_edge.new_ones(1).expand_as(batch_edge)
-        new_graph["num_neighbors"] = 2 * segment_coo_det(
+        new_graph["num_neighbors"] = 2 * segment_coo(
             ones, batch_edge, dim_size=graph["num_neighbors"].size(0)
         )
 
@@ -1008,7 +1009,7 @@ class GemNetOCBackbone(nn.Module):
         # Symmetrize edges for swapping in symmetric message passing
         main_graph, id_swap = self.symmetrize_edges(main_graph, data_dict["batch"])
 
-        trip_idx_e2e = get_triplets(main_graph, num_atoms=num_atoms)
+        trip_idx_e2e = get_triplets(main_graph, num_atoms=num_atoms, use_torch_sparse=self.use_torch_sparse)
 
         # Additional indices for quadruplets
         if self.quad_interaction:
@@ -1016,6 +1017,7 @@ class GemNetOCBackbone(nn.Module):
                 main_graph,
                 qint_graph,
                 num_atoms,
+                use_torch_sparse=self.use_torch_sparse,
             )
         else:
             quad_idx = {}
@@ -1026,6 +1028,7 @@ class GemNetOCBackbone(nn.Module):
                 main_graph,
                 num_atoms=num_atoms,
                 return_agg_idx=True,
+                use_torch_sparse=self.use_torch_sparse,
             )
         else:
             trip_idx_a2e = {}
@@ -1035,6 +1038,7 @@ class GemNetOCBackbone(nn.Module):
                 a2ee2a_graph,
                 num_atoms=num_atoms,
                 return_agg_idx=True,
+                use_torch_sparse=self.use_torch_sparse,
             )
             # a2ee2a_graph['edge_index'][1] has to be sorted for this
             a2ee2a_graph["target_neighbor_idx"] = get_inner_idx(
@@ -1421,25 +1425,20 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
                     repeats=2,
                     continuous_indexing=True,
                 )
-                F_st = scatter_det(
-                    F_st,
-                    id_undir,
-                    dim=0,
-                    dim_size=int(nEdges / 2),
-                    reduce="mean",
-                )  # (nEdges/2, 1)
-                F_st = F_st[id_undir]  # (nEdges, 1)
+                # Aggregate forces for coupled/symmetric edges (mean aggregation)
+                F_st_agg = torch.zeros(int(nEdges / 2), 1, device=F_st.device, dtype=F_st.dtype)
+                count = torch.zeros(int(nEdges / 2), 1, device=F_st.device, dtype=F_st.dtype)
+                ones = torch.ones_like(F_st)
+                F_st_agg.scatter_add_(0, id_undir.unsqueeze(-1), F_st)
+                count.scatter_add_(0, id_undir.unsqueeze(-1), ones)
+                F_st_agg = F_st_agg / count.clamp(min=1)  # mean of the two directions
+                F_st = F_st_agg[id_undir]  # (nEdges, 1)
 
             # map forces in edge directions
             F_st_vec = F_st[:, :, None] * emb["edge_vec"][:, None, :]
             # (nEdges, 1, 3)
-            F_t = scatter_det(
-                F_st_vec,
-                emb["edge_idx"],
-                dim=0,
-                dim_size=data_dict["atomic_numbers"].long().shape[0],
-                reduce="add",
-            )  # (nAtoms, 1, 3)
+            F_t = torch.zeros(data_dict["atomic_numbers"].long().shape[0], 1, 3, device=F_st_vec.device, dtype=F_st_vec.dtype)
+            F_t.scatter_add_(0, emb["edge_idx"].unsqueeze(-1).unsqueeze(-1).expand(-1, 1, 3), F_st_vec)
             return {"forces": F_t.squeeze(1)}  # (num_atoms, 3)
         return {}
 
@@ -1502,15 +1501,18 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
 
         nMolecules = torch.max(data_dict["batch"]) + 1
         if self.extensive:
-            E_t = scatter_det(
-                E_t, data_dict["batch"], dim=0, dim_size=nMolecules, reduce="add"
-            )  # (nMolecules, 1)
+            E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
+            E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
         else:
-            E_t = scatter_det(
-                E_t, data_dict["batch"], dim=0, dim_size=nMolecules, reduce="mean"
-            )  # (nMolecules, 1)
+            # For mean, we need to use scatter_add and then divide by count
+            E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
+            count = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
+            ones = torch.ones_like(E_t)
+            E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
+            count.scatter_add_(0, data_dict["batch"].unsqueeze(-1), ones)
+            E_t_agg = E_t_agg / count.clamp(min=1)  # avoid division by zero
 
-        outputs = {"energy": E_t.squeeze(1)}  # (num_molecules)
+        outputs = {"energy": E_t_agg.squeeze(1)}  # (num_molecules)
 
         if self.regress_forces and not self.direct_forces:
             F_t = self.force_scaler.calc_forces_and_update(outputs["energy"], data_dict["pos"])
@@ -1576,15 +1578,18 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
 
         nMolecules = torch.max(data_dict["batch"]) + 1
         if self.extensive:
-            E_t = scatter_det(
-                E_t, data_dict["batch"], dim=0, dim_size=nMolecules, reduce="add"
-            )  # (nMolecules, 1)
+            E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
+            E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
         else:
-            E_t = scatter_det(
-                E_t, data_dict["batch"], dim=0, dim_size=nMolecules, reduce="mean"
-            )  # (nMolecules, 1)
+            # For mean, we need to use scatter_add and then divide by count
+            E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
+            count = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
+            ones = torch.ones_like(E_t)
+            E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
+            count.scatter_add_(0, data_dict["batch"].unsqueeze(-1), ones)
+            E_t_agg = E_t_agg / count.clamp(min=1)  # avoid division by zero
 
-        outputs = {"energy": E_t.squeeze(1)}  # (num_molecules)
+        outputs = {"energy": E_t_agg.squeeze(1)}  # (num_molecules)
 
         if self.regress_forces and not self.direct_forces:
             F_t, virials = self.grad_scaler.calc_and_update(outputs["energy"], data.pos, data.displacement, self.training)
@@ -1722,16 +1727,40 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
                 edge_irrep2 = self.out_mlp_irrep2(edge_irrep2)
                 edge_irrep2 = self.out_mlp_irrep2_final(edge_irrep2)
 
-            node_scalar = scatter_det(edge_scalar, edge_index, dim=0, dim_size=emb["xs_E"][0].shape[0], reduce="mean")
-            node_irrep2 = scatter_det(edge_irrep2, edge_index, dim=0, dim_size=emb["xs_E"][0].shape[0], reduce="mean")
+            # Edge to node aggregation using scatter operations
+            node_scalar = torch.zeros(emb["xs_E"][0].shape[0], edge_scalar.shape[1], device=edge_scalar.device, dtype=edge_scalar.dtype)
+            count_scalar = torch.zeros(emb["xs_E"][0].shape[0], 1, device=edge_scalar.device, dtype=edge_scalar.dtype)
+            ones_scalar = torch.ones(edge_scalar.shape[0], 1, device=edge_scalar.device, dtype=edge_scalar.dtype)
+            node_scalar.scatter_add_(0, edge_index.unsqueeze(-1).expand(-1, edge_scalar.shape[1]), edge_scalar)
+            count_scalar.scatter_add_(0, edge_index.unsqueeze(-1), ones_scalar)
+            node_scalar = node_scalar / count_scalar.clamp(min=1)  # mean aggregation
+            
+            node_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], edge_irrep2.shape[1], edge_irrep2.shape[2], device=edge_irrep2.device, dtype=edge_irrep2.dtype)
+            count_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
+            ones_irrep2 = torch.ones(edge_irrep2.shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
+            node_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1).expand(-1, edge_irrep2.shape[1], edge_irrep2.shape[2]), edge_irrep2)
+            count_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1), ones_irrep2)
+            node_irrep2 = node_irrep2 / count_irrep2.clamp(min=1)  # mean aggregation
         else:
-
+            # Edge to node aggregation first, then MLP
             edge_irrep2 = (
                 sphere_irrep2[:, :, None] * x_edge[:, None, :]
-            )  # (nAtoms, 5, emb_size)
+            )  # (nEdges, 5, emb_size)
 
-            node_scalar = scatter_det(x_edge, edge_index, dim=0, dim_size=emb["xs_E"][0].shape[0], reduce="mean")
-            node_irrep2 = scatter_det(edge_irrep2, edge_index, dim=0, dim_size=emb["xs_E"][0].shape[0], reduce="mean")
+            # Edge to node aggregation using scatter operations
+            node_scalar = torch.zeros(emb["xs_E"][0].shape[0], x_edge.shape[1], device=x_edge.device, dtype=x_edge.dtype)
+            count_scalar = torch.zeros(emb["xs_E"][0].shape[0], 1, device=x_edge.device, dtype=x_edge.dtype)
+            ones_scalar = torch.ones(x_edge.shape[0], 1, device=x_edge.device, dtype=x_edge.dtype)
+            node_scalar.scatter_add_(0, edge_index.unsqueeze(-1).expand(-1, x_edge.shape[1]), x_edge)
+            count_scalar.scatter_add_(0, edge_index.unsqueeze(-1), ones_scalar)
+            node_scalar = node_scalar / count_scalar.clamp(min=1)  # mean aggregation
+            
+            node_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], edge_irrep2.shape[1], edge_irrep2.shape[2], device=edge_irrep2.device, dtype=edge_irrep2.dtype)
+            count_irrep2 = torch.zeros(emb["xs_E"][0].shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
+            ones_irrep2 = torch.ones(edge_irrep2.shape[0], 1, 1, device=edge_irrep2.device, dtype=edge_irrep2.dtype)
+            node_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1).expand(-1, edge_irrep2.shape[1], edge_irrep2.shape[2]), edge_irrep2)
+            count_irrep2.scatter_add_(0, edge_index.unsqueeze(-1).unsqueeze(-1), ones_irrep2)
+            node_irrep2 = node_irrep2 / count_irrep2.clamp(min=1)  # mean aggregation
 
             with torch.cuda.amp.autocast(False):
                 # Irrep 0 prediction
@@ -1742,21 +1771,29 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
                 node_irrep2 = self.out_mlp_irrep2(node_irrep2)
                 node_irrep2 = self.out_mlp_irrep2_final(node_irrep2)
 
-        scalar = scatter_det(
-            node_scalar.view(-1),
-            data_dict["batch"],
-            dim=0,
-            dim_size=data_dict["batch"].max() + 1,
-            reduce="sum" if self.extensive else "mean",
-        )
-
-        irrep2 = scatter_det(
-            node_irrep2.view(-1, 5),
-            data_dict["batch"],
-            dim=0,
-            dim_size=data_dict["batch"].max() + 1,
-            reduce="sum" if self.extensive else "mean",
-        )
+        # Final aggregation from nodes to molecules
+        batch_size = data_dict["batch"].max() + 1
+        if self.extensive:
+            scalar = torch.zeros(batch_size, device=node_scalar.device, dtype=node_scalar.dtype)
+            scalar.scatter_add_(0, data_dict["batch"], node_scalar.view(-1))
+            
+            irrep2 = torch.zeros(batch_size, 5, device=node_irrep2.device, dtype=node_irrep2.dtype)
+            irrep2.scatter_add_(0, data_dict["batch"].unsqueeze(-1).expand(-1, 5), node_irrep2.view(-1, 5))
+        else:
+            # For mean aggregation
+            scalar = torch.zeros(batch_size, device=node_scalar.device, dtype=node_scalar.dtype)
+            count_scalar_final = torch.zeros(batch_size, device=node_scalar.device, dtype=node_scalar.dtype)
+            ones_scalar_final = torch.ones_like(node_scalar.view(-1))
+            scalar.scatter_add_(0, data_dict["batch"], node_scalar.view(-1))
+            count_scalar_final.scatter_add_(0, data_dict["batch"], ones_scalar_final)
+            scalar = scalar / count_scalar_final.clamp(min=1)
+            
+            irrep2 = torch.zeros(batch_size, 5, device=node_irrep2.device, dtype=node_irrep2.dtype)
+            count_irrep2_final = torch.zeros(batch_size, 1, device=node_irrep2.device, dtype=node_irrep2.dtype)
+            ones_irrep2_final = torch.ones(node_irrep2.shape[0], 1, device=node_irrep2.device, dtype=node_irrep2.dtype)
+            irrep2.scatter_add_(0, data_dict["batch"].unsqueeze(-1).expand(-1, 5), node_irrep2.view(-1, 5))
+            count_irrep2_final.scatter_add_(0, data_dict["batch"].unsqueeze(-1), ones_irrep2_final)
+            irrep2 = irrep2 / count_irrep2_final.clamp(min=1)
 
         return {
             f"{self.output_name}_isotropic": scalar.reshape(-1),

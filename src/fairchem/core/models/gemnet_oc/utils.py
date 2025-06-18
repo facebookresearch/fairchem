@@ -8,8 +8,41 @@ from __future__ import annotations
 
 import numpy as np
 import torch
+import warnings
 
-from fairchem.core.common.utils import segment_coo_det
+from fairchem.core.common.utils import segment_coo
+
+# Try to import actual torch_sparse, with fallback to None if not available
+try:
+    import torch_sparse
+    TORCH_SPARSE_AVAILABLE = True
+except ImportError:
+    torch_sparse = None
+    TORCH_SPARSE_AVAILABLE = False
+
+
+def get_sparse_tensor_class(use_torch_sparse: bool = False):
+    """
+    Get the appropriate SparseTensor class based on the flag.
+    
+    Args:
+        use_torch_sparse: If True, use actual torch_sparse.SparseTensor.
+                         If False, use custom implementation.
+    
+    Returns:
+        SparseTensor class to use
+    """
+    if use_torch_sparse:
+        if not TORCH_SPARSE_AVAILABLE:
+            warnings.warn(
+                "torch_sparse is not available. Falling back to custom implementation. "
+                "To use torch_sparse, install it with: pip install torch-sparse",
+                RuntimeWarning
+            )
+            return CustomSparseTensor
+        return torch_sparse.SparseTensor
+    else:
+        return CustomSparseTensor
 
 
 class CustomSparseTensor:
@@ -113,14 +146,22 @@ class CustomSparseStorage:
         return self._row
 
 
-# For backward compatibility
-SparseTensor = CustomSparseTensor
-
-
-def segment_csr_det(src, indptr, reduce="sum"):
+# For backward compatibility - use get_sparse_tensor_class() instead
+def SparseTensor(*args, **kwargs):
     """
-    A deterministic version of segment_csr from torch_scatter.
-    
+    Backward compatibility function. 
+    Use get_sparse_tensor_class() for new code.
+    """
+    warnings.warn(
+        "Direct use of SparseTensor is deprecated. Use get_sparse_tensor_class() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return CustomSparseTensor(*args, **kwargs)
+
+
+def segment_csr(src, indptr, reduce="sum"):
+    """
     This function performs a segment-wise reduction of the src tensor along the first dimension,
     where the segments are defined by the indptr tensor.
     
@@ -132,11 +173,6 @@ def segment_csr_det(src, indptr, reduce="sum"):
     Returns:
         Tensor of shape [M, *] with segment-wise reduction
     """
-    from fairchem.core.common.registry import registry
-
-    deterministic = registry.get("set_deterministic_scatter", no_warning=True)
-    if deterministic:
-        torch.use_deterministic_algorithms(mode=True)
     
     # Create output tensor with proper gradient requirements
     dim_size = indptr.size(0) - 1
@@ -169,9 +205,6 @@ def segment_csr_det(src, indptr, reduce="sum"):
             out[i] = torch.min(segment, dim=0)[0]
         elif reduce == "max":
             out[i] = torch.max(segment, dim=0)[0]
-    
-    if deterministic:
-        torch.use_deterministic_algorithms(mode=False)
     
     return out
 
@@ -295,11 +328,11 @@ def repeat_blocks(
         indptr = torch.cat((sizes.new_zeros(1), diffs.cumsum(0)))
         if continuous_indexing:
             # If a group was skipped (repeats=0) we need to add its size
-            insert_val += segment_csr_det(sizes[: r1[-1]], indptr, reduce="sum")
+            insert_val += segment_csr(sizes[: r1[-1]], indptr, reduce="sum")
 
         # Add block increments
         if isinstance(block_inc, torch.Tensor):
-            insert_val += segment_csr_det(block_inc[: r1[-1]], indptr, reduce="sum")
+            insert_val += segment_csr(block_inc[: r1[-1]], indptr, reduce="sum")
         else:
             insert_val += block_inc * (indptr[1:] - indptr[:-1])
             if insert_dummy:
@@ -347,22 +380,40 @@ def repeat_blocks(
     return id_ar.cumsum(0)
 
 
-def masked_select_sparsetensor_flat(src, mask) -> SparseTensor:
+def masked_select_sparsetensor_flat(src, mask, use_torch_sparse: bool = False):
     """
     Apply a mask to a SparseTensor.
     
     Args:
-        src: Source SparseTensor
+        src: Source SparseTensor (either CustomSparseTensor or torch_sparse.SparseTensor)
         mask: Boolean mask to apply
+        use_torch_sparse: Whether to use torch_sparse or custom implementation
         
     Returns:
         Masked SparseTensor
     """
-    row, col, value = src.coo()
+    if use_torch_sparse and TORCH_SPARSE_AVAILABLE and hasattr(src, 'coo'):
+        # For actual torch_sparse.SparseTensor
+        row, col, value = src.coo()
+    elif hasattr(src, 'coo'):
+        # For CustomSparseTensor
+        row, col, value = src.coo()
+    else:
+        # Fallback for other implementations
+        row, col, value = src.row, src.col, src.value
+    
     row = row[mask]
     col = col[mask]
     value = value[mask]
-    return SparseTensor(row=row, col=col, value=value, sparse_sizes=src.sparse_sizes)
+    
+    # Get sparse_sizes - handle both property and method
+    if hasattr(src.sparse_sizes, '__call__'):
+        sparse_sizes = src.sparse_sizes()  # torch_sparse.SparseTensor
+    else:
+        sparse_sizes = src.sparse_sizes    # CustomSparseTensor
+    
+    SparseTensorClass = get_sparse_tensor_class(use_torch_sparse)
+    return SparseTensorClass(row=row, col=col, value=value, sparse_sizes=sparse_sizes)
 
 
 def calculate_interatomic_vectors(R, id_s, id_t, offsets_st):
@@ -498,7 +549,7 @@ def get_projected_angle(R_ab, P_n, eps: float = 1e-4) -> torch.Tensor:
 def mask_neighbors(neighbors, edge_mask):
     neighbors_old_indptr = torch.cat([neighbors.new_zeros(1), neighbors])
     neighbors_old_indptr = torch.cumsum(neighbors_old_indptr, dim=0)
-    return segment_csr_det(edge_mask.long(), neighbors_old_indptr)
+    return segment_csr(edge_mask.long(), neighbors_old_indptr)
 
 
 def get_neighbor_order(num_atoms: int, index, atom_distance) -> torch.Tensor:
@@ -515,7 +566,7 @@ def get_neighbor_order(num_atoms: int, index, atom_distance) -> torch.Tensor:
 
     # Get number of neighbors
     ones = index_sorted.new_ones(1).expand_as(index_sorted)
-    num_neighbors = segment_coo_det(ones, index_sorted, dim_size=num_atoms)
+    num_neighbors = segment_coo(ones, index_sorted, dim_size=num_atoms)
     max_num_neighbors = num_neighbors.max()
 
     # Create a tensor of size [num_atoms, max_num_neighbors] to sort the distances of the neighbors.
@@ -567,7 +618,7 @@ def get_inner_idx(idx, dim_size):
     idx has to be sorted for this to work.
     """
     ones = idx.new_ones(1).expand_as(idx)
-    num_neighbors = segment_coo_det(ones, idx, dim_size=dim_size)
+    num_neighbors = segment_coo(ones, idx, dim_size=dim_size)
     return ragged_range(num_neighbors)
 
 

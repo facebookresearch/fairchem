@@ -10,7 +10,6 @@ import math
 
 import torch
 
-from fairchem.core.common.utils import scatter_det
 from fairchem.core.modules.scaling import ScaleFactor
 
 from .base_layers import Dense, ResidualLayer
@@ -74,9 +73,8 @@ class AtomUpdateBlock(torch.nn.Module):
         bases_emb = self.dense_rbf(basis_rad)  # (nEdges, emb_size_edge)
         x = m * bases_emb
 
-        x2 = scatter_det(
-            x, idx_atom, dim=0, dim_size=nAtoms, reduce="sum"
-        )  # (nAtoms, emb_size_edge)
+        x2 = torch.zeros(nAtoms, x.shape[1], device=x.device, dtype=x.dtype)
+        x2.scatter_add_(0, idx_atom.unsqueeze(-1).expand(-1, x.shape[1]), x)
         x = self.scale_sum(x2, ref=m)
 
         for layer in self.layers:
@@ -161,9 +159,8 @@ class OutputBlock(AtomUpdateBlock):
         basis_emb_E = self.dense_rbf(basis_rad)  # (nEdges, emb_size_edge)
         x = m * basis_emb_E
 
-        x_E = scatter_det(
-            x, idx_atom, dim=0, dim_size=nAtoms, reduce="sum"
-        )  # (nAtoms, emb_size_edge)
+        x_E = torch.zeros(nAtoms, x.shape[1], device=x.device, dtype=x.dtype)
+        x_E.scatter_add_(0, idx_atom.unsqueeze(-1).expand(-1, x.shape[1]), x)
         x_E = self.scale_sum(x_E, ref=m)
 
         for layer in self.seq_energy_pre:
