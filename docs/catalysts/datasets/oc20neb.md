@@ -74,8 +74,14 @@ optimizer = BFGS(
     trajectory="neb.traj",
 )
 
-conv = optimizer.run(fmax=0.45, steps=200)
+# Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
+if os.environ.get("FAST_DOCS", "false").lower() == "true":
+    optimization_steps = 20
+elif os.environ.get("FAST_DOCS", "false").lower() == "false":
+    optimization_steps = 300
+
+conv = optimizer.run(fmax=0.45, steps=optimization_steps)
 if conv:
     neb.climb = True
-    conv = optimizer.run(fmax=0.05, steps=300)
+    conv = optimizer.run(fmax=0.05, steps=optimization_steps)
 ```

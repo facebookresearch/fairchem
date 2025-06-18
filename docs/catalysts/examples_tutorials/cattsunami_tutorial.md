@@ -17,6 +17,15 @@ FAIR chemistry models can be used to enumerate and study reaction pathways via t
 
 The first section of this tutorial walks through how to use the CatTsunami tools to automatically enumerate a number of hypothetical initial/final configurations for various types of reactions on a heterogeneous catalyst surface. If you already have a NEB you're looking to optimize, you can jump straight to the last section (Run NEBs)!
 
+Since the NEB calculations here can be a bit time consuming, we'll use a small number of steps during the documentation testing, and otherwise use a reasonable guess.
+
+```{code-cell} ipython3
+# Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
+if os.environ.get("FAST_DOCS", "false").lower() == "true":
+    optimization_steps = 20
+elif os.environ.get("FAST_DOCS", "false").lower() == "false":
+    optimization_steps = 300
+```
 
 ## Do enumerations in an AdsorbML style
 
@@ -98,7 +107,7 @@ for config in reactant_configs:
     config.calc = calc
     config.pbc = True
     opt = BFGS(config)
-    opt.run(fmax=0.05, steps=200)
+    opt.run(fmax=0.05, steps=optimization_steps)
     reactant_energies.append(config.get_potential_energy())
 ```
 
@@ -109,7 +118,7 @@ for config in product1_configs:
     config.calc = calc
     config.pbc = True
     opt = BFGS(config)
-    opt.run(fmax=0.05, steps=200)
+    opt.run(fmax=0.05, steps=optimization_steps)
     product1_energies.append(config.get_potential_energy())
 ```
 
@@ -119,7 +128,7 @@ for config in product2_configs:
     config.calc = calc
     config.pbc = True
     opt = BFGS(config)
-    opt.run(fmax=0.05, steps=200)
+    opt.run(fmax=0.05, steps=optimization_steps)
     product2_energies.append(config.get_potential_energy())
 ```
 
@@ -179,10 +188,10 @@ for idx, frame_set in enumerate(frame_sets):
         neb,
         trajectory=f"ch_dissoc_on_Ru_{idx}.traj",
     )
-    conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=200)
+    conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=optimization_steps)
     if conv:
         neb.climb = True
-        conv = optimizer.run(fmax=fmax, steps=300)
+        conv = optimizer.run(fmax=fmax, steps=optimization_steps)
         if conv:
             converged_idxs.append(idx)
 
@@ -204,10 +213,10 @@ optimizer = BFGS(
     neb,
     trajectory="ch_dissoc_on_Ru_0.traj",
 )
-conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=200)
+conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=optimization_steps)
 if conv:
     neb.climb = True
-    conv = optimizer.run(fmax=fmax, steps=300)
+    conv = optimizer.run(fmax=fmax, steps=optimization_steps)
 ```
 
 ## Visualize the results
