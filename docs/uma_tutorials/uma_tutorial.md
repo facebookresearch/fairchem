@@ -75,7 +75,6 @@ predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 ```
 
 ```{code-cell}
-%timeit -n 1 -r 1
 from ase.build import molecule
 
 #  singlet CH2
@@ -100,7 +99,6 @@ This is an OC20 task because it is a slab with an adsorbate.
 We specify an explicit device in the predictor here, and avoid the warning.
 
 ```{code-cell}
-%timeit -n 1 -r 1
 from ase.build import add_adsorbate, fcc100, molecule
 from ase.optimize import LBFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
@@ -124,7 +122,6 @@ print(slab.get_potential_energy())
 ## Example bulk relaxation - OMAT
 
 ```{code-cell}
-%timeit -n 1 -r 1
 from ase.build import bulk
 from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
@@ -147,7 +144,6 @@ print(atoms.get_stress())  # !!!! We get stress now!
 ```{code-cell}
 import matplotlib.pyplot as plt
 
-%timeit -n 1 -r 1
 from ase import units
 from ase.build import molecule
 from ase.io import Trajectory
