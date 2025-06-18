@@ -42,12 +42,6 @@ from .utils import (
     repeat_blocks,
 )
 
-DTYPE_DICT = {
-    "float16": torch.float16,
-    "float32": torch.float32,
-    "float64": torch.float64,
-}
-
 
 @registry.register_model("gemnet_oc_backbone")
 class GemNetOCBackbone(nn.Module):
@@ -1265,12 +1259,6 @@ class GemNetOCBackbone(nn.Module):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: dict) -> dict[str, torch.Tensor]:
-        self.dtype = data_dict["pos"].dtype
-
-        if (self.dtype != torch.float32) and (data_dict["pos"].dtype != self.dtype):
-            data_dict["pos"] = data_dict["pos"].to(self.dtype)
-            data_dict["cell"] = data_dict["cell"].to(self.dtype)
-
         pos = data_dict["pos"]
         batch = data_dict["batch"]
         cell = data_dict["cell"]
@@ -1384,13 +1372,8 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
         backbone,
         num_global_out_layers: int,
         output_init: str = "HeOrthogonal",
-        dtype: str | None = None,
     ):
         super().__init__()
-
-        self.dtype = DTYPE_DICT[dtype] if dtype is not None else torch.float32
-        if dtype is not None:
-            torch.set_default_dtype(self.dtype)
 
         self.direct_forces = backbone.direct_forces
         self.forces_coupled = backbone.forces_coupled
@@ -1427,7 +1410,8 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
     ) -> dict[str, torch.Tensor]:
         if self.direct_forces:
             with torch.cuda.amp.autocast(False):
-                x_F = self.out_mlp_F(torch.cat(emb["xs_F"], dim=-1).to(self.dtype))
+                x_F_cat = torch.cat(emb["xs_F"], dim=-1)
+                x_F = self.out_mlp_F(x_F_cat)
                 F_st = self.out_forces(x_F)
 
             if self.forces_coupled:  # enforce F_st = F_ts
@@ -1466,17 +1450,17 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
                 F_st_vec,
             )
             return {"forces": F_t.squeeze(1)}  # (num_atoms, 3)
+
         return {}
 
 
-@registry.register_model("gemnet_oc_energy_and_grad_force_head_dtype")
+@registry.register_model("gemnet_oc_energy_and_grad_force_head")
 class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone: BackboneInterface,
         num_global_out_layers: int,
         output_init: str = "HeOrthogonal",
-        dtype: str | None = None,
     ):
         super().__init__()
         self.extensive = backbone.extensive
@@ -1484,10 +1468,6 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
         self.regress_forces = backbone.regress_forces
         self.direct_forces = backbone.direct_forces
         self.scaler = backbone.scaler
-
-        self.dtype = DTYPE_DICT[dtype] if dtype is not None else torch.float32
-        if dtype is not None:
-            torch.set_default_dtype(self.dtype)
 
         backbone.out_mlp_E = None
         backbone.out_energy = None
@@ -1524,14 +1504,14 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
         # Global output block for final predictions
         x_E = self.out_mlp_E(torch.cat(emb["xs_E"], dim=-1))
         with torch.cuda.amp.autocast(False):
-            E_t = self.out_energy(x_E.to(self.dtype))
+            E_t = self.out_energy(x_E)
 
         nMolecules = torch.max(data_dict["batch"]) + 1
         if self.extensive:
             E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
             E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
         else:
-            # For mean, we need to use scatter_add and then divide by count
+            # For mean aggregation
             E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
             count = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
             ones = torch.ones_like(E_t)
@@ -1542,24 +1522,20 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
         outputs = {"energy": E_t_agg.squeeze(1)}  # (num_molecules)
 
         if self.regress_forces and not self.direct_forces:
-            F_t, virials = self.scaler.calc_and_update(
-                outputs["energy"],
-                data_dict["pos"],
-                data_dict["displacement"],
-                self.training,
+            F_t = self.scaler.calc_forces_and_update(
+                outputs["energy"], data_dict["pos"]
             )
             outputs["forces"] = F_t.squeeze(1)
         return outputs
 
 
-@registry.register_model("gemnet_oc_energy_and_grad_force_stress_head_dtype")
+@registry.register_model("gemnet_oc_energy_and_grad_force_stress_head")
 class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone: BackboneInterface,
         num_global_out_layers: int,
         output_init: str = "HeOrthogonal",
-        dtype: str | None = None,
     ):
         super().__init__()
         self.extensive = backbone.extensive
@@ -1567,10 +1543,6 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
         self.regress_forces = backbone.regress_forces
         self.direct_forces = backbone.direct_forces
         self.scaler = backbone.scaler
-
-        self.dtype = DTYPE_DICT[dtype] if dtype is not None else torch.float32
-        if dtype is not None:
-            torch.set_default_dtype(self.dtype)
 
         backbone.out_mlp_E = None
         backbone.out_energy = None
@@ -1607,14 +1579,14 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
         # Global output block for final predictions
         x_E = self.out_mlp_E(torch.cat(emb["xs_E"], dim=-1))
         with torch.cuda.amp.autocast(False):
-            E_t = self.out_energy(x_E.to(self.dtype))
+            E_t = self.out_energy(x_E)
 
         nMolecules = torch.max(data_dict["batch"]) + 1
         if self.extensive:
             E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
             E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
         else:
-            # For mean, we need to use scatter_add and then divide by count
+            # For mean aggregation
             E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
             count = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
             ones = torch.ones_like(E_t)
@@ -1642,7 +1614,7 @@ class GemNetOCEnergyAndGradForceStressHead(nn.Module, HeadInterface):
         return outputs
 
 
-@registry.register_model("rank2_decomp_head_dtype")
+@registry.register_model("rank2_decomp_head")
 class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
     """
     Output block for predicting rank-2 tensors (stress, dielectric tensor, etc).
@@ -1657,16 +1629,12 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
         output_init: str = "HeOrthogonal",
         edge_level: bool = False,
         extensive: bool = False,
-        dtype: str | None = None,
     ):
         super().__init__()
         emb_size_edge = backbone.edge_emb.dense.linear.out_features
         self.edge_level = edge_level
         self.extensive = extensive
         self.output_name = output_name
-        self.dtype = DTYPE_DICT[dtype] if dtype is not None else torch.float32
-        if dtype is not None:
-            torch.set_default_dtype(self.dtype)
 
         out_mlp_scalar = [
             Dense(
@@ -1745,7 +1713,7 @@ class Rank2DecompositionEdgeBlock(nn.Module, HeadInterface):
         self, data_dict, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         edge_distance_vec = emb["edge_vec"]
-        x_edge = torch.cat(emb["xs_F"], dim=-1).to(self.dtype)
+        x_edge = torch.cat(emb["xs_F"], dim=-1)
         edge_index = emb["edge_idx"]
 
         # Calculate spherical harmonics of degree 2 of the points sampled
