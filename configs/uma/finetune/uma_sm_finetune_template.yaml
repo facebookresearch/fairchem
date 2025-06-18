@@ -1,5 +1,5 @@
 defaults:
-  - data: uma_conserving_data_task_template
+  - data: ??
   - _self_
 
 job:
@@ -19,11 +19,16 @@ job:
 
 
 base_model_name: uma-s-1
+# 300 is effectively infinite neighbors, but if you are memory strained, using 100 is usually just as good
 max_neighbors: 300
+# uma models are usually trained with 6 ang cutoff so this shouldn't be changed
 cutoff_radius: 6
+# can either train to a fixed number of epochs (int) or steps (int) but not both
 epochs: 1
 steps: null
-regress_stress: True
+# customize batch size depending on your system
+batch_size: 2
+lr: 4e-4
 
 
 train_dataset:
@@ -38,7 +43,7 @@ train_dataloader:
   batch_sampler_fn:
     _target_: fairchem.core.common.data_parallel.BalancedBatchSampler
     _partial_: True
-    batch_size: 1
+    batch_size: ${batch_size}
     shuffle: True
     seed: 0
   num_workers: 0
@@ -58,7 +63,7 @@ eval_dataloader:
   batch_sampler_fn:
     _target_: fairchem.core.common.data_parallel.BalancedBatchSampler
     _partial_: True
-    batch_size: 1
+    batch_size: ${batch_size}
     shuffle: False
     seed: 0
   num_workers: 0
@@ -83,15 +88,13 @@ runner:
         backbone:
           otf_graph: True
           max_neighbors: ${max_neighbors}
-          regress_stress: ${regress_stress}
-        pass_through_head_outputs: True
-      heads:
-        energyandforcehead:
-          module: fairchem.core.models.uma.escn_md.MLP_EFS_Head
+          regress_stress: ${data.regress_stress}
+        pass_through_head_outputs: ${data.pass_through_head_outputs}
+      heads: ${data.heads}
     optimizer_fn:
       _target_: torch.optim.AdamW
       _partial_: true
-      lr: 4e-4
+      lr: ${lr}
       weight_decay: 1e-3
     cosine_lr_scheduler_fn:
       _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler

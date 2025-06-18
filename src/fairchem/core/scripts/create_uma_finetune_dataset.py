@@ -16,7 +16,12 @@ from fairchem.core.units.mlip_unit.api.inference import UMATask
 logging.basicConfig(level=logging.INFO)
 
 TEMPLATE_DIR = Path("configs/uma/finetune")
-DATA_TASK_YAML = Path("data/uma_conserving_data_task_template.yaml")
+DATA_YAML_DIR = Path("data")
+REGRESSION_LABEL_TO_TASK_YAML = {
+    "e": DATA_YAML_DIR / Path("uma_conserving_data_task_energy.yaml"),
+    "ef": DATA_YAML_DIR / Path("uma_conserving_data_task_energy_force.yaml"),
+    "efs": DATA_YAML_DIR / Path("uma_conserving_data_task_energy_force_stress.yaml"),
+}
 UMA_SM_FINETUNE_YAML = Path("uma_sm_finetune_template.yaml")
 
 
@@ -27,10 +32,10 @@ def create_yaml(
     linref_coeff: list,
     output_dir: str,
     dataset_name: str,
-    regress_stress: bool,
+    regression_tasks: str,
     base_model_name: str,
 ):
-    data_task_yaml = TEMPLATE_DIR / DATA_TASK_YAML
+    data_task_yaml = TEMPLATE_DIR / REGRESSION_LABEL_TO_TASK_YAML[regression_tasks]
     with open(data_task_yaml) as file:
         template = yaml.safe_load(file)
         template["dataset_name"] = dataset_name
@@ -41,18 +46,19 @@ def create_yaml(
         # add extra large vaccum box for molecules
         # if dataset_name == str(UMATask.OMOL):
         #     template["train_dataset"]["a2g_args"]["molecule_cell_size"] = 1000.0
-        if not regress_stress:
-            # remove the stress task
-            template["tasks_list"].pop()
-        os.makedirs(output_dir / "data", exist_ok=True)
-        with open(output_dir / DATA_TASK_YAML, "w") as yaml_file:
+        os.makedirs(output_dir / DATA_YAML_DIR, exist_ok=True)
+        with open(
+            output_dir / REGRESSION_LABEL_TO_TASK_YAML[regression_tasks], "w"
+        ) as yaml_file:
             yaml.dump(template, yaml_file, default_flow_style=False, sort_keys=False)
 
     uma_finetune_yaml = TEMPLATE_DIR / UMA_SM_FINETUNE_YAML
     with open(uma_finetune_yaml) as file:
         template_ft = yaml.safe_load(file)
-        template_ft["regress_stress"] = regress_stress
         template_ft["base_model_name"] = base_model_name
+        template_ft["defaults"][0]["data"] = REGRESSION_LABEL_TO_TASK_YAML[
+            regression_tasks
+        ].stem
     with open(output_dir / UMA_SM_FINETUNE_YAML, "w") as yaml_file:
         yaml.dump(template_ft, yaml_file, default_flow_style=False, sort_keys=False)
 
@@ -72,17 +78,18 @@ if __name__ == "__main__":
         help="Directory of ASE atoms objects to convert for validation.",
     )
     parser.add_argument(
-        "--task-to-finetune",
+        "--uma-task",
         type=str,
         required=True,
         choices=[t.value for t in UMATask],
         help="choose a uma task to finetune",
     )
     parser.add_argument(
-        "--regress-stress",
-        type=bool,
-        default=False,
-        help="Allow for stress regression tasks, will only work if your dataset has stress labels",
+        "--regression-tasks",
+        type=str,
+        choices=["e", "ef", "efs"],
+        required=True,
+        help="Choose to finetune based on regression task set (you must have the corresponding labels in your dataset), can be energy (e), energy+force (ef) or energy+force+stress(efs)",
     )
     parser.add_argument(
         "--base-model",
@@ -103,6 +110,9 @@ if __name__ == "__main__":
         help="Number of parallel workers for processing files.",
     )
     args = parser.parse_args()
+    assert not Path(
+        args.output_dir
+    ).exists(), f"{args.output_dir} can't already exist, please choose a different dir"
 
     # Launch processing for training data
     train_path = args.output_dir / "train"
@@ -119,8 +129,8 @@ if __name__ == "__main__":
         force_rms=float(force_rms),
         linref_coeff=linref_coeff,
         output_dir=args.output_dir,
-        dataset_name=args.task_to_finetune,
-        regress_stress=args.regress_stress,
+        dataset_name=args.uma_task,
+        regression_tasks=args.regression_tasks,
         base_model_name=args.base_model,
     )
     logging.info(f"Generated dataset and data config yaml in {args.output_dir}")
