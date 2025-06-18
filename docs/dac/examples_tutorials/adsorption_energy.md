@@ -178,14 +178,17 @@ For H<sub>2</sub>O adsorption in `WOBHEB_0.11`, we have
 
 ```{code-cell}
 E_int = E_combo - E_mof_adsorbed_state - E_h2o
+print(f'E_int: {E_int}')
 ```
 
 ```{code-cell}
 E_mof_deform = E_mof_adsorbed_state - E_mof_empty
+print(f'E_mof_deform: {E_mof_deform}')
 ```
 
 ```{code-cell}
 E_ads = E_int + E_mof_deform
+print(f'E_ads: {E_ads}')
 ```
 
 $E_{\mathrm{int}}$ is equivalent to $E_{\mathrm{ads}}$ when the MOF is assumed to be rigid. In this case, failure to consider adsorbate-induced deformation would result in an overestimation of the adsorption energy magnitude.
