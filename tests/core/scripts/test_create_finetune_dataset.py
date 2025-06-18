@@ -39,9 +39,7 @@ def generate_random_bulk_structure():
         # Fallback to fcc if structure doesn't work for the element
         atoms = bulk(element, "fcc", a=base_a, cubic=True)
 
-    # Create supercell with random size (2x2x2 to 4x4x4)
-    nx, ny, nz = random.randint(2, 4), random.randint(2, 4), random.randint(2, 4)
-    atoms = atoms.repeat((nx, ny, nz))
+    atoms = atoms.repeat((2, 2, 2))
 
     # Add random displacement to atoms (thermal motion simulation)
     displacement_magnitude = random.uniform(0.05, 0.2)
@@ -175,7 +173,7 @@ def create_dataset(n_structures=1000, train_ratio=0.8, output_dir="bulk_structur
         f.write("\nStructure properties:\n")
         f.write("- Random elements from: Al, Cu, Fe, Ni, Ti, Mg, Zn, Cr, Mn, Co\n")
         f.write("- Crystal structures: fcc, bcc, hcp, diamond, sc\n")
-        f.write("- Supercell sizes: 2x2x2 to 4x4x4\n")
+        f.write("- Supercell sizes: 2x2x2\n")
         f.write("- Random atomic displacements and cell strain applied\n")
         f.write("- Fake energies and forces generated\n")
 
@@ -199,8 +197,10 @@ def test_create_finetune_dataset():
             f"{tmpdirname}/val",
             "--output-dir",
             os.path.join(tmpdirname, "dataset"),
-            "--task-to-finetune",
+            "--uma-task",
             "omol",
+            "--regression-tasks",
+            "ef",
         ]
         subprocess.run(create_dataset_command, check=True)
         assert os.path.exists(
@@ -212,7 +212,14 @@ def test_create_finetune_dataset():
 
 
 @pytest.mark.gpu()
-def test_e2e_finetuning_bulks():
+@pytest.mark.parametrize(
+    "reg_task",
+    [
+        ("e"),
+        ("ef"),
+    ],
+)
+def test_e2e_finetuning_bulks(reg_task):
     with tempfile.TemporaryDirectory() as tmpdirname:
         # create a bulks dataset
         create_dataset(n_structures=100, train_ratio=0.8, output_dir=tmpdirname)
@@ -227,8 +234,10 @@ def test_e2e_finetuning_bulks():
             f"{tmpdirname}/val",
             "--output-dir",
             generated_dataset_dir,
-            "--task-to-finetune",
+            "--uma-task",
             "omat",
+            "--regression-tasks",
+            reg_task,
         ]
         subprocess.run(create_dataset_command, check=True)
         # finetune for 1 epoch
