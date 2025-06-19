@@ -17,18 +17,19 @@ job:
     entity: example
     project: uma_finetune
 
-
+# refers to a model name that can be retrieved from (huggingface)[https://huggingface.co/facebook/UMA]
 base_model_name: uma-s-1
 # 300 is effectively infinite neighbors, but if you are memory strained, using 100 is usually just as good
 max_neighbors: 300
-# uma models are usually trained with 6 ang cutoff so this shouldn't be changed
-cutoff_radius: 6
-# can either train to a fixed number of epochs (int) or steps (int) but not both
+# choose to either run for integer number of epochs or steps, only 1 can be step, the other must be null
 epochs: 1
 steps: null
 # customize batch size depending on your system
 batch_size: 2
 lr: 4e-4
+weight_decay: 1e-3
+evaluate_every_n_steps: 100
+checkpoint_every_n_steps: 1000
 
 
 train_dataset:
@@ -96,7 +97,7 @@ runner:
       _target_: torch.optim.AdamW
       _partial_: true
       lr: ${lr}
-      weight_decay: 1e-3
+      weight_decay: ${weight_decay}
     cosine_lr_scheduler_fn:
       _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
       _partial_: true
@@ -109,9 +110,9 @@ runner:
     clip_grad_norm: 100
   max_epochs: ${epochs}
   max_steps: ${steps}
-  evaluate_every_n_steps: 100
+  evaluate_every_n_steps: ${evaluate_every_n_steps}
   callbacks:
     - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
-      checkpoint_every_n_steps: 1000
+      checkpoint_every_n_steps: ${checkpoint_every_n_steps}
       max_saved_checkpoints: 5
     - _target_: torchtnt.framework.callbacks.TQDMProgressBar
