@@ -1,9 +1,9 @@
 # Fine-tuning
 
-This repo provides a number of scripts to quickly fine-tune a model using a custom ASE LMDB dataset. These scripts are merely for convenience and finetuning uses the exact same tooling and infra as our standard training (See Training section). Training in the fairchem repo uses the fairchem cli tool which uses [Hydra yaml](https://hydra.cc/) configs. Training dataset must be in the ASE-lmdb format. For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats as such (cifs, traj, extxyz etc) as well as a finetuning yaml config that can be directly used for finetuning.
+This repo provides a number of scripts to quickly fine-tune a model using a custom ASE LMDB dataset. These scripts are merely for convenience and finetuning uses the exact same tooling and infra as our standard training (See Training section). Training in the fairchem repo uses the fairchem cli tool and configs are in [Hydra yaml](https://hydra.cc/) format. Training dataset must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats as such (cifs, traj, extxyz etc) as well as a finetuning yaml config that can be directly used for finetuning.
 
 ## Generating training/fine-tuning datasets
-First we needto generate a dataset in the aselmdb format for finetuning. The requirement is you need to have any input files that can be read as ASE atoms object by the ase.io.read routine.
+First we need to generate a dataset in the aselmdb format for finetuning. The only requirement is you need to have input files that can be read as ASE atoms object by the ase.io.read routine and that they contain energy (forces, stress) in the correct format. For concrete examples refer to this to the test at `tests/core/scripts/test_create_finetune_dataset.py`.
 
 Run this script to create the aselmdbs as well as a set of templated yamls for finetuning
 
@@ -11,11 +11,11 @@ Run this script to create the aselmdbs as well as a set of templated yamls for f
 python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir <path/to/train_ases> --val-dir <path/to/val_ases> --output-dir <path/to/output_dir> --uma-task <uma-task for finetuning> --regression-task <regression-task for finetuning>
 ```
 
-The uma task can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated (feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs).
+* The `uma-task` can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated (feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs).
 
-The regression task can be one of e, ef, efs (energy, energy+force, energy+force+stress)
+* The `regression-task` can be one of e, ef, efs (energy, energy+force, energy+force+stress)
 
-This will generate a folder of lmdbs and the a uma_sm_finetune_template.yaml that you can run directly with the fairchem cli to start training.
+This will generate a folder of lmdbs and the a `uma_sm_finetune_template.yaml` that you can run directly with the fairchem cli to start training.
 
 If you want to only create the aselmdbs, you can use `src/fairchem/core/scripts/create_finetune_dataset.py` which is called by `create_uma_finetune_dataset.py`.
 
@@ -74,7 +74,7 @@ runner ...
       checkpoint_location: /path/to/your/checkpoint.pt
 ```
 
-* `max_neighbors`: the number of neighbors used for the equivariant convolutions. 300 is the default used in uma training but if you don't have alot of memory, 100 is usually fine to guarentee smoothness of the potential.
+* `max_neighbors`: the number of neighbors used for the equivariant SO2 convolutions. 300 is the default used in uma training but if you don't have alot of memory, 100 is usually fine to ensure smoothness of the potential (see the [ESEN paper](https://arxiv.org/abs/2502.12147)).
 * `epochs`, `steps`: choose to either run for integer number of epochs or steps, only 1 can be step, the other must be null
 * `batch_size`: in this configuration we use the batch sampler, you can start with choosing the largest batch size that can fit on your system without running out of memory. However, you don't want to use a batch size so large such that you complete training in very few training steps
 * `lr`, `weight_decay`: these are standard learning parameters, the recommended values we use are the defaults
