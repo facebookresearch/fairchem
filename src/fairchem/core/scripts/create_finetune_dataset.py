@@ -78,6 +78,9 @@ def compute_lin_ref(atomic_numbers, energies):
     y = energies
 
     coeff = np.linalg.lstsq(X, y, rcond=None)[0]
+    assert np.isfinite(
+        coeff
+    ).all(), "Found some non-finite values while computing element references, please check/sanitize your inputs before proceeding"
     return coeff.tolist()
 
 
