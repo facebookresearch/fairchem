@@ -7,9 +7,6 @@ train_dataset:
     train:
       src: ??
   format: ase_db
-  a2g_args:
-    max_neigh: ${max_neighbors}
-    radius: ${cutoff_radius}
   transforms:
     common_transform:
       dataset_name: ${data.dataset_name}
@@ -21,9 +18,6 @@ val_dataset:
     val:
       src: ??
   format: ase_db
-  a2g_args:
-    max_neigh: ${max_neighbors}
-    radius: ${cutoff_radius}
   transforms:
     common_transform:
       dataset_name: ${data.dataset_name}
