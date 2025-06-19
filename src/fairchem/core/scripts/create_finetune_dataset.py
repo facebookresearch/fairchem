@@ -40,6 +40,9 @@ def compute_normalizer_and_linear_reference(train_path, num_workers):
         energies = [x[1] for x in outputs]
         forces = np.array([force for x in outputs for force in x[2]])
         force_rms = np.sqrt(np.mean(np.square(forces)))
+        assert (
+            np.isfinite(force_rms).all()
+        ), "We found non-finite values in the forces, please check your input data!"
         coeff = compute_lin_ref(atomic_numbers, energies)
     return force_rms, coeff
 
