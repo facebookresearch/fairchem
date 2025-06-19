@@ -92,7 +92,7 @@ class InferenceSettings:
 def inference_settings_default():
     return InferenceSettings(
         tf32=False,
-        activation_checkpointing=False,
+        activation_checkpointing=True,
         merge_mole=False,
         compile=False,
         wigner_cuda=False,
