@@ -42,7 +42,7 @@ runner:
   normalize_properties_by:
     energy: nmolecules
   fmax: 0.001
-  steps: 3000
+  steps: 5000
   optimizer_cls:
     _target_: ase.optimize.LBFGS
     _partial_: True

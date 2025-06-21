@@ -1,0 +1,2 @@
+ckpt_path: ${cluster.checkpoint_root_dir}/uma_md_1p1_mpa.pt
+model_name: uma_md_1p1_mpa
