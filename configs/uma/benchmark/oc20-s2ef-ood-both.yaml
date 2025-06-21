@@ -31,8 +31,8 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
   calculator:
-    _target_: fairchem.core.common.calculator.FAIRChemCalculator
-    checkpoint_path: ${checkpoint.ckpt_path}
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
     task_name: oc20
   evaluate_total_energy: False
   adsorption_energy_model: False
