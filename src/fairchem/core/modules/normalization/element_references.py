@@ -42,8 +42,8 @@ class ElementReferences(nn.Module):
                 tensor.shape, dtype=elem_refs.dtype, device=tensor.device
             ).scatter_reduce(
                 0,
-                batch.batch_full,
-                elem_refs[batch.atomic_numbers_full],
+                batch.batch,
+                elem_refs[batch.atomic_numbers],
                 reduce="sum",
             )
             if operation == "subtract":
