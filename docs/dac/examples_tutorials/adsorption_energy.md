@@ -29,7 +29,7 @@ To leverage the ODAC pre-trained models, ensure you have fairchem version 2 inst
 ```{code-cell}
 :tags: [skip-execution]
 
-pip install fairchem-core
+!pip install fairchem-core
 ```
 
 Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In this example, we'll employ UMA to determine the CO<sub>2</sub> adsorption energies.
@@ -37,7 +37,7 @@ Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 calc = FAIRChemCalculator(predictor, task_name="odac")
 ```
 
@@ -166,7 +166,6 @@ This adsorption energy closely matches that from DFT (–0.699 eV) [[1]](https:/
 $$ E_{\mathrm{int}} = E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{H2O}}(r_{\mathrm{MOF+H2O}}) \tag{2}$$
 
 
-
 $$ E_{\mathrm{MOF,deform}} = E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF}}) \tag{3}$$
 
 
@@ -178,21 +177,21 @@ For H<sub>2</sub>O adsorption in `WOBHEB_0.11`, we have
 
 ```{code-cell}
 E_int = E_combo - E_mof_adsorbed_state - E_h2o
-print(f'E_int: {E_int}')
+print(f"E_int: {E_int}")
 ```
 
 ```{code-cell}
 E_mof_deform = E_mof_adsorbed_state - E_mof_empty
-print(f'E_mof_deform: {E_mof_deform}')
+print(f"E_mof_deform: {E_mof_deform}")
 ```
 
 ```{code-cell}
 E_ads = E_int + E_mof_deform
-print(f'E_ads: {E_ads}')
+print(f"E_ads: {E_ads}")
 ```
 
 $E_{\mathrm{int}}$ is equivalent to $E_{\mathrm{ads}}$ when the MOF is assumed to be rigid. In this case, failure to consider adsorbate-induced deformation would result in an overestimation of the adsorption energy magnitude.
 
 ## Acknowledgements & Authors
 
-Logan Brabson and Sihoon Choi (Georgia Tech) and the OpenDAC project. 
+Logan Brabson and Sihoon Choi (Georgia Tech) and the OpenDAC project.

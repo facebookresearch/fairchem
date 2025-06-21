@@ -6,10 +6,7 @@ on:
   workflow_dispatch:
   pull_request_target:
     branches: [main]
-  # pull_request_review:
-  #   types: [submitted]
-  # merge_group:
-
+  
 jobs:
   build:
     runs-on: 4-core-ubuntu-gpu-t4
@@ -41,11 +38,6 @@ jobs:
       env:
         QUACC_CONFIG_FILE: docs/.quacc.yml
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        FAST_DOCS: 'true'  # Enable fast docs mode
       run: |
         jupyter-book build docs
-
-    - name: Upload documentation artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: docs-html
-        path: docs/_build/html/*
