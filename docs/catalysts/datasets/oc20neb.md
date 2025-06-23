@@ -77,9 +77,10 @@ optimizer = BFGS(
 )
 
 # Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
-if os.environ.get("FAST_DOCS", "false").lower() == "true":
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
     optimization_steps = 20
-elif os.environ.get("FAST_DOCS", "false").lower() == "false":
+else:
     optimization_steps = 300
 
 conv = optimizer.run(fmax=0.45, steps=optimization_steps)

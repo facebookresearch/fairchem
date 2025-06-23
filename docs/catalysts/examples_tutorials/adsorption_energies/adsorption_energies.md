@@ -182,11 +182,12 @@ It is somewhat time consuming to run this. We're going to use a small number of 
 ```{code-cell} ipython3
 import os
 
-if os.environ.get("FAST_DOCS", "false").lower() == "true":
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
     num_bulks = 1
     num_sites = 5
     relaxation_steps = 20
-elif os.environ.get("FAST_DOCS", "false").lower() == "false":
+else:
     num_bulks = -1
     num_sites = 100
     relaxation_steps = 300

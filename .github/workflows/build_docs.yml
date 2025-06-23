@@ -38,6 +38,6 @@ jobs:
       env:
         QUACC_CONFIG_FILE: docs/.quacc.yml
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        FAST_DOCS: 'true'  # Enable fast docs mode
+        FAST_DOCS: true
       run: |
         jupyter-book build docs
