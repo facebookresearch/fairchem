@@ -38,6 +38,13 @@ jobs:
       env:
         QUACC_CONFIG_FILE: docs/.quacc.yml
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        FAST_DOCS: true
+        # Set FAST_DOCS only if not a push to main
+        FAST_DOCS: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && 'true' || '' }}
       run: |
         jupyter-book build docs
+
+    - name: Upload documentation artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: docs-html
+        path: docs/_build/html/*
