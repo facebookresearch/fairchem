@@ -23,7 +23,11 @@ parts:
     - file: core/common_tasks/fine_tuning
     - file: core/common_tasks/workflows
     - file: core/uma_faq
+  - file: core/uma_examples/summary
+    sections:
+    - file: core/uma_examples/uma_tutorial
   - file: core/generative_models
+  
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
