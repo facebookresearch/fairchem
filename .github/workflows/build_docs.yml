@@ -42,7 +42,8 @@ jobs:
         FAST_DOCS: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && 'true' || '' }}
       run: |
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
-        find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
+        jupytext --to ipynb ./docs/uma_tutorials/uma_tutorial.md
+        # find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
         jupyter-book build docs
 
     - name: Upload documentation artifact
