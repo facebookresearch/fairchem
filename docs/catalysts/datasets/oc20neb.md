@@ -56,6 +56,8 @@ relaxed_frames = traj[-10:]
 One more note: We have not prepared an lmdb for this dataset. This is because it is NEB calculations are not supported directly in ocp. You must use the ase native OCP class along with ase infrastructure to run NEB calculations. Here is an example of a use:
 
 ```{code-cell} ipython3
+import os 
+
 from ase.io import read
 from ase.mep import DyNEB
 from ase.optimize import BFGS
@@ -74,8 +76,15 @@ optimizer = BFGS(
     trajectory="neb.traj",
 )
 
-conv = optimizer.run(fmax=0.45, steps=200)
+# Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
+    optimization_steps = 20
+else:
+    optimization_steps = 300
+
+conv = optimizer.run(fmax=0.45, steps=optimization_steps)
 if conv:
     neb.climb = True
-    conv = optimizer.run(fmax=0.05, steps=300)
+    conv = optimizer.run(fmax=0.05, steps=optimization_steps)
 ```

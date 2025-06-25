@@ -14,7 +14,7 @@ copyright                   : "2024"  # Copyright year to be placed in the foote
 # See https://jupyterbook.org/content/execute.html
 execute:
   execute_notebooks: cache
-  timeout: 3600
+  timeout: 7200
   allow_errors: false
 
 # Define the name of the latex output file for PDF builds
