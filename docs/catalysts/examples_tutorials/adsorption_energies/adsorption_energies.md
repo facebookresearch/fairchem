@@ -17,6 +17,14 @@ Expert adsorption energies
 
 One of the most common tasks in computational catalysis is calculating the binding energies or adsorption energies of small molecules on catalyst surfaces.
 
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+
+:::
+
 ```{code-cell} ipython3
 from __future__ import annotations
 

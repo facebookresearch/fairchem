@@ -60,3 +60,10 @@ print(
 ```
 
 Congratulations, you ran your first phonon calculation!
+
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+:::

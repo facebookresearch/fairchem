@@ -16,26 +16,14 @@ UMA Intro Tutorial
 
 This tutorial will walk you through a few examples of how you can use UMA. Each step is covered in more detail elsewhere in the documentation, but this is well suited to a ~1-2 hour tutorial session for researchers new to UMA but with some background in ASE and molecular simulations. 
 
-## Before you start / installation
-
-You need to get a HuggingFace account and request access to the UMA models.
-
-You need a Huggingface account, request access to https://huggingface.co/facebook/UMA, and to create a Huggingface token at https://huggingface.co/settings/tokens/ with these permission:
-
-Permissions: Read access to contents of all public gated repos you can access
-
-Then, add the token as an environment variable (using `huggingface-cli login` or settings the HF_TOKEN variable. 
-
 ## Installation process
 
-It may be enough to use `pip install fairchem-core`. This gets you the latest version on PyPi (https://pypi.org/project/fairchem-core/)
-
-Here we install some sub-packages. This can take 2-5 minutes to run.
+```{include} ../../core/simplified_install.md
+```
 
 ```{code-cell}
-:tags: [skip-execution]
-
-! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami x3dase
+# Check that packages are installed
+!pip list | grep fairchem
 ```
 
 ```{code-cell}
@@ -48,7 +36,6 @@ import fairchem.core
 
 fairchem.core.__version__
 ```
-
 
 ## Illustrative examples
 

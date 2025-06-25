@@ -30,6 +30,14 @@ else:
     optimization_steps = 300
 ```
 
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+
+:::
+
 ## Do enumerations in an AdsorbML style
 
 ```{code-cell} ipython3

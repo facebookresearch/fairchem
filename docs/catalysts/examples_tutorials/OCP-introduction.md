@@ -56,11 +56,18 @@ Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?spe
 
 The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
 
-This next cell will automatically download the checkpoint from huggingface and load it. 
-1. You need to first request access to the UMA model here: https://huggingface.co/facebook/UMA
-2. You also need to run `huggingface-cli login` and follow the instructions to get a token from huggingface to authenticate to the servers. 
+
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+
+:::
 
 If you find your kernel is crashing, it probably means you have exceeded the allowed amount of memory. This checkpoint works fine in this example, but it may crash your kernel if you use it in the NRR example.
+
+This next cell will automatically download the checkpoint from huggingface and load it. 
 
 ```{code-cell}
 from __future__ import annotations

@@ -1,5 +1,12 @@
 # Batch inference with UMA models
 
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+:::
+
 If your application requires predictions over many systems you can run batch inference using
 UMA models to use compute more efficiently and improve GPU utilization. Below we show some easy ways to run batch
 inference over batches created at runtime or loading from a dataset. If you want to learn more about the different
@@ -39,8 +46,7 @@ preds["energy"][0]
 preds["forces"][batch.batch == 0]
 ```
 
-Batch inference using a dataset and a dataloader
-------------------------------------------------
+## Batch inference using a dataset and a dataloader
 
 If you are running predictions over more structures than you can fit in memory, you can run inference using
 a torch Dataloader,
@@ -60,8 +66,8 @@ for batch in loader:
     preds = predictor.predict(batch)
 ```
 
-Inference over heterogenous batches
------------------------------------
+## Inference over heterogenous batches
+
 For the odd cases where you want to batch systems to be computed with different task predictions
 (ie molecules and materials), you can take advantage of UMA models and do it in a single batch
 as follows,
