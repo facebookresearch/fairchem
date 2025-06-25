@@ -189,7 +189,7 @@ if fast_docs:
     relaxation_steps = 20
 else:
     num_bulks = -1
-    num_sites = 100
+    num_sites = 20
     relaxation_steps = 300
 ```
 
