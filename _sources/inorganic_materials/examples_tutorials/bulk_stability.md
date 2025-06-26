@@ -18,7 +18,12 @@ We're going to start simple here - let's run a local relaxation (optimize the un
 1. It's a relatively small (31M) parameter model
 2. It was pre-trained on the OMat24 dataset, and then fine-tuned on the MPtrj and Alexandria datasets, so it should emit energies and forces that are consistent with the MP GGA (PBE/PBE+U) level of theory
 
-This code will download the appropriate checkpoint from huggingface_hub automatically; if you don't have the right access token specified, you'll hit an permission or 401 error.
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+:::
 
 ```{code-cell} ipython3
 from __future__ import annotations

@@ -602,7 +602,33 @@ document.write(`
 <li><p>It’s a relatively small (31M) parameter model</p></li>
 <li><p>It was pre-trained on the OMat24 dataset, and then fine-tuned on the MPtrj and Alexandria datasets, so it should emit energies and forces that are consistent with the MP GGA (PBE/PBE+U) level of theory</p></li>
 </ol>
-<p>This code will download the appropriate checkpoint from huggingface_hub automatically; if you don’t have the right access token specified, you’ll hit an permission or 401 error.</p>
+<p>:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown</p>
+<ol class="arabic simple">
+<li><p>Install the necessary packages using pip, uv etc</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Get access to any necessary huggingface gated models</p>
+<ul class="simple">
+<li><p>Get and login to your Huggingface account</p></li>
+<li><p>Request access to https://huggingface.co/facebook/UMA</p></li>
+<li><p>Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission “Permissions: Read access to contents of all public gated repos you can access”</p></li>
+<li><p>Add the token as an environment variable using <code class="docutils literal notranslate"><span class="pre">huggingface-cli</span> <span class="pre">login</span></code> or by setting the HF_TOKEN environment variable.</p></li>
+</ul>
+</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Login using the huggingface-cli utility</span>
+<span class="c1"># ! huggingface-cli login</span>
+
+<span class="c1"># alternatively,</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;HF_TOKEN&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;MY_TOKEN&#39;</span>
+</pre></div>
+</div>
+<p>:::</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -641,10 +667,10 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Setting random seed to 41
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-23-22-47-55-809482-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-17-49-46-934867-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-23-22-47-55-809482-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-17-49-46-934867-59941
 </pre></div>
 </div>
 </div>
@@ -658,9 +684,9 @@ document.write(`
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
  &#39;converged&#39;: np.True_,
- &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-23-22-47-55-809482-59941&#39;,
+ &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-17-49-46-934867-59941&#39;,
  &#39;input_atoms&#39;: {&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
-                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 6, 23, 22, 47, 56, 542263, tzinfo=datetime.timezone.utc),
+                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 6, 26, 17, 49, 47, 626993, tzinfo=datetime.timezone.utc),
                                                          &#39;emmet_version&#39;: &#39;0.84.8&#39;,
                                                          &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
                                         &#39;chemsys&#39;: &#39;Cu&#39;,
@@ -682,8 +708,8 @@ document.write(`
                                                      &#39;version&#39;: &#39;2.6.0&#39;},
                                         &#39;volume&#39;: 11.761470249999999}},
  &#39;name&#39;: &#39;fairchem Relax&#39;,
- &#39;nid&#39;: &#39;runnervm1w6u6.ilonryld4j1ubp2vurtnjdzw0f.bx.internal.cloudapp.net&#39;,
- &#39;parameters&#39;: {&#39;version&#39;: &#39;2.2.1.dev26+g4d768118&#39;},
+ &#39;nid&#39;: &#39;runnervm1w6u6.fmwxo1vhichurb1wybuswyps5c.dx.internal.cloudapp.net&#39;,
+ &#39;parameters&#39;: {&#39;version&#39;: &#39;2.2.1.dev28+g9793d997&#39;},
  &#39;parameters_opt&#39;: {&#39;fmax&#39;: 0.001,
                     &#39;max_steps&#39;: 1000,
                     &#39;maxstep&#39;: 0.2,
@@ -693,9 +719,9 @@ document.write(`
  &#39;results&#39;: {&#39;energy&#39;: -3.757900797531085,
              &#39;forces&#39;: array([[0., 0., 0.]], dtype=float32),
              &#39;free_energy&#39;: -3.757900797531085,
-             &#39;stress&#39;: array([-6.3946731e-03, -6.3946708e-03, -6.3946708e-03,  6.0710664e-10,
-       -2.1437205e-10, -2.3468720e-09], dtype=float32)},
- &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 6, 23, 22, 47, 56, 553519, tzinfo=datetime.timezone.utc),
+             &#39;stress&#39;: array([-6.3946918e-03, -6.3946871e-03, -6.3946885e-03, -8.5997576e-10,
+       -1.3110216e-09, -1.6933330e-09], dtype=float32)},
+ &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 6, 26, 17, 49, 47, 637852, tzinfo=datetime.timezone.utc),
                                          &#39;emmet_version&#39;: &#39;0.84.8&#39;,
                                          &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
                         &#39;chemsys&#39;: &#39;Cu&#39;,
@@ -720,8 +746,8 @@ document.write(`
  &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.757900797531085,
                          &#39;forces&#39;: array([[0., 0., 0.]]),
                          &#39;free_energy&#39;: -3.757900797531085,
-                         &#39;stress&#39;: array([-6.39467314e-03, -6.39467081e-03, -6.39467081e-03,  6.07106643e-10,
-       -2.14372048e-10, -2.34687203e-09])}]}
+                         &#39;stress&#39;: array([-6.39469177e-03, -6.39468711e-03, -6.39468851e-03, -8.59975757e-10,
+       -1.31102162e-09, -1.69333303e-09])}]}
 </pre></div>
 </div>
 </div>

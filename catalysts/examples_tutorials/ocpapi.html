@@ -627,14 +627,33 @@ document.write(`
 <p>Python library for programmatic use of the <a class="reference external" href="https://open-catalyst.metademolab.com/">Open Catalyst Demo</a>. Users unfamiliar with the Open Catalyst Demo are encouraged to read more about it before continuing.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
-<p>Ensure you have Python 3.9.1 or newer, and install <code class="docutils literal notranslate"><span class="pre">ocpapi</span></code> using:</p>
-<div class="cell tag_skip-execution docutils container">
-<div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-q<span class="w"> </span>ocpapi
+<p>:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown</p>
+<ol class="arabic simple">
+<li><p>Install the necessary packages using pip, uv etc</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
 </pre></div>
 </div>
+<ol class="arabic simple" start="2">
+<li><p>Get access to any necessary huggingface gated models</p>
+<ul class="simple">
+<li><p>Get and login to your Huggingface account</p></li>
+<li><p>Request access to https://huggingface.co/facebook/UMA</p></li>
+<li><p>Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission “Permissions: Read access to contents of all public gated repos you can access”</p></li>
+<li><p>Add the token as an environment variable using <code class="docutils literal notranslate"><span class="pre">huggingface-cli</span> <span class="pre">login</span></code> or by setting the HF_TOKEN environment variable.</p></li>
+</ul>
+</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Login using the huggingface-cli utility</span>
+<span class="c1"># ! huggingface-cli login</span>
+
+<span class="c1"># alternatively,</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;HF_TOKEN&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;MY_TOKEN&#39;</span>
+</pre></div>
 </div>
-</div>
+<p>:::</p>
 </section>
 <section id="quickstart">
 <h2>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading">#</a></h2>

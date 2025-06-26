@@ -16,14 +16,13 @@ Python library for programmatic use of the [Open Catalyst Demo](https://open-cat
 
 ## Installation
 
-Ensure you have Python 3.9.1 or newer, and install `ocpapi` using:
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
 
-```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
-! pip install -q ocpapi
+```{include} ../../core/simplified_install.md
 ```
+
+:::
 
 ## Quickstart
 

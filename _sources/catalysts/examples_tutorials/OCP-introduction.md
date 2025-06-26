@@ -56,11 +56,40 @@ Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?spe
 
 The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
 
-This next cell will automatically download the checkpoint from huggingface and load it. 
-1. You need to first request access to the UMA model here: https://huggingface.co/facebook/UMA
-2. You also need to run `huggingface-cli login` and follow the instructions to get a token from huggingface to authenticate to the servers. 
+
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+
+1. Install the necessary packages using pip, uv etc
+```{code}
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models 
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+
+```{code}
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+# ! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
 
 If you find your kernel is crashing, it probably means you have exceeded the allowed amount of memory. This checkpoint works fine in this example, but it may crash your kernel if you use it in the NRR example.
+
+This next cell will automatically download the checkpoint from huggingface and load it. 
 
 ```{code-cell}
 from __future__ import annotations
