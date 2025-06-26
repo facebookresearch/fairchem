@@ -417,6 +417,13 @@ class AtomicData:
             ]
         )
 
+        bandgap = torch.LongTensor(
+            [
+                atoms.info.get("Band_gap_HSE", 0)
+                if r_data_keys is not None and "Band_gap_HSE" in r_data_keys
+                else 0
+            ]
+        )
         # NOTE: code assumes these are ints.. not tensors
         # charge = atoms.info.get("charge", 0)
         # spin = atoms.info.get("spin", 0)
@@ -431,6 +438,7 @@ class AtomicData:
             nedges=nedges,
             charge=tensor_or_int_to_tensor(charge, torch.long),
             spin=tensor_or_int_to_tensor(spin, torch.long),
+            bandgap=bandgap,
             fixed=fixed,
             tags=tags,
             energy=energy,
