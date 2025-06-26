@@ -44,7 +44,6 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
 )
 from fairchem.core.common.logger import WandBSingletonLogger
-from fairchem.core.common.registry import registry
 from fairchem.core.components.train.train_runner import Checkpointable
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
@@ -157,7 +156,7 @@ def initialize_finetuning_model(
                 f"{head_name} head does not specify module to use for the head"
             )
         module_name = head_config.pop("module")
-        model.output_heads[head_name] = registry.get_model_class(module_name)(
+        model.output_heads[head_name] = module_name(
             model.backbone,
             **head_config,
         )
@@ -259,6 +258,7 @@ def compute_loss(
 
         # this is related to how Hydra outputs stuff in nested dicts:
         # ie: oc20_energy.energy
+
         pred_for_task = predictions[task.name][task.property]
         if task.level == "atom":
             pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
