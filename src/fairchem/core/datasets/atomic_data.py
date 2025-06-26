@@ -133,6 +133,7 @@ class AtomicData:
         nedges: torch.Tensor,  # (1,)
         charge: torch.Tensor,  # (num_graph,)
         spin: torch.Tensor,  # (num_graph,)
+        bandgap: torch.Tensor,  # (num_graph,)
         fixed: torch.Tensor,  # (num_node,)
         tags: torch.Tensor,  # (num_node,)
         energy: torch.Tensor | None = None,  # (num_graph,)
@@ -156,6 +157,7 @@ class AtomicData:
         self.nedges = nedges
         self.charge = charge
         self.spin = spin
+        self.bandgap = bandgap
         self.fixed = fixed
         self.tags = tags
         self.sid = sid if sid is not None else [""]
@@ -508,6 +510,7 @@ class AtomicData:
             nedges=dictionary["nedges"],
             charge=dictionary["charge"],
             spin=dictionary["spin"],
+            bandgap=dictionary["bandgap"],
             fixed=dictionary.get("fixed", None),
             tags=dictionary.get("tags", None),
             energy=dictionary.get("energy", None),
