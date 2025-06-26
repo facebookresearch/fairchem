@@ -625,9 +625,33 @@ appropriate task name for domain specific prediction.</p>
 <li><p><strong>odac:</strong> use this for MOFs</p></li>
 <li><p><strong>omc:</strong> use this for molecular crystals</p></li>
 </ul>
-<p>:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
-:class: dropdown</p>
-<p>:::</p>
+<div class="dropdown admonition">
+<p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
+<ol class="arabic simple">
+<li><p>Install the necessary packages using pip, uv etc</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Get access to any necessary huggingface gated models</p>
+<ul class="simple">
+<li><p>Get and login to your Huggingface account</p></li>
+<li><p>Request access to https://huggingface.co/facebook/UMA</p></li>
+<li><p>Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission “Permissions: Read access to contents of all public gated repos you can access”</p></li>
+<li><p>Add the token as an environment variable using <code class="docutils literal notranslate"><span class="pre">huggingface-cli</span> <span class="pre">login</span></code> or by setting the HF_TOKEN environment variable.</p></li>
+</ul>
+</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ[&#39;HF_TOKEN&#39;] = &#39;MY_TOKEN&#39;
+</pre></div>
+</div>
+</div>
 <section id="relax-an-adsorbate-on-a-catalytic-surface">
 <h2>Relax an adsorbate on a catalytic surface<a class="headerlink" href="#relax-an-adsorbate-on-a-catalytic-surface" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">fcc100</span><span class="p">,</span> <span class="n">add_adsorbate</span><span class="p">,</span> <span class="n">molecule</span>
@@ -809,7 +833,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2024.
+      © Copyright 2025.
       <br/>
     
   </p>

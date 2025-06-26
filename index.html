@@ -641,9 +641,33 @@ as detailed <a class="reference internal" href="#looking-for-fairchem-v1-models-
 <p>If you want to explore model capabilities check out our
 <a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">educational demo</a></p>
 <p><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/"><img alt="Educational Demo" src="https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec" /></a></p>
-<p>:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
-:class: dropdown</p>
-<p>:::</p>
+<div class="dropdown admonition">
+<p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
+<ol class="arabic simple">
+<li><p>Install the necessary packages using pip, uv etc</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p>Get access to any necessary huggingface gated models</p>
+<ul class="simple">
+<li><p>Get and login to your Huggingface account</p></li>
+<li><p>Request access to https://huggingface.co/facebook/UMA</p></li>
+<li><p>Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission “Permissions: Read access to contents of all public gated repos you can access”</p></li>
+<li><p>Add the token as an environment variable using <code class="docutils literal notranslate"><span class="pre">huggingface-cli</span> <span class="pre">login</span></code> or by setting the HF_TOKEN environment variable.</p></li>
+</ul>
+</li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ[&#39;HF_TOKEN&#39;] = &#39;MY_TOKEN&#39;
+</pre></div>
+</div>
+</div>
 </section>
 <div class="toctree-wrapper compound">
 </div>
@@ -746,7 +770,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2024.
+      © Copyright 2025.
       <br/>
     
   </p>

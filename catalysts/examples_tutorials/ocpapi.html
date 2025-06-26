@@ -627,8 +627,8 @@ document.write(`
 <p>Python library for programmatic use of the <a class="reference external" href="https://open-catalyst.metademolab.com/">Open Catalyst Demo</a>. Users unfamiliar with the Open Catalyst Demo are encouraged to read more about it before continuing.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
-<p>:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
-:class: dropdown</p>
+<div class="dropdown admonition">
+<p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
 <ol class="arabic simple">
 <li><p>Install the necessary packages using pip, uv etc</p></li>
 </ol>
@@ -645,15 +645,15 @@ document.write(`
 </ul>
 </li>
 </ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Login using the huggingface-cli utility</span>
-<span class="c1"># ! huggingface-cli login</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Login using the huggingface-cli utility
+! huggingface-cli login
 
-<span class="c1"># alternatively,</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;HF_TOKEN&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;MY_TOKEN&#39;</span>
+# alternatively,
+import os
+os.environ[&#39;HF_TOKEN&#39;] = &#39;MY_TOKEN&#39;
 </pre></div>
 </div>
-<p>:::</p>
+</div>
 </section>
 <section id="quickstart">
 <h2>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading">#</a></h2>
@@ -1012,7 +1012,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2024.
+      © Copyright 2025.
       <br/>
     
   </p>

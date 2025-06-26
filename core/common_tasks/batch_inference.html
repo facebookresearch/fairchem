@@ -609,8 +609,8 @@ document.write(`
                   
   <section class="tex2jax_ignore mathjax_ignore" id="batch-inference-with-uma-models">
 <h1>Batch inference with UMA models<a class="headerlink" href="#batch-inference-with-uma-models" title="Link to this heading">#</a></h1>
-<p>:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
-:class: dropdown</p>
+<div class="dropdown admonition">
+<p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
 <ol class="arabic simple">
 <li><p>Install the necessary packages using pip, uv etc</p></li>
 </ol>
@@ -627,15 +627,15 @@ document.write(`
 </ul>
 </li>
 </ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Login using the huggingface-cli utility</span>
-<span class="c1"># ! huggingface-cli login</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Login using the huggingface-cli utility
+! huggingface-cli login
 
-<span class="c1"># alternatively,</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;HF_TOKEN&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;MY_TOKEN&#39;</span>
+# alternatively,
+import os
+os.environ[&#39;HF_TOKEN&#39;] = &#39;MY_TOKEN&#39;
 </pre></div>
 </div>
-<p>:::</p>
+</div>
 <p>If your application requires predictions over many systems you can run batch inference using
 UMA models to use compute more efficiently and improve GPU utilization. Below we show some easy ways to run batch
 inference over batches created at runtime or loading from a dataset. If you want to learn more about the different
@@ -819,7 +819,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2024.
+      © Copyright 2025.
       <br/>
     
   </p>
