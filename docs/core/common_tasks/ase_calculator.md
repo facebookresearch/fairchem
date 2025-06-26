@@ -27,6 +27,13 @@ predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+:::
+
 ## Default mode
 
 UMA is designed for both general-purpose usage (single or batched systems) and single-system long rollout (MD simulations, relaxations, etc.). For general-purpose use, we suggest using the [default settings](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/api/inference.py#L92). This is a good trade-off between accuracy, speed, and memory consumption and should suffice for most applications. In this setting, on a single 80GB H100 GPU, we expect a user should be able to compute on systems as large as 50k-100k neighbors (depending on their atomic density). Batching is also supported in this mode.

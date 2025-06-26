@@ -16,7 +16,8 @@ UMA Intro Tutorial
 
 This tutorial will walk you through a few examples of how you can use UMA. Each step is covered in more detail elsewhere in the documentation, but this is well suited to a ~1-2 hour tutorial session for researchers new to UMA but with some background in ASE and molecular simulations. 
 
-## Before you start / installation
+
+# Before you start / installation
 
 You need to get a HuggingFace account and request access to the UMA models.
 
@@ -24,7 +25,23 @@ You need a Huggingface account, request access to https://huggingface.co/faceboo
 
 Permissions: Read access to contents of all public gated repos you can access
 
-Then, add the token as an environment variable (using `huggingface-cli login` or settings the HF_TOKEN variable. 
+Then, add the token as an environment variable (using `huggingface-cli login`: 
+
+```{code-cell}
+:tags: [skip-execution]
+
+# Enter token via huggingface-cli
+! huggingface-cli login
+```
+
+or you can set the token via HF_TOKEN variable:
+```{code-cell}
+:tags: [skip-execution]
+
+# Set token via env variable
+import os
+os.environ['HF_TOKEN'] = 'MYTOKEN'
+```
 
 ## Installation process
 
@@ -50,7 +67,7 @@ fairchem.core.__version__
 ```
 
 
-## Illustrative examples
+# Illustrative examples
 
 These should just run, and are here to show some basic uses.
 
@@ -60,7 +77,7 @@ Critical points:
 2. Specify the **task_name**
 3. Use calculator like other ASE calculators
 
-### Spin gap energy - OMOL
+## Spin gap energy - OMOL
 
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
 
@@ -89,7 +106,7 @@ triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 print(triplet.get_potential_energy() - singlet.get_potential_energy())
 ```
 
-### Example of adsorbate relaxation - OC20
+## Example of adsorbate relaxation - OC20
 
 Here we just setup a Cu(100) slab with a CO on it and relax it.
 
@@ -118,7 +135,7 @@ opt.run(0.05, 100)
 print(slab.get_potential_energy())
 ```
 
-## Example bulk relaxation - OMAT
+# Example bulk relaxation - OMAT
 
 ```{code-cell}
 from ase.build import bulk
@@ -138,7 +155,7 @@ opt.run(0.05, 100)
 print(atoms.get_stress())  # !!!! We get stress now!
 ```
 
-### Molecular dynamics - OMOL
+## Molecular dynamics - OMOL
 
 ```{code-cell}
 import matplotlib.pyplot as plt
@@ -178,7 +195,7 @@ plt.xlabel("Time (fs)")
 plt.ylabel("Energy (eV)");
 ```
 
-## [Catalyst Adsorption energies](../catalysts/examples_tutorials/OCP-introduction)
+# [Catalyst Adsorption energies](../catalysts/examples_tutorials/OCP-introduction)
 
 The basic approach in computing an adsorption energy is to compute this energy difference:
 
@@ -307,7 +324,7 @@ vib.run()
 vib.summary()
 ```
 
-## Bulk alloy phase behavior
+# Bulk alloy phase behavior
 
 Adapted from https://kitchingroup.cheme.cmu.edu/dft-book/dft.html#orgheadline29
 
@@ -348,7 +365,7 @@ opt.run(0.05, 100)
 pd.get_potential_energy()
 ```
 
-### Alloy formation energies
+## Alloy formation energies
 
 ```{code-cell}
 cupd1 = Atoms(
@@ -469,7 +486,7 @@ dosax.set_xticks([])
 dosax.set_xlabel("DOS", fontsize=18);
 ```
 
-## Transition States (NEBs)
+# Transition States (NEBs)
 
 Nudged elastic band calculations are among the most costly calculations we do. UMA makes these quicker!
 
@@ -483,7 +500,7 @@ Nudged elastic band calculations are among the most costly calculations we do. U
 We explore diffusion of an O adatom from an hcp to an fcc site on Pt(111).
 
 
-### Initial state
+## Initial state
 
 ```{code-cell}
 from ase.build import add_adsorbate, fcc111, molecule
@@ -506,7 +523,7 @@ opt.run(0.05, 100)
 print(initial.get_potential_energy())
 ```
 
-### Final state
+## Final state
 
 ```{code-cell}
 # Set up your system as an ASE atoms object
@@ -522,7 +539,7 @@ opt.run(0.05, 100)
 print(final.get_potential_energy())
 ```
 
-### Setup and relax the band
+## Setup and relax the band
 
 ```{code-cell}
 from ase.mep import NEB
@@ -552,7 +569,7 @@ NEBTools(neb.images).plot_band();
 This could be a good initial guess to initialize an NEB in DFT.
 
 
-## Ideas for things you can do with UMA
+# Ideas for things you can do with UMA
 
 1. FineTuna - use it for initial geometry optimizations then do DFT
 
@@ -577,7 +594,7 @@ This could be a good initial guess to initialize an NEB in DFT.
   a. https://arxiv.org/abs/2411.11783
 
 
-## Advanced applications
+# Advanced applications
 
 These take a while to run.
 
@@ -598,6 +615,6 @@ This takes up to an hour with a GPU, and much longer with a CPU.
 
 The CatTsunami tutorial is an example of enumerating initial and final states, and computing reaction paths between them with UMA.
 
-### Acknowledgements 
+## Acknowledgements 
 
 This tutorial was originally compiled by John Kitchin (CMU) for the NAM29 catalysis tutorial session, using a variety of resources from the FAIR chemistry repository.

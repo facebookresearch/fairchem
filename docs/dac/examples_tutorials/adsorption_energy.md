@@ -24,15 +24,15 @@ Each term on the right-hand side represents the energy of the relaxed state of t
 
 ## Loading Pre-trained Models
 
-To leverage the ODAC pre-trained models, ensure you have fairchem version 2 installed; more details are available [here](../../core/fairchemv1_v2.html). You can install the required version using pip if you haven't already:
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 
-```{code-cell}
-:tags: [skip-execution]
-
-!pip install fairchem-core
+```{include} ../../core/simplified_install.md
 ```
 
-Once installed, a pre-trained model can be loaded using `FAIRChemCalculator`. In this example, we'll employ UMA to determine the CO<sub>2</sub> adsorption energies.
+:::
+
+
+A pre-trained model can be loaded using `FAIRChemCalculator`. In this example, we'll employ UMA to determine the CO<sub>2</sub> adsorption energies.
 
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
