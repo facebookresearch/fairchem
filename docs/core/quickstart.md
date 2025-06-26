@@ -25,6 +25,13 @@ appropriate task name for domain specific prediction.
 - **odac:** use this for MOFs
 - **omc:** use this for molecular crystals
 
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+:::
+
 ## Relax an adsorbate on a catalytic surface
 ```python
 from ase.build import fcc100, add_adsorbate, molecule

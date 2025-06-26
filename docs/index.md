@@ -35,10 +35,11 @@ If you want to explore model capabilities check out our
 
 [![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
 
-## Installation
-Although not required, we highly recommend installing using a package manager and virtualenv such as [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer), it is much faster and better at resolving dependencies than standalone pip.
 
-Install fairchem-core using pip
-```bash
-pip install fairchem-core
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
 ```
+
+:::

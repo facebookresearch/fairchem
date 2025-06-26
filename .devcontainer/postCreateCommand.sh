@@ -1,11 +1,5 @@
 #!/bin/bash
-if [ -f packages/requirements.txt ]; then pip install -r packages/requirements.txt; fi
-if [ -f packages/requirements-optional.txt ]; then pip install -r packages/requirements-optional.txt; fi
-pip install -e packages/fairchem-core[dev,docs,adsorbml]
-pip install -e packages/fairchem-data-oc[dev]
-pip install -e packages/fairchem-demo-ocpapi[dev]
-pip install -e packages/fairchem-applications-cattsunami
-pip install jupytext
+pip install -e packages/fairchem-core[docs,adsorbml,quacc] -e packages/fairchem-data-oc[dev] -e packages/fairchem-applications-cattsunami jupytext
 
 # Convert all .md docs to ipynb for easy viewing in vscode later!
 find ./docs -name '*.md' -exec jupytext --to ipynb {} \;

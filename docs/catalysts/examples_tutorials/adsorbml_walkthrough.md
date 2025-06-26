@@ -17,6 +17,14 @@ The [AdsorbML](https://arxiv.org/abs/2211.16486) paper showed that pre-trained m
 
 The latest UMA models are now total-energy models, and the results for the adsorption energy are even more impressive ([see the paper for details and benchmarks](https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/)). The AdsorbML package helps you with automated multi-adsorbate placement, and will automatically run calculations using the ML models to find the best sites to sample. 
 
+:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+```{include} ../../core/simplified_install.md
+```
+
+:::
+
 ## Define desired adsorbate+slab system
 
 ```{code-cell} ipython3
