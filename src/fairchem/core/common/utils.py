@@ -444,28 +444,31 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         key=lambda x: x[1],
     )
 
+
 def segment_coo(src, index, dim_size=None):
     """
     This function performs a segment-wise summation of the src tensor along the first dimension,
     where the indices for the segments are given by the index tensor.
-    
+
     Args:
         src: Source tensor of shape [N, *]
         index: Index tensor of shape [N] indicating the segment each element belongs to
         dim_size: Size of the output tensor's first dimension
-    
+
     Returns:
         Tensor of shape [dim_size, *] with segment-wise summation
     """
-    
+
     # Handle dimension size
     if dim_size is None:
         dim_size = index.max().item() + 1 if index.numel() > 0 else 0
-    
+
     # Create output tensor with proper gradient requirements
     out_shape = [dim_size] + list(src.shape[1:])
-    out = torch.zeros(out_shape, dtype=src.dtype, device=src.device, requires_grad=src.requires_grad)
-    
+    out = torch.zeros(
+        out_shape, dtype=src.dtype, device=src.device, requires_grad=src.requires_grad
+    )
+
     # Use scatter_add to preserve gradients (non-in-place)
     if src.dim() == 1:
         out = out.scatter_add(0, index, src)
@@ -473,5 +476,5 @@ def segment_coo(src, index, dim_size=None):
         # For multi-dimensional src, expand index to match src dimensions
         index_expanded = index.view(-1, *([1] * (src.dim() - 1))).expand_as(src)
         out = out.scatter_add(0, index_expanded, src)
-    
+
     return out
