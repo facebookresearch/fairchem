@@ -1,2 +1,0 @@
-ckpt_path: ${cluster.checkpoint_root_dir}/uma_sm_1p1_530k_mpa_converted.pt #202505-0622-2445-47b9/uma_sm_v1_release_950k.pt
-model_name: uma_sm_1p1
