@@ -55,6 +55,24 @@ def load_inference_model(
     return (model, checkpoint) if return_checkpoint is True else model
 
 
+def load_tasks(checkpoint_location: str) -> list:
+    """
+    Load tasks from a checkpoint file.
+
+    Args:
+        checkpoint_location (str): Path to the checkpoint file.
+
+    Returns:
+        list[Task]: A list of instantiated Task objects from the checkpoint's tasks_config.
+    """
+    checkpoint: MLIPInferenceCheckpoint = torch.load(
+        checkpoint_location, map_location="cpu", weights_only=False
+    )
+    return [
+        hydra.utils.instantiate(task_config) for task_config in checkpoint.tasks_config
+    ]
+
+
 @contextmanager
 def tf32_context_manager():
     # Store the original settings
