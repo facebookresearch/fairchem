@@ -78,7 +78,7 @@ The first step is getting a checkpoint for the model we want to use. UMA is curr
 :tags: [skip-execution]
 
 # Login using the huggingface-cli utility
-# ! huggingface-cli login
+! huggingface-cli login
 
 # alternatively,
 import os
