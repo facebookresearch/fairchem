@@ -1,2 +1,2 @@
-ckpt_path: ${cluster.checkpoint_root_dir}/202505-0622-2445-47b9/uma_sm_v1_release_950k.pt
 model_name: uma_sm
+ckpt_path: ${cluster.checkpoint_root_dir}/uma_sm.pt

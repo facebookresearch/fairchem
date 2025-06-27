@@ -29,14 +29,14 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.nve_md_runner.NVEMDRunner
   calculator:
-    _target_: fairchem.core.common.calculator.FAIRChemCalculator
-    checkpoint_path: ${checkpoint.ckpt_path}
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
     task_name: omat
 
   input_data:
     _target_: fairchem.core.components.calculate.nve_md_runner.get_nve_md_data
     dataset_root: ${cluster.data_root_dir}/md
-    task_name: tm23
+    dataset_name: tm23
   time_step: 5.
   steps: 20000
 

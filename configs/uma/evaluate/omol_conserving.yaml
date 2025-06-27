@@ -77,4 +77,5 @@ runner:
     model:
       _target_: fairchem.core.units.mlip_unit.mlip_unit.load_inference_model
       checkpoint_location: ${checkpoint.ckpt_path}
+      return_checkpoint: False
       use_ema: True

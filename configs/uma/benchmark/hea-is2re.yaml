@@ -29,8 +29,8 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.relaxation_runner.RelaxationRunner
   calculator:
-    _target_: fairchem.core.common.calculator.FAIRChemCalculator
-    checkpoint_path: ${checkpoint.ckpt_path}
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
     task_name: omat
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
