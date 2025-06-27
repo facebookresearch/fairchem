@@ -201,6 +201,19 @@
 <li class="toctree-l2"><a class="reference internal" href="../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_tutorial.html">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
+</ul>
+</details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../core/generative_models.html">Generative Models</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
@@ -611,9 +624,6 @@ document.write(`
 <ol class="arabic simple">
 <li><p>Install the necessary packages using pip, uv etc</p></li>
 </ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
-</pre></div>
-</div>
 <ol class="arabic simple" start="2">
 <li><p>Get access to any necessary huggingface gated models</p>
 <ul class="simple">
@@ -624,14 +634,6 @@ document.write(`
 </ul>
 </li>
 </ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Login using the huggingface-cli utility
-! huggingface-cli login
-
-# alternatively,
-import os
-os.environ[&#39;HF_TOKEN&#39;] = &#39;MY_TOKEN&#39;
-</pre></div>
-</div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
@@ -671,154 +673,154 @@ os.environ[&#39;HF_TOKEN&#39;] = &#39;MY_TOKEN&#39;
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Setting random seed to 41
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-51-067670-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-45-872069-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-51-067670-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-45-872069-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-51-949958-53545
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-46-783304-53545
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-51-949958-53545
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-46-783304-53545
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-082171-40240
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-46-917857-40240
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-082171-40240
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-46-917857-40240
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-213179-31762
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-051673-31762
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-213179-31762
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-051673-31762
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-344024-60545
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-184826-60545
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-344024-60545
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-184826-60545
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-474865-85751
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-317675-85751
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-474865-85751
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-317675-85751
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-605520-47153
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-450404-47153
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-605520-47153
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-450404-47153
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-736526-82490
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-583024-82490
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-736526-82490
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-583024-82490
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-867825-46278
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-716232-46278
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-867825-46278
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-716232-46278
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-52-998683-60271
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-849277-60271
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-52-998683-60271
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-849277-60271
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-129284-85553
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-47-981714-85553
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-129284-85553
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-47-981714-85553
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-260206-11222
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-115036-11222
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-260206-11222
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-115036-11222
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-390980-42646
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-247458-42646
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-390980-42646
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-247458-42646
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-521820-96714
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-380066-96714
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-521820-96714
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-380066-96714
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-640808-12403
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-500923-12403
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-640808-12403
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-500923-12403
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-761875-67592
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-624180-67592
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-761875-67592
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-624180-67592
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-53-882779-30322
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-746214-30322
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-53-882779-30322
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-746214-30322
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-001415-29639
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-867310-29639
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-001415-29639
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-867310-29639
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-121781-51796
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-48-989416-51796
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-121781-51796
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-48-989416-51796
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-244464-31955
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-49-113482-31955
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-244464-31955
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-49-113482-31955
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-366776-43752
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-49-237682-43752
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-366776-43752
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-49-237682-43752
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-486855-95806
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-49-359076-95806
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-486855-95806
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-49-359076-95806
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-606802-91366
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-49-481298-91366
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-606802-91366
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-49-481298-91366
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-729562-86518
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-49-607014-86518
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-729562-86518
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-49-607014-86518
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-26-22-43-54-851955-17798
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-06-27-17-05-49-731570-17798
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-26-22-43-54-851955-17798
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-06-27-17-05-49-731570-17798
 </pre></div>
 </div>
 </div>

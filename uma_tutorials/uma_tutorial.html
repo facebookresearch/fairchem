@@ -61,6 +61,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'uma_tutorials/uma_tutorial';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Generative Models" href="../core/generative_models.html" />
+    <link rel="prev" title="UMA tutorials" href="summary.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -123,8 +125,6 @@
       
       
       
-        
-      
       <div class="bd-sidebar-primary bd-sidebar">
         
 
@@ -182,7 +182,7 @@
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../core/intro.html">GNNs for Chemistry</a></li>
 
 
@@ -199,6 +199,19 @@
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/workflows.html">Workflows</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../core/uma_faq.html">FAQ</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">UMA tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../core/generative_models.html">Generative Models</a></li>
@@ -687,9 +700,9 @@ document.write(`
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>fairchem-applications-cattsunami 1.1.1.dev27+gebda7376 /home/runner/work/fairchem/fairchem/packages/fairchem-applications-cattsunami
-fairchem-core                    2.2.1.dev29+gebda7376 /home/runner/work/fairchem/fairchem/packages/fairchem-core
-fairchem-data-oc                 1.0.2.dev27+gebda7376 /home/runner/work/fairchem/fairchem/packages/fairchem-data-oc
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>fairchem-applications-cattsunami 1.1.1.dev28+gf3e97899 /home/runner/work/fairchem/fairchem/packages/fairchem-applications-cattsunami
+fairchem-core                    2.2.1.dev30+gf3e97899 /home/runner/work/fairchem/fairchem/packages/fairchem-core
+fairchem-data-oc                 1.0.2.dev28+gf3e97899 /home/runner/work/fairchem/fairchem/packages/fairchem-data-oc
 </pre></div>
 </div>
 </div>
@@ -707,7 +720,7 @@ fairchem-data-oc                 1.0.2.dev27+gebda7376 /home/runner/work/fairche
   import pkg_resources
 </pre></div>
 </div>
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>&#39;2.2.1.dev29+gebda7376&#39;
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>&#39;2.2.1.dev30+gf3e97899&#39;
 </pre></div>
 </div>
 </div>
@@ -799,70 +812,70 @@ fairchem-data-oc                 1.0.2.dev27+gebda7376 /home/runner/work/fairche
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
-LBFGS:    0 22:44:31      -89.596203       11.451671
+LBFGS:    0 17:06:27      -89.596203       11.451672
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 22:44:31      -92.497558        6.543861
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 17:06:27      -92.497558        6.543861
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 22:44:31      -92.624427        7.536264
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 17:06:27      -92.624426        7.536263
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 22:44:31      -93.000883        3.716014
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 17:06:27      -93.000882        3.716013
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 22:44:31      -93.158617        3.479753
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 17:06:28      -93.158617        3.479753
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 22:44:31      -93.264053        2.256241
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 17:06:28      -93.264053        2.256152
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 22:44:31      -93.505117        1.133172
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 17:06:28      -93.505117        1.133186
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 22:44:31      -93.595832        0.991969
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 17:06:28      -93.595831        0.991969
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 22:44:32      -93.705420        0.685428
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 17:06:28      -93.705422        0.685422
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 22:44:32      -93.791641        0.507977
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 17:06:28      -93.791642        0.508280
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 22:44:32      -93.838082        0.363672
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 17:06:28      -93.838083        0.363669
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 22:44:32      -93.856976        0.349779
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 17:06:28      -93.856976        0.349778
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 22:44:32      -93.881901        0.498191
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 17:06:28      -93.881900        0.498437
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 22:44:32      -93.900342        0.433057
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 17:06:28      -93.900341        0.433053
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 22:44:32      -93.910141        0.156711
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 17:06:29      -93.910140        0.156794
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 22:44:32      -93.915984        0.169752
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 17:06:29      -93.915984        0.169759
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 22:44:32      -93.922215        0.210832
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 17:06:29      -93.922215        0.210910
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 22:44:33      -93.929051        0.259959
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 17:06:29      -93.929051        0.260122
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 22:44:33      -93.935195        0.183522
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 17:06:29      -93.935197        0.183433
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 22:44:33      -93.938064        0.057576
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 17:06:29      -93.938065        0.057645
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 22:44:33      -93.938524        0.039530
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 17:06:29      -93.938523        0.039530
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-93.93852403001175
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-93.93852271870956
 </pre></div>
 </div>
 </div>
@@ -896,41 +909,41 @@ LBFGS:    0 22:44:31      -89.596203       11.451671
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-FIRE:    0 22:44:35       -8.261158        0.651784
+FIRE:    0 17:06:31       -8.261158        0.651784
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 22:44:35       -8.271310        0.358119
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 17:06:32       -8.271310        0.358119
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 22:44:35       -8.264588        1.650200
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 17:06:32       -8.264588        1.650194
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 22:44:35       -8.273672        0.177967
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 17:06:32       -8.273672        0.177966
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 22:44:35       -8.272633        0.269093
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 17:06:32       -8.272634        0.269082
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    5 22:44:35       -8.272766        0.257552
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    5 17:06:32       -8.272767        0.257552
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    6 22:44:36       -8.273009        0.234348
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    6 17:06:32       -8.273009        0.234348
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    7 22:44:36       -8.273319        0.199200
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    7 17:06:32       -8.273319        0.199201
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    8 22:44:36       -8.273635        0.151747
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    8 17:06:32       -8.273635        0.151747
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    9 22:44:36       -8.273890        0.091456
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    9 17:06:33       -8.273890        0.091454
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:   10 22:44:36       -8.274015        0.017803
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:   10 17:06:33       -8.274016        0.017809
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[ 1.5564635e-03  1.5564413e-03  1.5564074e-03 -3.6522010e-08
- -5.5612066e-08  9.0682072e-08]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>[ 1.5569514e-03  1.5570063e-03  1.5568454e-03  4.7381537e-08
+  3.1449375e-08 -1.8129863e-07]
 </pre></div>
 </div>
 </div>
@@ -1059,71 +1072,71 @@ FIRE:    0 22:44:35       -8.261158        0.651784
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Relaxing slab
       Step     Time          Energy          fmax
-BFGS:    0 22:44:45     -104.710392        0.707696
+BFGS:    0 17:06:42     -104.710392        0.707696
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 22:44:45     -104.767890        0.605448
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 17:06:42     -104.767890        0.605448
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 22:44:45     -104.919424        0.369264
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 17:06:42     -104.919425        0.369264
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 22:44:46     -104.952877        0.441350
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 17:06:42     -104.952876        0.441349
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 22:44:46     -105.030002        0.467592
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 17:06:43     -105.030000        0.467591
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 22:44:46     -105.091451        0.365230
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 17:06:43     -105.091452        0.365230
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 22:44:46     -105.128721        0.195041
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 17:06:43     -105.128721        0.195039
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 22:44:46     -105.143316        0.048833
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 17:06:43     -105.143315        0.048837
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Relaxing adslab
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-BFGS:    0 22:44:46     -110.055657        1.762239
+BFGS:    0 17:06:43     -110.055657        1.762238
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 22:44:46     -110.239037        0.996881
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 17:06:43     -110.239035        0.996881
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 22:44:46     -110.389564        0.747598
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 17:06:43     -110.389564        0.747598
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 22:44:46     -110.441199        0.818395
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 17:06:43     -110.441197        0.818395
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 22:44:47     -110.557346        0.688441
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 17:06:43     -110.557347        0.688442
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 22:44:47     -110.631225        0.497312
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 17:06:44     -110.631225        0.497311
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 22:44:47     -110.687286        0.690716
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 17:06:44     -110.687287        0.690714
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 22:44:47     -110.737884        0.729323
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 17:06:44     -110.737886        0.729322
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 22:44:47     -110.774870        0.435668
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 17:06:44     -110.774868        0.435697
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 22:44:47     -110.786663        0.199893
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 17:06:44     -110.786663        0.199899
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 22:44:47     -110.789560        0.080686
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 17:06:44     -110.789559        0.080683
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 22:44:47     -110.790038        0.058014
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 17:06:44     -110.790036        0.058014
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 22:44:47     -110.790285        0.044015
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 17:06:44     -110.790285        0.044018
 </pre></div>
 </div>
 </div>
@@ -1137,7 +1150,7 @@ BFGS:    0 22:44:46     -110.055657        1.762239
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-1.4729683596917833
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-1.472969790203258
 </pre></div>
 </div>
 </div>
@@ -1168,7 +1181,7 @@ BFGS:    0 22:44:46     -110.055657        1.762239
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/b282aa4fd1b0c564b8013f8aa680814686fcd96a64f3d84e10fd1ba15dbf5f29.png" src="../_images/b282aa4fd1b0c564b8013f8aa680814686fcd96a64f3d84e10fd1ba15dbf5f29.png" />
+<img alt="../_images/325d2ad087ac8fe424758022ab2363528f7ae21328f3d2dc9c3369f9aa3bc3b6.png" src="../_images/325d2ad087ac8fe424758022ab2363528f7ae21328f3d2dc9c3369f9aa3bc3b6.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -1211,19 +1224,19 @@ BFGS:    0 22:44:46     -110.055657        1.762239
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-BFGS:    0 22:44:51    -2981.068009        1.645285
+BFGS:    0 17:06:49    -2981.068009        1.645285
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 22:44:52    -2980.961842        6.601502
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 17:06:49    -2980.961842        6.601502
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 22:44:52    -2981.076753        0.203644
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 17:06:49    -2981.076753        0.203644
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 22:44:52    -2981.076882        0.024169
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 17:06:49    -2981.076882        0.024169
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 22:44:52    -2981.076883        0.000103
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 17:06:49    -2981.076883        0.000103
 </pre></div>
 </div>
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>np.True_
@@ -1288,16 +1301,16 @@ Zero-point energy: 0.157 eV
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-FIRE:    0 22:44:55       -3.756933        0.161999
+FIRE:    0 17:06:52       -3.756933        0.161999
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 22:44:55       -3.757594        0.110083
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 17:06:53       -3.757594        0.110083
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 22:44:55       -3.758130        0.020766
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 17:06:53       -3.758130        0.020766
 </pre></div>
 </div>
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-3.758130036994891
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-3.7581299773902463
 </pre></div>
 </div>
 </div>
@@ -1320,22 +1333,22 @@ FIRE:    0 22:44:55       -3.756933        0.161999
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-FIRE:    0 22:44:55       -5.211726        0.240058
+FIRE:    0 17:06:53       -5.211726        0.240058
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 22:44:56       -5.213070        0.131578
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 17:06:53       -5.213070        0.131577
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 22:44:56       -5.213503        0.060259
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 17:06:53       -5.213503        0.060259
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 22:44:56       -5.213528        0.051646
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 17:06:53       -5.213528        0.051646
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 22:44:56       -5.213565        0.035871
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 17:06:53       -5.213565        0.035871
 </pre></div>
 </div>
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-5.213564696643232
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-5.213564711544393
 </pre></div>
 </div>
 </div>
@@ -1361,31 +1374,31 @@ FIRE:    0 22:44:55       -5.211726        0.240058
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-FIRE:    0 22:44:56       -9.202820        0.142029
+FIRE:    0 17:06:53       -9.202820        0.142029
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 22:44:56       -9.203042        0.127498
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 17:06:54       -9.203042        0.127498
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 22:44:56       -9.203371        0.101174
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 17:06:54       -9.203371        0.101174
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 22:44:56       -9.203669        0.068563
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 17:06:54       -9.203669        0.068562
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 22:44:57       -9.203892        0.060712
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 17:06:54       -9.203892        0.060712
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    5 22:44:57       -9.204129        0.078850
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    5 17:06:54       -9.204129        0.078851
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    6 22:44:57       -9.204490        0.081599
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    6 17:06:54       -9.204490        0.081598
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    7 22:44:57       -9.204987        0.069264
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    7 17:06:54       -9.204987        0.069264
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    8 22:44:57       -9.205592        0.045645
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    8 17:06:54       -9.205592        0.045645
 </pre></div>
 </div>
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-9.205591614980058
@@ -1416,22 +1429,22 @@ FIRE:    0 22:44:56       -9.202820        0.142029
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
-FIRE:    0 22:44:57      -18.126594        0.181633
+FIRE:    0 17:06:54      -18.126594        0.181633
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 22:44:57      -18.127546        0.162952
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    1 17:06:55      -18.127546        0.162952
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 22:44:57      -18.129065        0.127293
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    2 17:06:55      -18.129065        0.127293
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 22:44:57      -18.130534        0.078069
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    3 17:06:55      -18.130534        0.078068
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 22:44:58      -18.131346        0.021485
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>FIRE:    4 17:06:55      -18.131347        0.021486
 </pre></div>
 </div>
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-18.13134633687845
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-18.13134657529703
 </pre></div>
 </div>
 </div>
@@ -1447,7 +1460,7 @@ FIRE:    0 22:44:57      -18.126594        0.181633
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-0.2338968813419351
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-0.23389692604541867
 </pre></div>
 </div>
 </div>
@@ -1465,7 +1478,7 @@ FIRE:    0 22:44:57      -18.126594        0.181633
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-0.18795686960220515
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-0.1879571974277514
 </pre></div>
 </div>
 </div>
@@ -1477,7 +1490,7 @@ FIRE:    0 22:44:57      -18.126594        0.181633
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>(-0.04594001173972995, -0.07)
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>(-0.045939728617667264, -0.07)
 </pre></div>
 </div>
 </div>
@@ -1523,6 +1536,10 @@ FIRE:    0 22:44:57      -18.126594        0.181633
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 </pre></div>
 </div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING, 1 imaginary frequencies at q = ( 0.00,  0.00,  0.00) ; (omega_q = 4.589e-09*i)
+WARNING, 1 imaginary frequencies at q = ( 0.00,  0.00,  0.00) ; (omega_q = 4.589e-09*i)
+</pre></div>
+</div>
 </div>
 </div>
 <div class="cell docutils container">
@@ -1554,7 +1571,7 @@ FIRE:    0 22:44:57      -18.126594        0.181633
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/0ad51fd60d8852b5dfa71f56d219be88e0a90d5c57297126474352d98d780448.png" src="../_images/0ad51fd60d8852b5dfa71f56d219be88e0a90d5c57297126474352d98d780448.png" />
+<img alt="../_images/4f18d409689688e006b4f1a8e0cf55f1918dfe23bc70102cf12be138bf4c6174.png" src="../_images/4f18d409689688e006b4f1a8e0cf55f1918dfe23bc70102cf12be138bf4c6174.png" />
 </div>
 </div>
 </section>
@@ -1600,52 +1617,52 @@ FIRE:    0 22:44:57      -18.126594        0.181633
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
-LBFGS:    0 22:45:06     -141.329803        3.509944
+LBFGS:    0 17:07:04     -141.329803        3.509945
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 22:45:06     -141.719926        3.515033
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 17:07:04     -141.719926        3.515033
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 22:45:06     -142.980940        2.978366
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 17:07:04     -142.980940        2.978365
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 22:45:06     -143.684051        0.968214
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 17:07:04     -143.684051        0.968214
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 22:45:06     -143.787048        1.271662
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 17:07:04     -143.787049        1.271662
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 22:45:06     -143.858776        0.874622
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 17:07:04     -143.858776        0.874620
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 22:45:07     -143.933929        0.170922
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 17:07:04     -143.933929        0.170922
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 22:45:07     -143.937115        0.152459
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 17:07:04     -143.937113        0.152456
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 22:45:07     -143.944600        0.122219
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 17:07:04     -143.944599        0.122224
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 22:45:07     -143.948831        0.109263
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 17:07:05     -143.948831        0.109263
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 22:45:07     -143.952238        0.069952
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 17:07:05     -143.952238        0.069951
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 22:45:07     -143.953715        0.080121
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 17:07:05     -143.953716        0.080118
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 22:45:07     -143.955176        0.083502
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 17:07:05     -143.955175        0.083502
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 22:45:07     -143.956799        0.066265
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 17:07:05     -143.956801        0.066266
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 22:45:07     -143.958309        0.031462
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 17:07:05     -143.958307        0.031463
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-143.95830944174895
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-143.958306580726
 </pre></div>
 </div>
 </div>
@@ -1671,40 +1688,40 @@ LBFGS:    0 22:45:06     -141.329803        3.509944
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
-LBFGS:    0 22:45:08     -141.282604        3.340431
+LBFGS:    0 17:07:05     -141.282604        3.340430
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 22:45:08     -141.659793        3.323332
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 17:07:05     -141.659793        3.323332
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 22:45:08     -142.891404        2.596621
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 17:07:05     -142.891404        2.596621
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 22:45:08     -143.418901        1.225924
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 17:07:06     -143.418901        1.225923
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 22:45:08     -143.484096        0.977171
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 17:07:06     -143.484096        0.977171
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 22:45:08     -143.606347        0.136703
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 17:07:06     -143.606345        0.136702
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 22:45:08     -143.610842        0.118714
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 17:07:06     -143.610845        0.118715
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 22:45:08     -143.613317        0.100028
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 17:07:06     -143.613316        0.100029
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 22:45:08     -143.615008        0.078403
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 17:07:06     -143.615007        0.078403
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 22:45:08     -143.616457        0.051650
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 17:07:06     -143.616456        0.051649
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 22:45:09     -143.617140        0.033181
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 17:07:06     -143.617141        0.033182
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-143.61714008444915
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>-143.61714103812346
 </pre></div>
 </div>
 </div>
@@ -1735,58 +1752,58 @@ LBFGS:    0 22:45:08     -141.282604        3.340431
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
-LBFGS:    0 22:45:09     -143.193979        3.039262
+LBFGS:    0 17:07:07     -143.193981        3.039279
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 22:45:09     -143.360196        1.460913
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 17:07:07     -143.360199        1.460897
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 22:45:10     -143.411351        0.450261
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 17:07:07     -143.411351        0.450279
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 22:45:10     -143.423399        0.447552
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 17:07:08     -143.423401        0.447562
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 22:45:10     -143.443054        0.476364
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 17:07:08     -143.443052        0.476363
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 22:45:10     -143.459318        0.378466
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 17:07:08     -143.459318        0.378459
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 22:45:11     -143.469908        0.211645
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 17:07:08     -143.469906        0.211650
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 22:45:11     -143.474781        0.177242
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 17:07:09     -143.474778        0.177234
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 22:45:11     -143.475803        0.183670
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 17:07:09     -143.475806        0.183665
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 22:45:12     -143.477284        0.178453
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 17:07:09     -143.477284        0.178469
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 22:45:12     -143.478785        0.167186
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 17:07:10     -143.478785        0.167216
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 22:45:12     -143.479386        0.095008
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 17:07:10     -143.479385        0.095005
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 22:45:13     -143.479539        0.097041
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 17:07:10     -143.479537        0.097039
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 22:45:13     -143.479787        0.100272
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 17:07:11     -143.479789        0.100289
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 22:45:13     -143.480347        0.124773
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 17:07:11     -143.480347        0.124788
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 22:45:14     -143.481008        0.092764
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 17:07:11     -143.481008        0.092774
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 22:45:14     -143.481432        0.050549
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 17:07:12     -143.481432        0.050548
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 22:45:14     -143.481735        0.040571
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 17:07:12     -143.481735        0.040566
 </pre></div>
 </div>
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>np.True_
@@ -1803,7 +1820,7 @@ LBFGS:    0 22:45:09     -143.193979        3.039262
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/36ec9a140a6420860f7e3bb193774e280d2a43feca92993bf09a0c4df5d2f08d.png" src="../_images/36ec9a140a6420860f7e3bb193774e280d2a43feca92993bf09a0c4df5d2f08d.png" />
+<img alt="../_images/2fd969086d63ced5cfac67098d5dea6ca93aeb7e8af8aa70311847949ac4679b.png" src="../_images/2fd969086d63ced5cfac67098d5dea6ca93aeb7e8af8aa70311847949ac4679b.png" />
 </div>
 </div>
 <p>This could be a good initial guess to initialize an NEB in DFT.</p>
@@ -1885,6 +1902,24 @@ LBFGS:    0 22:45:09     -143.193979        3.039262
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="summary.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">UMA tutorials</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../core/generative_models.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Generative Models</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               
