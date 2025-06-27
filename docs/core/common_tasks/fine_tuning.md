@@ -13,7 +13,7 @@ python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir <pat
 
 * The `uma-task` can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs.
 
-* The `regression-task` can be one of e, ef, efs (energy, energy+force, energy+force+stress)
+* The `regression-task` can be one of e, ef, efs (energy, energy+force, energy+force+stress), depending on the data you have available in the ASE db. For example, some aperiodic DFT codes only support energy/forces and not gradients, and some very fancy codes like QMC only produce energies. Note that even if you train on just energy or energy/forces, all gradients (forces/stresses) will be computable via the model gradients.
 
 This will generate a folder of lmdbs and the a `uma_sm_finetune_template.yaml` that you can run directly with the fairchem cli to start training.
 
