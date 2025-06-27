@@ -116,6 +116,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
             for task_config in checkpoint.tasks_config
         ]
         self.tasks = {t.name: t for t in tasks}
+        for task in self.tasks.values():
+            task.normalizer.to(dtype=torch.float)
+            if task.element_references is not None:
+                task.element_references.to(dtype=torch.float)
 
         self.dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
         assert set(self.dataset_to_tasks.keys()).issubset(
