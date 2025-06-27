@@ -19,7 +19,7 @@ This will generate a folder of lmdbs and the a `uma_sm_finetune_template.yaml` t
 
 If you want to only create the aselmdbs, you can use `src/fairchem/core/scripts/create_finetune_dataset.py` which is called by `create_uma_finetune_dataset.py`.
 
-## Runing training
+## Model fine-tuning (default settings)
 The previous step should have generated some yaml files to get you started on finetuning. You can simply run this with the `fairchem` cli. The default is configured to run locally on a 1 GPU.
 
 ```
