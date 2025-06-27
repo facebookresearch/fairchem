@@ -11,7 +11,7 @@ Run this script to create the aselmdbs as well as a set of templated yamls for f
 python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir <path/to/train_ases> --val-dir <path/to/val_ases> --output-dir <path/to/output_dir> --uma-task <uma-task for finetuning> --regression-task <regression-task for finetuning>
 ```
 
-* The `uma-task` can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated (feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs).
+* The `uma-task` can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs.
 
 * The `regression-task` can be one of e, ef, efs (energy, energy+force, energy+force+stress)
 
