@@ -23,7 +23,7 @@ If you want to only create the aselmdbs, you can use `src/fairchem/core/scripts/
 The previous step should have generated some yaml files to get you started on finetuning. You can simply run this with the `fairchem` cli. The default is configured to run locally on a 1 GPU.
 
 ```
-fairchem -c <path/to/uma_sm_finetune_template.yaml>
+fairchem -c configs/uma/finetune/uma_sm_finetune_template.yaml
 ```
 
 ## Advanced configuration
