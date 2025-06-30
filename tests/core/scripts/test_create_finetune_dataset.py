@@ -7,6 +7,7 @@ import tempfile
 
 import numpy as np
 import pytest
+import torch
 from ase import Atoms
 from ase.build import bulk, molecule
 from ase.io import write
@@ -236,6 +237,7 @@ def test_create_finetune_dataset(type, random_state):
 )
 def test_e2e_finetuning_bulks(reg_task, type):
     with tempfile.TemporaryDirectory() as tmpdirname:
+        torch.cuda.empty_cache()
         # create a bulks dataset
         create_dataset(
             type=type, n_structures=100, train_ratio=0.8, output_dir=tmpdirname
