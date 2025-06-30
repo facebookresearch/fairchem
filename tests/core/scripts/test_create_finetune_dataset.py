@@ -268,6 +268,7 @@ def test_e2e_finetuning_bulks(reg_task, type):
             f"{generated_dataset_dir}/uma_sm_finetune_template.yaml",
             f"job.run_dir={run_dir}",
             f"+job.timestamp_id={job_dir_id}",
+            "batch_size=1",
         ]
         subprocess.run(train_cmd, check=True)
         checkpoint_path = os.path.join(
