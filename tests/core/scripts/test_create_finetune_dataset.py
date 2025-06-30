@@ -93,7 +93,11 @@ def generate_fake_forces(atoms):
 
 
 def create_dataset(
-    type, n_structures=1000, train_ratio=0.8, output_dir="bulk_structures"
+    type,
+    n_structures=1000,
+    train_ratio=0.8,
+    output_dir="bulk_structures",
+    random_state=42,
 ):
     """
     Create a dataset of random bulk structures with train/validation split.
@@ -149,7 +153,7 @@ def create_dataset(
 
     # Split into train and validation sets
     train_structures, val_structures = train_test_split(
-        structures, train_size=train_ratio, random_state=42
+        structures, train_size=train_ratio, random_state=random_state
     )
 
     print(f"Saving {len(train_structures)} training structures...")
@@ -182,16 +186,21 @@ def create_dataset(
 
 
 @pytest.mark.parametrize(
-    "type",
+    "type, random_state",
     [
-        ("bulk"),
-        ("molecule"),
+        ("bulk", 42),
+        ("bulk", 49),
+        ("molecule", 999),
     ],
 )
-def test_create_finetune_dataset(type):
+def test_create_finetune_dataset(type, random_state):
     with tempfile.TemporaryDirectory() as tmpdirname:
         create_dataset(
-            type=type, n_structures=100, train_ratio=0.8, output_dir=tmpdirname
+            type=type,
+            n_structures=100,
+            train_ratio=0.8,
+            output_dir=tmpdirname,
+            random_state=random_state,
         )
         create_dataset_command = [
             "python",

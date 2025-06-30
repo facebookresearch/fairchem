@@ -5,8 +5,17 @@ This repo provides a number of scripts to quickly fine-tune a model using a cust
 ## Generating training/fine-tuning datasets
 First we need to generate a dataset in the aselmdb format for finetuning. The only requirement is you need to have input files that can be read as ASE atoms object by the ase.io.read routine and that they contain energy (forces, stress) in the correct format. For concrete examples refer to this to the test at `tests/core/scripts/test_create_finetune_dataset.py`.
 
-Run this script to create the aselmdbs as well as a set of templated yamls for finetuning
+First you should checkout the fairchem repo and install it to access the scripts
 
+```
+git clone git@github.com:facebookresearch/fairchem.git
+
+cd fairchem
+
+pip install -e src/packages/fairchem-core[dev]
+```
+
+Run this script to create the aselmdbs as well as a set of templated yamls for finetuning
 ```
 python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir <path/to/train_ases> --val-dir <path/to/val_ases> --output-dir <path/to/output_dir> --uma-task <uma-task for finetuning> --regression-task <regression-task for finetuning>
 ```
