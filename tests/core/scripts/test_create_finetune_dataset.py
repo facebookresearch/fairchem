@@ -8,7 +8,7 @@ import tempfile
 import numpy as np
 import pytest
 from ase import Atoms
-from ase.build import bulk
+from ase.build import bulk, molecule
 from ase.io import write
 from sklearn.model_selection import train_test_split
 
@@ -275,7 +275,17 @@ def test_e2e_finetuning_bulks(reg_task, type):
         # try loading this checkpoint and run inference
         predictor = load_predict_unit(checkpoint_path)
         calc = FAIRChemCalculator(predictor, task_name="omat")
-        atoms = bulk("Fe")
-        atoms.calc = calc
-        energy = atoms.get_potential_energy()
-        assert energy != 0
+        if type == "bulk":
+            atoms = bulk("Fe")
+            atoms.calc = calc
+            energy = atoms.get_potential_energy()
+            assert energy != 0
+        elif type == "molecule":
+            atoms = molecule("H2O")
+            atoms.calc = calc
+            energy = atoms.get_potential_energy()
+            assert energy != 0
+            forces = atoms.get_forces()
+            assert forces[0].mean() != 0
+        else:
+            raise AssertionError("type unknown!")
