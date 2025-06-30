@@ -1,3 +1,16 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.17.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
 # Fine-tuning
 
 This repo provides a number of scripts to quickly fine-tune a model using a custom ASE LMDB dataset. These scripts are merely for convenience and finetuning uses the exact same tooling and infra as our standard training (See Training section). Training in the fairchem repo uses the fairchem cli tool and configs are in [Hydra yaml](https://hydra.cc/) format. Training dataset must be in the [ASE-lmdb format](https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect). For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats as such (cifs, traj, extxyz etc) as well as a finetuning yaml config that can be directly used for finetuning.
@@ -7,7 +20,8 @@ First we need to generate a dataset in the aselmdb format for finetuning. The on
 
 First you should checkout the fairchem repo and install it to access the scripts
 
-```
+```{code-cell} ipython3
+:tags: [skip-execution]
 git clone git@github.com:facebookresearch/fairchem.git
 
 cd fairchem
@@ -15,9 +29,9 @@ cd fairchem
 pip install -e src/packages/fairchem-core[dev]
 ```
 
-Run this script to create the aselmdbs as well as a set of templated yamls for finetuning
-```
-python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir <path/to/train_ases> --val-dir <path/to/val_ases> --output-dir <path/to/output_dir> --uma-task <uma-task for finetuning> --regression-task <regression-task for finetuning>
+Run this script to create the aselmdbs as well as a set of templated yamls for finetuning, we will use a few dummy structures for demonstration purposes
+```{code-cell} ipython3
+! python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir docs/core/common_tasks/finetune_assets/train/ --val-dir docs/core/common_tasks/finetune_assets/val --output-dir /tmp/bulk --uma-task=omat --regression-task e
 ```
 
 * The `uma-task` can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs.
@@ -31,8 +45,9 @@ If you want to only create the aselmdbs, you can use `src/fairchem/core/scripts/
 ## Model fine-tuning (default settings)
 The previous step should have generated some yaml files to get you started on finetuning. You can simply run this with the `fairchem` cli. The default is configured to run locally on a 1 GPU.
 
-```
-fairchem -c configs/uma/finetune/uma_sm_finetune_template.yaml
+```{code-cell} ipython3
+:tags: [skip-execution]
+! fairchem -c /tmp/bulk/uma_sm_finetune_template.yaml
 ```
 
 ## Advanced configuration
@@ -40,8 +55,8 @@ The scripts provide a simple way to get started on finetuning, but likely for yo
 
 To modify the generated yamls, you can either edit the files directly or use [hydra override notation](https://hydra.cc/docs/advanced/override_grammar/basic/). For example, changing a few parameters is very simple to do on the command line
 
-```
-fairchem -c <path/to/uma_sm_finetune_template.yaml> epochs=2 lr=2e-4 job.run_dir=/tmp/your_dir
+```{code-cell} ipython3
+! fairchem -c /tmp/bulk/uma_sm_finetune_template.yaml epochs=2 lr=2e-4 job.run_dir=/tmp/finetune_dir +job.timestamp_id=some_id
 ```
 
 The basic yaml configuration looks like the following:
@@ -102,20 +117,21 @@ To train with multi-node on an SLURM cluster, you need to change `job.scheduler.
 
 ### Resuming runs
 
-To resume from a checkpoint in the middle of a run, find the checkpoint folder at the step you want and simply run:
+To resume from a checkpoint in the middle of a run, find the checkpoint folder at the step you want and use the same fairchem command, eg:
 
-```
-fairchem -c /path/to/checkpoints/step_xxxx/resume.yaml
+```{code-cell} ipython3
+:tags: [skip-execution]
+! fairchem -c /tmp/finetune_dir/some_id/checkpoints/final/resume.yaml
 ```
 
 ### Running inference on the finetuned model
 
 Inference is run in the same way as the UMA models, except you need to load the checkpoint from a local path. You must also use the same task that you used for finetuning:
 
-```
+```{code-cell} ipython3
 from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core import FAIRChemCalculator
 
-predictor = load_predict_unit("/path/to/inference_ckpt.pt")
-calc = FAIRChemCalculator(predictor, task_name=task)
+predictor = load_predict_unit("/tmp/finetune_dir/some_id/checkpoints/final/inference_ckpt.pt")
+calc = FAIRChemCalculator(predictor, task_name="omat")
 ```
