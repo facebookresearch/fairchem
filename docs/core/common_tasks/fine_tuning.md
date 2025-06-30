@@ -84,8 +84,8 @@ runner ...
 ```
 
 * `max_neighbors`: the number of neighbors used for the equivariant SO2 convolutions. 300 is the default used in uma training but if you don't have alot of memory, 100 is usually fine to ensure smoothness of the potential (see the [ESEN paper](https://arxiv.org/abs/2502.12147)).
-* `epochs`, `steps`: choose to either run for integer number of epochs or steps, only 1 can be step, the other must be null
-* `batch_size`: in this configuration we use the batch sampler, you can start with choosing the largest batch size that can fit on your system without running out of memory. However, you don't want to use a batch size so large such that you complete training in very few training steps
+* `epochs`, `steps`: choose to either run for integer number of epochs or steps, only 1 can be specified, the other must be null
+* `batch_size`: in this configuration we use the batch sampler, you can start with choosing the largest batch size that can fit on your system without running out of memory. However, you don't want to use a batch size so large such that you complete training in very few training steps. The optimal batch size is usually the one that minimizes the final validation loss for a fixed compute budget.
 * `lr`, `weight_decay`: these are standard learning parameters, the recommended values we use are the defaults
 
 ### Logging and Artifacts
