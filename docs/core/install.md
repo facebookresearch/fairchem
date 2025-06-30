@@ -21,6 +21,21 @@ pip install fairchem-core
 
 In V2, we removed all dependencies on 3rd party libraries such as torch-geometric, pyg, torch-scatter, torch-sparse etc that made installation difficult. So no additional steps are required!
 
+## Subpackages
+
+In addition to `fairchem-core`, there are related packages for specialized tasks or applications. Each can be installed with `pip` or `uv` just like `fairchem-core`:
+* `fairchem-data-oc`
+* `fairchem-applications-cattsunami`
+* `fairchem-demo-ocpapi`
+
+## Access to gated models on huggingface
+
+To access gated models like UMA, you need to get a HuggingFace account and request access to the UMA models.
+
+1. Get and login to your Huggingface account
+2. Request access to https://huggingface.co/facebook/UMA
+3. Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+4. Add the token as an environment variable (using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
 
 ## License
 
