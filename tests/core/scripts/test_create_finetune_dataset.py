@@ -269,6 +269,7 @@ def test_e2e_finetuning_bulks(reg_task, type):
             f"job.run_dir={run_dir}",
             f"+job.timestamp_id={job_dir_id}",
             "batch_size=1",
+            "max_neighbors=50",
         ]
         subprocess.run(train_cmd, check=True)
         checkpoint_path = os.path.join(
