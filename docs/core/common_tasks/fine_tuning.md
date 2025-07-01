@@ -24,15 +24,16 @@ First you should checkout the fairchem repo and install it to access the scripts
 :tags: [skip-execution]
 git clone git@github.com:facebookresearch/fairchem.git
 
-cd fairchem
-
-pip install -e src/packages/fairchem-core[dev]
+pip install -e fairchem/src/packages/fairchem-core[dev]
 ```
 
 Run this script to create the aselmdbs as well as a set of templated yamls for finetuning, we will use a few dummy structures for demonstration purposes
 ```{code-cell} ipython3
+import os
+os.chdir('../../../../fairchem')
 ! python src/fairchem/core/scripts/create_uma_finetune_dataset.py --train-dir docs/core/common_tasks/finetune_assets/train/ --val-dir docs/core/common_tasks/finetune_assets/val --output-dir /tmp/bulk --uma-task=omat --regression-task e
 ```
+
 
 * The `uma-task` can be one of the uma tasks: ie: `omol`, `odac`, `oc20`, `omat`, `omc`. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs.
 
