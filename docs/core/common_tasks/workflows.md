@@ -31,7 +31,7 @@ result = elastic_tensor_flow(
     job_params={
         "all": dict(
             method="fairchem",
-            name_or_path="uma-s-1",
+            name_or_path="uma-s-1p1",
             task_name="omat",
         ),
     },
