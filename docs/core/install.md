@@ -1,5 +1,7 @@
 # Installation & License
 
+## Installation
+
 To install `fairchem-core` you will need to setup the `fairchem-core` environment. We support either pip or uv. Conda is no longer supported and has also been dropped by pytorch itself. Note you can still create environments with conda and use pip to install the packages.
 
 **Note FairchemV2 is a major breaking changing from FairchemV1. If you are looking for old V1 code, you will need install v1 (`pip install fairchem-core==1.10`)**
@@ -17,14 +19,40 @@ Then to install the fairchem package, you can simply use pip:
 pip install fairchem-core
 ```
 
+#### For developers that want to contribute to fairchem, clone the repo and install it in edit mode
+
+```
+git clone git@github.com:facebookresearch/fairchem.git
+
+cd fairchem
+
+pip install -e src/packages/fairchem-core[dev]
+```
+
+
 In V2, we removed all dependencies on 3rd party libraries such as torch-geometric, pyg, torch-scatter, torch-sparse etc that made installation difficult. So no additional steps are required!
 
+## Subpackages
 
-# License
+In addition to `fairchem-core`, there are related packages for specialized tasks or applications. Each can be installed with `pip` or `uv` just like `fairchem-core`:
+* `fairchem-data-oc`
+* `fairchem-applications-cattsunami`
+* `fairchem-demo-ocpapi`
 
-## Repository software
+## Access to gated models on huggingface
 
-The software in this repo is licensed under an MIT license unless otherwise specified. 
+To access gated models like UMA, you need to get a HuggingFace account and request access to the UMA models.
+
+1. Get and login to your Huggingface account
+2. Request access to https://huggingface.co/facebook/UMA
+3. Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+4. Add the token as an environment variable (using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+
+## License
+
+### Repository software
+
+The software in this repo is licensed under an MIT license unless otherwise specified.
 
 ```
 MIT License
@@ -50,5 +78,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Model checkpoints and datasets
+### Model checkpoints and datasets
+
 Please check each dataset and model for their own licenses.

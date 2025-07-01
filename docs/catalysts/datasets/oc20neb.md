@@ -1,5 +1,18 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.17.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
 
-# Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
+Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
+======================================================
 
 ## Overview
 This is a validation dataset which was used to assess model performance in [CatTSunami: Accelerating Transition State Energy Calculations with Pre-trained Graph Neural Networks](https://arxiv.org/abs/2405.02078). It is comprised of 932 NEB relaxation trajectories. There are three different types of reactions represented: desorptions, dissociations, and transfers. NEB calculations allow us to find transition states. The rate of reaction is determined by the transition state energy, so access to transition states is very important for catalysis research. For more information, check out the paper.
@@ -20,7 +33,11 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
 
-```python
+```{code-cell} ipython3
+from __future__ import annotations
+
+!wget https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/desorption_id_83_2409_9_111-4_neb1.0.traj
+
 from ase.io import read
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
@@ -38,25 +55,36 @@ relaxed_frames = traj[-10:]
 ## Use
 One more note: We have not prepared an lmdb for this dataset. This is because it is NEB calculations are not supported directly in ocp. You must use the ase native OCP class along with ase infrastructure to run NEB calculations. Here is an example of a use:
 
-```python
+```{code-cell} ipython3
+import os 
+
 from ase.io import read
+from ase.mep import DyNEB
 from ase.optimize import BFGS
-from fairchem.applications.cattsunami.core import OCPNEB
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
-neb_frames = traj[0:10]
-neb = OCPNEB(
-    neb_frames,
-    checkpoint_path=YOUR_CHECKPOINT_PATH,
-    k=k,
-    batch_size=8,
-)
+images = traj[0:10]
+predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+
+neb = DyNEB(images, k=1)
+for image in images:
+    image.calc = FAIRChemCalculator(predictor, task_name="oc20")
+
 optimizer = BFGS(
     neb,
-    trajectory=f"test_neb.traj",
+    trajectory="neb.traj",
 )
-conv = optimizer.run(fmax=0.45, steps=200)
+
+# Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
+    optimization_steps = 20
+else:
+    optimization_steps = 300
+
+conv = optimizer.run(fmax=0.45, steps=optimization_steps)
 if conv:
     neb.climb = True
-    conv = optimizer.run(fmax=0.05, steps=300)
+    conv = optimizer.run(fmax=0.05, steps=optimization_steps)
 ```

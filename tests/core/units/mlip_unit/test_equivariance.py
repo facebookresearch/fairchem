@@ -11,7 +11,7 @@ from e3nn.o3 import rand_matrix
 from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 # Test equivariance in both fp32 and fp64
 # If error in equivariance is due to numerical error in fp
@@ -93,11 +93,10 @@ def equivariance_on_pt(
         predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
         predictor.model = predictor.model.to(dtype)
 
-        sample = a2g(db.get_atoms(sample_idx))
+        sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         sample.pos += 500
         sample.cell *= 2000
         sample.cell = sample.cell.to(dtype)
-        sample["dataset"] = "oc20"
         batch = data_list_collater([sample], otf_graph=True)
 
         original_positions = batch.pos.clone().to(dtype)
@@ -108,8 +107,8 @@ def equivariance_on_pt(
         for _ in range(n_repeats):
             batch.pos = original_positions.clone()
             out = predictor.predict(batch)
-            energies.append(out["oc20_energy"])
-            forces.append(out.get("forces", out.get("oc20_forces")))
+            energies.append(out["energy"])
+            forces.append(out.get("forces"))
 
         force_var = torch.stack(forces).var(dim=0).max()
         energy_var = torch.stack(energies).var()
@@ -125,8 +124,8 @@ def equivariance_on_pt(
         for rotation in rotations:
             batch.pos = original_positions.clone() @ rotation
             out = predictor.predict(batch)
-            energies.append(out["oc20_energy"])
-            forces.append(out.get("forces", out.get("oc20_forces")) @ rotation.T)
+            energies.append(out["energy"])
+            forces.append(out.get("forces") @ rotation.T)
 
         force_var = torch.stack(forces).var(dim=0).max()
         energy_var = torch.stack(energies).var()

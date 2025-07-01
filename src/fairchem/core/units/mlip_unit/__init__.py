@@ -16,7 +16,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     guess_inference_settings,
 )
-from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit.predict import MLIPPredictUnit
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,6 +27,7 @@ def load_predict_unit(
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
+    atom_refs: dict | None = None,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -37,6 +38,7 @@ def load_predict_unit(
             use a custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
+        atom_refs: Optional dictionary of isolated atom reference energies.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -53,5 +55,6 @@ def load_predict_unit(
         path,
         device=device,
         inference_settings=inference_settings,
-        overrides={"backbone": {"always_use_pbc": False}},
+        overrides=overrides,
+        atom_refs=atom_refs,
     )
