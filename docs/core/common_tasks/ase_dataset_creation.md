@@ -1,10 +1,23 @@
 
-# Making datasets
+# FAIRChem & Custom Datasets
+
+## Datasets in `fairchem`:
+`fairchem` provides training and evaluation code for tasks and models that take arbitrary
+chemical structures as input to predict energies / forces / positions / stresses,
+and can be used as a base scaffold for research projects. For an overview of
+tasks, data, and metrics, please read the documentations and respective papers:
+ - [OC20](catalysts/datasets/oc20)
+ - [OC22](catalysts/datasets/oc22)
+ - [ODAC23](dac/datasets/odac)
+ - [OC20Dense](catalysts/datasets/oc20dense)
+ - [OC20NEB](catalysts/datasets/oc20neb)
+ - [OMat24](inorganic_materials/datasets/omat24)
+ - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
+
 
 There are multiple ways to train and evaluate FAIRChem models on data other than OC20 and OC22. Writing an LMDB is the most performant option. However, ASE-based dataset formats are also included as a convenience for people with existing data who simply want to try fairchem tools without needing to learn about LMDBs.
 
-
-## Using an ASE Database
+## Custom ASE Databases
 
 If your data is already in an [ASE Database](https://databases.fysik.dtu.dk/ase/ase/db/db.html), no additional preprocessing is necessary before running training/prediction! Although the ASE DB backends may not be sufficiently high throughput for all use cases, they are generally considered "fast enough" to train on a reasonably-sized dataset with 1-2 GPUs or predict with a single GPU. If you want to effictively utilize more resources than this, please be aware of the potential for this bottleneck and consider writing your data to an LMDB. If your dataset is small enough to fit in CPU memory, use the `keep_in_memory: True` option to avoid this bottleneck.
 

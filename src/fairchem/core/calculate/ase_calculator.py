@@ -32,14 +32,14 @@ from fairchem.core.units.mlip_unit.api.inference import (
 if TYPE_CHECKING:
     from ase import Atoms
 
-    from fairchem.core.units.mlip_unit.mlip_unit import MLIPPredictUnit
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
 class FAIRChemCalculator(Calculator):
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,
-        task_name: UMATask | None = None,
+        task_name: UMATask | str | None = None,
         seed: int = 41,
     ):
         """
@@ -47,7 +47,7 @@ class FAIRChemCalculator(Calculator):
 
         Args:
             predict_unit (MLIPPredictUnit): A pretrained MLIPPredictUnit.
-            task_name (UMATask, optional): Name of the task to use if using a UMA checkpoint.
+            task_name (UMATask or str, optional): Name of the task to use if using a UMA checkpoint.
                 Determines default key names for energy, forces, and stress.
                 Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
             seed (int, optional): Random seed for reproducibility. Defaults to 42.
@@ -61,7 +61,6 @@ class FAIRChemCalculator(Calculator):
         """
 
         super().__init__()
-        self.implemented_properties = []
 
         # check that external graph gen is not set!
         if predict_unit.inference_mode.external_graph_gen is not False:
@@ -75,30 +74,37 @@ class FAIRChemCalculator(Calculator):
                 "energy surface and energy conservation errors."
             )
 
-        self.predictor = predict_unit
-        self.predictor.seed(seed)
-
-        self.calc_property_to_model_key_mapping = {}
-        logging.debug(f"Available task names: {self.predictor.datasets}")
+        if isinstance(task_name, UMATask):
+            task_name = task_name.value
 
         if task_name is not None:
             assert (
-                task_name in self.predictor.datasets
-            ), f"Given: {task_name}, Valid options are {self.predictor.datasets}"
+                task_name in predict_unit.datasets
+            ), f"Given: {task_name}, Valid options are {predict_unit.datasets}"
             self._task_name = task_name
-        elif len(self.predictor.datasets) == 1:
-            self._task_name = self.predictor.datasets[0]
+        elif len(predict_unit.datasets) == 1:
+            self._task_name = predict_unit.datasets[0]
         else:
             raise RuntimeError(
-                f"A task name must be provided. Valid options are {self.predictor.datasets}"
+                f"A task name must be provided. Valid options are {predict_unit.datasets}"
             )
 
-        self._reset_calc_key_mapping(self._task_name)
+        self.implemented_properties = [
+            task.property for task in predict_unit.dataset_to_tasks[self.task_name]
+        ]
+        if "energy" in self.implemented_properties:
+            self.implemented_properties.append(
+                "free_energy"
+            )  # Free energy is a copy of energy, see docstring above
+
+        self.predictor = predict_unit
+        self.predictor.seed(seed)
 
         self.a2g = partial(
             AtomicData.from_ase,
             max_neigh=self.predictor.model.module.backbone.max_neighbors,
             radius=self.predictor.model.module.backbone.cutoff,
+            task_name=self.task_name,
             r_edges=False,
             r_data_keys=["spin", "charge"],
         )
@@ -152,28 +158,6 @@ class FAIRChemCalculator(Calculator):
     def task_name(self) -> str:
         return self._task_name
 
-    def _reset_calc_key_mapping(self, task_name: str) -> None:
-        """
-        Create a map of calculator keys to predictor output keys based on whats available in the model.
-
-        Args:
-            task_name (str): The name of the task to use.
-        """
-        implemented_properties = set()
-        self.calc_property_to_model_key_mapping.clear()
-
-        for model_task_name, model_task in self.predictor.tasks.items():
-            if task_name in model_task.datasets:
-                for calc_key in ["energy", "forces", "stress"]:
-                    if calc_key == model_task.property:
-                        self.calc_property_to_model_key_mapping[calc_key] = (
-                            model_task_name
-                        )
-                        implemented_properties.add(calc_key)
-                        if calc_key == "energy":
-                            implemented_properties.add("free_energy")
-        self.implemented_properties = list(implemented_properties)
-
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
         """
         Check for any system changes since the last calculation.
@@ -206,15 +190,13 @@ class FAIRChemCalculator(Calculator):
             - `spin` must be an integer representing the spin multiplicity and can range from 0 to 100.
             - If `task_name="omol"`, and `charge` or `spin` are not set in `atoms.info`, they will default to `0`.
             - `charge` and `spin` are currently only used for the `omol` head.
-            - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy. It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
+            - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy.
+              It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """
-        assert (
-            self.task_name is not None
-        ), "You must set a task name before attempting to use the calculator"
 
         # Our calculators won't work if natoms=0
         if len(atoms) == 0:
-            raise NoAtoms
+            raise ValueError("Atoms object has no atoms inside.")
 
         # Check if the atoms object has periodic boundary conditions (PBC) set correctly
         self._check_atoms_pbc(atoms)
@@ -225,32 +207,62 @@ class FAIRChemCalculator(Calculator):
         # Standard call to check system_changes etc
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        # Convert using the current a2g object
-        data_object = self.a2g(atoms)
-        data_object.dataset = self.task_name
+        if len(atoms) == 1 and sum(atoms.pbc) == 0:
+            self.results = self._get_single_atom_energies(atoms)
+        else:
+            # Convert using the current a2g object
+            data_object = self.a2g(atoms)
 
-        # Batch and predict
-        batch = data_list_collater([data_object], otf_graph=True)
-        pred = self.predictor.predict(
-            batch,
+            # Batch and predict
+            batch = data_list_collater([data_object], otf_graph=True)
+            pred = self.predictor.predict(batch)
+
+            # Collect the results into self.results
+            self.results = {}
+            for calc_key in self.implemented_properties:
+                if calc_key == "energy":
+                    energy = float(pred[calc_key].detach().cpu().numpy()[0])
+
+                    self.results["energy"] = self.results["free_energy"] = (
+                        energy  # Free energy is a copy of energy
+                    )
+                if calc_key == "forces":
+                    forces = pred[calc_key].detach().cpu().numpy()
+                    self.results["forces"] = forces
+                if calc_key == "stress":
+                    stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
+                    stress_voigt = full_3x3_to_voigt_6_stress(stress)
+                    self.results["stress"] = stress_voigt
+
+    def _get_single_atom_energies(self, atoms) -> dict:
+        """
+        Populate output with single atom energies
+        """
+        if self.predictor.atom_refs is None:
+            raise ValueError(
+                "Single atom system but no atomic references present. "
+                "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
+                "with an appropriate checkpoint name."
+            )
+        logging.warning(
+            "Single atom systems are not handled by the model; "
+            "the precomputed DFT result is returned. "
+            "Spin multiplicity is ignored for monoatomic systems."
         )
+        elt = atoms.get_atomic_numbers()[0]
+        results = {}
 
-        # Collect the results into self.results
-        self.results = {}
-        for calc_key, predictor_key in self.calc_property_to_model_key_mapping.items():
-            if calc_key == "energy":
-                energy = float(pred[predictor_key].detach().cpu().numpy()[0])
-
-                self.results["energy"] = self.results["free_energy"] = (
-                    energy  # Free energy is a copy of energy
-                )
-            if calc_key == "forces":
-                forces = pred[predictor_key].detach().cpu().numpy()
-                self.results["forces"] = forces
-            if calc_key == "stress":
-                stress = pred[predictor_key].detach().cpu().numpy().reshape(3, 3)
-                stress_voigt = full_3x3_to_voigt_6_stress(stress)
-                self.results["stress"] = stress_voigt
+        atom_refs = self.predictor.atom_refs[self.task_name]
+        try:
+            energy = atom_refs.get(int(elt), {}).get(atoms.info["charge"])
+        except AttributeError:
+            energy = atom_refs[int(elt)]
+        if energy is None:
+            raise ValueError("This model has not stored this element with this charge.")
+        results["energy"] = energy
+        results["forces"] = np.array([[0.0] * 3])
+        results["stress"] = np.array([0.0] * 6)
+        return results
 
     def _check_atoms_pbc(self, atoms) -> None:
         """
@@ -318,7 +330,8 @@ class MixedPBCError(ValueError):
 
     def __init__(
         self,
-        message="Attempted to guess PBC for an atoms object, but the atoms object has PBC set to True for some dimensions but not others. Please ensure that the atoms object has PBC set to True for all dimensions.",
+        message="Attempted to guess PBC for an atoms object, but the atoms object has PBC set to True for some"
+        "dimensions but not others. Please ensure that the atoms object has PBC set to True for all dimensions.",
     ):
         self.message = message
         super().__init__(self.message)
@@ -329,18 +342,8 @@ class AllZeroUnitCellError(ValueError):
 
     def __init__(
         self,
-        message="Atoms object claims to have PBC set, but the unit cell is identically 0. Please ensure that the atoms object has a non-zero unit cell.",
-    ):
-        self.message = message
-        super().__init__(self.message)
-
-
-class NoAtoms(ValueError):
-    """Specific exception example."""
-
-    def __init__(
-        self,
-        message="Atoms object has no atoms inside.",
+        message="Atoms object claims to have PBC set, but the unit cell is identically 0. Please ensure that the atoms"
+        "object has a non-zero unit cell.",
     ):
         self.message = message
         super().__init__(self.message)

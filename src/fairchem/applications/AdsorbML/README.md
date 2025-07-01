@@ -2,7 +2,7 @@
 
 ![adsorbml](https://user-images.githubusercontent.com/45150244/213025581-498b459e-9077-42ac-84e1-65ef331555d2.png)
 
-`AdsorbML` is an algorithm to calculating the minima adsorbate binding energy (adsorption energy) for a unique adsorbate+surface combination. All ML models are obtained from [`ocp`](https://github.com/Open-Catalyst-Project/ocp) to perform corresponding structure relaxations.
+`AdsorbML` is an algorithm to calculating the minima adsorbate binding energy (adsorption energy) for a unique adsorbate+surface combination. All ML models are obtained from [`fairchem`](https://fair-chem.github.io/) to perform corresponding structure relaxations.
 
 This repository holds the dataset, scripts, and downloads for the accompanying [paper](https://arxiv.org/abs/2211.16486).
 
