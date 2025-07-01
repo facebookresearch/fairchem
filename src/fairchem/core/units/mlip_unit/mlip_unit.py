@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import numpy as np
 import torch
+import torch.distributed.checkpoint as dcp
+from omegaconf import OmegaConf
 from torch.distributed.checkpoint.format_utils import dcp_to_torch_save
 from torch.distributed.checkpoint.state_dict import (
     get_model_state_dict,
@@ -43,6 +45,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
+from fairchem.core.components.train.train_runner import Checkpointable
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
 from fairchem.core.modules.normalization.element_references import (  # noqa: TCH001
@@ -58,6 +61,12 @@ from fairchem.core.units.mlip_unit.utils import load_inference_model
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
+
+# this is a config generated on the fly and can be used to resume a run for a given checkpoint
+UNIT_RESUME_CONFIG = "resume.yaml"
+
+# this represents the inference only checkpoint generated at each checkpoint
+UNIT_INFERENCE_CHECKPOINT = "inference_ckpt.pt"
 
 
 @dataclass
@@ -84,6 +93,20 @@ class Task:
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
+
+
+DEFAULT_EXCLUDE_KEYS = [
+    "id",  # only oc20,oc22 have this
+    "fid",  # only oc20,oc22 have this
+    "absolute_idx",  # only ani has this
+    "target_pos",  # only ani has this
+    "ref_energy",  # only ani/geom have this
+    "pbc",  # only ani/transition1x have this
+    "nads",  # oc22
+    "oc22",  # oc22
+    "formation_energy",  # spice
+    "total_charge",  # spice
+]
 
 
 def convert_train_checkpoint_to_inference_checkpoint(
@@ -343,7 +366,9 @@ def compute_metrics(
     return metrics
 
 
-def mt_collater_adapter(tasks: list[Task], exclude_keys: list[str]):
+def mt_collater_adapter(
+    tasks: list[Task], exclude_keys: list[str] = DEFAULT_EXCLUDE_KEYS
+):
     # this is required because the MTCollater needs the old json formated task config so we need to convert it here
     task_config_old = {}
     for task in tasks:
@@ -376,7 +401,9 @@ def _get_consine_lr_scheduler(
     scheduler_steps = int(epochs * n_iters_per_epoch) if steps is None else steps
     # fixed function for constructing a LambdaLR scheduler
     lambda_fn = CosineLRLambda(
-        warmup_epochs=int(warmup_epochs * n_iters_per_epoch),
+        warmup_epochs=max(
+            int(warmup_epochs * n_iters_per_epoch), 1
+        ),  # this cannot be 0
         warmup_factor=warmup_factor,
         epochs=scheduler_steps,
         lr_min_factor=lr_min_factor,
@@ -446,7 +473,9 @@ def set_sampler_state(state: State, epoch: int, step_start: int) -> None:
         )
 
 
-class MLIPTrainEvalUnit(TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful):
+class MLIPTrainEvalUnit(
+    TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful, Checkpointable
+):
     def __init__(
         self,
         job_config: DictConfig,
@@ -461,11 +490,13 @@ class MLIPTrainEvalUnit(TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful):
         train_strategy: TrainStrategy = TrainStrategy.DDP,
         debug_checksums_save_path: str | None = None,
         profile_flops: bool = False,
+        save_inference_ckpt: bool = True,
     ):
         super().__init__()
         self.job_config = job_config
         self.tasks = tasks
         self.profile_flops = profile_flops
+        self.save_inference_ckpt = save_inference_ckpt
 
         for task in tasks:
             if task.element_references is not None:
@@ -575,6 +606,7 @@ class MLIPTrainEvalUnit(TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful):
 
         self.cosine_lr_scheduler_fn = cosine_lr_scheduler_fn
         self.scheduler = None
+        self.lazy_state_location = None
 
     def load_scheduler(self, train_dataloader_size: int) -> int:
         self.scheduler = self.cosine_lr_scheduler_fn(
@@ -614,6 +646,10 @@ class MLIPTrainEvalUnit(TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful):
 
         if self.scheduler is None:
             self.load_scheduler(len(state.train_state.dataloader))
+
+        if self.lazy_state_location is not None:
+            self._execute_load_state(self.lazy_state_location)
+
         self.previous_wall_time = time.time()
         # this should only be non-zero if we are resuming from a run
         epoch = self.train_progress.num_epochs_completed
@@ -796,6 +832,45 @@ class MLIPTrainEvalUnit(TrainUnit[AtomicData], EvalUnit[AtomicData], Stateful):
 
     def get_finetune_model_config(self) -> DictConfig | None:
         return self.finetune_model_full_config
+
+    def save_state(self, checkpoint_location: str) -> None:
+        # save a resume config that can be easily used for resuming runs
+        os.makedirs(checkpoint_location, exist_ok=True)
+        config = OmegaConf.load(self.job_config.metadata.config_path)
+        config.job.runner_state_path = checkpoint_location
+
+        finetune_model_full_config = self.get_finetune_model_config()
+        if finetune_model_full_config is not None:
+            config.runner.train_eval_unit.model = finetune_model_full_config
+
+        OmegaConf.save(config, os.path.join(checkpoint_location, UNIT_RESUME_CONFIG))
+
+        # calls train_eval_unit.save_state
+        state = {"unit_state": self.state_dict(), "config": config}
+        dcp.save(state, checkpoint_id=checkpoint_location)
+
+        # warning this can be VERY SLOW for large models, better not to do this at every checkpoint
+        if (
+            self.save_inference_ckpt
+            and distutils.is_master()
+            and os.path.exists(checkpoint_location)
+        ):
+            convert_train_checkpoint_to_inference_checkpoint(
+                checkpoint_location,
+                os.path.join(checkpoint_location, UNIT_INFERENCE_CHECKPOINT),
+            )
+
+        logging.info(f"Saved dcp checkpoint to {checkpoint_location}")
+
+    def load_state(self, checkpoint_location: str | None) -> None:
+        # lazily load state, save the state and load on the first train step
+        self.lazy_state_location = checkpoint_location
+
+    def _execute_load_state(self, checkpoint_location: str | None) -> None:
+        state = {"unit_state": self.state_dict()}
+        dcp.load(state_dict=state, checkpoint_id=checkpoint_location)
+        self.load_state_dict(state["unit_state"])
+        logging.info(f"Done loading checkpoint from {checkpoint_location}")
 
 
 class MLIPEvalUnit(EvalUnit[AtomicData]):

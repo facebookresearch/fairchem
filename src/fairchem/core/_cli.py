@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
+import clusterscope
 import hydra
 import numpy as np
 import torch
@@ -39,7 +40,6 @@ from submitit.slurm.slurm import SlurmJobEnvironment
 from fairchem.core.common import distutils
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
-    get_cluster_name,
     get_commit_hash,
     get_timestamp_uid,
     setup_env_vars,
@@ -167,6 +167,10 @@ class JobConfig:
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
+        try:
+            cluster = clusterscope.cluster()
+        except RuntimeError:
+            cluster = ""
         self.metadata = Metadata(
             commit=get_commit_hash(),
             log_dir=os.path.join(self.run_dir, self.timestamp_id, LOG_DIR_NAME),
@@ -181,7 +185,7 @@ class JobConfig:
                 CHECKPOINT_DIR_NAME,
                 PREEMPTION_STATE_DIR_NAME,
             ),
-            cluster_name=get_cluster_name(),
+            cluster_name=cluster,
         )
 
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 import torch
+from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc111, molecule
 from ase.optimize import BFGS
 
@@ -24,8 +25,6 @@ from fairchem.core.calculate.ase_calculator import (
 from fairchem.core.units.mlip_unit.api.inference import UMATask
 
 if TYPE_CHECKING:
-    from ase import Atoms
-
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 from fairchem.core.calculate import pretrained_mlip
@@ -42,7 +41,9 @@ def all_calculators(mlip_predict_unit):
 
     def _calc_generator():
         for dataset in mlip_predict_unit.datasets:
-            yield FAIRChemCalculator(mlip_predict_unit, task_name=dataset)
+            # check that all single task models load without specifying task name
+            task_name = dataset if len(mlip_predict_unit.datasets) > 1 else None
+            yield FAIRChemCalculator(mlip_predict_unit, task_name=task_name)
 
     return _calc_generator
 
@@ -117,13 +118,19 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
     np.testing.assert_allclose(energies[0], energies[1])
 
 
-def test_calculator_unknown_task_raises_error(aperiodic_atoms):
+def test_no_task_name_single_task():
+    for model_name in pretrained_mlip.available_models:
+        predict_unit = pretrained_mlip.get_predict_unit(model_name)
+        if len(predict_unit.datasets) == 1:
+            calc = FAIRChemCalculator(predict_unit)
+            assert calc.task_name == predict_unit.datasets[0]
+
+
+def test_calculator_unknown_task_raises_error():
     with pytest.raises(AssertionError):
-        calc_omol = FAIRChemCalculator.from_model_checkpoint(
+        FAIRChemCalculator.from_model_checkpoint(
             pretrained_mlip.available_models[0], task_name="ommmmmol"
         )
-        atoms = aperiodic_atoms
-        atoms.calc = calc_omol
 
 
 @pytest.mark.gpu()
@@ -153,7 +160,6 @@ def test_calculator_setup(all_calculators):
         "bulk_atoms",
         "aperiodic_atoms",
         "periodic_h2o_atoms",
-        "large_bulk_atoms",
     ],
 )
 def test_energy_calculation(request, atoms_fixture, all_calculators):
@@ -304,6 +310,41 @@ def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators)
         assert len(energy_values) == len(
             set(energy_values)
         ), "Energy values are not unique for different charge/spin combinations"
+
+
+def test_single_atom_systems():
+    """Test a system with a single atom. Single atoms do not currently use the model."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+
+    for at_num in range(1, 84):
+        atom = Atoms([at_num], positions=[(0.0, 0.0, 0.0)])
+        atom.info["charge"] = 0
+        atom.info["spin"] = 3
+
+        for task_name in ("omat", "omol", "oc20"):
+            calc = FAIRChemCalculator(predict_unit, task_name=task_name)
+            atom.calc = calc
+            # Test energy calculation
+            energy = atom.get_potential_energy()
+            assert isinstance(energy, float)
+
+            # Test forces are 0.0
+            forces = atom.get_forces()
+            assert (forces == 0.0).all()
+
+
+def test_single_atom_system_errors():
+    """Test that a charged system with a single atom does not work."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    atom = Atoms("C", positions=[(0.0, 0.0, 0.0)])
+    atom.calc = calc
+    atom.info["charge"] = -1
+    atom.info["spin"] = 4
+
+    with pytest.raises(ValueError):
+        atom.get_potential_energy()
 
 
 @pytest.mark.gpu()

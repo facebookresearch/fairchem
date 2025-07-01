@@ -6,16 +6,18 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-  # pull_request_review:
-  #   types: [submitted]
-  # merge_group:
-
+  
 jobs:
   build:
     runs-on: 4-core-ubuntu-gpu-t4
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        # Optional: get full history if needed
+        fetch-depth: 0
 
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
@@ -36,7 +38,12 @@ jobs:
       env:
         QUACC_CONFIG_FILE: docs/.quacc.yml
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # Set FAST_DOCS only if not a push to main
+        FAST_DOCS: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && 'true' || '' }}
       run: |
+        # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
+        jupytext --to ipynb ./docs/uma_tutorials/uma_tutorial.md
+        # find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
         jupyter-book build docs
 
     - name: Upload documentation artifact
