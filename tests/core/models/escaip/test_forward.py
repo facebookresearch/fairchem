@@ -73,7 +73,7 @@ def get_backbone_config(
         "use_padding": use_compile,
         "use_pbc": True,
         "max_num_elements": MAX_ELEMENTS,
-        "max_atoms": 500,
+        "max_atoms": 1000,
         "max_batch_size": 64,
         "max_radius": cutoff,
         "knn_k": 20,
@@ -91,6 +91,9 @@ def get_backbone_config(
         "node_direction_expansion_size": 4,
         "edge_distance_expansion_size": 8,
         "edge_distance_embedding_size": 8,
+        "readout_hidden_layer_multiplier": 1,
+        "output_hidden_layer_multiplier": 1,
+        "ffn_hidden_layer_multiplier": 1,
         "atten_name": "memory_efficient",
         "atten_num_heads": 2,
         "use_frequency_embedding": False,
@@ -149,8 +152,8 @@ def test_compile_full_gpu():
         model_no_compile.parameters(), model_compile.parameters()
     ):
         param.data = param_compile.data.clone()
-    sizes = range(3, 6)
-    neighbors = range(30, 50, 5)
+    sizes = range(3, 7)
+    neighbors = range(30, 100, 5)
     for size, neigh in list(itertools.product(sizes, neighbors)):
         data = get_diamond_tg_data(neigh, cutoff, size, device)
         seed_everywhere()
