@@ -131,9 +131,14 @@ def convert_train_checkpoint_to_inference_checkpoint(
 
 
 def initialize_finetuning_model(
-    checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None
+    checkpoint_location: str,
+    overrides: dict | None = None,
+    heads: dict | None = None,
+    strict: bool = True,
 ) -> torch.nn.Module:
-    model, checkpoint = load_inference_model(checkpoint_location, overrides)
+    model, checkpoint = load_inference_model(
+        checkpoint_location, overrides, strict=strict
+    )
 
     logging.warning(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
@@ -484,6 +489,7 @@ class MLIPTrainEvalUnit(
         cosine_lr_scheduler_fn: callable,
         tasks: list[Task],
         bf16: bool = False,
+        fp16: bool = False,
         print_every: int = 10,
         clip_grad_norm: float | None = None,
         ema_decay: float = 0.999,
@@ -504,8 +510,14 @@ class MLIPTrainEvalUnit(
 
         # placeholder for autocast code, may need to move out to common
         self.bf16 = bf16
-        self.autocast_enabled = self.bf16
-        self.autocast_dtype = torch.bfloat16
+        self.fp16 = fp16
+        self.autocast_enabled = self.bf16 or self.fp16
+        if self.bf16:
+            self.autocast_dtype = torch.bfloat16
+        elif self.fp16:
+            self.autocast_dtype = torch.float16
+        else:
+            self.autocast_dtype = None
 
         self.finetune_model_full_config = getattr(
             model, "finetune_model_full_config", None
@@ -880,6 +892,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         model: torch.nn.Module,
         tasks: Sequence[Task],
         bf16: bool = False,
+        fp16: bool = False,
     ):
         """Evaluate your MLIPs and so forth.
 
@@ -888,6 +901,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
             model: model to evaluate
             evaluations: a list of evaluation objects
             bf16: whether to use autocast with bf16
+            fp16: whether to use autocast with fp16
         """
         super().__init__()
         self.job_config = job_config
@@ -918,8 +932,13 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         )
 
         # TODO see placeholder comment in TrainEvalUnit as well
-        self.autocast_enabled = bf16
-        self.autocast_dtype = torch.bfloat16
+        self.autocast_enabled = bf16 or fp16
+        if bf16:
+            self.autocast_dtype = torch.bfloat16
+        elif fp16:
+            self.autocast_dtype = torch.float16
+        else:
+            self.autocast_dtype = None
 
     def setup_train_eval_unit(self, model: torch.nn.Module) -> None:
         self.model = model
