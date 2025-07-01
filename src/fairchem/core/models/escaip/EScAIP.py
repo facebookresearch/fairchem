@@ -87,9 +87,9 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
                     molecular_graph_cfg=self.molecular_graph_cfg,
                     gnn_cfg=self.gnn_cfg,
                     reg_cfg=self.reg_cfg,
-                    is_last=(idx == self.gnn_cfg.num_layers - 1),
+                    is_last=(idx == self.global_cfg.num_layers - 1),
                 )
-                for idx in range(self.gnn_cfg.num_layers)
+                for idx in range(self.global_cfg.num_layers)
             ]
         )
 
@@ -101,7 +101,7 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
                     gnn_cfg=self.gnn_cfg,
                     reg_cfg=self.reg_cfg,
                 )
-                for _ in range(self.gnn_cfg.num_layers + 1)
+                for _ in range(self.global_cfg.num_layers + 1)
             ]
         )
 
@@ -138,7 +138,7 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         edge_readouts = [readouts[2]]
 
         # transformer blocks
-        for idx in range(self.gnn_cfg.num_layers):
+        for idx in range(self.global_cfg.num_layers):
             node_features, edge_features = self.transformer_blocks[idx](
                 data, node_features, edge_features
             )

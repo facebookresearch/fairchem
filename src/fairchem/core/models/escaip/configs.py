@@ -9,9 +9,10 @@ class GlobalConfigs:
     regress_forces: bool
     direct_forces: bool
     hidden_size: int  # divisible by 2 and num_heads
+    num_layers: int
     activation: Literal[
         "squared_relu", "gelu", "leaky_relu", "relu", "smelu", "star_relu"
-    ]
+    ] = "gelu"
     regress_stress: bool = False
     use_compile: bool = True
     use_padding: bool = True
@@ -31,24 +32,25 @@ class MolecularGraphConfigs:
     knn_lse_scale: float
     knn_use_low_mem: bool
     knn_pad_size: int
-    distance_function: Literal["gaussian", "sigmoid", "linearsigmoid", "silu"]
-    use_envelope: bool
+    distance_function: Literal["gaussian", "sigmoid", "linearsigmoid", "silu"] = (
+        "gaussian"
+    )
+    use_envelope: bool = True
 
 
 @dataclass
 class GraphNeuralNetworksConfigs:
-    num_layers: int
-    atom_embedding_size: int
-    node_direction_embedding_size: int
-    node_direction_expansion_size: int
-    edge_distance_expansion_size: int
-    edge_distance_embedding_size: int
     atten_name: Literal[
         "math",
         "memory_efficient",
         "flash",
     ]
     atten_num_heads: int
+    atom_embedding_size: int = 128
+    node_direction_embedding_size: int = 64
+    node_direction_expansion_size: int = 10
+    edge_distance_expansion_size: int = 600
+    edge_distance_embedding_size: int = 512
     readout_hidden_layer_multiplier: int = 2
     output_hidden_layer_multiplier: int = 2
     ffn_hidden_layer_multiplier: int = 2
@@ -58,8 +60,8 @@ class GraphNeuralNetworksConfigs:
     use_graph_attention: bool = False
     use_message_gate: bool = False
     use_global_readout: bool = False
-    use_frequency_embedding: bool = False
-    freequency_list: list = field(default_factory=list)
+    use_frequency_embedding: bool = True
+    freequency_list: list = field(default_factory=lambda: [20, 10, 4, 10, 20])
     energy_reduce: Literal["sum", "mean"] = "sum"
 
 
@@ -109,7 +111,9 @@ def init_configs(cls, kwargs):
         elif field_name in kwargs:  # Direct assignment
             init_kwargs[field_name] = kwargs[field_name]
         elif _field.default is not MISSING:  # Assign default if available
-            init_kwargs[field_name] = field.default
+            init_kwargs[field_name] = _field.default
+        elif _field.default_factory is not MISSING:  # Handle default_factory
+            init_kwargs[field_name] = _field.default_factory()
         else:
             raise ValueError(
                 f"Missing required configuration parameter: '{field_name}' in '{cls.__name__}'"

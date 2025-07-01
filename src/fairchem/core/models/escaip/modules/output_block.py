@@ -33,7 +33,7 @@ class OutputProjection(nn.Module):
 
         # map concatenated readout features to hidden size
         self.node_projection = get_linear(
-            in_features=global_cfg.hidden_size * (gnn_cfg.num_layers + 1),
+            in_features=global_cfg.hidden_size * (global_cfg.num_layers + 1),
             out_features=global_cfg.hidden_size,
             activation=Activation(global_cfg.activation),
             bias=True,
@@ -44,7 +44,7 @@ class OutputProjection(nn.Module):
 
         if self.use_edge_readout:
             self.edge_projection = get_linear(
-                in_features=global_cfg.hidden_size * (gnn_cfg.num_layers + 1),
+                in_features=global_cfg.hidden_size * (global_cfg.num_layers + 1),
                 out_features=global_cfg.hidden_size,
                 activation=Activation(global_cfg.activation),
                 bias=True,
@@ -55,7 +55,7 @@ class OutputProjection(nn.Module):
 
         if self.use_global_readout:
             self.global_projection = get_linear(
-                in_features=global_cfg.hidden_size * (gnn_cfg.num_layers + 1),
+                in_features=global_cfg.hidden_size * (global_cfg.num_layers + 1),
                 out_features=global_cfg.hidden_size,
                 activation=Activation(global_cfg.activation),
                 bias=True,
