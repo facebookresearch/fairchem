@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields, is_dataclass
-from typing import Any, Literal
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
+from typing import Literal
 
 
 @dataclass
@@ -49,10 +49,10 @@ class GraphNeuralNetworksConfigs:
         "flash",
     ]
     atten_num_heads: int
-    readout_hidden_layer_multiplier: int
-    output_hidden_layer_multiplier: int
-    ffn_hidden_layer_multiplier: int
-    use_angle_embedding: Literal["scalar", "bias", "none"]
+    readout_hidden_layer_multiplier: int = 2
+    output_hidden_layer_multiplier: int = 2
+    ffn_hidden_layer_multiplier: int = 2
+    use_angle_embedding: Literal["scalar", "bias", "none"] = "none"
     angle_expansion_size: int = 10
     angle_embedding_size: int = 8
     use_graph_attention: bool = False
@@ -60,19 +60,19 @@ class GraphNeuralNetworksConfigs:
     use_global_readout: bool = False
     use_frequency_embedding: bool = False
     freequency_list: list = field(default_factory=list)
-    energy_reduce: Literal["sum", "mean"] = "mean"
+    energy_reduce: Literal["sum", "mean"] = "sum"
 
 
 @dataclass
 class RegularizationConfigs:
-    mlp_dropout: float
-    atten_dropout: float
-    stochastic_depth_prob: float
-    normalization: Literal["layernorm", "rmsnorm", "skip"]
-    node_ffn_dropout: float
-    edge_ffn_dropout: float
-    scalar_output_dropout: float
-    vector_output_dropout: float
+    normalization: Literal["layernorm", "rmsnorm", "skip"] = "rmsnorm"
+    mlp_dropout: float = 0.0
+    atten_dropout: float = 0.0
+    stochastic_depth_prob: float = 0.0
+    node_ffn_dropout: float = 0.0
+    edge_ffn_dropout: float = 0.0
+    scalar_output_dropout: float = 0.0
+    vector_output_dropout: float = 0.0
 
 
 @dataclass
@@ -83,21 +83,36 @@ class EScAIPConfigs:
     reg_cfg: RegularizationConfigs
 
 
-def init_configs(cls: Any, kwargs: dict[str, Any]) -> Any:
+def resolve_type_hint(cls, field):
+    """Resolves forward reference type hints from string to actual class objects."""
+    if isinstance(field.type, str):
+        resolved_type = getattr(cls, field.type, None)
+        if resolved_type is None:
+            resolved_type = globals().get(field.type, None)  # Try global scope
+        if resolved_type is None:
+            return field.type  # Fallback to string if not found
+        return resolved_type
+    return field.type
+
+
+def init_configs(cls, kwargs):
     """
     Initialize a dataclass with the given kwargs.
     """
     init_kwargs = {}
     for _field in fields(cls):
-        if is_dataclass(_field.type):
-            init_kwargs[_field.name] = init_configs(_field.type, kwargs)
-        elif _field.name in kwargs:
-            init_kwargs[_field.name] = kwargs[_field.name]
-        elif _field.default is not None:
-            init_kwargs[_field.name] = _field.default
+        field_name = _field.name
+        field_type = resolve_type_hint(cls, _field)  # Resolve type
+
+        if is_dataclass(field_type):  # Handle nested dataclass
+            init_kwargs[_field.name] = init_configs(field_type, kwargs)
+        elif field_name in kwargs:  # Direct assignment
+            init_kwargs[field_name] = kwargs[field_name]
+        elif _field.default is not MISSING:  # Assign default if available
+            init_kwargs[field_name] = field.default
         else:
             raise ValueError(
-                f"Missing required configuration parameter: '{_field.name}'"
+                f"Missing required configuration parameter: '{field_name}' in '{cls.__name__}'"
             )
 
     return cls(**init_kwargs)

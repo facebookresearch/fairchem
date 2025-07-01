@@ -306,6 +306,11 @@ def unpad_results(results, node_padding_mask, graph_padding_mask):
             unpad_results[key] = results[key][node_padding_mask]
         elif results[key].shape[0] == graph_padding_mask.shape[0]:
             unpad_results[key] = results[key][graph_padding_mask]
+        elif (
+            results[key].shape[0] == node_padding_mask.sum()
+            or results[key].shape[0] == graph_padding_mask.sum()
+        ):
+            unpad_results[key] = results[key]
         else:
             raise ValueError("Unknown padding mask shape")
     return unpad_results
