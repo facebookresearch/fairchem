@@ -45,9 +45,11 @@ Install fairchem-core using pip
 pip install fairchem-core
 ```
 
-If you want to contribute or make modifications to the code, install in edit mode
+If you want to contribute or make modifications to the code, clone the repo and install in edit mode
 ```bash
-pip install -e fairchem-core[dev]
+git clone git@github.com:facebookresearch/fairchem.git
+
+pip install -e fairchem/packages/fairchem-core[dev]
 ```
 
 ## Quick Start
