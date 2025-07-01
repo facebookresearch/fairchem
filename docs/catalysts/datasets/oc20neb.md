@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.1
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -34,6 +34,8 @@ The tar file contains 3 subdirectories: dissociations, desorptions, and transfer
 The content of these trajectory files is the repeating frame sets. Despite the initial and final frames not being optimized during the NEB, the initial and final frames are saved for every iteration in the trajectory. For the dataset, 10 frames were used - 8 which were optimized over the neb. So the length of the trajectory is the number of iterations (N) * 10. If you wanted to look at the frame set prior to optimization and the optimized frame set, you could get them like this:
 
 ```{code-cell} ipython3
+from __future__ import annotations
+
 !wget https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/desorption_id_83_2409_9_111-4_neb1.0.traj
 
 from ase.io import read
@@ -54,10 +56,12 @@ relaxed_frames = traj[-10:]
 One more note: We have not prepared an lmdb for this dataset. This is because it is NEB calculations are not supported directly in ocp. You must use the ase native OCP class along with ase infrastructure to run NEB calculations. Here is an example of a use:
 
 ```{code-cell} ipython3
+import os 
+
 from ase.io import read
-from ase.optimize import BFGS
 from ase.mep import DyNEB
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
+from ase.optimize import BFGS
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
 images = traj[0:10]
@@ -69,11 +73,18 @@ for image in images:
 
 optimizer = BFGS(
     neb,
-    trajectory=f"neb.traj",
+    trajectory="neb.traj",
 )
 
-conv = optimizer.run(fmax=0.45, steps=200)
+# Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
+    optimization_steps = 20
+else:
+    optimization_steps = 300
+
+conv = optimizer.run(fmax=0.45, steps=optimization_steps)
 if conv:
     neb.climb = True
-    conv = optimizer.run(fmax=0.05, steps=300)
+    conv = optimizer.run(fmax=0.05, steps=optimization_steps)
 ```

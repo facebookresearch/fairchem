@@ -27,6 +27,7 @@ def load_predict_unit(
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
+    atom_refs: dict | None = None,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -37,6 +38,7 @@ def load_predict_unit(
             use a custom InferenceSettings object.
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
+        atom_refs: Optional dictionary of isolated atom reference energies.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -54,4 +56,5 @@ def load_predict_unit(
         device=device,
         inference_settings=inference_settings,
         overrides=overrides,
+        atom_refs=atom_refs,
     )

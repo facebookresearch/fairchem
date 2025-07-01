@@ -16,19 +16,27 @@ parts:
   - file: core/common_tasks/summary
     sections:
     - file: core/common_tasks/ase_calculator
+    - file: core/common_tasks/batch_inference
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
     - file: core/common_tasks/evaluation
     - file: core/common_tasks/fine_tuning
-    - file: core/common_tasks/batch_inference
     - file: core/common_tasks/workflows
     - file: core/uma_faq
+  - file: uma_tutorials/summary
+    sections:
+    - file: uma_tutorials/uma_tutorial
+  - file: core/uma_examples/summary
+    sections:
+    - file: core/uma_examples/uma_tutorial
   - file: core/generative_models
+  
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
     sections:
     - file: molecules/datasets/omol25
+    - file: molecules/datasets/omc25
   - file: molecules/models
   - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
@@ -60,7 +68,7 @@ parts:
     - file: inorganic_materials/datasets/omat24
   - file: inorganic_materials/models
   - file: inorganic_materials/examples_tutorials/summary
-    sections: 
+    sections:
     - file: inorganic_materials/examples_tutorials/bulk_stability
     - file: inorganic_materials/examples_tutorials/phonons
     - file: inorganic_materials/examples_tutorials/elastic
@@ -73,7 +81,7 @@ parts:
   - file: dac/models
   - file: dac/examples_tutorials/summary
     sections:
-    - file: dac/examples_tutorials/adsorption_energies
+    - file: dac/examples_tutorials/adsorption_energy
 - caption: Learn More
   chapters:
   - file: core/intro_series

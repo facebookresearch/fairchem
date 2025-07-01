@@ -71,11 +71,18 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         overrides: dict | None = None,
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
+        atom_refs: dict | None = None,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.seed(seed)
+        # note these are different from the element references used for model training
+        self.atom_refs = (
+            {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
+            if atom_refs is not None
+            else {}
+        )
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -111,9 +118,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         self.tasks = {t.name: t for t in tasks}
 
         self.dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
-        assert set(self.datasets) == set(
-            self.dataset_to_tasks.keys()
-        ), "Found mismatch between datasets in backbone and datsets in Tasks"
+        assert set(self.dataset_to_tasks.keys()).issubset(
+            set(self.datasets)
+        ), "Datasets in tasks is not a strict subset of datasets in backbone."
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
