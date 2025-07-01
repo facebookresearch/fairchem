@@ -26,7 +26,7 @@ job:
     project: spice_v2
 
 # cpu_graph: True
-bf16: False
+fp16: False
 max_neighbors: 30
 max_neighbors_pad_size: 45
 cutoff_radius: 6
@@ -153,7 +153,7 @@ runner:
       steps: ${steps}
     print_every: 10
     clip_grad_norm: 0.1
-    bf16: ${bf16}
+    fp16: ${fp16}
   max_epochs: ${epochs}
   max_steps: ${steps}
   evaluate_every_n_steps: 5000

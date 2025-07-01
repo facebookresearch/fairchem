@@ -26,7 +26,7 @@ job:
     project: mptrj_v2
 
 # cpu_graph: True
-bf16: True
+fp16: True
 max_neighbors: 30
 max_neighbors_pad_size: 45
 cutoff_radius: 6
@@ -149,7 +149,7 @@ runner:
       steps: ${steps}
     print_every: 10
     clip_grad_norm: 100
-    bf16: ${bf16}
+    fp16: ${fp16}
   max_epochs: ${epochs}
   max_steps: ${steps}
   evaluate_every_n_steps: 5000
