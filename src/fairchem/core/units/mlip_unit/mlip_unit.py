@@ -512,9 +512,12 @@ class MLIPTrainEvalUnit(
         self.bf16 = bf16
         self.fp16 = fp16
         self.autocast_enabled = self.bf16 or self.fp16
-        self.autocast_dtype = (
-            torch.bfloat16 if self.bf16 else torch.float16 if self.fp16 else None
-        )
+        if self.bf16:
+            self.autocast_dtype = torch.bfloat16
+        elif self.fp16:
+            self.autocast_dtype = torch.float16
+        else:
+            self.autocast_dtype = None
 
         self.finetune_model_full_config = getattr(
             model, "finetune_model_full_config", None
@@ -930,9 +933,12 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
 
         # TODO see placeholder comment in TrainEvalUnit as well
         self.autocast_enabled = bf16 or fp16
-        self.autocast_dtype = (
-            torch.bfloat16 if bf16 else torch.float16 if fp16 else None
-        )
+        if bf16:
+            self.autocast_dtype = torch.bfloat16
+        elif fp16:
+            self.autocast_dtype = torch.float16
+        else:
+            self.autocast_dtype = None
 
     def setup_train_eval_unit(self, model: torch.nn.Module) -> None:
         self.model = model
