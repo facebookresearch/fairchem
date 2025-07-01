@@ -19,6 +19,17 @@ Then to install the fairchem package, you can simply use pip:
 pip install fairchem-core
 ```
 
+#### For developers that want to contribute to fairchem, clone the repo and install it in edit mode
+
+```
+git clone git@github.com:facebookresearch/fairchem.git
+
+cd fairchem
+
+pip install -e src/packages/fairchem-core[dev]
+```
+
+
 In V2, we removed all dependencies on 3rd party libraries such as torch-geometric, pyg, torch-scatter, torch-sparse etc that made installation difficult. So no additional steps are required!
 
 ## Subpackages
@@ -35,13 +46,13 @@ To access gated models like UMA, you need to get a HuggingFace account and reque
 1. Get and login to your Huggingface account
 2. Request access to https://huggingface.co/facebook/UMA
 3. Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-4. Add the token as an environment variable (using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+4. Add the token as an environment variable (using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
 
 ## License
 
 ### Repository software
 
-The software in this repo is licensed under an MIT license unless otherwise specified. 
+The software in this repo is licensed under an MIT license unless otherwise specified.
 
 ```
 MIT License
