@@ -1,4 +1,4 @@
-model: src.EScAIP.EScAIPBackbone
+model: fairchem.core.models.escaip.EScAIP.EScAIPBackbone
 
 # Global Configs
 num_layers: 10

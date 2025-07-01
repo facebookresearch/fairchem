@@ -118,9 +118,9 @@ eval_dataloader:
 
 heads:
   mptrj_energy:
-    module: src.EScAIP.EScAIPEnergyHead
+    module: fairchem.core.models.escaip.EScAIP.EScAIPEnergyHead
   forces:
-    module: src.EScAIP.EScAIPDirectForceHead
+    module: fairchem.core.models.escaip.EScAIP.EScAIPDirectForceHead
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner

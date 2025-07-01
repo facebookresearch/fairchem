@@ -115,7 +115,7 @@ eval_dataloader:
 heads:
   energyandforcehead:
     module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
-    head_cls: src.EScAIP.EScAIPGradientEnergyForceStressHead
+    head_cls: fairchem.core.models.escaip.EScAIP.EScAIPGradientEnergyForceStressHead
     head_kwargs:
       wrap_property: False
     dataset_names:
