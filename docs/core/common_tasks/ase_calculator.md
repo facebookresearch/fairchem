@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -38,11 +38,11 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 ! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
 ```
 
-2. Get access to any necessary huggingface gated models 
+2. Get access to any necessary huggingface gated models
     * Get and login to your Huggingface account
     * Request access to https://huggingface.co/facebook/UMA
     * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
 
 ```{code-cell} ipython3
 :tags: [skip-execution]
@@ -67,7 +67,7 @@ For long rollout trajectory use-cases, such as molecular dynamics (MD) or relaxa
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1", device="cuda", inference_settings="turbo"
+    "uma-s-1p1", device="cuda", inference_settings="turbo"
 )
 ```
 
@@ -100,6 +100,6 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1", device="cuda", inference_settings=settings
+    "uma-s-1p1", device="cuda", inference_settings=settings
 )
 ```
