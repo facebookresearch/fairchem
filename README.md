@@ -63,6 +63,13 @@ You can use the following to save an auth token,
 huggingface-cli login
 ```
 
+Models are referenced by their name, below are the currently supported models:
+
+| Model Name | Description |
+|---|---|
+| uma-s-1p1 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/150M active/total params) |
+| uma-m-1p1 | Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params) |
+
 ### Set the task for your application and calculate
 
 - **oc20:** use this for catalysis
