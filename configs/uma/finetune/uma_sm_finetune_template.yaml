@@ -18,7 +18,7 @@ job:
     project: uma_finetune
 
 # refers to a model name that can be retrieved from (huggingface)[https://huggingface.co/facebook/UMA]
-base_model_name: uma-s-1
+base_model_name: uma-s-1p1
 # 300 is effectively infinite neighbors, but if you are memory strained, using 100 is usually just as good
 max_neighbors: 300
 # choose to either run for integer number of epochs or steps, only 1 can be step, the other must be null
