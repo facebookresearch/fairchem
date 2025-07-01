@@ -19,6 +19,7 @@ Attributes
 
    core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG
    core.units.mlip_unit.mlip_unit.UNIT_INFERENCE_CHECKPOINT
+   core.units.mlip_unit.mlip_unit.DEFAULT_EXCLUDE_KEYS
 
 
 Classes
@@ -151,6 +152,10 @@ Module Contents
 
 
 
+.. py:data:: DEFAULT_EXCLUDE_KEYS
+   :value: ['id', 'fid', 'absolute_idx', 'target_pos', 'ref_energy', 'pbc', 'nads', 'oc22',...
+
+
 .. py:function:: convert_train_checkpoint_to_inference_checkpoint(dcp_checkpoint_loc: str, checkpoint_loc: str) -> None
 
 .. py:function:: initialize_finetuning_model(checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None) -> torch.nn.Module
@@ -200,7 +205,7 @@ Module Contents
    :returns: dictionary of (updated) metrics
 
 
-.. py:function:: mt_collater_adapter(tasks: list[Task], exclude_keys: list[str])
+.. py:function:: mt_collater_adapter(tasks: list[Task], exclude_keys: list[str] = DEFAULT_EXCLUDE_KEYS)
 
 .. py:function:: _get_consine_lr_scheduler(warmup_factor: float, warmup_epochs: float, lr_min_factor: float, n_iters_per_epoch: int, optimizer: torch.optim.Optimizer, epochs: Optional[int] = None, steps: Optional[int] = None) -> torch.optim.lr_scheduler.LRScheduler
 

@@ -35,6 +35,7 @@ Functions
 
 .. autoapisummary::
 
+   core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
    core.calculate.pretrained_mlip.get_predict_unit
    core.calculate.pretrained_mlip.get_isolated_atomic_energies
 
@@ -79,6 +80,8 @@ Module Contents
 .. py:data:: _MODEL_CKPTS
 
 .. py:data:: available_models
+
+.. py:function:: pretrained_checkpoint_path_from_name(model_name: str)
 
 .. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, cache_dir: str = CACHE_DIR) -> fairchem.core.units.mlip_unit.MLIPPredictUnit
 

@@ -340,6 +340,8 @@
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="autoapi/core/scripts/index.html">core.scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -2046,6 +2048,8 @@ document.write(`
 </li>
       <li><a href="autoapi/adsorbml/scripts/dense_eval/index.html#adsorbml.scripts.dense_eval.compute_hybrid_success">compute_hybrid_success() (in module adsorbml.scripts.dense_eval)</a>
 </li>
+      <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.compute_lin_ref">compute_lin_ref() (in module core.scripts.create_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.compute_loss">compute_loss() (in module core.units.mlip_unit.mlip_unit)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/adsorbml_reducer/index.html#core.components.benchmark.adsorbml_reducer.AdsorbMLReducer.compute_metrics">compute_metrics() (core.components.benchmark.adsorbml_reducer.AdsorbMLReducer method)</a>
@@ -2073,6 +2077,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/graph/radius_graph_pbc/index.html#core.graph.radius_graph_pbc.compute_neighbors">compute_neighbors() (in module core.graph.radius_graph_pbc)</a>
+</li>
+      <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.compute_normalizer_and_linear_reference">compute_normalizer_and_linear_reference() (in module core.scripts.create_finetune_dataset)</a>
 </li>
       <li><a href="autoapi/core/modules/normalization/element_references/index.html#core.modules.normalization.element_references.ElementReferences.compute_references">compute_references() (core.modules.normalization.element_references.ElementReferences static method)</a>
 </li>
@@ -2429,8 +2435,6 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/recipes/index.html#module-core.components.calculate.recipes">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes.adsorbml
 
@@ -2438,6 +2442,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/recipes/adsorbml/index.html#module-core.components.calculate.recipes.adsorbml">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes.adsorption
 
@@ -2985,6 +2991,20 @@ document.write(`
 </li>
       </ul></li>
       <li>
+    core.scripts.create_finetune_dataset
+
+      <ul>
+        <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#module-core.scripts.create_finetune_dataset">module</a>
+</li>
+      </ul></li>
+      <li>
+    core.scripts.create_uma_finetune_dataset
+
+      <ul>
+        <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#module-core.scripts.create_uma_finetune_dataset">module</a>
+</li>
+      </ul></li>
+      <li>
     core.scripts.download_data
 
       <ul>
@@ -3186,6 +3206,8 @@ document.write(`
         <li><a href="autoapi/data/oc/core/index.html#data.oc.core.InterfaceConfig.create_packmol_atoms">(data.oc.core.InterfaceConfig method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#core.scripts.create_uma_finetune_dataset.create_yaml">create_yaml() (in module core.scripts.create_uma_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.cs_emb_grad">cs_emb_grad (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 </li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.csd_embedding">csd_embedding() (core.models.uma.escn_md.eSCNMDBackbone method)</a>
@@ -3478,6 +3500,8 @@ document.write(`
         <li><a href="autoapi/core/datasets/collaters/simple_collater/index.html#core.datasets.collaters.simple_collater.data_list_collater">(in module core.datasets.collaters.simple_collater)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#core.scripts.create_uma_finetune_dataset.DATA_YAML_DIR">DATA_YAML_DIR (in module core.scripts.create_uma_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.dataloader">dataloader (core.components.evaluate.eval_runner.EvalRunner attribute)</a>
 </li>
       <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler.dataset">dataset (core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler attribute)</a>
@@ -3547,6 +3571,8 @@ document.write(`
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.DEFAULT_CLIENT">DEFAULT_CLIENT (in module ocpapi.workflows.adsorbates)</a>
 </li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.DEFAULT_ENV_VARS">DEFAULT_ENV_VARS (in module core.common.utils)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.DEFAULT_EXCLUDE_KEYS">DEFAULT_EXCLUDE_KEYS (in module core.units.mlip_unit.mlip_unit)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.DEFAULT_SPIN">DEFAULT_SPIN (in module core.units.mlip_unit.api.inference)</a>
 </li>
@@ -3909,6 +3935,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/data/oc/utils/geometry/index.html#data.oc.utils.geometry.Geometry.extract_box_properties">extract_box_properties() (data.oc.utils.geometry.Geometry static method)</a>
+</li>
+      <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.extract_energy_and_forces">extract_energy_and_forces() (in module core.scripts.create_finetune_dataset)</a>
 </li>
       <li><a href="autoapi/data/oc/experimental/get_energies/index.html#data.oc.experimental.get_energies.extract_file">extract_file() (in module data.oc.experimental.get_energies)</a>
 
@@ -5110,6 +5138,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/uma/common/so3/index.html#core.models.uma.common.so3.SO3_Grid.lat_resolution">lat_resolution (core.models.uma.common.so3.SO3_Grid attribute)</a>
 </li>
+      <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.launch_processing">launch_processing() (in module core.scripts.create_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/models/utils/basis/index.html#core.models.utils.basis.SIREN.layers">layers (core.models.utils.basis.SIREN attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.lazy_model_intialized">lazy_model_intialized (core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
@@ -6066,6 +6096,10 @@ document.write(`
 </li>
         <li><a href="autoapi/core/scripts/convert_hydra_to_release/index.html#module-core.scripts.convert_hydra_to_release">core.scripts.convert_hydra_to_release</a>
 </li>
+        <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#module-core.scripts.create_finetune_dataset">core.scripts.create_finetune_dataset</a>
+</li>
+        <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#module-core.scripts.create_uma_finetune_dataset">core.scripts.create_uma_finetune_dataset</a>
+</li>
         <li><a href="autoapi/core/scripts/download_data/index.html#module-core.scripts.download_data">core.scripts.download_data</a>
 </li>
         <li><a href="autoapi/core/scripts/download_large_files/index.html#module-core.scripts.download_large_files">core.scripts.download_large_files</a>
@@ -6764,6 +6798,10 @@ document.write(`
 </li>
         <li><a href="autoapi/core/scripts/convert_hydra_to_release/index.html#core.scripts.convert_hydra_to_release.parser">(in module core.scripts.convert_hydra_to_release)</a>
 </li>
+        <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.parser">(in module core.scripts.create_finetune_dataset)</a>
+</li>
+        <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#core.scripts.create_uma_finetune_dataset.parser">(in module core.scripts.create_uma_finetune_dataset)</a>
+</li>
         <li><a href="autoapi/core/scripts/download_data/index.html#core.scripts.download_data.parser">(in module core.scripts.download_data)</a>
 </li>
         <li><a href="autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html#core.scripts.eqv2_to_hydra_eqv2.parser">(in module core.scripts.eqv2_to_hydra_eqv2)</a>
@@ -6914,6 +6952,8 @@ document.write(`
       <li><a href="autoapi/core/models/uma/common/so3/index.html#core.models.uma.common.so3.CoefficientMapping.prepare_coefficient_idx">prepare_coefficient_idx() (core.models.uma.common.so3.CoefficientMapping method)</a>
 </li>
       <li><a href="autoapi/core/scripts/download_data/index.html#core.scripts.download_data.preprocess_data">preprocess_data() (in module core.scripts.download_data)</a>
+</li>
+      <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name">pretrained_checkpoint_path_from_name() (in module core.calculate.pretrained_mlip)</a>
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.PretrainedModels">PretrainedModels (class in core.calculate.pretrained_mlip)</a>
 </li>
@@ -7151,6 +7191,8 @@ document.write(`
         <li><a href="autoapi/core/models/uma/escn_moe/index.html#core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper.regress_stress">(core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#core.scripts.create_uma_finetune_dataset.REGRESSION_LABEL_TO_TASK_YAML">REGRESSION_LABEL_TO_TASK_YAML (in module core.scripts.create_uma_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/components/calculate/recipes/relax/index.html#core.components.calculate.recipes.relax.relax_atoms">relax_atoms() (in module core.components.calculate.recipes.relax)</a>
 </li>
       <li><a href="autoapi/data/oc/utils/vasp_flags/index.html#data.oc.utils.vasp_flags.RELAX_FLAGS">RELAX_FLAGS (in module data.oc.utils.vasp_flags)</a>
@@ -8133,6 +8175,8 @@ document.write(`
 </li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.temp_split_string">temp_split_string (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
 </li>
+      <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#core.scripts.create_uma_finetune_dataset.TEMPLATE_DIR">TEMPLATE_DIR (in module core.scripts.create_uma_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.tensor_or_int_to_tensor">tensor_or_int_to_tensor() (in module core.datasets.atomic_data)</a>
 </li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.tensor_stats">tensor_stats() (in module core.common.utils)</a>
@@ -8149,10 +8193,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/recipes/phonons/index.html#core.components.calculate.recipes.phonons.THz_to_K">THz_to_K (in module core.components.calculate.recipes.phonons)</a>
 </li>
-      <li><a href="autoapi/data/oc/core/slab/index.html#data.oc.core.slab.tile_and_tag_atoms">tile_and_tag_atoms() (in module data.oc.core.slab)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/data/oc/core/slab/index.html#data.oc.core.slab.tile_and_tag_atoms">tile_and_tag_atoms() (in module data.oc.core.slab)</a>
+</li>
       <li><a href="autoapi/data/oc/core/slab/index.html#data.oc.core.slab.tile_atoms">tile_atoms() (in module data.oc.core.slab)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/nve_md_runner/index.html#core.components.calculate.nve_md_runner.NVEMDRunner.time_step">time_step (core.components.calculate.nve_md_runner.NVEMDRunner attribute)</a>
@@ -8261,6 +8305,8 @@ document.write(`
         <li><a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.AdsorbateSlabRelaxations.ui_url">(ocpapi.workflows.AdsorbateSlabRelaxations attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#core.scripts.create_uma_finetune_dataset.UMA_SM_FINETUNE_YAML">UMA_SM_FINETUNE_YAML (in module core.scripts.create_uma_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.UMATask">UMATask (class in core.units.mlip_unit.api.inference)</a>
 </li>
       <li><a href="autoapi/core/scripts/download_data/index.html#core.scripts.download_data.uncompress_data">uncompress_data() (in module core.scripts.download_data)</a>
@@ -8285,10 +8331,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/base_dataset/index.html#core.datasets.base_dataset.UnsupportedDatasetError">UnsupportedDatasetError</a>
 </li>
-      <li><a href="autoapi/ocpapi/index.html#ocpapi.UnsupportedModelException">UnsupportedModelException</a>, <a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.UnsupportedModelException">[1]</a>, <a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.UnsupportedModelException">[2]</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/ocpapi/index.html#ocpapi.UnsupportedModelException">UnsupportedModelException</a>, <a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.UnsupportedModelException">[1]</a>, <a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.UnsupportedModelException">[2]</a>
+</li>
       <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.unwrap_atoms">unwrap_atoms() (in module cattsunami.core.autoframe)</a>
 </li>
       <li><a href="autoapi/core/modules/evaluator/index.html#core.modules.evaluator.Evaluator.update">update() (core.modules.evaluator.Evaluator method)</a>
@@ -8417,6 +8463,8 @@ document.write(`
         <li><a href="autoapi/core/models/uma/escn_moe/index.html#core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper.wrap_property">(core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.write_ase_db">write_ase_db() (in module core.scripts.create_finetune_dataset)</a>
+</li>
       <li><a href="autoapi/core/scripts/preprocess_ef/index.html#core.scripts.preprocess_ef.write_images_to_lmdb">write_images_to_lmdb() (in module core.scripts.preprocess_ef)</a>
 
       <ul>
