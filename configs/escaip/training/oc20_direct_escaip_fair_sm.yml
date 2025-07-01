@@ -16,6 +16,7 @@ job:
       mem_gb: ${cluster.mem_gb}
       timeout_hr: ${cluster.timeout_hr}
       cpus_per_task: ${cluster.cpus_per_task}
+      additional_parameters: ${cluster.additional_parameters}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
   run_name: escaip_oc20_direct_64n_sm

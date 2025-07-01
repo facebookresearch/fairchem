@@ -94,7 +94,6 @@ def get_backbone_config(
         "atten_name": "memory_efficient",
         "atten_num_heads": 2,
         "use_frequency_embedding": False,
-        "freequency_list": [],
         "energy_reduce": "sum",
         "normalization": "rmsnorm",
     }
