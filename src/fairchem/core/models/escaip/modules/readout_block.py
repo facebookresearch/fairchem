@@ -15,6 +15,8 @@ from fairchem.core.models.escaip.utils.graph_utils import (
     compilable_scatter,
 )
 from fairchem.core.models.escaip.utils.nn_utils import (
+    Activation,
+    NormalizationType,
     get_feedforward,
     get_normalization_layer,
 )
@@ -45,48 +47,48 @@ class ReadoutBlock(nn.Module):
         if gnn_cfg.use_global_readout:
             self.global_ffn = get_feedforward(
                 hidden_dim=global_cfg.hidden_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 hidden_layer_multiplier=gnn_cfg.readout_hidden_layer_multiplier,
                 dropout=reg_cfg.mlp_dropout,
                 bias=True,
             ).to(self.backbone_dtype)
-            self.pre_global_norm = get_normalization_layer(reg_cfg.normalization)(
-                global_cfg.hidden_size, dtype=self.backbone_dtype
-            )
-            self.post_global_norm = get_normalization_layer(reg_cfg.normalization)(
-                global_cfg.hidden_size, dtype=self.backbone_dtype
-            )
+            self.pre_global_norm = get_normalization_layer(
+                NormalizationType(reg_cfg.normalization)
+            )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+            self.post_global_norm = get_normalization_layer(
+                NormalizationType(reg_cfg.normalization)
+            )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
         # node read out
         self.node_ffn = get_feedforward(
             hidden_dim=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             hidden_layer_multiplier=gnn_cfg.readout_hidden_layer_multiplier,
             dropout=reg_cfg.mlp_dropout,
             bias=True,
         ).to(self.backbone_dtype)
-        self.pre_node_norm = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size, dtype=self.backbone_dtype
-        )
-        self.post_node_norm = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size, dtype=self.backbone_dtype
-        )
+        self.pre_node_norm = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+        self.post_node_norm = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
         # forces read out
         if self.use_edge_readout:
             self.edge_ffn = get_feedforward(
                 hidden_dim=global_cfg.hidden_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 hidden_layer_multiplier=gnn_cfg.readout_hidden_layer_multiplier,
                 dropout=reg_cfg.mlp_dropout,
                 bias=True,
             ).to(self.backbone_dtype)
-            self.pre_edge_norm = get_normalization_layer(reg_cfg.normalization)(
-                global_cfg.hidden_size, dtype=self.backbone_dtype
-            )
-            self.post_edge_norm = get_normalization_layer(reg_cfg.normalization)(
-                global_cfg.hidden_size, dtype=self.backbone_dtype
-            )
+            self.pre_edge_norm = get_normalization_layer(
+                NormalizationType(reg_cfg.normalization)
+            )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+            self.post_edge_norm = get_normalization_layer(
+                NormalizationType(reg_cfg.normalization)
+            )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
     def forward(self, data, node_features, edge_features):
         """

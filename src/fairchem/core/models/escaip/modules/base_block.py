@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     )
     from fairchem.core.models.escaip.custom_types import GraphAttentionData
 from fairchem.core.models.escaip.utils.graph_utils import map_sender_receiver_feature
-from fairchem.core.models.escaip.utils.nn_utils import get_linear
+from fairchem.core.models.escaip.utils.nn_utils import Activation, get_linear
 
 
 class BaseGraphNeuralNetworkLayer(nn.Module):
@@ -47,14 +47,14 @@ class BaseGraphNeuralNetworkLayer(nn.Module):
         self.source_direction_embedding = get_linear(
             in_features=gnn_cfg.node_direction_expansion_size,
             out_features=gnn_cfg.node_direction_embedding_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
             dropout=reg_cfg.mlp_dropout,
         )
         self.target_direction_embedding = get_linear(
             in_features=gnn_cfg.node_direction_expansion_size,
             out_features=gnn_cfg.node_direction_embedding_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
             dropout=reg_cfg.mlp_dropout,
         )
@@ -63,7 +63,7 @@ class BaseGraphNeuralNetworkLayer(nn.Module):
         self.edge_distance_embedding = get_linear(
             in_features=gnn_cfg.edge_distance_expansion_size,
             out_features=gnn_cfg.edge_distance_embedding_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
             dropout=reg_cfg.mlp_dropout,
         )
@@ -79,7 +79,7 @@ class BaseGraphNeuralNetworkLayer(nn.Module):
             + 2 * gnn_cfg.node_direction_embedding_size
             + 2 * gnn_cfg.atom_embedding_size,
             out_features=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
             dropout=reg_cfg.mlp_dropout,
         )
@@ -90,7 +90,7 @@ class BaseGraphNeuralNetworkLayer(nn.Module):
         return get_linear(
             in_features=2 * global_cfg.hidden_size,
             out_features=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
             dropout=reg_cfg.mlp_dropout,
         )

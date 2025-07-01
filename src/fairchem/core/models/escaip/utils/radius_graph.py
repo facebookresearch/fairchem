@@ -1,3 +1,8 @@
+"""
+Modified from MinDScAIP: Minimally biased Differentiable Scaled Attention Interatomic Potential
+Credit: Ryan Liu
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -379,7 +384,7 @@ def biknn_radius_graph(
     knn_use_low_mem: bool,
     knn_pad_size: int,
     use_pbc: bool,
-    device: str,
+    device: torch.device,
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -440,7 +445,7 @@ def biknn_radius_graph(
         )
         for reps in zip(rep_a1, rep_a2, rep_a3)
     ]
-    pos_list: list[torch.Tensor] = [data[i].pos for i in range(len(data))]
+    pos_list: list[torch.Tensor] = list(torch.split(data.pos, data.natoms.tolist()))
     cell_list: list[torch.Tensor] = list(data.cell)
 
     # call to the batched_radius_graph function to perform per-system biknn radius

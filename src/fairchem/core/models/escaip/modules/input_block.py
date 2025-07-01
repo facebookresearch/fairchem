@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from fairchem.core.models.escaip.custom_types import GraphAttentionData
 from fairchem.core.models.escaip.modules.base_block import BaseGraphNeuralNetworkLayer
 from fairchem.core.models.escaip.utils.nn_utils import (
+    Activation,
+    NormalizationType,
     get_feedforward,
     get_normalization_layer,
 )
@@ -40,12 +42,12 @@ class InputBlock(nn.Module):
 
         self.input_layer = InputLayer(global_cfg, molecular_graph_cfg, gnn_cfg, reg_cfg)
 
-        self.norm_node = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size, dtype=self.backbone_dtype
-        )
-        self.norm_edge = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size, dtype=self.backbone_dtype
-        )
+        self.norm_node = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+        self.norm_edge = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
     def forward(self, inputs: GraphAttentionData):
         node_features, edge_features = self.input_layer(inputs)
@@ -72,14 +74,14 @@ class InputLayer(BaseGraphNeuralNetworkLayer):
 
         # Edge linear layer
         self.edge_attr_linear = self.get_edge_linear(gnn_cfg, global_cfg, reg_cfg)
-        self.edge_attr_norm = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size
-        )
+        self.edge_attr_norm = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size)
 
         # ffn for edge features
         self.edge_ffn = get_feedforward(
             hidden_dim=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             hidden_layer_multiplier=1,
             dropout=reg_cfg.edge_ffn_dropout,
             bias=True,

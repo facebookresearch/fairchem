@@ -27,7 +27,7 @@ class GaussianSmearing(torch.nn.Module):
         self.register_buffer("offset", offset)
 
     def forward(self, dist) -> torch.Tensor:
-        dist = dist.view(-1, 1) - self.offset.view(1, -1)
+        dist = dist.view(-1, 1) - self.offset.view(1, -1)  # type: ignore
         return torch.exp(self.coeff * torch.pow(dist, 2))
 
 
@@ -42,7 +42,7 @@ class SigmoidSmearing(torch.nn.Module):
         self.register_buffer("offset", offset)
 
     def forward(self, dist) -> torch.Tensor:
-        exp_dist = self.coeff * (dist.view(-1, 1) - self.offset.view(1, -1))
+        exp_dist = self.coeff * (dist.view(-1, 1) - self.offset.view(1, -1))  # type: ignore
         return torch.sigmoid(exp_dist)
 
 
@@ -61,7 +61,7 @@ class LinearSigmoidSmearing(torch.nn.Module):
         self.register_buffer("offset", offset)
 
     def forward(self, dist) -> torch.Tensor:
-        exp_dist = self.coeff * (dist.view(-1, 1) - self.offset.view(1, -1))
+        exp_dist = self.coeff * (dist.view(-1, 1) - self.offset.view(1, -1))  # type: ignore
         return torch.sigmoid(exp_dist) + 0.001 * exp_dist
 
 

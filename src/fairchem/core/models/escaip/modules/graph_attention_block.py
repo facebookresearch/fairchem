@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from fairchem.core.models.escaip.custom_types import GraphAttentionData
 from fairchem.core.models.escaip.modules.base_block import BaseGraphNeuralNetworkLayer
 from fairchem.core.models.escaip.utils.nn_utils import (
+    Activation,
     NormalizationType,
     get_feedforward,
     get_linear,
@@ -189,9 +190,9 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
 
         # Edge linear layer
         self.edge_attr_linear = self.get_edge_linear(gnn_cfg, global_cfg, reg_cfg)
-        self.edge_attr_norm = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size
-        )
+        self.edge_attr_norm = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size)
 
         # Node hidden layer
         self.node_hidden_linear = self.get_node_linear(global_cfg, reg_cfg).to(
@@ -202,15 +203,15 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
         self.edge_hidden_linear = get_linear(
             in_features=global_cfg.hidden_size,
             out_features=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
             dropout=reg_cfg.mlp_dropout,
         ).to(self.backbone_dtype)
 
         # message normalization
-        self.message_norm = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size, dtype=self.backbone_dtype
-        )
+        self.message_norm = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
         # message linear
         self.use_message_gate = gnn_cfg.use_message_gate
@@ -231,7 +232,7 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
             self.message_linear = get_linear(
                 in_features=global_cfg.hidden_size * 3,
                 out_features=global_cfg.hidden_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 bias=True,
             ).to(self.backbone_dtype)
 
@@ -278,14 +279,14 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
             self.attn_distance_embedding = get_linear(
                 in_features=gnn_cfg.edge_distance_expansion_size,
                 out_features=gnn_cfg.angle_embedding_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 bias=True,
                 dropout=reg_cfg.mlp_dropout,
             )
             self.attn_angle_embedding = get_linear(
                 in_features=gnn_cfg.angle_expansion_size + 1,
                 out_features=gnn_cfg.angle_embedding_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 bias=True,
                 dropout=reg_cfg.mlp_dropout,
             )
@@ -360,7 +361,7 @@ class EfficientGraphAttention(BaseGraphNeuralNetworkLayer):
             attn_mask = data.attn_mask + self.get_attn_bias(
                 data.angle_embedding, data.edge_distance_expansion
             )
-        elif self.use_angle_embedding == "scalar":
+        elif self.use_angle_embedding == "scalar" and data.angle_embedding is not None:
             angle_embedding = data.angle_embedding.reshape(
                 -1,
                 self.attn_scalar.shape[0],
@@ -608,7 +609,7 @@ class FeedForwardNetwork(nn.Module):
         )
         self.mlp_node = get_feedforward(
             hidden_dim=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             hidden_layer_multiplier=gnn_cfg.ffn_hidden_layer_multiplier,
             bias=True,
             dropout=reg_cfg.node_ffn_dropout,
@@ -618,7 +619,7 @@ class FeedForwardNetwork(nn.Module):
         ):
             self.mlp_edge = get_feedforward(
                 hidden_dim=global_cfg.hidden_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 hidden_layer_multiplier=gnn_cfg.ffn_hidden_layer_multiplier,
                 bias=True,
                 dropout=reg_cfg.edge_ffn_dropout,

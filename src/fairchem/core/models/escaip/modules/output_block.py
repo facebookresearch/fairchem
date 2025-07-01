@@ -12,6 +12,8 @@ if TYPE_CHECKING:
         RegularizationConfigs,
     )
 from fairchem.core.models.escaip.utils.nn_utils import (
+    Activation,
+    NormalizationType,
     get_feedforward,
     get_linear,
     get_normalization_layer,
@@ -33,34 +35,34 @@ class OutputProjection(nn.Module):
         self.node_projection = get_linear(
             in_features=global_cfg.hidden_size * (gnn_cfg.num_layers + 1),
             out_features=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             bias=True,
         )
-        self.output_norm_node = get_normalization_layer(reg_cfg.normalization)(
-            global_cfg.hidden_size
-        )
+        self.output_norm_node = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size)
 
         if self.use_edge_readout:
             self.edge_projection = get_linear(
                 in_features=global_cfg.hidden_size * (gnn_cfg.num_layers + 1),
                 out_features=global_cfg.hidden_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 bias=True,
             )
-            self.output_norm_edge = get_normalization_layer(reg_cfg.normalization)(
-                global_cfg.hidden_size
-            )
+            self.output_norm_edge = get_normalization_layer(
+                NormalizationType(reg_cfg.normalization)
+            )(global_cfg.hidden_size)
 
         if self.use_global_readout:
             self.global_projection = get_linear(
                 in_features=global_cfg.hidden_size * (gnn_cfg.num_layers + 1),
                 out_features=global_cfg.hidden_size,
-                activation=global_cfg.activation,
+                activation=Activation(global_cfg.activation),
                 bias=True,
             )
-            self.output_norm_global = get_normalization_layer(reg_cfg.normalization)(
-                global_cfg.hidden_size
-            )
+            self.output_norm_global = get_normalization_layer(
+                NormalizationType(reg_cfg.normalization)
+            )(global_cfg.hidden_size)
 
     def forward(self, data, global_readouts, node_readouts, edge_readouts):
         node_features = self.node_projection(node_readouts)
@@ -104,7 +106,7 @@ class OutputLayer(nn.Module):
         # mlp
         self.ffn = get_feedforward(
             hidden_dim=global_cfg.hidden_size,
-            activation=global_cfg.activation,
+            activation=Activation(global_cfg.activation),
             hidden_layer_multiplier=gnn_cfg.output_hidden_layer_multiplier,
             dropout=reg_cfg.scalar_output_dropout
             if output_type == "Scalar"

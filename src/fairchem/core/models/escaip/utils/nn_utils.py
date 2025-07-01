@@ -77,13 +77,15 @@ def get_linear(
     in_features: int,
     out_features: int,
     bias: bool = False,
-    activation: Activation = None,
+    activation: Activation | None = None,
     dropout: float = 0.0,
 ):
     """
     Build a linear layer with optional activation and dropout.
     """
-    layers = [nn.Linear(in_features=in_features, out_features=out_features, bias=bias)]
+    layers: list[nn.Module] = [
+        nn.Linear(in_features=in_features, out_features=out_features, bias=bias)
+    ]
     if activation:
         layers.append(build_activation(activation))
     if dropout > 0.0:
@@ -93,7 +95,7 @@ def get_linear(
 
 def get_feedforward(
     hidden_dim: int,
-    activation: Activation,
+    activation: Activation | None,
     hidden_layer_multiplier: int,
     bias: bool = False,
     dropout: float = 0.0,

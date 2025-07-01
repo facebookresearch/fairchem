@@ -12,29 +12,25 @@ class GlobalConfigs:
     activation: Literal[
         "squared_relu", "gelu", "leaky_relu", "relu", "smelu", "star_relu"
     ]
+    regress_stress: bool = False
     use_compile: bool = True
     use_padding: bool = True
     use_fp16_backbone: bool = False
-    regress_stress: bool = False
 
 
 @dataclass
 class MolecularGraphConfigs:
     use_pbc: bool
-    use_pbc_single: bool
-    otf_graph: bool
-    max_neighbors: int
-    max_radius: float
     max_num_elements: int
     max_atoms: int
     max_batch_size: int
+    max_radius: float
     knn_k: int
     knn_soft: bool
     knn_sigmoid_scale: float
     knn_lse_scale: float
     knn_use_low_mem: bool
     knn_pad_size: int
-    enforce_max_neighbors_strictly: bool
     distance_function: Literal["gaussian", "sigmoid", "linearsigmoid", "silu"]
     use_envelope: bool
 
@@ -87,7 +83,7 @@ class EScAIPConfigs:
     reg_cfg: RegularizationConfigs
 
 
-def init_configs(cls: type[EScAIPConfigs], kwargs: dict[str, Any]) -> EScAIPConfigs:
+def init_configs(cls: Any, kwargs: dict[str, Any]) -> Any:
     """
     Initialize a dataclass with the given kwargs.
     """

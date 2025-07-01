@@ -56,64 +56,6 @@ def get_node_direction_expansion_neighbor(
     return node_boo
 
 
-def convert_neighbor_list(edge_index: torch.Tensor, max_neighbors: int, num_nodes: int):
-    """
-    Convert edge_index to a neighbor list format.
-    output:
-    """
-    src = edge_index[0, :]
-    dst = edge_index[1, :]
-
-    # Count the number of neighbors for each node
-    neighbor_counts = torch.bincount(dst, minlength=num_nodes)
-
-    # Calculate the offset for each node
-    offset = max_neighbors - neighbor_counts
-    offset = torch.cat(
-        [torch.tensor([0], device=offset.device), torch.cumsum(offset, dim=0)]
-    )
-
-    # Create an index mapping
-    index_mapping = torch.arange(0, edge_index.shape[1], device=edge_index.device)
-
-    # Calculate the indices in the neighbor list
-    index_mapping = offset[dst] + index_mapping
-
-    # Initialize the neighbor list and mask
-    neighbor_list = torch.full(
-        (num_nodes * max_neighbors,), -1, dtype=torch.long, device=edge_index.device
-    )
-    mask = torch.zeros(
-        (num_nodes * max_neighbors,), dtype=torch.bool, device=edge_index.device
-    )
-
-    # Scatter the neighbors
-    neighbor_list.scatter_(0, index_mapping, src)
-    mask.scatter_(
-        0,
-        index_mapping,
-        torch.ones_like(src, dtype=torch.bool, device=edge_index.device),
-    )
-
-    # Reshape to [N, max_num_neighbors]
-    neighbor_list = neighbor_list.view(num_nodes, max_neighbors)
-    mask = mask.view(num_nodes, max_neighbors)
-
-    return neighbor_list, mask, index_mapping
-
-
-def map_neighbor_list(x, index_mapping, max_neighbors, num_nodes):
-    """
-    Map from edges to neighbor list.
-    x: (num_edges, h)
-    index_mapping: (num_edges, )
-    return: (num_nodes, max_neighbors, h)
-    """
-    output = torch.zeros((num_nodes * max_neighbors, x.shape[1]), device=x.device)
-    output.scatter_(0, index_mapping.unsqueeze(1).expand(-1, x.shape[1]), x)
-    return output.view(num_nodes, max_neighbors, x.shape[1])
-
-
 def map_sender_receiver_feature(sender_feature, receiver_feature, neighbor_list):
     """
     Map from node features to edge features.
@@ -161,7 +103,7 @@ def legendre_polynomials(x: torch.Tensor, lmax: int) -> torch.Tensor:
 
 
 def get_compact_frequency_vectors(
-    edge_direction: torch.Tensor, lmax: int, repeating_dimensions: torch.Tensor
+    edge_direction: torch.Tensor, lmax: int, repeating_dimensions: torch.Tensor | list
 ):
     """
     Calculate a compact representation of frequency vectors.
@@ -222,38 +164,6 @@ def get_compact_frequency_vectors(
         )
 
 
-def get_frequency_vectors(
-    edge_direction: torch.Tensor, repeating_dimensions: torch.Tensor
-):
-    """
-    Calculate frequency vectors for all edge directions.
-    This is the original implementation that produces expanded vectors.
-    """
-    lmax = repeating_dimensions.shape[0] - 1
-    edge_direction = edge_direction.to(repeating_dimensions.device)
-    # (edge_direction: N, k, 3)
-    harmonics = _spherical_harmonics(
-        lmax, edge_direction[..., 0], edge_direction[..., 1], edge_direction[..., 2]
-    )  # (N, k, (Lmax + 1)**2)
-    result = torch.zeros(
-        (harmonics.shape[0], harmonics.shape[1], lmax + 1, 2 * lmax + 1),
-        device=repeating_dimensions.device,
-    )  # (N, k , lmax, 2 * lmax + 1)
-    curr_idx = 0
-    for _l in range(lmax + 1):
-        curr_irrep = harmonics[:, :, curr_idx : curr_idx + 2 * _l + 1] / math.sqrt(
-            2 * _l + 1
-        )  # ensure this is properly normalized
-        result[:, :, _l, : 2 * _l + 1] = curr_irrep
-        curr_idx += 2 * _l + 1
-
-    frequency_vectors = torch.repeat_interleave(
-        result, repeating_dimensions, dim=2
-    )  # (N, k, head_dim, 2 * lmax + 1)
-    return frequency_vectors
-
-
-# @torch.compile
 def get_attn_mask(
     edge_direction: torch.Tensor,
     neighbor_mask: torch.Tensor,
@@ -462,10 +372,11 @@ def compilable_scatter(
 
 
 def get_displacement_and_cell(data, regress_stress, regress_forces, direct_forces):
-    ###############################################################
-    # gradient-based forces/stress
-    # ref: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/models/uma/escn_md.py#L298
-    ###############################################################
+    """
+    Get the displacement and cell from the data.
+    For gradient-based forces/stress
+    ref: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/models/uma/escn_md.py#L298
+    """
     displacement = None
     orig_cell = None
     if regress_stress and not direct_forces:

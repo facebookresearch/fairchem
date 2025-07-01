@@ -28,8 +28,8 @@ class GraphAttentionData:
     edge_direction: torch.Tensor
     node_direction_expansion: torch.Tensor
     attn_mask: torch.Tensor
-    angle_embedding: torch.Tensor
-    frequency_vectors: torch.Tensor
+    angle_embedding: torch.Tensor | None
+    frequency_vectors: torch.Tensor | None
     neighbor_list: torch.Tensor
     neighbor_mask: torch.Tensor
     node_batch: torch.Tensor
@@ -55,6 +55,6 @@ def flatten_graph_attention_data_with_spec(data, spec):
 torch.export.register_dataclass(
     GraphAttentionData, serialized_type_name="GraphAttentionData"
 )
-torch.fx._pytree.register_pytree_flatten_spec(
+torch.fx._pytree.register_pytree_flatten_spec(  # type: ignore
     GraphAttentionData, flatten_fn_spec=flatten_graph_attention_data_with_spec
 )

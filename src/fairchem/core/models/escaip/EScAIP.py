@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
-from e3nn import o3
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
@@ -61,27 +60,10 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         self.regress_forces = cfg.global_cfg.regress_forces
         self.direct_forces = cfg.global_cfg.direct_forces
         self.regress_stress = cfg.global_cfg.regress_stress
-        self.use_pbc = cfg.molecular_graph_cfg.use_pbc
-
-        # graph generation
-        self.use_pbc_single = (
-            self.molecular_graph_cfg.use_pbc_single
-        )  # TODO: remove this when FairChem fixes the bug
-        # generate_graph_fn = partial(
-        #     self.generate_graph,
-        #     cutoff=self.molecular_graph_cfg.max_radius,
-        #     max_neighbors=self.molecular_graph_cfg.max_neighbors,
-        #     use_pbc=self.molecular_graph_cfg.use_pbc,
-        #     otf_graph=self.molecular_graph_cfg.otf_graph,
-        #     enforce_max_neighbors_strictly=self.molecular_graph_cfg.enforce_max_neighbors_strictly,
-        #     use_pbc_single=self.molecular_graph_cfg.use_pbc_single,
-        # )
 
         # data preprocess
         self.data_preprocess = partial(
-            # data_preprocess,
             data_preprocess_radius_graph,
-            # generate_graph_fn=generate_graph_fn,
             global_cfg=self.global_cfg,
             gnn_cfg=self.gnn_cfg,
             molecular_graph_cfg=self.molecular_graph_cfg,
@@ -131,14 +113,13 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         )
 
         # init weights
-        # self.apply(init_linear_weights)
         self.init_weights()
 
         # enable torch.set_float32_matmul_precision('high')
         torch.set_float32_matmul_precision("high")
 
         # log recompiles
-        torch._logging.set_logs(recompiles=True)
+        torch._logging.set_logs(recompiles=True)  # type: ignore
 
         self.forward_fn = (
             torch.compile(self.compiled_forward)
@@ -187,9 +168,10 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data: AtomicData):
-        data["atomic_numbers"] = data["atomic_numbers"].long()
-        data["atomic_numbers_full"] = data["atomic_numbers"]
-        data["batch_full"] = data["batch"]
+        # TODO: remove this when FairChem fixes the bug
+        data["atomic_numbers"] = data["atomic_numbers"].long()  # type: ignore
+        data["atomic_numbers_full"] = data["atomic_numbers"]  # type: ignore
+        data["batch_full"] = data["batch"]  # type: ignore
 
         # gradient force and stress
         displacement, orig_cell = get_displacement_and_cell(
@@ -204,7 +186,7 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         results["orig_cell"] = orig_cell
         return results
 
-    @torch.jit.ignore
+    @torch.jit.ignore(drop=False)
     def no_weight_decay(self):
         return no_weight_decay(self)
 
@@ -233,7 +215,7 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
 
 
 class EScAIPHeadBase(nn.Module, HeadInterface):
-    def __init__(self, backbone: EScAIPBackbone):
+    def __init__(self, backbone: EScAIPBackbone):  # type: ignore
         super().__init__()
         self.global_cfg = backbone.global_cfg
         self.molecular_graph_cfg = backbone.molecular_graph_cfg
@@ -243,24 +225,24 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
         self.regress_forces = backbone.regress_forces
         self.direct_forces = backbone.direct_forces
 
-    def post_init(self, gain=1.41421):
+    def post_init(self, gain=1.0):
         # init weights
         self.apply(partial(init_linear_weights, gain=gain))
 
         self.forward_fn = (
-            torch.compile(self.compiled_forward)
+            torch.compile(self.compiled_forward)  # type: ignore
             if self.global_cfg.use_compile
             else self.compiled_forward
         )
 
-    @torch.jit.ignore
+    @torch.jit.ignore(drop=False)
     def no_weight_decay(self):
         return no_weight_decay(self)
 
 
 @registry.register_model("EScAIP_direct_force_head")
 class EScAIPDirectForceHead(EScAIPHeadBase):
-    def __init__(self, backbone: EScAIPBackbone):
+    def __init__(self, backbone: EScAIPBackbone):  # type: ignore
         super().__init__(backbone)
         self.force_direction_layer = OutputLayer(
             global_cfg=self.global_cfg,
@@ -295,7 +277,7 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        force_output = self.forward_fn(
+        force_output = self.forward_fn(  # type: ignore
             edge_features=emb["edge_features"],
             node_features=emb["node_features"],
             data=emb["data"],
@@ -303,14 +285,14 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
 
         return unpad_results(
             results={"forces": force_output},
-            node_padding_mask=emb["data"].node_padding_mask,
-            graph_padding_mask=emb["data"].graph_padding_mask,
+            node_padding_mask=emb["data"].node_padding_mask,  # type: ignore
+            graph_padding_mask=emb["data"].graph_padding_mask,  # type: ignore
         )
 
 
 @registry.register_model("EScAIP_energy_head")
 class EScAIPEnergyHead(EScAIPHeadBase):
-    def __init__(self, backbone: EScAIPBackbone):
+    def __init__(self, backbone: EScAIPBackbone):  # type: ignore
         super().__init__(backbone)
         self.energy_layer = OutputLayer(
             global_cfg=self.global_cfg,
@@ -343,23 +325,25 @@ class EScAIPEnergyHead(EScAIPHeadBase):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        energy_output = self.forward_fn(emb)
+        energy_output = self.forward_fn(emb)  # type: ignore
+        if len(energy_output.shape) == 0:
+            energy_output = energy_output.unsqueeze(0)
         return unpad_results(
             results={"energy": energy_output},
-            node_padding_mask=emb["data"].node_padding_mask,
-            graph_padding_mask=emb["data"].graph_padding_mask,
+            node_padding_mask=emb["data"].node_padding_mask,  # type: ignore
+            graph_padding_mask=emb["data"].graph_padding_mask,  # type: ignore
         )
 
 
 @registry.register_model("EScAIP_grad_energy_force_stress_head")
-class EScAIPGradientEnergyForceStressHead(EScAIPEnergyHead):
+class EScAIPGradientEnergyForceStressHead(EScAIPEnergyHead):  # type: ignore
     """
     Do not support torch.compile
     """
 
     def __init__(
         self,
-        backbone: EScAIPBackbone,
+        backbone: EScAIPBackbone,  # type: ignore
         prefix: str | None = None,
         wrap_property: bool = True,
     ):
@@ -391,11 +375,13 @@ class EScAIPGradientEnergyForceStressHead(EScAIPEnergyHead):
 
             energy_output = compilable_scatter(
                 src=energy_output,
-                index=emb["data"].node_batch,
-                dim_size=emb["data"].graph_padding_mask.shape[0],
+                index=emb["data"].node_batch,  # type: ignore
+                dim_size=emb["data"].graph_padding_mask.shape[0],  # type: ignore
                 dim=0,
                 reduce=self.energy_reduce,
             ).squeeze()
+            if len(energy_output.shape) == 0:
+                energy_output = energy_output.unsqueeze(0)
         outputs[energy_key] = (
             {"energy": energy_output} if self.wrap_property else energy_output
         )
@@ -429,90 +415,6 @@ class EScAIPGradientEnergyForceStressHead(EScAIPEnergyHead):
 
         return unpad_results(
             results=outputs,
-            node_padding_mask=emb["data"].node_padding_mask,
-            graph_padding_mask=emb["data"].graph_padding_mask,
-        )
-
-
-@registry.register_model("EScAIP_rank2_head")
-class EScAIPRank2Head(EScAIPHeadBase):
-    """
-    Rank-2 head for EScAIP model. Modified from the Rank2Block for Equiformer V2.
-    """
-
-    def __init__(
-        self,
-        backbone: EScAIPBackbone,
-        output_name: str = "stress",
-    ):
-        super().__init__(backbone)
-        self.output_name = output_name
-        self.scalar_layer = OutputLayer(
-            global_cfg=self.global_cfg,
-            gnn_cfg=self.gnn_cfg,
-            reg_cfg=self.reg_cfg,
-            output_type="Scalar",
-        )
-        self.irreps2_layer = OutputLayer(
-            global_cfg=self.global_cfg,
-            gnn_cfg=self.gnn_cfg,
-            reg_cfg=self.reg_cfg,
-            output_type="Scalar",
-        )
-
-        self.post_init()
-
-    def compiled_forward(self, node_features, edge_features, data: GraphAttentionData):
-        sphere_irrep2 = o3.spherical_harmonics(
-            2, data.edge_direction, True
-        ).detach()  # (num_nodes, max_neighbor, 5)
-
-        # map from invariant to irrep2
-        edge_irrep2 = (
-            sphere_irrep2[:, :, :, None] * edge_features[:, :, None, :]
-        )  # (num_nodes, max_neighbor, 5, h)
-
-        # sum over neighbors
-        neighbor_count = data.neighbor_mask.sum(dim=1, keepdim=True) + 1e-5
-        neighbor_count = neighbor_count.to(edge_irrep2.dtype)
-        node_irrep2 = (
-            edge_irrep2 * data.neighbor_mask.unsqueeze(-1).unsqueeze(-1)
-        ).sum(dim=1) / neighbor_count.unsqueeze(-1)  # (num_nodes, 5, h)
-
-        irrep2_output = self.irreps2_layer(node_irrep2)  # (num_nodes, 5, 1)
-        scalar_output = self.scalar_layer(node_features)  # (num_nodes, 1)
-
-        # get graph level output
-        irrep2_output = compilable_scatter(
-            src=irrep2_output.view(-1, 5),
-            index=data.node_batch,
-            dim_size=data.graph_padding_mask.shape[0],
-            dim=0,
-            reduce="mean",
-        )
-        scalar_output = compilable_scatter(
-            src=scalar_output.view(-1, 1),
-            index=data.node_batch,
-            dim_size=data.graph_padding_mask.shape[0],
-            dim=0,
-            reduce="mean",
-        )
-        return irrep2_output, scalar_output.view(-1)
-
-    @conditional_grad(torch.enable_grad())
-    def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
-        irrep2_output, scalar_output = self.forward_fn(
-            node_features=emb["node_features"],
-            edge_features=emb["edge_features"],
-            data=emb["data"],
-        )
-        output = {
-            f"{self.output_name}_isotropic": scalar_output.unsqueeze(1),
-            f"{self.output_name}_anisotropic": irrep2_output,
-        }
-
-        return unpad_results(
-            results=output,
-            node_padding_mask=emb["data"].node_padding_mask,
-            graph_padding_mask=emb["data"].graph_padding_mask,
+            node_padding_mask=emb["data"].node_padding_mask,  # type: ignore
+            graph_padding_mask=emb["data"].graph_padding_mask,  # type: ignore
         )
