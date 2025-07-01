@@ -37,13 +37,17 @@ If you want to explore model capabilities check out our
 
 [![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
 
-
 ## Installation
 Although not required, we highly recommend installing using a package manager and virtualenv such as [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer), it is much faster and better at resolving dependencies than standalone pip.
 
 Install fairchem-core using pip
 ```bash
 pip install fairchem-core
+```
+
+If you want to contribute or make modifications to the code, install in edit mode
+```bash
+pip install -e fairchem-core[dev]
 ```
 
 ## Quick Start
@@ -73,7 +77,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -95,7 +99,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -113,7 +117,7 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -135,7 +139,7 @@ dyn.run(steps=1000)
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
@@ -151,4 +155,4 @@ triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
 ### LICENSE
-`fairchem` is available under a [MIT License](LICENSE.md). Models/checkpoint licenses vary by application area. 
+`fairchem` is available under a [MIT License](LICENSE.md). Models/checkpoint licenses vary by application area.
