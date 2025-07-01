@@ -23,9 +23,9 @@ parts:
     - file: core/common_tasks/fine_tuning
     - file: core/common_tasks/workflows
     - file: core/uma_faq
-  - file: core/uma_tutorials/summary
+  - file: uma_tutorials/summary
     sections:
-    - file: core/uma_tutorials/uma_tutorial
+    - file: uma_tutorials/uma_tutorial
   - file: core/uma_examples/summary
     sections:
     - file: core/uma_examples/uma_tutorial

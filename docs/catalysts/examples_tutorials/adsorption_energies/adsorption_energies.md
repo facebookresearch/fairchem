@@ -22,7 +22,7 @@ One of the most common tasks in computational catalysis is calculating the bindi
 
 
 1. Install the necessary packages using pip, uv etc
-```{code}
+```{code-cell} ipython3
 :tags: [skip-execution]
 
 ! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
@@ -34,7 +34,7 @@ One of the most common tasks in computational catalysis is calculating the bindi
     * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
     * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
 
-```{code}
+```{code-cell} ipython3
 :tags: [skip-execution]
 
 # Login using the huggingface-cli utility

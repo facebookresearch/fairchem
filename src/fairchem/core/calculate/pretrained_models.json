@@ -8,6 +8,24 @@
             "filename": "iso_atom_elem_refs.yaml"
         }
     },
+    "uma-s-1p1": {
+        "filename": "uma-s-1p1.pt",
+        "repo_id": "facebook/UMA",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "iso_atom_elem_refs.yaml"
+        }
+    },
+    "uma-m-1p1": {
+        "filename": "uma-m-1p1.pt",
+        "repo_id": "facebook/UMA",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "iso_atom_elem_refs.yaml"
+        }
+    },
     "esen-md-direct-all-omol": {
         "filename": "esen_md_direct_all.pt",
         "repo_id": "facebook/OMol25",

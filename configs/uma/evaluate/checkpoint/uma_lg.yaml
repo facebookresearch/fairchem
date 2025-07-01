@@ -1,2 +1,2 @@
 model_name: uma_lg
-ckpt_path: ${cluster.checkpoint_root_dir}/paper_models/uma_lg.pt
+ckpt_path: ${cluster.checkpoint_root_dir}/uma_lg.pt
