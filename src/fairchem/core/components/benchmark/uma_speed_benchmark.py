@@ -18,6 +18,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 from ase import build
+from ase.io import read
 from torch.profiler import ProfilerActivity, profile
 
 from fairchem.core.common.profiler_utils import get_profile_schedule
@@ -107,8 +108,9 @@ def make_profile(data, predictor, name, save_loc):
         schedule=profile_schedule,
         on_trace_ready=tc,
     ) as p:
-        for _ in range(total_profile_steps):
+        for i in range(total_profile_steps):
             predictor.predict(data)
+            logging.info(f"done step {i}")
             torch.cuda.synchronize()
             p.step()
 
@@ -117,16 +119,21 @@ class InferenceBenchRunner(Runner):
     def __init__(
         self,
         run_dir_root,
-        natoms_list: list[int],
         model_checkpoints: dict[str, str],
         timeiters: int = 10,
         seed: int = 1,
         device="cuda",
+        natoms_list: list[int] | None = None,
+        input_system: dict | None = None,
         overrides: dict | None = None,
         inference_settings: InferenceSettings = inference_settings_default(),  # noqa B008
         generate_traces: bool = False,  # takes additional memory and time
     ):
         self.natoms_list = natoms_list
+        self.input_system = input_system
+        assert (natoms_list is None) ^ (
+            input_system is None
+        ), "input must be either list of natoms or dict names: input system files"
         self.device = device
         self.seed = seed
         self.timeiters = timeiters
@@ -156,17 +163,31 @@ class InferenceBenchRunner(Runner):
             cutoff = predictor.model.module.backbone.cutoff
             logging.info(f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}")
 
-            # benchmark all cell sizes
-            for natoms in self.natoms_list:
-                data = get_fcc_carbon_xtal(
-                    max_neighbors,
-                    cutoff,
-                    natoms,
-                    external_graph=self.inference_settings.external_graph_gen,
-                )
-                num_atoms = data.natoms.item()
+            def yield_inputs():
+                if self.natoms_list is not None:
+                    for natoms in self.natoms_list:
+                        data = get_fcc_carbon_xtal(
+                            max_neighbors,
+                            cutoff,
+                            natoms,
+                            external_graph=self.inference_settings.external_graph_gen,
+                        )
+                        yield data.natoms.item(), data
+                else:
+                    for k, v in self.input_system.items():
+                        atoms = read(v)
+                        data = ase_to_graph(
+                            atoms,
+                            max_neighbors,
+                            cutoff,
+                            external_graph=self.inference_settings.external_graph_gen,
+                        )
+                        yield k, data
 
-                print_info = f"Starting profile: model: {model_checkpoint}, num_atoms: {num_atoms}"
+            # benchmark all models or number of atoms
+            for name, data in yield_inputs():
+                num_atoms = data.natoms.item()
+                print_info = f"Starting profile: model: {model_checkpoint}, input: {name}, num_atoms: {num_atoms}"
                 if self.inference_settings.external_graph_gen:
                     num_edges = data.edge_index.shape[1]
                     print_info += f" num edges compute on: {num_edges}"
