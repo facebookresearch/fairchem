@@ -1,0 +1,39 @@
+mptrj_train:
+  splits:
+    train:
+      src:
+        - data/mptrj/train/train_mptrj.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: ${regress_stress}
+  key_mapping:
+    energy: mptrj_energy
+    forces: ${mptrj_forces_key}
+    stress: ${mptrj_stress_key}
+  transforms:
+    common_transform:
+      dataset_name: mptrj
+    stress_reshape_transform:
+      dataset_name: mptrj
+
+mptrj_val:
+  splits:
+    val:
+      src:
+        - data/mptrj/val/val_mptrj.aselmdb
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: ${regress_stress}
+  key_mapping:
+    energy: mptrj_energy
+    forces: ${mptrj_forces_key}
+    stress: ${mptrj_stress_key}
+  transforms:
+    common_transform:
+      dataset_name: mptrj
+    stress_reshape_transform:
+      dataset_name: mptrj
