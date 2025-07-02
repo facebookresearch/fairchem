@@ -1,6 +1,6 @@
 defaults:
   - cluster: h100
-  - checkpoint: uma_sm
+  - checkpoint: uma_sm_mpa
   - _self_
 
 benchmark_name: mp-binary-pbe-elasticity
@@ -31,11 +31,9 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.elasticity_runner.ElasticityRunner
   calculator:
-    _target_: fairchem.core.calculate.ase_calculator.FAIRChemCalculator
-    predict_unit:
-      _target_: fairchem.core.units.mlip_unit.load_predict_unit
-      path: ${checkpoint.ckpt_path}
-  task_name: omat
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
+    task_name: omat
   input_data:
     _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
     config:

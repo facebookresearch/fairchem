@@ -13,10 +13,52 @@ kernelspec:
 
 # Transition State Search (NEBs)
 
-FAIR chemistry models can be used to enumerate and study reaction pathways via transition state search tools built into ASE or in packages like Sella via the ASE interface. 
+FAIR chemistry models can be used to enumerate and study reaction pathways via transition state search tools built into ASE or in packages like Sella via the ASE interface.
 
 The first section of this tutorial walks through how to use the CatTsunami tools to automatically enumerate a number of hypothetical initial/final configurations for various types of reactions on a heterogeneous catalyst surface. If you already have a NEB you're looking to optimize, you can jump straight to the last section (Run NEBs)!
 
+Since the NEB calculations here can be a bit time consuming, we'll use a small number of steps during the documentation testing, and otherwise use a reasonable guess.
+
+```{code-cell} ipython3
+import os
+
+# Use a small number of steps here to keep the docs fast during CI, but otherwise do quite reasonable settings.
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
+    optimization_steps = 20
+else:
+    optimization_steps = 300
+```
+
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+
+1. Install the necessary packages using pip, uv etc
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
 
 ## Do enumerations in an AdsorbML style
 
@@ -87,7 +129,7 @@ product2_configs = AdsorbateSlabConfig(
 
 ```{code-cell} ipython3
 # Instantiate the calculator
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -98,7 +140,7 @@ for config in reactant_configs:
     config.calc = calc
     config.pbc = True
     opt = BFGS(config)
-    opt.run(fmax=0.05, steps=200)
+    opt.run(fmax=0.05, steps=optimization_steps)
     reactant_energies.append(config.get_potential_energy())
 ```
 
@@ -109,7 +151,7 @@ for config in product1_configs:
     config.calc = calc
     config.pbc = True
     opt = BFGS(config)
-    opt.run(fmax=0.05, steps=200)
+    opt.run(fmax=0.05, steps=optimization_steps)
     product1_energies.append(config.get_potential_energy())
 ```
 
@@ -119,7 +161,7 @@ for config in product2_configs:
     config.calc = calc
     config.pbc = True
     opt = BFGS(config)
-    opt.run(fmax=0.05, steps=200)
+    opt.run(fmax=0.05, steps=optimization_steps)
     product2_energies.append(config.get_potential_energy())
 ```
 
@@ -179,10 +221,10 @@ for idx, frame_set in enumerate(frame_sets):
         neb,
         trajectory=f"ch_dissoc_on_Ru_{idx}.traj",
     )
-    conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=200)
+    conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=optimization_steps)
     if conv:
         neb.climb = True
-        conv = optimizer.run(fmax=fmax, steps=300)
+        conv = optimizer.run(fmax=fmax, steps=optimization_steps)
         if conv:
             converged_idxs.append(idx)
 
@@ -204,10 +246,10 @@ optimizer = BFGS(
     neb,
     trajectory="ch_dissoc_on_Ru_0.traj",
 )
-conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=200)
+conv = optimizer.run(fmax=fmax + delta_fmax_climb, steps=optimization_steps)
 if conv:
     neb.climb = True
-    conv = optimizer.run(fmax=fmax, steps=300)
+    conv = optimizer.run(fmax=fmax, steps=optimization_steps)
 ```
 
 ## Visualize the results
