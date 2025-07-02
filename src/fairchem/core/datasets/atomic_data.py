@@ -450,7 +450,7 @@ class AtomicData:
             positions=self.pos.numpy(),
             cell=self.cell.squeeze().numpy(),
             pbc=self.pbc.squeeze().tolist(),
-            constraint=FixAtoms(mask=self.fixed.tolist()),
+            constraint=FixAtoms(mask=self.fixed.bool().tolist()),
             tags=self.tags.numpy(),
         )
 
