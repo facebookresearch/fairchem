@@ -20,6 +20,7 @@ from .uma.escn_md import (
 )
 from .uma.escn_moe import eSCNMDMoeBackbone, eSCNMDMoeBackboneLR
 
+from .uma.escn_md_les import eSCNMDBackboneLES, MLP_EFS_Head_LES
 torch.set_float32_matmul_precision("high")
 
 __all__ = [
