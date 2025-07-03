@@ -13,6 +13,7 @@ __all__ = ['Les']
 class Les(nn.Module):
 
     def __init__(self, 
+            n_in=None,  # input dimension of representation
             n_layers: int = 3,
             n_hidden: Union[int, list] = [32, 16],
             add_linear_nn: bool = True,
@@ -32,6 +33,7 @@ class Les(nn.Module):
         if les_arguments is not None:
             self._parse_arguments(les_arguments)
         else:
+            self.n_in = n_in
             self.les_arguments = {}
             self.n_layers = n_layers
             self.n_hidden = n_hidden
@@ -46,6 +48,7 @@ class Les(nn.Module):
         
         self.atomwise: nn.Module = (
             Atomwise(
+                n_in=self.n_in,
                 n_layers=self.n_layers,
                 n_hidden=self.n_hidden,
                 add_linear_nn=self.add_linear_nn,
@@ -70,6 +73,7 @@ class Les(nn.Module):
         """
         Parse arguments for LES model
         """
+        self.n_in = les_arguments.get('n_in', None)  # input dimension of representation    
         self.n_layers = les_arguments.get('n_layers', 3)
         self.n_hidden = les_arguments.get('n_hidden', [32, 16])
         self.add_linear_nn = les_arguments.get('add_linear_nn', True)
@@ -118,6 +122,8 @@ class Les(nn.Module):
                 raise ValueError("desc must be provided and use_atomwise must be True if latent_charges is not provided")
             # compute the latent charges
             assert desc.shape[0] == positions.shape[0]
+            
+            # error is here - desc/batch
             latent_charges = self.atomwise(desc, batch)
         else:
             raise ValueError("Either desc or latent_charges must be provided")

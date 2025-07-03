@@ -272,6 +272,11 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+        # print the number of parameters in the model
+        logging.info(
+            f"eSCNMD Backbone LES model initialized with {self.num_params} parameters."
+        )
+
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
     ):
@@ -655,6 +660,7 @@ class MLP_EFS_Head_LES(nn.Module, HeadInterface):
         self.hidden_channels = backbone.hidden_channels
 
         self.les = Les(
+            n_in=backbone.sphere_channels,
             n_layers=backbone.les_n_layers,
             n_hidden=backbone.les_n_hidden,
             add_linear_nn=backbone.les_add_linear_nn,
@@ -712,15 +718,21 @@ class MLP_EFS_Head_LES(nn.Module, HeadInterface):
         lr_energy = self.les(
             positions=data["pos"], 
             cell=data["cell"], 
-            desc=emb["node_embedding"],
+            desc=emb["node_embedding"].narrow(1, 0, 1).squeeze(),
             batch=data["batch"],
             compute_energy=True,
             compute_bec=False,  # not used in eSCNMD
             bec_output_index=None,  # not used in eSCNMD
         )
-
-        energy_part.index_add_(0, data["batch"], lr_energy)
-
+        
+        #print(lr_energy["E_lr"].shape)
+        #print(data["batch"].shape)
+        #print(energy_part.shape)
+        #energy_part.index_add_(0, data["batch"], lr_energy["E_lr"])
+        # add long-range energy to energy_part 
+        #print("energies shapes: ", lr_energy["E_lr"].shape, energy_part.shape, data["batch"].shape)
+        
+        energy_part = energy_part + lr_energy["E_lr"]
         outputs[energy_key] = {"energy": energy_part} if self.wrap_property else energy_part
 
         if self.regress_stress:
