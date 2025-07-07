@@ -24,7 +24,7 @@ from fairchem.core.units.mlip_unit import MLIPPredictUnit
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        #(torch.float32, 1e-8, 1e-5),
+        (torch.float32, 1e-8, 1e-5),
         (torch.float64, 1e-25, 1e-22),
     ],
 )
@@ -40,7 +40,7 @@ def test_direct_equivariance(
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        #(torch.float32, 1e-8, 1e-5),
+        (torch.float32, 1e-8, 1e-5),
         (torch.float64, 1e-25, 1e-22),
     ],
 )
@@ -56,7 +56,7 @@ def test_direct_mole_equivariance(
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        #(torch.float32, 1e-8, 1e-5),
+        (torch.float32, 1e-8, 1e-5),
         (torch.float64, 1e-25, 1e-22),
     ],
 )
