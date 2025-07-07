@@ -226,10 +226,10 @@ class FAIRChemCalculator(Calculator):
                     self.results["energy"] = self.results["free_energy"] = (
                         energy  # Free energy is a copy of energy
                     )
-                if calc_key == "forces":
+                elif calc_key == "forces":
                     forces = pred[calc_key].detach().cpu().numpy()
                     self.results["forces"] = forces
-                if calc_key == "stress":
+                elif calc_key == "stress" and atoms.pbc.any():
                     stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
