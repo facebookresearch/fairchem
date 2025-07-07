@@ -134,6 +134,7 @@ class AtomicData:
         charge: torch.Tensor,  # (num_graph,)
         spin: torch.Tensor,  # (num_graph,)
         bandgap: torch.Tensor,  # (num_graph,)
+        optical_gap: torch.Tensor,  # (num_graph,)
         fixed: torch.Tensor,  # (num_node,)
         tags: torch.Tensor,  # (num_node,)
         energy: torch.Tensor | None = None,  # (num_graph,)
@@ -158,6 +159,7 @@ class AtomicData:
         self.charge = charge
         self.spin = spin
         self.bandgap = bandgap
+        self.optical_gap = optical_gap
         self.fixed = fixed
         self.tags = tags
         self.sid = sid if sid is not None else [""]
@@ -426,6 +428,15 @@ class AtomicData:
                 else 0
             ]
         )
+
+        optical_gap = torch.LongTensor(
+            [
+                atoms.info.get("Band_gap_HSE_optical", 0)
+                if r_data_keys is not None and "Band_gap_HSE_optical" in r_data_keys
+                else 0
+            ]
+        )
+
         # NOTE: code assumes these are ints.. not tensors
         # charge = atoms.info.get("charge", 0)
         # spin = atoms.info.get("spin", 0)
@@ -441,6 +452,7 @@ class AtomicData:
             charge=tensor_or_int_to_tensor(charge, torch.long),
             spin=tensor_or_int_to_tensor(spin, torch.long),
             bandgap=bandgap,
+            optical_gap=optical_gap,
             fixed=fixed,
             tags=tags,
             energy=energy,
@@ -511,6 +523,7 @@ class AtomicData:
             charge=dictionary["charge"],
             spin=dictionary["spin"],
             bandgap=dictionary["bandgap"],
+            optical_gap=dictionary["optical_gap"],
             fixed=dictionary.get("fixed", None),
             tags=dictionary.get("tags", None),
             energy=dictionary.get("energy", None),
