@@ -35,11 +35,11 @@ Each term on the right-hand side represents the energy of the relaxed state of t
 ! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
 ```
 
-2. Get access to any necessary huggingface gated models 
+2. Get access to any necessary huggingface gated models
     * Get and login to your Huggingface account
     * Request access to https://huggingface.co/facebook/UMA
     * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
 
 ```{code-cell} ipython3
 :tags: [skip-execution]
@@ -60,7 +60,7 @@ A pre-trained model can be loaded using `FAIRChemCalculator`. In this example, w
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="odac")
 ```
 
