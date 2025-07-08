@@ -169,7 +169,7 @@ class JobConfig:
         self.run_dir = os.path.abspath(self.run_dir)
         try:
             cluster = clusterscope.cluster()
-        except RuntimeError:
+        except Exception:
             cluster = ""
         self.metadata = Metadata(
             commit=get_commit_hash(),
