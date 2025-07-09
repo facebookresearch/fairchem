@@ -11,6 +11,7 @@ import argparse
 import logging
 import os
 import random
+import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass, field
@@ -167,10 +168,13 @@ class JobConfig:
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
-        try:
+
+        # Get the cluster name if we have a slurm cluster
+        if shutil.which('scontrol') is not None:
             cluster = clusterscope.cluster()
-        except Exception:
+        else:
             cluster = ""
+
         self.metadata = Metadata(
             commit=get_commit_hash(),
             log_dir=os.path.join(self.run_dir, self.timestamp_id, LOG_DIR_NAME),
