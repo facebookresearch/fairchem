@@ -170,7 +170,7 @@ class JobConfig:
         self.run_dir = os.path.abspath(self.run_dir)
 
         # Get the cluster name if we have a slurm cluster
-        if shutil.which('scontrol') is not None:
+        if shutil.which("scontrol") is not None:
             cluster = clusterscope.cluster()
         else:
             cluster = ""
