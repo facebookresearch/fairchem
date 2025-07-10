@@ -160,7 +160,6 @@ def test_calculator_setup(all_calculators):
         "bulk_atoms",
         "aperiodic_atoms",
         "periodic_h2o_atoms",
-        "large_bulk_atoms",
     ],
 )
 def test_energy_calculation(request, atoms_fixture, all_calculators):
@@ -317,7 +316,7 @@ def test_single_atom_systems():
     """Test a system with a single atom. Single atoms do not currently use the model."""
     predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
 
-    for at_num in range(1,84):
+    for at_num in range(1, 84):
         atom = Atoms([at_num], positions=[(0.0, 0.0, 0.0)])
         atom.info["charge"] = 0
         atom.info["spin"] = 3

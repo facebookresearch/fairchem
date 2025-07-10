@@ -13,7 +13,7 @@ kernelspec:
 
 # Transition State Search (NEBs)
 
-FAIR chemistry models can be used to enumerate and study reaction pathways via transition state search tools built into ASE or in packages like Sella via the ASE interface. 
+FAIR chemistry models can be used to enumerate and study reaction pathways via transition state search tools built into ASE or in packages like Sella via the ASE interface.
 
 The first section of this tutorial walks through how to use the CatTsunami tools to automatically enumerate a number of hypothetical initial/final configurations for various types of reactions on a heterogeneous catalyst surface. If you already have a NEB you're looking to optimize, you can jump straight to the last section (Run NEBs)!
 
@@ -29,6 +29,36 @@ if fast_docs:
 else:
     optimization_steps = 300
 ```
+
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+
+1. Install the necessary packages using pip, uv etc
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
 
 ## Do enumerations in an AdsorbML style
 
@@ -99,7 +129,7 @@ product2_configs = AdsorbateSlabConfig(
 
 ```{code-cell} ipython3
 # Instantiate the calculator
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
