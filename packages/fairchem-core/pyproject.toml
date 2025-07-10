@@ -27,7 +27,7 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "ase>=3.25.0",
     "ase-db-backends>=0.10.0",
-    "clusterscope",
+    "clusterscope>=0.0.7",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
