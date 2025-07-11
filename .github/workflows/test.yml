@@ -1,28 +1,65 @@
 name: tests
 
 on:
-  workflow_call:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
+  workflow_run:
+    workflows:
+      - "contributor check"
+    types:
+      - completed
 
 jobs:
   test:
     runs-on: 32-core-ubuntu
-    continue-on-error: true
+    permissions:
+      contents: read
+      # Needed by set-commit-status-action
+      statuses: write
     strategy:
       max-parallel: 10
       matrix:
         python_version: ['3.10', '3.12']
 
     steps:
-      # Check out the PR code (not the base branch)
-      - name: Checkout PR code
+      # If triggered by a workflow_run on a PR, the status won't show up by
+      # default on the PR checks so we need to do it manually. This sets the
+      # status to pending, but more importantly it adds a URL to the PR check
+      # linking to this workflow job.
+      - name: Report initial status after workflow_run trigger
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: myrotvorets/set-commit-status-action@v2.0.1
+        with:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          status: pending
+      
+      # If this was triggered by a completed workflow run, we want to make
+      # sure that workflow actually succeeded. If it didn't, we should skip
+      # the remainder of the tests.
+      - name: Fail on triggering workflow failure
+        if: ${{
+            github.event_name == 'workflow_run'
+            && github.event.workflow_run.conclusion != 'success'
+          }}
+        run: |
+          echo "Skipping tests because the triggering workflow did not succeed"
+          exit 1
+      
+      # Check out the code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          # The path to the sha of the commit we want to test will depend
+          # on the trigger type. If a workflow_run trigger, then we want
+          # the sha from the head of the branch that triggered it. For 
+          # pushes and manual triggers, we want the sha of the branch.
+          ref: |
+            ${{
+              github.event.workflow_run.head_sha ||
+              github.event.pull_request.head.sha ||
+              github.sha
+            }}
           # Optional: get full history if needed
           fetch-depth: 0
       - name: Set up Python ${{ matrix.python_version }}
@@ -76,17 +113,71 @@ jobs:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }} # required
           verbose: true # optional (default = false)
+      
+      # Manually report the final status if this was triggered by a
+      # workflow_run since it won't show up by default on the checks
+      # of the triggering PR
+      - name: Report final status after workflow_run trigger
+        if: ${{
+            always()
+            && github.event_name == 'workflow_run'
+          }}
+        uses: myrotvorets/set-commit-status-action@v2.0.1
+        with:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          status: ${{ job.status }}
 
   test_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
-    continue-on-error: true
+    permissions:
+      contents: read
+      # Needed by set-commit-status-action
+      statuses: write
     strategy:
       max-parallel: 10
       matrix:
         python_version: ['3.12']
 
     steps:
-      - uses: actions/checkout@v4
+      # If triggered by a workflow_run on a PR, the status won't show up by
+      # default on the PR checks so we need to do it manually. This sets the
+      # status to pending, but more importantly it adds a URL to the PR check
+      # linking to this workflow job.
+      - name: Report initial status after workflow_run trigger
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: myrotvorets/set-commit-status-action@v2.0.1
+        with:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          status: pending
+      
+      # If this was triggered by a completed workflow run, we want to make
+      # sure that workflow actually succeeded. If it didn't, we should skip
+      # the remainder of the tests.
+      - name: Fail on triggering workflow failure
+        if: ${{
+            github.event_name == 'workflow_run'
+            && github.event.workflow_run.conclusion != 'success'
+          }}
+        run: |
+          echo "Skipping tests because the triggering workflow did not succeed"
+          exit 1
+      
+      # Check out the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # The path to the sha of the commit we want to test will depend
+          # on the trigger type. If a workflow_run trigger, then we want
+          # the sha from the head of the branch that triggered it. For 
+          # pushes and manual triggers, we want the sha of the branch.
+          ref: |
+            ${{
+              github.event.workflow_run.head_sha ||
+              github.event.pull_request.head.sha ||
+              github.sha
+            }}
+          # Optional: get full history if needed
+          fetch-depth: 0
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
         with:
@@ -103,3 +194,16 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+      
+      # Manually report the final status if this was triggered by a
+      # workflow_run since it won't show up by default on the checks
+      # of the triggering PR
+      - name: Report final status after workflow_run trigger
+        if: ${{
+            always()
+            && github.event_name == 'workflow_run'
+          }}
+        uses: myrotvorets/set-commit-status-action@v2.0.1
+        with:
+          sha: ${{ github.event.workflow_run.head_sha }}
+          status: ${{ job.status }}

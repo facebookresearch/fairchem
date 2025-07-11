@@ -2,22 +2,63 @@
 name: build documentation
 
 on:
-  workflow_call:
   workflow_dispatch:
-  pull_request:
+  push:
     branches: [main]
-  
+  workflow_run:
+    workflows:
+      - "contributor check"
+    types:
+      - completed
+
 jobs:
   build:
     runs-on: 4-core-ubuntu-gpu-t4
+    permissions:
+      contents: read
+      # Needed by set-commit-status-action
+      statuses: write
 
     steps:
-    - name: Checkout PR code
+    # If triggered by a workflow_run on a PR, the status won't show up by
+    # default on the PR checks so we need to do it manually. This sets the
+    # status to pending, but more importantly it adds a URL to the PR check
+    # linking to this workflow job.
+    - name: Report initial status after workflow_run trigger
+      if: ${{ github.event_name == 'workflow_run' }}
+      uses: myrotvorets/set-commit-status-action@v2.0.1
+      with:
+        sha: ${{ github.event.workflow_run.head_sha }}
+        status: pending
+    
+    # If this was triggered by a completed workflow run, we want to make
+    # sure that workflow actually succeeded. If it didn't, we should skip
+    # the remainder of the build.
+    - name: Fail on triggering workflow failure
+      if: ${{
+          github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion != 'success'
+        }}
+      run: |
+        echo "Skipping build because the triggering workflow did not succeed"
+        exit 1
+    
+    # Check out the code
+    - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        # Optional: get full history if needed
-        fetch-depth: 0
+        # The path to the sha of the commit we want to build will depend
+        # on the trigger type. If a workflow_run trigger, then we want
+        # the sha from the head of the branch that triggered it. For 
+        # pushes and manual triggers, we want the sha of the branch.
+        ref: |
+          ${{
+            github.event.workflow_run.head_sha ||
+            github.event.pull_request.head.sha ||
+            github.sha
+          }}
+      # Optional: get full history if needed
+      fetch-depth: 0
 
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
@@ -51,3 +92,16 @@ jobs:
       with:
         name: docs-html
         path: docs/_build/html/*
+    
+    # Manually report the final status if this was triggered by a
+    # workflow_run since it won't show up by default on the checks
+    # of the triggering PR
+    - name: Report final status after workflow_run trigger
+      if: ${{
+          always()
+          && github.event_name == 'workflow_run'
+        }}
+      uses: myrotvorets/set-commit-status-action@v2.0.1
+      with:
+        sha: ${{ github.event.workflow_run.head_sha }}
+        status: ${{ job.status }}
