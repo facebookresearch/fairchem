@@ -26,6 +26,7 @@ def load_inference_model(
     overrides: dict | None = None,
     use_ema: bool = False,
     return_checkpoint: bool = True,
+    strict: bool = True,
 ) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint] | torch.nn.Module:
     checkpoint: MLIPInferenceCheckpoint = torch.load(
         checkpoint_location, map_location="cpu", weights_only=False
@@ -48,9 +49,9 @@ def load_inference_model(
 
         matched_dict["n_averaged"] = n_averaged
 
-        load_state_dict(model, matched_dict, strict=True)
+        load_state_dict(model, matched_dict, strict=strict)
     else:
-        load_state_dict(model, checkpoint.model_state_dict, strict=True)
+        load_state_dict(model, checkpoint.model_state_dict, strict=strict)
 
     return (model, checkpoint) if return_checkpoint is True else model
 

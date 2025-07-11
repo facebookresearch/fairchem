@@ -91,6 +91,7 @@ class SlurmConfig:
     account: Optional[str] = (
         None  # omegaconf in python 3.9 does not backport annotations
     )
+    additional_parameters: Optional[dict] = None
 
 
 @dataclass
@@ -444,6 +445,7 @@ def main(
             nodes=scheduler_cfg.num_nodes,
             slurm_qos=scheduler_cfg.slurm.qos,
             slurm_account=scheduler_cfg.slurm.account,
+            slurm_additional_parameters=scheduler_cfg.slurm.additional_parameters,
         )
         if scheduler_cfg.num_array_jobs == 1:
             job = executor.submit(Submitit(), cfg)
