@@ -11,7 +11,7 @@ requires-python = ">=3.9, <3.13"
 dependencies = [
     "torch~=2.6.0",
     "numpy>=2.0,<2.3",
-    "lmdb",
+    "lmdb<=1.7.0",
     "pymatgen>=2023.10.3",
     "pyyaml",
     "tensorboard",
