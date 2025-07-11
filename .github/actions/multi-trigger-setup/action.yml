@@ -1,0 +1,23 @@
+# Steps to run at the end of workflow jobs that can be triggered
+# by workflow_run
+
+# If triggered on workflow_run or workflow_dispatch, the status
+# won't be automatically added to any PRs associated with this
+# change, so we need to set the status manually.
+name: 'Multi trigger cleanup'
+runs:
+  using: 'composite'
+  steps:
+    - name: Report final status after trigger
+      if: ${{
+          github.event_name == 'workflow_run'
+          || github.event_name == 'workflow_dispatch'
+        }}
+      uses: myrotvorets/set-commit-status-action@v2.0.1
+      with:
+        sha: |
+          ${{ 
+            github.event.workflow_run.head_sha
+            || github.sha
+          }}
+        status: ${{ job.status }}
