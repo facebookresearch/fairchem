@@ -148,6 +148,35 @@ class Les(nn.Module):
 		           )
         else:
             bec = None
+        ######### HACK FOR EVAL REMOVE LATER
+        bec = self.bec(q=latent_charges,
+                        r=positions,
+                        cell=cell,
+                        batch=batch,
+                        output_index=bec_output_index,
+                )
+
+        # save becs to numpy array
+        """
+        import numpy as np
+        import os
+        bec = bec.detach().cpu().numpy() if bec is not None else None
+        # save to numpy array
+        #print("bec_shape", bec.shape)
+        file_name = 'bec.npy'
+        if os.path.exists(file_name):
+            # append to the file
+            existing_bec = np.load(file_name)
+            bec = bec#.reshape(-1, 9)
+            print("bec_shape", bec.shape)
+            #bec = bec.reshape(-1, bec.shape[-1])
+            bec = np.concatenate((existing_bec, bec), axis=0)
+        else:
+            # create the file
+            bec = bec#.reshape(-1, 9)
+        np.save(file_name, bec)
+        """
+        ######### HACK FOR EVAL REMOVE LATER
 
         output = {
             'E_lr': E_lr,

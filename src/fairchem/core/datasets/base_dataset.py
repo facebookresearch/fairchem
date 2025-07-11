@@ -97,8 +97,11 @@ class BaseDataset(Dataset[T_co], metaclass=ABCMeta):
         assert np.issubdtype(metadata["natoms"].dtype, np.integer), (
             f"Metadata natoms must be an integer type! not {metadata['natoms'].dtype}"
         )
+
         assert metadata["natoms"].shape[0] == len(self), (
-            "Loaded metadata and dataset size mismatch."
+            "Loaded metadata and dataset size mismatch. Len of dataset: "
+            f"{len(self)}, len of metadata: {metadata['natoms'].shape[0]}"
+            f" in {self.paths}."
         )
 
         return metadata

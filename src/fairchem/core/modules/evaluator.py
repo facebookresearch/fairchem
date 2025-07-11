@@ -41,7 +41,7 @@ NONE_SLICE = slice(None)
 class Evaluator:
     task_metrics: ClassVar[dict[str, str]] = {
         "s2ef": {
-            "energy": ["mae"],
+            "energy": ["mae", "r2"],
             "forces": [
                 "forcesx_mae",
                 "forcesy_mae",
@@ -50,6 +50,7 @@ class Evaluator:
                 "cosine_similarity",
                 "magnitude_error",
                 "energy_forces_within_threshold",
+                "r2"
             ],
         },
         "is2rs": {
@@ -178,6 +179,18 @@ def mse(
 ) -> torch.Tensor:
     return (target[key] - prediction[key]) ** 2
 
+@metrics_dict
+def r2(
+    prediction: dict[str, torch.Tensor],
+    target: dict[str, torch.Tensor],
+    key: Hashable = NONE_SLICE,
+) -> torch.Tensor:
+    # Calculate R^2 score
+    target_mean = target[key].mean()
+    ss_total = ((target[key] - target_mean) ** 2).sum()
+    ss_residual = ((target[key] - prediction[key]) ** 2).sum()
+    r2_score = 1 - (ss_residual / ss_total)
+    return r2_score.unsqueeze(0)
 
 @metrics_dict
 def per_atom_mae(

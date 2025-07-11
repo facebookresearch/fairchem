@@ -12,6 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from fairchem.core._config import clear_cache
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
+from fairchem.core.calculate.ase_calculatorOG import FAIRChemCalculatorOG
 
 try:
     __version__ = version("fairchem.core")
@@ -19,4 +20,4 @@ except PackageNotFoundError:
     # package is not installed
     __version__ = ""
 
-__all__ = ["FAIRChemCalculator", "clear_cache", "pretrained_mlip"]
+__all__ = ["FAIRChemCalculator", "FAIRChemCalculatorOG", "clear_cache", "pretrained_mlip"]

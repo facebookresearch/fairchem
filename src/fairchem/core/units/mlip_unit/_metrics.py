@@ -65,6 +65,21 @@ def cosine_similarity(
 
 
 @metrics_dict
+def r2(
+    prediction: dict[str, torch.Tensor],
+    target: dict[str, torch.Tensor],
+    key: Hashable = NONE_SLICE,
+) -> torch.Tensor:
+    """
+    Coefficient of determination, R^2
+    """
+    target_mean = target[key].mean(dim=-1, keepdim=True)
+    ss_total = ((target[key] - target_mean) ** 2).sum(dim=-1)
+    ss_residual = ((target[key] - prediction[key]) ** 2).sum(dim=-1)
+    return 1 - (ss_residual / ss_total)
+
+
+@metrics_dict
 def mae(
     prediction: dict[str, torch.Tensor],
     target: dict[str, torch.Tensor],
