@@ -25,3 +25,4 @@ runs:
           }}
         status: ${{ job.status }}
         context: ${{ inputs.status-context }}
+        targetUrl: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

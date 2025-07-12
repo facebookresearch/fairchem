@@ -26,6 +26,7 @@ runs:
           }}
         status: pending
         context: ${{ inputs.status-context }}
+        targetUrl: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     # If this was triggered by a completed workflow run, we want to make
     # sure that workflow actually succeeded. If it didn't, we should skip
