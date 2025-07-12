@@ -40,6 +40,8 @@ jobs:
     
     - name: Setup
       uses: ./.github/actions/multi-trigger-setup
+      with:
+          status-context: '${{ github.job }}'
 
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
@@ -77,3 +79,5 @@ jobs:
     - name: Cleanup
       if: always()
       uses: ./.github/actions/multi-trigger-cleanup
+      with:
+          status-context: '${{ github.job }}'
