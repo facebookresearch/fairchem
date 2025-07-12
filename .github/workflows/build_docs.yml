@@ -35,8 +35,8 @@ jobs:
             github.event.pull_request.head.sha ||
             github.sha
           }}
-      # Optional: get full history if needed
-      fetch-depth: 0
+        # Optional: get full history if needed
+        fetch-depth: 0
     
     - name: Setup
       uses: ./.github/actions/multi-trigger-setup
