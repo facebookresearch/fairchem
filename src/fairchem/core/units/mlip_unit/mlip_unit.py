@@ -550,6 +550,9 @@ class MLIPTrainEvalUnit(
             self.logger.log_summary(
                 {"num_params": self.num_params, "dp_world_size": self.dp_world_size}
             )
+        logging.info(
+            f"Num_params: {self.num_params}, dp_world_size: {self.dp_world_size}"
+        )
 
         model.to(torch.device(get_device_for_local_rank()))
 

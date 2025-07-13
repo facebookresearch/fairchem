@@ -60,6 +60,10 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         self.regress_forces = cfg.global_cfg.regress_forces
         self.direct_forces = cfg.global_cfg.direct_forces
         self.regress_stress = cfg.global_cfg.regress_stress
+        self.dataset_list = cfg.global_cfg.dataset_list
+        self.max_num_elements = cfg.molecular_graph_cfg.max_num_elements
+        self.max_neighbors = cfg.molecular_graph_cfg.knn_k
+        self.cutoff = cfg.molecular_graph_cfg.max_radius
 
         # data preprocess
         self.data_preprocess = partial(
@@ -121,12 +125,6 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore
 
-        self.forward_fn = (
-            torch.compile(self.compiled_forward)
-            if self.global_cfg.use_compile
-            else self.compiled_forward
-        )
-
     def compiled_forward(self, data: GraphAttentionData):
         # input block
         node_features, edge_features = self.input_block(data)
@@ -181,6 +179,13 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         # preprocess data
         x = self.data_preprocess(data)
 
+        # compile forward function
+        self.forward_fn = (
+            torch.compile(self.compiled_forward)
+            if self.global_cfg.use_compile
+            else self.compiled_forward
+        )
+
         results = self.forward_fn(x)
         results["displacement"] = displacement
         results["orig_cell"] = orig_cell
@@ -229,12 +234,6 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
         # init weights
         self.apply(partial(init_linear_weights, gain=gain))
 
-        self.forward_fn = (
-            torch.compile(self.compiled_forward)  # type: ignore
-            if self.global_cfg.use_compile
-            else self.compiled_forward
-        )
-
     @torch.jit.ignore(drop=False)
     def no_weight_decay(self):
         return no_weight_decay(self)
@@ -277,6 +276,12 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        self.forward_fn = (
+            torch.compile(self.compiled_forward)  # type: ignore
+            if self.global_cfg.use_compile
+            else self.compiled_forward
+        )
+
         force_output = self.forward_fn(  # type: ignore
             edge_features=emb["edge_features"],
             node_features=emb["node_features"],
@@ -325,6 +330,12 @@ class EScAIPEnergyHead(EScAIPHeadBase):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        self.forward_fn = (
+            torch.compile(self.compiled_forward)  # type: ignore
+            if self.global_cfg.use_compile
+            else self.compiled_forward
+        )
+
         energy_output = self.forward_fn(emb)  # type: ignore
         if len(energy_output.shape) == 0:
             energy_output = energy_output.unsqueeze(0)

@@ -192,7 +192,8 @@ def data_preprocess_radius_graph(
         torch.backends.cuda.enable_mem_efficient_sdp(
             gnn_cfg.atten_name == "memory_efficient"
         )
-        torch.backends.cuda.enable_math_sdp(gnn_cfg.atten_name == "math")
+        # enable math attention for fallbacks
+        torch.backends.cuda.enable_math_sdp(True)
     else:
         raise NotImplementedError(
             f"Attention name {gnn_cfg.atten_name} not implemented"

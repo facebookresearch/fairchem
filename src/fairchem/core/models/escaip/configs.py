@@ -17,6 +17,7 @@ class GlobalConfigs:
     use_compile: bool = True
     use_padding: bool = True
     use_fp16_backbone: bool = False
+    dataset_list: list = field(default_factory=list)
 
 
 @dataclass

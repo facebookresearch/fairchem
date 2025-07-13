@@ -37,6 +37,26 @@ class GraphAttentionData:
     graph_padding_mask: torch.Tensor
 
 
+def map_graph_attention_data_to_device(
+    data: GraphAttentionData, device: torch.device | str
+) -> GraphAttentionData:
+    """
+    Map all tensor fields in GraphAttentionData to the specified device.
+    """
+    kwargs = {}
+    for field in dataclasses.fields(data):
+        field_value = getattr(data, field.name)
+        if isinstance(field_value, torch.Tensor):
+            kwargs[field.name] = field_value.to(device)
+        elif field_value is None:
+            kwargs[field.name] = None
+        else:
+            # Handle any other types that might be added in the future
+            kwargs[field.name] = field_value
+
+    return GraphAttentionData(**kwargs)
+
+
 def flatten_graph_attention_data_with_spec(data, spec):
     # Flatten based on the in_spec structure
     flat_data = []
