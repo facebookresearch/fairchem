@@ -95,6 +95,20 @@ class Task:
     eval_on_free_atoms: bool = True
 
 
+DEFAULT_EXCLUDE_KEYS = [
+    "id",  # only oc20,oc22 have this
+    "fid",  # only oc20,oc22 have this
+    "absolute_idx",  # only ani has this
+    "target_pos",  # only ani has this
+    "ref_energy",  # only ani/geom have this
+    "pbc",  # only ani/transition1x have this
+    "nads",  # oc22
+    "oc22",  # oc22
+    "formation_energy",  # spice
+    "total_charge",  # spice
+]
+
+
 def convert_train_checkpoint_to_inference_checkpoint(
     dcp_checkpoint_loc: str, checkpoint_loc: str
 ) -> None:
@@ -352,7 +366,9 @@ def compute_metrics(
     return metrics
 
 
-def mt_collater_adapter(tasks: list[Task], exclude_keys: list[str]):
+def mt_collater_adapter(
+    tasks: list[Task], exclude_keys: list[str] = DEFAULT_EXCLUDE_KEYS
+):
     # this is required because the MTCollater needs the old json formated task config so we need to convert it here
     task_config_old = {}
     for task in tasks:
@@ -385,7 +401,9 @@ def _get_consine_lr_scheduler(
     scheduler_steps = int(epochs * n_iters_per_epoch) if steps is None else steps
     # fixed function for constructing a LambdaLR scheduler
     lambda_fn = CosineLRLambda(
-        warmup_epochs=int(warmup_epochs * n_iters_per_epoch),
+        warmup_epochs=max(
+            int(warmup_epochs * n_iters_per_epoch), 1
+        ),  # this cannot be 0
         warmup_factor=warmup_factor,
         epochs=scheduler_steps,
         lr_min_factor=lr_min_factor,
