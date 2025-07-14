@@ -33,8 +33,8 @@ job:
 runner:
   _target_: fairchem.core.components.calculate.adsorption_runner.AdsorptionRunner
   calculator:
-    _target_: fairchem.core.common.calculator.FAIRChemCalculator
-    checkpoint_path: ${checkpoint.ckpt_path}
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
     task_name: oc20
   save_relaxed_atoms: False
   relax_surface: True

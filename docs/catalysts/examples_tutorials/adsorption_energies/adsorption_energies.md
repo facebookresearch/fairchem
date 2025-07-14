@@ -17,6 +17,36 @@ Expert adsorption energies
 
 One of the most common tasks in computational catalysis is calculating the binding energies or adsorption energies of small molecules on catalyst surfaces.
 
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+
+1. Install the necessary packages using pip, uv etc
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
+
 ```{code-cell} ipython3
 from __future__ import annotations
 
@@ -130,7 +160,7 @@ Running the model with QuasiNewton prints at each relaxation step which is a lot
 os.makedirs(f"data/{bulk_src_id}_{adsorbate_smiles_h}", exist_ok=True)
 
 # Define the
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -175,9 +205,23 @@ These steps are embarrassingly parallel, and can be launched that way to speed t
 
 +++
 
-The goal here is to relax each candidate adsorption geometry and save the results in a trajectory file we will analyze later. Each trajectory file will have the geometry and final energy of the relaxed structure. 
+The goal here is to relax each candidate adsorption geometry and save the results in a trajectory file we will analyze later. Each trajectory file will have the geometry and final energy of the relaxed structure.
 
-It is somewhat time consuming to run this, so in this cell we only run one example, and just the first 4 configurations for each adsorbate.
+It is somewhat time consuming to run this. We're going to use a small number of bulks for the testing of this documentation, but otherwise run all of the results for the actual documentation.
+
+```{code-cell} ipython3
+import os
+
+fast_docs = os.environ.get("FAST_DOCS", "false").lower() == "true"
+if fast_docs:
+    num_bulks = 1
+    num_sites = 5
+    relaxation_steps = 20
+else:
+    num_bulks = -1
+    num_sites = 20
+    relaxation_steps = 300
+```
 
 ```{code-cell} ipython3
 import random
@@ -191,7 +235,7 @@ random.seed(42)
 random.shuffle(bulk_ids)
 
 # Note we're just doing the first bulk_id!
-for bulk_src_id in tqdm(bulk_ids[:4]):
+for bulk_src_id in tqdm(bulk_ids[:num_bulks]):
 
     # Set up data directories
     os.makedirs("data/slabs/", exist_ok=True)
@@ -210,7 +254,7 @@ for bulk_src_id in tqdm(bulk_ids[:4]):
         trajectory=f"data/slabs/{bulk_src_id}.traj",
         logfile=f"data/slabs/{bulk_src_id}.log",
     )
-    opt.run(fmax=0.05, steps=20)
+    opt.run(fmax=0.05, steps=relaxation_steps)
     print(
         f"  Elapsed time: {time.time() - t0:1.1f} seconds for data/slabs/{bulk_src_id} slab relaxation"
     )
@@ -220,10 +264,13 @@ for bulk_src_id in tqdm(bulk_ids[:4]):
         slab[0],
         adsorbate_H,
         mode="random_site_heuristic_placement",
-        num_sites=20,
+        num_sites=num_sites,
     )
     heuristic_adslabs_NNH = AdsorbateSlabConfig(
-        slab[0], adsorbate_NNH, mode="random_site_heuristic_placement", num_sites=20,
+        slab[0],
+        adsorbate_NNH,
+        mode="random_site_heuristic_placement",
+        num_sites=num_sites,
     )
 
     print(f"{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}")
@@ -246,7 +293,6 @@ for bulk_src_id in tqdm(bulk_ids[:4]):
             f"  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}"
         )
 
-    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
     for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list):
         t0 = time.time()
         adslab.calc = calc
@@ -257,93 +303,7 @@ for bulk_src_id in tqdm(bulk_ids[:4]):
             trajectory=f"data/adslabs/{bulk_src_id}_NNH/{idx}.traj",
             logfile=f"data/adslabs/{bulk_src_id}_NNH/{idx}.log",
         )
-        opt.run(fmax=0.05, steps=200)
-        print(
-            f"  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_NNH/{idx}"
-        )
-
-print(f"Elapsed time: {time.time() - tinit:1.1f} seconds")
-```
-
-This cell runs all the examples. I don't recommend you run this during the workshop. Instead, we have saved the results for the subsequent analyses so you can skip this one.
-
-```{code-cell} ipython3
-:tags: [skip-execution]
-
-import time
-
-from tqdm import tqdm
-
-tinit = time.time()
-
-# Note we're just doing the first bulk_id!
-for bulk_src_id in tqdm(bulk_ids):
-
-    # Set up data directories
-    os.makedirs("data/slabs/", exist_ok=True)
-    os.makedirs(f"data/adslabs/{bulk_src_id}_H", exist_ok=True)
-    os.makedirs(f"data/adslabs/{bulk_src_id}_NNH", exist_ok=True)
-
-    # Enumerate slabs and establish adsorbates
-    bulk = Bulk(bulk_src_id_from_db=bulk_src_id, bulk_db_path="NRR_example_bulks.pkl")
-    slab = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1, 1, 1))
-
-    slab_atoms = slab[0].atoms.copy()
-    slab_atoms.calc = calc
-    slab_atoms.pbc = True
-    opt = QuasiNewton(
-        slab_atoms,
-        trajectory=f"data/slabs/{bulk_src_id}.traj",
-        logfile=f"data/slabs/{bulk_src_id}.log",
-    )
-    opt.run(fmax=0.05, steps=20)
-    print(
-        f"  Elapsed time: {time.time() - t0:1.1f} seconds for data/slabs/{bulk_src_id} slab relaxation"
-    )
-
-    # Perform heuristic placements
-    heuristic_adslabs_H = AdsorbateSlabConfig(
-        slab[0],
-        adsorbate_H,
-        mode="random_site_heuristic_placement",
-    )
-    heuristic_adslabs_NNH = AdsorbateSlabConfig(
-        slab[0], adsorbate_NNH, mode="random_site_heuristic_placement"
-    )
-
-    print(f"{len(heuristic_adslabs_H.atoms_list)} H slabs to compute for {bulk_src_id}")
-    print(
-        f"{len(heuristic_adslabs_NNH.atoms_list)} NNH slabs to compute for {bulk_src_id}"
-    )
-
-    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
-    for idx, adslab in enumerate(heuristic_adslabs_H.atoms_list):
-        t0 = time.time()
-        adslab.calc = calc
-        adslab.pbc = True
-        print(f"Running data/adslabs/{bulk_src_id}_H/{idx}")
-        opt = QuasiNewton(
-            adslab,
-            trajectory=f"data/adslabs/{bulk_src_id}_H/{idx}.traj",
-            logfile=f"data/adslabs/{bulk_src_id}_H/{idx}.log",
-        )
-        opt.run(fmax=0.05, steps=200)
-        print(
-            f"  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_H/{idx}"
-        )
-
-    # Set up the calculator, note we're doing just the first 4 configs to keep this fast for the online documentation!
-    for idx, adslab in enumerate(heuristic_adslabs_NNH.atoms_list):
-        t0 = time.time()
-        adslab.calc = calc
-        adslab.pbc = True
-        print(f"Running data/adslabs/{bulk_src_id}_NNH/{idx}")
-        opt = QuasiNewton(
-            adslab,
-            trajectory=f"data/adslabs/{bulk_src_id}_NNH/{idx}.traj",
-            logfile=f"data/adslabs/{bulk_src_id}_NNH/{idx}.log",
-        )
-        opt.run(fmax=0.05, steps=200)
+        opt.run(fmax=0.05, steps=relaxation_steps)
         print(
             f"  Elapsed time: {time.time() - t0:1.1f} seconds for data/adslabs/{bulk_src_id}_NNH/{idx}"
         )
