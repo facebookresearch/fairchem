@@ -234,6 +234,55 @@ class FAIRChemCalculator(Calculator):
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
 
+    def get_hessian(self, atoms: Atoms, vmap: bool = True) -> np.ndarray:
+        """
+        Get the Hessian matrix for the given atomic structure.
+
+        Args:
+            atoms (Atoms): The atomic structure to calculate the Hessian for.
+            vmap (bool): Whether to use vectorized mapping for Hessian calculation. Defaults to True.
+
+        Returns:
+            np.ndarray: The Hessian matrix.
+        """
+        # Turn on create_graph for the first derivative
+        self.predictor.model.module.output_heads['energyandforcehead'].head.training = True
+
+        # Convert using the current a2g object
+        data_list = [self.a2g(atoms) for atoms in atoms_list]
+
+        # Batch and predict
+        batch = data_list_collater(data_list, otf_graph=True)
+        pred = self.predictor.predict(batch)
+
+        # Get the forces and positions
+        positions = batch.pos
+        forces = pred["forces"].flatten()
+
+        # Calculate the Hessian using autograd
+        if vmap:
+            hessian = torch.vmap(
+                lambda vec: grad(
+                    -forces,
+                    positions,
+                    grad_outputs=vec,
+                    retain_graph=True,
+                    )[0],
+                )(torch.eye(forces.numel(), device=forces.device)).detach().cpu().numpy()
+        else:
+            hessian = np.zeros((len(forces), len(forces)))
+            for i in range(len(forces)):
+                hessian[:, i] = grad(
+                    -forces[i],
+                    positions,
+                    retain_graph=True,
+                )[0].flatten().detach().cpu().numpy()
+
+        # Turn off create_graph for the first derivative
+        self.predictor.model.module.output_heads['energyandforcehead'].head.training = False
+
+        return hessian
+
     def _get_single_atom_energies(self, atoms) -> dict:
         """
         Populate output with single atom energies
