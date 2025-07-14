@@ -1,0 +1,15 @@
+name: contributor check
+
+on: 
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: pass
+        run: echo "passed"
+

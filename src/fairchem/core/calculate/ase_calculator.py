@@ -65,7 +65,7 @@ class FAIRChemCalculator(Calculator):
         # check that external graph gen is not set!
         if predict_unit.inference_mode.external_graph_gen is not False:
             raise RuntimeError(
-                "FAIRChemCalculator can only be used with external_graph_gen True inference settings."
+                "FAIRChemCalculator can only be used with external_graph_gen False inference settings."
             )
 
         if predict_unit.model.module.backbone.direct_forces:
