@@ -16,7 +16,7 @@ jobs:
     runs-on: 4-core-ubuntu-gpu-t4
     permissions:
       contents: read
-      # Needed by set-commit-status-action
+      # Needed to manually set commit status
       statuses: write
 
     steps:
