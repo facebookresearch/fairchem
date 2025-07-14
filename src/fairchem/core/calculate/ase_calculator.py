@@ -249,10 +249,10 @@ class FAIRChemCalculator(Calculator):
         self.predictor.model.module.output_heads['energyandforcehead'].head.training = True
 
         # Convert using the current a2g object
-        data_list = self.a2g(atoms)
+        data_object = self.a2g(atoms)
 
         # Batch and predict
-        batch = data_list_collater(data_list, otf_graph=True)
+        batch = data_list_collater([data_object], otf_graph=True)
         pred = self.predictor.predict(batch)
 
         # Get the forces and positions
