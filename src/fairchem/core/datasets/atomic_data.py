@@ -135,6 +135,7 @@ class AtomicData:
         spin: torch.Tensor,  # (num_graph,)
         bandgap: torch.Tensor,  # (num_graph,)
         optical_gap: torch.Tensor,  # (num_graph,)
+        dielectric_tensor: torch.Tensor,  # (num_graph, 3, 3)
         fixed: torch.Tensor,  # (num_node,)
         tags: torch.Tensor,  # (num_node,)
         energy: torch.Tensor | None = None,  # (num_graph,)
@@ -160,6 +161,7 @@ class AtomicData:
         self.spin = spin
         self.bandgap = bandgap
         self.optical_gap = optical_gap
+        self.dielectric_tensor = dielectric_tensor
         self.fixed = fixed
         self.tags = tags
         self.sid = sid if sid is not None else [""]
@@ -421,20 +423,20 @@ class AtomicData:
             ]
         )
 
-        bandgap = torch.LongTensor(
-            [
-                atoms.info.get("Band_gap_HSE", 0)
-                if r_data_keys is not None and "Band_gap_HSE" in r_data_keys
-                else 0
-            ]
+        bandgap = (
+            torch.FloatTensor([atoms.info.get("Band_gap_HSE")])
+            if r_data_keys is not None and "Band_gap_HSE" in r_data_keys
+            else 0.0
         )
 
-        optical_gap = torch.LongTensor(
-            [
-                atoms.info.get("Band_gap_HSE_optical", 0)
-                if r_data_keys is not None and "Band_gap_HSE_optical" in r_data_keys
-                else 0
-            ]
+        optical_gap = (
+            torch.FloatTensor([atoms.info.get("Band_gap_HSE_optical")])
+            if r_data_keys is not None and "Band_gap_HSE_optical" in r_data_keys
+            else 0.0
+        )
+
+        dielectric_tensor = torch.FloatTensor(atoms.info["dielectric_tensor"]).view(
+            1, 3, 3
         )
 
         # NOTE: code assumes these are ints.. not tensors
@@ -453,6 +455,7 @@ class AtomicData:
             spin=tensor_or_int_to_tensor(spin, torch.long),
             bandgap=bandgap,
             optical_gap=optical_gap,
+            dielectric_tensor=dielectric_tensor,
             fixed=fixed,
             tags=tags,
             energy=energy,
@@ -524,6 +527,7 @@ class AtomicData:
             spin=dictionary["spin"],
             bandgap=dictionary["bandgap"],
             optical_gap=dictionary["optical_gap"],
+            dielectric_tensor=dictionary["dielectric_tensor"],
             fixed=dictionary.get("fixed", None),
             tags=dictionary.get("tags", None),
             energy=dictionary.get("energy", None),

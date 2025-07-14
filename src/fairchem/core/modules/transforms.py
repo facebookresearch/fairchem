@@ -170,7 +170,11 @@ def omol_transform(data_object: AtomicData, config) -> AtomicData:
 
 def stress_reshape_transform(data_object: AtomicData, config) -> AtomicData:
     for k in data_object.keys():  # noqa: SIM118
-        if "stress" in k and ("iso" not in k and "aniso" not in k):
+        if (
+            "stress" in k
+            and ("iso" not in k and "aniso" not in k)
+            or "dielectric_tensor" in k
+        ):
             data_object[k] = data_object[k].reshape(1, 9)
     return data_object
 

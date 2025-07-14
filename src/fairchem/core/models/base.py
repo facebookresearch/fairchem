@@ -152,6 +152,10 @@ class HydraModel(nn.Module):
                     self.backbone,
                     **head_config,
                 )
+                # self.output_heads[head_name] = module_name(
+                #     self.backbone,
+                #     **head_config,
+                # )
 
             self.output_heads = torch.nn.ModuleDict(self.output_heads)
         elif starting_model is not None:

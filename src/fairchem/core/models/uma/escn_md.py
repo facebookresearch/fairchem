@@ -714,7 +714,6 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
     def __init__(self, backbone, reduce: str = "sum"):
         super().__init__()
         self.reduce = reduce
-
         self.sphere_channels = backbone.sphere_channels
         self.hidden_channels = backbone.hidden_channels
         self.energy_block = nn.Sequential(

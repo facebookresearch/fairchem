@@ -181,16 +181,20 @@ def get_output_mask(batch: AtomicData, task: Task) -> dict[str, torch.Tensor]:
 
     output_masks = {task.name: torch.isfinite(batch[task.name])}
     if "forces" in task.name:
-        output_masks[task.name] = output_masks[task.name].all(dim=1)
+        output_masks[task.name] = output_masks[task.name].all(
+            dim=1
+        )  # J: task.name = dielectric_tensor
 
-    for dset in set(batch.dataset_name):
+    for dset in set(
+        batch.dataset_name
+    ):  # J: batch.dataset_name = [omc.train, omc.train]
         dset_mask = torch.from_numpy(np.array(batch.dataset_name) == dset).to(
             batch.pos.device
         )
         if task.level == "atom":
             dset_mask = torch.repeat_interleave(dset_mask, batch.natoms)
             output_masks[f"{dset}.{task.name}"] = dset_mask & output_masks[task.name]
-        elif "stress" in task.name:
+        elif "stress" in task.name or "dielectric_tensor" in task.name:
             assert output_masks[task.name].shape[0] == dset_mask.shape[0]
             # we need to expand the target mask shape to match the output shape
             target_shape = output_masks[task.name].shape
@@ -234,7 +238,6 @@ def compute_loss(
 
     free_mask = batch.fixed == 0
     output_masks = get_output_masks(batch, tasks)
-
     loss_dict = {}
     for task in tasks:
         # TODO this might be a very expensive clone
@@ -312,7 +315,7 @@ def compute_metrics(
 
         natoms_masked = natoms[output_mask]
         output_size = natoms_masked.numel()
-    elif "stress" in task.name:
+    elif "stress" in task.name or "dielectric_tensor" in task.name:
         natoms_masked = batch.natoms[output_mask.all(dim=1)]
         output_size = output_mask.sum()
     else:
