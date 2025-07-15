@@ -21,3 +21,10 @@ def ase_atoms():
 def test_to_ase_single(ase_atoms):
     atoms = AtomicData.from_ase(ase_atoms).to_ase_single()
     assert atoms.get_chemical_formula() == "H2O"
+
+
+@pytest.mark.gpu
+def test_to_ase_single_cuda(ase_atoms):
+    atomic_data = AtomicData.from_ase(ase_atoms).cuda()
+    atoms = atomic_data.to_ase_single()
+    assert atoms.get_chemical_formula() == "H2O"
