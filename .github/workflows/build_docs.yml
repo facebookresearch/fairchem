@@ -2,22 +2,46 @@
 name: build documentation
 
 on:
-  workflow_call:
   workflow_dispatch:
-  pull_request:
+  push:
     branches: [main]
-  
+  workflow_run:
+    workflows:
+      - "contributor check"
+    types:
+      - completed
+
 jobs:
   build:
     runs-on: 4-core-ubuntu-gpu-t4
+    permissions:
+      contents: read
+      # Needed to manually set commit status
+      statuses: write
 
     steps:
-    - name: Checkout PR code
+    
+    # Check out the code
+    - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.pull_request.head.sha }}
+        # The path to the sha of the commit we want to build will depend
+        # on the trigger type. If a workflow_run trigger, then we want
+        # the sha from the head of the branch that triggered it. For 
+        # pushes and manual triggers, we want the sha of the branch.
+        ref: |
+          ${{
+            github.event.workflow_run.head_sha ||
+            github.event.pull_request.head.sha ||
+            github.sha
+          }}
         # Optional: get full history if needed
         fetch-depth: 0
+    
+    - name: Setup
+      uses: ./.github/actions/multi-trigger-setup
+      with:
+          status-context: '${{ github.job }}'
 
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
@@ -51,3 +75,9 @@ jobs:
       with:
         name: docs-html
         path: docs/_build/html/*
+    
+    - name: Cleanup
+      if: always()
+      uses: ./.github/actions/multi-trigger-cleanup
+      with:
+          status-context: '${{ github.job }}'

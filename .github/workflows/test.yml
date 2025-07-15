@@ -1,30 +1,50 @@
 name: tests
 
 on:
-  workflow_call:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
+  workflow_run:
+    workflows:
+      - "contributor check"
+    types:
+      - completed
 
 jobs:
   test:
     runs-on: 32-core-ubuntu
-    continue-on-error: true
+    permissions:
+      contents: read
+      # Needed to manually set commit status
+      statuses: write
     strategy:
       max-parallel: 10
       matrix:
         python_version: ['3.10', '3.12']
 
     steps:
-      # Check out the PR code (not the base branch)
-      - name: Checkout PR code
+      # Check out the code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          # The path to the sha of the commit we want to test will depend
+          # on the trigger type. If a workflow_run trigger, then we want
+          # the sha from the head of the branch that triggered it. For 
+          # pushes and manual triggers, we want the sha of the branch.
+          ref: |
+            ${{
+              github.event.workflow_run.head_sha ||
+              github.event.pull_request.head.sha ||
+              github.sha
+            }}
           # Optional: get full history if needed
           fetch-depth: 0
+      
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
         with:
@@ -76,17 +96,48 @@ jobs:
           files: ./coverage.xml
           token: ${{ secrets.CODECOV_TOKEN }} # required
           verbose: true # optional (default = false)
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
 
   test_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
-    continue-on-error: true
+    permissions:
+      contents: read
+      # Needed to manually set commit status
+      statuses: write
     strategy:
       max-parallel: 10
       matrix:
         python_version: ['3.12']
 
     steps:
-      - uses: actions/checkout@v4
+      
+      # Check out the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # The path to the sha of the commit we want to test will depend
+          # on the trigger type. If a workflow_run trigger, then we want
+          # the sha from the head of the branch that triggered it. For 
+          # pushes and manual triggers, we want the sha of the branch.
+          ref: |
+            ${{
+              github.event.workflow_run.head_sha ||
+              github.event.pull_request.head.sha ||
+              github.sha
+            }}
+          # Optional: get full history if needed
+          fetch-depth: 0
+      
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+      
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
         with:
@@ -103,3 +154,9 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
