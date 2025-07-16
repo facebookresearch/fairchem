@@ -8,7 +8,10 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+import re
+import shutil
 from abc import ABCMeta, abstractmethod
+from glob import glob
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 from fairchem.core.components.runner import Runner
@@ -52,6 +55,7 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
         """
         self._calculator = calculator
         self._input_data = input_data
+        self._already_calculated = False
 
     @property
     def calculator(self) -> Calculator:
@@ -111,14 +115,35 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def load_state(self, checkpoint_location: str | None) -> None:
         """Load a previously saved state from a checkpoint.
 
         Args:
             checkpoint_location (str | None): Location of the checkpoint to load, or None if no checkpoint
         """
-        raise NotImplementedError
+        if checkpoint_location is not None:
+            os.makedirs(
+                self.job_config.metadata.results_dir, exist_ok=True
+            )  # TODO Should we have all these dir created in cli main?
+
+            existing_results_files = glob(
+                os.path.join(checkpoint_location, self.result_glob_pattern)
+            )
+            if len(existing_results_files) == 0:
+                return
+
+            # try to find and load the results file for the given job
+            for file in existing_results_files:
+                matches = re.findall(r"\d+", file)
+                if (
+                    matches
+                    and int(matches[-1]) == self.job_config.metadata.array_job_num
+                ):
+                    # copy it over to the new run directory
+                    shutil.copy(file, self.job_config.metadata.results_dir)
+                    # make sure we can load the file?
+                    self._already_calculated = True
+                    return
 
     def run(self):
         """Run the actual calculation and save results.
@@ -129,17 +154,18 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
         Note:
             Re-implementing this method in derived classes is discouraged.
         """
-        os.makedirs(
-            self.job_config.metadata.results_dir, exist_ok=True
-        )  # TODO Should we have all these dir created in cli main?
+        if not self._already_calculated:
+            os.makedirs(
+                self.job_config.metadata.results_dir, exist_ok=True
+            )  # TODO Should we have all these dir created in cli main?
 
-        results = self.calculate(
-            job_num=self.job_config.metadata.array_job_num,
-            num_jobs=self.job_config.scheduler.num_array_jobs,
-        )
-        self.write_results(
-            results,
-            self.job_config.metadata.results_dir,
-            job_num=self.job_config.metadata.array_job_num,
-            num_jobs=self.job_config.scheduler.num_array_jobs,
-        )
+            results = self.calculate(
+                job_num=self.job_config.metadata.array_job_num,
+                num_jobs=self.job_config.scheduler.num_array_jobs,
+            )
+            self.write_results(
+                results,
+                self.job_config.metadata.results_dir,
+                job_num=self.job_config.metadata.array_job_num,
+                num_jobs=self.job_config.scheduler.num_array_jobs,
+            )
