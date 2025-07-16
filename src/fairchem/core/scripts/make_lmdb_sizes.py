@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import multiprocessing as mp
 import os
-import warnings
+import random
 
 import numpy as np
 from tqdm import tqdm
@@ -26,11 +26,8 @@ from fairchem.core.datasets import AseDBDataset
 def get_data(index):
     data = dataset[index]
     natoms = data.natoms
-    neighbors = None
-    if hasattr(data, "edge_index") and data.edge_index is not None:
-        neighbors = data.edge_index.shape[1]
 
-    return index, natoms, neighbors
+    return index, natoms
 
 
 def make_lmdb_sizes(args) -> None:
@@ -49,22 +46,17 @@ def make_lmdb_sizes(args) -> None:
 
     indices = []
     natoms = []
-    neighbors = []
     for i in outputs:
         indices.append(i[0])
         natoms.append(i[1])
-        neighbors.append(i[2])
 
     _sort = np.argsort(indices)
-    sorted_natoms = np.array(natoms, dtype=np.int32)[_sort]
-    if None in neighbors:
-        warnings.warn(
-            f"edge_index information not found, {outpath} only supports atom-wise load balancing."
-        )
-        np.savez(outpath, natoms=sorted_natoms)
-    else:
-        sorted_neighbors = np.array(neighbors, dtype=np.int32)[_sort]
-        np.savez(outpath, natoms=sorted_natoms, neighbors=sorted_neighbors)
+    sorted_natoms = np.array(natoms)[_sort].flatten()
+
+    sample_indices = random.sample(range(len(dataset)), 2000)
+    for idx in tqdm(sample_indices, desc="Verifying metadata consistency"):
+        assert natoms[idx] == len(dataset.get_atoms(idx))
+    np.savez(outpath, natoms=sorted_natoms)
 
 
 def get_lmdb_sizes_parser():

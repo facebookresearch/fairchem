@@ -435,8 +435,10 @@ class AtomicData:
             else 0.0
         )
 
-        dielectric_tensor = torch.FloatTensor(atoms.info["dielectric_tensor"]).view(
-            1, 3, 3
+        dielectric_tensor = (
+            torch.FloatTensor(atoms.info["dielectric_tensor"]).view(1, 3, 3)
+            if r_data_keys is not None and "dielectric_tensor" in r_data_keys
+            else torch.eye(3).view(1, 3, 3) * 1.0
         )
 
         # NOTE: code assumes these are ints.. not tensors
