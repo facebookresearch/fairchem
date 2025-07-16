@@ -55,9 +55,9 @@ class ReadoutBlock(nn.Module):
             self.pre_global_norm = get_normalization_layer(
                 NormalizationType(reg_cfg.normalization)
             )(global_cfg.hidden_size, dtype=self.backbone_dtype)
-            self.post_global_norm = get_normalization_layer(
-                NormalizationType(reg_cfg.normalization)
-            )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+            # self.post_global_norm = get_normalization_layer(
+            #     NormalizationType(reg_cfg.normalization)
+            # )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
         # node read out
         self.node_ffn = get_feedforward(
@@ -70,9 +70,9 @@ class ReadoutBlock(nn.Module):
         self.pre_node_norm = get_normalization_layer(
             NormalizationType(reg_cfg.normalization)
         )(global_cfg.hidden_size, dtype=self.backbone_dtype)
-        self.post_node_norm = get_normalization_layer(
-            NormalizationType(reg_cfg.normalization)
-        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+        # self.post_node_norm = get_normalization_layer(
+        #     NormalizationType(reg_cfg.normalization)
+        # )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
         # forces read out
         if self.use_edge_readout:
@@ -86,9 +86,9 @@ class ReadoutBlock(nn.Module):
             self.pre_edge_norm = get_normalization_layer(
                 NormalizationType(reg_cfg.normalization)
             )(global_cfg.hidden_size, dtype=self.backbone_dtype)
-            self.post_edge_norm = get_normalization_layer(
-                NormalizationType(reg_cfg.normalization)
-            )(global_cfg.hidden_size, dtype=self.backbone_dtype)
+            # self.post_edge_norm = get_normalization_layer(
+            #     NormalizationType(reg_cfg.normalization)
+            # )(global_cfg.hidden_size, dtype=self.backbone_dtype)
 
     def forward(self, data, node_features, edge_features):
         """
@@ -98,7 +98,7 @@ class ReadoutBlock(nn.Module):
             Edge Readout (N, max_nei, H)
         """
         node_readout = node_features + self.node_ffn(self.pre_node_norm(node_features))
-        node_readout = self.post_node_norm(node_readout)
+        # node_readout = self.post_node_norm(node_readout)
 
         if self.use_global_readout:
             global_features = compilable_scatter(
@@ -111,7 +111,7 @@ class ReadoutBlock(nn.Module):
             global_readout = global_features + self.global_ffn(
                 self.pre_global_norm(global_features)
             )
-            global_readout = self.post_global_norm(global_readout)
+            # global_readout = self.post_global_norm(global_readout)
         else:
             global_readout = torch.zeros_like(node_readout)
 
@@ -119,7 +119,7 @@ class ReadoutBlock(nn.Module):
             edge_readout = edge_features + self.edge_ffn(
                 self.pre_edge_norm(edge_features)
             )
-            edge_readout = self.post_edge_norm(edge_readout)
+            # edge_readout = self.post_edge_norm(edge_readout)
         else:
             edge_readout = torch.zeros_like(node_readout)
 

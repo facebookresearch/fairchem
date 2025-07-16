@@ -111,6 +111,8 @@ class AdsorptionSinglePointRunner(CalculateRunner):
                         - dft_slab_atoms.get_potential_energy()
                         - gas_reference_energy
                     )
+                    results["total_energy_target"] = dft_energy
+                    results["total_energy_pred"] = pred_energy
             all_results.append(results)
 
         return all_results

@@ -285,7 +285,7 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
         force_output = self.forward_fn(  # type: ignore
             edge_features=emb["edge_features"],
             node_features=emb["node_features"],
-            data=emb["data"],
+            data=emb["data"],  # type: ignore
         )
 
         return unpad_results(
