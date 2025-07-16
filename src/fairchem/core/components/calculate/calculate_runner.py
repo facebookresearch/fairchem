@@ -55,6 +55,7 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
         """
         self._calculator = calculator
         self._input_data = input_data
+        self._already_calculated = False
 
     @property
     def calculator(self) -> Calculator:
@@ -153,17 +154,18 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
         Note:
             Re-implementing this method in derived classes is discouraged.
         """
-        os.makedirs(
-            self.job_config.metadata.results_dir, exist_ok=True
-        )  # TODO Should we have all these dir created in cli main?
+        if not self._already_calculated:
+            os.makedirs(
+                self.job_config.metadata.results_dir, exist_ok=True
+            )  # TODO Should we have all these dir created in cli main?
 
-        results = self.calculate(
-            job_num=self.job_config.metadata.array_job_num,
-            num_jobs=self.job_config.scheduler.num_array_jobs,
-        )
-        self.write_results(
-            results,
-            self.job_config.metadata.results_dir,
-            job_num=self.job_config.metadata.array_job_num,
-            num_jobs=self.job_config.scheduler.num_array_jobs,
-        )
+            results = self.calculate(
+                job_num=self.job_config.metadata.array_job_num,
+                num_jobs=self.job_config.scheduler.num_array_jobs,
+            )
+            self.write_results(
+                results,
+                self.job_config.metadata.results_dir,
+                job_num=self.job_config.metadata.array_job_num,
+                num_jobs=self.job_config.scheduler.num_array_jobs,
+            )
