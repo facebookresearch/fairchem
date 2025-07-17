@@ -44,6 +44,9 @@ jobs:
         uses: ./.github/actions/multi-trigger-setup
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }})'
+      
+      - name: Echo
+        run: echo "Hello"
 
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
