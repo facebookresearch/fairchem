@@ -11,7 +11,7 @@ requires-python = ">=3.9, <3.13"
 dependencies = [
     "torch~=2.6.0",
     "numpy>=2.0,<2.3",
-    "lmdb",
+    "lmdb<=1.7.0",
     "pymatgen>=2023.10.3",
     "pyyaml",
     "tensorboard",
@@ -27,6 +27,7 @@ dependencies = [
     "huggingface_hub>=0.27.1",
     "ase>=3.25.0",
     "ase-db-backends>=0.10.0",
+    "clusterscope>=0.0.7",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]

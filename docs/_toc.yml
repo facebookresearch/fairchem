@@ -23,7 +23,14 @@ parts:
     - file: core/common_tasks/fine_tuning
     - file: core/common_tasks/workflows
     - file: core/uma_faq
+  - file: uma_tutorials/summary
+    sections:
+    - file: uma_tutorials/uma_tutorial
+  - file: core/uma_examples/summary
+    sections:
+    - file: core/uma_examples/uma_tutorial
   - file: core/generative_models
+  
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
@@ -74,7 +81,7 @@ parts:
   - file: dac/models
   - file: dac/examples_tutorials/summary
     sections:
-    - file: dac/examples_tutorials/adsorption_energies
+    - file: dac/examples_tutorials/adsorption_energy
 - caption: Learn More
   chapters:
   - file: core/intro_series

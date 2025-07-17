@@ -37,13 +37,19 @@ If you want to explore model capabilities check out our
 
 [![Educational Demo](https://github.com/user-attachments/assets/7005d1bb-4459-403d-b299-d41fdd8c48ec)](https://facebook-fairchem-uma-demo.hf.space/)
 
-
 ## Installation
 Although not required, we highly recommend installing using a package manager and virtualenv such as [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer), it is much faster and better at resolving dependencies than standalone pip.
 
 Install fairchem-core using pip
 ```bash
 pip install fairchem-core
+```
+
+If you want to contribute or make modifications to the code, clone the repo and install in edit mode
+```bash
+git clone git@github.com:facebookresearch/fairchem.git
+
+pip install -e fairchem/packages/fairchem-core[dev]
 ```
 
 ## Quick Start
@@ -59,6 +65,13 @@ You can use the following to save an auth token,
 huggingface-cli login
 ```
 
+Models are referenced by their name, below are the currently supported models:
+
+| Model Name | Description |
+|---|---|
+| uma-s-1p1 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/150M active/total params) |
+| uma-m-1p1 | Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params) |
+
 ### Set the task for your application and calculate
 
 - **oc20:** use this for catalysis
@@ -73,7 +86,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -95,7 +108,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -113,7 +126,7 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -135,7 +148,7 @@ dyn.run(steps=1000)
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
@@ -151,4 +164,4 @@ triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
 ### LICENSE
-`fairchem` is available under a [MIT License](LICENSE.md). Models/checkpoint licenses vary by application area. 
+`fairchem` is available under a [MIT License](LICENSE.md). Models/checkpoint licenses vary by application area.

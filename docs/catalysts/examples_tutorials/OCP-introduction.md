@@ -23,7 +23,7 @@ You do have to be careful in the details though. Some OCP model/checkpoint combi
 
 ## Intro to Adsorption energies
 
-Adsorption energies are always a reaction energy (an adsorbed species relative to some implied combination of reactants). There are many common schemes in the catalysis literature. 
+Adsorption energies are always a reaction energy (an adsorbed species relative to some implied combination of reactants). There are many common schemes in the catalysis literature.
 
 For example, you may want the adsorption energy of oxygen, and you might compute that from this reaction:
 
@@ -44,30 +44,59 @@ or alternatively,
 It is possible through thermodynamic cycles to compute other reactions. If we can look up rH1 below and compute rH2
 
     H2 + 1/2 O2 -> H2O  re1 = -3.03 eV, from exp
-    H2O + * -> O* + H2  re2  # Get from UMA 
+    H2O + * -> O* + H2  re2  # Get from UMA
 
 Then, the adsorption energy for
 
-    1/2O2 + * -> O*  
+    1/2O2 + * -> O*
 
 is just re1 + re2.
 
-Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state experimentally. You could also compute this using DFT, but you would probably get the wrong answer for this. 
+Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?species_number=986, the formation energy of water is about -3.03 eV at standard state experimentally. You could also compute this using DFT, but you would probably get the wrong answer for this.
 
-The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
+The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task.
 
-This next cell will automatically download the checkpoint from huggingface and load it. 
-1. You need to first request access to the UMA model here: https://huggingface.co/facebook/UMA
-2. You also need to run `huggingface-cli login` and follow the instructions to get a token from huggingface to authenticate to the servers. 
+
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+
+1. Install the necessary packages using pip, uv etc
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
 
 If you find your kernel is crashing, it probably means you have exceeded the allowed amount of memory. This checkpoint works fine in this example, but it may crash your kernel if you use it in the NRR example.
+
+This next cell will automatically download the checkpoint from huggingface and load it.
 
 ```{code-cell}
 from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -143,7 +172,7 @@ to get a comparable energy of about -1.68 eV. There is about ~0.2 eV difference 
 2. The reference energy used for the experiment references. These can differ by up to 0.5 eV from comparable DFT calculations.
 3. How many layers are relaxed in the calculation
 
-Some of these differences tend to be systematic, and you can calibrate and correct these, especially if you can augment these with your own DFT calculations. 
+Some of these differences tend to be systematic, and you can calibrate and correct these, especially if you can augment these with your own DFT calculations.
 
 See [convergence study](#Convergence-study) for some additional studies of factors that influence this number.
 
@@ -174,7 +203,7 @@ We have to do some work to get comparable numbers from OCP
 
 Then, the adsorption energy for
 
-    O + * -> O*  
+    O + * -> O*
 
 is just re1 + re2 + re3.
 
@@ -335,7 +364,7 @@ plt.legend(["DFT (PBE)", "UMA-OC20"]);
 
 ### Exercises
 
-1. You can also explore a few other adsorbates: C, H, N. 
+1. You can also explore a few other adsorbates: C, H, N.
 2. Explore the higher coverages. The deviations from the reference data are expected to be higher, but relative differences tend to be better. You probably need fine tuning to improve this performance. This data set doesn't have forces though, so it isn't practical to do it here.
 
 +++

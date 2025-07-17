@@ -32,12 +32,6 @@ def find_new_module_name(module):
 
 def update_config(config_or_data):
     if isinstance(config_or_data, (omegaconf.dictconfig.DictConfig, dict)):
-        if (
-            "model" in config_or_data
-            and config_or_data["model"]
-            == "fairchem.experimental.foundation_models.models.message_passing.escn_omol.eSCNMDBackbone"
-        ):
-            config_or_data["use_dataset_embedding"] = False
         for k, v in config_or_data.items():
             config_or_data[k] = update_config(v)
     elif isinstance(config_or_data, (omegaconf.listconfig.ListConfig, list)):
@@ -59,7 +53,7 @@ class RenameUnpickler(pickle.Unpickler):
         return super().find_class(find_new_module_name(module), name)
 
 
-def gererate_stress_task_config(dataset_name, rmsd):
+def generate_stress_task_config(dataset_name, rmsd):
     return {
         "_target_": "fairchem.core.units.mlip_unit.mlip_unit.Task",
         "name": f"{dataset_name}_stress",
@@ -87,6 +81,8 @@ def migrate_checkpoint(
     rm_static_keys: bool = True,
     map_undefined_stress_to: str | None = None,
     add_stress: bool = False,
+    task_add_stress: str | None = None,
+    model_version: float = 1.0,
 ) -> dict:
     """
     Migrates a checkpoint by updating module imports and configurations.
@@ -101,6 +97,7 @@ def migrate_checkpoint(
         checkpoint_path: Path to the input checkpoint file
         rm_static_keys: Whether to remove static keys from the state dictionaries
         task_add_stress: If provided, adds stress tasks for datasets based on this task
+        model_version: Inject this model version into model
 
     Returns:
         Migrated checkpoint dict
@@ -110,8 +107,23 @@ def migrate_checkpoint(
     checkpoint.tasks_config = update_config(checkpoint.tasks_config)
     checkpoint.model_config = update_config(checkpoint.model_config)
 
-    if map_undefined_stress_to is not None:
-        target_stress_task = f"{map_undefined_stress_to}_stress"
+    if (
+        checkpoint.model_config["backbone"]["model"]
+        == "fairchem.experimental.foundation_models.models.message_passing.escn_omol.eSCNMDBackbone"
+    ):
+        checkpoint.model_config["backbone"]["use_dataset_embedding"] = False
+
+    if (
+        checkpoint.model_config["backbone"]["model"]
+        == "fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone"
+    ):
+        if "model_version" in checkpoint.model_config["backbone"]:
+            assert checkpoint.model_config["backbone"]["model_version"] == model_version
+        print("Setting model version to", model_version)
+        checkpoint.model_config["backbone"]["model_version"] = model_version
+
+    if task_add_stress is not None:
+        target_stress_task = f"{task_add_stress}_stress"
         output_dataset_names = set()
         datasets_with_stress = set()
         target_stress_config = None
@@ -147,7 +159,9 @@ def migrate_checkpoint(
                 ]
         for dataset_name in output_dataset_names - datasets_with_stress:
             checkpoint.tasks_config.append(
-                gererate_stress_task_config(dataset_name, datasets_to_rmsd["omol"])
+                generate_stress_task_config(
+                    dataset_name, datasets_to_rmsd[dataset_name]
+                )
             )
 
     # remove keys for registered buffers that are no longer saved
@@ -157,7 +171,8 @@ def migrate_checkpoint(
         rename_keys = {
             # "module.backbone.routing_mlp": "module.backbone.mole_coefficient_mlp",
             # "module.backbone.moe_coefficient_mlp": "module.backbone.mole_coefficient_mlp",
-            "module.backbone.dataset_embedding.dataset_emb_dict.osc.weight": "module.backbone.dataset_embedding.dataset_emb_dict.omc.weight"
+            "backbone.dataset_embedding.dataset_emb_dict.osc.weight": "backbone.dataset_embedding.dataset_emb_dict.omc.weight",
+            "module.backbone.dataset_embedding.dataset_emb_dict.osc.weight": "module.backbone.dataset_embedding.dataset_emb_dict.omc.weight",
         }
         for state_dict_name in ["model_state_dict", "ema_state_dict"]:
             state_dict = getattr(checkpoint, state_dict_name)
@@ -190,11 +205,12 @@ if __name__ == "__main__":
         "--remove-static-keys", default=True, action=argparse.BooleanOptionalAction
     )
     parser.add_argument(
-        "--add-stress", default=True, action=argparse.BooleanOptionalAction
+        "--add-stress", default=False, action=argparse.BooleanOptionalAction
     )
     parser.add_argument(
         "--map-undefined-stress-to", type=str, required=False, default=None
     )
+    parser.add_argument("--model-version", type=float, default=1.0)
     args = parser.parse_args()
 
     if os.path.exists(args.checkpoint_out):
@@ -207,6 +223,7 @@ if __name__ == "__main__":
         args.remove_static_keys,
         args.map_undefined_stress_to,
         add_stress=args.add_stress,
+        model_version=args.model_version,
     )
     torch.save(checkpoint, args.checkpoint_out)
 
