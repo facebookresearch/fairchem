@@ -15,10 +15,37 @@ from e3nn import o3
 
 YTOL = 0.999999
 
-
 def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
     edge_vec_0 = edge_distance_vec
     edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
+
+    # Make sure the atoms are far enough apart
+    # assert torch.min(edge_vec_0_distance) < 0.0001
+    if len(edge_vec_0_distance) > 0 and torch.min(edge_vec_0_distance) < 0.0001:
+        logging.error(f"Error edge_vec_0_distance: {torch.min(edge_vec_0_distance)}")
+
+    #make unit vector
+    xyz=torch.nn.functional.normalize(edge_vec_0,p=2,dim=1) #.clamp(-1+1e-6,1-1e-6)
+
+    #compute alpha and beta
+    mask=xyz[:,1].abs().isclose(torch.tensor(1.0))
+    beta = xyz.new_zeros(xyz.shape[0])
+    beta[~mask]=torch.acos(xyz[~mask, 1])
+    beta[mask]=torch.acos(xyz[mask, 1]).detach()
+    
+    alpha = torch.zeros_like(beta)
+    alpha[~mask] = torch.atan2(xyz[~mask, 0], xyz[~mask, 2])
+    alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
+
+    #random gamma (roll)
+    gamma = torch.rand_like(alpha) * 2 * torch.pi
+
+    return -gamma,-beta,-alpha
+
+def init_edge_rot_mat2(edge_distance_vec, rot_clip=False):
+    edge_vec_0 = edge_distance_vec
+    edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
+    print("DIST",edge_vec_0)
 
     # Make sure the atoms are far enough apart
     # assert torch.min(edge_vec_0_distance) < 0.0001
@@ -69,6 +96,11 @@ def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
     edge_rot_mat_inv = torch.cat([norm_z, norm_x, norm_y], dim=2)
     edge_rot_mat = torch.transpose(edge_rot_mat_inv, 1, 2)
 
+
+    print(norm_x.shape)
+
+    #print("Z",norm_z)
+    #print("EDGE ROT MAT",edge_rot_mat)
     if rot_clip:
         return edge_rot_mat
     else:
@@ -117,8 +149,76 @@ def _z_rot_mat(angle: torch.Tensor, lv: int) -> torch.Tensor:
         M[..., inds[i], inds[i]] = torch.cos(frequencies[i] * angle)
     return M
 
+def rotation_to_wignerx(
+    edge_rot_mat: torch.Tensor,
+    start_lmax: int,
+    end_lmax: int,
+    Jd: list[torch.Tensor],
+    rot_clip: bool = False,
+) -> torch.Tensor:
+    print("WIGNER NEW")
+    eps = 0.00001
+    alpha_norm = torch.sqrt(edge_rot_mat[:, 0, 1]**2 + edge_rot_mat[:, 2, 1]**2) + eps
+    alpha_cos = edge_rot_mat[:, 2, 1] / alpha_norm
+    alpha_sin = -edge_rot_mat[:, 0, 1] / alpha_norm
+    alpha = -torch.acos(alpha_cos)*torch.sign(alpha_sin)
+    
+    # We could instead use a "soft" sign function?
+    # alpha = -torch.acos(alpha_cos)*(alpha_sin/(torch.abs(alpha_sin) + 0.001))
+
+    beta = torch.acos(edge_rot_mat[:, 1, 1])
+
+    gamma_norm = torch.sqrt(edge_rot_mat[:, 1, 0]**2 + edge_rot_mat[:, 1, 2]**2) + eps
+    gamma_cos = -edge_rot_mat[:, 1, 2] / gamma_norm
+    gamma_sin = edge_rot_mat[:, 1, 0] / gamma_norm
+    gamma = torch.acos(gamma_cos)*torch.sign(gamma_sin)
+
+    print(alpha)
+    print(beta)
+    print(gamma)
+
+    # We could instead use a "soft" sign function?
+    # gamma = torch.acos(gamma_cos)*(gamma_sin/(torch.abs(gamma_sin) + 0.001))
+
+
+    size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
+    wigner = torch.zeros(
+        len(alpha), size, size, device=edge_rot_mat.device, dtype=edge_rot_mat.dtype
+    )
+    start = 0
+    for lmax in range(start_lmax, end_lmax + 1):
+        block = wigner_D(lmax, alpha, beta, gamma, Jd)
+        end = start + block.size()[1]
+        wigner[:, start:end, start:end] = block
+        start = end
+    return wigner
 
 def rotation_to_wigner(
+    edge_rot_mat: torch.Tensor,
+    start_lmax: int,
+    end_lmax: int,
+    Jd: list[torch.Tensor],
+    rot_clip: bool = False,
+) -> torch.Tensor:
+    """
+    set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
+    """
+    alpha,beta,gamma=edge_rot_mat
+
+    size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
+    wigner = torch.zeros(
+        len(alpha), size, size, device=alpha.device, dtype=alpha.dtype
+    )
+    start = 0
+    for lmax in range(start_lmax, end_lmax + 1):
+        block = wigner_D(lmax, alpha, beta, gamma, Jd)
+        end = start + block.size()[1]
+        wigner[:, start:end, start:end] = block
+        start = end
+
+    return wigner
+
+def rotation_to_wigner_old(
     edge_rot_mat: torch.Tensor,
     start_lmax: int,
     end_lmax: int,
