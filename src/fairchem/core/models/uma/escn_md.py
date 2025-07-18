@@ -523,7 +523,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
-        node_embeddings_by_layer=[x_message]
+        node_embeddings_by_layer = [x_message]
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
@@ -549,8 +549,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # layer_idx = 0 (before first layer) to num_layers (after last layer)
             # Invariant embeddings are stored in node_embeddings_by_layer[layer_idx][:,0,:]
             "user_accesible_embeddings": {
-                "node_embeddings_by_layer":node_embeddings_by_layer,
-            }
+                "node_embeddings_by_layer": node_embeddings_by_layer,
+            },
         }
         return out
 
