@@ -8,10 +8,8 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
-import math
 
 import torch
-from e3nn import o3
 
 YTOL = 0.999999
 
@@ -25,54 +23,29 @@ def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
     if len(edge_vec_0_distance) > 0 and torch.min(edge_vec_0_distance) < 0.0001:
         logging.error(f"Error edge_vec_0_distance: {torch.min(edge_vec_0_distance)}")
 
-    norm_x = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
+    # make unit vector
+    xyz = torch.nn.functional.normalize(
+        edge_vec_0, p=2, dim=1
+    )  # .clamp(-1+1e-6,1-1e-6)
 
-    if rot_clip:
-        yprod = norm_x @ norm_x.new_tensor([0.0, 1.0, 0.0])
-        norm_x[yprod > YTOL] = norm_x.new_tensor([0.0, 1.0, 0.0])
-        norm_x[yprod < -YTOL] = norm_x.new_tensor([0.0, -1.0, 0.0])
+    # compute alpha and beta
+    # are we standing at the north pole
+    mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
 
-    edge_vec_2 = torch.rand_like(edge_vec_0) - 0.5
-    edge_vec_2 = edge_vec_2 / (torch.sqrt(torch.sum(edge_vec_2**2, dim=1)).view(-1, 1))
-    # Create two rotated copys of the random vectors in case the random vector is aligned with norm_x
-    # With two 90 degree rotated vectors, at least one should not be aligned with norm_x
-    edge_vec_2b = edge_vec_2.clone()
-    edge_vec_2b[:, 0] = -edge_vec_2[:, 1]
-    edge_vec_2b[:, 1] = edge_vec_2[:, 0]
-    edge_vec_2c = edge_vec_2.clone()
-    edge_vec_2c[:, 1] = -edge_vec_2[:, 2]
-    edge_vec_2c[:, 2] = edge_vec_2[:, 1]
-    vec_dot_b = torch.abs(torch.sum(edge_vec_2b * norm_x, dim=1)).view(-1, 1)
-    vec_dot_c = torch.abs(torch.sum(edge_vec_2c * norm_x, dim=1)).view(-1, 1)
+    # latitude (beta)
+    beta = xyz.new_zeros(xyz.shape[0])
+    beta[~mask] = torch.acos(xyz[~mask, 1])
+    beta[mask] = torch.acos(xyz[mask, 1]).detach()
 
-    vec_dot = torch.abs(torch.sum(edge_vec_2 * norm_x, dim=1)).view(-1, 1)
-    edge_vec_2 = torch.where(torch.gt(vec_dot, vec_dot_b), edge_vec_2b, edge_vec_2)
-    vec_dot = torch.abs(torch.sum(edge_vec_2 * norm_x, dim=1)).view(-1, 1)
-    edge_vec_2 = torch.where(torch.gt(vec_dot, vec_dot_c), edge_vec_2c, edge_vec_2)
+    # longitude (alpha)
+    alpha = torch.zeros_like(beta)
+    alpha[~mask] = torch.atan2(xyz[~mask, 0], xyz[~mask, 2])
+    alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
 
-    vec_dot = torch.abs(torch.sum(edge_vec_2 * norm_x, dim=1))
-    # Check the vectors aren't aligned
-    if len(vec_dot) > 0:
-        assert torch.max(vec_dot) < 0.99
+    # random gamma (roll)
+    gamma = torch.rand_like(alpha) * 2 * torch.pi
 
-    norm_z = torch.cross(norm_x, edge_vec_2, dim=1)
-    norm_z = norm_z / (torch.sqrt(torch.sum(norm_z**2, dim=1, keepdim=True)))
-    norm_z = norm_z / (torch.sqrt(torch.sum(norm_z**2, dim=1)).view(-1, 1))
-    norm_y = torch.cross(norm_x, norm_z, dim=1)
-    norm_y = norm_y / (torch.sqrt(torch.sum(norm_y**2, dim=1, keepdim=True)))
-
-    # Construct the 3D rotation matrix
-    norm_x = norm_x.view(-1, 3, 1)
-    norm_y = -norm_y.view(-1, 3, 1)
-    norm_z = norm_z.view(-1, 3, 1)
-
-    edge_rot_mat_inv = torch.cat([norm_z, norm_x, norm_y], dim=2)
-    edge_rot_mat = torch.transpose(edge_rot_mat_inv, 1, 2)
-
-    if rot_clip:
-        return edge_rot_mat
-    else:
-        return edge_rot_mat.detach()
+    return -gamma, -beta, -alpha
 
 
 # Borrowed from e3nn @ 0.4.0:
@@ -128,48 +101,15 @@ def rotation_to_wigner(
     """
     set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
     """
-    x = edge_rot_mat @ edge_rot_mat.new_tensor([0.0, 1.0, 0.0])
-    alpha, beta = o3.xyz_to_angles(x)
-    R = (
-        o3.angles_to_matrix(alpha, beta, torch.zeros_like(alpha)).transpose(-1, -2)
-        @ edge_rot_mat
-    )
-    gamma = torch.atan2(R[..., 0, 2], R[..., 0, 0])
-
-    if rot_clip:
-        yprod = (x @ x.new_tensor([0, 1, 0])).detach()
-        mask = (yprod > -YTOL) & (yprod < YTOL)
-        alpha_detach = alpha[~mask].clone().detach()
-        gamma_detach = gamma[~mask].clone().detach()
-        beta_detach = beta.clone().detach()
-        beta_detach[yprod > YTOL] = 0.0
-        beta_detach[yprod < -YTOL] = math.pi
-        beta_detach = beta_detach[~mask]
+    alpha, beta, gamma = edge_rot_mat
 
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
-    wigner = torch.zeros(
-        len(alpha), size, size, device=edge_rot_mat.device, dtype=edge_rot_mat.dtype
-    )
+    wigner = torch.zeros(len(alpha), size, size, device=alpha.device, dtype=alpha.dtype)
     start = 0
     for lmax in range(start_lmax, end_lmax + 1):
-        if rot_clip:
-            block = wigner_D(lmax, alpha[mask], beta[mask], gamma[mask], Jd).to(
-                wigner.dtype
-            )
-            block_detach = wigner_D(
-                lmax, alpha_detach, beta_detach, gamma_detach, Jd
-            ).to(wigner.dtype)
-            end = start + block.size()[1]
-            wigner[mask, start:end, start:end] = block
-            wigner[~mask, start:end, start:end] = block_detach
-            start = end
-        else:
-            block = wigner_D(lmax, alpha, beta, gamma, Jd)
-            end = start + block.size()[1]
-            wigner[:, start:end, start:end] = block
-            start = end
+        block = wigner_D(lmax, alpha, beta, gamma, Jd)
+        end = start + block.size()[1]
+        wigner[:, start:end, start:end] = block
+        start = end
 
-    if rot_clip:
-        return wigner
-    else:
-        return wigner.detach()
+    return wigner
