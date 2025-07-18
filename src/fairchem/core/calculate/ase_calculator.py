@@ -193,7 +193,6 @@ class FAIRChemCalculator(Calculator):
             - The `free_energy` is simply a copy of the `energy` and is not the actual electronic free energy.
               It is only set for ASE routines/optimizers that are hard-coded to use this rather than the `energy` key.
         """
-
         # Our calculators won't work if natoms=0
         if len(atoms) == 0:
             raise ValueError("Atoms object has no atoms inside.")
@@ -233,6 +232,24 @@ class FAIRChemCalculator(Calculator):
                     stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
+
+    def get_descriptors(self, atoms: Atoms) -> dict:
+        if len(atoms) == 0:
+            raise ValueError("Atoms object has no atoms inside.")
+        if len(atoms) == 1:
+            raise ValueError("Descriptors do not exist for single atom systems.")
+
+        # Convert using the current a2g object
+        data_object = self.a2g(atoms)
+
+        # Batch and predict
+        batch = data_list_collater([data_object], otf_graph=True)
+        pred = self.predictor.predict(batch)
+
+        assert (
+            "user_accesible_embeddings" in pred
+        ), "No user accessible embeddings found in the prediction output."
+        return pred["user_accesible_embeddings"]
 
     def _get_single_atom_energies(self, atoms) -> dict:
         """

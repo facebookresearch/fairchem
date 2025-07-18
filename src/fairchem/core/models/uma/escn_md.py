@@ -523,6 +523,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+        node_embeddings_by_layer=[x_message]
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
@@ -535,6 +536,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
+                node_embeddings_by_layer.append(x_message)
 
         # Final layer norm
         x_message = self.norm(x_message)
@@ -543,6 +545,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "displacement": displacement,
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
+            # node_embeddings_by_layer[layer_idx] = [ N, (lmax+1)^2, sphere_channels ]
+            # layer_idx = 0 (before first layer) to num_layers (after last layer)
+            # Invariant embeddings are stored in node_embeddings_by_layer[layer_idx][:,0,:]
+            "user_accesible_embeddings": {
+                "node_embeddings_by_layer":node_embeddings_by_layer,
+            }
         }
         return out
 

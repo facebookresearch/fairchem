@@ -58,7 +58,14 @@ def collate_predictions(predict_fn):
                         f"Unrecognized task level={task.level} found in data batch at position {i}"
                     )
 
-        return {prop: torch.cat(val) for prop, val in collated_preds.items()}
+        collated_results = {
+            prop: torch.cat(val) for prop, val in collated_preds.items()
+        }
+        if len(data.dataset) == 1 and "user_accesible_embeddings" in preds:
+            collated_results["user_accesible_embeddings"] = preds[
+                "user_accesible_embeddings"
+            ]
+        return collated_results
 
     return collated_predict
 
@@ -239,6 +246,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
                     pred_output[task_name] = task.element_references.undo_refs(
                         data_device, pred_output[task_name]
                     )
+        if "user_accesible_embeddings" in output:
+            pred_output["user_accesible_embeddings"] = output[
+                "user_accesible_embeddings"
+            ]
 
         return pred_output
 
