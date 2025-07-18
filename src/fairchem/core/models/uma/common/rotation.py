@@ -29,11 +29,15 @@ def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
     )  # .clamp(-1+1e-6,1-1e-6)
 
     # compute alpha and beta
-    mask = xyz[:, 1].abs().isclose(torch.tensor(1.0))
+    # are we standing at the north pole
+    mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
+
+    # latitude (beta)
     beta = xyz.new_zeros(xyz.shape[0])
     beta[~mask] = torch.acos(xyz[~mask, 1])
     beta[mask] = torch.acos(xyz[mask, 1]).detach()
 
+    # longitude (alpha)
     alpha = torch.zeros_like(beta)
     alpha[~mask] = torch.atan2(xyz[~mask, 0], xyz[~mask, 2])
     alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
