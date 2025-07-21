@@ -95,6 +95,7 @@ class Les(nn.Module):
                compute_energy: bool = True,
                compute_bec: bool = False,
                bec_output_index: Optional[int] = None, # option to compute BEC components along only one direction
+               sid: Optional[str] = None, # [n_atoms, ] optional sid for the atoms
                ) -> Dict[str, Optional[torch.Tensor]]:
         """
         arguments:
@@ -145,10 +146,14 @@ class Les(nn.Module):
                            cell=cell,
                            batch=batch,
                            output_index=bec_output_index,
+                            
 		           )
         else:
             bec = None
+
+
         ######### HACK FOR EVAL REMOVE LATER
+        
         bec = self.bec(q=latent_charges,
                         r=positions,
                         cell=cell,
@@ -156,26 +161,57 @@ class Les(nn.Module):
                         output_index=bec_output_index,
                 )
 
+
+
         # save becs to numpy array
-        """
+        
+        '''
         import numpy as np
         import os
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        file_name = 'bec.npy'
+        tag = "spice_4l2_bec"
+        file_name = '{}.npy'.format(tag)
+        file_name_ids = '{}_ids.npy'.format(tag)
+        file_name_charges = '{}_charges.npy'.format(tag)
+        
         if os.path.exists(file_name):
             # append to the file
             existing_bec = np.load(file_name)
             bec = bec#.reshape(-1, 9)
-            print("bec_shape", bec.shape)
-            #bec = bec.reshape(-1, bec.shape[-1])
             bec = np.concatenate((existing_bec, bec), axis=0)
         else:
             # create the file
             bec = bec#.reshape(-1, 9)
+        
         np.save(file_name, bec)
-        """
+
+
+        if os.path.exists(file_name_ids):
+            # append to the file
+            existing_ids = np.load(file_name_ids)
+            sid = sid#.reshape(-1, 1)
+            # append
+            #sid = sid.reshape(-1, 1) if sid is not None else None
+            if sid is not None:
+                sid = np.concatenate((existing_ids, sid), axis=0)
+    
+        if os.path.exists(file_name_charges):
+            # append to the file
+            existing_charges = np.load(file_name_charges)
+            latent_charges = latent_charges.detach().cpu().numpy() if latent_charges is not None else None
+            latent_charges = np.concatenate((existing_charges, latent_charges), axis=0)
+        else:
+            latent_charges = latent_charges.detach().cpu().numpy() if latent_charges is not None else None
+        
+        np.save(file_name_charges, latent_charges)
+
+        if sid is not None:
+            np.save(file_name_ids, sid)
+        '''
+        
+        
         ######### HACK FOR EVAL REMOVE LATER
 
         output = {

@@ -703,6 +703,8 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         always_use_pbc: bool = True,
         heisenberg_tf: bool = False,  # extra for LR
         latent_charge_tf: bool = True,  # extra for LR
+        return_bec: bool = True,  # TODO: change back
+        conv_function_tf: bool = True,  # extra for LR
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -842,6 +844,8 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.hidden_channels_lr = hidden_channels_lr
         self.heisenberg_tf = heisenberg_tf
         self.latent_charge_tf = latent_charge_tf
+        self.return_bec = return_bec
+        self.conv_function_tf = conv_function_tf
 
         # Initialize the blocks for each layer
         self.blocks = nn.ModuleList()
@@ -1344,6 +1348,8 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         self.regress_forces = backbone.regress_forces
         self.prefix = prefix
         self.wrap_property = wrap_property
+        self.return_bec = backbone.return_bec
+        self.conv_function_tf = backbone.conv_function_tf
 
         self.sphere_channels = backbone.sphere_channels
         self.hidden_channels = backbone.hidden_channels
@@ -1393,6 +1399,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
 
     def get_charges(self, node_features):
         results = {}
+        # Ensure gradients are enabled and avoid detaching outputs
         charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
@@ -1413,17 +1420,62 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         results = {}
         charge_dict = self.get_charges(emb["node_embedding"].narrow(1, 0, 1).squeeze())
 
-        energy_output_lr = potential_full_from_edge_inds(
+
+        energy_output_lr_dict = potential_full_from_edge_inds(
             edge_index=data["edge_index"],
             pos=data["pos"],
             q=charge_dict["charges"],
             sigma=1.0,
             epsilon=1e-6,
+            return_bec=self.return_bec,
+            batch=data["batch"],
+            conv_function_tf=self.conv_function_tf,
         )
-        # print("energy_output_lr: ", energy_output_lr.shape)
 
-        results["energy"] = energy_output_lr
+        #################################### HACK REMOVE LATER ####################################
+        sid = data.get("sid", None)
+        import numpy as np
+        import os
+        bec = energy_output_lr_dict['bec']
+        bec = bec.detach().cpu().numpy() if bec is not None else None
+        # save to numpy array
+        #print("bec_shape", bec.shape)
+        tag = "spice_lr_no_conv_bec"
+        file_name = '{}.npy'.format(tag)
+        file_name_ids = '{}_ids.npy'.format(tag)
+        
+        if os.path.exists(file_name):
+            # append to the file
+            existing_bec = np.load(file_name)
+            bec = bec#.reshape(-1, 9)
+            #print("bec_shape", bec.shape, sid, positions.shape)
+            #bec = bec.reshape(-1, bec.shape[-1])
+            # make jagged array
+            
+            bec = np.concatenate((existing_bec, bec), axis=0)
+        else:
+            # create the file
+            bec = bec#.reshape(-1, 9)
+        
+        np.save(file_name, bec)
 
+
+        if os.path.exists(file_name_ids):
+            # append to the file
+            existing_ids = np.load(file_name_ids)
+            sid = sid#.reshape(-1, 1)
+            # append
+            #sid = sid.reshape(-1, 1) if sid is not None else None
+            if sid is not None:
+                sid = np.concatenate((existing_ids, sid), axis=0)
+    
+        
+        if sid is not None:
+            np.save(file_name_ids, sid)
+
+        #################################### HACK REMOVE LATER ####################################
+
+        results["energy"] = energy_output_lr_dict["potential"]
         if self.heisenberg_tf:
             energy_spin = heisenberg_potential_full_from_edge_inds(
                 edge_index=data["edge_index"],
@@ -1563,7 +1615,8 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         self.reduce = reduce
 
         self.sphere_channels = backbone.sphere_channels
-
+        self.return_bec = False
+        self.conv_function_tf = backbone.conv_function_tf
         self.hidden_channels = backbone.hidden_channels
         self.hidden_channels_lr = (
             backbone.hidden_channels_lr
@@ -1600,10 +1653,12 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
                 nn.SiLU(),
                 nn.Linear(self.hidden_channels_lr, 1, bias=True),
             )
+            #self.coupling_nn.apply(self._initialize_weights)
 
     def get_charges(self, node_features):
         results = {}
-        charges_raw = self.q_output_lr(node_features)
+        with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
+            charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
             results["charges"] = charges_raw.view(-1, 1, 1)
@@ -1622,17 +1677,21 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
     def get_lr_energies(self, emb, data, return_charges: bool = False):
         results = {}
         charge_dict = self.get_charges(emb["node_embedding"].narrow(1, 0, 1).squeeze())
+        #if not data["pos"].requires_grad:
+        #    data["pos"].requires_grad_(True)
 
-        energy_output_lr = potential_full_from_edge_inds(
+        energy_output_lr_dict = potential_full_from_edge_inds(
             edge_index=data["edge_index"],
             pos=data["pos"],
             q=charge_dict["charges"],
             sigma=1.0,
             epsilon=1e-6,
+            return_bec=self.return_bec,
+            batch=data["batch"],
+            conv_function_tf=self.conv_function_tf,
         )
-        # print("energy_output_lr: ", energy_output_lr.shape)
 
-        results["energy"] = energy_output_lr
+        results["energy"] = energy_output_lr_dict["potential"]
 
         if self.heisenberg_tf:
             energy_spin = heisenberg_potential_full_from_edge_inds(
@@ -1680,7 +1739,6 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             raise ValueError(
                 f"reduce can only be sum or mean, user provided: {self.reduce}"
             )
-
 
 @registry.register_model("esen_linear_energy_head")
 class Linear_Energy_Head(nn.Module, HeadInterface):

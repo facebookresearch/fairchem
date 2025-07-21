@@ -10,6 +10,7 @@ def grad(y: torch.Tensor, x: torch.Tensor, training: bool = True) -> torch.Tenso
     y: [n_graphs, ] or [n_graphs, dim_y]
     x: [n_nodes, :]
     """
+
     if y.is_complex():
         get_imag = True
     else:
@@ -40,7 +41,7 @@ def grad(y: torch.Tensor, x: torch.Tensor, training: bool = True) -> torch.Tenso
             gradient_imag = torch.tensor(0.0, dtype=x.dtype, device=x.device)
     else:
         dim_y = y.shape[1] 
-        grad_outputs: List[Optional[torch.Tensor]] = [torch.ones_like(y[:,0])]
+        grad_outputs: List[Optional[torch.Tensor]] = [torch.ones_like(y[:,0], requires_grad=True)]
         grad_list_real = []
         for i in range(dim_y):
             g = torch.autograd.grad(
