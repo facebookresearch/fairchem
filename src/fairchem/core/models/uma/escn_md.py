@@ -222,7 +222,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # Initialize the blocks for each layer
         self.blocks = nn.ModuleList()
-        for _ in range(self.num_layers):
+        for layer_idx in range(self.num_layers):
+            last_layer = layer_idx == (self.num_layers - 1)
             block = eSCNMD_Block(
                 self.sphere_channels,
                 self.hidden_channels,
@@ -236,6 +237,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                last_layer=last_layer,
             )
             self.blocks.append(block)
 
@@ -525,13 +527,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                last_layer = i == self.num_layers - 1
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
                     graph_dict["edge_distance"],
                     graph_dict["edge_index"],
-                    wigner_and_M_mapping,
-                    wigner_and_M_mapping_inv,
+                    wigner_and_M_mapping
+                    if not last_layer
+                    else wigner_and_M_mapping[:, : self.lmax + 1],
+                    wigner_and_M_mapping_inv
+                    if not last_layer
+                    else wigner_and_M_mapping[:, :, : self.lmax + 1],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
