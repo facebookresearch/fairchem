@@ -1521,7 +1521,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             lr_energy = self.get_lr_energies(emb, data)
             #energy_part = energy_part + lr_energy["energy"] 
             #print("energy part shape: ", energy_part.shape, " lr_energy shape: ", lr_energy["energy"].shape, " batch shape: ", data["batch"])
-            print("energy_part: ", energy_part, " lr_energy: ", lr_energy["energy"].abs().sum())
+            #print("energy_part: ", energy_part, " lr_energy: ", lr_energy["energy"].abs().sum())
             energy_part.index_add_(0, data["batch"], lr_energy["energy"])
             #energy_part = energy_part + lr_energy["energy"]
 
