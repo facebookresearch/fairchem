@@ -39,42 +39,10 @@ def potential_full_from_edge_inds(
     assert n == q.size(0), 'q dimension error'
     
     if batch is None:
-        batch = torch.zeros(n, dtype=torch.int64, device=r.device)
+        batch = torch.zeros(n, dtype=torch.int64, device=pos.device)
 
     unique_batches = torch.unique(batch)  # Get unique batch indices
     
-    """
-    batch_indices = batch.unsqueeze(-1) == unique_batches.unsqueeze(0)  # Broadcasting mask
-    pos_now = pos.unsqueeze(1) * batch_indices  # Shape: [n_atoms, n_batches, 3]
-    q_now = q.unsqueeze(1) * batch_indices  # Shape: [n_atoms, n_batches, 1]
-    q_now = q_now - torch.mean(q_now, dim=0, keepdim=True)  # Center charges per batch
-
-    j, i = edge_index
-    distance_vec = pos_now[j] - pos_now[i]
-    # red to [n_interactions, 1]
-    edge_dist = distance_vec.norm(dim=-1).unsqueeze(-1)
-    edge_dist.requires_grad_(True)  
-    edge_dist_transformed = (1.0 / (edge_dist + epsilon)) / twopi / 2.0
-    q_source = q_now[i].view(-1)
-    q_target = q_now[j].view(-1)
-    pairwise_potential = q_source.unsqueeze(0) * q_target.unsqueeze(1)
-    pairwise_potential = pairwise_potential * edge_dist_transformed#.unsqueeze(2)
-    
-    if conv_function_tf:
-        convergence_func = torch.special.erf(edge_dist / sigma / (2.0**0.5))
-        pairwise_potential *= convergence_func
-    
-    # remove diagonal elements
-    pairwise_potential = pairwise_potential * (i != j).float()
-    # add back self-interaction
-    self_interaction = torch.sum(q_now ** 2, dim=0) / (sigma * twopi**(3./2.))
-    pairwise_potential += self_interaction
-    norm_factor=90.0474
-    results["potential"] = torch.stack(pairwise_potential, dim=0).sum(dim=1) * norm_factor
-    """
-    #results = scatter(
-    #    pairwise_potential, i, dim=0, dim_size=q.size(0), reduce="sum"
-    #).sum(dim=1)
 
     if return_bec:
         # Ensure pos has requires_grad=True
@@ -89,14 +57,6 @@ def potential_full_from_edge_inds(
         all_P = []
         all_phases = [] 
         unique_batches = torch.unique(batch)  # Get unique batch indices
-        '''        
-        batch_indices = batch.unsqueeze(-1) == unique_batches.unsqueeze(0)  # Broadcasting mask
-        r_now = pos.unsqueeze(1) * batch_indices  # Shape: [n_atoms, n_batches, 3]
-        q_now = q.unsqueeze(1) * batch_indices  # Shape: [n_atoms, n_batches, 1]
-        q_now = q_now - torch.mean(q_now, dim=0, keepdim=True)  # Center charges per batch
-        polarization = torch.sum(q_now * r_now, dim=0)  # Sum over atoms per batch
-        phase = torch.ones_like(r_now, dtype=torch.complex64, requires_grad=True)
-        '''
         
         for i in unique_batches:    
             #print("batch: ", batch)
@@ -147,16 +107,6 @@ def potential_full_from_edge_inds(
     # remove diagonal elements 
     pairwise_potential = pairwise_potential * (i != j).float()
     
-    #self_interaction = torch.sum(q ** 2) / (sigma * twopi**(3./2.))
-    #pairwise_potential += self_interaction
-    
-    # add back self-interaction
-    #self_interaction = torch.sum(q ** 2) / (sigma * twopi**(3./2.))
-    #pairwise_potential += self_interaction
-    
-    #results["potential"] = scatter(
-    #    pairwise_potential, i, dim=0, dim_size=q.size(0), reduce="sum"
-    #)
     # 1/2\epsilon_0, where \epsilon_0 is the vacuum permittivity
     # \epsilon_0 = 5.55263*10^{-3} e^2 eV^{-1} A^{-1}
     norm_factor = 90.0474
