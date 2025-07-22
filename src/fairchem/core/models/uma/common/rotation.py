@@ -11,10 +11,8 @@ import logging
 
 import torch
 
-YTOL = 0.999999
 
-
-def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
+def init_edge_rot_euler_angles(edge_distance_vec):
     edge_vec_0 = edge_distance_vec
     edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
 
@@ -23,14 +21,13 @@ def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
     if len(edge_vec_0_distance) > 0 and torch.min(edge_vec_0_distance) < 0.0001:
         logging.error(f"Error edge_vec_0_distance: {torch.min(edge_vec_0_distance)}")
 
-    # make unit vector
-    xyz = torch.nn.functional.normalize(
-        edge_vec_0, p=2, dim=1
-    )  # .clamp(-1+1e-6,1-1e-6)
+    # make unit vectors
+    xyz = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
 
-    # compute alpha and beta
     # are we standing at the north pole
     mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
+
+    # compute alpha and beta
 
     # latitude (beta)
     beta = xyz.new_zeros(xyz.shape[0])
@@ -45,6 +42,7 @@ def init_edge_rot_mat(edge_distance_vec, rot_clip=False):
     # random gamma (roll)
     gamma = torch.rand_like(alpha) * 2 * torch.pi
 
+    # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha
 
 
@@ -96,7 +94,6 @@ def rotation_to_wigner(
     start_lmax: int,
     end_lmax: int,
     Jd: list[torch.Tensor],
-    rot_clip: bool = False,
 ) -> torch.Tensor:
     """
     set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
