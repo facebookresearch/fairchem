@@ -703,8 +703,9 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         always_use_pbc: bool = True,
         heisenberg_tf: bool = False,  # extra for LR
         latent_charge_tf: bool = True,  # extra for LR
-        return_bec: bool = True,  # TODO: change back
+        return_bec: bool = False,  # TODO: change back
         conv_function_tf: bool = True,  # extra for LR
+        lr_output_scaling_factor: float = 1.0
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -846,6 +847,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.latent_charge_tf = latent_charge_tf
         self.return_bec = return_bec
         self.conv_function_tf = conv_function_tf
+        self.lr_output_scaling_factor = lr_output_scaling_factor
 
         # Initialize the blocks for each layer
         self.blocks = nn.ModuleList()
@@ -1350,6 +1352,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         self.wrap_property = wrap_property
         self.return_bec = backbone.return_bec
         self.conv_function_tf = backbone.conv_function_tf
+        self.lr_output_scaling_factor = backbone.lr_output_scaling_factor
 
         self.sphere_channels = backbone.sphere_channels
         self.hidden_channels = backbone.hidden_channels
@@ -1389,7 +1392,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
                 nn.Linear(self.hidden_channels_lr, 1, bias=True),
             )
 
-        # TODO: this is not very clean, bug-prone.
+        
         # but is currently necessary for finetuning pretrained models that did not have
         # the direct_forces flag set to False
         backbone.direct_forces = False
@@ -1403,12 +1406,12 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
-            results["charges"] = charges_raw.view(-1, 1, 1)
+            results["charges"] = charges_raw.view(-1, 1, 1) * self.lr_output_scaling_factor
 
         if self.lr_comp_size == 2:
             # sum across components
-            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1)
-            results["charges_raw"] = charges_raw.abs()
+            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1)  * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw.abs()  * self.lr_output_scaling_factor
             alpha = charges_raw[:, 0]
             beta = charges_raw[:, 1]
             spin = alpha - beta
@@ -1427,12 +1430,13 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             q=charge_dict["charges"],
             sigma=1.0,
             epsilon=1e-6,
-            return_bec=self.return_bec,
+            return_bec=True,
             batch=data["batch"],
             conv_function_tf=self.conv_function_tf,
         )
 
         #################################### HACK REMOVE LATER ####################################
+        """
         sid = data.get("sid", None)
         import numpy as np
         import os
@@ -1440,7 +1444,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        tag = "spice_lr_no_conv_bec"
+        tag = "spice_lr_bec_no_conv_step_10000"
         file_name = '{}.npy'.format(tag)
         file_name_ids = '{}_ids.npy'.format(tag)
         
@@ -1459,7 +1463,6 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         
         np.save(file_name, bec)
 
-
         if os.path.exists(file_name_ids):
             # append to the file
             existing_ids = np.load(file_name_ids)
@@ -1472,7 +1475,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         
         if sid is not None:
             np.save(file_name_ids, sid)
-
+        """
         #################################### HACK REMOVE LATER ####################################
 
         results["energy"] = energy_output_lr_dict["potential"]
@@ -1516,7 +1519,11 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
 
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data)
+            #energy_part = energy_part + lr_energy["energy"] 
+            #print("energy part shape: ", energy_part.shape, " lr_energy shape: ", lr_energy["energy"].shape, " batch shape: ", data["batch"])
+            print("energy_part: ", energy_part, " lr_energy: ", lr_energy["energy"].abs().sum())
             energy_part.index_add_(0, data["batch"], lr_energy["energy"])
+            #energy_part = energy_part + lr_energy["energy"]
 
         if self.heisenberg_tf:
             energy_part.index_add_(0, data["batch"], lr_energy["energy_spin"])
@@ -1617,6 +1624,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         self.sphere_channels = backbone.sphere_channels
         self.return_bec = False
         self.conv_function_tf = backbone.conv_function_tf
+        self.lr_output_scaling_factor = backbone.lr_output_scaling_factor
         self.hidden_channels = backbone.hidden_channels
         self.hidden_channels_lr = (
             backbone.hidden_channels_lr
@@ -1661,12 +1669,12 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
-            results["charges"] = charges_raw.view(-1, 1, 1)
+            results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
 
         if self.lr_comp_size == 2:
             # sum across components
-            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1)
-            results["charges_raw"] = charges_raw.abs()
+            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw.abs()  * self.lr_output_scaling_factor
             alpha = charges_raw[:, 0]
             beta = charges_raw[:, 1]
             spin = alpha - beta
@@ -1709,6 +1717,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             if self.lr_comp_size == 2:
                 results["spin"] = charge_dict["spin"]
 
+
         return results
 
     def forward(self, data_dict, emb: dict[str, torch.Tensor]):
@@ -1726,6 +1735,8 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
 
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data_dict)
+            #print("energy_part: ", energy, " lr_energy: ", lr_energy["energy"].sum())
+            #energy = energy + lr_energy["energy"] 
             energy.index_add_(0, data_dict["batch"], lr_energy["energy"])
 
         if self.heisenberg_tf:

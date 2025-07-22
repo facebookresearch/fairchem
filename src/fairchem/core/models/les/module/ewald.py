@@ -72,8 +72,7 @@ class Ewald(nn.Module):
         r_ij_norm = torch.norm(r_ij, dim=-1)
  
         # Error function scaling for long-range interactions
-        convergence_func_ij = torch.special.erf(r_ij_norm / self.sigma / (2.0 ** 0.5))
-   
+        
         # Compute inverse distance
         r_p_ij = 1.0 / (r_ij_norm)
 
@@ -82,8 +81,9 @@ class Ewald(nn.Module):
             q = q.unsqueeze(1)
     
         # Compute potential energy
-        n_node, n_q = q.shape
+        #n_node, n_q = q.shape
         # [1, n_node, n_q] * [n_node, 1, n_q] * [n_node, n_node, 1] * [n_node, n_node, 1]
+        convergence_func_ij = torch.special.erf(r_ij_norm / self.sigma / (2.0 ** 0.5))
         pot = q.unsqueeze(0) * q.unsqueeze(1) * r_p_ij.unsqueeze(2) * convergence_func_ij.unsqueeze(2)
 
         #Exclude diagonal terms from energy

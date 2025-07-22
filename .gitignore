@@ -5,6 +5,13 @@ results
 logs
 *.traj
 experimental
+*yml
+*yaml
+*pt
+*ipynb
+*distcp
+*.metadata
+*npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
