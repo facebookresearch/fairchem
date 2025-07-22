@@ -148,14 +148,14 @@ class HydraModel(nn.Module):
                     )
 
                 module_name = head_config.pop("module")
-                # self.output_heads[head_name] = registry.get_model_class(module_name)(
-                #     self.backbone,
-                #     **head_config,
-                # )
-                self.output_heads[head_name] = module_name(
+                self.output_heads[head_name] = registry.get_model_class(module_name)(
                     self.backbone,
                     **head_config,
                 )
+                # self.output_heads[head_name] = module_name(
+                #     self.backbone,
+                #     **head_config,
+                # )
 
             self.output_heads = torch.nn.ModuleDict(self.output_heads)
         elif starting_model is not None:
