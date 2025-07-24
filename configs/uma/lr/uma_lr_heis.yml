@@ -1,0 +1,134 @@
+defaults:
+  - backbone: small_lr_heis
+  - dataset: spice
+  - element_refs: spice_energy_linref
+  - tasks: spice
+  - cluster: santi_local
+  - _self_
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+  debug: false
+  run_dir: /home/santiagovargas/dev/fairchem/dev/training/spice_les_small_lr_heis/
+  run_name: spice_uma_lr_self_heis
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: santi
+    project: uma-spice-lr
+
+bf16: true
+epochs: 1200 # 80 epochs
+steps: null
+max_atoms: 55
+min_atoms: 35
+normalizer_rmsd: 1.0533
+spice_energy_coef: 3
+spice_forces_coef: 5
+cutoff_radius: 6.0
+max_neighbors: 50
+dataset_list: ["spice"]
+cpu_graph: True
+#num_moe_experts: 32
+#moe_layer_type: pytorch
+
+exclude_keys: [
+    "ref_energy", # only ani/geom have this
+    "total_charge", # spice
+  ]
+
+train_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    spice: ${dataset.spice_train}
+  combined_dataset_config:
+    sampling:
+      type: explicit
+      ratios:
+        spice.train: 1.0
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    spice: ${dataset.spice_val}
+  combined_dataset_config: { sampling: { type: temperature, temperature: 1.0 } }
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    #min_atoms: ${min_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    min_atoms: ${min_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+heads:
+  energy_force:
+    module: esen_efs_head_lr
+
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.models.base.HydraModel
+      backbone: ${backbone}
+      heads: ${heads}
+      pass_through_head_outputs: True
+
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 4.e-4
+      weight_decay: 1.e-4
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 0.02
+      lr_min_factor: 0.001
+      epochs: ${epochs}
+      steps: ${steps}
+    print_every: 200
+    clip_grad_norm: 200
+    bf16: ${bf16}
+  max_epochs: ${epochs}
+  max_steps: ${steps}
+  evaluate_every_n_steps: 10000
+  callbacks:
+    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
+      job_config: ${job}
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 10000
+      max_saved_checkpoints: 5

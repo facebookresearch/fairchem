@@ -1,0 +1,41 @@
+spice_train:
+  splits:
+    train:
+      sample_n: 495
+      src: /home/santiagovargas/dev/data/les/train_spice/spice/
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: spice
+
+spice_val:
+  splits:
+    val:
+      sample_n: 55
+      src: /home/santiagovargas/dev/data/les/val_spice/spice/
+
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    radius: ${cutoff_radius}
+    max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: energy
+    forces: forces
+    sid: sid
+  transforms:
+    common_transform:
+      dataset_name: spice

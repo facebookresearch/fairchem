@@ -1,0 +1,34 @@
+model: escnmd_backbone_lr
+
+max_num_elements: 100
+sphere_channels: 64
+lmax: 2
+mmax: 2
+otf_graph: True
+use_pbc: False
+use_pbc_single: False
+edge_channels: 64
+distance_function: gaussian
+num_distance_basis: 64
+regress_forces: True
+regress_stress: False
+direct_forces: False
+num_layers: 4
+hidden_channels: 64
+norm_type: rms_norm_sh
+act_type: gate
+ff_type: spectral
+chg_spin_emb_type: "rand_emb"
+cs_emb_grad: True
+dataset_list: ${dataset_list}
+
+# LR  components
+return_bec: False
+latent_charge_tf: true # coul
+conv_function_tf: False  # extra for LR
+lr_output_scaling_factor: 0.1
+hidden_channels_lr: 64
+cutoff_lr: 15.0
+
+heisenberg_tf: True # spin
+

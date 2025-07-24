@@ -412,7 +412,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 max_neighbors=self.max_neighbors,
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
-                pbc=pbc,
+                pbc=pbc
             )
         else:
             # this assume edge_index is provided
@@ -705,9 +705,11 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         latent_charge_tf: bool = True,  # extra for LR
         return_bec: bool = False,  # TODO: change back
         conv_function_tf: bool = True,  # extra for LR
-        lr_output_scaling_factor: float = 1.0
+        lr_output_scaling_factor: float = 1.0,
+        cutoff_lr: float = -1.0
     ):
         super().__init__()
+        
         self.max_num_elements = max_num_elements
         self.lmax = lmax
         self.mmax = mmax
@@ -848,7 +850,12 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.return_bec = return_bec
         self.conv_function_tf = conv_function_tf
         self.lr_output_scaling_factor = lr_output_scaling_factor
-
+        
+        if cutoff_lr < 0.0:
+            cutoff_lr = None
+        else:
+            self.cutoff_lr = cutoff_lr
+        
         # Initialize the blocks for each layer
         self.blocks = nn.ModuleList()
         for _ in range(self.num_layers):
@@ -991,6 +998,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
                 "We can only accept pbc that is all true or all false"
             )
             logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
+            
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -998,6 +1006,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
+                cutoff_lr=self.cutoff_lr
             )
         else:
             # this assume edge_index is provided
@@ -1173,6 +1182,9 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
+        if self.cutoff_lr is not None:
+            out["edge_index_lr"] = graph_dict["edge_index_lr"]
+
         return out
 
     def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
@@ -1423,20 +1435,24 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         results = {}
         charge_dict = self.get_charges(emb["node_embedding"].narrow(1, 0, 1).squeeze())
 
+        if "edge_index_lr" in emb: 
+           edges_lr = emb["edge_index_lr"]
+        else:
+            edges_lr = emb["edge_index"]
 
         energy_output_lr_dict = potential_full_from_edge_inds(
-            edge_index=data["edge_index"],
+            edge_index=edges_lr,
             pos=data["pos"],
             q=charge_dict["charges"],
             sigma=1.0,
             epsilon=1e-6,
-            return_bec=True,
+            return_bec=self.return_bec,
             batch=data["batch"],
             conv_function_tf=self.conv_function_tf,
         )
 
         #################################### HACK REMOVE LATER ####################################
-        """
+        '''
         sid = data.get("sid", None)
         import numpy as np
         import os
@@ -1444,7 +1460,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        tag = "spice_lr_bec_no_conv_step_10000"
+        tag = "spice_lr_bec_no_conv_heis_step_490000"
         file_name = '{}.npy'.format(tag)
         file_name_ids = '{}_ids.npy'.format(tag)
         
@@ -1475,13 +1491,13 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         
         if sid is not None:
             np.save(file_name_ids, sid)
-        """
+        '''
         #################################### HACK REMOVE LATER ####################################
 
         results["energy"] = energy_output_lr_dict["potential"]
         if self.heisenberg_tf:
             energy_spin = heisenberg_potential_full_from_edge_inds(
-                edge_index=data["edge_index"],
+                edge_index=edges_lr,
                 q=charge_dict["charges_raw"],
                 pos=data["pos"],
                 nn=self.coupling_nn,
@@ -1519,12 +1535,8 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
 
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data)
-            #energy_part = energy_part + lr_energy["energy"] 
-            #print("energy part shape: ", energy_part.shape, " lr_energy shape: ", lr_energy["energy"].shape, " batch shape: ", data["batch"])
             #print("energy_part: ", energy_part, " lr_energy: ", lr_energy["energy"].abs().sum())
             energy_part.index_add_(0, data["batch"], lr_energy["energy"])
-            #energy_part = energy_part + lr_energy["energy"]
-
         if self.heisenberg_tf:
             energy_part.index_add_(0, data["batch"], lr_energy["energy_spin"])
 
@@ -1685,11 +1697,14 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
     def get_lr_energies(self, emb, data, return_charges: bool = False):
         results = {}
         charge_dict = self.get_charges(emb["node_embedding"].narrow(1, 0, 1).squeeze())
-        #if not data["pos"].requires_grad:
-        #    data["pos"].requires_grad_(True)
+        
+        if "edge_index_lr" in emb: 
+            edges_lr = emb["edge_index_lr"]
+        else:
+            edges_lr = emb["edge_index"]
 
         energy_output_lr_dict = potential_full_from_edge_inds(
-            edge_index=data["edge_index"],
+            edge_index=edges_lr,
             pos=data["pos"],
             q=charge_dict["charges"],
             sigma=1.0,
@@ -1736,7 +1751,6 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data_dict)
             #print("energy_part: ", energy, " lr_energy: ", lr_energy["energy"].sum())
-            #energy = energy + lr_energy["energy"] 
             energy.index_add_(0, data_dict["batch"], lr_energy["energy"])
 
         if self.heisenberg_tf:

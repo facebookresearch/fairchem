@@ -62,6 +62,7 @@ def generate_graph(
     enforce_max_neighbors_strictly: bool,
     radius_pbc_version: int,
     pbc: torch.Tensor,
+    cutoff_lr=None
 ) -> dict:
     """Generate a graph representation from atomic structure data.
 
@@ -85,7 +86,9 @@ def generate_graph(
             - 'cell_offsets' (torch.Tensor): Offsets of the cell vectors for each edge.
             - 'offset_distances' (torch.Tensor): Distances between the atoms connected by the edges, including the cell offsets.
             - 'neighbors' (torch.Tensor): Number of neighbors for each atom.
+            - 'cutoff_lr' (float, optional): The cutoff distance for long-range interactions, if applicable.
     """
+    #print("generate graph! cutoff_Lr: ", cutoff_lr)
 
     if radius_pbc_version == 1:
         radius_graph_pbc_fn = radius_graph_pbc
@@ -140,7 +143,7 @@ def generate_graph(
     cell_offset_distances = out["offsets"]
     distance_vec = out["distance_vec"]
 
-    return {
+    ret_dict = {
         "edge_index": edge_index,
         "edge_distance": edge_dist,
         "edge_distance_vec": distance_vec,
@@ -148,3 +151,48 @@ def generate_graph(
         "offset_distances": cell_offset_distances,
         "neighbors": neighbors,
     }
+
+    if cutoff_lr is not None:
+        (
+            edge_index_per_system_lr,
+            cell_offsets_per_system_lr,
+            neighbors_per_system_lr,
+        ) = list(
+            zip(
+                *[
+                    radius_graph_pbc_fn(
+                        data[idx],  # loop over the batches?
+                        cutoff_lr,
+                        max_neighbors,
+                        enforce_max_neighbors_strictly,
+                        pbc=pbc[idx],
+                    )
+                    for idx in range(len(data))
+                ]
+            )
+        )
+
+        # atom indexs in the edge_index need to be offset
+        #atom_index_offset = data.natoms.cumsum(dim=0).roll(1)
+        atom_index_offset[0] = 0
+        edge_index_lr = torch.hstack(
+            [
+                edge_index_per_system_lr[idx] + atom_index_offset[idx]
+                for idx in range(len(data))
+            ]
+        )
+        cell_offsets_lr = torch.vstack(cell_offsets_per_system_lr)
+        neighbors_lr = torch.hstack(neighbors_per_system_lr)
+
+        out_lr = get_pbc_distances(
+            data.pos,
+            edge_index_lr,
+            data.cell,
+            cell_offsets_lr,
+            neighbors_lr,
+            return_offsets=True,
+            return_distance_vec=True,
+        )
+        ret_dict["edge_index_lr"] = out_lr["edge_index"]
+    #print("data dict keys: ", ret_dict.keys())
+    return ret_dict
