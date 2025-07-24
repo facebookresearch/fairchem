@@ -27,7 +27,6 @@
     - per_atom_mae
     - per_atom_mse
     - rmse
-    - r2
 
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
   name: forces
@@ -55,4 +54,4 @@
     - cosine_similarity
     - magnitude_error
     - rmse
-    - r2
+

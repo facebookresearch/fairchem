@@ -1,9 +1,4 @@
-model: escnmd_moe_backbone_lr
-moe_dropout: 0.05
-moe_layer_type: ${moe_layer_type}
-num_experts: ${num_moe_experts}
-use_composition_embedding: true
-use_global_embedding: false
+model: escnmd_backbone_lr
 
 hidden_channels_lr: 32
 heisenberg_tf: true

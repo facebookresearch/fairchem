@@ -21,19 +21,19 @@ job:
     project: uma-spice-lr
 
 bf16: true
-epochs: 1200 # 80 epochs
+epochs: 1200
 steps: null
-max_atoms: 55
-min_atoms: 35
 normalizer_rmsd: 1.0533
+max_atoms: 100
+min_atoms: 0 
 spice_energy_coef: 3
 spice_forces_coef: 5
 cutoff_radius: 6.0
 max_neighbors: 50
 dataset_list: ["spice"]
 cpu_graph: True
-#num_moe_experts: 32
-#moe_layer_type: pytorch
+num_moe_experts: 4
+moe_layer_type: pytorch
 
 exclude_keys: [
     "ref_energy", # only ani/geom have this

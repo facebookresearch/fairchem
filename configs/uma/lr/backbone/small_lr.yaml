@@ -1,23 +1,31 @@
-model: escnmd_backbone_lr
+model: escnmd_moe_backbone_lr
+moe_dropout: 0.05
+moe_layer_type: ${moe_layer_type}
+num_experts: ${num_moe_experts}
+use_composition_embedding: true
+use_global_embedding: false
 
 max_num_elements: 100
-sphere_channels: 64
+sphere_channels: 128
 lmax: 2
 mmax: 2
 otf_graph: True
 use_pbc: False
 use_pbc_single: False
-edge_channels: 64
+edge_channels: 128
 distance_function: gaussian
 num_distance_basis: 64
+
 regress_forces: True
 regress_stress: False
 direct_forces: False
+
 num_layers: 4
-hidden_channels: 64
+hidden_channels: 128
 norm_type: rms_norm_sh
 act_type: gate
 ff_type: spectral
+
 chg_spin_emb_type: "rand_emb"
 cs_emb_grad: True
 dataset_list: ${dataset_list}
