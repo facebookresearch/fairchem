@@ -44,6 +44,15 @@ def test_single_dataset_predict(uma_predict_unit):
     )
 
 
+def test_no_stress_on_finite(uma_predict_unit):
+    calc = FAIRChemCalculator(uma_predict_unit, task_name="omol")
+    atoms = molecule("H2O")
+    atoms.calc = calc
+    atoms.get_forces()
+    assert "stress" not in atoms.calc.results, "Stress should not be calculated for finite systems."
+
+
+
 @pytest.mark.gpu()
 def test_multiple_dataset_predict(uma_predict_unit):
     h2o = molecule("H2O")
