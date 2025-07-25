@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-import clusterscope
+# import clusterscope
 import hydra
 import numpy as np
 import torch
@@ -167,10 +167,10 @@ class JobConfig:
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
-        try:
-            cluster = clusterscope.cluster()
-        except RuntimeError:
-            cluster = ""
+        # try:
+        #     cluster = clusterscope.cluster()
+        # except RuntimeError:
+        cluster = ""
         self.metadata = Metadata(
             commit=get_commit_hash(),
             log_dir=os.path.join(self.run_dir, self.timestamp_id, LOG_DIR_NAME),
