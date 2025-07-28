@@ -93,6 +93,7 @@ class Task:
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
+    shallow_ensemble: bool = False
 
 
 DEFAULT_EXCLUDE_KEYS = [
@@ -219,62 +220,80 @@ def get_output_masks(
 def compute_loss(
     tasks: Sequence[Task], predictions: dict[str, torch.Tensor], batch: AtomicData
 ) -> dict[str, float]:
-    """Compute loss given a sequence of tasks
-
-    Args:
-        tasks: a sequence of Task
-        predictions: dictionary of predictions
-        batch: data batch
-
-    Returns:
-        dictionary of losses for each task
-    """
-
     batch_size = batch.natoms.numel()
     num_atoms_in_batch = batch.natoms.sum()
-
     free_mask = batch.fixed == 0
     output_masks = get_output_masks(batch, tasks)
 
     loss_dict = {}
     for task in tasks:
-        # TODO this might be a very expensive clone
-        target = batch[task.name].clone()
-        output_mask = output_masks[task.name]
+        if getattr(task, "shallow_ensemble", False):
+            # Gather all predictions for this task from all heads
+            preds = []
+            for head_name, head_pred in predictions.items():
+                if task.name not in head_pred:
+                    continue
+                pred_for_task = head_pred[task.property]
+                if task.level == "atom":
+                    pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
+                else:
+                    pred_for_task = pred_for_task.view(batch_size, -1)
+                preds.append(pred_for_task)
+            if not preds:
+                continue
+            preds = torch.stack(preds, dim=0)  # shape: (n_heads, batch, ...)
+            mean_pred = preds.mean(dim=0)
+            std_pred = preds.std(dim=0) + 1e-8  # add epsilon for numerical stability
 
-        # element references are applied to the target before normalization
-        # TODO the current implementation will not work for single tasks with
-        # multiple element references or normalizers
-        # apply element references to the target
-        if task.element_references is not None:
-            with record_function("element_refs"):
-                target = task.element_references.apply_refs(batch, target)
-        # Normalize the target
-        target = task.normalizer.norm(target)
+            target = batch[task.name].clone()
+            output_mask = output_masks[task.name]
+            if task.element_references is not None:
+                with record_function("element_refs"):
+                    target = task.element_references.apply_refs(batch, target)
+            target = task.normalizer.norm(target)
+            if task.level == "atom":
+                target = target.view(num_atoms_in_batch, -1)
+            else:
+                target = target.view(batch_size, -1)
+            if task.level == "atom" and task.train_on_free_atoms:
+                mult_mask = free_mask & output_mask
+            else:
+                mult_mask = output_mask
 
-        # Setting up a mult_mask to multiply the loss by 1 for valid atoms
-        # or structures, and by 0 for the others. This is better than
-        # indexing the loss with the mask, because it ensures that the
-        # computational graph is correct.
+            # Only keep masked elements
+            mean_pred = mean_pred[mult_mask]
+            std_pred = std_pred[mult_mask]
+            target = target[mult_mask]
 
-        # this is related to how Hydra outputs stuff in nested dicts:
-        # ie: oc20_energy.energy
-        pred_for_task = predictions[task.name][task.property]
-        if task.level == "atom":
-            pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
+            # Special loss: log(std^2) + (target-mean)^2/std^2
+            loss = torch.log(std_pred ** 2) + ((target - mean_pred) ** 2) / (std_pred ** 2)
+            loss = loss.mean()
+            loss_dict[task.name] = loss
         else:
-            pred_for_task = pred_for_task.view(batch_size, -1)
-
-        if task.level == "atom" and task.train_on_free_atoms:
-            mult_mask = free_mask & output_mask
-        else:
-            mult_mask = output_mask
-        loss_dict[task.name] = task.loss_fn(
-            pred_for_task,
-            target,
-            mult_mask=mult_mask,
-            natoms=batch.natoms,
-        )
+            # Original logic: only one head per task
+            head_pred = predictions[task.name]
+            target = batch[task.name].clone()
+            output_mask = output_masks[task.name]
+            if task.element_references is not None:
+                with record_function("element_refs"):
+                    target = task.element_references.apply_refs(batch, target)
+            target = task.normalizer.norm(target)
+            pred_for_task = head_pred[task.property]
+            if task.level == "atom":
+                pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
+            else:
+                pred_for_task = pred_for_task.view(batch_size, -1)
+            if task.level == "atom" and task.train_on_free_atoms:
+                mult_mask = free_mask & output_mask
+            else:
+                mult_mask = output_mask
+            loss = task.loss_fn(
+                pred_for_task,
+                target,
+                mult_mask=mult_mask,
+                natoms=batch.natoms,
+            )
+            loss_dict[task.name] = loss
 
     # Sanity check to make sure the compute graph is correct.
     for lc in loss_dict.values():
@@ -285,31 +304,16 @@ def compute_loss(
 
 def compute_metrics(
     task: Task,
-    predictions: dict[str, torch.Tensor],
+    predictions: dict[str, dict],
     batch: AtomicData,
     dataset_name: str | None = None,
-) -> dict[str:Metrics]:
-    """Compute metrics and update running metrics for a given task
-
-    Args:
-        task: a Task
-        predictions: dictionary of predictions
-        batch: data batch
-        dataset_name: optional, if given compute metrics for given task using only labels from the given dataset
-        running_metrics: optional dictionary of previous metrics to update.
-
-    Returns:
-        dictionary of (updated) metrics
-    """
-    # output masks include task level mask, and task.dataset level masks.
+) -> dict[str, Metrics]:
     mask_key = task.name if dataset_name is None else f"{dataset_name}.{task.name}"
     output_mask = get_output_mask(batch, task)[mask_key]
-
     natoms = torch.repeat_interleave(batch.natoms, batch.natoms)
     if task.level == "atom":
         if task.eval_on_free_atoms is True:
             output_mask = output_mask & (batch.fixed == 0)
-
         natoms_masked = natoms[output_mask]
         output_size = natoms_masked.numel()
     elif "stress" in task.name:
@@ -318,52 +322,53 @@ def compute_metrics(
     else:
         natoms_masked = batch.natoms[output_mask]
         output_size = output_mask.sum()
-
-    # no metrics to report
     if output_size == 0:
         return {metric_name: Metrics() for metric_name in task.metrics}
 
-    target_masked = batch[task.name][output_mask]
-    pred = predictions[task.name][task.property].clone()
-    # denormalize the prediction
-    pred = task.normalizer.denorm(pred)
-    # undo element references for energy tasks
-    if task.element_references is not None:
-        pred = task.element_references.undo_refs(
-            batch,
-            pred,
-        )
-    pred_masked = pred[output_mask]
-
-    # reshape: (num_atoms_in_batch, -1) or (num_systems_in_batch, -1)
-    # if task.level == "atom" or "stress" not in task.name:
-    #     # TODO do not reshape based on task.name
-    #     # tensor.view(..., -1) will add an extra dimension even if the input shape is the same as output shape
-    #     # this will cause downstream broadcast operations to be wrong and is dangerous
-    #     target_masked = target_masked.view(output_size, -1)
-
-    assert (
-        target_masked.shape == pred_masked.shape
-    ), f"shape mismatch for {task} target: target: {target_masked.shape}, pred: {pred_masked.shape}"
-
-    # TODO need a cleaner interface for this...
-    # Lets package up the masked target and prediction into a dictionary,
-    # so that it plays nicely with the metrics functions
-    # this does not work for metrics that use more than a single prediction key, ie energy_forces_within_threshold
-    target_dict = {task.property: target_masked, "natoms": natoms_masked}
-    pred_dict = {task.property: pred_masked}
-
-    # this is different from original mt trainer, it assumes a Task has a single normalizer\
-    # (even if it is used across datasets)
-    metrics = {}
-    for metric_name in task.metrics:
-        # now predict the metrics and update them
-        metric_fn = get_metrics_fn(metric_name)
-        metrics[metric_name] = metric_fn(
-            pred_dict, target_dict, key=task.property
-        )  # TODO change this to return Metrics dataclass
-
-    return metrics
+    if getattr(task, "shallow_ensemble", False):
+        # Ensemble logic: average metrics over all heads for this task
+        metrics_per_head = []
+        for head_name, head_pred in predictions.items():
+            if task.name not in head_pred:
+                continue
+            target_masked = batch[task.name][output_mask]
+            pred = head_pred[task.property].clone()
+            pred = task.normalizer.denorm(pred)
+            if task.element_references is not None:
+                pred = task.element_references.undo_refs(batch, pred)
+            pred_masked = pred[output_mask]
+            assert target_masked.shape == pred_masked.shape
+            target_dict = {task.property: target_masked, "natoms": natoms_masked}
+            pred_dict = {task.property: pred_masked}
+            metrics = {}
+            for metric_name in task.metrics:
+                metric_fn = get_metrics_fn(metric_name)
+                metrics[metric_name] = metric_fn(pred_dict, target_dict, key=task.property)
+            metrics_per_head.append(metrics)
+        if metrics_per_head:
+            agg_metrics = {}
+            for metric_name in task.metrics:
+                agg_metrics[metric_name] = sum(m[metric_name] for m in metrics_per_head) / len(metrics_per_head)
+            return agg_metrics
+        else:
+            return {metric_name: Metrics() for metric_name in task.metrics}
+    else:
+        # Original logic: only one head per task
+        head_pred = predictions[task.name]
+        target_masked = batch[task.name][output_mask]
+        pred = head_pred[task.property].clone()
+        pred = task.normalizer.denorm(pred)
+        if task.element_references is not None:
+            pred = task.element_references.undo_refs(batch, pred)
+        pred_masked = pred[output_mask]
+        assert target_masked.shape == pred_masked.shape
+        target_dict = {task.property: target_masked, "natoms": natoms_masked}
+        pred_dict = {task.property: pred_masked}
+        metrics = {}
+        for metric_name in task.metrics:
+            metric_fn = get_metrics_fn(metric_name)
+            metrics[metric_name] = metric_fn(pred_dict, target_dict, key=task.property)
+        return metrics
 
 
 def mt_collater_adapter(
