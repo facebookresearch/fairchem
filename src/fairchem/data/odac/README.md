@@ -6,7 +6,7 @@ Pre-trained ML models and configs are available [here](https://fair-chem.github.
 
 Large ODAC files can be downloaded by running the command `python src/fairchem/core/scripts/download_large_files.py odac` from the root of the fairchem repo.
 
-This repository contains the list of [promising MOFs](https://github.com/FAIR-Chem/fairchem/tree/main/src/fairchem/data/odac/promising_mof) discovered in the ODAC23 paper, as well as details of the [classifical force field calculations](https://github.com/FAIR-Chem/fairchem/tree/main/src/fairchem/data/odac/force_field). 
+This repository contains the list of [promising MOFs](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/odac/promising_mof) discovered in the ODAC23 paper, as well as details of the [classifical force field calculations](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/odac/force_field). 
 
 Information about supercells can be found in [supercell_info.csv](https://dl.fbaipublicfiles.com/opencatalystproject/data/large_files/supercell_info.csv) for each example (this file is downloaded to the local repo only when the above script is run).
 

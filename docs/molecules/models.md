@@ -1,5 +1,11 @@
-# OMol25-trained models
+# Pretrained models
 
+**2025 recommendation:** We suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
+1. It is state-of-the-art in out-of-domain prediction accuracy
+2. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
+3. The UMA model is most likely to be updated in the future.
+
+## Baseline models in the OMol25 paper
 As part of the OMol25 release, we released two sets of models:
 1. [preferred] UMA models trained on a range of FAIR chemistry datasets, available at [HuggingFace](https://huggingface.co/facebook/UMA)
 2. eSEN models trained only on OMol25, available at [HuggingFace](https://huggingface.co/facebook/OMol25/tree/main)

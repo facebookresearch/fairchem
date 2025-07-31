@@ -19,6 +19,7 @@ import pytest
 import torch
 from torchtnt.framework.callback import Callback
 
+from fairchem.core.units.mlip_unit.mlip_unit import UNIT_RESUME_CONFIG
 from tests.core.testing_utils import launch_main
 
 if TYPE_CHECKING:
@@ -127,6 +128,7 @@ def pickle_data_loader(pickle_path: str, steps: int):
 
     return _DummyLoader()
 
+
 @pytest.mark.skip()
 def test_full_eval_from_cli():
     sys_args = [
@@ -178,7 +180,7 @@ def test_full_train_eval_from_cli_aselmdb_gpu(
     launch_main(sys_args)
 
 
-def test_full_train_from_cli(fake_uma_dataset,torch_deterministic):
+def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
     sys_args = [
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
@@ -462,6 +464,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
         ]
     launch_main(sys_args)
 
+
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
@@ -496,7 +499,7 @@ def test_train_and_resume_max_epochs(
     checkpoin_dir = os.path.join(
         temp_dir, timestamp_id, "checkpoints", f"step_{checkpoint_step}"
     )
-    checkpoint_state_yaml = os.path.join(checkpoin_dir, "train_state.yaml")
+    checkpoint_state_yaml = os.path.join(checkpoin_dir, UNIT_RESUME_CONFIG)
     assert os.path.isdir(checkpoin_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     # next do a manual restart from a checkpoint on step 3
@@ -537,7 +540,7 @@ def test_train_and_resume_max_steps(
     checkpoin_dir = os.path.join(
         temp_dir, timestamp_id, "checkpoints", f"step_{checkpoint_step}"
     )
-    checkpoint_state_yaml = os.path.join(checkpoin_dir, "train_state.yaml")
+    checkpoint_state_yaml = os.path.join(checkpoin_dir, UNIT_RESUME_CONFIG)
     assert os.path.isdir(checkpoin_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     # next do a manual restart from a checkpoint on step 3
@@ -581,7 +584,7 @@ def train_and_resume_mole_on_dgl(device, data_root_dir):
     # Now resume from checkpoint_step and should get the same result
     # TODO, should get the run config and get checkpoint location from there
     checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
-    checkpoint_state_yaml = os.path.join(checkpoint_dir, "train_state.yaml")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
     assert os.path.isdir(checkpoint_dir)
     assert os.path.isfile(checkpoint_state_yaml)
     # next do a manual restart from a checkpoint on step 3

@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.1
+    jupytext_version: 1.17.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -56,14 +56,45 @@ Based on https://atct.anl.gov/Thermochemical%20Data/version%201.118/species/?spe
 
 The first step is getting a checkpoint for the model we want to use. UMA is currently the state-of-the-art model and will provide total energy estimates at the RPBE level of theory if you use the "OC20" task. 
 
-This next cell will automatically download the checkpoint from huggingface and load it. 
-1. You need to first request access to the UMA model here: https://huggingface.co/facebook/UMA
-2. You also need to run `huggingface-cli login` and follow the instructions to get a token from huggingface to authenticate to the servers. 
+
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+:class: dropdown
+
+
+1. Install the necessary packages using pip, uv etc
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models 
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable. 
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
 
 If you find your kernel is crashing, it probably means you have exceeded the allowed amount of memory. This checkpoint works fine in this example, but it may crash your kernel if you use it in the NRR example.
 
+This next cell will automatically download the checkpoint from huggingface and load it. 
+
 ```{code-cell}
-from fairchem.core import pretrained_mlip, FAIRChemCalculator
+from __future__ import annotations
+
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 predictor = pretrained_mlip.get_predict_unit("uma-s-1")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
@@ -72,27 +103,26 @@ calc = FAIRChemCalculator(predictor, task_name="oc20")
 Next we can build a slab with an adsorbate on it. Here we use the ASE module to build a Pt slab. We use the experimental lattice constant that is the default. This can introduce some small errors with DFT since the lattice constant can differ by a few percent, and it is common to use DFT lattice constants. In this example, we do not constrain any layers.
 
 ```{code-cell}
-from ase.build import fcc111, add_adsorbate
+from ase.build import add_adsorbate, fcc111
 from ase.optimize import BFGS
 ```
 
 ```{code-cell}
-
 # reference energies from a linear combination of H2O/N2/CO/H2!
 atomic_reference_energies = {
-            "H": -3.477,
-            "N": -8.083,
-            "O": -7.204,
-            "C": -7.282,
+    "H": -3.477,
+    "N": -8.083,
+    "O": -7.204,
+    "C": -7.282,
 }
 
 re1 = -3.03
 
-slab = fcc111('Pt', size=(2, 2, 5), vacuum=20.0)
-slab.pbc=True
+slab = fcc111("Pt", size=(2, 2, 5), vacuum=20.0)
+slab.pbc = True
 
 adslab = slab.copy()
-add_adsorbate(adslab, 'O', height=1.2, position='fcc')
+add_adsorbate(adslab, "O", height=1.2, position="fcc")
 
 slab.set_calculator(calc)
 opt = BFGS(slab)
@@ -105,7 +135,7 @@ opt.run(fmax=0.05, steps=100)
 adslab_e = adslab.get_potential_energy()
 
 # Energy for ((H2O-H2) + * -> *O) + (H2 + 1/2O2 -> H2) leads to 1/2O2 + * -> *O!
-adslab_e - slab_e - atomic_reference_energies['O'] + re1
+adslab_e - slab_e - atomic_reference_energies["O"] + re1
 ```
 
 It is good practice to look at your geometries to make sure they are what you expect.
@@ -115,8 +145,8 @@ import matplotlib.pyplot as plt
 from ase.visualize.plot import plot_atoms
 
 fig, axs = plt.subplots(1, 2)
-plot_atoms(slab, axs[0]);
-plot_atoms(slab, axs[1], rotation=('-90x'))
+plot_atoms(slab, axs[0])
+plot_atoms(slab, axs[1], rotation=("-90x"))
 axs[0].set_axis_off()
 axs[1].set_axis_off()
 ```
@@ -126,8 +156,8 @@ import matplotlib.pyplot as plt
 from ase.visualize.plot import plot_atoms
 
 fig, axs = plt.subplots(1, 2)
-plot_atoms(adslab, axs[0]);
-plot_atoms(adslab, axs[1], rotation=('-90x'))
+plot_atoms(adslab, axs[0])
+plot_atoms(adslab, axs[1], rotation=("-90x"))
 axs[0].set_axis_off()
 axs[1].set_axis_off()
 ```
@@ -188,22 +218,22 @@ First we get a reference energy from the paper (PBE, 0.25 ML O on Pt(111)).
 ```{code-cell}
 import json
 
-with open('energies.json') as f:
+with open("energies.json") as f:
     edata = json.load(f)
 
-with open('structures.json') as f:
+with open("structures.json") as f:
     sdata = json.load(f)
-    
-edata['Pt']['O']['fcc']['0.25']
+
+edata["Pt"]["O"]["fcc"]["0.25"]
 ```
 
 Next, we load data from the SI to get the geometry to start from.
 
 ```{code-cell}
-with open('structures.json') as f:
+with open("structures.json") as f:
     s = json.load(f)
-    
-sfcc = s['Pt']['O']['fcc']['0.25']    
+
+sfcc = s["Pt"]["O"]["fcc"]["0.25"]
 ```
 
 Next, we construct the atomic geometry, run the geometry optimization, and compute the energy.
@@ -213,14 +243,11 @@ re3 = -2.58  # O -> 1/2 O2         re3 = -2.58 eV
 
 from ase import Atoms
 
-adslab = Atoms(sfcc['symbols'],
-              positions=sfcc['pos'],
-              cell=sfcc['cell'],
-              pbc=True)
+adslab = Atoms(sfcc["symbols"], positions=sfcc["pos"], cell=sfcc["cell"], pbc=True)
 
 # Grab just the metal surface atoms
-slab = adslab[adslab.arrays['numbers']==adslab.arrays['numbers'][0]]
-adsorbates = adslab[~(adslab.arrays['numbers']==adslab.arrays['numbers'][0])]
+slab = adslab[adslab.arrays["numbers"] == adslab.arrays["numbers"][0]]
+adsorbates = adslab[~(adslab.arrays["numbers"] == adslab.arrays["numbers"][0])]
 slab.set_calculator(calc)
 opt = BFGS(slab)
 opt.run(fmax=0.05, steps=100)
@@ -229,11 +256,15 @@ adslab.set_calculator(calc)
 opt = BFGS(adslab)
 
 opt.run(fmax=0.05, steps=100)
-re2 = adslab.get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
-    
+re2 = (
+    adslab.get_potential_energy()
+    - slab.get_potential_energy()
+    - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
+)
+
 nO = 0
 for atom in adslab:
-    if atom.symbol == 'O':
+    if atom.symbol == "O":
         nO += 1
         re2 += re1 + re3
 
@@ -247,37 +278,38 @@ This cell reproduces a portion of a figure in the paper. We compare oxygen adsor
 At higher coverages, the agreement is not as good. This is likely because the model is extrapolating and needs to be fine-tuned.
 
 ```{code-cell}
-from tqdm import tqdm
 import time
+
+from tqdm import tqdm
 
 t0 = time.time()
 
-data = {'fcc': [],
-       'hcp': []}
+data = {"fcc": [], "hcp": []}
 
-refdata = {'fcc': [],
-           'hcp': []}
+refdata = {"fcc": [], "hcp": []}
 
 
-for metal in ['Cu', 'Ag', 'Pd', 'Pt', 'Rh', 'Ir']:
+for metal in ["Cu", "Ag", "Pd", "Pt", "Rh", "Ir"]:
     print(metal)
-    for site in ['fcc', 'hcp']:
-        for adsorbate in ['O']:
-            for coverage in tqdm(['0.25']):
-                 
-                
+    for site in ["fcc", "hcp"]:
+        for adsorbate in ["O"]:
+            for coverage in tqdm(["0.25"]):
+
                 entry = s[metal][adsorbate][site][coverage]
-                
-                adslab = Atoms(entry['symbols'],
-                              positions=entry['pos'],
-                              cell=entry['cell'],
-                              pbc=True)
 
-                
+                adslab = Atoms(
+                    entry["symbols"],
+                    positions=entry["pos"],
+                    cell=entry["cell"],
+                    pbc=True,
+                )
+
                 # Grab just the metal surface atoms
-                adsorbates = adslab[~(adslab.arrays['numbers']==adslab.arrays['numbers'][0])]
+                adsorbates = adslab[
+                    ~(adslab.arrays["numbers"] == adslab.arrays["numbers"][0])
+                ]
 
-                slab = adslab[adslab.arrays['numbers']==adslab.arrays['numbers'][0]]
+                slab = adslab[adslab.arrays["numbers"] == adslab.arrays["numbers"][0]]
                 slab.set_calculator(calc)
                 opt = BFGS(slab)
                 opt.run(fmax=0.05, steps=100)
@@ -286,39 +318,48 @@ for metal in ['Cu', 'Ag', 'Pd', 'Pt', 'Rh', 'Ir']:
                 opt = BFGS(adslab)
                 opt.run(fmax=0.05, steps=100)
 
-                re2 = adslab.get_potential_energy() - slab.get_potential_energy() - sum([atomic_reference_energies[x] for x in adsorbates.get_chemical_symbols()])
+                re2 = (
+                    adslab.get_potential_energy()
+                    - slab.get_potential_energy()
+                    - sum(
+                        [
+                            atomic_reference_energies[x]
+                            for x in adsorbates.get_chemical_symbols()
+                        ]
+                    )
+                )
 
                 nO = 0
                 for atom in adslab:
-                    if atom.symbol == 'O':
+                    if atom.symbol == "O":
                         nO += 1
                         re2 += re1 + re3
-                
+
                 data[site] += [re2 / nO]
-                refdata[site] += [edata[metal][adsorbate][site][coverage]]  
-                
-f'Elapsed time = {time.time() - t0} seconds'            
+                refdata[site] += [edata[metal][adsorbate][site][coverage]]
+
+f"Elapsed time = {time.time() - t0} seconds"
 ```
 
 First, we compare the computed data and reference data. There is a systematic difference of about 0.5 eV due to the difference between RPBE and PBE functionals, and other subtle differences like lattice constant differences and reference energy differences. This is pretty typical, and an expected deviation.
 
 ```{code-cell}
-plt.plot(refdata['fcc'], data['fcc'], 'r.', label='fcc')
-plt.plot(refdata['hcp'], data['hcp'], 'b.', label='hcp')
-plt.plot([-5.5, -3.5], [-5.5, -3.5], 'k-')
-plt.xlabel('Ref. data (DFT)')
-plt.ylabel('UMA-OC20 prediction');
+plt.plot(refdata["fcc"], data["fcc"], "r.", label="fcc")
+plt.plot(refdata["hcp"], data["hcp"], "b.", label="hcp")
+plt.plot([-5.5, -3.5], [-5.5, -3.5], "k-")
+plt.xlabel("Ref. data (DFT)")
+plt.ylabel("UMA-OC20 prediction");
 ```
 
 Next we compare the correlation between the hcp and fcc sites. Here we see the same trends. The data falls below the parity line because the hcp sites tend to be a little weaker binding than the fcc sites.
 
 ```{code-cell}
-plt.plot(refdata['hcp'], refdata['fcc'], 'r.')
-plt.plot(data['hcp'], data['fcc'], '.')
-plt.plot([-6, -1], [-6, -1], 'k-')
-plt.xlabel('$H_{ads, hcp}$')
-plt.ylabel('$H_{ads, fcc}$')
-plt.legend(['DFT (PBE)', 'UMA-OC20']);
+plt.plot(refdata["hcp"], refdata["fcc"], "r.")
+plt.plot(data["hcp"], data["fcc"], ".")
+plt.plot([-6, -1], [-6, -1], "k-")
+plt.xlabel("$H_{ads, hcp}$")
+plt.ylabel("$H_{ads, fcc}$")
+plt.legend(["DFT (PBE)", "UMA-OC20"]);
 ```
 
 ### Exercises
@@ -348,24 +389,26 @@ Slab thickness could be a factor. Here we relax the whole slab, and see by about
 
 ```{code-cell}
 for nlayers in [3, 4, 5, 6, 7, 8]:
-    slab = fcc111('Pt', size=(2, 2, nlayers), vacuum=10.0)
+    slab = fcc111("Pt", size=(2, 2, nlayers), vacuum=10.0)
 
-    slab.pbc=True
+    slab.pbc = True
     slab.set_calculator(calc)
     opt_slab = BFGS(slab, logfile=None)
     opt_slab.run(fmax=0.05, steps=100)
     slab_e = slab.get_potential_energy()
 
     adslab = slab.copy()
-    add_adsorbate(adslab, 'O', height=1.2, position='fcc')
-    
-    adslab.pbc=True
+    add_adsorbate(adslab, "O", height=1.2, position="fcc")
+
+    adslab.pbc = True
     adslab.set_calculator(calc)
     opt_adslab = BFGS(adslab, logfile=None)
     opt_adslab.run(fmax=0.05, steps=100)
     adslab_e = adslab.get_potential_energy()
 
-    print(f'nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
+    print(
+        f"nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV"
+    )
 ```
 
 ### Effects of relaxation
@@ -378,26 +421,28 @@ This has a small effect (0.1 eV).
 from ase.constraints import FixAtoms
 
 for nlayers in [3, 4, 5, 6, 7, 8]:
-    slab = fcc111('Pt', size=(2, 2, nlayers), vacuum=10.0)
+    slab = fcc111("Pt", size=(2, 2, nlayers), vacuum=10.0)
 
     slab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in slab]))
-    slab.pbc=True
+    slab.pbc = True
     slab.set_calculator(calc)
     opt_slab = BFGS(slab, logfile=None)
     opt_slab.run(fmax=0.05, steps=100)
     slab_e = slab.get_potential_energy()
 
     adslab = slab.copy()
-    add_adsorbate(adslab, 'O', height=1.2, position='fcc')
-    
+    add_adsorbate(adslab, "O", height=1.2, position="fcc")
+
     adslab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in adslab]))
-    adslab.pbc=True
+    adslab.pbc = True
     adslab.set_calculator(calc)
     opt_adslab = BFGS(adslab, logfile=None)
     opt_adslab.run(fmax=0.05, steps=100)
     adslab_e = adslab.get_potential_energy()
 
-    print(f'nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
+    print(
+        f"nlayers = {nlayers}: {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV"
+    )
 ```
 
 ### Unit cell size
@@ -407,26 +452,28 @@ Coverage effects are quite noticeable with oxygen. Here we consider larger unit 
 ```{code-cell}
 for size in [1, 2, 3, 4, 5]:
 
-    slab = fcc111('Pt', size=(size, size, 5), vacuum=10.0)
+    slab = fcc111("Pt", size=(size, size, 5), vacuum=10.0)
 
     slab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in slab]))
-    slab.pbc=True
+    slab.pbc = True
     slab.set_calculator(calc)
     opt_slab = BFGS(slab, logfile=None)
     opt_slab.run(fmax=0.05, steps=100)
     slab_e = slab.get_potential_energy()
 
     adslab = slab.copy()
-    add_adsorbate(adslab, 'O', height=1.2, position='fcc')
-    
+    add_adsorbate(adslab, "O", height=1.2, position="fcc")
+
     adslab.set_constraint(FixAtoms(mask=[atom.tag > 1 for atom in adslab]))
-    adslab.pbc=True
+    adslab.pbc = True
     adslab.set_calculator(calc)
     opt_adslab = BFGS(adslab, logfile=None)
     opt_adslab.run(fmax=0.05, steps=100)
     adslab_e = adslab.get_potential_energy()
 
-    print(f'({size}x{size}): {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV')
+    print(
+        f"({size}x{size}): {adslab_e - slab_e - atomic_reference_energies['O'] + re1:1.2f} eV"
+    )
 ```
 
 ## Summary
