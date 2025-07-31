@@ -27,26 +27,47 @@ def test_radius_graph_1d(radius_pbc_version):
     atoms.pbc = [True, False, False]
     data_dict = AtomicData.from_ase(atoms)
 
+    # case with number of neighbors within max_neighbors
     graph_dict = generate_graph(
         data_dict, 
         cutoff=cutoff, 
-        max_neighbors=3, 
+        max_neighbors=10, 
         enforce_max_neighbors_strictly=False, 
         radius_pbc_version=radius_pbc_version, 
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 4
-
     graph_dict = generate_graph(
         data_dict, 
         cutoff=cutoff, 
-        max_neighbors=3, 
+        max_neighbors=10, 
         enforce_max_neighbors_strictly=True, 
         radius_pbc_version=radius_pbc_version, 
         pbc=data_dict["pbc"]
     )
-    assert graph_dict["neighbors"] == 3
+    assert graph_dict["neighbors"] == 4
 
+    # case with number of neighbors exceeding max_neighbors
+    graph_dict = generate_graph(
+        data_dict, 
+        cutoff=cutoff, 
+        max_neighbors=1, 
+        enforce_max_neighbors_strictly=False, 
+        radius_pbc_version=radius_pbc_version, 
+        pbc=data_dict["pbc"],
+    )
+    assert graph_dict["neighbors"] == 2
+    graph_dict = generate_graph(
+        data_dict, 
+        cutoff=cutoff, 
+        max_neighbors=1, 
+        enforce_max_neighbors_strictly=True, 
+        radius_pbc_version=radius_pbc_version, 
+        pbc=data_dict["pbc"]
+    )
+    assert graph_dict["neighbors"] == 1
+
+    # case without max_neighbors
     graph_dict = generate_graph(
         data_dict, 
         cutoff=cutoff, 
@@ -56,7 +77,6 @@ def test_radius_graph_1d(radius_pbc_version):
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 4
-
     graph_dict = generate_graph(
         data_dict, 
         cutoff=cutoff, 
