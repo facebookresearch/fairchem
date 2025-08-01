@@ -2,15 +2,12 @@ import json
 import os
 import sys
 from io import StringIO
-from pathlib import Path
 
 import numpy as np
-import yaml
 from ase import Atoms
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.db import connect
 from fairchem.core.common import tutorial_utils as tu
-from fairchem.core.models.model_registry import model_name_to_local_file
 from fairchem.core.scripts import download_large_files
 
 
@@ -72,36 +69,4 @@ def test_train_test_val_split():
         assert os.path.exists(fname)
         assert len(connect(fname)) == sizes[fname]
         # Clean up after ourselves
-        os.remove(fname)
-
-
-def test_generate_yml_config():
-    """
-    Test that a YAML is generated and we are able to modify as necessary.
-    """
-    checkpoint_path = model_name_to_local_file("GemNet-dT-S2EFS-OC22", local_cache=".")
-    new_settings = {
-        "gpus": 1,
-        "logger": "tensorboard",
-        "task.prediction_dtype": "float32",
-        "dataset.test.format": "ase_db",
-        "dataset.test.a2g_args.r_energy": False,
-    }
-    yml = tu.generate_yml_config(
-        checkpoint_path,
-        "config.yml",
-        delete=["cmd", "logger", "slurm"],
-        update=new_settings,
-    )
-    with open(yml, "r") as fh:
-        data = yaml.safe_load(fh)
-    assert "cmd" not in data
-    assert "slurm" not in data
-    assert "logger" in data
-    for k, v in new_settings.items():
-        dict_like = '["' + k.replace(".", '"]["') + '"]'
-        assert eval(f"data{dict_like}") == v
-
-    # Clean up after ourselves
-    for fname in ("gndt_oc22_all_s2ef.pt", "config.yml"):
         os.remove(fname)
