@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-data-omc"
+dynamic = ["version", "readme"]
+description = "Code for generating OMC VASP inputs"
+license = {text = "MIT License"}
+dependencies = [
+    "ase",
+    "atomate2==0.0.12",
+    "pymatgen",
+    "pyyaml",
+    "tqdm"
+]
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/omc"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match fairchem_data_omc-*'
+
+[tool.hatch.build]
+directory = "../../dist-data-omc"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/data/omc"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/data/omc"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/data/omc/README.md" },
+  { path = "src/fairchem/data/omc/LICENSE.md" },
+]

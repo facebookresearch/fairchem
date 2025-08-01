@@ -1,0 +1,33 @@
+# INCAR settings for tight relaxation of molecular crystals (default for OMC25 dataset)
+
+ADDGRID: True
+ALGO: Normal
+
+EDIFF: 1.0E-06
+EDIFFG: -1.0E-03
+ENCUT: 520
+
+GGA: PE
+
+IBRION: 2
+ISIF: 3
+ISMEAR: 0
+ISPIN: 1
+IVDW: 11
+
+LREAL: False
+LMIXTAU: True
+LASPH: True
+LORBIT: 11
+LWAVE: False  # don't write wavecars
+LAECHG: False  # dont write charge density
+LVTOT: False  # dont write total potential to file
+
+NCORE: 100  # adjust to hardware
+NELM: 200
+NELMDL: -10
+NSW: 1500
+
+PREC: Normal
+
+SIGMA: 0.10

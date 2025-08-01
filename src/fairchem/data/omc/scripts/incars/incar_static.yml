@@ -1,0 +1,33 @@
+# INCAR settings for static calculations of molecular crystals
+
+ADDGRID: True
+ALGO: Normal
+
+EDIFF: 1.0E-06
+
+ENCUT: 520
+
+GGA: PE
+
+IBRION: -1
+ISIF: 0
+ISMEAR: 0
+ISPIN: 1
+IVDW: 11
+
+LREAL: False
+LMIXTAU: True
+LASPH: True
+LORBIT: 11
+LWAVE: False  # don't write wavecars
+LAECHG: False  # dont write charge density
+LVTOT: False  # dont write total potential to file
+
+NCORE: 100  # adjust to hardware
+NELM: 200
+NELMDL: -10
+NSW: 0
+
+PREC: Normal
+
+SIGMA: 0.10
