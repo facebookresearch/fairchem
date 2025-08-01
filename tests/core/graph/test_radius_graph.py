@@ -7,15 +7,9 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
-
-import numpy as np
 import pytest
-import torch
-from ase import Atoms, build
+from ase import build
 
-from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.graph.compute import generate_graph
 
