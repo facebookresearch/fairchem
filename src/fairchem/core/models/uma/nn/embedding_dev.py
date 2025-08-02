@@ -233,11 +233,12 @@ class DatasetEmbedding(nn.Module):
     def __init__(self, embedding_size, grad, dataset_list):
         super().__init__()
         self.embedding_size = embedding_size
+        self.grad = grad
         self.dataset_emb_dict = nn.ModuleDict({})
         for dataset in dataset_list:
             if dataset not in self.dataset_emb_dict:
                 self.dataset_emb_dict[dataset] = nn.Embedding(1, embedding_size)
-            if not grad:
+            if not self.grad:
                 for param in self.dataset_emb_dict[dataset].parameters():
                     param.requires_grad = False
 
@@ -245,15 +246,28 @@ class DatasetEmbedding(nn.Module):
         device = list(self.parameters())[0].device
         emb_idx = torch.tensor(0, device=device, dtype=torch.long)
 
-        # TODO: this is a hack to accomodate the MPA finetuning
-        # emb_for_datasets = [
-        #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
-        # ]
-        emb_for_datasets = [
-            self.dataset_emb_dict["omat"](emb_idx)
-            if dataset in ["mptrj", "salex"]
-            else self.dataset_emb_dict[dataset](emb_idx)
-            for dataset in dataset_list
-        ]
+        if self.grad and self.training:
+            # If gradients are enabled we need to ensure that all embeddings are included
+            # in the graph even if they are missing from the batch
+            safety_loss_emb = torch.stack(
+                [
+                    self.dataset_emb_dict[dataset](emb_idx) * 0.0
+                    for dataset in self.dataset_emb_dict
+                ]
+            ).sum(dim=0)
+
+            emb_for_datasets = [
+                (
+                    self.dataset_emb_dict[dataset](emb_idx) + safety_loss_emb
+                    if i == 0
+                    else self.dataset_emb_dict[dataset](emb_idx)
+                )
+                for i, dataset in enumerate(dataset_list)
+            ]
+
+        else:
+            emb_for_datasets = [
+                (self.dataset_emb_dict[dataset](emb_idx)) for dataset in dataset_list
+            ]
 
         return torch.stack(emb_for_datasets, dim=0)
