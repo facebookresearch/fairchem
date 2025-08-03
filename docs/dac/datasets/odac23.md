@@ -1,5 +1,5 @@
 
-# Open Direct Air Capture 2023 (ODAC23)
+# Open Direct Air Capture 2023 (ODAC23) [Deprecated]
 
 ## Structure to Energy and Forces (S2EF) task
 
