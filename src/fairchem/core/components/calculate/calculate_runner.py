@@ -132,15 +132,31 @@ class CalculateRunner(Runner, metaclass=ABCMeta):
             if len(existing_results_files) == 0:
                 return
 
+            job_array_num = self.job_config.metadata.array_job_num
+            job_array_total = self.job_config.scheduler.num_array_jobs
             # try to find and load the results file for the given job
             for file in existing_results_files:
                 matches = re.findall(r"\d+", file)
                 if (
                     matches
-                    and int(matches[-1]) == self.job_config.metadata.array_job_num
+                    and int(matches[-1]) == job_array_num
+                    and int(matches[-2]) == job_array_total
                 ):
                     # copy it over to the new run directory
                     shutil.copy(file, self.job_config.metadata.results_dir)
+
+                    job_state_path = os.path.join(
+                        os.path.dirname(file),
+                        f"{self.result_glob_pattern.split('_*')[0]}_{job_array_total}_{job_array_num}.txt",
+                    )
+                    new_path = os.path.join(
+                        self.job_config.metadata.results_dir,
+                        os.path.basename(file),
+                    )
+                    with open(job_state_path, "w") as f:
+                        f.write(f"{file} moved to {new_path}")
+
+                    os.remove(file)
                     # make sure we can load the file?
                     self._already_calculated = True
                     return
