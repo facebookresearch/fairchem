@@ -1,7 +1,6 @@
 defaults:
   - cluster: h100
   - dataset: omol
-  - element_refs: uma_hof_lin_refs
   - checkpoint: uma_sm_omol
   - _self_
 
@@ -30,10 +29,6 @@ cutoff_radius: 6
 max_atoms: 350
 
 cpu_graph: True
-normalizer_rmsd: 0.984507
-
-energy_coef: 20
-force_coef: 2
 
 omol_forces_key: omol_forces
 

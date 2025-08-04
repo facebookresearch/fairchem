@@ -19,6 +19,7 @@ from fairchem.core.common.utils import load_state_dict, match_state_dict
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 
 def load_inference_model(
@@ -55,7 +56,7 @@ def load_inference_model(
     return (model, checkpoint) if return_checkpoint is True else model
 
 
-def load_tasks(checkpoint_location: str) -> list:
+def load_tasks(checkpoint_location: str) -> list[Task]:
     """
     Load tasks from a checkpoint file.
 

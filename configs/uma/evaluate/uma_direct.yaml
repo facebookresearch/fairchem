@@ -1,8 +1,7 @@
 defaults:
   - cluster: h100
   - dataset: uma
-  - element_refs: uma_hof_lin_refs
-  - checkpoint: uma_lg_0425
+  - checkpoint: uma_lg
   - _self_
 
 job:
@@ -30,13 +29,6 @@ max_neighbors: 30
 cutoff_radius: 12
 
 cpu_graph: False
-#otf_graph: True
-normalizer_rmsd: 1.568
-
-energy_coef: 20
-force_coef: 2
-stress_coef: 1
-
 regress_stress: True
 
 oc20_forces_key: oc20_forces

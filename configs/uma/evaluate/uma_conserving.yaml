@@ -1,7 +1,6 @@
 defaults:
   - cluster: h100
   - dataset: uma
-  - element_refs: uma_v1_hof_lin_refs
   - checkpoint: uma_sm
   - _self_
 
@@ -30,11 +29,6 @@ cutoff_radius: 6
 max_atoms: 350
 
 cpu_graph: True
-normalizer_rmsd: 1.423
-
-energy_coef: 20
-force_coef: 2
-stress_coef: 1
 
 regress_stress: True
 
