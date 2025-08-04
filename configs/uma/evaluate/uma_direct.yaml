@@ -2,7 +2,6 @@ defaults:
   - cluster: h100
   - dataset: uma
   - element_refs: uma_hof_lin_refs
-  - tasks: uma_direct
   - checkpoint: uma_lg_0425
   - _self_
 
@@ -56,6 +55,10 @@ exclude_keys: [
   "nads", # oc22
   "oc22", # oc22
 ]
+
+tasks:
+  _target_: fairchem.core.units.mlip_unit.utils.load_tasks
+  checkpoint_location: ${checkpoint.ckpt_path}
 
 eval_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
