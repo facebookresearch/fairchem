@@ -40,10 +40,10 @@ We encourage users to cite this paper when using the OMC25 dataset or pretrained
       title={Open Molecular Crystals 2025 (OMC25) Dataset and Models},
       author={Vahe Gharakhanyan and Luis Barroso-Luque and Yi Yang and Muhammed Shuaibi and Kyle Michel and Daniel S. Levine and Misko Dzamba and Xiang Fu and Meng Gao and Xingyu Liu and Haoran Ni and Keian Noori and Brandon M. Wood and Matt Uyttendaele and Arman Boromand and C. Lawrence Zitnick and Noa Marom and Zachary W. Ulissi and Anuroop Sriram},
       year={2025},
-      eprint={xxxx.xxxxx},
+      eprint={2508.02651},
       archivePrefix={arXiv},
       primaryClass={physics.chem-ph},
-      url={https://arxiv.org/abs/xxxx.xxxxx},
+      url={https://arxiv.org/abs/2508.02651},
 }
 ```
 
