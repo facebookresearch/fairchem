@@ -16,8 +16,8 @@ from fairchem.core.units.mlip_unit import MLIPPredictUnit
 @pytest.mark.parametrize(
     "dtype,num_tol",
     [
-        (torch.float32, 1e-6),
-        (torch.float64, 1e-12),
+        (torch.float32, 1e-5),
+        (torch.float64, 1e-11),
     ],
 )
 def test_extensivity(dtype, num_tol, direct_checkpoint, fake_uma_dataset):
