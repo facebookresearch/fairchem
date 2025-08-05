@@ -139,29 +139,30 @@ def initialize_finetuning_model(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
     )
 
-    checkpoint.model_config["heads"] = deepcopy(heads)
-    model.finetune_model_full_config = checkpoint.model_config
+    if heads:
+        checkpoint.model_config["heads"] = deepcopy(heads)
 
-    model.output_heads = None
-    model.heads = heads
-    del model.output_heads
-    model.output_heads = {}
-    head_names_sorted = sorted(heads.keys())
-    assert len(set(head_names_sorted)) == len(
-        head_names_sorted
-    ), "Head names must be unique!"
-    for head_name in head_names_sorted:
-        head_config = heads[head_name]
-        if "module" not in head_config:
-            raise ValueError(
-                f"{head_name} head does not specify module to use for the head"
+        model.output_heads = None
+        model.heads = heads
+        del model.output_heads
+        model.output_heads = {}
+        head_names_sorted = sorted(heads.keys())
+        assert len(set(head_names_sorted)) == len(
+            head_names_sorted
+        ), "Head names must be unique!"
+        for head_name in head_names_sorted:
+            head_config = heads[head_name]
+            if "module" not in head_config:
+                raise ValueError(
+                    f"{head_name} head does not specify module to use for the head"
+                )
+            module_name = head_config.pop("module")
+            model.output_heads[head_name] = registry.get_model_class(module_name)(
+                model.backbone,
+                **head_config,
             )
-        module_name = head_config.pop("module")
-        model.output_heads[head_name] = registry.get_model_class(module_name)(
-            model.backbone,
-            **head_config,
-        )
-    model.output_heads = torch.nn.ModuleDict(model.output_heads)
+        model.output_heads = torch.nn.ModuleDict(model.output_heads)
+    model.finetune_model_full_config = checkpoint.model_config
     return model
 
 
