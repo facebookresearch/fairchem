@@ -77,11 +77,14 @@ def tf32_context_manager():
 def update_configs(original_config, new_config):
     updated_config = deepcopy(original_config)
     for k, v in new_config.items():
-        is_dict_config = (isinstance(v, (dict, DictConfig))) and (
-            isinstance(updated_config[k], (dict, DictConfig))
-        )
-        if is_dict_config and k in updated_config:
-            updated_config[k] = update_configs(updated_config[k], v)
+        if k not in updated_config:
+            updated_config[k]=v
         else:
-            updated_config[k] = v
+            is_dict_config = (isinstance(v, (dict, DictConfig))) and (
+                isinstance(updated_config[k], (dict, DictConfig))
+            )
+            if is_dict_config and k in updated_config:
+                updated_config[k] = update_configs(updated_config[k], v)
+            else:
+                updated_config[k] = v
     return updated_config
