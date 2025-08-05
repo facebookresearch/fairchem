@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Sequential request server with parallel model execution
 Usage: python server.py --workers 4 --port 8000
@@ -11,20 +10,45 @@ import pickle
 import socket
 import time
 import traceback
+from typing import TYPE_CHECKING, Protocol
 
 import hydra
 import torch.multiprocessing as mp
-from omegaconf import DictConfig
 
+if TYPE_CHECKING:
+    from omegaconf import DictConfig
+from torch.distributed.elastic.utils.distributed import get_free_port
+
+from fairchem.core.common import distutils, gp_utils
+from fairchem.core.common.distutils import (
+    get_device_for_local_rank,
+    setup_env_local_multi_gpu,
+)
 from fairchem.core.common.utils import detach_dict_tensors
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-def worker_process(worker_id, input_queue, output_queue, predict_config):
+def worker_process(
+    worker_id, input_queue, output_queue, predict_config, master_port, world_size
+):
     """Worker process - waits for input data and processes it"""
+    setup_env_local_multi_gpu(worker_id, master_port)
+    device = predict_config.get("device")
+    backend = "gloo" if device == "cpu" else "nccl"
+    dist_config = {
+        "distributed_backend": backend,
+        "world_size": world_size,
+        "cpu": device == "cpu",
+        "submit": False,
+    }
+    distutils.setup(dist_config)
+    gp_utils.setup_graph_parallel_groups(world_size, backend)
     predict_unit = hydra.utils.instantiate(predict_config)
-    logging.debug(f"Worker {worker_id} loaded predict unit: {predict_unit}")
+    logging.debug(
+        f"Worker {worker_id} loaded predict unit: {predict_unit}, "
+        f"on port {master_port}, with device: {get_device_for_local_rank()}"
+    )
 
     while True:
         try:
@@ -68,7 +92,11 @@ def worker_process(worker_id, input_queue, output_queue, predict_config):
             )
 
 
-class MLIPInferenceServer:
+class InferenceServerProtocol(Protocol):
+    def run(self) -> None: ...
+
+
+class MLIPInferenceServerMP(InferenceServerProtocol):
     def __init__(
         self,
         num_workers: int,
@@ -84,12 +112,14 @@ class MLIPInferenceServer:
 
         # Create queues for each worker
         # use queues to pass input, need to change to using SharedMemory for large data
+
         self.input_queues = [mp.Queue() for _ in range(num_workers)]
         self.output_queues = [mp.Queue() for _ in range(num_workers)]
         self.workers = []
 
     def start_workers(self):
         """Start all worker processes"""
+        port = get_free_port()
         for i in range(self.num_workers):
             worker = mp.Process(
                 target=worker_process,
@@ -98,6 +128,8 @@ class MLIPInferenceServer:
                     self.input_queues[i],
                     self.output_queues[i],
                     self.predict_config,
+                    port,
+                    self.num_workers,
                 ),
             )
             worker.start()
@@ -210,11 +242,13 @@ class MLIPInferenceServer:
     config_name="server_config",
 )
 def main(cfg: DictConfig):
-    server = MLIPInferenceServer(
+    # if backend method is mp, use python multiprocessing
+    server: InferenceServerProtocol = MLIPInferenceServerMP(
         num_workers=cfg.server.workers,
         port=cfg.server.port,
         predict_config=cfg.predict_unit,
     )
+    # otherwise use ray
     server.run()
 
 

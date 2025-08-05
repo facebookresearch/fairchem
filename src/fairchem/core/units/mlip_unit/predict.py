@@ -20,6 +20,7 @@ import numpy as np
 import torch
 from torchtnt.framework import PredictUnit, State
 
+from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     get_device_for_local_rank,
@@ -42,6 +43,8 @@ def collate_predictions(predict_fn):
     ):
         # Get the full prediction dictionary from the original predict method
         preds = predict_fn(predict_unit, data, undo_element_references)
+        if gp_utils.initialized():
+            data.batch = data.batch_full
         collated_preds = defaultdict(list)
         for i, dataset in enumerate(data.dataset):
             for task in predict_unit.dataset_to_tasks[dataset]:
