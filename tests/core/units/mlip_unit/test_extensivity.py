@@ -71,6 +71,9 @@ def test_extensivity(dtype, num_tol, direct_checkpoint, fake_uma_dataset):
     P = np.eye(3, dtype=int)
     P[0, 0] = 2  # 2x1x1 supercell
     atoms_supercell = make_supercell(atoms_pbc, P)
+
+    # this cant be charge'=2*charge and spin'=2*spin-1
+    # because that gets different embeddings in UMA
     atoms_supercell.info['charge']=atoms_pbc.info['charge'] 
     atoms_supercell.info['spin']=atoms_pbc.info['spin'] 
 
