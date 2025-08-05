@@ -41,10 +41,10 @@ def test_to_ase_batch(batch_edgeless):
     neighbors = torch.tensor([2, 2])
     # or equivalently:
     # edge_index, cell_offsets, neighbors = radius_graph_pbc_v2(
-    #     atomicdata_batch,
+    #     batch_edgeless,
     #     radius=1,
     #     max_num_neighbors_threshold=100,
-    #     pbc=atomicdata_batch["pbc"][0],  # use the PBC from molecule 0
+    #     pbc=batch_edgeless["pbc"][0],  # use the PBC from molecule 0
     # )
 
     # Add edge information to batch and check it is correct
