@@ -97,10 +97,9 @@ def equivariance_on_pt(
         sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         sample.pos += 500
         sample.cell *= 2000
-        sample.cell = sample.cell.to(dtype)
         batch = data_list_collater([sample], otf_graph=True)
 
-        original_positions = batch.pos.clone().to(dtype)
+        original_positions = batch.pos.clone()
 
         # numerical stability
         energies = []
