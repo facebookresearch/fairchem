@@ -1,8 +1,6 @@
 defaults:
   - cluster: h100
   - dataset: omc
-  - element_refs: uma_hof_lin_refs
-  - tasks: omc_conserving
   - checkpoint: uma_sm_omc
   - _self_
 
@@ -31,15 +29,14 @@ cutoff_radius: 6
 max_atoms: 350
 
 cpu_graph: True
-normalizer_rmsd: 0.102613
-
-energy_coef: 20
-force_coef: 2
-stress_coef: 1
 
 regress_stress: True
 omc_forces_key: omc_forces
 exclude_keys: []
+
+tasks:
+  _target_: fairchem.core.units.mlip_unit.utils.load_tasks
+  checkpoint_location: ${checkpoint.ckpt_path}
 
 eval_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
@@ -72,4 +69,5 @@ runner:
     model:
       _target_: fairchem.core.units.mlip_unit.mlip_unit.load_inference_model
       checkpoint_location: ${checkpoint.ckpt_path}
+      return_checkpoint: False
       use_ema: True

@@ -1,9 +1,7 @@
 defaults:
   - cluster: h100
   - dataset: uma
-  - element_refs: uma_hof_lin_refs
-  - tasks: uma_direct
-  - checkpoint: uma_lg_0425
+  - checkpoint: uma_lg
   - _self_
 
 job:
@@ -31,13 +29,6 @@ max_neighbors: 30
 cutoff_radius: 12
 
 cpu_graph: False
-#otf_graph: True
-normalizer_rmsd: 1.568
-
-energy_coef: 20
-force_coef: 2
-stress_coef: 1
-
 regress_stress: True
 
 oc20_forces_key: oc20_forces
@@ -56,6 +47,10 @@ exclude_keys: [
   "nads", # oc22
   "oc22", # oc22
 ]
+
+tasks:
+  _target_: fairchem.core.units.mlip_unit.utils.load_tasks
+  checkpoint_location: ${checkpoint.ckpt_path}
 
 eval_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
@@ -93,4 +88,5 @@ runner:
     model:
       _target_: fairchem.core.units.mlip_unit.mlip_unit.load_inference_model
       checkpoint_location: ${checkpoint.ckpt_path}
+      return_checkpoint: False
       use_ema: True

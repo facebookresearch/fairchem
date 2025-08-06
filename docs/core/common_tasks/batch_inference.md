@@ -1,12 +1,34 @@
 # Batch inference with UMA models
 
-:::{note} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
+````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
 
-```{include} ../../core/simplified_install.md
-```
-:::
 
+1. Install the necessary packages using pip, uv etc
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
+```
+
+2. Get access to any necessary huggingface gated models
+    * Get and login to your Huggingface account
+    * Request access to https://huggingface.co/facebook/UMA
+    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
+    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
+
+```{code-cell} ipython3
+:tags: [skip-execution]
+
+# Login using the huggingface-cli utility
+! huggingface-cli login
+
+# alternatively,
+import os
+os.environ['HF_TOKEN'] = 'MY_TOKEN'
+```
+
+````
 If your application requires predictions over many systems you can run batch inference using
 UMA models to use compute more efficiently and improve GPU utilization. Below we show some easy ways to run batch
 inference over batches created at runtime or loading from a dataset. If you want to learn more about the different
@@ -31,7 +53,7 @@ atomic_data_list = [
 ]
 batch = atomicdata_list_to_batch(atomic_data_list)
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 preds = predictor.predict(batch)
 ```
 
@@ -60,7 +82,7 @@ dataset = AseDBDataset(
     config=dict(src="path/to/your/dataset.aselmdb", a2g_args=dict(task_name="omol"))
 )
 loader = DataLoader(dataset, batch_size=200, collate_fn=atomicdata_list_to_batch)
-predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 
 for batch in loader:
     preds = predictor.predict(batch)

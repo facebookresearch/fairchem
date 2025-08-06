@@ -115,6 +115,8 @@ class RelaxationRunner(CalculateRunner):
                 )
                 results.update(
                     {
+                        "opt_nsteps": atoms.info.get("opt_nsteps", np.nan),
+                        "opt_converged": atoms.info.get("opt_converged", np.nan),
                         "errors": "",
                         "traceback": "",
                     }
@@ -126,6 +128,8 @@ class RelaxationRunner(CalculateRunner):
                     {
                         "errors": f"{ex!r}",
                         "traceback": traceback.format_exc(),
+                        "opt_nsteps": np.nan,
+                        "opt_converged": np.nan,
                     }
                 )
 
@@ -158,6 +162,3 @@ class RelaxationRunner(CalculateRunner):
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         return True
-
-    def load_state(self, checkpoint_location: str | None) -> None:
-        return
