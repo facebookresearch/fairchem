@@ -21,6 +21,9 @@ from fairchem.core.common.utils import (
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 from fairchem.core.models.base import BackboneInterface, HeadInterface
+from fairchem.core.models.uma.nn.embedding_dev import (
+    ChgSpinEmbedding,
+)
 from fairchem.core.modules.scaling.compat import load_scales_compat
 
 from .initializers import get_initializer
@@ -234,6 +237,8 @@ class GemNetOCBackbone(nn.Module):
         otf_graph: bool = False,
         scale_file: str | None = None,
         use_torch_sparse: bool = False,
+        chg_spin_emb_type: str | None = None,
+        cs_emb_grad: bool = False,
         **kwargs,  # backwards compatibility with deprecated arguments
     ) -> None:
         if qint_tags is None:
@@ -301,6 +306,28 @@ class GemNetOCBackbone(nn.Module):
         self.edge_emb = EdgeEmbedding(
             emb_size_atom, num_radial, emb_size_edge, activation=activation
         )
+
+        # include charge/spin
+        self.chg_spin_emb_type = chg_spin_emb_type
+        self.cs_emb_grad = cs_emb_grad
+        emb_size = self.atom_emb.emb_size
+        if self.chg_spin_emb_type is not None:
+            # charge / spin embedding
+            self.charge_embedding = ChgSpinEmbedding(
+                self.chg_spin_emb_type,
+                "charge",
+                emb_size,
+                grad=self.cs_emb_grad,
+            )
+            self.spin_embedding = ChgSpinEmbedding(
+                self.chg_spin_emb_type,
+                "spin",
+                emb_size,
+                grad=self.cs_emb_grad,
+            )
+
+            # mix charge, spin
+            self.mix_cs = nn.Linear(2 * emb_size, emb_size)
 
         # Interaction Blocks
         int_blocks = []
@@ -1281,6 +1308,14 @@ class GemNetOCBackbone(nn.Module):
 
         # Embedding block
         h = self.atom_emb(atomic_numbers)
+        # Add charge and spin embedding
+        if self.chg_spin_emb_type is not None:
+            chg_emb = self.charge_embedding(data_dict["charge"])
+            spin_emb = self.spin_embedding(data_dict["spin"])
+            cs_mixed_emb = torch.nn.SiLU()(
+                self.mix_cs(torch.cat((chg_emb, spin_emb), dim=1))
+            )
+            h = h + cs_mixed_emb[data_dict["batch"]]
         # (nAtoms, emb_size_atom)
         m = self.edge_emb(h, basis_rad_raw, main_graph["edge_index"])
         # (nEdges, emb_size_edge)
@@ -1309,6 +1344,9 @@ class GemNetOCBackbone(nn.Module):
                 trip_idx_e2a=trip_idx_e2a,
                 quad_idx=quad_idx,
             )  # (nAtoms, emb_size_atom), (nEdges, emb_size_edge)
+
+            if self.chg_spin_emb_type is not None:
+                h = h + cs_mixed_emb[data_dict["batch"]]
 
             x_E, x_F = self.out_blocks[i + 1](h, m, basis_output, idx_t)
             # (nAtoms, emb_size_atom), (nEdges, emb_size_edge)
