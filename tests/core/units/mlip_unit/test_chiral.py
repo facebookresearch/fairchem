@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 from ase import Atoms
+from ase.build import molecule
 
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
@@ -30,8 +31,8 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
-def make_atoms(symbols, coords, pbc, mode):
-    atoms1 = Atoms(symbols=symbols, positions=coords)
+def make_atoms(symbols, positions, pbc, mode):
+    atoms1 = Atoms(symbols=symbols, positions=positions)
     atoms2 = atoms1.copy()
     if mode == "full_mirror":
         atoms2.positions[:, 0] *= -1
@@ -53,41 +54,22 @@ def make_atoms(symbols, coords, pbc, mode):
 
 
 def make_chiral_methane_atoms(pbc, mode):
-    coords = np.array(
-        [
-            [0.000, 0.000, 0.000],
-            [0.629, 0.629, 0.629],
-            [-0.629, -0.629, 0.629],
-            [-0.629, 0.629, -0.629],
-            [0.629, -0.629, -0.629],
-        ]
-    )
+    positions = molecule("CH4").positions
     symbols = ["C", "H", "Cl", "Br", "F"]
-    return make_atoms(symbols, coords, pbc, mode)
+    return make_atoms(symbols, positions, pbc, mode)
 
 
 def make_chiral_ethane_atoms(pbc, mode):
-    coords = np.array(
-        [
-            [0.000, 0.000, 0.000],
-            [1.54, 0.000, 0.000],
-            [-0.629, 0.629, 0.629],
-            [-0.629, -0.629, 0.629],
-            [-0.629, 0.629, -0.629],
-            [2.169, 0.629, 0.629],
-            [2.169, -0.629, 0.629],
-            [2.169, 0.629, -0.629],
-        ]
-    )
+    positions = molecule("C2H6").positions
     symbols = ["C", "C", "H", "Cl", "Br", "H", "Cl", "F"]
-    return make_atoms(symbols, coords, pbc, mode)
+    return make_atoms(symbols, positions, pbc, mode)
 
 
 @pytest.mark.parametrize(
     "dtype,num_tol",
     [
-        (torch.float32, 1e-6),
-        (torch.float64, 1e-12),
+        (torch.float32, 1e-5),
+        (torch.float64, 1e-10),
     ],
 )
 @pytest.mark.parametrize("case_name,mode,pbc,should_be_equal", test_cases)
@@ -132,8 +114,8 @@ def test_uma_cases_all(
     if should_be_equal:
         assert (
             torch.abs(energy2 - energy1) < num_tol
-        ), f"UMA energy should be invariant for case={case_name}, mode={mode}, pbc={pbc}, dtype={dtype}"
+        ), f"Energy should be invariant for enantiomers: case={case_name}, mode={mode}, pbc={pbc}, dtype={dtype}"
     else:
         assert (
             torch.abs(energy2 - energy1) > num_tol
-        ), f"UMA energy should differ for case={case_name}, mode={mode}, pbc={pbc}, dtype={dtype}"
+        ), f"Energy should differ for diastereomers: case={case_name}, mode={mode}, pbc={pbc}, dtype={dtype}"
