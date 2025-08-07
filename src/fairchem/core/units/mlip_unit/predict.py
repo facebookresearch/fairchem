@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import os
 import random
+import threading
+import time
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
@@ -18,6 +20,7 @@ from typing import TYPE_CHECKING, Sequence
 import hydra
 import numpy as np
 import torch
+from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
 from fairchem.core.common import gp_utils
@@ -26,6 +29,11 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
 )
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.inference.client import MLIPInferenceClient
+from fairchem.core.inference.inference_server import (
+    InferenceServerProtocol,
+    MLIPInferenceServerMP,
+)
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
@@ -261,3 +269,97 @@ def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
         for dataset_name in task.datasets:
             dset_to_tasks_map[dataset_name].append(task)
     return dict(dset_to_tasks_map)
+
+
+def run_server_entry(num_workers, port, predict_unit_config):
+    server: InferenceServerProtocol = MLIPInferenceServerMP(
+        num_workers=num_workers,
+        port=port,
+        predict_config=predict_unit_config,
+    )
+    server.run()
+
+
+class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
+    def __init__(
+        self,
+        inference_model_path: str,
+        device: str = "cpu",
+        overrides: dict | None = None,
+        inference_settings: InferenceSettings | None = None,
+        seed: int = 41,
+        atom_refs: dict | None = None,
+        server_config: dict | None = None,
+        client_config: dict | None = None,
+    ):
+        """
+        This PredictUnit can be used to run inference on a remote server.
+
+        It can be used in several modes:
+        1) If server_config is provided then it will start a local server and create a client to connect to it.
+        A separate client cannot be provided in this case.
+        2) If server_config is NOT provided and client_config is provided, we assume the remote server is already running
+        and we will create a client to connect to it.
+        """
+        super().__init__()
+        assert (server_config is not None) ^ (
+            client_config is not None
+        ), "Exactly one of server_config or client_config must be provided."
+
+        config = {}
+        self.server_process = None
+
+        if server_config is not None:
+            logging.info(f"Starting inference server with config {server_config}")
+            if "port" not in server_config:
+                server_config["port"] = get_free_port()
+            config["server"] = server_config
+            self.server_address = "localhost"
+            self.server_port = server_config.get("port")
+            self.workers = server_config.get("workers", 1)
+            predict_unit_config = {
+                "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
+                "inference_model_path": inference_model_path,
+                "device": device,
+                "overrides": overrides,
+                "inference_settings": inference_settings,
+                "seed": seed,
+                "atom_refs": atom_refs,
+            }
+
+            self.server: InferenceServerProtocol = MLIPInferenceServerMP(
+                num_workers=self.workers,
+                port=self.server_port,
+                predict_config=predict_unit_config,
+            )
+            self.server_thread = threading.Thread(target=self.server.run, args=())
+            self.server_thread.start()
+
+            while not self.server.ready():
+                logging.info(
+                    f"Waiting for server to be ready on {self.server_address}:{self.server_port}"
+                )
+                time.sleep(1)
+
+        if client_config is not None:
+            logging.info(f"Connecting to inference server with config {client_config}")
+            self.client = hydra.utils.instantiate(client_config)
+        else:
+            self.client = MLIPInferenceClient(
+                server_address=self.server_address,
+                port=self.server_port,
+            )
+
+    def shutdown(self):
+        # Explicitly shut down the server and join the thread
+        if hasattr(self, "server") and self.server is not None:
+            self.server.shutdown()
+        if hasattr(self, "server_thread") and self.server_thread.is_alive():
+            self.server_thread.join(timeout=5)
+
+    def __del__(self):
+        # Do not rely on __del__ for shutdown, use shutdown() explicitly if possible
+        self.server.shutdown()
+
+    def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
+        return self.client.call(data)

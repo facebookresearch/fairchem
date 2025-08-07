@@ -30,7 +30,13 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def worker_process(
-    worker_id, input_queue, output_queue, predict_config, master_port, world_size
+    worker_id,
+    input_queue,
+    output_queue,
+    ready_queue,
+    predict_config,
+    master_port,
+    world_size,
 ):
     """Worker process - waits for input data and processes it"""
     setup_env_local_multi_gpu(worker_id, master_port)
@@ -47,8 +53,9 @@ def worker_process(
     predict_unit = hydra.utils.instantiate(predict_config)
     logging.debug(
         f"Worker {worker_id} loaded predict unit: {predict_unit}, "
-        f"on port {master_port}, with device: {get_device_for_local_rank()}"
+        f"on port {master_port}, with device: {get_device_for_local_rank()}, config: {predict_config}"
     )
+    ready_queue.put(worker_id)
 
     while True:
         try:
@@ -95,6 +102,8 @@ def worker_process(
 class InferenceServerProtocol(Protocol):
     def run(self) -> None: ...
 
+    def ready(self) -> bool: ...
+
 
 class MLIPInferenceServerMP(InferenceServerProtocol):
     def __init__(
@@ -105,16 +114,16 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         start_method: str = "spawn",
     ):
         mp.set_start_method(start_method)
-
         self.num_workers = num_workers
         self.port = port
         self.predict_config = predict_config
 
         # Create queues for each worker
         # use queues to pass input, need to change to using SharedMemory for large data
-
+        self.server_socket = None
         self.input_queues = [mp.Queue() for _ in range(num_workers)]
         self.output_queues = [mp.Queue() for _ in range(num_workers)]
+        self.ready_queue = mp.Queue()
         self.workers = []
 
     def start_workers(self):
@@ -127,6 +136,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                     i,
                     self.input_queues[i],
                     self.output_queues[i],
+                    self.ready_queue,
                     self.predict_config,
                     port,
                     self.num_workers,
@@ -202,38 +212,53 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
             client_socket.close()
             logging.info(f"Client {addr} disconnected")
 
+    def ready(self):
+        """Check if all workers are ready"""
+        ready_workers = []
+        while len(ready_workers) < self.num_workers:
+            try:
+                worker_id = self.ready_queue.get(timeout=1)
+                ready_workers.append(worker_id)
+            except Exception:
+                break
+        return len(ready_workers) == self.num_workers
+
     def run(self):
         """Start server - handles one request at a time"""
         # Start worker processes
         self.start_workers()
 
         # Start server socket
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind(("localhost", self.port))
-        server_socket.listen(1)  # Only accept 1 connection at a time
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.bind(("localhost", self.port))
+        self.server_socket.listen(1)  # Only accept 1 connection at a time
 
         logging.info(f"MLIP Inference Server: Listening on port {self.port}")
 
         try:
             while True:
                 # Accept one client at a time
-                client_socket, addr = server_socket.accept()
-
+                client_socket, addr = self.server_socket.accept()
                 # Handle this client completely before accepting next one
                 self.handle_client(client_socket, addr)
-
-        except KeyboardInterrupt:
-            logging.info("Shutting down server...")
         finally:
-            # Shutdown workers
-            for input_queue in self.input_queues:
-                input_queue.put(None)  # Shutdown signal
+            self.shutdown()
 
-            for worker in self.workers:
+    def shutdown(self):
+        """Shutdown the server and all workers"""
+        for input_queue in self.input_queues:
+            input_queue.put(None)  # Shutdown signal
+
+        # Ensure all workers are terminated
+        for worker in self.workers:
+            worker.join(timeout=5)
+            if worker.is_alive():
+                logging.warning(f"Worker {worker.pid} still alive, terminating...")
+                worker.terminate()
                 worker.join()
-
-            server_socket.close()
+        if self.server_socket:
+            self.server_socket.close()
 
 
 @hydra.main(
