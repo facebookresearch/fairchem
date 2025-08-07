@@ -63,8 +63,6 @@ This will include the configuration from `configs/uma/evaluate/model/omc_conserv
 
 You can create new config groups or override existing ones by changing the entries under `defaults`.
 
-### Example Evaluation Config
-
 ```yaml
 defaults:
   - cluster: Configuration settings for a particular compute cluster
