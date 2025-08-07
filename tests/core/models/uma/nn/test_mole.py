@@ -1,14 +1,14 @@
 """
-Unit tests for MoLE (Mixture of Local Experts) implementations.
-Tests for src/fairchem/core/models/uma/nn/mole.py
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 """
 
 import math
 import pytest
 import torch
 import torch.nn as nn
-from unittest.mock import Mock, patch
-from dataclasses import dataclass
 
 from src.fairchem.core.models.uma.nn.mole import (
     interval_intersection,
@@ -17,7 +17,6 @@ from src.fairchem.core.models.uma.nn.mole import (
     norm_str_to_fn,
     MOLEGlobals,
     init_linear,
-    MOLEDGL,
     MOLE,
 )
 
@@ -198,77 +197,6 @@ class TestInitLinear:
         assert not torch.allclose(expert0, expert1, rtol=1e-3)
         assert not torch.allclose(expert1, expert2, rtol=1e-3)
         assert not torch.allclose(expert0, expert2, rtol=1e-3)
-
-
-class TestMOLEDGL:
-    """Test MOLEDGL implementation (requires fairchem_cpp)."""
-    
-    @pytest.fixture
-    def setup_moledgl_data(self):
-        """Setup test data for MOLEDGL (without creating the layer)."""
-        num_experts = 3
-        in_features = 8
-        out_features = 4
-        batch_size = 2
-        
-        expert_coeffs = torch.softmax(torch.randn(batch_size, num_experts), dim=1)
-        mole_sizes = torch.tensor([10, 15])
-        
-        globals_obj = MOLEGlobals(
-            expert_mixing_coefficients=expert_coeffs,
-            mole_sizes=mole_sizes
-        )
-        
-        return {
-            'globals': globals_obj,
-            'num_experts': num_experts,
-            'in_features': in_features,
-            'out_features': out_features,
-            'batch_size': batch_size
-        }
-    
-    @pytest.mark.skipif(not hasattr(torch.nn, 'Module'), reason="Skipping MOLEDGL tests - would require fairchem_cpp")
-    def test_moledgl_initialization_params(self, setup_moledgl_data):
-        """Test MOLEDGL initialization parameters (without actually creating it)."""
-        data = setup_moledgl_data
-        
-        # Test that we can create the MOLEGlobals object correctly
-        assert data['globals'].expert_mixing_coefficients.shape == (data['batch_size'], data['num_experts'])
-        assert data['globals'].mole_sizes.shape == (data['batch_size'],)
-        
-        # Test weight initialization function
-        weights, bias = init_linear(
-            data['num_experts'], True, data['out_features'], data['in_features']
-        )
-        
-        assert weights.shape == (data['num_experts'], data['out_features'], data['in_features'])
-        assert bias.shape == (data['out_features'],)
-    
-    def test_moledgl_weight_mixing_computation(self, setup_moledgl_data):
-        """Test the weight mixing computation used by MOLEDGL."""
-        data = setup_moledgl_data
-        
-        # Create mock weights
-        weights = torch.randn(data['num_experts'], data['out_features'], data['in_features'])
-        
-        # Test the einsum operation used in MOLEDGL
-        mixed_weights = torch.einsum(
-            "eoi, be->bio",
-            weights,
-            data['globals'].expert_mixing_coefficients
-        )
-        
-        # Check shape - note MOLEDGL uses "bio" ordering
-        assert mixed_weights.shape == (
-            data['batch_size'], 
-            data['in_features'],  # Note: different from MOLE
-            data['out_features']
-        )
-        
-        # Each system should have different mixed weights (unless coefficients are identical)
-        if not torch.allclose(data['globals'].expert_mixing_coefficients[0], 
-                            data['globals'].expert_mixing_coefficients[1]):
-            assert not torch.allclose(mixed_weights[0], mixed_weights[1])
 
 
 class TestMOLE:
@@ -484,54 +412,3 @@ class TestMOLE:
         
         # Verify the assertion passes for correct input
         assert output.shape[0] == x.shape[0]
-
-
-class TestMOLEComparison:
-    """Test consistency between MOLEDGL and MOLE implementations."""
-    
-    @pytest.fixture
-    def setup_comparison_data(self):
-        """Setup data for comparing MOLEDGL and MOLE."""
-        num_experts = 2
-        in_features = 4
-        out_features = 3
-        batch_size = 2
-        
-        expert_coeffs = torch.tensor([[0.7, 0.3], [0.4, 0.6]])  # Fixed coefficients
-        mole_sizes = torch.tensor([6, 4])
-        
-        globals_obj = MOLEGlobals(
-            expert_mixing_coefficients=expert_coeffs,
-            mole_sizes=mole_sizes
-        )
-        
-        return {
-            'num_experts': num_experts,
-            'in_features': in_features,
-            'out_features': out_features,
-            'globals': globals_obj,
-            'total_atoms': mole_sizes.sum().item()
-        }
-    
-    def test_weight_mixing_einsum_differences(self, setup_comparison_data):
-        """Test the differences in weight mixing between MOLE and MOLEDGL einsum operations."""
-        data = setup_comparison_data
-        
-        # Create shared weights and coefficients
-        weights = torch.randn(data['num_experts'], data['out_features'], data['in_features'])
-        coefficients = data['globals'].expert_mixing_coefficients
-        
-        # Compute weight mixing using both einsum patterns
-        mole_mixed = torch.einsum("eoi, be->boi", weights, coefficients)
-        moledgl_mixed = torch.einsum("eoi, be->bio", weights, coefficients)
-        
-        # Check shapes
-        assert mole_mixed.shape == (len(data['globals'].mole_sizes), data['out_features'], data['in_features'])
-        assert moledgl_mixed.shape == (len(data['globals'].mole_sizes), data['in_features'], data['out_features'])
-        
-        # MOLEDGL's "bio" is the transpose of MOLE's "boi" in the last two dimensions
-        assert torch.allclose(mole_mixed, moledgl_mixed.transpose(-2, -1))
-        
-        # This difference reflects how they apply the mixed weights:
-        # - MOLE: uses F.linear(x, weights[n], bias) where weights[n] has shape [out, in]
-        # - MOLEDGL: uses fairchem_cpp.ops.segment_mm which expects different weight ordering
