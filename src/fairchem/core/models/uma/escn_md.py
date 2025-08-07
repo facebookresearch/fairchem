@@ -288,10 +288,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
 
         wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m, wigner
+            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
         )
         wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m
+            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
         )
         return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
 
