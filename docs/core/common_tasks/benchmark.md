@@ -2,8 +2,6 @@
 
 Model benchmarks involve evaluating a model on downstream property predictions involving several model evaluations to calculate a single or set of related properties. For example calculating structure relaxations, elastic tensors, phonons, or adsportion energy.
 
-## Running Model Evaluations
-
 To benchmark UMA models on standard datasets, you can find benchmark configuration files in `configs/uma/benchmark`. Example files include:
 - `adsorbml.yaml`
 - `hea-is2re.yaml`
