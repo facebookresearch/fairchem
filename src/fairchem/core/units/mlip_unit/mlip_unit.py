@@ -184,8 +184,8 @@ def get_output_mask(batch: AtomicData, task: Task) -> dict[str, torch.Tensor]:
     if "forces" in task.name:
         output_masks[task.name] = output_masks[task.name].all(dim=1)
 
-    for dset in set(batch.dataset):
-        dset_mask = torch.from_numpy(np.array(batch.dataset) == dset).to(
+    for dset in set(batch.dataset_name):
+        dset_mask = torch.from_numpy(np.array(batch.dataset_name) == dset).to(
             batch.pos.device
         )
         if task.level == "atom":
@@ -259,14 +259,7 @@ def compute_loss(
 
         # this is related to how Hydra outputs stuff in nested dicts:
         # ie: oc20_energy.energy
-        # Special handling for stress tasks that access decomposed outputs from omat_stress head
-        if task.name in ["omat_stress_isotropic", "omat_stress_anisotropic"]:
-            pred_for_task = predictions["omat_stress"][task.property]
-            # Fix shape mismatch for isotropic component: [3] -> [3, 1]
-            if task.name == "omat_stress_isotropic" and pred_for_task.ndim == 1:
-                pred_for_task = pred_for_task.unsqueeze(-1)
-        else:
-            pred_for_task = predictions[task.name][task.property]
+        pred_for_task = predictions[task.name][task.property]
         if task.level == "atom":
             pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
         else:
@@ -276,10 +269,6 @@ def compute_loss(
             mult_mask = free_mask & output_mask
         else:
             mult_mask = output_mask
-            # Fix mask shape for stress tasks: should only cover batch dimension
-            if "stress" in task.name and mult_mask.ndim > 1:
-                mult_mask = mult_mask.all(dim=tuple(range(1, mult_mask.ndim)))
-
         loss_dict[task.name] = task.loss_fn(
             pred_for_task,
             target,
@@ -335,14 +324,7 @@ def compute_metrics(
         return {metric_name: Metrics() for metric_name in task.metrics}
 
     target_masked = batch[task.name][output_mask]
-    # Special handling for stress tasks that access decomposed outputs from omat_stress head
-    if task.name in ["omat_stress_isotropic", "omat_stress_anisotropic"]:
-        pred = predictions["omat_stress"][task.property].clone()
-        # Fix shape mismatch for isotropic component: [3] -> [3, 1]
-        if task.name == "omat_stress_isotropic" and pred.ndim == 1:
-            pred = pred.unsqueeze(-1)
-    else:
-        pred = predictions[task.name][task.property].clone()
+    pred = predictions[task.name][task.property].clone()
     # denormalize the prediction
     pred = task.normalizer.denorm(pred)
     # undo element references for energy tasks
@@ -999,7 +981,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         self.total_loss_metrics += Metrics(metric=total_loss, total=total_loss, numel=1)
 
         # get the datasets with split names
-        datasets_in_batch = set(data.dataset)
+        datasets_in_batch = set(data.dataset_name)
 
         # run each evaluation
         for task in self.tasks:
