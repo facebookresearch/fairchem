@@ -26,6 +26,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.mlip_unit import Task
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
@@ -61,6 +62,31 @@ def collate_predictions(predict_fn):
         return {prop: torch.cat(val) for prop, val in collated_preds.items()}
 
     return collated_predict
+
+
+class AdditionalInferenceTasks:
+    def __init__(self, predictor, additional_tasks):
+        self.predictor = predictor
+        self.additional_tasks = additional_tasks
+
+    def __enter__(self):
+        # context - create a copy of current settings
+        self.original_tasks = self.predictor.tasks.copy()
+        self.original_dataset_to_tasks = {
+            k: v.copy() for k, v in self.predictor.dataset_to_tasks.items()
+        }
+
+        # create an inference task for embeddings
+        for task in self.additional_tasks:
+            self.predictor.tasks[task.name] = task
+            for dataset in task.datasets:
+                if dataset not in self.predictor.dataset_to_tasks:
+                    self.predictor.dataset_to_tasks[dataset] = []
+                self.predictor.dataset_to_tasks[dataset].append(task)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.predictor.tasks = self.original_tasks
+        self.predictor.dataset_to_tasks = self.original_dataset_to_tasks
 
 
 class MLIPPredictUnit(PredictUnit[AtomicData]):

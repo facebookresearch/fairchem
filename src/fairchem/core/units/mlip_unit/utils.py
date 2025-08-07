@@ -78,7 +78,7 @@ def update_configs(original_config, new_config):
     updated_config = deepcopy(original_config)
     for k, v in new_config.items():
         if k not in updated_config:
-            updated_config[k]=v
+            updated_config[k] = v
         else:
             is_dict_config = (isinstance(v, (dict, DictConfig))) and (
                 isinstance(updated_config[k], (dict, DictConfig))

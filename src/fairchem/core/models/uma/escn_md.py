@@ -98,8 +98,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # in this mode, the user must be responsible for providing a large vaccum box
         # for aperiodic systems
         self.always_use_pbc = always_use_pbc
-        
-        self.report_embeddings_by_layer=False
+
+        self.report_embeddings_by_layer = False
 
         # energy conservation related
         self.regress_forces = regress_forces
@@ -548,7 +548,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "displacement": displacement,
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
-            "node_embeddings_by_layer":node_embeddings_by_layer + [x_message]
+            "node_embeddings_by_layer": node_embeddings_by_layer + [x_message],
         }
         return out
 
@@ -626,20 +626,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
 
 class Embedding_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone, layer_idx, l_idx):
+    def __init__(self, backbone, layers_and_ls):
         super().__init__()
-        backbone.report_embeddings_by_layer=True
-        self.layer_idx=layer_idx
-        self.l_idx=l_idx
-        assert l_idx>=0 , 'l_idx must be >=0'
-        assert l_idx<=backbone.lmax, f'l_idx must be <=lmax({backbone.lmax})'
+        backbone.report_embeddings_by_layer = True
+        self.layers_and_ls = layers_and_ls
+        for _, l_idx in self.layers_and_ls:
+            assert l_idx >= 0, "l_idx must be >=0"
+            assert l_idx <= backbone.lmax, f"l_idx must be <=lmax({backbone.lmax})"
 
     def forward(self, _, emb: dict[str, torch.Tensor]):
-        assert self.layer_idx < len(emb['node_embeddings_by_layer']), f"embedding for {self.layer_idx} in model with only {len(emb['node_embeddings_by_layer'])-1} layers"
-        embeddings_at_layer=emb['node_embeddings_by_layer'][self.layer_idx]
-        start_m_idx=self.l_idx**2
-        end_m_idx=start_m_idx+2*self.l_idx+1
-        return {f'embeddings_layer{self.layer_idx}_l{self.l_idx}':embeddings_at_layer[:,start_m_idx:end_m_idx]}
+        embeddings = {}
+        for layer_idx, l_idx in self.layers_and_ls:
+            assert (
+                layer_idx < len(emb["node_embeddings_by_layer"])
+            ), f"embedding for {layer_idx} in model with only {len(emb['node_embeddings_by_layer'])-1} layers"
+            embeddings_at_layer = emb["node_embeddings_by_layer"][layer_idx]
+            start_m_idx = l_idx**2
+            end_m_idx = start_m_idx + 2 * l_idx + 1
+            output_name = f"embeddings_layer{layer_idx}_l{l_idx}"
+            embeddings[output_name] = {
+                output_name: embeddings_at_layer[:, start_m_idx:end_m_idx]
+            }
+        return embeddings
 
 
 class MLP_EFS_Head(nn.Module, HeadInterface):

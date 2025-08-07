@@ -86,7 +86,7 @@ class Task:
     level: str
     property: str
     loss_fn: torch.nn.Module
-    out_spec: OutputSpec
+    out_spec: OutputSpec | None
     normalizer: Normalizer
     datasets: list[str]
     element_references: Optional[ElementReferences] = None

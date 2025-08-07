@@ -13,12 +13,15 @@ from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+import torch
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
 
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.models.uma.escn_md import Embedding_Head
+from fairchem.core.modules.normalization.normalizer import Normalizer
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
     DEFAULT_CHARGE,
@@ -28,6 +31,8 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     UMATask,
 )
+from fairchem.core.units.mlip_unit.mlip_unit import Task
+from fairchem.core.units.mlip_unit.predict import AdditionalInferenceTasks
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -173,6 +178,50 @@ class FAIRChemCalculator(Calculator):
         if (not state) and (self.atoms.info != atoms.info):
             state.append("info")
         return state
+
+    def get_descriptors(self, atoms, layers_and_ls=None):
+        if layers_and_ls is None:
+            layers_and_ls = [(-1, 0)]
+        if len(atoms) == 0:
+            raise ValueError("Atoms object has no atoms inside.")
+
+        # Check if the atoms object has periodic boundary conditions (PBC) set correctly
+        self._check_atoms_pbc(atoms)
+
+        # Validate that charge/spin are set correctly for omol, or default to 0 otherwise
+        self._validate_charge_and_spin(atoms)
+
+        batch = data_list_collater([self.a2g(atoms)], otf_graph=True)
+
+        additional_inference_tasks = []
+        for layer_idx, l_idx in layers_and_ls:
+            property_name = f"embeddings_layer{layer_idx}_l{l_idx}"
+            additional_inference_tasks.append(
+                Task(
+                    name=property_name,
+                    level="atom",
+                    loss_fn=torch.nn.L1Loss(),
+                    property=property_name,
+                    out_spec=None,
+                    normalizer=Normalizer(mean=0.0, rmsd=1.0),
+                    datasets=[self.task_name],
+                )
+            )
+
+        # add and remove an additional head , and tasks
+        self.predictor.model.module.output_heads["embeddings"] = Embedding_Head(
+            backbone=self.predictor.model.module.backbone, layers_and_ls=layers_and_ls
+        )
+        with AdditionalInferenceTasks(self.predictor, additional_inference_tasks):
+            out = self.predictor.predict(batch)
+        self.predictor.model.module.output_heads.pop("embeddings")
+
+        return {
+            f"embeddings_layer{layer_idx}_l{l_idx}": out[
+                f"embeddings_layer{layer_idx}_l{l_idx}"
+            ].detach()
+            for layer_idx, l_idx in layers_and_ls
+        }
 
     def calculate(
         self, atoms: Atoms, properties: list[str], system_changes: list[str]
