@@ -20,7 +20,6 @@ from ase.stress import full_3x3_to_voigt_6_stress
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.models.uma.escn_md import Embedding_Head
 from fairchem.core.modules.normalization.normalizer import Normalizer
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
