@@ -132,37 +132,79 @@ def convert_train_checkpoint_to_inference_checkpoint(
 
 
 def initialize_finetuning_model(
-    checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None
+    checkpoint_location: str = None,
+    model_name: str = None,
+    overrides: dict | None = None,
+    heads: dict | None = None,
+    device: str = None,
+    cache_dir: str = None,
 ) -> torch.nn.Module:
-    model, checkpoint = load_inference_model(checkpoint_location, overrides)
+    """
+    Initialize a finetuning model from either a checkpoint location or a model name.
+    """
+    if model_name is not None:
+        # Use pretrained_mlip.get_predict_unit logic to fetch checkpoint
+        from fairchem.core.calculate.pretrained_mlip import get_predict_unit
+        predict_unit = get_predict_unit(
+            model_name,
+            overrides=overrides,
+            device=device,
+            cache_dir=cache_dir,
+        )
+        model = predict_unit.model
+        checkpoint = predict_unit.checkpoint if hasattr(predict_unit, "checkpoint") else None
+    elif checkpoint_location is not None:
+        model, checkpoint = load_inference_model(checkpoint_location, overrides)
+    else:
+        raise ValueError("Must provide either checkpoint_location or model_name")
 
     logging.warning(
-        f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
+        f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location} or model_name: {model_name}"
     )
 
-    checkpoint.model_config["heads"] = deepcopy(heads)
-    model.finetune_model_full_config = checkpoint.model_config
+    if heads is not None:
+        # Unwrap AveragedModel if needed
+        if hasattr(model, "module"):
+            base_model = model.module
+        else:
+            base_model = model
 
-    model.output_heads = None
-    model.heads = heads
-    del model.output_heads
-    model.output_heads = {}
-    head_names_sorted = sorted(heads.keys())
-    assert len(set(head_names_sorted)) == len(
-        head_names_sorted
-    ), "Head names must be unique!"
-    for head_name in head_names_sorted:
-        head_config = heads[head_name]
-        if "module" not in head_config:
-            raise ValueError(
-                f"{head_name} head does not specify module to use for the head"
+        # Try to update config if available
+        config = None
+        if checkpoint is not None and hasattr(checkpoint, "model_config"):
+            config = checkpoint.model_config
+        elif hasattr(base_model, "finetune_model_full_config"):
+            config = base_model.finetune_model_full_config
+        if config is not None:
+            config["heads"] = deepcopy(heads)
+            base_model.finetune_model_full_config = config
+
+        base_model.output_heads = None
+        base_model.heads = heads
+        del base_model.output_heads
+        base_model.output_heads = {}
+        head_names_sorted = sorted(heads.keys())
+        assert len(set(head_names_sorted)) == len(
+            head_names_sorted
+        ), "Head names must be unique!"
+        for head_name in head_names_sorted:
+            head_config = heads[head_name]
+            if "module" not in head_config:
+                raise ValueError(
+                    f"{head_name} head does not specify module to use for the head"
+                )
+            module_name = head_config.pop("module")
+            base_model.output_heads[head_name] = registry.get_model_class(module_name)(
+                base_model.backbone,
+                **head_config,
             )
-        module_name = head_config.pop("module")
-        model.output_heads[head_name] = registry.get_model_class(module_name)(
-            model.backbone,
-            **head_config,
-        )
-    model.output_heads = torch.nn.ModuleDict(model.output_heads)
+        base_model.output_heads = torch.nn.ModuleDict(base_model.output_heads)
+        
+        # For multiple heads, ensure proper ensemble behavior
+        if len(heads) > 1:
+            base_model.pass_through_head_outputs = False
+        
+        return base_model
     return model
 
 
@@ -218,7 +260,7 @@ def get_output_masks(
 
 
 def compute_loss(
-    tasks: Sequence[Task], predictions: dict[str, torch.Tensor], batch: AtomicData
+    tasks: Sequence[Task], predictions: dict[str, dict], batch: AtomicData
 ) -> dict[str, float]:
     batch_size = batch.natoms.numel()
     num_atoms_in_batch = batch.natoms.sum()
@@ -227,20 +269,55 @@ def compute_loss(
 
     loss_dict = {}
     for task in tasks:
-        if getattr(task, "shallow_ensemble", False):
-            # Gather all predictions for this task from all heads
+        # Find the matching prediction key for this task
+        task_property_preds = None
+        matching_pred_key = None
+        
+        # Look for prediction keys that match this task
+        for pred_key, pred_value in predictions.items():
+            # Check if this prediction key corresponds to this task
+            # Could be task.property directly, or dataset_property_property pattern
+            if (pred_key == task.property or 
+                (any(dataset in pred_key and task.property in pred_key for dataset in task.datasets))):
+                task_property_preds = pred_value
+                matching_pred_key = pred_key
+                break
+        
+        if task_property_preds is None:
+            continue
+        
+        # Find all heads that correspond to this specific task
+        task_heads = []
+        for head_key, head_pred in task_property_preds.items():
+            # For shallow ensemble, look for heads with names like "energy_0", "energy_1", etc.
+            if getattr(task, "shallow_ensemble", False):
+                # Match heads that start with the task property name followed by underscore and number
+                # OR heads that start with "head" followed by number and contain the property name
+                if ((head_key.startswith(f"{task.property}_") and head_key.split("_")[-1].isdigit()) or
+                    (head_key.startswith("head") and task.property in head_key)):
+                    task_heads.append((head_key, head_pred))
+            else:
+                # For non-ensemble, match heads by name patterns
+                if (head_key == task.name or 
+                    head_key.endswith(f"_{task.name}") or
+                    any(dataset in head_key and task.property in head_key 
+                        for dataset in task.datasets)):
+                    task_heads.append((head_key, head_pred))
+        
+        if not task_heads:
+            continue  # Skip if no heads found for this task
+            
+        if getattr(task, "shallow_ensemble", False) and len(task_heads) > 1:
+            # Shallow ensemble: use multiple heads for uncertainty estimation
             preds = []
-            for head_name, head_pred in predictions.items():
-                if task.name not in head_pred:
-                    continue
-                pred_for_task = head_pred[task.property]
+            for head_key, head_pred in task_heads:
+                pred_for_task = head_pred
                 if task.level == "atom":
                     pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
                 else:
                     pred_for_task = pred_for_task.view(batch_size, -1)
                 preds.append(pred_for_task)
-            if not preds:
-                continue
+                
             preds = torch.stack(preds, dim=0)  # shape: (n_heads, batch, ...)
             mean_pred = preds.mean(dim=0)
             std_pred = preds.std(dim=0) + 1e-8  # add epsilon for numerical stability
@@ -270,15 +347,28 @@ def compute_loss(
             loss = loss.mean()
             loss_dict[task.name] = loss
         else:
-            # Original logic: only one head per task
-            head_pred = predictions[task.name]
+            # Use first available head (or average if multiple but not ensemble)
+            if len(task_heads) == 1:
+                head_pred = task_heads[0][1]
+            else:
+                # Average multiple heads
+                preds = []
+                for head_key, head_pred in task_heads:
+                    pred_for_task = head_pred
+                    if task.level == "atom":
+                        pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
+                    else:
+                        pred_for_task = pred_for_task.view(batch_size, -1)
+                    preds.append(pred_for_task)
+                head_pred = torch.stack(preds, dim=0).mean(dim=0)
+            
             target = batch[task.name].clone()
             output_mask = output_masks[task.name]
             if task.element_references is not None:
                 with record_function("element_refs"):
                     target = task.element_references.apply_refs(batch, target)
             target = task.normalizer.norm(target)
-            pred_for_task = head_pred[task.property]
+            pred_for_task = head_pred
             if task.level == "atom":
                 pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
             else:
@@ -325,14 +415,28 @@ def compute_metrics(
     if output_size == 0:
         return {metric_name: Metrics() for metric_name in task.metrics}
 
-    if getattr(task, "shallow_ensemble", False):
+    task_property_preds = predictions.get(task.property, {})
+    
+    # Find all heads that correspond to this specific task
+    task_heads = []
+    for head_key, head_pred in task_property_preds.items():
+        # Check if this head corresponds to this task
+        # Could be exact match or pattern match like "head_dataset_property"
+        if (head_key == task.name or 
+            head_key.endswith(f"_{task.name}") or
+            any(dataset in head_key and task.property in head_key 
+                for dataset in task.datasets)):
+            task_heads.append((head_key, head_pred))
+    
+    if not task_heads:
+        return {metric_name: Metrics() for metric_name in task.metrics}
+
+    if getattr(task, "shallow_ensemble", False) and len(task_heads) > 1:
         # Ensemble logic: average metrics over all heads for this task
         metrics_per_head = []
-        for head_name, head_pred in predictions.items():
-            if task.name not in head_pred:
-                continue
+        for head_key, head_pred in task_heads:
             target_masked = batch[task.name][output_mask]
-            pred = head_pred[task.property].clone()
+            pred = head_pred.clone()
             pred = task.normalizer.denorm(pred)
             if task.element_references is not None:
                 pred = task.element_references.undo_refs(batch, pred)
@@ -353,10 +457,16 @@ def compute_metrics(
         else:
             return {metric_name: Metrics() for metric_name in task.metrics}
     else:
-        # Original logic: only one head per task
-        head_pred = predictions[task.name]
+        # Use first available head (or average if multiple but not ensemble)
+        if len(task_heads) == 1:
+            head_pred = task_heads[0][1]
+        else:
+            # Average multiple heads
+            preds = [head_pred for head_key, head_pred in task_heads]
+            head_pred = torch.stack(preds, dim=0).mean(dim=0)
+                
         target_masked = batch[task.name][output_mask]
-        pred = head_pred[task.property].clone()
+        pred = head_pred.clone()
         pred = task.normalizer.denorm(pred)
         if task.element_references is not None:
             pred = task.element_references.undo_refs(batch, pred)
@@ -690,7 +800,11 @@ class MLIPTrainEvalUnit(
                     pred = self.model.forward(batch_on_device)
                 with record_function("compute_loss"):
                     loss_dict = compute_loss(self.tasks, pred, batch_on_device)
-            scalar_loss = sum(loss_dict.values())
+            if loss_dict:
+                scalar_loss = sum(loss_dict.values())
+            else:
+                # If no losses computed, create a zero tensor with requires_grad=True
+                scalar_loss = torch.tensor(0.0, requires_grad=True, device=batch_on_device.pos.device)
             self.optimizer.zero_grad()
             with record_function("backward"):
                 scalar_loss.backward()
@@ -990,19 +1104,15 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
 
         # run each evaluation
         for task in self.tasks:
-            # This filters out all the datasets.splits that are in the current batch and
-            # and are also included in the task. Remove the dataset.splits not in the task, since we
-            # wont compute metrics for those.
-            # TODO overhaul the dataset names in task to avoid this filter?
-            for dataset in filter(
-                lambda x: any(dset_name in x for dset_name in task.datasets),
-                datasets_in_batch,
-            ):
-                current_metrics = compute_metrics(task, preds, data, dataset)
-                running_metrics = self.running_metrics[task.name][dataset]
-
-                for metric_name in task.metrics:
-                    running_metrics[metric_name] += current_metrics[metric_name]
+            datasets_for_task = [d for d in datasets_in_batch if any(dset in d for dset in task.datasets)]
+            for dataset in datasets_for_task:
+                # compute metrics for this task on this dataset
+                running_metrics = compute_metrics(task, preds, data, dataset)
+                
+                if task.name not in self.running_metrics:
+                    continue
+                if dataset not in self.running_metrics[task.name]:
+                    continue
 
                 self.running_metrics[task.name][dataset].update(running_metrics)
 
