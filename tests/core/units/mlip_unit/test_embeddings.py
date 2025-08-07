@@ -19,7 +19,7 @@ def test_get_descriptors(fake_uma_dataset):
     predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
     atoms = db.get_atoms(0)
 
-    calc = FAIRChemCalculator(predictor, task_name="omol")
+    calc = FAIRChemCalculator(predictor, task_name="oc20")
 
     embeddings = calc.get_descriptors(atoms)
     assert "embeddings_layer-1_l0" in embeddings
@@ -42,7 +42,7 @@ def test_embeddings_from_predict(fake_uma_dataset):
         predictor.model.module.backbone.get_embedding_head(layers_and_ls=layers_and_ls)
     )
 
-    dataset = "omol"
+    dataset = "oc20"
 
     a2g = partial(
         AtomicData.from_ase,
@@ -98,7 +98,7 @@ def test_embeddings_from_predict_override(fake_uma_dataset):
         },
     )
 
-    dataset = "omol"
+    dataset = "oc20"
 
     a2g = partial(
         AtomicData.from_ase,
