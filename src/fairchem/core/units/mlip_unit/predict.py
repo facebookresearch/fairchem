@@ -42,23 +42,40 @@ def collate_predictions(predict_fn):
     ):
         # Get the full prediction dictionary from the original predict method
         preds = predict_fn(predict_unit, data, undo_element_references)
-        collated_preds = defaultdict(list)
+        collated_preds = defaultdict(dict)
+        
+        # Create a mapping from model output keys to task information
+        # Model outputs are in format like "dataset_property" (e.g., "oc20_energy")
+        # We need to map these to tasks and identify which head they came from
         for i, dataset in enumerate(data.dataset):
             for task in predict_unit.dataset_to_tasks[dataset]:
-                if task.level == "system":
-                    collated_preds[task.property].append(
-                        preds[task.name][i].unsqueeze(0)
-                    )
-                elif task.level == "atom":
-                    collated_preds[task.property].append(
-                        preds[task.name][data.batch == i]
-                    )
-                else:
-                    raise RuntimeError(
-                        f"Unrecognized task level={task.level} found in data batch at position {i}"
-                    )
+                # Look for all model output keys that match this task
+                matching_keys = []
+                for output_key in preds.keys():
+                    # Check if this output key corresponds to this task
+                    # Format could be: "task_name", "head_dataset_property", etc.
+                    if (output_key == task.name or 
+                        output_key.endswith(f"_{dataset}_{task.property}") or
+                        output_key.endswith(f"_{task.property}") and dataset in output_key):
+                        matching_keys.append(output_key)
+                
+                # If no matching keys found, try the task name directly
+                if not matching_keys and task.name in preds:
+                    matching_keys = [task.name]
+                
+                for output_key in matching_keys:
+                    if task.level == "system":
+                        value = preds[output_key][i].unsqueeze(0)
+                    elif task.level == "atom":
+                        value = preds[output_key][data.batch == i]
+                    else:
+                        raise RuntimeError(
+                            f"Unrecognized task level={task.level} found in data batch at position {i}"
+                        )
+                    # Use the full output key as the head identifier to maintain uniqueness
+                    collated_preds[task.property][output_key] = value
 
-        return {prop: torch.cat(val) for prop, val in collated_preds.items()}
+        return dict(collated_preds)
 
     return collated_predict
 
@@ -111,12 +128,16 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
-        tasks = [
+
+        all_tasks = [
             hydra.utils.instantiate(task_config)
             for task_config in checkpoint.tasks_config
         ]
-        self.tasks = {t.name: t for t in tasks}
-
+        # Only keep tasks whose dataset matches one of self.datasets
+        filtered_tasks = [
+            t for t in all_tasks if any(ds in self.datasets for ds in getattr(t, 'datasets', []))
+        ]
+        self.tasks = {t.name: t for t in filtered_tasks}
         self.dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
         assert set(self.dataset_to_tasks.keys()).issubset(
             set(self.datasets)
@@ -140,6 +161,30 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
     @property
     def datasets(self) -> list[str]:
         return self.model.module.backbone.dataset_list
+
+    def get_available_heads(self) -> dict[str, list[str]]:
+        """Get a mapping of properties to available head names.
+        
+        Returns:
+            Dictionary mapping property names to lists of head names that predict that property
+        """
+        # This requires running a prediction to see what heads are available
+        # For now, return an empty dict - this would need to be populated after first prediction
+        return getattr(self, '_available_heads', {})
+    
+    def _update_available_heads(self, predictions: dict):
+        """Update the internal mapping of available heads based on a prediction output."""
+        if not hasattr(self, '_available_heads'):
+            self._available_heads = defaultdict(list)
+        
+        for head_key in predictions.keys():
+            for task in self.tasks.values():
+                if (head_key == task.name or 
+                    head_key.endswith(f"_{task.name}") or
+                    any(dataset in head_key and task.property in head_key 
+                        for dataset in task.datasets)):
+                    if head_key not in self._available_heads[task.property]:
+                        self._available_heads[task.property].append(head_key)
 
     def seed(self, seed: int):
         logging.info(f"Setting random seed to {seed}")
@@ -231,15 +276,55 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         pred_output = {}
         with inference_context, tf32_context:
             output = self.model(data_device)
+            # Only process tasks relevant to the current data.dataset
+            relevant_datasets = set(data.dataset) if hasattr(data, 'dataset') else set()
             for task_name, task in self.tasks.items():
-                pred_output[task_name] = task.normalizer.denorm(
-                    output[task_name][task.property]
-                )
+                # Only process if this task is for a relevant dataset
+                if not relevant_datasets.intersection(set(getattr(task, 'datasets', []))):
+                    continue
+                
+                # Look for matching output keys that correspond to this task
+                # Keys might be like "omat_energy", "dataset_property", etc.
+                matching_output_key = None
+                for output_key in output.keys():
+                    # Check if this output key matches this task
+                    if (task_name in output_key or 
+                        any(dataset in output_key and task.property in output_key 
+                            for dataset in getattr(task, 'datasets', []))):
+                        matching_output_key = output_key
+                        break
+                
+                if matching_output_key is None:
+                    continue
+                    
+                head_dict = output[matching_output_key]
+                if isinstance(head_dict, dict):
+                    # Multiple heads case - select appropriate head
+                    if hasattr(task, 'head') and task.head in head_dict:
+                        head_name = task.head
+                        value = head_dict[head_name]
+                    else:
+                        # If only one head, use it; otherwise average or pick first
+                        head_names = list(head_dict.keys())
+                        if len(head_names) == 1:
+                            value = head_dict[head_names[0]]
+                        else:
+                            # Average multiple heads for this property
+                            head_values = [head_dict[head_name] for head_name in head_names]
+                            value = torch.stack(head_values).mean(dim=0)
+                else:
+                    # Single value case (backward compatibility)
+                    value = head_dict
+                    
+                pred_output[task_name] = task.normalizer.denorm(value)
                 if undo_element_references and task.element_references is not None:
                     pred_output[task_name] = task.element_references.undo_refs(
                         data_device, pred_output[task_name]
                     )
 
+        # Update available heads mapping for future reference
+        self._update_available_heads(pred_output)
+        
         return pred_output
 
 
@@ -258,3 +343,27 @@ def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
         for dataset_name in task.datasets:
             dset_to_tasks_map[dataset_name].append(task)
     return dict(dset_to_tasks_map)
+
+
+def get_head_to_task_mapping(predictions: dict, tasks: Sequence[Task]) -> dict[str, list[Task]]:
+    """Create a mapping from head names to their corresponding tasks.
+    
+    Args:
+        predictions: Dictionary of predictions from the model
+        tasks: Sequence of Task objects
+        
+    Returns:
+        Dictionary mapping head names to lists of tasks they correspond to
+    """
+    head_to_tasks = defaultdict(list)
+    
+    for head_key in predictions.keys():
+        for task in tasks:
+            # Check if this head corresponds to this task
+            if (head_key == task.name or 
+                head_key.endswith(f"_{task.name}") or
+                any(dataset in head_key and task.property in head_key 
+                    for dataset in task.datasets)):
+                head_to_tasks[head_key].append(task)
+    
+    return dict(head_to_tasks)

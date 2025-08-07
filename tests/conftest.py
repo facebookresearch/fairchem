@@ -8,7 +8,9 @@ LICENSE file in the root directory of this source tree.
 # conftest.py
 from __future__ import annotations
 
+import os
 import random
+import shutil
 from contextlib import suppress
 
 import numpy as np
@@ -114,3 +116,39 @@ def compile_reset_state():
     torch.compiler.reset()
     yield
     torch.compiler.reset()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_finetune_temp_dirs():
+    """
+    Session-scoped fixture to clean up temporary fine-tuning directories.
+    This runs automatically at the end of the test session.
+    """
+    yield  # Run all tests first
+    
+    # Clean up common temporary directories created during fine-tuning tests
+    cleanup_paths = [
+        "/tmp/uma_finetune_runs/",
+        "/tmp/finetune_run/",
+        "/tmp/pytest-of-*/pytest-*/test_*/finetune_run/"  # Test-specific paths
+    ]
+    
+    for path_pattern in cleanup_paths:
+        if "*" in path_pattern:
+            # Handle glob patterns
+            import glob
+            for path in glob.glob(path_pattern):
+                if os.path.exists(path):
+                    try:
+                        shutil.rmtree(path)
+                        print(f"Session cleanup: Removed directory {path}")
+                    except Exception as e:
+                        print(f"Session cleanup warning: Could not remove {path}: {e}")
+        else:
+            # Handle direct paths
+            if os.path.exists(path_pattern):
+                try:
+                    shutil.rmtree(path_pattern)
+                    print(f"Session cleanup: Removed directory {path_pattern}")
+                except Exception as e:
+                    print(f"Session cleanup warning: Could not remove {path_pattern}: {e}")
