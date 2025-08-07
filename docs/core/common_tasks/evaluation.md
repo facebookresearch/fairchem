@@ -71,3 +71,12 @@ defaults:
   - dataset: Configuration settings for the evaluation dataset
   - checkpoint: Configuration settings of the pretrained model checkpoint 
   - _self_
+```
+
+Using config groups allows to easily override defaults in the cli. For example,
+
+```bash
+fairchem --config evaluation_config.yaml cluster=cluster_config checkpoint=checkpoint_config
+```
+
+Where `cluster_config` and `checkpoint_config` are cluster and checkpoint configuration files written to directories under cluster and checkpoint respectively. See the files in `configs/uma/evaluate` as a full example.
