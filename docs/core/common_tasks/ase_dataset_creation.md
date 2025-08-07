@@ -1,5 +1,5 @@
 
-# FAIRChem & Custom Datasets
+# FAIRChem & custom datasets
 
 ## Datasets in `fairchem`:
 `fairchem` provides training and evaluation code for tasks and models that take arbitrary
