@@ -192,22 +192,60 @@ def test_ensemble_averaging():
         # Create mock predictions with multiple heads
         mock_predictions = {
             "energy": {
-                "head0": 1.0,
-                "head1": 2.0,
-                "head2": 3.0,
-                "head3": 4.0,
-                "head4": 5.0
+                "head0": torch.tensor([1.0]),
+                "head1": torch.tensor([2.0]),
+                "head2": torch.tensor([3.0]),
+                "head3": torch.tensor([4.0]),
+                "head4": torch.tensor([5.0])
             },
             "forces": {
-                "head0": [0.1, 0.2, 0.3],
-                "head1": [0.2, 0.3, 0.4],
-                "head2": [0.3, 0.4, 0.5],
-                "head3": [0.4, 0.5, 0.6],
-                "head4": [0.5, 0.6, 0.7]
+                "head0": torch.tensor([[0.1, 0.2, 0.3]]),
+                "head1": torch.tensor([[0.2, 0.3, 0.4]]),
+                "head2": torch.tensor([[0.3, 0.4, 0.5]]),
+                "head3": torch.tensor([[0.4, 0.5, 0.6]]),
+                "head4": torch.tensor([[0.5, 0.6, 0.7]])
             }
         }
         
+        # Test energy ensemble
+        energy_preds = list(mock_predictions["energy"].values())
+        energy_stacked = torch.stack(energy_preds, dim=0)
+        energy_mean = energy_stacked.mean(dim=0)
+        energy_std = energy_stacked.std(dim=0)
+        
+        # Test diversity in energy predictions
+        energy_values = [p.item() for p in energy_preds]
+        unique_energy = len(set(energy_values))
+        assert unique_energy == 5, f"Expected 5 unique energy predictions, got {unique_energy}"
+        
+        # Test no NaNs in energy statistics
+        assert not torch.isnan(energy_mean).any(), "Energy mean contains NaN"
+        assert not torch.isnan(energy_std).any(), "Energy std contains NaN"
+        assert energy_std.item() > 0, "Energy std should be positive for diverse predictions"
+        
+        print(f"   ✓ Energy ensemble: μ={energy_mean.item():.2f}, σ={energy_std.item():.2f}")
+        
+        # Test forces ensemble
+        forces_preds = list(mock_predictions["forces"].values())
+        forces_stacked = torch.stack(forces_preds, dim=0)
+        forces_mean = forces_stacked.mean(dim=0)
+        forces_std = forces_stacked.std(dim=0)
+        
+        # Test diversity in forces predictions
+        forces_norms = [torch.norm(p).item() for p in forces_preds]
+        unique_forces = len(set([round(f, 6) for f in forces_norms]))
+        assert unique_forces > 1, f"Forces should have diversity, got norms {forces_norms}"
+        
+        # Test no NaNs in forces statistics
+        assert not torch.isnan(forces_mean).any(), "Forces mean contains NaN"
+        assert not torch.isnan(forces_std).any(), "Forces std contains NaN"
+        assert torch.all(forces_std >= 0), "All forces std should be non-negative"
+        assert torch.any(forces_std > 0), "Some forces std should be positive"
+        
+        print(f"   ✓ Forces ensemble: mean_norm={torch.norm(forces_mean).item():.3f}, max_std={forces_std.max().item():.3f}")
+        print("   ✓ All ensemble averaging tests passed")
+        
     except Exception as e:
         print(f"✗ Ensemble averaging test failed: {e}")
-        return False
+        pytest.fail(f"Ensemble averaging test failed: {e}")
 

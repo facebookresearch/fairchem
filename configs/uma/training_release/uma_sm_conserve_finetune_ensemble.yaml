@@ -127,36 +127,33 @@ heads:
   energyandforcehead1:
     module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
     head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
-    head_kwargs:
-      wrap_property: False
     dataset_names:
       - omol
       - omat
       - oc20
       - omc
       - odac
+    wrap_property: False
   energyandforcehead2:
     module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
     head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
-    head_kwargs:
-      wrap_property: False
     dataset_names:
       - omol
       - omat
       - oc20
       - omc
       - odac
+    wrap_property: False
   energyandforcehead3:
     module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
     head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
-    head_kwargs:
-      wrap_property: False
     dataset_names:
       - omol
       - omat
       - oc20
       - omc
       - odac
+    wrap_property: False
 
 runner:
   _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
@@ -175,7 +172,7 @@ runner:
           regress_stress: ${regress_stress}
           direct_forces: False
           moe_layer_type: pytorch
-        pass_through_head_outputs: True
+        pass_through_head_outputs: False
       heads: ${heads}
     optimizer_fn:
       _target_: torch.optim.AdamW

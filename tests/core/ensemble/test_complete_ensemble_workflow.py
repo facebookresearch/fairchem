@@ -126,8 +126,8 @@ def test_complete_ensemble_workflow():
     energy_predictions = []
     for i in range(5):
         head_key = f"energy_head_{i}"
-        if head_key in predictions:
-            energy_predictions.append(predictions[head_key])
+        if head_key in head_outputs:
+            energy_predictions.append(head_outputs[head_key])
     
     if energy_predictions:
         stacked = torch.stack(energy_predictions, dim=0)
@@ -138,7 +138,26 @@ def test_complete_ensemble_workflow():
         print(f"   Ensemble mean: {ensemble_mean.item():.4f}")
         print(f"   Ensemble std: {ensemble_std.item():.4f}")
         
+        # Test that standard deviation has no NaNs
+        assert not torch.isnan(ensemble_std).any(), "Ensemble standard deviation contains NaN values"
         assert ensemble_std.item() >= 0, "Standard deviation should be non-negative"
+        
+        # Test that different heads produce different predictions (ensemble should have variance)
+        individual_values = [p.item() for p in energy_predictions]
+        unique_values = len(set([round(v, 6) for v in individual_values]))  # Round to avoid floating point issues
+        
+        # Either predictions should be different OR if they're identical, we should still have valid stats
+        if unique_values > 1:
+            print(f"   ✓ Predictions are diverse: {unique_values} unique values out of {len(energy_predictions)}")
+            assert ensemble_std.item() > 0, "Expected non-zero variance when predictions differ"
+        else:
+            print(f"   ℹ All predictions identical (possible for untrained heads): {individual_values[0]:.6f}")
+            # For identical predictions, std should be exactly 0
+            assert ensemble_std.item() == 0, "Expected zero variance for identical predictions"
+        
+        # Additional ensemble validation
+        print("   ✓ Standard deviation is finite and non-NaN")
+        print("   ✓ Ensemble statistics computed successfully")
     
     # Step 6: Test ASE calculator functionality
     print("6. Testing ASE calculator with standard model...")
@@ -160,8 +179,16 @@ def test_complete_ensemble_workflow():
     # Verify outputs are reasonable
     assert isinstance(energy, float)
     assert forces.shape == (len(atoms), 3)
-    assert not torch.isnan(torch.tensor(energy))
-    assert not torch.any(torch.isnan(torch.tensor(forces)))
+    assert not torch.isnan(torch.tensor(energy)), "Energy prediction contains NaN"
+    assert not torch.any(torch.isnan(torch.tensor(forces))), "Forces prediction contains NaN"
+    
+    # Test forces standard deviation if we have ensemble forces
+    forces_tensor = torch.tensor(forces)
+    if forces_tensor.numel() > 1:
+        forces_std = forces_tensor.std()
+        assert not torch.isnan(forces_std), "Forces standard deviation contains NaN"
+        assert forces_std.item() >= 0, "Forces standard deviation should be non-negative"
+        print(f"   ✓ Forces standard deviation: {forces_std.item():.6f} eV/Å (no NaNs)")
     
     # Step 7: Test head discovery methods
     print("7. Testing head discovery methods...")
@@ -198,7 +225,7 @@ def test_complete_ensemble_workflow():
 def test_ensemble_prediction_format():
     """Test that ensemble predictions follow the expected format."""
     
-    # Create mock predictions in the expected format
+    # Create mock predictions in the expected format with diverse values
     mock_predictions = {
         "energy": {
             "energy_head_0": torch.tensor([1.0]),
@@ -206,28 +233,69 @@ def test_ensemble_prediction_format():
             "energy_head_2": torch.tensor([0.95]),
             "energy_head_3": torch.tensor([1.02]),
             "energy_head_4": torch.tensor([0.98])
+        },
+        "forces": {
+            "forces_head_0": torch.tensor([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]),
+            "forces_head_1": torch.tensor([[0.11, 0.21, 0.31], [0.41, 0.51, 0.61]]),
+            "forces_head_2": torch.tensor([[0.09, 0.19, 0.29], [0.39, 0.49, 0.59]]),
+            "forces_head_3": torch.tensor([[0.12, 0.22, 0.32], [0.42, 0.52, 0.62]]),
+            "forces_head_4": torch.tensor([[0.08, 0.18, 0.28], [0.38, 0.48, 0.58]])
         }
     }
     
-    # Test the format structure
+    # Test energy predictions
     assert "energy" in mock_predictions
     assert isinstance(mock_predictions["energy"], dict)
     assert len(mock_predictions["energy"]) == 5
     
-    # Test ensemble computation
-    heads = mock_predictions["energy"]
-    head_predictions = list(heads.values())
-    stacked = torch.stack(head_predictions, dim=0)
+    # Test energy ensemble computation
+    energy_heads = mock_predictions["energy"]
+    energy_predictions = list(energy_heads.values())
+    energy_stacked = torch.stack(energy_predictions, dim=0)
     
-    mean_pred = stacked.mean(dim=0)
-    std_pred = stacked.std(dim=0)
+    energy_mean = energy_stacked.mean(dim=0)
+    energy_std = energy_stacked.std(dim=0)
     
-    # Verify statistics
-    expected_mean = sum([1.0, 1.05, 0.95, 1.02, 0.98]) / 5
-    assert abs(mean_pred.item() - expected_mean) < 1e-6
-    assert std_pred.item() > 0
+    # Test that energy predictions are different
+    energy_values = [p.item() for p in energy_predictions]
+    unique_energy_values = len(set([round(v, 6) for v in energy_values]))
+    assert unique_energy_values > 1, f"Energy predictions should be different, got {energy_values}"
     
-    print(f"✓ Prediction format test passed: μ={mean_pred.item():.4f}, σ={std_pred.item():.4f}")
+    # Test energy statistics
+    assert not torch.isnan(energy_mean).any(), "Energy mean contains NaN"
+    assert not torch.isnan(energy_std).any(), "Energy standard deviation contains NaN"
+    assert energy_std.item() > 0, "Energy standard deviation should be positive for diverse predictions"
+    
+    expected_energy_mean = sum(energy_values) / len(energy_values)
+    assert abs(energy_mean.item() - expected_energy_mean) < 1e-6
+    
+    print(f"✓ Energy diversity: {unique_energy_values}/5 unique values")
+    print(f"✓ Energy ensemble: μ={energy_mean.item():.4f}, σ={energy_std.item():.4f}")
+    
+    # Test forces predictions
+    if "forces" in mock_predictions:
+        forces_heads = mock_predictions["forces"]
+        forces_predictions = list(forces_heads.values())
+        forces_stacked = torch.stack(forces_predictions, dim=0)
+        
+        forces_mean = forces_stacked.mean(dim=0)
+        forces_std = forces_stacked.std(dim=0)
+        
+        # Test that forces predictions are different
+        forces_norms = [torch.norm(p).item() for p in forces_predictions]
+        unique_forces_values = len(set([round(v, 6) for v in forces_norms]))
+        assert unique_forces_values > 1, f"Forces predictions should be different, got norms {forces_norms}"
+        
+        # Test forces statistics - no NaNs anywhere
+        assert not torch.isnan(forces_mean).any(), "Forces mean contains NaN"
+        assert not torch.isnan(forces_std).any(), "Forces standard deviation contains NaN"
+        assert torch.all(forces_std >= 0), "All forces standard deviations should be non-negative"
+        assert torch.any(forces_std > 0), "At least some forces standard deviations should be positive"
+        
+        print(f"✓ Forces diversity: {unique_forces_values}/5 unique force magnitudes")
+        print(f"✓ Forces ensemble: mean_norm={torch.norm(forces_mean).item():.4f}, std_max={forces_std.max().item():.4f}")
+    
+    print("✓ Prediction format test passed with diversity and NaN checks")
 
 
 if __name__ == "__main__":

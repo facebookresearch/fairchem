@@ -325,7 +325,7 @@ class TestASECalculatorEnsemble:
                 selected_pred = pred["energy"][selected_head]
                 assert torch.allclose(selected_pred, torch.tensor([1.1]))
             
-            # Test averaging
+            # Test averaging and diversity
             head_predictions = list(pred["energy"].values())
             stacked = torch.stack(head_predictions, dim=0)
             mean_pred = stacked.mean(dim=0)
@@ -334,6 +334,15 @@ class TestASECalculatorEnsemble:
             expected_mean = torch.tensor([1.0])  # (1.0 + 1.1 + 0.9) / 3
             assert torch.allclose(mean_pred, expected_mean, atol=1e-6)
             assert std_pred.item() > 0  # Should have non-zero std
+            
+            # Test that predictions are actually different
+            pred_values = [p.item() for p in head_predictions]
+            unique_values = len(set([round(v, 6) for v in pred_values]))
+            assert unique_values > 1, f"Predictions should be different, got {pred_values}"
+            
+            # Test no NaNs in statistics
+            assert not torch.isnan(mean_pred).any(), "Mean prediction contains NaN"
+            assert not torch.isnan(std_pred).any(), "Standard deviation contains NaN"
 
 
 class TestFineTuningWithMultipleHeads:
@@ -409,4 +418,123 @@ def test_head_to_task_mapping():
             head_key.endswith(f"_{property_name}")
         )
         assert matches == should_match, f"Failed for {head_key} -> {property_name}"
+
+
+def test_ensemble_diversity_and_nan_checks():
+    """Test that ensemble predictions have proper diversity and no NaN values."""
+    
+    # Create diverse mock predictions
+    mock_ensemble_predictions = {
+        "energy": {
+            "head0_omat_energy": torch.tensor([[1.0], [2.0], [3.0]]),
+            "head1_omat_energy": torch.tensor([[1.05], [2.1], [2.95]]),
+            "head2_omat_energy": torch.tensor([[0.95], [1.9], [3.05]]),
+            "head3_omat_energy": torch.tensor([[1.02], [2.05], [2.98]]),
+            "head4_omat_energy": torch.tensor([[0.98], [1.95], [3.02]])
+        },
+        "forces": {
+            "head0_omat_forces": torch.tensor([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]),
+            "head1_omat_forces": torch.tensor([[0.11, 0.21, 0.31], [0.41, 0.51, 0.61], [0.71, 0.81, 0.91]]),
+            "head2_omat_forces": torch.tensor([[0.09, 0.19, 0.29], [0.39, 0.49, 0.59], [0.69, 0.79, 0.89]]),
+            "head3_omat_forces": torch.tensor([[0.12, 0.22, 0.32], [0.42, 0.52, 0.62], [0.72, 0.82, 0.92]]),
+            "head4_omat_forces": torch.tensor([[0.08, 0.18, 0.28], [0.38, 0.48, 0.58], [0.68, 0.78, 0.88]])
+        }
+    }
+    
+    # Test energy ensemble diversity
+    energy_heads = mock_ensemble_predictions["energy"]
+    energy_predictions = list(energy_heads.values())
+    
+    # Check that predictions are different across heads
+    for i in range(len(energy_predictions[0])):  # For each sample
+        sample_predictions = [pred[i].item() for pred in energy_predictions]
+        unique_predictions = len(set([round(v, 6) for v in sample_predictions]))
+        assert unique_predictions > 1, f"Energy predictions for sample {i} should be different: {sample_predictions}"
+    
+    # Test energy ensemble statistics
+    energy_stacked = torch.stack(energy_predictions, dim=0)
+    energy_mean = energy_stacked.mean(dim=0)
+    energy_std = energy_stacked.std(dim=0)
+    
+    # Ensure no NaNs in energy statistics
+    assert not torch.isnan(energy_mean).any(), "Energy ensemble mean contains NaN"
+    assert not torch.isnan(energy_std).any(), "Energy ensemble standard deviation contains NaN"
+    assert torch.all(energy_std > 0), "Energy ensemble should have positive standard deviation for all samples"
+    
+    print(f"✓ Energy ensemble diversity verified: std range [{energy_std.min().item():.6f}, {energy_std.max().item():.6f}]")
+    
+    # Test forces ensemble diversity
+    forces_heads = mock_ensemble_predictions["forces"]
+    forces_predictions = list(forces_heads.values())
+    
+    # Check that force predictions are different across heads
+    for head_idx in range(len(forces_predictions)):
+        for other_idx in range(head_idx + 1, len(forces_predictions)):
+            diff = torch.norm(forces_predictions[head_idx] - forces_predictions[other_idx])
+            assert diff.item() > 1e-6, f"Forces predictions between head {head_idx} and {other_idx} are too similar"
+    
+    # Test forces ensemble statistics
+    forces_stacked = torch.stack(forces_predictions, dim=0)
+    forces_mean = forces_stacked.mean(dim=0)
+    forces_std = forces_stacked.std(dim=0)
+    
+    # Ensure no NaNs in forces statistics
+    assert not torch.isnan(forces_mean).any(), "Forces ensemble mean contains NaN"
+    assert not torch.isnan(forces_std).any(), "Forces ensemble standard deviation contains NaN"
+    assert torch.all(forces_std >= 0), "Forces ensemble standard deviation should be non-negative"
+    assert torch.any(forces_std > 0), "Forces ensemble should have some positive standard deviation"
+    
+    print(f"✓ Forces ensemble diversity verified: std range [{forces_std.min().item():.6f}, {forces_std.max().item():.6f}]")
+    
+    # Test per-component statistics for forces
+    for atom_idx in range(forces_std.shape[0]):
+        for coord_idx in range(forces_std.shape[1]):
+            component_std = forces_std[atom_idx, coord_idx]
+            assert not torch.isnan(component_std), f"Forces std for atom {atom_idx}, coord {coord_idx} is NaN"
+            assert component_std >= 0, f"Forces std for atom {atom_idx}, coord {coord_idx} is negative"
+    
+    print("✓ All ensemble diversity and NaN checks passed")
+
+
+def test_ensemble_edge_cases():
+    """Test ensemble behavior with edge cases like identical predictions."""
+    
+    # Test case 1: Identical predictions (e.g., from untrained heads)
+    identical_predictions = {
+        "energy": {
+            "head0_energy": torch.tensor([1.0, 2.0, 3.0]),
+            "head1_energy": torch.tensor([1.0, 2.0, 3.0]),
+            "head2_energy": torch.tensor([1.0, 2.0, 3.0])
+        }
+    }
+    
+    energy_preds = list(identical_predictions["energy"].values())
+    energy_stacked = torch.stack(energy_preds, dim=0)
+    energy_mean = energy_stacked.mean(dim=0)
+    energy_std = energy_stacked.std(dim=0)
+    
+    # For identical predictions, std should be exactly 0
+    assert not torch.isnan(energy_mean).any(), "Mean should not be NaN even for identical predictions"
+    assert not torch.isnan(energy_std).any(), "Std should not be NaN even for identical predictions"
+    assert torch.allclose(energy_std, torch.zeros_like(energy_std)), "Std should be zero for identical predictions"
+    
+    # Test case 2: Small differences (numerical precision edge case)
+    small_diff_predictions = {
+        "energy": {
+            "head0_energy": torch.tensor([1.0000001, 2.0000001, 3.0000001]),
+            "head1_energy": torch.tensor([1.0000002, 2.0000002, 3.0000002]),
+            "head2_energy": torch.tensor([1.0000003, 2.0000003, 3.0000003])
+        }
+    }
+    
+    small_preds = list(small_diff_predictions["energy"].values())
+    small_stacked = torch.stack(small_preds, dim=0)
+    small_mean = small_stacked.mean(dim=0)
+    small_std = small_stacked.std(dim=0)
+    
+    assert not torch.isnan(small_mean).any(), "Mean should not be NaN for small differences"
+    assert not torch.isnan(small_std).any(), "Std should not be NaN for small differences"
+    assert torch.all(small_std >= 0), "Std should be non-negative for small differences"
+    
+    print("✓ Edge case ensemble tests passed")
 
