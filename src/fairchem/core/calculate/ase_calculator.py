@@ -209,9 +209,12 @@ class FAIRChemCalculator(Calculator):
             )
 
         # add and remove an additional head , and tasks
-        self.predictor.model.module.output_heads["embeddings"] = Embedding_Head(
-            backbone=self.predictor.model.module.backbone, layers_and_ls=layers_and_ls
+        self.predictor.model.module.output_heads["embeddings"] = (
+            self.predictor.model.module.backbone.get_embedding_head(
+                layers_and_ls=layers_and_ls
+            )
         )
+
         with AdditionalInferenceTasks(self.predictor, additional_inference_tasks):
             out = self.predictor.predict(batch)
         self.predictor.model.module.output_heads.pop("embeddings")

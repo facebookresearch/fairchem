@@ -297,6 +297,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
 
+    def get_embedding_head(self, layers_and_ls):
+        return Embedding_Head(backbone=self, layers_and_ls=layers_and_ls)
+
     def _get_displacement_and_cell(self, data_dict):
         ###############################################################
         # gradient-based forces/stress

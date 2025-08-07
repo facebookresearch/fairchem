@@ -15,7 +15,7 @@ from fairchem.core.units.mlip_unit.predict import AdditionalInferenceTasks
 
 def test_get_descriptors():
     predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
-    singlet = molecule("CH2_s1A1d")
+    singlet = molecule("CH4")
     singlet.info.update({"spin": 1, "charge": 0})
     calc = FAIRChemCalculator(predictor, task_name="omol")
 
@@ -32,6 +32,55 @@ def test_get_descriptors():
 
 def test_embeddings_from_predict():
     layers_and_ls = [(4, 0), (3, 1)]
+
+    predictor = pretrained_mlip.get_predict_unit("uma-s-1", device="cpu")
+
+    predictor.model.module.output_heads["embeddings"] = (
+        predictor.model.module.backbone.get_embedding_head(layers_and_ls=layers_and_ls)
+    )
+
+    dataset = "omol"
+
+    a2g = partial(
+        AtomicData.from_ase,
+        max_neigh=10,
+        radius=100,
+        r_edges=False,
+        r_data_keys=["spin", "charge"],
+        task_name=dataset,
+    )
+
+    singlet = molecule("CH4")
+    singlet.info.update({"spin": 1, "charge": 0})
+
+    batch = data_list_collater([a2g(singlet)], otf_graph=True)
+
+    additional_inference_tasks = []
+    for layer_idx, l_idx in layers_and_ls:
+        property_name = f"embeddings_layer{layer_idx}_l{l_idx}"
+        additional_inference_tasks.append(
+            Task(
+                name=property_name,
+                level="atom",
+                loss_fn=torch.nn.L1Loss(),
+                property=property_name,
+                out_spec=None,
+                normalizer=Normalizer(mean=0.0, rmsd=1.0),
+                datasets=[dataset],
+            )
+        )
+
+    # add and remove an additional head , and tasks
+    with AdditionalInferenceTasks(predictor, additional_inference_tasks):
+        out = predictor.predict(batch)
+
+    assert "embeddings_layer4_l0" in out
+    assert "embeddings_layer3_l1" in out
+
+
+def test_embeddings_from_predict_override():
+    layers_and_ls = [(4, 0), (3, 1)]
+
     predictor = pretrained_mlip.get_predict_unit(
         "uma-s-1",
         device="cpu",
@@ -56,7 +105,7 @@ def test_embeddings_from_predict():
         task_name=dataset,
     )
 
-    singlet = molecule("CH2_s1A1d")
+    singlet = molecule("CH4")
     singlet.info.update({"spin": 1, "charge": 0})
 
     batch = data_list_collater([a2g(singlet)], otf_graph=True)
