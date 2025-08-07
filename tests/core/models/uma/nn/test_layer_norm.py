@@ -1,16 +1,8 @@
 """
-Unit tests for UMA layer normalization components.
-Tests for src/fairchem/core/models/uma/nn/layer_norm.py
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
-This comprehensive test suite covers:
-1. get_l_to_all_m_expand_index: Utility function for spherical harmonic indexing
-2. EquivariantLayerNormArray: Per-degree layer normalization
-3. EquivariantLayerNormArraySphericalHarmonics: L=0/L>0 split normalization  
-4. EquivariantRMSNormArraySphericalHarmonics: RMS normalization across all degrees
-5. EquivariantRMSNormArraySphericalHarmonicsV2: Optimized vectorized RMS normalization
-6. EquivariantDegreeLayerScale: Degree-aware layer scaling
-
-All tests verify correctness of spherical harmonic equivariant operations.
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 """
 
 import math
@@ -1037,7 +1029,3 @@ class TestEquivariantDegreeLayerScale:
         assert f"lmax={data['lmax']}" in repr_str
         assert f"num_channels={data['num_channels']}" in repr_str
         assert f"scale_factor={scale_factor}" in repr_str
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
