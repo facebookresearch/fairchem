@@ -100,7 +100,9 @@ class ScaledSigmoid(torch.nn.Module):
 
 class GateActivation(torch.nn.Module):
     # m_prime -> order is l0m0, l1m0, l2m0.. , l1m1 , l2m1, ... , l1m-1, l2m-1,...
-    def __init__(self, lmax: int, mmax: int, num_channels: int, m_prime=False) -> None:
+    def __init__(
+        self, lmax: int, mmax: int, num_channels: int, m_prime: bool = False
+    ) -> None:
         super().__init__()
         self.lmax = lmax
         self.mmax = mmax
