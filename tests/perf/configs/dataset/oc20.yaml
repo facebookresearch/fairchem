@@ -3,6 +3,7 @@ snapshot_dir: fm_training/dataset_sync_250225
 oc20_train:
   splits:
     train:
+      sample_n: 10000
       src:
         - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/train/all
         - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/train/md38M
@@ -24,11 +25,11 @@ oc20_train:
 oc20_val:
   splits:
     val_id:
-      sample_n: 25000
+      sample_n: 1000
       src:
         - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/val/id
     val_ood_both:
-      sample_n: 25000
+      sample_n: 1000
       src:
         - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/val/ood_both
   format: ase_db

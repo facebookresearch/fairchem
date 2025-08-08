@@ -11,7 +11,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 2
+    num_nodes: 1
     slurm:
       account: ${cluster.account}
       qos: ${cluster.qos}
@@ -19,11 +19,12 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
+  run_name: uma_oc20_sm_direct_test
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
     entity: fairchem
-    project: oc25
+    project: performance_training
 
 moe_layer_type: pytorch
 num_moe_experts: 0
@@ -120,7 +121,7 @@ runner:
     clip_grad_norm: 100
     bf16: ${bf16}
   max_epochs: ${epochs}
-  evaluate_every_n_steps: 10000
+  evaluate_every_n_steps: 5000
   callbacks:
     - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
       job_config: ${job}
