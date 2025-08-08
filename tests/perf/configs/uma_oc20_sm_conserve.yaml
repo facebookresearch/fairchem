@@ -11,7 +11,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 4
+    num_nodes: 2
     slurm:
       account: ${cluster.account}
       qos: ${cluster.qos}
