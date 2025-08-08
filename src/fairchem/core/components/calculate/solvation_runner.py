@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+import pickle
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -20,15 +21,6 @@ if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
 
-def solvation_data(dataset_root, dataset_name):
-    """
-    Load solvation data from a pickle file.
-    """
-    with open(f"{dataset_root}/{dataset_name}.pkl", "rb") as f:
-        data = pd.read_pickle(f)
-    return data
-
-
 class SolvationRunner(CalculateRunner):
     """
     Singlepoint evaluator for OC25 solvation energy. #to-do: write an explanation
@@ -36,14 +28,16 @@ class SolvationRunner(CalculateRunner):
 
     result_glob_pattern: ClassVar[str] = "solvation_*-*.json.gz"
 
-    def __init__(self, calculator: Calculator, input_data: dict):
+    def __init__(self, calculator: Calculator, input_data_path: str):
         """
         Initialize the SolvationRunner
 
         Args:
             calculator: ASE calculator to use for energy calculations
-            input_data (dict): Dictionary containing atomic structures to process
+            input_data_path (dict): Path to dataset containing atoms object for solvation inputs
         """
+        with open(input_data_path, "rb") as f:
+            input_data = pickle.load(f)
         super().__init__(calculator=calculator, input_data=input_data)
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:
@@ -114,12 +108,12 @@ class SolvationRunner(CalculateRunner):
 
             results = {
                 "identifier": key,
-                "dft_solvation_energy": dft_solvation_en,
-                "dft_solvent_ads_energy": dft_solvent_ads_en,
-                "dft_clean_ads_energy": dft_clean_ads_en,
-                "ml_solvation_energy": ml_solvation_en,
-                "ml_solvent_ads_energy": ml_solvent_ads_en,
-                "ml_clean_ads_energy": ml_clean_ads_en,
+                "solvation_energy_target": dft_solvation_en,
+                "solvent_ads_energy_target": dft_solvent_ads_en,
+                "clean_ads_energy_target": dft_clean_ads_en,
+                "solvation_energy": ml_solvation_en,
+                "solvent_ads_energy": ml_solvent_ads_en,
+                "clean_ads_energy": ml_clean_ads_en,
             }
 
             all_results.append(results)
