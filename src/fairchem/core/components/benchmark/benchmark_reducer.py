@@ -247,7 +247,7 @@ class JsonDFReducer(BenchmarkReducer):
         ).reset_index()
 
         if self.index_name is not None:
-            results = results.set_index("sid").sort_index()
+            results = results.set_index(self.index_name).sort_index()
             results.index.name = self.index_name
 
         return results

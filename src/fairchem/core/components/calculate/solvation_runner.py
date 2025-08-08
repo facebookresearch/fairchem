@@ -138,7 +138,7 @@ class SolvationRunner(CalculateRunner):
         results_df = pd.DataFrame(results)
         results_df.to_json(
             os.path.join(
-                results_dir, f"adsorption-singlepoint_{num_jobs}-{job_num}.json.gz"
+                results_dir, f"solvation-singlepoint_{num_jobs}-{job_num}.json.gz"
             )
         )
 
