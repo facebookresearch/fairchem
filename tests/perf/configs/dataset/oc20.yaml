@@ -1,0 +1,42 @@
+snapshot_dir: fm_training/dataset_sync_250225
+
+oc20_train:
+  splits:
+    train:
+      src:
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/train/all
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/train/md38M
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/train/rattled17M
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20_slabs/train
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20_slabs/val_id
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20_slabs/val_ood
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/multi_adsorbate/250214/train+val
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  transforms:
+    common_transform:
+      dataset_name: oc20
+
+oc20_val:
+  splits:
+    val_id:
+      sample_n: 25000
+      src:
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/val/id
+    val_ood_both:
+      sample_n: 25000
+      src:
+        - ${cluster.data_root_dir}/${dataset.snapshot_dir}/oc20/val/ood_both
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_edges: ${cpu_graph}
+    max_neigh: ${max_neighbors}
+  transforms:
+    common_transform:
+      dataset_name: oc20
