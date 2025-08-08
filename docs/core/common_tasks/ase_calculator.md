@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-Inference using ASE and Predictor Interface
+Inference using ASE and Predictor interface
 ------------------
 
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
