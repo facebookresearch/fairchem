@@ -296,7 +296,7 @@ class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
         This PredictUnit can be used to run inference on a remote server.
 
         It can be used in several modes:
-        1) If server_config is provided then it will start a local server and create a client to connect to it.
+        1) If server_config is provided then it will start a local server in a thread and create a client to connect to it.
         A separate client cannot be provided in this case.
         2) If server_config is NOT provided and client_config is provided, we assume the remote server is already running
         and we will create a client to connect to it.
@@ -350,16 +350,12 @@ class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
                 port=self.server_port,
             )
 
-    def shutdown(self):
+    def __del__(self):
         # Explicitly shut down the server and join the thread
         if hasattr(self, "server") and self.server is not None:
             self.server.shutdown()
         if hasattr(self, "server_thread") and self.server_thread.is_alive():
             self.server_thread.join(timeout=5)
-
-    def __del__(self):
-        # Do not rely on __del__ for shutdown, use shutdown() explicitly if possible
-        self.server.shutdown()
 
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.client.call(data)

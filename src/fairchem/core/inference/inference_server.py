@@ -104,6 +104,8 @@ class InferenceServerProtocol(Protocol):
 
     def ready(self) -> bool: ...
 
+    def shutdown(self) -> None: ...
+
 
 class MLIPInferenceServerMP(InferenceServerProtocol):
     def __init__(
@@ -242,6 +244,8 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 client_socket, addr = self.server_socket.accept()
                 # Handle this client completely before accepting next one
                 self.handle_client(client_socket, addr)
+        except Exception:
+            logging.info("Server shutting down")
         finally:
             self.shutdown()
 
