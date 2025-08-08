@@ -787,6 +787,27 @@ class AtomicData:
         order to be able to reconstruct the initial objects."""
         return [self.get_example(i) for i in range(self.num_graphs)]
 
+    def update_batch_edges(
+        self, edge_index: torch.Tensor, cell_offsets: torch.Tensor, nedges: torch.Tensor
+    ) -> AtomicData:
+        r"""Update the connectivity of each batched AtomicData sample.
+
+        Args:
+            edge_index (torch.Tensor): New batch edge_index (shape [2, total_edges]).
+            cell_offsets (torch.Tensor): Cell offsets per edge (shape [total_edges, 3]).
+            nedges (torch.Tensor): Number of edges per system (shape [num_systems]).
+
+        Returns:
+            AtomicData: The updated batch object.
+        """
+        self.edge_index = edge_index
+        self.cell_offsets = cell_offsets
+        self.nedges = nedges
+        edge_slices = [0] + torch.cumsum(nedges, dim=0).tolist()
+        self.__slices__["edge_index"] = edge_slices
+        self.__slices__["cell_offsets"] = edge_slices
+        return self
+
 
 def atomicdata_list_to_batch(
     data_list: list[AtomicData], exclude_keys: Optional[list] = None
