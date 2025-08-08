@@ -205,12 +205,12 @@ class Edgewise(torch.nn.Module):
 
             # SO2 convolution
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
-            breakpoint()
+
             # M-prime...
             x_message = self.act(x_0_gating, x_message)
 
             x_message = self.so2_conv_2(x_message, x_edge)
-            breakpoint()
+
             # envelope
             dist_scaled = edge_distance / self.cutoff
             env = self.envelope(dist_scaled)
