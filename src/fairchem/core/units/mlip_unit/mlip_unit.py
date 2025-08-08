@@ -85,14 +85,15 @@ class Task:
     name: str
     level: str
     property: str
-    loss_fn: torch.nn.Module
     out_spec: OutputSpec
     normalizer: Normalizer
     datasets: list[str]
+    loss_fn: torch.nn.Module = None
     element_references: Optional[ElementReferences] = None
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
+    inference_only: bool = False
 
 
 DEFAULT_EXCLUDE_KEYS = [
@@ -494,11 +495,12 @@ class MLIPTrainEvalUnit(
     ):
         super().__init__()
         self.job_config = job_config
-        self.tasks = tasks
+        # throw out tasks that are inference_only (don't use them for training/eval)
+        self.tasks = [t for t in tasks if not t.inference_only]
         self.profile_flops = profile_flops
         self.save_inference_ckpt = save_inference_ckpt
 
-        for task in tasks:
+        for task in self.tasks:
             if task.element_references is not None:
                 task.element_references.to(torch.device(get_device_for_local_rank()))
 
@@ -892,9 +894,9 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         super().__init__()
         self.job_config = job_config
         self.model = model
-        self.tasks = tasks
+        self.tasks = [t for t in tasks if not t.inference_only]
 
-        for task in tasks:
+        for task in self.tasks:
             if task.element_references is not None:
                 task.element_references.to(torch.device(get_device_for_local_rank()))
 
