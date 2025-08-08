@@ -87,22 +87,24 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s --junitxml=junit.xml -o junit_family=legacy --cov-report=xml:gpu-coverage.xml
+          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s --junitxml=junit-gpu.xml -o junit_family=legacy --cov-report=xml:gpu-coverage.xml
 
       - if: ${{ matrix.python_version == '3.12' }}
         name: codecov-coverage
         uses: codecov/codecov-action@v5
         with:
-          fail_ci_if_error: false # optional (default = false)
+          fail_ci_if_error: false
           files: ./coverage.xml,./gpu-coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }} # required
-          verbose: true # optional (default = false)
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - if: ${{ matrix.python_version == '3.12' }}
         name: codecov-test-results
         uses: codecov/test-results-action@v1
         with:
-          token: ${{ secrets.CODECOV_STATIC_ANALYSIS_TOKEN }}
+          files: ./junit.xml,./junit-gpu.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
 
       - name: Cleanup
         if: always()
