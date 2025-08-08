@@ -712,7 +712,9 @@ class MLP_EFS_Head_LES(nn.Module, HeadInterface):
             energy_part = gp_utils.reduce_from_model_parallel_region(energy_part)
         else:
             energy_part = energy_part
-
+        
+        #print("data sid", data["sid"])
+        
         # add lr energy
         lr_energy = self.les(
             positions=data["pos"], 

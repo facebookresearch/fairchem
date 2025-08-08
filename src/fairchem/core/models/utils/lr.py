@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from torch_scatter import scatter
+from torch_scatter import scatter, scatter_add
 from fairchem.core.models.les.util import grad
 
 def potential_full_from_edge_inds(
@@ -154,3 +154,64 @@ def heisenberg_potential_full_from_edge_inds(
     ).sum(dim=1)
 
     return results
+
+
+def batch_spin_charge_renormalization(
+    charges_raw: torch.Tensor, # [n_atoms, 2],
+    q_total: torch.Tensor, # [n_batches]
+    s_total: torch.Tensor, # [n_batches]
+    epsilon: float = 1e-12,
+    batch: torch.Tensor | None = None,
+    weights: torch.Tensor | None = None,
+):
+    """
+    Renormalizes the charges and spins for each batch.
+    Args:
+        charges_raw: raw charges of shape (n_atoms, 2)
+        q_total: total charge for each batch of shape (n_batches,)
+        s_total: total spin for each batch of shape (n_batches,)
+        epsilon: small value to avoid division by zero
+    Returns:
+        charges_renormalized: renormalized charges of shape (n_atoms, 2)
+    """
+    B, N = charges_raw.shape
+
+    device = charges_raw.device
+    num_batches = q_total.shape[0]    
+
+    alpha = charges_raw[:, 0]
+    beta = charges_raw[:, 1]
+    # Default weights: uniform per channel
+    if weights is None:
+        weights = torch.ones_like(charges_raw)
+    w_alpha = weights[:, 0]
+    w_beta  = weights[:, 1]
+
+    # Compute sums per batch for predicted α+β and α−β
+    alpha_sum = torch.zeros(num_batches, device=device).scatter_add_(0, batch, alpha)
+    beta_sum  = torch.zeros(num_batches, device=device).scatter_add_(0, batch, beta)
+
+    q_sum = alpha_sum + beta_sum        # total charge
+    s_sum = alpha_sum - beta_sum        # total spin
+
+    # Compute per-batch residuals
+    dq = q_total - q_sum
+    ds = s_total - s_sum
+
+    # Normalize weights per batch
+    w_alpha_sum = torch.zeros(num_batches, device=device).scatter_add_(0, batch, w_alpha)
+    w_beta_sum  = torch.zeros(num_batches, device=device).scatter_add_(0, batch, w_beta)
+    w_alpha_norm = w_alpha / (w_alpha_sum[batch] + epsilon)
+    w_beta_norm  = w_beta  / (w_beta_sum[batch] + epsilon)
+
+    # Residuals per batch for each constraint
+    dq_atom = dq[batch]
+    ds_atom = ds[batch]
+
+    delta_alpha = 0.5 * (dq_atom * w_alpha_norm + ds_atom * w_alpha_norm)
+    delta_beta  = 0.5 * (dq_atom * w_beta_norm - ds_atom * w_beta_norm)
+
+    alpha_corr = alpha + delta_alpha
+    beta_corr  = beta  + delta_beta
+
+    return torch.stack([alpha_corr, beta_corr], dim=-1)

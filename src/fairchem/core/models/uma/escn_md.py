@@ -13,6 +13,7 @@ import os
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
+from torch_scatter import scatter_add
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import get_device_for_local_rank
@@ -45,6 +46,7 @@ from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 from fairchem.core.models.utils.lr import (
     heisenberg_potential_full_from_edge_inds,
     potential_full_from_edge_inds,
+    batch_spin_charge_renormalization
 )
 
 from .escn_md_block import eSCNMD_Block
@@ -703,10 +705,11 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         always_use_pbc: bool = True,
         heisenberg_tf: bool = False,  # extra for LR
         latent_charge_tf: bool = True,  # extra for LR
-        return_bec: bool = False,  # TODO: change back
+        return_bec: bool = True,  # TODO: change back
         conv_function_tf: bool = True,  # extra for LR
         lr_output_scaling_factor: float = 1.0,
-        cutoff_lr: float = -1.0
+        cutoff_lr: float = -1.0,  # extra for LR, -1 means the sr cutoff is used for electrostatics/magnetic terms
+        normalize_charges_tf: bool = True,  # extra for LR
     ):
         super().__init__()
         
@@ -850,9 +853,10 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.return_bec = return_bec
         self.conv_function_tf = conv_function_tf
         self.lr_output_scaling_factor = lr_output_scaling_factor
-        
+        self.normalize_charges_tf = normalize_charges_tf
+
         if cutoff_lr < 0.0:
-            cutoff_lr = None
+            self.cutoff_lr = cutoff
         else:
             self.cutoff_lr = cutoff_lr
         
@@ -1339,6 +1343,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
+        
         elif self.regress_forces:
             forces = (
                 -1
@@ -1373,6 +1378,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         )  # this might not be in the backbone
         self.heisenberg_tf = backbone.heisenberg_tf
         self.latent_charge_tf = backbone.latent_charge_tf
+        self.normalize_charges_tf = backbone.normalize_charges_tf
 
         self.lr_comp_size = 1
         if self.heisenberg_tf:
@@ -1412,28 +1418,88 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             "EFS head is only used for gradient-based forces/stress."
         )
 
-    def get_charges(self, node_features):
+    def get_charges(self, node_features, data):
         results = {}
-        # Ensure gradients are enabled and avoid detaching outputs
-        charges_raw = self.q_output_lr(node_features)
+        with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
+            charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
-            results["charges"] = charges_raw.view(-1, 1, 1) * self.lr_output_scaling_factor
+            results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
+            
+            # TODO: renormalize charges if 
+            if self.normalize_charges_tf:
+                global_charges = scatter_add(
+                    charges_raw.view(-1, 1), 
+                    data["batch"], 
+                    dim=0,
+                )
+                # renormalize charges
+                global_charges_broadcasted = global_charges[data["batch"]]
+                true_charge_broadcasted = data["charge"][data["batch"]].view(-1, 1)
+                # renormalizes via division
+                charges_raw = true_charge_broadcasted * charges_raw / global_charges_broadcasted
+                results["charges"] = charges_raw
+                
+                """global_charges = scatter_add(
+                    charges_raw.view(-1, 1), 
+                    data["batch"], 
+                    dim=0,
+                )"""
+                #print("renormalized global_charges: ", global_charges)
 
         if self.lr_comp_size == 2:
-            # sum across components
-            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1)  * self.lr_output_scaling_factor
-            results["charges_raw"] = charges_raw.abs()  * self.lr_output_scaling_factor
-            alpha = charges_raw[:, 0]
-            beta = charges_raw[:, 1]
-            spin = alpha - beta
-            results["spin"] = spin.view(-1, 1, 1)
 
+            # sum across components
+            results["charges"] = charges_raw.sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw  * self.lr_output_scaling_factor
+            alpha = results["charges_raw"][:, 0]
+            beta = results["charges_raw"][:, 1]
+            spin = alpha - beta
+            results["net_partial_spin"] = spin.view(-1, 1, 1)
+            
+            global_charges_batchwise = data["charge"]
+            global_spin_batchwise = data["spin"]
+            #print("global_charges_batchwise: ", global_charges_batchwise, " global_spin_batchwise: ", global_spin_batchwise)
+
+            #print("charges pre renorm: ", results["charges_raw"].shape)
+            charges_renorm = batch_spin_charge_renormalization(
+                charges_raw=results["charges_raw"],
+                batch=data["batch"],
+                s_total=global_spin_batchwise,
+                q_total=global_charges_batchwise
+            ) # return [N_atoms, 2]
+            #print("charges_renorm: ", charges_renorm.shape)
+
+            
+            #num_batches = global_charges_batchwise.shape[0]   
+            #device = charges_raw.device
+            #alpha = charges_renorm[:, 0]
+            #beta = charges_renorm[:, 1]
+            #alpha_sum = torch.zeros(num_batches, device=device).scatter_add_(0, data["batch"], alpha)
+            #beta_sum  = torch.zeros(num_batches, device=device).scatter_add_(0, data["batch"], beta)
+            #q_sum = alpha_sum + beta_sum        # total charge
+            #s_sum = alpha_sum - beta_sum        # total spin
+            #print("renormalized charge: ", q_sum, " renormalized spin: ", s_sum)
+            #print(charges_renorm)
+            #print("----"*10)
+            results["charges_raw"] = charges_renorm#.abs()
+            results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
+            results["net_partial_spin"] = (
+                charges_renorm[:, 0] - charges_renorm[:, 1]
+            ).view(-1, 1, 1) 
+            
         return results
 
+
     def get_lr_energies(self, emb, data, return_charges: bool = False):
+        
         results = {}
-        charge_dict = self.get_charges(emb["node_embedding"].narrow(1, 0, 1).squeeze())
+
+        charge_dict = self.get_charges(
+            emb["node_embedding"].narrow(1, 0, 1).squeeze(), 
+            data
+        )
+        #print("data dict keys: ", data.keys())
 
         if "edge_index_lr" in emb: 
            edges_lr = emb["edge_index_lr"]
@@ -1446,13 +1512,13 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             q=charge_dict["charges"],
             sigma=1.0,
             epsilon=1e-6,
-            return_bec=self.return_bec,
+            return_bec=True,
             batch=data["batch"],
             conv_function_tf=self.conv_function_tf,
         )
 
         #################################### HACK REMOVE LATER ####################################
-        '''
+        
         sid = data.get("sid", None)
         import numpy as np
         import os
@@ -1460,7 +1526,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        tag = "spice_lr_bec_no_conv_heis_step_490000"
+        tag = "spice_spin_charge_constrain"
         file_name = '{}.npy'.format(tag)
         file_name_ids = '{}_ids.npy'.format(tag)
         
@@ -1491,10 +1557,11 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         
         if sid is not None:
             np.save(file_name_ids, sid)
-        '''
+        
         #################################### HACK REMOVE LATER ####################################
 
         results["energy"] = energy_output_lr_dict["potential"]
+        
         if self.heisenberg_tf:
             energy_spin = heisenberg_potential_full_from_edge_inds(
                 edge_index=edges_lr,
@@ -1535,9 +1602,21 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
 
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data)
-            #print("energy_part: ", energy_part, " lr_energy: ", lr_energy["energy"].abs().sum())
+            #print("energy_part: ", energy_part, " E_lr: ", lr_energy["energy"].abs().sum())
+            e_lr_diagnose = scatter_add(
+                lr_energy["energy"], 
+                data["batch"],
+                dim=0,
+            )
             energy_part.index_add_(0, data["batch"], lr_energy["energy"])
         if self.heisenberg_tf:
+            # print energy spin sum along batch
+            e_diagnose = scatter_add(
+                lr_energy["energy_spin"], 
+                data["batch"], 
+                dim=0,
+            )
+            #print("e_sr: {} e_esp: {} e_spin: {}".format(energy_part, e_lr_diagnose, e_diagnose))
             energy_part.index_add_(0, data["batch"], lr_energy["energy_spin"])
 
         if gp_utils.initialized():
@@ -1643,6 +1722,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         )  # this might not be in the backbone
         self.heisenberg_tf = backbone.heisenberg_tf
         self.latent_charge_tf = backbone.latent_charge_tf
+        self.normalize_charges_tf = backbone.normalize_charges_tf
 
         self.lr_comp_size = 1
         if self.heisenberg_tf:
@@ -1675,28 +1755,72 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             )
             #self.coupling_nn.apply(self._initialize_weights)
 
-    def get_charges(self, node_features):
+    def get_charges(self, node_features, data):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
             charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
             results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
+            
+            # TODO: renormalize charges if 
+            if self.normalize_charges_tf:
+                global_charges = scatter_add(
+                    charges_raw.view(-1, 1), 
+                    data["batch"], 
+                    dim=0,
+                )
+                # renormalize charges
+                global_charges_broadcasted = global_charges[data["batch"]]
+                true_charge_broadcasted = data["charge"][data["batch"]].view(-1, 1)
+                # renormalizes via division
+                charges_raw = true_charge_broadcasted * charges_raw / global_charges_broadcasted
+                results["charges"] = charges_raw
+                
+                """global_charges = scatter_add(
+                    charges_raw.view(-1, 1), 
+                    data["batch"], 
+                    dim=0,
+                )"""
+                #print("renormalized global_charges: ", global_charges)
 
         if self.lr_comp_size == 2:
+
             # sum across components
             results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
             results["charges_raw"] = charges_raw.abs()  * self.lr_output_scaling_factor
-            alpha = charges_raw[:, 0]
-            beta = charges_raw[:, 1]
+            alpha = results["charges_raw"][:, 0]
+            beta = results["charges_raw"][:, 1]
             spin = alpha - beta
-            results["spin"] = spin.view(-1, 1, 1)
+            results["net_partial_spin"] = spin.view(-1, 1, 1)
+            
+            global_charges_batchwise = data["charge"]
+            global_spin_batchwise = data["spin"]
 
+
+            charges_renorm = batch_spin_charge_renormalization(
+                charges_raw=results["charges_raw"],
+                batch=data["batch"],
+                s_total=global_spin_batchwise,
+                q_total=global_charges_batchwise
+            ) # return [N_atoms, 2]
+            print("charges_renorm: ", charges_renorm.shape)
+
+            results["charges_raw"] = charges_renorm.abs()
+            results["charges"] = charges_renorm.abs().sum(dim=1).view(-1, 1, 1) 
+            results["net_partial_spin"] = (
+                charges_renorm[:, 0] - charges_renorm[:, 1]
+            ).view(-1, 1, 1) 
+            
         return results
 
     def get_lr_energies(self, emb, data, return_charges: bool = False):
         results = {}
-        charge_dict = self.get_charges(emb["node_embedding"].narrow(1, 0, 1).squeeze())
+
+        charge_dict = self.get_charges(
+            emb["node_embedding"].narrow(1, 0, 1).squeeze(), 
+            data
+        )
         
         if "edge_index_lr" in emb: 
             edges_lr = emb["edge_index_lr"]
@@ -1730,7 +1854,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             results["charges"] = charge_dict["charges"]
 
             if self.lr_comp_size == 2:
-                results["spin"] = charge_dict["spin"]
+                results["spin"] = charge_dict["net_partial_spin"]
 
 
         return results
@@ -1754,6 +1878,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             energy.index_add_(0, data_dict["batch"], lr_energy["energy"])
 
         if self.heisenberg_tf:
+            #print("energy_part: ", energy, " lr_energy_spin: ", lr_energy["energy_spin"].sum())
             energy.index_add_(0, data_dict["batch"], lr_energy["energy_spin"])
 
         if self.reduce == "sum":
@@ -1764,6 +1889,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             raise ValueError(
                 f"reduce can only be sum or mean, user provided: {self.reduce}"
             )
+
 
 @registry.register_model("esen_linear_energy_head")
 class Linear_Energy_Head(nn.Module, HeadInterface):

@@ -113,7 +113,7 @@ class Les(nn.Module):
         # check the input shapes
         if batch is None:
             batch = torch.zeros(positions.shape[0], dtype=torch.int64, device=positions.device)
-
+        
 
         if latent_charges is not None:
             # check the shape of latent charges
@@ -164,14 +164,14 @@ class Les(nn.Module):
 
 
         # save becs to numpy array
-        
+        #print('Saving BECs to numpy array...')
         '''
         import numpy as np
         import os
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        tag = "spice_4l2_bec"
+        tag = "au_3l3_bec"
         file_name = '{}.npy'.format(tag)
         file_name_ids = '{}_ids.npy'.format(tag)
         file_name_charges = '{}_charges.npy'.format(tag)

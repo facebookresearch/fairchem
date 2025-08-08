@@ -37,6 +37,6 @@ conv_function_tf: False  # extra for LR
 lr_output_scaling_factor: 0.1
 hidden_channels_lr: 64
 cutoff_lr: 15.0
-
+normalize_charges_tf: False
 heisenberg_tf: True # spin
 
