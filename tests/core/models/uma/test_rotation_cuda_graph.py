@@ -16,10 +16,11 @@ import numpy as np
 import pytest
 import torch
 from torch.profiler import ProfilerActivity, profile
+from e3nn.o3 import angles_to_matrix
 
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.models.uma.common.rotation import (
-    init_edge_rot_mat,
+    init_edge_rot_euler_angles,
     rotation_to_wigner,
 )
 from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
@@ -40,14 +41,14 @@ def get_jds(lmax):
     return Jd_buffers
 
 
-def get_rotmat_and_wigner(edge_distance_vecs, jds, rot_clip=True):
-    edge_rot_mat = init_edge_rot_mat(edge_distance_vecs, rot_clip=True)
+def get_rotmat_and_wigner(edge_distance_vecs, jds):
+    euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+    edge_rot_mat = angles_to_matrix(*euler_angles)
     wigner = rotation_to_wigner(
         edge_rot_mat,
         0,
         len(jds) - 1,
         jds,
-        rot_clip=rot_clip,
     )
     wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
