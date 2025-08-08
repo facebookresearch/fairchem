@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+from typing import Literal
 
 import torch
 import torch.nn as nn
@@ -158,17 +159,18 @@ class EdgeDegreeEmbedding(torch.nn.Module):
 class ChgSpinEmbedding(nn.Module):
     def __init__(
         self,
-        embedding_type,
-        embedding_target,
-        embedding_size,
-        grad,
-        scale=1.0,
-    ):
+        embedding_type: Literal["pos_emb", "lin_emb", "rand_emb"],
+        embedding_target: Literal["charge", "spin"],
+        embedding_size: int,
+        grad: bool,
+        scale: float = 1.0,
+    ) -> None:
         super().__init__()
         assert embedding_type in ["pos_emb", "lin_emb", "rand_emb"]
         self.embedding_type = embedding_type
         assert embedding_target in ["charge", "spin"]
         self.embedding_target = embedding_target
+        assert embedding_size % 2 == 0, f"{embedding_size=} must be even"
 
         if self.embedding_target == "charge":
             # 100 is a conservative upper bound

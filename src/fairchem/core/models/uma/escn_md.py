@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Literal
 
 import torch
 import torch.nn as nn
@@ -77,7 +78,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         act_type: str = "gate",
         ff_type: str = "grid",
         activation_checkpointing: bool = False,
-        chg_spin_emb_type: str = "pos_emb",
+        chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
@@ -121,10 +122,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
+        if self.use_dataset_embedding:
+            assert (
+                self.dataset_list
+            ), "the dataset list is empty, please add it to the model backbone config"
         self.use_cuda_graph_wigner = use_cuda_graph_wigner
-        assert (
-            self.dataset_list
-        ), "the dataset list is empty, please add it to the model backbone config"
 
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
