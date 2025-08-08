@@ -110,6 +110,11 @@ DEFAULT_EXCLUDE_KEYS = [
 ]
 
 
+def filter_inference_only_tasks(tasks: Sequence[Task]) -> list[Task]:
+    """Filter out tasks that are marked as inference_only."""
+    return [task for task in tasks if not task.inference_only]
+
+
 def convert_train_checkpoint_to_inference_checkpoint(
     dcp_checkpoint_loc: str, checkpoint_loc: str
 ) -> None:
@@ -372,6 +377,7 @@ def mt_collater_adapter(
 ):
     # this is required because the MTCollater needs the old json formated task config so we need to convert it here
     task_config_old = {}
+    tasks = filter_inference_only_tasks(tasks)
     for task in tasks:
         task_config_old[task.name] = {
             "level": task.level,
@@ -496,7 +502,7 @@ class MLIPTrainEvalUnit(
         super().__init__()
         self.job_config = job_config
         # throw out tasks that are inference_only (don't use them for training/eval)
-        self.tasks = [t for t in tasks if not t.inference_only]
+        self.tasks = filter_inference_only_tasks(tasks)
         self.profile_flops = profile_flops
         self.save_inference_ckpt = save_inference_ckpt
 
@@ -894,7 +900,7 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         super().__init__()
         self.job_config = job_config
         self.model = model
-        self.tasks = [t for t in tasks if not t.inference_only]
+        self.tasks = filter_inference_only_tasks(tasks)
 
         for task in self.tasks:
             if task.element_references is not None:
