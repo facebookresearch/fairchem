@@ -1,5 +1,5 @@
 defaults:
-  - cluster: h100
+  - cluster: h100_local
   - backbone: K10L4
   - dataset: oc20
   - element_refs: uma_hof_lin_refs
@@ -11,7 +11,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 4
+    num_nodes: 1
     slurm:
       account: ${cluster.account}
       qos: ${cluster.qos}

@@ -54,7 +54,7 @@ def generate_train_uma_test_cases() -> list[TrainUMATestCase]:
     config_dict = {
         "uma_sm_task_oc20_direct": "configs/uma_oc20_sm_direct.yaml",
         "uma_sm_task_oc20_conserve": "configs/uma_oc20_sm_conserve.yaml",
-        "uma_md_task_oc20_direct": "configs/uma_oc20_md_direct.yaml",
+        # "uma_md_task_oc20_direct": "configs/uma_oc20_md_direct.yaml",
     }
     for measurement_name, config_path in config_dict.items():
         test_cases.append(

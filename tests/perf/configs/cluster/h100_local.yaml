@@ -1,10 +1,10 @@
 data_root_dir: /checkpoint/ocp/shared
 run_dir: /checkpoint/ocp/shared/performance_training
 account: ocp
-qos: ocp
+qos: ocp_high
 mode: LOCAL
 device: CUDA
-ranks_per_node: 2
+ranks_per_node: 4
 dataloader_workers: 0
 debug: True
 mem_gb: 0
