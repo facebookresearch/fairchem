@@ -89,6 +89,7 @@ class Task:
     out_spec: OutputSpec
     normalizer: Normalizer
     datasets: list[str]
+    loss_fn: torch.nn.Module | None = None
     element_references: Optional[ElementReferences] = None
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
