@@ -8,6 +8,7 @@
 ![tests](https://github.com/facebookresearch/fairchem/actions/workflows/test.yml/badge.svg?branch=main&event=push)
 ![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
 ![Static Badge](https://img.shields.io/badge/python-3.10%2B-blue)
+[![codecov](https://codecov.io/gh/facebookresearch/fairchem/graph/badge.svg?token=M606LH5LK6)](https://codecov.io/gh/facebookresearch/fairchem)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15587498.svg)](https://doi.org/10.5281/zenodo.15587498)
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/facebookresearch/fairchem?quickstart=1)
