@@ -56,7 +56,7 @@ class TestOmolRecipes(unittest.TestCase):
         self.test_atoms = self.water_atoms.copy()
 
         # Real ASE Calculator using FAIRChem
-        predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+        predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cpu")
         self.calculator = FAIRChemCalculator(predictor, task_name="omol")
 
         # Mock optimization flags
