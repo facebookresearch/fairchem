@@ -26,7 +26,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.utils import detach_dict_tensors
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 
 def worker_process(
