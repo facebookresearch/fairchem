@@ -251,6 +251,7 @@ def assert_efs_valid(energy, forces, stress):
     "reg_task,type",
     [
         ("e", "bulk"),
+        ("e", "molecule"),
         ("ef", "bulk"),
         ("ef", "molecule"),
     ],

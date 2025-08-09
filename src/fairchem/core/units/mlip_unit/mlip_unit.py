@@ -85,7 +85,6 @@ class Task:
     name: str
     level: str
     property: str
-    loss_fn: torch.nn.Module
     out_spec: OutputSpec
     normalizer: Normalizer
     datasets: list[str]
@@ -94,6 +93,7 @@ class Task:
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
+    inference_only: bool = False
 
 
 DEFAULT_EXCLUDE_KEYS = [
@@ -108,6 +108,11 @@ DEFAULT_EXCLUDE_KEYS = [
     "formation_energy",  # spice
     "total_charge",  # spice
 ]
+
+
+def filter_inference_only_tasks(tasks: Sequence[Task]) -> list[Task]:
+    """Filter out tasks that are marked as inference_only."""
+    return [task for task in tasks if not task.inference_only]
 
 
 def convert_train_checkpoint_to_inference_checkpoint(
@@ -372,6 +377,7 @@ def mt_collater_adapter(
 ):
     # this is required because the MTCollater needs the old json formated task config so we need to convert it here
     task_config_old = {}
+    tasks = filter_inference_only_tasks(tasks)
     for task in tasks:
         task_config_old[task.name] = {
             "level": task.level,
@@ -495,11 +501,12 @@ class MLIPTrainEvalUnit(
     ):
         super().__init__()
         self.job_config = job_config
-        self.tasks = tasks
+        # throw out tasks that are inference_only (don't use them for training/eval)
+        self.tasks = filter_inference_only_tasks(tasks)
         self.profile_flops = profile_flops
         self.save_inference_ckpt = save_inference_ckpt
 
-        for task in tasks:
+        for task in self.tasks:
             if task.element_references is not None:
                 task.element_references.to(torch.device(get_device_for_local_rank()))
 
@@ -893,9 +900,9 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         super().__init__()
         self.job_config = job_config
         self.model = model
-        self.tasks = tasks
+        self.tasks = filter_inference_only_tasks(tasks)
 
-        for task in tasks:
+        for task in self.tasks:
             if task.element_references is not None:
                 task.element_references.to(torch.device(get_device_for_local_rank()))
 
