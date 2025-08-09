@@ -6,10 +6,12 @@ Usage: python server.py --workers 4 --port 8000
 from __future__ import annotations
 
 import logging
+import os
 import pickle
 import socket
 import time
 import traceback
+from multiprocessing import shared_memory
 from typing import TYPE_CHECKING, Protocol
 
 import hydra
@@ -26,13 +28,18 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.utils import detach_dict_tensors
 
-# logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 def worker_process(
     worker_id,
-    input_queue,
-    output_queue,
+    input_shm_name,
+    output_shm_name,
+    input_size_shm_name,
+    output_size_shm_name,
+    input_ready_event,
+    output_ready_event,
+    shutdown_event,
     ready_queue,
     predict_config,
     master_port,
@@ -57,46 +64,72 @@ def worker_process(
     )
     ready_queue.put(worker_id)
 
-    while True:
-        try:
-            # Wait for input data from main process
-            logging.debug(f"Worker {worker_id} waiting for input")
-            request_data = input_queue.get()
+    # Connect to shared memory
+    input_shm = shared_memory.SharedMemory(name=input_shm_name)
+    output_shm = shared_memory.SharedMemory(name=output_shm_name)
+    input_size_shm = shared_memory.SharedMemory(name=input_size_shm_name)
+    output_size_shm = shared_memory.SharedMemory(name=output_size_shm_name)
 
-            if request_data is None:  # Shutdown signal
+    try:
+        while True:
+            # Wait for input data signal
+            logging.debug(f"Worker {worker_id} waiting for input")
+            if shutdown_event.is_set():
                 break
 
-            # Deserialize input data - asssume pickle for now
-            atomic_data_input = pickle.loads(request_data)
-            logging.debug(f"Worker {worker_id} received input: {atomic_data_input}")
-            # inference_input = deserialize_message(request_data, INFERENCE_INPUT_SCHEMA)
+            input_ready_event.wait()
+            if shutdown_event.is_set():
+                break
 
-            # Run prediction, just pass in None for state for now
-            result = predict_unit.predict_step(None, atomic_data_input)
-            # detach and move tensors to cpu before sending back
-            result = detach_dict_tensors(result)
+            try:
+                # Read input size
+                input_size = int.from_bytes(input_size_shm.buf[:4], "big")
 
-            logging.debug(f"Worker {worker_id} predicted result: {result}")
+                # Read and deserialize input data
+                request_data = bytes(input_shm.buf[:input_size])
+                atomic_data_input = pickle.loads(request_data)
+                logging.debug(f"Worker {worker_id} received input: {atomic_data_input}")
 
-            # Send result back
-            output_queue.put(
-                {
+                # Run prediction
+                result = predict_unit.predict_step(None, atomic_data_input)
+                result = detach_dict_tensors(result)
+                logging.debug(f"Worker {worker_id} predicted result: {result}")
+
+                # Serialize result
+                response_data = {
                     "worker_id": worker_id,
                     "result": result,
                     "error": None,
                 }
-            )
+                pickled_result = pickle.dumps(response_data)
 
-        except Exception as e:
-            logging.error(f"Worker {worker_id} encountered error: {e}")
-            traceback.print_exc()
-            output_queue.put(
-                {
+                # Write result size and data
+                output_size_shm.buf[:4] = len(pickled_result).to_bytes(4, "big")
+                output_shm.buf[: len(pickled_result)] = pickled_result
+
+            except Exception as e:
+                logging.error(f"Worker {worker_id} encountered error: {e}")
+                traceback.print_exc()
+
+                # Write error response
+                error_response = {
                     "worker_id": worker_id,
                     "result": None,
                     "error": str(e),
                 }
-            )
+                pickled_error = pickle.dumps(error_response)
+                output_size_shm.buf[:4] = len(pickled_error).to_bytes(4, "big")
+                output_shm.buf[: len(pickled_error)] = pickled_error
+
+            # Signal that output is ready
+            output_ready_event.set()
+
+    finally:
+        distutils.cleanup()
+        input_shm.close()
+        output_shm.close()
+        input_size_shm.close()
+        output_size_shm.close()
 
 
 class InferenceServerProtocol(Protocol):
@@ -108,25 +141,55 @@ class InferenceServerProtocol(Protocol):
 
 
 class MLIPInferenceServerMP(InferenceServerProtocol):
+    """Inference server using python multiprocessing for parallel model execution, not designed for multi-node use"""
+
     def __init__(
         self,
         num_workers: int,
         port: int,
         predict_config: DictConfig,
         start_method: str = "spawn",
+        max_data_size: int = 100 * 1024 * 1024,  # 100MB default
     ):
+        # note this is a global setting
         mp.set_start_method(start_method)
         self.num_workers = num_workers
         self.port = port
         self.predict_config = predict_config
+        self.max_data_size = max_data_size
 
-        # Create queues for each worker
-        # use queues to pass input, need to change to using SharedMemory for large data
+        # Create shared memory segments for each worker
         self.server_socket = None
-        self.input_queues = [mp.Queue() for _ in range(num_workers)]
-        self.output_queues = [mp.Queue() for _ in range(num_workers)]
+        self.input_shms = []
+        self.output_shms = []
+        self.input_size_shms = []
+        self.output_size_shms = []
+        self.input_ready_events = []
+        self.output_ready_events = []
+        self.shutdown_event = mp.Event()
         self.ready_queue = mp.Queue()
         self.workers = []
+
+        # Create shared memory segments
+        for _ in range(num_workers):
+            # Input data shared memory
+            input_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
+            self.input_shms.append(input_shm)
+
+            # Output data shared memory
+            output_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
+            self.output_shms.append(output_shm)
+
+            # Size information shared memory (4 bytes each)
+            input_size_shm = shared_memory.SharedMemory(create=True, size=4)
+            self.input_size_shms.append(input_size_shm)
+
+            output_size_shm = shared_memory.SharedMemory(create=True, size=4)
+            self.output_size_shms.append(output_size_shm)
+
+            # Synchronization events
+            self.input_ready_events.append(mp.Event())
+            self.output_ready_events.append(mp.Event())
 
     def start_workers(self):
         """Start all worker processes"""
@@ -136,8 +199,13 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 target=worker_process,
                 args=(
                     i,
-                    self.input_queues[i],
-                    self.output_queues[i],
+                    self.input_shms[i].name,
+                    self.output_shms[i].name,
+                    self.input_size_shms[i].name,
+                    self.output_size_shms[i].name,
+                    self.input_ready_events[i],
+                    self.output_ready_events[i],
+                    self.shutdown_event,
                     self.ready_queue,
                     self.predict_config,
                     port,
@@ -152,15 +220,38 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         """Send request to all workers and collect results"""
         start_time = time.time()
 
-        # Send same data to all workers
-        for input_queue in self.input_queues:
-            input_queue.put(request_data)
+        # Clear all output ready events
+        for event in self.output_ready_events:
+            event.clear()
 
-        # Just collect result from the first worker to speed this up?
+        # Write input data to all workers' shared memory
+        for i in range(self.num_workers):
+            if len(request_data) > self.max_data_size:
+                raise ValueError(
+                    f"Request data size {len(request_data)} exceeds maximum {self.max_data_size}"
+                )
+
+            # Write size and data
+            self.input_size_shms[i].buf[:4] = len(request_data).to_bytes(4, "big")
+            self.input_shms[i].buf[: len(request_data)] = request_data
+
+            # Signal input is ready
+            self.input_ready_events[i].set()
+
+        # Wait for and collect results from all workers
         results = []
-        for output_queue in self.output_queues:
-            result = output_queue.get()
+        for i in range(self.num_workers):
+            self.output_ready_events[i].wait()
+
+            # Read result size and data
+            output_size = int.from_bytes(self.output_size_shms[i].buf[:4], "big")
+            result_data = bytes(self.output_shms[i].buf[:output_size])
+            result = pickle.loads(result_data)
             results.append(result)
+
+            # Clear events for next request
+            self.input_ready_events[i].clear()
+            self.output_ready_events[i].clear()
 
         inference_time = (time.time() - start_time) * 1000
 
@@ -251,8 +342,11 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
 
     def shutdown(self):
         """Shutdown the server and all workers"""
-        for input_queue in self.input_queues:
-            input_queue.put(None)  # Shutdown signal
+        self.shutdown_event.set()
+
+        # Signal all workers to wake up and check shutdown event
+        for event in self.input_ready_events:
+            event.set()
 
         # Ensure all workers are terminated
         for worker in self.workers:
@@ -261,6 +355,26 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 logging.warning(f"Worker {worker.pid} still alive, terminating...")
                 worker.terminate()
                 worker.join()
+
+        # Clean up shared memory
+        for shm in (
+            self.input_shms
+            + self.output_shms
+            + self.input_size_shms
+            + self.output_size_shms
+        ):
+            try:
+                shm.close()
+                # Check if shared memory still exists before unlinking
+                shm_path = f"/dev/shm/{shm.name}"
+                if os.path.exists(shm_path):
+                    shm.unlink()
+            except FileNotFoundError:
+                # Shared memory already cleaned up, this is fine
+                pass
+            except Exception as e:
+                logging.warning(f"Error cleaning up shared memory {shm.name}: {e}")
+
         if self.server_socket:
             self.server_socket.close()
 
@@ -271,14 +385,14 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
     config_name="server_config",
 )
 def main(cfg: DictConfig):
-    # if backend method is mp, use python multiprocessing
+    # for single-node use, we can just use a backend of python multiprocessing
     server: InferenceServerProtocol = MLIPInferenceServerMP(
         num_workers=cfg.server.workers,
         port=cfg.server.port,
         predict_config=cfg.predict_unit,
     )
-    # otherwise use ray
     server.run()
+    # otherwise use ray for multi-node inference ... To be implemented
 
 
 if __name__ == "__main__":

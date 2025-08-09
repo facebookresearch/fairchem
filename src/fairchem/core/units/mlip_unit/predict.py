@@ -153,7 +153,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         return self.model.module.backbone.dataset_list
 
     def seed(self, seed: int):
-        logging.info(f"Setting random seed to {seed}")
+        logging.debug(f"Setting random seed to {seed}")
         self._seed = seed
         random.seed(seed)
         np.random.seed(seed)
