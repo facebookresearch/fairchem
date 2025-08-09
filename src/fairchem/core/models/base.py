@@ -187,6 +187,8 @@ class HydraModel(nn.Module):
                 else:
                     out[k] = self.output_heads[k](data, emb)
 
+        if "user_accesible_embeddings" in emb:
+            out["user_accesible_embeddings"] = emb["user_accesible_embeddings"]
         return out
 
 
@@ -224,4 +226,7 @@ class HydraModelV2(nn.Module):
                 device_type=self.device, enabled=self.output_heads[k].use_amp
             ):
                 out[k] = self.output_heads[k](data, emb)
+
+        if "user_accesible_embeddings" in emb:
+            out["user_accesible_embeddings"] = emb["user_accesible_embeddings"]
         return out
