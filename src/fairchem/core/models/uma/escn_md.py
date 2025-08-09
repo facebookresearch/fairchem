@@ -99,6 +99,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # for aperiodic systems
         self.always_use_pbc = always_use_pbc
 
+        self.report_embeddings_by_layer = False
+
         # energy conservation related
         self.regress_forces = regress_forces
         self.direct_forces = direct_forces
@@ -294,6 +296,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
         )
         return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
+
+    def get_embedding_head(self, layers_and_ls):
+        return Embedding_Head(backbone=self, layers_and_ls=layers_and_ls)
 
     def _get_displacement_and_cell(self, data_dict):
         ###############################################################
@@ -523,8 +528,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+        node_embeddings_by_layer = []
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                if self.report_embeddings_by_layer:
+                    node_embeddings_by_layer.append(x_message)
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
@@ -543,6 +551,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "displacement": displacement,
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
+            "node_embeddings_by_layer": node_embeddings_by_layer + [x_message],
         }
         return out
 
@@ -617,6 +626,31 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     no_wd_list.append(global_parameter_name)
 
         return set(no_wd_list)
+
+
+class Embedding_Head(nn.Module, HeadInterface):
+    def __init__(self, backbone, layers_and_ls):
+        super().__init__()
+        backbone.report_embeddings_by_layer = True
+        self.layers_and_ls = layers_and_ls
+        for _, l_idx in self.layers_and_ls:
+            assert l_idx >= 0, "l_idx must be >=0"
+            assert l_idx <= backbone.lmax, f"l_idx must be <=lmax({backbone.lmax})"
+
+    def forward(self, _, emb: dict[str, torch.Tensor]):
+        embeddings = {}
+        for layer_idx, l_idx in self.layers_and_ls:
+            assert (
+                layer_idx < len(emb["node_embeddings_by_layer"])
+            ), f"embedding for {layer_idx} in model with only {len(emb['node_embeddings_by_layer'])-1} layers"
+            embeddings_at_layer = emb["node_embeddings_by_layer"][layer_idx]
+            start_m_idx = l_idx**2
+            end_m_idx = start_m_idx + 2 * l_idx + 1
+            output_name = f"embeddings_layer{layer_idx}_l{l_idx}"
+            embeddings[output_name] = {
+                output_name: embeddings_at_layer[:, start_m_idx:end_m_idx]
+            }
+        return embeddings
 
 
 class MLP_EFS_Head(nn.Module, HeadInterface):

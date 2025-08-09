@@ -67,6 +67,9 @@ class BackboneInterface(metaclass=ABCMeta):
         """
         return
 
+    def get_embedding_head(self, **kwargs):
+        raise NotImplementedError("Not implemented")
+
 
 @registry.register_model("hydra")
 class HydraModel(nn.Module):
