@@ -49,8 +49,6 @@ class MTCollater:
                 if dataset not in datasets_task_map:
                     datasets_task_map[dataset] = {}
                 datasets_task_map[dataset][task] = {"level": task_dict["level"]}
-            # if len(task_dict["datasets"]) == 0:
-            #    datasets_task_map[""][task] = {"level": task_dict["level"]}
         return datasets_task_map
 
     def _add_missing_attr(self, data_list, dataset_task_map):

@@ -126,6 +126,9 @@ if __name__ == "__main__":
     force_rms, linref_coeff = compute_normalizer_and_linear_reference(
         train_path, args.num_workers
     )
+    # don't use force rms if doing energy only training
+    if args.regression_tasks == "e":
+        force_rms = 1.0
     val_path = args.output_dir / "val"
     launch_processing(args.val_dir, val_path, args.num_workers)
 

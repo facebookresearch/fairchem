@@ -19,6 +19,14 @@ from fairchem.core.units.mlip_unit import load_predict_unit
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 
 
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def generate_random_bulk_structure():
     """Generate a random bulk structure with various crystal systems and elements."""
 
@@ -195,6 +203,7 @@ def create_dataset(
     ],
 )
 def test_create_finetune_dataset(type, random_state):
+    set_seeds(random_state)
     with tempfile.TemporaryDirectory() as tmpdirname:
         create_dataset(
             type=type,
@@ -226,16 +235,29 @@ def test_create_finetune_dataset(type, random_state):
         )
 
 
+def assert_efs_valid(energy, forces, stress):
+    """Assert that the energy, forces, and stress are valid."""
+    assert energy != 0
+    assert not np.isnan(energy)
+    # the single atom bulks tend to get zero forces
+    # assert np.count_nonzero(forces) > 0
+    assert np.count_nonzero(np.isnan(forces)) == 0
+    assert np.count_nonzero(stress) > 0
+    assert np.count_nonzero(np.isnan(stress)) == 0
+
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "reg_task,type",
     [
         ("e", "bulk"),
+        ("e", "molecule"),
         ("ef", "bulk"),
         ("ef", "molecule"),
     ],
 )
 def test_e2e_finetuning_bulks(reg_task, type):
+    set_seeds(42)
     with tempfile.TemporaryDirectory() as tmpdirname:
         torch.cuda.empty_cache()
         # create a bulks dataset
@@ -283,13 +305,15 @@ def test_e2e_finetuning_bulks(reg_task, type):
             atoms = bulk("Fe")
             atoms.calc = calc
             energy = atoms.get_potential_energy()
-            assert energy != 0
+            forces = atoms.get_forces()
+            stress = atoms.get_stress()
+            assert_efs_valid(energy, forces, stress)
         elif type == "molecule":
             atoms = molecule("H2O")
             atoms.calc = calc
             energy = atoms.get_potential_energy()
-            assert energy != 0
             forces = atoms.get_forces()
-            assert forces[0].mean() != 0
+            stress = atoms.get_stress()
+            assert_efs_valid(energy, forces, stress)
         else:
             raise AssertionError("type unknown!")
