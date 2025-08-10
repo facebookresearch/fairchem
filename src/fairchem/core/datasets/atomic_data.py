@@ -134,6 +134,7 @@ class AtomicData:
         charge: torch.Tensor,  # (num_graph,)
         spin: torch.Tensor,  # (num_graph,)
         bandgap: torch.Tensor,  # (num_graph,)
+        hl_gap: torch.Tensor,  # (num_graph,)
         pbe_gap: torch.Tensor,  # (num_graph,)
         optical_gap: torch.Tensor,  # (num_graph,)
         dielectric_tensor: torch.Tensor,  # (num_graph, 3, 3)
@@ -161,6 +162,7 @@ class AtomicData:
         self.charge = charge
         self.spin = spin
         self.bandgap = bandgap
+        self.hl_gap = hl_gap
         self.pbe_gap = pbe_gap
         self.optical_gap = optical_gap
         self.dielectric_tensor = dielectric_tensor
@@ -431,6 +433,12 @@ class AtomicData:
             else 0.0
         )
 
+        hl_gap = (
+            torch.FloatTensor([atoms.info.get("homo_lumo")])
+            if r_data_keys is not None and "homo_lumo" in r_data_keys
+            else 0.0
+        )
+
         pbe_gap = (
             torch.FloatTensor([atoms.info.get("bandgap")])
             if r_data_keys is not None and "bandgap" in r_data_keys
@@ -464,6 +472,7 @@ class AtomicData:
             charge=tensor_or_int_to_tensor(charge, torch.long),
             spin=tensor_or_int_to_tensor(spin, torch.long),
             bandgap=bandgap,
+            hl_gap=hl_gap,
             pbe_gap=pbe_gap,
             optical_gap=optical_gap,
             dielectric_tensor=dielectric_tensor,
@@ -537,6 +546,7 @@ class AtomicData:
             charge=dictionary["charge"],
             spin=dictionary["spin"],
             bandgap=dictionary["bandgap"],
+            hl_gap=dictionary["hl_gap"],
             pbe_gap=dictionary["pbe_gap"],
             optical_gap=dictionary["optical_gap"],
             dielectric_tensor=dictionary["dielectric_tensor"],
