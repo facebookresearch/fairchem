@@ -28,8 +28,8 @@ regress_stress: True
 pass_through_head_outputs: True
 
 heads:
-    efs:
-      module: fairchem.core.models.uma.escn_md.MLP_EFS_Head
+  efs:
+    module: fairchem.core.models.uma.escn_md.MLP_EFS_Head
 
 tasks_list:
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
