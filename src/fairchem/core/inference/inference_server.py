@@ -27,18 +27,71 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 from fairchem.core.common.utils import detach_dict_tensors
+from fairchem.core.inference.socket_utils import recv_message, send_message
 
 logging.basicConfig(level=logging.INFO)
 
 
+class SharedMemoryComm:
+    """Encapsulates shared memory communication between main process and workers"""
+
+    def __init__(self, max_data_size: int = 100 * 1024 * 1024):
+        self.max_data_size = max_data_size
+
+        # Create shared memory segments
+        self.input_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
+        self.output_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
+        self.input_size_shm = shared_memory.SharedMemory(create=True, size=4)
+        self.output_size_shm = shared_memory.SharedMemory(create=True, size=4)
+
+        # Synchronization events
+        self.input_ready_event = mp.Event()
+        self.output_ready_event = mp.Event()
+
+    @staticmethod
+    def write_data(
+        data_shm: shared_memory.SharedMemory,
+        size_shm: shared_memory.SharedMemory,
+        data: bytes,
+        max_size: int,
+    ) -> None:
+        """Write data to shared memory"""
+        if len(data) > max_size:
+            raise ValueError(f"Data size {len(data)} exceeds maximum {max_size}")
+
+        size_shm.buf[:4] = len(data).to_bytes(4, "big")
+        data_shm.buf[: len(data)] = data
+
+    @staticmethod
+    def read_data(
+        data_shm: shared_memory.SharedMemory, size_shm: shared_memory.SharedMemory
+    ) -> bytes:
+        """Read data from shared memory"""
+        data_size = int.from_bytes(size_shm.buf[:4], "big")
+        return bytes(data_shm.buf[:data_size])
+
+    def cleanup(self):
+        """Clean up shared memory segments"""
+        for shm in [
+            self.input_shm,
+            self.output_shm,
+            self.input_size_shm,
+            self.output_size_shm,
+        ]:
+            try:
+                shm.close()
+                shm_path = f"/dev/shm/{shm.name}"
+                if os.path.exists(shm_path):
+                    shm.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                logging.warning(f"Error cleaning up shared memory {shm.name}: {e}")
+
+
 def worker_process(
     worker_id,
-    input_shm_name,
-    output_shm_name,
-    input_size_shm_name,
-    output_size_shm_name,
-    input_ready_event,
-    output_ready_event,
+    comm,
     shutdown_event,
     ready_queue,
     predict_config,
@@ -64,11 +117,11 @@ def worker_process(
     )
     ready_queue.put(worker_id)
 
-    # Connect to shared memory
-    input_shm = shared_memory.SharedMemory(name=input_shm_name)
-    output_shm = shared_memory.SharedMemory(name=output_shm_name)
-    input_size_shm = shared_memory.SharedMemory(name=input_size_shm_name)
-    output_size_shm = shared_memory.SharedMemory(name=output_size_shm_name)
+    # Connect to shared memory using the comm object
+    input_shm = shared_memory.SharedMemory(name=comm.input_shm.name)
+    output_shm = shared_memory.SharedMemory(name=comm.output_shm.name)
+    input_size_shm = shared_memory.SharedMemory(name=comm.input_size_shm.name)
+    output_size_shm = shared_memory.SharedMemory(name=comm.output_size_shm.name)
 
     try:
         while True:
@@ -77,16 +130,13 @@ def worker_process(
             if shutdown_event.is_set():
                 break
 
-            input_ready_event.wait()
+            comm.input_ready_event.wait()
             if shutdown_event.is_set():
                 break
 
             try:
-                # Read input size
-                input_size = int.from_bytes(input_size_shm.buf[:4], "big")
-
                 # Read and deserialize input data
-                request_data = bytes(input_shm.buf[:input_size])
+                request_data = SharedMemoryComm.read_data(input_shm, input_size_shm)
                 atomic_data_input = pickle.loads(request_data)
                 logging.debug(f"Worker {worker_id} received input: {atomic_data_input}")
 
@@ -105,10 +155,11 @@ def worker_process(
 
                 # Write result size and data only on worker 0
                 if worker_id == 0:
-                    output_size_shm.buf[:4] = len(pickled_result).to_bytes(4, "big")
-                    output_shm.buf[: len(pickled_result)] = pickled_result
+                    SharedMemoryComm.write_data(
+                        output_shm, output_size_shm, pickled_result, comm.max_data_size
+                    )
                     # Signal that output is ready
-                    output_ready_event.set()
+                    comm.output_ready_event.set()
 
             except Exception as e:
                 logging.error(f"Worker {worker_id} encountered error: {e}")
@@ -121,8 +172,9 @@ def worker_process(
                     "error": str(e),
                 }
                 pickled_error = pickle.dumps(error_response)
-                output_size_shm.buf[:4] = len(pickled_error).to_bytes(4, "big")
-                output_shm.buf[: len(pickled_error)] = pickled_error
+                SharedMemoryComm.write_data(
+                    output_shm, output_size_shm, pickled_error, comm.max_data_size
+                )
 
     finally:
         distutils.cleanup()
@@ -156,42 +208,24 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         self.num_workers = num_workers
         self.port = port
         self.predict_config = predict_config
-        self.max_data_size = max_data_size
 
-        # Create shared memory segments for each worker
+        # Create shared memory communication object
         self.server_socket = None
         self.shutdown_event = mp.Event()
         self.ready_queue = mp.Queue()
         self.workers = []
-
-        # Create shared memory segments
-        # Input data shared memory
-        self.input_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
-        # Output data shared memory
-        self.output_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
-
-        # Size information shared memory (4 bytes each)
-        self.input_size_shm = shared_memory.SharedMemory(create=True, size=4)
-        self.output_size_shm = shared_memory.SharedMemory(create=True, size=4)
-
-        # Synchronization events
-        self.input_ready_event = mp.Event()
-        self.output_ready_event = mp.Event()
+        self.comm = SharedMemoryComm(max_data_size)
 
     def start_workers(self):
         """Start all worker processes"""
         port = get_free_port()
+
         for i in range(self.num_workers):
             worker = mp.Process(
                 target=worker_process,
                 args=(
                     i,
-                    self.input_shm.name,
-                    self.output_shm.name,
-                    self.input_size_shm.name,
-                    self.output_size_shm.name,
-                    self.input_ready_event,
-                    self.output_ready_event,
+                    self.comm,
                     self.shutdown_event,
                     self.ready_queue,
                     self.predict_config,
@@ -208,32 +242,32 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         start_time = time.time()
 
         # Clear all output ready events
-        self.output_ready_event.clear()
+        self.comm.output_ready_event.clear()
 
-        # Write input data to all workers' shared memory
-        if len(request_data) > self.max_data_size:
-            raise ValueError(
-                f"Request data size {len(request_data)} exceeds maximum {self.max_data_size}"
-            )
+        # Write input data to shared memory
+        SharedMemoryComm.write_data(
+            self.comm.input_shm,
+            self.comm.input_size_shm,
+            request_data,
+            self.comm.max_data_size,
+        )
 
-        # Write size and data
-        self.input_size_shm.buf[:4] = len(request_data).to_bytes(4, "big")
-        self.input_shm.buf[: len(request_data)] = request_data
         # Signal input is ready
-        self.input_ready_event.set()
+        self.comm.input_ready_event.set()
 
         # Wait for and collect results from all workers
-        self.output_ready_event.wait()
+        self.comm.output_ready_event.wait()
 
-        # Read result size and data
-        output_size = int.from_bytes(self.output_size_shm.buf[:4], "big")
-        result_data = bytes(self.output_shm.buf[:output_size])
+        # Read result data
+        result_data = SharedMemoryComm.read_data(
+            self.comm.output_shm, self.comm.output_size_shm
+        )
         result = pickle.loads(result_data)
         logging.debug(f"Process_request: Received result from workers: {result}")
 
         # Clear events for next request
-        self.input_ready_event.clear()
-        self.output_ready_event.clear()
+        self.comm.input_ready_event.clear()
+        self.comm.output_ready_event.clear()
 
         inference_time = (time.time() - start_time) * 1000
 
@@ -259,42 +293,26 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         logging.info(f"Connection from {addr}")
         try:
             while True:
-                # Read request length
-                length_data = client_socket.recv(4)
-                if not length_data:
-                    break
-
-                msg_length = int.from_bytes(length_data, "big")
-                logging.debug(
-                    f"Received request of length {msg_length} bytes from {addr}"
-                )
-
-                # Read request data in chunks to ensure we get all data
-                data = b""
-                remaining = msg_length
-                while remaining > 0:
-                    chunk = client_socket.recv(remaining)
-                    if not chunk:
-                        raise ConnectionError("Connection closed while receiving data")
-                    data += chunk
-                    remaining -= len(chunk)
-
-                if len(data) != msg_length:
-                    raise ValueError(
-                        f"Received data length {len(data)} does not match expected length {msg_length}"
+                try:
+                    # Receive request data
+                    data = recv_message(client_socket)
+                    logging.debug(
+                        f"Received request of length {len(data)} bytes from {addr}"
                     )
 
-                # Process request (blocks until all workers complete)
-                # The requested data is in a pickled AtomicData for now
-                response_data = self.process_request(data)
-                pickled_response = pickle.dumps(response_data)
+                    # Process request (blocks until all workers complete)
+                    response_data = self.process_request(data)
+                    pickled_response = pickle.dumps(response_data)
 
-                # Send response back in pickled format as well
-                length = len(pickled_response).to_bytes(4, "big")
-                logging.info(
-                    f"Sending response of length {len(pickled_response)} bytes to {addr}"
-                )
-                client_socket.sendall(length + pickled_response)
+                    # Send response back
+                    send_message(client_socket, pickled_response)
+                    logging.info(
+                        f"Sent response of length {len(pickled_response)} bytes to {addr}"
+                    )
+
+                except ConnectionError:
+                    # Client disconnected
+                    break
 
         except Exception as e:
             logging.error(f"Client {addr} encountered error: {e}")
@@ -343,7 +361,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         self.shutdown_event.set()
 
         # Signal all workers to wake up and check shutdown event
-        self.input_ready_event.set()
+        self.comm.input_ready_event.set()
 
         # Ensure all workers are terminated
         for worker in self.workers:
@@ -354,23 +372,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 worker.join()
 
         # Clean up shared memory
-        for shm in [
-            self.input_shm,
-            self.output_shm,
-            self.input_size_shm,
-            self.output_size_shm,
-        ]:
-            try:
-                shm.close()
-                # Check if shared memory still exists before unlinking
-                shm_path = f"/dev/shm/{shm.name}"
-                if os.path.exists(shm_path):
-                    shm.unlink()
-            except FileNotFoundError:
-                # Shared memory already cleaned up, this is fine
-                pass
-            except Exception as e:
-                logging.warning(f"Error cleaning up shared memory {shm.name}: {e}")
+        self.comm.cleanup()
 
         if self.server_socket:
             self.server_socket.close()

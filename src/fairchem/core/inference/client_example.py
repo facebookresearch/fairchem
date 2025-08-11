@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import timeit
 
 import numpy as np
@@ -10,6 +11,8 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
 )
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+
+logging.basicConfig(level=logging.INFO)
 
 
 def get_fcc_carbon_xtal(
@@ -28,11 +31,9 @@ def get_fcc_carbon_xtal(
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
     def timefunc():
         predictor.predict_step(None, data)
-        # torch.cuda.synchronize()
 
     for _ in range(warmups):
         timefunc()
-        # logging.info(f"memory allocated: {torch.cuda.memory_allocated()/(1024**3)}")
 
     result = timeit.timeit(timefunc, number=timeiters)
     qps = timeiters / result
@@ -41,11 +42,6 @@ def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
 
 
 def main():
-    # Create an AtomicData object
-    # h2o = build.molecule("H2O")
-    # atomic_data = AtomicData.from_ase(h2o)
-    # atomic_data.task_name = ["omol"]
-
     atomic_data = get_fcc_carbon_xtal(20000)
 
     ppunit = ParallelMLIPPredictUnit(
@@ -61,13 +57,9 @@ def main():
         ),
         server_config={"workers": 8},
     )
-    print("Starting profile")
+    logging.info("Starting profile")
     qps, ns_per_day = get_qps(atomic_data, ppunit, warmups=10, timeiters=10)
-    print(f"QPS: {qps}, ns/day: {ns_per_day}")
-
-    # client = MLIPInferenceClient("localhost", 8001)
-    # result = client.call(atomic_data)
-    # print(result)
+    logging.info(f"QPS: {qps}, ns/day: {ns_per_day}")
 
 
 if __name__ == "__main__":
