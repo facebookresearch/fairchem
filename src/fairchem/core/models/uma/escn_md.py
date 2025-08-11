@@ -623,7 +623,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
 class MLP_EFS_Head(nn.Module, HeadInterface):
     def __init__(
-        self, backbone: eSCNMDBackbone, prefix=None, wrap_property=True
+        self,
+        backbone: eSCNMDBackbone,
+        prefix: str | None = None,
+        wrap_property: bool = True,
     ) -> None:
         super().__init__()
         backbone.energy_block = None
