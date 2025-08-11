@@ -25,12 +25,13 @@ def get_fcc_carbon_xtal(
     atoms = atoms.repeat((n_cells, n_cells, n_cells))
     indices = np.random.choice(len(atoms), num_atoms, replace=False)
     sampled_atoms = atoms[indices]
-    return AtomicData.from_ase(sampled_atoms, task_name=["omol"])
+    return sampled_atoms
+    # return AtomicData.from_ase(sampled_atoms, task_name=["omol"])
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
     def timefunc():
-        predictor.predict_step(None, data)
+        predictor.predict(data)
 
     for _ in range(warmups):
         timefunc()
@@ -42,8 +43,6 @@ def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
 
 
 def main():
-    atomic_data = get_fcc_carbon_xtal(20000)
-
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path="/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt",
         device="cuda",
@@ -57,6 +56,18 @@ def main():
         ),
         server_config={"workers": 8},
     )
+    atoms = get_fcc_carbon_xtal(20000)
+
+    # calc = FAIRChemCalculator(ppunit, task_name="omol")
+    # atoms.calc = calc
+    # print(atoms.get_potential_energy())
+    # # atoms = get_fcc_carbon_xtal(10001)
+    # # atoms.calc = calc
+    # # print(atoms.get_potential_energy())
+    # # del calc
+    # del calc.predictor
+
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omol"])
     logging.info("Starting profile")
     qps, ns_per_day = get_qps(atomic_data, ppunit, warmups=10, timeiters=10)
     logging.info(f"QPS: {qps}, ns/day: {ns_per_day}")

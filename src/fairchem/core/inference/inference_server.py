@@ -27,9 +27,13 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 from fairchem.core.common.utils import detach_dict_tensors
-from fairchem.core.inference.socket_utils import recv_message, send_message
+from fairchem.core.inference.socket_utils import (
+    SOCKET_TIMEOUT,
+    recv_message,
+    send_message,
+)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class SharedMemoryComm:
@@ -164,17 +168,7 @@ def worker_process(
             except Exception as e:
                 logging.error(f"Worker {worker_id} encountered error: {e}")
                 traceback.print_exc()
-
-                # Write error response
-                error_response = {
-                    "worker_id": worker_id,
-                    "result": None,
-                    "error": str(e),
-                }
-                pickled_error = pickle.dumps(error_response)
-                SharedMemoryComm.write_data(
-                    output_shm, output_size_shm, pickled_error, comm.max_data_size
-                )
+                raise e
 
     finally:
         distutils.cleanup()
@@ -255,8 +249,14 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         # Signal input is ready
         self.comm.input_ready_event.set()
 
-        # Wait for and collect results from all workers
+        # Wait for and collect results from all workers with health checks
         self.comm.output_ready_event.wait()
+        while not self.comm.output_ready_event.wait(timeout=10.0):
+            # Check if any workers have died while waiting
+            if not all(worker.is_alive() for worker in self.workers):
+                raise RuntimeError(
+                    "A Worker died while processing request. Shutting down server."
+                )
 
         # Read result data
         result_data = SharedMemoryComm.read_data(
@@ -339,6 +339,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
 
         # Start server socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.settimeout(SOCKET_TIMEOUT)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(("localhost", self.port))
         self.server_socket.listen(1)  # Only accept 1 connection at a time
@@ -351,8 +352,10 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 client_socket, addr = self.server_socket.accept()
                 # Handle this client completely before accepting next one
                 self.handle_client(client_socket, addr)
+        except KeyboardInterrupt:
+            logging.info("Server shutting down due to keyboard interrupt")
         except Exception:
-            logging.info("Server shutting down")
+            logging.info("Server shutting down...")
         finally:
             self.shutdown()
 

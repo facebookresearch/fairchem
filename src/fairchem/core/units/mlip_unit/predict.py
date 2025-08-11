@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import random
@@ -15,7 +16,7 @@ import time
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Protocol, Sequence
 
 import hydra
 import numpy as np
@@ -43,6 +44,9 @@ from fairchem.core.units.mlip_unit.utils import (
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
 
+# Constants
+SERVER_STARTUP_TIMEOUT = 60  # seconds
+
 
 def collate_predictions(predict_fn):
     @wraps(predict_fn)
@@ -55,7 +59,7 @@ def collate_predictions(predict_fn):
             data.batch = data.batch_full
         collated_preds = defaultdict(list)
         for i, dataset in enumerate(data.dataset):
-            for task in predict_unit.dataset_to_tasks[dataset]:
+            for task in predict_unit.datasets_to_tasks[dataset]:
                 if task.level == "system":
                     collated_preds[task.property].append(
                         preds[task.name][i].unsqueeze(0)
@@ -74,7 +78,14 @@ def collate_predictions(predict_fn):
     return collated_predict
 
 
-class MLIPPredictUnit(PredictUnit[AtomicData]):
+class MLIPPredictUnitProtocol(Protocol):
+    def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
+
+    @property
+    def datasets_to_tasks(self) -> dict[str, list]: ...
+
+
+class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
         inference_model_path: str,
@@ -87,7 +98,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
-        self.seed(seed)
+        self.set_seed(seed)
         # note these are different from the element references used for model training
         self.atom_refs = (
             {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
@@ -128,9 +139,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         ]
         self.tasks = {t.name: t for t in tasks}
 
-        self.dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
-        assert set(self.dataset_to_tasks.keys()).issubset(
-            set(self.datasets)
+        self._datasets_to_tasks = get_datasets_to_tasks_map(self.tasks.values())
+        assert set(self._datasets_to_tasks.keys()).issubset(
+            set(self.model.module.backbone.dataset_list)
         ), "Datasets in tasks is not a strict subset of datasets in backbone."
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
@@ -144,15 +155,21 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         # store composition embedding of system the model was merged on
         self.merged_on = None
 
+        if self.direct_forces:
+            logging.warning(
+                "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
+                "energy surface and energy conservation errors."
+            )
+
     @property
     def direct_forces(self) -> bool:
         return self.model.module.backbone.direct_forces
 
     @property
-    def datasets(self) -> list[str]:
-        return self.model.module.backbone.dataset_list
+    def datasets_to_tasks(self) -> dict[str, list]:
+        return self._datasets_to_tasks
 
-    def seed(self, seed: int):
+    def set_seed(self, seed: int):
         logging.debug(f"Setting random seed to {seed}")
         self._seed = seed
         random.seed(seed)
@@ -210,6 +227,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
+        if self.inference_mode.external_graph_gen and data.edge_index.shape[1] == 0:
+            raise ValueError(
+                "Cannot run inference with external graph generation on empty edge index. "
+                "Please ensure the input data has valid edges."
+            )
+
         data_device = data.to(self.device)
 
         if self.inference_mode.merge_mole:
@@ -254,7 +277,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         return pred_output
 
 
-def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+def get_datasets_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     """Create a mapping from dataset names to their associated tasks.
 
     Args:
@@ -280,7 +303,7 @@ def run_server_entry(num_workers, port, predict_unit_config):
     server.run()
 
 
-class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
+class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
         inference_model_path: str,
@@ -309,6 +332,19 @@ class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
         config = {}
         self.server_process = None
 
+        # TODO, we need this just to get the datasets for the FAIRChemCalculator, this is not great, think about if
+        # we can remove this dependency
+        _mlip_pred_unit = MLIPPredictUnit(
+            inference_model_path=inference_model_path,
+            device="cpu",
+            overrides=overrides,
+            inference_settings=inference_settings,
+            seed=seed,
+            atom_refs=atom_refs,
+        )
+        self._datasets_to_tasks = copy.deepcopy(_mlip_pred_unit.datasets_to_tasks)
+        # del _mlip_pred_unit
+
         if server_config is not None:
             logging.info(f"Starting inference server with config {server_config}")
             if "port" not in server_config:
@@ -335,7 +371,13 @@ class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
             self.server_thread = threading.Thread(target=self.server.run, args=())
             self.server_thread.start()
 
+            # Wait for server to be ready with timeout
+            start_time = time.time()
             while not self.server.ready():
+                if time.time() - start_time > SERVER_STARTUP_TIMEOUT:
+                    raise RuntimeError(
+                        f"Server failed to start within {SERVER_STARTUP_TIMEOUT} seconds"
+                    )
                 logging.info(
                     f"Waiting for server to be ready on {self.server_address}:{self.server_port}"
                 )
@@ -357,5 +399,18 @@ class ParallelMLIPPredictUnit(PredictUnit[AtomicData]):
         if hasattr(self, "server_thread") and self.server_thread.is_alive():
             self.server_thread.join(timeout=5)
 
-    def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
+        """
+        Predict method that sends data to the remote server and returns predictions.
+        """
+        if not hasattr(self, "client"):
+            raise RuntimeError(
+                "Client is not initialized. Ensure server_config or client_config is provided."
+            )
         return self.client.call(data)
+
+    @property
+    def datasets_to_tasks(self) -> dict[str, list]:
+        return self._datasets_to_tasks

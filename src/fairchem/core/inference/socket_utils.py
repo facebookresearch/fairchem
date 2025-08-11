@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import socket
 
+SOCKET_TIMEOUT = 120
+
 
 def recv_all(sock: socket.socket, length: int) -> bytes:
     """
