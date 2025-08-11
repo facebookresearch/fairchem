@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Literal
+from typing import Any, Literal
 
 import torch
 import torch.nn as nn
@@ -66,7 +66,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_pbc_single: bool = True,  # deprecated
         cutoff: float = 5.0,
         edge_channels: int = 128,
-        distance_function: str = "gaussian",
+        distance_function: Literal["gaussian"] = "gaussian",
         num_distance_basis: int = 512,
         direct_forces: bool = True,
         regress_forces: bool = True,
@@ -86,7 +86,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
-    ):
+    ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
         self.lmax = lmax
@@ -255,7 +255,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
-    ):
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         Jd_buffers = [
             getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
@@ -421,7 +421,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return graph_dict
 
     @conditional_grad(torch.enable_grad())
-    def forward(self, data_dict) -> dict[str, torch.Tensor]:
+    def forward(self, data_dict: dict[str, Any]) -> dict[str, torch.Tensor]:
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -429,7 +429,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
             spin=data_dict["spin"],
-            dataset=data_dict.get("dataset", None),
+            dataset=data_dict.get("dataset"),
         )
 
         self.set_MOLE_coefficients(
@@ -588,7 +588,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return graph_dict
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())
 
     @torch.jit.ignore
@@ -622,7 +622,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
 
 class MLP_EFS_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone, prefix=None, wrap_property=True):
+    def __init__(
+        self, backbone: eSCNMDBackbone, prefix=None, wrap_property=True
+    ) -> None:
         super().__init__()
         backbone.energy_block = None
         backbone.force_block = None
@@ -650,7 +652,9 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         ), "EFS head is only used for gradient-based forces/stress."
 
     @conditional_grad(torch.enable_grad())
-    def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    def forward(
+        self, data: dict[str, Any], emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
         if self.prefix:
             energy_key = f"{self.prefix}_energy"
             forces_key = f"{self.prefix}_forces"
@@ -713,7 +717,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
 
 class MLP_Energy_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone, reduce: str = "sum"):
+    def __init__(self, backbone: eSCNMDBackbone, reduce: str = "sum") -> None:
         super().__init__()
         self.reduce = reduce
 
@@ -727,7 +731,9 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             nn.Linear(self.hidden_channels, 1, bias=True),
         )
 
-    def forward(self, data_dict, emb: dict[str, torch.Tensor]):
+    def forward(
+        self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
         node_energy = self.energy_block(
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
         ).view(-1, 1, 1)
@@ -755,12 +761,14 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
 
 
 class Linear_Energy_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone, reduce: str = "sum"):
+    def __init__(self, backbone: eSCNMDBackbone, reduce: str = "sum") -> None:
         super().__init__()
         self.reduce = reduce
         self.energy_block = nn.Linear(backbone.sphere_channels, 1, bias=True)
 
-    def forward(self, data_dict, emb: dict[str, torch.Tensor]):
+    def forward(
+        self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
         node_energy = self.energy_block(
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
         ).view(-1, 1, 1)
@@ -789,11 +797,11 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
 
 
 class Linear_Force_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone):
+    def __init__(self, backbone: eSCNMDBackbone) -> None:
         super().__init__()
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
 
-    def forward(self, data_dict, emb: dict[str, torch.Tensor]):
+    def forward(self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]):
         forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
@@ -843,7 +851,7 @@ def compose_tensor(
 
 
 class MLP_Stress_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone, reduce: str = "mean"):
+    def __init__(self, backbone: eSCNMDBackbone, reduce: str = "mean") -> None:
         super().__init__()
         """
         predict the isotropic and anisotropic parts of the stress tensor
@@ -863,7 +871,9 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
 
         self.l2_linear = SO3_Linear(backbone.sphere_channels, 1, lmax=2)
 
-    def forward(self, data_dict, emb: dict[str, torch.Tensor]):
+    def forward(
+        self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
         node_scalar = self.scalar_block(
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
         ).view(-1, 1, 1)
