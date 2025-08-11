@@ -429,7 +429,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
             spin=data_dict["spin"],
-            dataset=data_dict.get("dataset"),
+            dataset=data_dict.get("dataset", default=None),
         )
 
         self.set_MOLE_coefficients(
