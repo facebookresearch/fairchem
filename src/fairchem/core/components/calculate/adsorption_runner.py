@@ -128,6 +128,3 @@ class AdsorptionRunner(CalculateRunner):
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         return True
-
-    def load_state(self, checkpoint_location: str | None) -> None:
-        return
