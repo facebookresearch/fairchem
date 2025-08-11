@@ -4,7 +4,8 @@ import pytest
 import torch
 from ase import Atoms
 from ase.build import molecule as get_molecule
-from e3nn.o3 import spherical_harmonics
+from e3nn.math import direct_sum
+from e3nn.o3 import matrix_to_angles, spherical_harmonics, wigner_D
 
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone
@@ -51,7 +52,7 @@ def test_escnmd_backbone_impossible_vectors(
     sh1 = spherical_harmonics(1, orthogonal_direction, normalize=True)
     l1 = out["node_embedding"][:, 1:4]
     orthogonal = torch.einsum(
-        "bijk,bj->bijk", l1[None, ...], sh1
+        "...ijk,...j->...ijk", l1, sh1
     )  # n_ortho_directions, edges, 3, channels
     orthogonal = orthogonal.norm(dim=2)  # n_ortho_directions, edges, channels
     assert torch.allclose(
@@ -105,7 +106,7 @@ def test_escnmd_backbone_symmetries(
     atoms1 = atoms.copy()
     atoms1.positions = atoms1.positions @ torch.linalg.inv(symmetry_matrix).T.numpy()
     g1 = AtomicData.from_ase(
-        input_atoms=atoms,
+        input_atoms=atoms1,
         max_neigh=25,
         radius=12,
         task_name="diatomic_test",
@@ -113,6 +114,15 @@ def test_escnmd_backbone_symmetries(
         r_data_keys=["spin", "charge"],
     )
     out1 = backbone(g1)
+
+    wigner_d = direct_sum(
+        *[wigner_D(l, *matrix_to_angles(symmetry_matrix)) for l in range(lmax + 1)]
+    )
+    out1["node_embedding"] = torch.einsum(
+        "aj,ijk->iak", wigner_d, out1["node_embedding"]
+    )
+
     assert (
-        (out0["node_embedding"] - out1["node_embedding"]).abs().max() < 1e-6
+        (out0["node_embedding"] - out1["node_embedding"]).abs().max()
+        < 5e-4  # high tolerance due to low precision
     ), f"For this molecule {atoms.positions=}, node embeddings should be invariant under this symmetry transformation {symmetry_matrix=}."
