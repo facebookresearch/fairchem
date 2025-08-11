@@ -103,9 +103,12 @@ def worker_process(
                 }
                 pickled_result = pickle.dumps(response_data)
 
-                # Write result size and data
-                output_size_shm.buf[:4] = len(pickled_result).to_bytes(4, "big")
-                output_shm.buf[: len(pickled_result)] = pickled_result
+                # Write result size and data only on worker 0
+                if worker_id == 0:
+                    output_size_shm.buf[:4] = len(pickled_result).to_bytes(4, "big")
+                    output_shm.buf[: len(pickled_result)] = pickled_result
+                    # Signal that output is ready
+                    output_ready_event.set()
 
             except Exception as e:
                 logging.error(f"Worker {worker_id} encountered error: {e}")
@@ -120,9 +123,6 @@ def worker_process(
                 pickled_error = pickle.dumps(error_response)
                 output_size_shm.buf[:4] = len(pickled_error).to_bytes(4, "big")
                 output_shm.buf[: len(pickled_error)] = pickled_error
-
-            # Signal that output is ready
-            output_ready_event.set()
 
     finally:
         distutils.cleanup()
@@ -160,36 +160,23 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
 
         # Create shared memory segments for each worker
         self.server_socket = None
-        self.input_shms = []
-        self.output_shms = []
-        self.input_size_shms = []
-        self.output_size_shms = []
-        self.input_ready_events = []
-        self.output_ready_events = []
         self.shutdown_event = mp.Event()
         self.ready_queue = mp.Queue()
         self.workers = []
 
         # Create shared memory segments
-        for _ in range(num_workers):
-            # Input data shared memory
-            input_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
-            self.input_shms.append(input_shm)
+        # Input data shared memory
+        self.input_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
+        # Output data shared memory
+        self.output_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
 
-            # Output data shared memory
-            output_shm = shared_memory.SharedMemory(create=True, size=max_data_size)
-            self.output_shms.append(output_shm)
+        # Size information shared memory (4 bytes each)
+        self.input_size_shm = shared_memory.SharedMemory(create=True, size=4)
+        self.output_size_shm = shared_memory.SharedMemory(create=True, size=4)
 
-            # Size information shared memory (4 bytes each)
-            input_size_shm = shared_memory.SharedMemory(create=True, size=4)
-            self.input_size_shms.append(input_size_shm)
-
-            output_size_shm = shared_memory.SharedMemory(create=True, size=4)
-            self.output_size_shms.append(output_size_shm)
-
-            # Synchronization events
-            self.input_ready_events.append(mp.Event())
-            self.output_ready_events.append(mp.Event())
+        # Synchronization events
+        self.input_ready_event = mp.Event()
+        self.output_ready_event = mp.Event()
 
     def start_workers(self):
         """Start all worker processes"""
@@ -199,12 +186,12 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 target=worker_process,
                 args=(
                     i,
-                    self.input_shms[i].name,
-                    self.output_shms[i].name,
-                    self.input_size_shms[i].name,
-                    self.output_size_shms[i].name,
-                    self.input_ready_events[i],
-                    self.output_ready_events[i],
+                    self.input_shm.name,
+                    self.output_shm.name,
+                    self.input_size_shm.name,
+                    self.output_size_shm.name,
+                    self.input_ready_event,
+                    self.output_ready_event,
                     self.shutdown_event,
                     self.ready_queue,
                     self.predict_config,
@@ -221,44 +208,39 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         start_time = time.time()
 
         # Clear all output ready events
-        for event in self.output_ready_events:
-            event.clear()
+        self.output_ready_event.clear()
 
         # Write input data to all workers' shared memory
-        for i in range(self.num_workers):
-            if len(request_data) > self.max_data_size:
-                raise ValueError(
-                    f"Request data size {len(request_data)} exceeds maximum {self.max_data_size}"
-                )
+        if len(request_data) > self.max_data_size:
+            raise ValueError(
+                f"Request data size {len(request_data)} exceeds maximum {self.max_data_size}"
+            )
 
-            # Write size and data
-            self.input_size_shms[i].buf[:4] = len(request_data).to_bytes(4, "big")
-            self.input_shms[i].buf[: len(request_data)] = request_data
-
-            # Signal input is ready
-            self.input_ready_events[i].set()
+        # Write size and data
+        self.input_size_shm.buf[:4] = len(request_data).to_bytes(4, "big")
+        self.input_shm.buf[: len(request_data)] = request_data
+        # Signal input is ready
+        self.input_ready_event.set()
 
         # Wait for and collect results from all workers
-        results = []
-        for i in range(self.num_workers):
-            self.output_ready_events[i].wait()
+        self.output_ready_event.wait()
 
-            # Read result size and data
-            output_size = int.from_bytes(self.output_size_shms[i].buf[:4], "big")
-            result_data = bytes(self.output_shms[i].buf[:output_size])
-            result = pickle.loads(result_data)
-            results.append(result)
+        # Read result size and data
+        output_size = int.from_bytes(self.output_size_shm.buf[:4], "big")
+        result_data = bytes(self.output_shm.buf[:output_size])
+        result = pickle.loads(result_data)
+        logging.debug(f"Process_request: Received result from workers: {result}")
 
-            # Clear events for next request
-            self.input_ready_events[i].clear()
-            self.output_ready_events[i].clear()
+        # Clear events for next request
+        self.input_ready_event.clear()
+        self.output_ready_event.clear()
 
         inference_time = (time.time() - start_time) * 1000
 
         # All responses should not error
-        if all(r["error"] is None for r in results):
+        if result.get("error") is None:
             response_data = {
-                "predictions": results[0]["result"],
+                "predictions": result["result"],
                 "error": None,
                 "inference_time": inference_time,
             }
@@ -266,7 +248,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
             # Handle errors
             response_data = {
                 "predictions": [],
-                "error": [result.get("error", "") for result in results],
+                "error": result.get("error"),
                 "inference_time": inference_time,
             }
 
@@ -283,11 +265,24 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                     break
 
                 msg_length = int.from_bytes(length_data, "big")
+                logging.debug(
+                    f"Received request of length {msg_length} bytes from {addr}"
+                )
 
-                # Read request data
-                data = client_socket.recv(msg_length, socket.MSG_WAITALL)
-                if not data or len(data) != msg_length:
-                    break
+                # Read request data in chunks to ensure we get all data
+                data = b""
+                remaining = msg_length
+                while remaining > 0:
+                    chunk = client_socket.recv(remaining)
+                    if not chunk:
+                        raise ConnectionError("Connection closed while receiving data")
+                    data += chunk
+                    remaining -= len(chunk)
+
+                if len(data) != msg_length:
+                    raise ValueError(
+                        f"Received data length {len(data)} does not match expected length {msg_length}"
+                    )
 
                 # Process request (blocks until all workers complete)
                 # The requested data is in a pickled AtomicData for now
@@ -296,6 +291,9 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
 
                 # Send response back in pickled format as well
                 length = len(pickled_response).to_bytes(4, "big")
+                logging.info(
+                    f"Sending response of length {len(pickled_response)} bytes to {addr}"
+                )
                 client_socket.sendall(length + pickled_response)
 
         except Exception as e:
@@ -345,8 +343,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         self.shutdown_event.set()
 
         # Signal all workers to wake up and check shutdown event
-        for event in self.input_ready_events:
-            event.set()
+        self.input_ready_event.set()
 
         # Ensure all workers are terminated
         for worker in self.workers:
@@ -357,12 +354,12 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
                 worker.join()
 
         # Clean up shared memory
-        for shm in (
-            self.input_shms
-            + self.output_shms
-            + self.input_size_shms
-            + self.output_size_shms
-        ):
+        for shm in [
+            self.input_shm,
+            self.output_shm,
+            self.input_size_shm,
+            self.output_size_shm,
+        ]:
             try:
                 shm.close()
                 # Check if shared memory still exists before unlinking

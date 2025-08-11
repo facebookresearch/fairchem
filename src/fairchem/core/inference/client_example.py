@@ -46,7 +46,7 @@ def main():
     # atomic_data = AtomicData.from_ase(h2o)
     # atomic_data.task_name = ["omol"]
 
-    atomic_data = get_fcc_carbon_xtal(5000)
+    atomic_data = get_fcc_carbon_xtal(20000)
 
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path="/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt",
@@ -61,7 +61,8 @@ def main():
         ),
         server_config={"workers": 8},
     )
-    qps, ns_per_day = get_qps(atomic_data, ppunit, warmups=10, timeiters=100)
+    print("Starting profile")
+    qps, ns_per_day = get_qps(atomic_data, ppunit, warmups=10, timeiters=10)
     print(f"QPS: {qps}, ns/day: {ns_per_day}")
 
     # client = MLIPInferenceClient("localhost", 8001)
