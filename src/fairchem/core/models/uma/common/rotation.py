@@ -89,8 +89,8 @@ def _z_rot_mat(angle: torch.Tensor, lv: int) -> torch.Tensor:
     return M
 
 
-def rotation_to_wigner(
-    edge_rot_mat: torch.Tensor,
+def eulers_to_wigner(
+    eulers: torch.Tensor,
     start_lmax: int,
     end_lmax: int,
     Jd: list[torch.Tensor],
@@ -98,7 +98,7 @@ def rotation_to_wigner(
     """
     set <rot_clip=True> to handle gradient instability when using gradient-based force/stress prediction.
     """
-    alpha, beta, gamma = edge_rot_mat
+    alpha, beta, gamma = eulers
 
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
     wigner = torch.zeros(len(alpha), size, size, device=alpha.device, dtype=alpha.dtype)
