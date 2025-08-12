@@ -39,7 +39,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: env.HEAD_SHA
+          ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
           fetch-depth: 0
 
@@ -106,7 +106,7 @@ jobs:
         with:
           files: ./junit.xml,./junit-gpu.xml
           token: ${{ secrets.CODECOV_TOKEN }}
-          commit_parent: env.HEAD_SHA
+          commit_parent: ${{ env.HEAD_SHA }}
           verbose: true
 
       - name: Cleanup
@@ -130,7 +130,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: env.HEAD_SHA
+          ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
           fetch-depth: 0
 
