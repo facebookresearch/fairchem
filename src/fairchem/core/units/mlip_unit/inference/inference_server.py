@@ -27,7 +27,7 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 from fairchem.core.common.utils import detach_dict_tensors
-from fairchem.core.inference.socket_utils import (
+from fairchem.core.units.mlip_unit.inference.socket_utils import (
     SOCKET_TIMEOUT,
     recv_message,
     send_message,

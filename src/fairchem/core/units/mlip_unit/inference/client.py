@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
     from fairchem.core.datasets.atomic_data import AtomicData
 
-from fairchem.core.inference.socket_utils import (
+from fairchem.core.units.mlip_unit.inference.socket_utils import (
     SOCKET_TIMEOUT,
     recv_message,
     send_message,

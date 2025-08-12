@@ -30,12 +30,12 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
 )
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.inference.client import MLIPInferenceClient
-from fairchem.core.inference.inference_server import (
+from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.inference.client import MLIPInferenceClient
+from fairchem.core.units.mlip_unit.inference.inference_server import (
     InferenceServerProtocol,
     MLIPInferenceServerMP,
 )
-from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
