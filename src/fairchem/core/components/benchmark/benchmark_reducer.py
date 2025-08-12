@@ -168,12 +168,17 @@ class BenchmarkReducer(Reducer, metaclass=ABCMeta):
         self.save_results(results, self.job_config.metadata.results_dir)
         logging.info("Calculating metrics.")
         metrics = self.compute_metrics(results, run_name=self.job_config.run_name)
-        logging.info(
-            f"Saving computed metrics in {self.job_config.metadata.results_dir}"
-        )
-        self.save_metrics(metrics, self.job_config.metadata.results_dir)
-        if self.logger is not None:
-            self.log_metrics(metrics, run_name=self.job_config.run_name)
+        if metrics is not None:
+            logging.info(
+                f"Saving computed metrics in {self.job_config.metadata.results_dir}"
+            )
+            self.save_metrics(metrics, self.job_config.metadata.results_dir)
+            if self.logger is not None:
+                self.log_metrics(metrics, run_name=self.job_config.run_name)
+        else:
+            logging.info(
+                "Evaluation labels not available, skipping metrics computation. Please submit results to the appropriate benchmark leaderboard if applicable."
+            )
 
 
 class JsonDFReducer(BenchmarkReducer):

@@ -1,5 +1,5 @@
 data_root_dir: /large_experiments/opencatalyst/foundation_models/benchmark
-checkpoint_root_dir: /large_experiments/opencatalyst/foundation_models/checkpoints/uma
+checkpoint_root_dir: /large_experiments/opencatalyst/foundation_models/checkpoints/uma/release
 run_dir: /checkpoint/${oc.env:USER}/
 account: null
 partition: scavenge
