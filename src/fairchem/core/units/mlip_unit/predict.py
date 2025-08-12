@@ -12,7 +12,6 @@ import logging
 import os
 import random
 import threading
-import time
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
@@ -112,6 +111,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             overrides = {}
         if "backbone" not in overrides:
             overrides["backbone"] = {}
+        # always disable always_use_pbc for inference
+        overrides["backbone"]["always_use_pbc"] = False
         if inference_settings.activation_checkpointing is not None:
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
@@ -371,17 +372,8 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             self.server_thread = threading.Thread(target=self.server.run, args=())
             self.server_thread.start()
 
-            # Wait for server to be ready with timeout
-            start_time = time.time()
-            while not self.server.ready():
-                if time.time() - start_time > SERVER_STARTUP_TIMEOUT:
-                    raise RuntimeError(
-                        f"Server failed to start within {SERVER_STARTUP_TIMEOUT} seconds"
-                    )
-                logging.info(
-                    f"Waiting for server to be ready on {self.server_address}:{self.server_port}"
-                )
-                time.sleep(1)
+            # Wait for server to be ready before starting the client
+            self.server.wait_until_ready()
 
         if client_config is not None:
             logging.info(f"Connecting to inference server with config {client_config}")

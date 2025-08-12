@@ -33,6 +33,7 @@ from fairchem.core.units.mlip_unit.inference.socket_utils import (
     send_message,
 )
 
+READY_TIMEOUT = 60
 logging.basicConfig(level=logging.INFO)
 
 
@@ -181,7 +182,7 @@ def worker_process(
 class InferenceServerProtocol(Protocol):
     def run(self) -> None: ...
 
-    def ready(self) -> bool: ...
+    def wait_until_ready(self) -> bool: ...
 
     def shutdown(self) -> None: ...
 
@@ -306,7 +307,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
 
                     # Send response back
                     send_message(client_socket, pickled_response)
-                    logging.info(
+                    logging.debug(
                         f"Sent response of length {len(pickled_response)} bytes to {addr}"
                     )
 
@@ -321,16 +322,15 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
             client_socket.close()
             logging.info(f"Client {addr} disconnected")
 
-    def ready(self):
-        """Check if all workers are ready"""
+    def wait_until_ready(self) -> None:
         ready_workers = []
+        start_time = time.time()
         while len(ready_workers) < self.num_workers:
-            try:
-                worker_id = self.ready_queue.get(timeout=1)
-                ready_workers.append(worker_id)
-            except Exception:
-                break
-        return len(ready_workers) == self.num_workers
+            worker_id = self.ready_queue.get(timeout=READY_TIMEOUT)
+            ready_workers.append(worker_id)
+            logging.info(f"{len(ready_workers)} workers are ready")
+            if time.time() - start_time > READY_TIMEOUT:
+                raise TimeoutError("Timeout waiting for workers to be ready")
 
     def run(self):
         """Start server - handles one request at a time"""
