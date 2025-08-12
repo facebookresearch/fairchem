@@ -198,7 +198,7 @@ class MLIPInferenceServerMP(InferenceServerProtocol):
         max_data_size: int = 100 * 1024 * 1024,  # 100MB default
     ):
         # note this is a global setting
-        mp.set_start_method(start_method)
+        mp.set_start_method(start_method, force=True)
         self.num_workers = num_workers
         self.port = port
         self.predict_config = predict_config

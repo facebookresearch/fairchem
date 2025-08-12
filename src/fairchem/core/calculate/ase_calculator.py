@@ -70,7 +70,7 @@ class FAIRChemCalculator(Calculator):
         if isinstance(task_name, UMATask):
             task_name = task_name.value
 
-        valid_datasets = predict_unit.datasets_to_tasks.keys()
+        valid_datasets = list(predict_unit.datasets_to_tasks.keys())
         if task_name is not None:
             assert (
                 task_name in valid_datasets

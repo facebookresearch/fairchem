@@ -40,9 +40,11 @@ def all_calculators(mlip_predict_unit):
     """Generate calculators for all available datasets in the mlip predict unit"""
 
     def _calc_generator():
-        for dataset in mlip_predict_unit.datasets:
+        for dataset in mlip_predict_unit.datasets_to_tasks:
             # check that all single task models load without specifying task name
-            task_name = dataset if len(mlip_predict_unit.datasets) > 1 else None
+            task_name = (
+                dataset if len(mlip_predict_unit.datasets_to_tasks) > 1 else None
+            )
             yield FAIRChemCalculator(mlip_predict_unit, task_name=task_name)
 
     return _calc_generator
@@ -53,7 +55,7 @@ def omol_calculators(request):
     def _calc_generator():
         for model_name in pretrained_mlip.available_models:
             predict_unit = pretrained_mlip.get_predict_unit(model_name)
-            if "omol" in predict_unit.datasets:
+            if "omol" in predict_unit.datasets_to_tasks:
                 yield FAIRChemCalculator(predict_unit, task_name="omol")
 
     return _calc_generator
@@ -121,9 +123,9 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
 def test_no_task_name_single_task():
     for model_name in pretrained_mlip.available_models:
         predict_unit = pretrained_mlip.get_predict_unit(model_name)
-        if len(predict_unit.datasets) == 1:
+        if len(predict_unit.datasets_to_tasks.keys()) == 1:
             calc = FAIRChemCalculator(predict_unit)
-            assert calc.task_name == predict_unit.datasets[0]
+            assert calc.task_name == predict_unit.datasets_to_tasks.keys()[0]
 
 
 def test_calculator_unknown_task_raises_error():
@@ -141,10 +143,10 @@ def test_calculator_setup(all_calculators):
         # all conservative UMA checkpoints should support E/F/S!
         if (
             not calc.predictor.direct_forces
-            and len(calc.predictor.datasets) > 1
+            and len(calc.predictor.datasets_to_tasks.keys()) > 1
             or calc.task_name != "omol"
         ):
-            print(len(calc.predictor.datasets), calc.task_name)
+            print(len(calc.predictor.datasets_to_tasks.keys()), calc.task_name)
             implemented_properties.append("stress")
 
         assert all(
@@ -174,7 +176,7 @@ def test_energy_calculation(request, atoms_fixture, all_calculators):
 def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
     calc = FAIRChemCalculator(
         mlip_predict_unit,
-        task_name=mlip_predict_unit.datasets[0],
+        task_name=mlip_predict_unit.datasets_to_tasks.keys()[0],
     )
 
     slab_atoms.calc = calc
@@ -199,7 +201,7 @@ def test_calculator_configurations(inference_settings, slab_atoms):
     )
     calc = FAIRChemCalculator(
         predict_unit,
-        task_name=predict_unit.datasets[0],
+        task_name=predict_unit.datasets_to_tasks.keys()[0],
     )
     slab_atoms.calc = calc
     assert predict_unit.model.module.otf_graph is True
