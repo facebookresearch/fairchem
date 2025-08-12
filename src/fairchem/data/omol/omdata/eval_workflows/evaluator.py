@@ -4,32 +4,12 @@ import itertools
 from collections import defaultdict
 
 import numpy as np
+from ase.build import minimize_rotation_and_translation
 from pymatgen.io.ase import MSONAtoms
-from schrodinger.application.matsci.aseutils import get_structure
-from schrodinger.structure import Structure
-from schrodinger.structutils import rmsd
 from scipy.optimize import linear_sum_assignment
 
-boltzmann_constant = 8.617333262 * 10**-5
 
-
-# Helper/processing functions
-
-
-def rmsd_wrapper(st1: Structure, st2: Structure) -> float:
-    """
-    Wrapper around Schrodinger's RMSD calculation function.
-    """
-    assert (
-        st1.atom_total == st2.atom_total
-    ), "Structures must have the same number of atoms for RMSD calculation"
-    if st1 == st2:
-        return 0.0
-    at_list = list(range(1, st1.atom_total + 1))
-    return rmsd.superimpose(st1, at_list, st2, at_list, use_symmetry=False)
-
-
-def sdgr_rmsd(orca_atoms, mlip_atoms):
+def rmsd(orca_atoms, mlip_atoms):
     """
     Calculate the RMSD between atoms optimized with ORCA and the MLIP,
     where we assume that ORCA atoms have sensible bonding.
@@ -37,87 +17,131 @@ def sdgr_rmsd(orca_atoms, mlip_atoms):
     orca_atoms = MSONAtoms.from_dict(orca_atoms)
     mlip_atoms = MSONAtoms.from_dict(mlip_atoms)
 
-    orca_st = get_structure(orca_atoms)
-    mlip_st = get_structure(mlip_atoms)
-    return rmsd_wrapper(orca_st, mlip_st)
-
-
-def cosine_similarity(forces_1, forces_2):
-    return np.sum(forces_1 * forces_2) / max(
-        np.linalg.norm(forces_1) * np.linalg.norm(forces_2), 1e-8
+    minimize_rotation_and_translation(orca_atoms, mlip_atoms)
+    return np.sqrt(
+        np.mean(
+            np.sum(
+                (orca_atoms.get_positions() - mlip_atoms.get_positions()) ** 2, axis=1
+            )
+        )
     )
 
 
-def interaction_energy_and_forces(results, principal_identifier):
+def interaction_energy_and_forces(results, supersystem):
     """
-    Calculate the interaction energy and interaction forces between a principal structure and each individual component in the complex.
+    For a supersystem (e.g. a protein-ligand complex), calculate the
+    interaction energy and forces with each individual component (e.g.
+    the protein and the ligand) in the complex.
+
+    We assume that the supersystem is the sum of the individual components
+    and all are present.
+
+    `results` looks like:
+    {
+        "system_name": {
+            "ligand_pocket": {
+                "energy": float,
+                "forces": list of floats,
+                "atoms": dict (MSONAtoms format)
+            },
+            "ligand": {
+                "energy": float,
+                "forces": list of floats,
+                "atoms": dict (MSONAtoms format)
+            },
+            "pocket": {
+                "energy": float,
+                "forces": list of floats,
+                "atoms": dict (MSONAtoms format)
+            }
+        }
+    }
 
     Args:
         results (dict): Results from ORCA or MLIP calculations.
-        principal_identifier (str): The identifier of the principal structure.
+        supersystem (str): The name of the supersystem (e.g. "ligand_pocket")
 
     Returns:
         interaction_energy, interaction_forces
     """
-    interaction_energy = {}
-    interaction_forces = {}
-    for identifier in results:
+    ixn_energy = {}
+    ixn_forces = {}
+    for system_name, components in results.items():
         indices_found = set()
-        interaction_energy[identifier] = results[identifier][principal_identifier][
-            "energy"
-        ]
-        interaction_forces[identifier] = np.array(
-            results[identifier][principal_identifier]["forces"]
-        )
-        principal_atoms = MSONAtoms.from_dict(
-            results[identifier][principal_identifier]["atoms"]
-        )
-        for component_identifier in results[identifier]:
-            if component_identifier != principal_identifier:
-                interaction_energy[identifier] -= results[identifier][
-                    component_identifier
-                ]["energy"]
-                component_atoms = MSONAtoms.from_dict(
-                    results[identifier][component_identifier]["atoms"]
-                )
-                for ii, sub_atom in enumerate(component_atoms):
-                    for jj, principal_atom in enumerate(principal_atoms):
-                        if sub_atom.symbol == principal_atom.symbol:
-                            if (sub_atom.position == principal_atom.position).all():
-                                indices_found.add(jj)
-                                interaction_forces[identifier][jj] -= np.array(
-                                    results[identifier][component_identifier]["forces"]
-                                )[ii]
-        assert len(indices_found) == len(principal_atoms)
+        ixn_energy[system_name] = components[supersystem]["energy"]
+        ixn_forces[system_name] = np.array(components[supersystem]["forces"])
 
-    return interaction_energy, interaction_forces
+        # Make a map from atomic symbol/position to index in the supersystem
+        # so that we can map the component atoms to the supersystem atoms
+        supersystem_atoms = MSONAtoms.from_dict(components[supersystem]["atoms"])
+        supersys_map = {
+            (at.symbol, tuple(at.position)): at.index for at in supersystem_atoms
+        }
+
+        # Loop over the components that make up the supersystem
+        for component_name, component_data in components.items():
+            if component_name == supersystem:
+                continue
+            ixn_energy[system_name] -= component_data["energy"]
+            component_atoms = MSONAtoms.from_dict(component_data["atoms"])
+            for at in component_atoms:
+                component_at_key = (at.symbol, tuple(at.position))
+                supersystem_at_idx = supersys_map.get(component_at_key)
+                if supersystem_at_idx is None:
+                    raise ValueError(
+                        f"Atom {at.symbol} at position {at.position} in "
+                        f"component {component_name} not found in supersystem."
+                    )
+                indices_found.add(supersystem_at_idx)
+                ixn_forces[system_name][supersystem_at_idx] -= np.array(
+                    component_data["forces"]
+                )[at.index]
+        assert len(indices_found) == len(supersystem_atoms)
+
+    return ixn_energy, ixn_forces
 
 
 def spin_deltas(results):
     """
     Calculate deltaE and deltaF values for the spin gap evaluation task.
 
+    `results` looks like:
+    {
+        "system_name": {
+            "1": {
+                "energy": float,
+                "forces": list of floats,
+                "atoms": dict (MSONAtoms format)
+            },
+            "3": {
+                "energy": float,
+                "forces": list of floats,
+                "atoms": dict (MSONAtoms format)
+            }
+    }
+
+
     Args:
-        results (dict): Results from ORCA or MLIP calculations performed at different spins.
+        results (dict): Results from ORCA or MLIP calculations performed at
+        different spins.
 
     Returns:
         deltaE (dict), deltaF (dict)
     """
     deltaE = {}
     deltaF = {}
-    for identifier in results:
+    for identifier, spin_states in results.items():
         deltaE[identifier] = {}
         deltaF[identifier] = {}
-        spins = [int(spin) for spin in results[identifier]]
-        spins.sort(reverse=True)
-        for spin in spins[1:]:
-            deltaE[identifier][spin] = (
-                results[identifier][str(spins[0])]["energy"]
-                - results[identifier][str(spin)]["energy"]
+        max_spin = max(spin_states, key=lambda x: int(x))
+        high_spin_data = spin_states[max_spin]
+        for spin, spin_data in spin_states.items():
+            if spin == max_spin:
+                continue
+            deltaE[identifier][spin] = high_spin_data["energy"] - spin_data["energy"]
+            deltaF[identifier][spin] = np.array(high_spin_data["forces"]) - np.array(
+                spin_data["forces"]
             )
-            deltaF[identifier][spin] = np.array(
-                results[identifier][str(spins[0])]["forces"]
-            ) - np.array(results[identifier][str(spin)]["forces"])
     return deltaE, deltaF
 
 
@@ -126,78 +150,46 @@ def charge_deltas(results):
     Calculate deltaE and deltaF values for adding and removing electrons
 
     Args:
-        results (dict): Results from ORCA or MLIP calculations performed at different charges.
+        results (dict): Results from ORCA or MLIP calculations performed
+        at different charges.
 
     Returns:
         deltaE (dict), deltaF (dict)
     """
     deltaE = {}
     deltaF = {}
-    for identifier in results:
-        charges = [int(charge) for charge in results[identifier]]
-        charges.sort()
-        assert charges[1] - 1 == charges[0]
-        assert charges[1] + 1 == charges[2]
+    for identifier, charge_states in results.items():
+        charges = sorted(charge_states, key=lambda x: int(x))
+        assert charges == [str(i) for i in range(int(charges[0]), int(charges[0]) + 3)]
         deltaE[identifier] = {"add_electron": {}, "remove_electron": {}}
         deltaF[identifier] = {"add_electron": {}, "remove_electron": {}}
-        assert len(results[identifier][str(charges[1])]) == 1
-        orig_spin = list(results[identifier][str(charges[1])])[0]
-        orig_energy = results[identifier][str(charges[1])][orig_spin]["energy"]
-        orig_forces = np.array(
-            results[identifier][str(charges[1])][orig_spin]["forces"]
-        )
+
+        # Verify that we have exactly one spin state for the base charge
+        assert len(charge_states[charges[1]]) == 1
+        base_charge_data = next(iter(charge_states[charges[1]].values()))
+        orig_energy = base_charge_data["energy"]
+        orig_forces = np.array(base_charge_data["forces"])
         for charge_val, tag in [
             (str(charges[0]), "add_electron"),
             (str(charges[2]), "remove_electron"),
         ]:
-            for spin in results[identifier][charge_val]:
-                deltaE[identifier][tag][spin] = (
-                    results[identifier][charge_val][spin]["energy"] - orig_energy
-                )
+            for spin, spin_data in charge_states[charge_val].items():
+                deltaE[identifier][tag][spin] = spin_data["energy"] - orig_energy
                 deltaF[identifier][tag][spin] = (
-                    np.array(results[identifier][charge_val][spin]["forces"])
-                    - orig_forces
+                    np.array(spin_data["forces"]) - orig_forces
                 )
     return deltaE, deltaF
 
 
-def calc_boltzmann_weights(results, temp=298.15):
-    """
-    Assign Boltzmann weights to the conformers in each family.
-
-    Args:
-        results (dict): Conformer results from ORCA or MLIP calculations.
-        temp (float): Temperature in Kelvin.
-
-    Returns:
-        list: Boltzmann weights for each conformer.
-    """
-    family_weights = {}
-    for family_identifier, structs in results.items():
-        weights = np.zeros(len(structs))
-        sum = 0
-        min_energy = min(struct["final"]["energy"] for struct in structs.values())
-        for ii, struct in enumerate(
-            structs.values()
-        ):  # If we don't subtract min_energy, we get overflow errors
-            weights[ii] = np.exp(
-                -(struct["final"]["energy"] - min_energy) / (boltzmann_constant * temp)
-            )
-            sum += weights[ii]
-        family_weights[family_identifier] = np.array(
-            [weight / sum for weight in weights]
-        )
-    return family_weights
-
-
 def rmsd_mapping(structs0, structs1):
     """
-    Map two conformer ensembles via linear sum assignment on an RMSD cost matrix.
+    Map two conformer ensembles via linear sum assignment on an RMSD
+    cost matrix.
     """
     cost_matrix = np.zeros(shape=(len(structs0), len(structs1)))
     for ii, key0 in enumerate(structs0):
         for jj, key1 in enumerate(structs1):
-            cost_matrix[ii][jj] = sdgr_rmsd(
+            cost_matrix[ii][jj] = rmsd(
                 structs0[key0]["final"]["atoms"],
                 structs1[key1]["final"]["atoms"],
             )
@@ -212,7 +204,8 @@ def rmsd_mapping(structs0, structs1):
 def ligand_strain_processing(results):
     """
     Process results for the ligand strain evaluation task.
-    Calculate the strain energy as the difference in energy between the global minimum and the loosely optimized ligand-in-pocket structure.
+    Calculate the strain energy as the difference in energy between
+    the global minimum and the loosely optimized ligand-in-pocket structure.
     Also save the global minimum structure for RMSD calculations.
 
     Args:
@@ -222,15 +215,15 @@ def ligand_strain_processing(results):
         dict: Processed results for the ligand strain evaluation task.
     """
     processed_results = defaultdict(dict)
-    for identifier in results:
+    for identifier, data in results.items():
         min_energy_struct = min(
-            results[identifier]["gas_phase"].values(),
+            data["gas_phase"].values(),
             key=lambda x: x["final"]["energy"],
         )
         min_energy = min_energy_struct["final"]["energy"]
         processed_results[identifier]["global_min"] = min_energy_struct
         processed_results[identifier]["strain_energy"] = (
-            results[identifier]["bioactive"]["energy"] - min_energy
+            data["bioactive"]["energy"] - min_energy
         )
     return processed_results
 
@@ -255,6 +248,8 @@ def sr_or_lr(name):
         return "sr"
     elif "long_range" in name:
         return "lr"
+    else:
+        raise NotImplementedError
 
 
 # Evaluator functions
@@ -273,55 +268,42 @@ def ligand_pocket(orca_results, mlip_results):
     """
     energy_mae = 0
     forces_mae = 0
-    forces_cosine_similarity = 0
     interaction_energy_mae = 0
     interaction_forces_mae = 0
-    interaction_forces_cosine_similarity = 0
     orca_interaction_energy, orca_interaction_forces = interaction_energy_and_forces(
         orca_results, "ligand_pocket"
     )
     mlip_interaction_energy, mlip_interaction_forces = interaction_energy_and_forces(
         mlip_results, "ligand_pocket"
     )
-    for identifier in orca_results:
-        assert len(orca_results[identifier]) == 3
+    force_denom = 0
+    ixn_force_denom = 0
+    for identifier, orca_components in orca_results.items():
+        assert len(orca_components) == 3
         assert len(mlip_results[identifier]) == 3
-        for component_identifier in orca_results[identifier]:
-            energy_mae += abs(
-                orca_results[identifier][component_identifier]["energy"]
-                - mlip_results[identifier][component_identifier]["energy"]
+        for component_identifier, orca_data in orca_components.items():
+            mlip_data = mlip_results[identifier][component_identifier]
+            energy_mae += abs(orca_data["energy"] - mlip_data["energy"])
+            forces_mae += np.sum(
+                np.abs(np.array(orca_data["forces"]) - np.array(mlip_data["forces"]))
             )
-            forces_mae += np.mean(
-                np.abs(
-                    np.array(orca_results[identifier][component_identifier]["forces"])
-                    - np.array(mlip_results[identifier][component_identifier]["forces"])
-                )
-            )
-            forces_cosine_similarity += cosine_similarity(
-                np.array(orca_results[identifier][component_identifier]["forces"]),
-                np.array(mlip_results[identifier][component_identifier]["forces"]),
-            )
+            force_denom += 3 * len(orca_data["forces"])
         interaction_energy_mae += abs(
             orca_interaction_energy[identifier] - mlip_interaction_energy[identifier]
         )
-        interaction_forces_mae += np.mean(
+        interaction_forces_mae += np.sum(
             np.abs(
                 orca_interaction_forces[identifier]
                 - mlip_interaction_forces[identifier]
             )
         )
-        interaction_forces_cosine_similarity += cosine_similarity(
-            orca_interaction_forces[identifier], mlip_interaction_forces[identifier]
-        )
+        ixn_force_denom += 3 * len(orca_interaction_forces[identifier])
 
     results = {
         "energy_mae": energy_mae / (3 * len(orca_results)),
-        "forces_mae": forces_mae / (3 * len(orca_results)),
-        "forces_cosine_similarity": forces_cosine_similarity / (3 * len(orca_results)),
+        "forces_mae": forces_mae / force_denom,
         "interaction_energy_mae": interaction_energy_mae / len(orca_results),
-        "interaction_forces_mae": interaction_forces_mae / len(orca_results),
-        "interaction_forces_cosine_similarity": interaction_forces_cosine_similarity
-        / len(orca_results),
+        "interaction_forces_mae": interaction_forces_mae / ixn_force_denom,
     }
     return results
 
@@ -346,7 +328,7 @@ def ligand_strain(orca_results, mlip_results):
             processed_orca_results[identifier]["strain_energy"]
             - processed_mlip_results[identifier]["strain_energy"]
         )
-        global_min_rmsd += sdgr_rmsd(
+        global_min_rmsd += rmsd(
             processed_orca_results[identifier]["global_min"]["final"]["atoms"],
             processed_mlip_results[identifier]["global_min"]["final"]["atoms"],
         )
@@ -358,9 +340,9 @@ def ligand_strain(orca_results, mlip_results):
     return results
 
 
-def geom_conformers_type1(orca_results, mlip_results):
+def geom_conformers(orca_results, mlip_results):
     """
-    Calculate error metrics for type1 conformer evaluation task.
+    Calculate error metrics for conformer evaluation task.
 
     Args:
         orca_results (dict): Results from ORCA calculations.
@@ -369,137 +351,38 @@ def geom_conformers_type1(orca_results, mlip_results):
     Returns:
         dict: Error metrics for type1 conformer evaluation task
     """
-    boltzmann_weighted_rmsd = 0
     ensemble_rmsd = 0
     deltaE_mae = 0
-    orca_boltzmann_weights = calc_boltzmann_weights(orca_results)
-    for family_identifier, structs in orca_results.items():
-        mapping, cost_vector = rmsd_mapping(structs, mlip_results[family_identifier])
+    for family_identifier, orca_structs in orca_results.items():
+        mlip_structs = mlip_results[family_identifier]
+        mapping, cost_vector = rmsd_mapping(orca_structs, mlip_structs)
         ensemble_rmsd += cost_vector.mean()
-        boltzmann_weighted_rmsd += sum(
-            orca_boltzmann_weights[family_identifier] * cost_vector
-        )
 
         orca_min_energy_id, min_energy_struct = min(
-            structs.items(), key=lambda x: x[1]["final"]["energy"]
+            orca_structs.items(), key=lambda x: x[1]["final"]["energy"]
         )
         orca_min_energy = min_energy_struct["final"]["energy"]
-        mlip_energy_of_orca_min = mlip_results[family_identifier][
-            mapping[orca_min_energy_id]
-        ]["final"]["energy"]
-        for conformer_identifier, struct in structs.items():
-            if conformer_identifier != orca_min_energy_id:
-                orca_deltaE = struct["final"]["energy"] - orca_min_energy
-                mlip_deltaE = (
-                    mlip_results[family_identifier][mapping[conformer_identifier]][
-                        "final"
-                    ]["energy"]
-                    - mlip_energy_of_orca_min
-                )
-                deltaE_mae += abs(orca_deltaE - mlip_deltaE) / (len(structs) - 1)
+        mlip_energy_of_orca_min = mlip_structs[mapping[orca_min_energy_id]]["final"][
+            "energy"
+        ]
+        for conformer_identifier, orca_struct in orca_structs.items():
+            if conformer_identifier == orca_min_energy_id:
+                continue
+            orca_deltaE = orca_struct["final"]["energy"] - orca_min_energy
+            mlip_deltaE = (
+                mlip_structs[mapping[conformer_identifier]]["final"]["energy"]
+                - mlip_energy_of_orca_min
+            )
+            deltaE_mae += abs(orca_deltaE - mlip_deltaE) / (len(orca_structs) - 1)
 
     results = {
         "ensemble_rmsd": ensemble_rmsd / len(orca_results),
-        "boltzmann_weighted_rmsd": boltzmann_weighted_rmsd / len(orca_results),
         "deltaE_mae": deltaE_mae / len(orca_results),
     }
     return results
 
 
-def geom_conformers_type2(orca_results, mlip_results):
-    """
-    Calculate error metrics for type2 conformer evaluation task.
-    deltaE_MLSP_i is the difference in energy calculated with the MLIP between the ORCA minimum energy conformer and conformer i without reoptimization by the MLIP
-    deltaE_MLRX_i is the difference in energy calculated with the MLIP between the ORCA minimum energy conformer and conformer i after reoptimization by the MLIP
-    Both are compared against the ORCA deltaE_i, with lower deltaE_MLSP_mae and deltaE_MLRX_mae values indicating a better match between the MLIP and DFT.
-
-    Args:
-        orca_results (dict): Results from ORCA calculations.
-        mlip_results (dict): Results from MLIP calculations.
-
-    Returns:
-        dict: Error metrics for type2 conformer evaluation task
-    """
-    energy_mae = 0
-    forces_mae = 0
-    forces_cosine_similarity = 0
-    deltaE_MLSP_mae = 0
-    deltaE_MLRX_mae = 0
-    reopt_rmsd = 0
-    for family_identifier, structs in orca_results.items():
-        for conformer_identifier, struct in structs.items():
-            # Compare DFT to MLIP on the DFT optimized structure, which is the MLIP initial structure
-            energy_mae += abs(
-                struct["final"]["energy"]
-                - mlip_results[family_identifier][conformer_identifier]["initial"][
-                    "energy"
-                ]
-            ) / len(structs)
-            forces_mae += np.mean(
-                np.abs(
-                    np.array(struct["final"]["forces"])
-                    - np.array(
-                        mlip_results[family_identifier][conformer_identifier][
-                            "initial"
-                        ]["forces"]
-                    )
-                )
-            ) / len(structs)
-            forces_cosine_similarity += cosine_similarity(
-                np.array(struct["final"]["forces"]),
-                np.array(
-                    mlip_results[family_identifier][conformer_identifier]["initial"][
-                        "forces"
-                    ],
-                ),
-            ) / len(structs)
-        orca_min_energy_id, min_energy_struct = min(
-            structs.items(), key=lambda x: x[1]["final"]["energy"]
-        )
-        orca_min_energy = min_energy_struct["final"]["energy"]
-        for conformer_identifier, struct in structs.items():
-            if conformer_identifier != orca_min_energy_id:
-                orca_deltaE = struct["final"]["energy"] - orca_min_energy
-                # TODO: Determine if deltaE_MLSP is directly correlated with energy_mae
-                deltaE_MLSP = (
-                    mlip_results[family_identifier][conformer_identifier]["initial"][
-                        "energy"
-                    ]
-                    - mlip_results[family_identifier][orca_min_energy_id]["initial"][
-                        "energy"
-                    ]
-                )
-                deltaE_MLRX = (
-                    mlip_results[family_identifier][conformer_identifier]["final"][
-                        "energy"
-                    ]
-                    - mlip_results[family_identifier][orca_min_energy_id]["final"][
-                        "energy"
-                    ]
-                )
-                deltaE_MLSP_mae += abs(orca_deltaE - deltaE_MLSP) / (len(structs) - 1)
-                deltaE_MLRX_mae += abs(orca_deltaE - deltaE_MLRX) / (len(structs) - 1)
-                reopt_rmsd += sdgr_rmsd(
-                    mlip_results[family_identifier][conformer_identifier]["initial"][
-                        "atoms"
-                    ],
-                    mlip_results[family_identifier][conformer_identifier]["final"][
-                        "atoms"
-                    ],
-                ) / (len(structs) - 1)
-
-    results = {
-        "energy_mae": energy_mae / len(orca_results),
-        "forces_mae": forces_mae / len(orca_results),
-        "forces_cosine_similarity": forces_cosine_similarity / len(orca_results),
-        "deltaE_MLSP_mae": deltaE_MLSP_mae / len(orca_results),
-        "deltaE_MLRX_mae": deltaE_MLRX_mae / len(orca_results),
-        "reopt_rmsd": reopt_rmsd / len(orca_results),
-    }
-    return results
-
-
-def protonation_energies_type1(orca_results, mlip_results):
+def protonation_energies(orca_results, mlip_results):
     """
     Calculate error metrics for the type1 protonation energies evaluation task.
 
@@ -511,100 +394,29 @@ def protonation_energies_type1(orca_results, mlip_results):
         dict: Error metrics for protonation energies evaluation task
     """
     deltaE_mae = 0
-    rmsd = 0
-    for identifier, structs in orca_results.items():
-        one_prot_diff_name_pairs = get_one_prot_diff_name_pairs(list(structs))
-        for name, struct in structs.items():
-            rmsd += sdgr_rmsd(
-                struct["final"]["atoms"],
-                mlip_results[identifier][name]["final"]["atoms"],
-            ) / len(structs)
+    tot_rmsd = 0
+    for identifier, orca_structs in orca_results.items():
+        mlip_structs = mlip_results[identifier]
+        one_prot_diff_name_pairs = get_one_prot_diff_name_pairs(list(orca_structs))
+        for name, orca_struct in orca_structs.items():
+            tot_rmsd += rmsd(
+                orca_struct["final"]["atoms"],
+                mlip_structs[name]["final"]["atoms"],
+            ) / len(orca_structs)
         for name0, name1 in one_prot_diff_name_pairs:
             orca_deltaE = (
-                structs[name0]["final"]["energy"] - structs[name1]["final"]["energy"]
+                orca_structs[name0]["final"]["energy"]
+                - orca_structs[name1]["final"]["energy"]
             )
             mlip_deltaE = (
-                mlip_results[identifier][name0]["final"]["energy"]
-                - mlip_results[identifier][name1]["final"]["energy"]
+                mlip_structs[name0]["final"]["energy"]
+                - mlip_structs[name1]["final"]["energy"]
             )
             deltaE_mae += abs(orca_deltaE - mlip_deltaE) / len(one_prot_diff_name_pairs)
 
     results = {
         "deltaE_mae": deltaE_mae / len(orca_results),
-        "rmsd": rmsd / len(orca_results),
-    }
-    return results
-
-
-def protonation_energies_type2(orca_results, mlip_results):
-    """
-    Calculate error metrics for the type2 protonation energies evaluation task.
-    deltaE_MLSP_ij is energy difference between species i and j calculated with the MLIP using ORCA minimized structures without reoptimization by the MLIP
-    deltaE_MLRX_ij is energy difference between species i and j calculated with the MLIP where ORCA minimized structures are reoptimized by the MLIP
-    Both are compared against the ORCA deltaE_ij, with lower deltaE_MLSP_mae and deltaE_MLRX_mae values indicating a better match between the MLIP and DFT.
-
-    Args:
-        orca_results (dict): Results from ORCA calculations.
-        mlip_results (dict): Results from MLIP calculations.
-
-    Returns:
-        dict: Error metrics for type2 conformer evaluation task
-    """
-    energy_mae = 0
-    forces_mae = 0
-    forces_cosine_similarity = 0
-    deltaE_MLSP_mae = 0
-    deltaE_MLRX_mae = 0
-    reopt_rmsd = 0
-    for identifier, structs in orca_results.items():
-        for name in structs:
-            # Compare DFT to MLIP on the DFT optimized structure, which is the MLIP initial structure
-            energy_mae += abs(
-                structs[name]["final"]["energy"]
-                - mlip_results[identifier][name]["initial"]["energy"]
-            ) / len(structs)
-            forces_mae += np.mean(
-                np.abs(
-                    np.array(structs[name]["final"]["forces"])
-                    - np.array(mlip_results[identifier][name]["initial"]["forces"])
-                )
-            ) / len(structs)
-            forces_cosine_similarity += cosine_similarity(
-                np.array(structs[name]["final"]["forces"]),
-                np.array(mlip_results[identifier][name]["initial"]["forces"]),
-            ) / len(structs)
-            reopt_rmsd += sdgr_rmsd(
-                mlip_results[identifier][name]["initial"]["atoms"],
-                mlip_results[identifier][name]["final"]["atoms"],
-            ) / len(structs)
-        one_prot_diff_name_pairs = get_one_prot_diff_name_pairs(list(structs))
-        for name0, name1 in one_prot_diff_name_pairs:
-            orca_deltaE = (
-                structs[name0]["final"]["energy"] - structs[name1]["final"]["energy"]
-            )
-            # TODO: Determine if deltaE_MLSP is directly correlated with energy_mae
-            deltaE_MLSP = (
-                mlip_results[identifier][name0]["initial"]["energy"]
-                - mlip_results[identifier][name1]["initial"]["energy"]
-            )
-            deltaE_MLRX = (
-                mlip_results[identifier][name0]["final"]["energy"]
-                - mlip_results[identifier][name1]["final"]["energy"]
-            )
-            deltaE_MLSP_mae += abs(orca_deltaE - deltaE_MLSP) / len(
-                one_prot_diff_name_pairs
-            )
-            deltaE_MLRX_mae += abs(orca_deltaE - deltaE_MLRX) / len(
-                one_prot_diff_name_pairs
-            )
-
-    results = {
-        "energy_mae": energy_mae / len(orca_results),
-        "forces_mae": forces_mae / len(orca_results),
-        "forces_cosine_similarity": forces_cosine_similarity / len(orca_results),
-        "deltaE_MLSP_mae": deltaE_MLSP_mae / len(orca_results),
-        "deltaE_MLRX_mae": deltaE_MLRX_mae / len(orca_results),
-        "reopt_rmsd": reopt_rmsd / len(orca_results),
+        "rmsd": tot_rmsd / len(orca_results),
     }
     return results
 
@@ -622,41 +434,31 @@ def unoptimized_ie_ea(orca_results, mlip_results):
     """
     energy_mae = 0
     forces_mae = 0
-    forces_cosine_similarity = 0
+    force_denom = 0
     deltaE_mae = 0
     deltaF_mae = 0
-    deltaF_cosine_similarity = 0
+    deltaF_denom = 0
     orca_deltaE, orca_deltaF = charge_deltas(orca_results)
     mlip_deltaE, mlip_deltaF = charge_deltas(mlip_results)
-    for identifier in orca_results:
-        num_samples = sum(len(structs) for structs in orca_results[identifier].values())
+    for identifier, orca_data in orca_results.items():
+        mlip_data = mlip_results[identifier]
+        num_samples = sum(len(structs) for structs in orca_data.values())
         num_deltas = sum(len(structs) for structs in orca_deltaE[identifier].values())
         assert num_samples - 1 == num_deltas
-        for charge in orca_results[identifier]:
-            for spin in orca_results[identifier][charge]:
+        for charge, orca_charge_states in orca_data.items():
+            for spin, orca_spin_state in orca_charge_states.items():
+                mlip_spin_state = mlip_data[charge][spin]
                 energy_mae += (
-                    abs(
-                        orca_results[identifier][charge][spin]["energy"]
-                        - mlip_results[identifier][charge][spin]["energy"]
-                    )
+                    abs(orca_spin_state["energy"] - mlip_spin_state["energy"])
                     / num_samples
                 )
-                forces_mae += (
-                    np.mean(
-                        np.abs(
-                            np.array(orca_results[identifier][charge][spin]["forces"])
-                            - np.array(mlip_results[identifier][charge][spin]["forces"])
-                        )
+                forces_mae += np.sum(
+                    np.abs(
+                        np.array(orca_spin_state["forces"])
+                        - np.array(mlip_spin_state["forces"])
                     )
-                    / num_samples
                 )
-                forces_cosine_similarity += (
-                    cosine_similarity(
-                        np.array(orca_results[identifier][charge][spin]["forces"]),
-                        np.array(mlip_results[identifier][charge][spin]["forces"]),
-                    )
-                    / num_samples
-                )
+                force_denom += 3 * len(orca_spin_state["forces"])
 
         for tag in ["add_electron", "remove_electron"]:
             for spin in orca_deltaE[identifier][tag]:
@@ -667,30 +469,19 @@ def unoptimized_ie_ea(orca_results, mlip_results):
                     )
                     / num_deltas
                 )
-                deltaF_mae += (
-                    np.mean(
-                        np.abs(
-                            orca_deltaF[identifier][tag][spin]
-                            - mlip_deltaF[identifier][tag][spin]
-                        )
+                deltaF_mae += np.sum(
+                    np.abs(
+                        orca_deltaF[identifier][tag][spin]
+                        - mlip_deltaF[identifier][tag][spin]
                     )
-                    / num_deltas
                 )
-                deltaF_cosine_similarity += (
-                    cosine_similarity(
-                        orca_deltaF[identifier][tag][spin],
-                        mlip_deltaF[identifier][tag][spin],
-                    )
-                    / num_deltas
-                )
+                deltaF_denom += 3 * len(orca_deltaF[identifier][tag][spin])
 
     results = {
         "energy_mae": energy_mae / len(orca_results),
-        "forces_mae": forces_mae / len(orca_results),
-        "forces_cosine_similarity": forces_cosine_similarity / len(orca_results),
+        "forces_mae": forces_mae / force_denom,
         "deltaE_mae": deltaE_mae / len(orca_results),
-        "deltaF_mae": deltaF_mae / len(orca_results),
-        "deltaF_cosine_similarity": deltaF_cosine_similarity / len(orca_results),
+        "deltaF_mae": deltaF_mae / deltaF_denom,
     }
     return results
 
@@ -701,7 +492,8 @@ def compute_distance_scaling_metrics(
     """
     Compute metrics for distance scaling eval for a single PES curve
 
-    :param pes_curve: specification of points on PES in the short or long range regime only, also contains ORCA data
+    :param pes_curve: specification of points on PES in the short or
+                      long range regime only, also contains ORCA data
     :param mlip_results: results from all points alng
     :param orca_min_point: name of reference point for ddE
     :param orca_min_data: data for reference point for ddE
@@ -713,6 +505,7 @@ def compute_distance_scaling_metrics(
     # this may or may not equal the total number of points depending on
     # where the reference is.
     n_deltas = 0
+    n_deltas_atoms = 0
 
     mlip_ref_data = mlip_results[orca_min_point]
     orca_ref_forces = np.array(orca_min_data["forces"])
@@ -738,12 +531,13 @@ def compute_distance_scaling_metrics(
         mlip_deltaF = ml_forces - mlip_ref_forces
 
         ddEnergy_mae_system += abs(orca_deltaE - mlip_deltaE)
-        ddForces_mae_system += np.mean(np.abs(orca_deltaF - mlip_deltaF))
+        ddForces_mae_system += np.sum(np.abs(orca_deltaF - mlip_deltaF))
         n_deltas += 1
+        n_deltas_atoms += len(orca_deltaF)
 
     # Normalize MAEs due to number of points on PES curve
     ddEnergy_mae_system /= n_deltas
-    ddForces_mae_system /= n_deltas
+    ddForces_mae_system /= n_deltas_atoms
 
     return ddEnergy_mae_system, ddForces_mae_system
 
@@ -764,8 +558,8 @@ def distance_scaling(orca_results, mlip_results):
     n_systems_with_sr = 0
     n_systems_with_lr = 0
     for vertical, samples in orca_results.items():
-        # vertical is e.g. 'biomolecules', samples is a dict keyed on identifiers
-        # with values being a given PES curve (i.e. many points)
+        # vertical is e.g. 'biomolecules', samples is a dict keyed on
+        # identifiers with values being a given PES curve (i.e. many points)
         for identifier, orca_curve in samples.items():
             mlip_curve = mlip_results[vertical][identifier]
             sr_orca_curve = {k: v for k, v in orca_curve.items() if sr_or_lr(k) == "sr"}
@@ -778,11 +572,11 @@ def distance_scaling(orca_results, mlip_results):
                 orca_min_point, orca_min_data = min(
                     lr_orca_curve.items(), key=lambda x: x[1]["energy"]
                 )
-            # We require at least 2 points for short-range because, if there is
-            # only 1, it won't actually contribute to the metrics since that one
-            # point is the reference. Because we require that there are at least
-            # 5 points on the PES, if there are >0 in LR, then they will contribute
-            # so no need to adjust there.
+            # We require at least 2 points for short-range because, if there
+            # is only 1, it won't actually contribute to the metrics since
+            # that one point is the reference. Because we require that there
+            # are at least 5 points on the PES, if there are >0 in LR, then
+            # they will contribute so no need to adjust there.
             if len(sr_orca_curve) == 1:
                 sr_orca_curve = {}
             if len(lr_orca_curve) == 1 and not sr_orca_curve:
@@ -829,78 +623,65 @@ def unoptimized_spin_gap(orca_results, mlip_results):
     """
     energy_mae = 0
     forces_mae = 0
-    forces_cosine_similarity = 0
     deltaE_mae = 0
     deltaF_mae = 0
-    deltaF_cosine_similarity = 0
+    force_denom = 0
+    deltaF_denom = 0
     orca_deltaE, orca_deltaF = spin_deltas(orca_results)
     mlip_deltaE, mlip_deltaF = spin_deltas(mlip_results)
-    for identifier in orca_results:
-        spins = [int(spin) for spin in orca_results[identifier]]
-        spins.sort(reverse=True)
+    for identifier, orca_data in orca_results.items():
+        mlip_data = mlip_results[identifier]
+        spins = sorted(orca_data, key=lambda x: int(x), reverse=True)
         for spin in spins:
             energy_mae += abs(
-                orca_results[identifier][str(spin)]["energy"]
-                - mlip_results[identifier][str(spin)]["energy"]
+                orca_data[spin]["energy"] - mlip_data[spin]["energy"]
             ) / len(spins)
-            forces_mae += np.mean(
+            forces_mae += np.sum(
                 np.abs(
-                    np.array(orca_results[identifier][str(spin)]["forces"])
-                    - np.array(mlip_results[identifier][str(spin)]["forces"])
+                    np.array(orca_data[spin]["forces"])
+                    - np.array(mlip_data[spin]["forces"])
                 )
-            ) / len(spins)
-            forces_cosine_similarity += cosine_similarity(
-                np.array(orca_results[identifier][str(spin)]["forces"]),
-                np.array(mlip_results[identifier][str(spin)]["forces"]),
-            ) / len(spins)
-            if spin != spins[0]:
-                deltaE_mae += abs(
-                    orca_deltaE[identifier][spin] - mlip_deltaE[identifier][spin]
-                ) / (len(spins) - 1)
-                deltaF_mae += np.mean(
-                    np.abs(
-                        orca_deltaF[identifier][spin] - mlip_deltaF[identifier][spin]
-                    )
-                ) / (len(spins) - 1)
-                deltaF_cosine_similarity += cosine_similarity(
-                    orca_deltaF[identifier][spin], mlip_deltaF[identifier][spin]
-                ) / (len(spins) - 1)
+            )
+            force_denom += 3 * len(orca_data[spin]["forces"])
+            if spin == spins[0]:
+                continue
+            deltaE_mae += abs(
+                orca_deltaE[identifier][spin] - mlip_deltaE[identifier][spin]
+            ) / (len(spins) - 1)
+            deltaF_mae += np.sum(
+                np.abs(orca_deltaF[identifier][spin] - mlip_deltaF[identifier][spin])
+            )
+            deltaF_denom += 3 * len(orca_deltaF[identifier][spin])
 
     results = {
         "energy_mae": energy_mae / len(orca_results),
-        "forces_mae": forces_mae / len(orca_results),
-        "forces_cosine_similarity": forces_cosine_similarity / len(orca_results),
+        "forces_mae": forces_mae / force_denom,
         "deltaE_mae": deltaE_mae / len(orca_results),
-        "deltaF_mae": deltaF_mae / len(orca_results),
-        "deltaF_cosine_similarity": deltaF_cosine_similarity / len(orca_results),
+        "deltaF_mae": deltaF_mae / deltaF_denom,
     }
     return results
 
 
 def singlepoint(orca_results, mlip_results):
-    target_energies = []
-    target_forces = []
-    energies = []
-    forces = []
-    natoms = []
-    for identifier in orca_results:
-        target_energies.append(orca_results[identifier]["energy"])
-        target_forces.append(orca_results[identifier]["forces"])
-        energies.append(mlip_results[identifier]["energy"])
-        forces.append(mlip_results[identifier]["forces"])
-        natoms.append(len(orca_results[identifier]["forces"]))
-
-    target_energies = np.array(target_energies)
-    target_forces = np.concatenate(target_forces)
-    energies = np.array(energies)
-    forces = np.concatenate(forces)
-    natoms = np.array(natoms)
+    energy_mae = 0
+    energy_per_atom_mae = 0
+    forces_mae = 0
+    natoms = 0
+    for identifier, orca_data in orca_results.items():
+        mlip_data = mlip_results[identifier]
+        _energy_mae = np.abs(orca_data["energy"] - mlip_data["energy"])
+        _natoms = len(orca_data["forces"])
+        forces_mae += np.sum(
+            np.abs(np.array(orca_data["forces"]) - np.array(mlip_data["forces"]))
+        )
+        natoms += _natoms
+        energy_mae += _energy_mae
+        energy_per_atom_mae += _energy_mae / _natoms
 
     metrics = {
-        "energy_mae": np.mean(np.abs(energies - target_energies)),
-        "energy_per_atom_mae": np.mean(np.abs(energies - target_energies) / natoms),
-        "forces_mae": np.mean(np.abs(forces - target_forces)),
-        "forces_cos": cosine_similarity(target_forces, forces),
+        "energy_mae": energy_mae / len(orca_results),
+        "energy_per_atom_mae": energy_per_atom_mae / len(orca_results),
+        "forces_mae": forces_mae / (3 * natoms),
     }
 
     return metrics
