@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
 
-from fairchem.data.omol.omdata.orca.calc import TIGHT_OPT_PARAMETERS
+from fairchem.data.omol.orca.calc import TIGHT_OPT_PARAMETERS
 from pymatgen.io.ase import MSONAtoms
 from tqdm import tqdm
 

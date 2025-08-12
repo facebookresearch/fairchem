@@ -3,7 +3,7 @@ defaults:
   - checkpoint: uma_sm
   - _self_
 
-benchmark_name: geom_conformers_type1
+benchmark_name: protonation_energies
 
 job:
   run_name: ${checkpoint.model_name}
@@ -32,10 +32,10 @@ runner:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
     task_name: omol
-  input_data: ${cluster.data_root_dir}/omol/250503/geom_inputs_type1_subsample5.pkl
+  input_data: ${cluster.data_root_dir}/omol/250503/inputs/protonation_inputs.pkl
   benchmark_name: ${benchmark_name}
   benchmark:
-    _target_: fairchem.core.components.calculate.recipes.omol.geom_conformers
+    _target_: fairchem.core.components.calculate.recipes.omol.protonation
     _partial_: True
     use_relaxed: False
 
@@ -43,5 +43,5 @@ reducer:
   _target_: fairchem.core.components.benchmark.omol_reducer.OMolReducer
   benchmark_name: ${benchmark_name}
   evaluator:
-    _target_: fairchem.data.omol.modules.evaluator.geom_conformers_type1
+    _target_: fairchem.data.omol.modules.evaluator.protonation_energies
     _partial_: True

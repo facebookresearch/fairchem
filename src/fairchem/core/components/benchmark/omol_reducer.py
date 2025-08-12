@@ -27,14 +27,17 @@ class OMolReducer(JsonDFReducer):
     def __init__(
         self,
         benchmark_name: str,
-        evaluator: Callable,
+        evaluator: Callable | None = None,
+        benchmark_labels: str | None = None,
     ):
         """
         Args:
             benchmark_name: Name of the benchmark to run + evaluate
             evaluator: Evaluation code
+            benchmark_labels: Benchmark labels to run through evaluator
         """
         self.benchmark_name = benchmark_name
+        self.benchmark_labels = benchmark_labels
         self.evaluator = evaluator
 
     def join_results(self, results_dir: str, glob_pattern: str) -> pd.DataFrame:
@@ -61,13 +64,16 @@ class OMolReducer(JsonDFReducer):
             results:  results: Combined results from join_results
             results_dir: Directory containing result files
         """
-        with gzip.open(
-            os.path.join(results_dir, f"{self.benchmark_name}_results.json.gz"), "wb"
-        ) as f:
+        results_path = os.path.join(
+            results_dir, f"{self.benchmark_name}_results.json.gz"
+        )
+        with gzip.open(results_path, "wb") as f:
             f.write(json.dumps(results).encode("utf-8"))
 
     def compute_metrics(self, results: dict, run_name: str) -> pd.DataFrame:
-        target = {x: results[x]["target"] for x in results}
-        prediction = {x: results[x]["prediction"] for x in results}
-        metrics = self.evaluator(target, prediction)
-        return pd.DataFrame([metrics], index=[run_name])
+        if self.benchmark_labels and self.evaluator:
+            with open(self.benchmark_labels) as f:
+                target = json.load(f)
+            metrics = self.evaluator(target, results)
+            return pd.DataFrame([metrics], index=[run_name])
+        return None

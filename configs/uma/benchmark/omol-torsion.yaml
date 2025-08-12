@@ -32,7 +32,7 @@ runner:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
     task_name: omol
-  input_data: ${cluster.data_root_dir}/omol/250503/s2ef_torsionnet_inputs.pkl
+  input_data: ${cluster.data_root_dir}/omol/250503/inputs/s2ef_torsionnet_inputs.pkl
   benchmark_name: ${benchmark_name}
   benchmark:
     _target_: fairchem.core.components.calculate.recipes.omol.singlepoint
