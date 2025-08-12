@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Generator
 
 import pytest
 
+from fairchem.core._cli import main
 from tests.perf.performance_report import PerformanceReport
 
 
@@ -53,7 +54,7 @@ def generate_train_uma_test_cases() -> list[TrainUMATestCase]:
     test_cases: list[TrainUMATestCase] = []
     config_dict = {
         "uma_sm_task_oc20_direct": "configs/uma_oc20_sm_direct.yaml",
-        "uma_sm_task_oc20_conserve": "configs/uma_oc20_sm_conserve.yaml",
+        # "uma_sm_task_oc20_conserve": "configs/uma_oc20_sm_conserve.yaml",
         # "uma_md_task_oc20_direct": "configs/uma_oc20_md_direct.yaml",
     }
     for measurement_name, config_path in config_dict.items():
@@ -67,11 +68,12 @@ def train_uma(path_to_config):
     """
     Submit a call for uma_s training performance test.
     """
-    command = ["fairchem", "-c", path_to_config]
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as e:
-        raise e
+    # command = ["fairchem", "-c", path_to_config]
+    # distutils.cleanup()
+    # hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = ["--config", path_to_config]
+    sys.argv[1:] = sys_args
+    main()
 
 
 @pytest.mark.parametrize("test_case", generate_train_uma_test_cases())

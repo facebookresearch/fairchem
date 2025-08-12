@@ -4,7 +4,7 @@ account: ocp
 qos: ocp_high
 mode: LOCAL
 device: CUDA
-ranks_per_node: 4
+ranks_per_node: 1
 dataloader_workers: 0
 debug: True
 mem_gb: 0
