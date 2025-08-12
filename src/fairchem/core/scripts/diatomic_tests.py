@@ -111,9 +111,9 @@ def compute_diatomic_curve(predictor, task, atom_1, atom_2, atoms_dict):
 
 def generate_plot(distances, energies, atom_1, atom_2, save_path):
     plt.figure(figsize=(8, 6))
-    plt.plot(distances, energies, label=f"{atom_1}-{atom_2} Potential Energy Curve")
+    plt.plot(distances, energies, label=f"{atom_1}-{atom_2}")
     plt.xlabel("Distance (Å)")
-    plt.ylabel("Potential Energy (eV)")
+    plt.ylabel("Relative Energy (eV)")
     plt.title("Diatomic Potential Energy Curve")
     plt.legend()
     plt.grid(True)
@@ -133,10 +133,10 @@ def combined_plot(results_dict, save_path):
         plt.plot(
             data["distances"],
             data["energies"],
-            label=f"{atom_type[0]}-{atom_type[1]} Potential Energy Curve",
+            label=f"{atom_type[0]}-{atom_type[1]}",
         )
     plt.xlabel("Distance (Å)")
-    plt.ylabel("Potential Energy (eV)")
+    plt.ylabel("Relative Energy (eV)")
     plt.title("Diatomic Potential Energy Curve")
     plt.legend()
     plt.grid(True)
