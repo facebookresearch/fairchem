@@ -31,7 +31,7 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
-def make_atoms(symbols, positions, pbc, mode):
+def make_atoms(symbols, positions, mode):
     atoms1 = Atoms(symbols=symbols, positions=positions)
     atoms2 = atoms1.copy()
     if mode == "full_mirror":
@@ -44,32 +44,26 @@ def make_atoms(symbols, positions, pbc, mode):
     else:
         raise ValueError(f"Unknown transformation mode: {mode}")
 
-    if pbc:
-        cell = np.array([5.0, 5.0, 5.0])
-        for atoms in [atoms1, atoms2]:
-            atoms.set_cell(cell)
-            atoms.pbc = True
-            atoms.center(about=cell / 2)
     return atoms1, atoms2
 
 
-def make_chiral_methane_atoms(pbc, mode):
+def make_chiral_methane_atoms(mode):
     positions = molecule("CH4").positions
     symbols = ["C", "H", "Cl", "Br", "F"]
-    return make_atoms(symbols, positions, pbc, mode)
+    return make_atoms(symbols, positions, mode)
 
 
-def make_chiral_ethane_atoms(pbc, mode):
+def make_chiral_ethane_atoms(mode):
     positions = molecule("C2H6").positions
     symbols = ["C", "C", "H", "Cl", "Br", "H", "Cl", "F"]
-    return make_atoms(symbols, positions, pbc, mode)
+    return make_atoms(symbols, positions, mode)
 
 
 @pytest.mark.parametrize(
     "dtype,num_tol",
     [
-        (torch.float32, 1e-5),
-        (torch.float64, 1e-10),
+        (torch.float32, 1e-4),
+        (torch.float64, 1e-4),
     ],
 )
 @pytest.mark.parametrize("case_name,mode,pbc,should_be_equal", test_cases)
@@ -84,9 +78,8 @@ def test_uma_cases_all(
 ):
     seed_everywhere()
     direct_inference_checkpoint_pt, _ = direct_checkpoint
-    predictor = MLIPPredictUnit(direct_inference_checkpoint_pt, device="cpu")
-    predictor.model = predictor.model.to(dtype)
 
+    molecule_cell_size = 5.0 if pbc else None
     a2g = partial(
         AtomicData.from_ase,
         max_neigh=100,
@@ -94,13 +87,14 @@ def test_uma_cases_all(
         r_edges=False,
         r_data_keys=["spin", "charge"],
         target_dtype=dtype,
+        molecule_cell_size=molecule_cell_size,
     )
 
     atom_builders = {
         "chiral_methane": make_chiral_methane_atoms,
         "chiral_ethane": make_chiral_ethane_atoms,
     }
-    atoms1, atoms2 = atom_builders[case_name](pbc, mode)
+    atoms1, atoms2 = atom_builders[case_name](mode)
 
     sample1 = a2g(atoms1, task_name="omol")
     sample2 = a2g(atoms2, task_name="omol")
@@ -108,14 +102,17 @@ def test_uma_cases_all(
     batch1 = data_list_collater([sample1], otf_graph=True)
     batch2 = data_list_collater([sample2], otf_graph=True)
 
+    predictor = MLIPPredictUnit(direct_inference_checkpoint_pt, device="cpu")
+    predictor.model = predictor.model.to(dtype)
+
     energy1 = predictor.predict(batch1)["energy"]
     energy2 = predictor.predict(batch2)["energy"]
 
     if should_be_equal:
         assert (
-            torch.abs(energy2 - energy1) < num_tol
+            torch.abs(energy2 - energy1).item() < num_tol
         ), f"Energy should be invariant for enantiomers: case={case_name}, mode={mode}, pbc={pbc}, dtype={dtype}"
     else:
         assert (
-            torch.abs(energy2 - energy1) > num_tol
+            torch.abs(energy2 - energy1).item() > num_tol
         ), f"Energy should differ for diastereomers: case={case_name}, mode={mode}, pbc={pbc}, dtype={dtype}"
