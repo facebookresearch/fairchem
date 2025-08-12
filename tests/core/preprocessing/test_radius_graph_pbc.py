@@ -10,10 +10,11 @@ from __future__ import annotations
 import os
 from functools import partial
 
+import numpy as np
 import pytest
 import torch
 from ase import Atoms
-from ase.build import molecule
+from ase.build import bulk, molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
@@ -214,8 +215,6 @@ class TestRadiusGraphPBC:
         assert pbc_xz > max(pbc_x, pbc_z)
         assert pbc_all > max(pbc_xy, pbc_yz, pbc_xz)
 
-        structure = FaceCenteredCubic("Pt", size=[1, 2, 3])
-
         # Ensure radius_graph_pbc matches radius_graph for non-PBC condition
         # torch geometric's RadiusGraph requires torch_scatter
         # RG = RadiusGraph(r=radius, max_num_neighbors=max_neigh)
@@ -331,3 +330,50 @@ def test_simple_systems_nopbc(
             )
             == 0
         )
+
+
+@pytest.mark.parametrize("atoms", [bulk("Cu", "fcc", a=5.0)])
+def test_pymatgen_vs_internal_graph(atoms):
+    radius = 20
+    max_neigh = 1000
+    atoms = Atoms(symbols=atoms.get_chemical_symbols(), positions=atoms.get_positions())
+
+    for radius_pbc_version in (1, 2):
+        for pbc in [True, False]:
+            if pbc:
+                atoms.set_pbc([True, True, True])
+                if atoms.cell is None:
+                    atoms.set_cell(np.eye(3) * 5.0)
+            else:
+                atoms.cell = None
+                atoms.set_pbc([False, False, False])
+            for unwrap in [True, False]:
+                if unwrap and pbc:
+                    atoms.positions = -atoms.positions
+
+                # Use pymatgen graph generation
+                data = AtomicData.from_ase(
+                    atoms,
+                    max_neigh=max_neigh,
+                    radius=radius,
+                    r_edges=True,
+                    r_data_keys=["spin", "charge"],
+                )
+
+                # Use FairChem internal graph generation (from core/graph/compute.py)
+                batch = data_list_collater([data])
+                graph_dict = generate_graph(
+                    batch,
+                    cutoff=radius,
+                    max_neighbors=max_neigh,
+                    enforce_max_neighbors_strictly=False,
+                    radius_pbc_version=radius_pbc_version,
+                    pbc=data.pbc,
+                )
+
+                assert check_features_match(
+                    batch.edge_index,
+                    batch.cell_offsets,
+                    graph_dict["edge_index"],
+                    graph_dict["cell_offsets"],
+                )
