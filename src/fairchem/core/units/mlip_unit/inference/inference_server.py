@@ -33,7 +33,7 @@ from fairchem.core.units.mlip_unit.inference.socket_utils import (
     send_message,
 )
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 class SharedMemoryComm:
