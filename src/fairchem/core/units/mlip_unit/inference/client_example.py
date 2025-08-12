@@ -45,7 +45,7 @@ def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
 def main():
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path="/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt",
-        device="cpu",
+        device="cuda",
         inference_settings=InferenceSettings(
             tf32=True,
             merge_mole=True,
@@ -54,9 +54,9 @@ def main():
             internal_graph_gen_version=2,
             external_graph_gen=False,
         ),
-        server_config={"workers": 2},
+        server_config={"workers": 8},
     )
-    atoms = get_fcc_carbon_xtal(100)
+    atoms = get_fcc_carbon_xtal(5000)
 
     # calc = FAIRChemCalculator(ppunit, task_name="omol")
     # atoms.calc = calc

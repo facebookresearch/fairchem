@@ -118,6 +118,7 @@ def test_multiple_dataset_predict(uma_predict_unit):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "workers, device", [(1, "cpu"), (2, "cpu"), (4, "cpu"), (1, "cuda")]
 )
@@ -145,7 +146,13 @@ def test_parallel_predict_unit_cpu(workers, device):
     )
     normal_results = normal_predict_unit.predict(atomic_data)
 
-    assert torch.allclose(pp_results["energy"], normal_results["energy"], atol=ATOL)
     assert torch.allclose(
-        pp_results["forces"].mean(), normal_results["forces"].mean(), atol=ATOL
+        pp_results["energy"].detach().cpu(),
+        normal_results["energy"].detach().cpu(),
+        atol=ATOL,
+    )
+    assert torch.allclose(
+        pp_results["forces"].detach().cpu().mean(),
+        normal_results["forces"].detach().cpu().mean(),
+        atol=ATOL,
     )
