@@ -74,9 +74,6 @@ class FAIRChemCalculator(Calculator):
                 "energy surface and energy conservation errors."
             )
 
-        if isinstance(task_name, str):
-            task_name = task_name.value
-
         if task_name is not None:
             assert (
                 task_name in predict_unit.datasets
