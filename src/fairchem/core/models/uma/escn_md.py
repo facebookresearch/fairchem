@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
@@ -45,6 +45,10 @@ from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
 from .escn_md_block import eSCNMD_Block
+
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
+
 
 ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
 
@@ -297,7 +301,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
 
-    def _get_displacement_and_cell(self, data_dict):
+    def _get_displacement_and_cell(
+        self, data_dict: AtomicData
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
         ###############################################################
         # gradient-based forces/stress
         ###############################################################
@@ -421,7 +427,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return graph_dict
 
     @conditional_grad(torch.enable_grad())
-    def forward(self, data_dict: dict[str, Any]) -> dict[str, torch.Tensor]:
+    def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -656,7 +662,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(
-        self, data: dict[str, Any], emb: dict[str, torch.Tensor]
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         if self.prefix:
             energy_key = f"{self.prefix}_energy"
@@ -735,7 +741,7 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
         )
 
     def forward(
-        self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]
+        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         node_energy = self.energy_block(
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
@@ -770,7 +776,7 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         self.energy_block = nn.Linear(backbone.sphere_channels, 1, bias=True)
 
     def forward(
-        self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]
+        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         node_energy = self.energy_block(
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
@@ -804,7 +810,7 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         super().__init__()
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
 
-    def forward(self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]):
+    def forward(self, data_dict: AtomicData, emb: dict[str, torch.Tensor]):
         forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
@@ -875,7 +881,7 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
         self.l2_linear = SO3_Linear(backbone.sphere_channels, 1, lmax=2)
 
     def forward(
-        self, data_dict: dict[str, Any], emb: dict[str, torch.Tensor]
+        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         node_scalar = self.scalar_block(
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
