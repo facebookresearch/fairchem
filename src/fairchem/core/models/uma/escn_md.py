@@ -673,6 +673,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             energy = energy_part
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
+        outputs["embeddings"] = (
+            {"embeddings": emb["node_embedding"].detach()}
+            if self.wrap_property
+            else emb["node_embedding"].detach()
+        )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
