@@ -42,5 +42,5 @@ reducer:
   _target_: fairchem.core.components.benchmark.omol_reducer.OMolReducer
   benchmark_name: ${benchmark_name}
   evaluator:
-    _target_: fairchem.data.omol.omdata.eval_workflows.evaluator.unoptimized_ie_ea
+    _target_: fairchem.data.omol.modules.evaluator.unoptimized_ie_ea
     _partial_: True

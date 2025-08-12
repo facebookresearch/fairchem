@@ -43,5 +43,5 @@ reducer:
   _target_: fairchem.core.components.benchmark.omol_reducer.OMolReducer
   benchmark_name: ${benchmark_name}
   evaluator:
-    _target_: fairchem.data.omol.omdata.eval_workflows.evaluator.geom_conformers_type1
+    _target_: fairchem.data.omol.modules.evaluator.geom_conformers_type1
     _partial_: True

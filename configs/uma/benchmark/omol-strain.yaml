@@ -42,5 +42,5 @@ reducer:
   _target_: fairchem.core.components.benchmark.omol_reducer.OMolReducer
   benchmark_name: ${benchmark_name}
   evaluator:
-    _target_: fairchem.data.omol.omdata.eval_workflows.evaluator.ligand_strain
+    _target_: fairchem.data.omol.modules.evaluator.ligand_strain
     _partial_: True
