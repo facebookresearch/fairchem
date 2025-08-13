@@ -155,7 +155,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest tests/core/models/uma/test_rotation_cuda_graph.py::test_rotation_no_graph_matches_graph_basic --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
       
       - name: Cleanup
         if: always()
