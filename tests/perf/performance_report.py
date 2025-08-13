@@ -194,6 +194,8 @@ class MeasurementChanges:
         decreased: Measurements whose values decreased relative to the
             baseline report.
         unchanged: Measurements whose values did not change between reports.
+        total_changes: For each unique combination of metric and stat, the
+            sum of values across all measurements.
     """
 
     added: list[MeasurementChange]
@@ -201,6 +203,8 @@ class MeasurementChanges:
     increased: list[MeasurementChange]
     decreased: list[MeasurementChange]
     unchanged: list[MeasurementChange]
+
+    total_changes: list[MeasurementChange] = field(init=False)
 
     def __post_init__(self) -> None:
 
@@ -213,6 +217,35 @@ class MeasurementChanges:
         self.increased.sort(key=lambda m: -(m.relative_change or 0))
         self.decreased.sort(key=lambda m: m.relative_change or 0)
         self.unchanged.sort(key=lambda m: (m.measurement, m.metric, m.stat))
+
+        # For every measurement that was present in both the baseline and
+        # target performance reports, sum over all values for each unique
+        # combination of metric and stat. For example, this would sum over
+        # mean wall times of all measurements.
+        totals: dict[tuple[str, str], float] = defaultdict(float)
+        baseline_totals: dict[tuple[str, str], float] = defaultdict(float)
+        all_changed = self.increased + self.decreased + self.unchanged
+        for m in all_changed:
+            # "or 0" added to make type checkers happy, but they should
+            # not be used since we know these measurements include both
+            # new and baseline values
+            totals[(m.metric, m.stat)] += m.value or 0
+            baseline_totals[(m.metric, m.stat)] += m.baseline_value or 0
+
+        # Sort all totals to make them easier to consume
+        self.total_changes = sorted(
+            [
+                MeasurementChange(
+                    measurement=f"sum of '{stat}' values",
+                    metric=metric,
+                    stat="",
+                    value=totals[(metric, stat)],
+                    baseline_value=baseline_totals[(metric, stat)],
+                )
+                for metric, stat in totals.keys()
+            ],
+            key=lambda m: -abs(m.relative_change or 0)
+        )
 
     def as_dict(self) -> dict[str, list[dict[str, int | float]]]:
         """
@@ -937,7 +970,8 @@ def compare(
 
         def format_measurements(
             header: str,
-            measurements: list[MeasurementChange]
+            measurements: list[MeasurementChange],
+            force_relative_change: bool = False,
         ) -> str:
 
             # Avoid errors below for empty lists
@@ -959,7 +993,7 @@ def compare(
 
                 # Add the relative change if needed
                 line: str = "  "
-                if any_changed:
+                if any_changed or force_relative_change:
                     line += f"{100*(m.relative_change or 0):9.4f}%"
 
                 # Add identifiers
@@ -1027,6 +1061,7 @@ def compare(
 + {format_measurements('Unchanged', measurements_comparison.unchanged)}
 + {format_measurements('Added', measurements_comparison.added)}
 + {format_measurements('Removed', measurements_comparison.removed)}
++ {format_measurements('Totals (excludes added and removed measurements)', measurements_comparison.total_changes, True)}
 
 -------------
  ENVIRONMENT
