@@ -83,7 +83,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - name: Core GPU tests
         env:
