@@ -94,6 +94,16 @@ class MeasurementStats:
         return float(np.max(np.array(self._values)))
 
     @property
+    def mean(self) -> float:
+        """
+        Get the mean of all samples that are stored on this object.
+
+        Returns:
+            The mean value of all samples stored on this object.
+        """
+        return float(np.mean(np.array(self._values)))
+
+    @property
     def median(self) -> float:
         """
         Get the median of all samples that are stored on this object.
