@@ -124,7 +124,6 @@ class MeasurementStats:
         """
         return float(np.std(np.array(self._values)))
 
-
 @dataclass
 class MeasurementChange:
     """
@@ -163,7 +162,7 @@ class MeasurementChange:
             # Otherwise calculate the change
             else:
                 try:
-                    self.relative_change = difference / self.baseline_value
+                    self.relative_change = difference / abs(self.baseline_value)
                 except ZeroDivisionError:
                     if self.value >= 0:
                         self.relative_change = float("inf")
@@ -242,7 +241,7 @@ class MeasurementChanges:
                     value=totals[(metric, stat)],
                     baseline_value=baseline_totals[(metric, stat)],
                 )
-                for metric, stat in totals.keys()
+                for metric, stat in totals
             ],
             key=lambda m: -abs(m.relative_change or 0)
         )
@@ -835,7 +834,7 @@ class PerformanceReport:
         }
 
     @contextmanager
-    def measure(self, measurement_name: str) -> Generator[None, None, None]:
+    def measure(self, measurement_name: str) -> Generator[Measurements, None, None]:
         """
         When used in a context manager, measures performance of all functions
         called while control is yielded. Results are organized based on the
@@ -852,12 +851,16 @@ class PerformanceReport:
             measurement_name: A name used to distinguish different measurements
                 being tracked in the same report. Aggregate statistics are
                 available when the same name is used multiple times.
+
+        Yields:
+            The Measurements instance being constructed for the input name.
         """
 
         # Get existing measurements for the input name or create a new
         # measurement if one does not already exist
-        with self._measurements[measurement_name].measure():
-            yield
+        measurements = self._measurements[measurement_name]
+        with measurements.measure():
+            yield measurements
 
 
 @click.group()
