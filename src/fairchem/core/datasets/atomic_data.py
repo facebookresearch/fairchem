@@ -146,7 +146,7 @@ class AtomicData:
 
         # this conversion must have been done somewhere in
         # pytorch geoemtric data
-        self.pos = pos.to(torch.float32)
+        self.pos = pos
         self.atomic_numbers = atomic_numbers
         self.cell = cell.to(self.pos.dtype)
         self.pbc = pbc
@@ -245,8 +245,12 @@ class AtomicData:
 
         # dtype checks
         assert (
-            self.pos.dtype == self.cell.dtype == self.cell_offsets.dtype == torch.float
-        ), "Positions, cell, cell_offsets are all expected to be float32. Check data going into AtomicData is correct dtype"
+            self.pos.dtype == self.cell.dtype == self.cell_offsets.dtype
+        ), "Positions, cell, cell_offsets are all expected to be same. Check data going into AtomicData is correct dtype"
+        assert self.pos.dtype in (
+            torch.float32,
+            torch.float64,
+        ), "Positions, cell, cell_offsets are all expected to be f32/f64"
         assert self.atomic_numbers.dtype == torch.long
         assert self.edge_index.dtype == torch.long
         assert self.pbc.dtype == torch.bool
@@ -297,6 +301,7 @@ class AtomicData:
         r_stress: bool = True,
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
+        target_dtype: torch.dtype = torch.float32,
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -325,9 +330,9 @@ class AtomicData:
         atoms.set_positions(pos)
 
         atomic_numbers = torch.from_numpy(atomic_numbers).long()
-        pos = torch.from_numpy(pos).float()
+        pos = torch.from_numpy(pos).to(target_dtype)
         pbc = torch.from_numpy(pbc).bool().view(1, 3)
-        cell = torch.from_numpy(cell).float().view(1, 3, 3)
+        cell = torch.from_numpy(cell).to(target_dtype).view(1, 3, 3)
         natoms = torch.tensor([pos.shape[0]], dtype=torch.long)
 
         # graph construction
@@ -344,7 +349,7 @@ class AtomicData:
         else:
             # empty graph
             edge_index = torch.empty((2, 0), dtype=torch.long)
-            cell_offsets = torch.empty((0, 3), dtype=torch.float)
+            cell_offsets = torch.empty((0, 3), dtype=target_dtype)
             nedges = torch.tensor([0], dtype=torch.long)
 
         # initialized to torch.zeros(natoms) if tags missing.
@@ -781,6 +786,27 @@ class AtomicData:
         The batch object must have been created via :meth:`from_data_list` in
         order to be able to reconstruct the initial objects."""
         return [self.get_example(i) for i in range(self.num_graphs)]
+
+    def update_batch_edges(
+        self, edge_index: torch.Tensor, cell_offsets: torch.Tensor, nedges: torch.Tensor
+    ) -> AtomicData:
+        r"""Update the connectivity of each batched AtomicData sample.
+
+        Args:
+            edge_index (torch.Tensor): New batch edge_index (shape [2, total_edges]).
+            cell_offsets (torch.Tensor): Cell offsets per edge (shape [total_edges, 3]).
+            nedges (torch.Tensor): Number of edges per system (shape [num_systems]).
+
+        Returns:
+            AtomicData: The updated batch object.
+        """
+        self.edge_index = edge_index
+        self.cell_offsets = cell_offsets
+        self.nedges = nedges
+        edge_slices = [0] + torch.cumsum(nedges, dim=0).tolist()
+        self.__slices__["edge_index"] = edge_slices
+        self.__slices__["cell_offsets"] = edge_slices
+        return self
 
 
 def atomicdata_list_to_batch(

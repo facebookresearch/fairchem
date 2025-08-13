@@ -19,6 +19,7 @@ from fairchem.core.common.utils import load_state_dict, match_state_dict
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 
 def load_inference_model(
@@ -53,6 +54,24 @@ def load_inference_model(
         load_state_dict(model, checkpoint.model_state_dict, strict=True)
 
     return (model, checkpoint) if return_checkpoint is True else model
+
+
+def load_tasks(checkpoint_location: str) -> list[Task]:
+    """
+    Load tasks from a checkpoint file.
+
+    Args:
+        checkpoint_location (str): Path to the checkpoint file.
+
+    Returns:
+        list[Task]: A list of instantiated Task objects from the checkpoint's tasks_config.
+    """
+    checkpoint: MLIPInferenceCheckpoint = torch.load(
+        checkpoint_location, map_location="cpu", weights_only=False
+    )
+    return [
+        hydra.utils.instantiate(task_config) for task_config in checkpoint.tasks_config
+    ]
 
 
 @contextmanager
