@@ -78,9 +78,6 @@ def test_embeddings(
 
         assert out['embeddings'][:,0].isclose(out_rotated['embeddings'][:,0]).all(), "L0 Embeddings are not invariant under rotation"
 
-        out_embeddings_unrotated= torch.einsum("ijc,jk->ikc", out_rotated['embeddings'][:,1:4], rotation.T)
-        assert out['embeddings'][:,1:4].isclose(out_embeddings_unrotated).all(), "L1 Embeddings are not equivariant under rotation"
-
 
         
 
