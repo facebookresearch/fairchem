@@ -1,0 +1,42 @@
+oc20_train:
+  splits:
+    train:
+      src:
+        - ${cluster.data_root_dir}/oc20/s2ef/train/all
+        - ${cluster.data_root_dir}/oc20/s2ef/train/md38M
+        - ${cluster.data_root_dir}/oc20/s2ef/train/rattled17M
+        - ${cluster.data_root_dir}/oc20_slabs/train
+        - ${cluster.data_root_dir}/oc20_slabs/val_id
+        - ${cluster.data_root_dir}/oc20_slabs/val_ood
+        - ${cluster.data_root_dir}/multi_adsorbate/250214/train+val
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: oc20_energy
+    forces: ${oc20_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: oc20
+
+oc20_val:
+  splits:
+    val_id:
+      sample_n: 25000
+      src:
+        - ${cluster.data_root_dir}/oc20/s2ef/val/id
+    val_ood_both:
+      sample_n: 25000
+      src:
+        - ${cluster.data_root_dir}/oc20/s2ef/val/ood_both
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: oc20_energy
+    forces: ${oc20_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: oc20
