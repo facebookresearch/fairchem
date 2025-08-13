@@ -12,6 +12,7 @@ from ase.data import atomic_numbers, covalent_radii
 from fairchem.core import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
+# TODO these reference energies need to replaced if not using OMol25 or OMat24
 mol_dict = {
     ("C", "C"): {
         "atoms_info": {"spin": 1, "charge": 0},
@@ -103,7 +104,7 @@ def compute_diatomic_curve(predictor, task, atom_1, atom_2, atoms_dict):
 
     energies = predictor.predict(batch)["energy"]
 
-    # reference energy is the sum of the individual atom energies
+    # reference energy is the sum of the isolated atomic energies
     relative_energies = energies.detach().cpu().numpy() - atoms_dict["ref_energy"]
 
     return distances, relative_energies.tolist(), atom_1, atom_2
