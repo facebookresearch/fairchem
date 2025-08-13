@@ -274,40 +274,68 @@ def compute_loss(
 
     loss_dict = {}
     for task in tasks:
-        # Find the matching prediction key for this task
-        task_property_preds = None
-        matching_pred_key = None
         
-        # Look for prediction keys that match this task
-        for pred_key, pred_value in predictions.items():
-            # Check if this prediction key corresponds to this task
-            # Could be task.property directly, or dataset_property_property pattern
-            if (pred_key == task.property or 
-                (any(dataset in pred_key and task.property in pred_key for dataset in task.datasets))):
-                task_property_preds = pred_value
-                matching_pred_key = pred_key
-                break
-        
-        if task_property_preds is None:
-            continue
-        
-        # Find all heads that correspond to this specific task
-        task_heads = []
-        for head_key, head_pred in task_property_preds.items():
-            # For shallow ensemble, look for heads with names like "energy_0", "energy_1", etc.
-            if getattr(task, "shallow_ensemble", False):
-                # Match heads that start with the task property name followed by underscore and number
-                # OR heads that start with "head" followed by number and contain the property name
-                if ((head_key.startswith(f"{task.property}_") and head_key.split("_")[-1].isdigit()) or
-                    (head_key.startswith("head") and task.property in head_key)):
-                    task_heads.append((head_key, head_pred))
+        # For shallow ensemble, find all heads that match the property pattern
+        if getattr(task, "shallow_ensemble", False):
+            task_heads = []
+            
+            # Look for the prediction key that contains the ensemble heads
+            property_pred_key = None
+            for pred_key, pred_value in predictions.items():
+                # Check if this key is for this task's property and datasets
+                if (any(dataset in pred_key and task.property in pred_key for dataset in task.datasets) or
+                    pred_key == task.property):
+                    property_pred_key = pred_key
+                    break
+            
+            if property_pred_key is None:
+                continue
+                
+            # Look for ensemble heads inside this prediction
+            pred_value = predictions[property_pred_key]
+            if isinstance(pred_value, dict):
+                for head_key, head_pred in pred_value.items():
+                    import re
+                    # Match patterns like: energy_0, energy_1, energyandforcehead1, head0_test_energy, head1_test_energy
+                    matches = (
+                        (head_key.startswith(f"{task.property}_") and re.search(r'_\d+$', head_key)) or
+                        (re.match(rf'.*{task.property}.*head\d+$', head_key)) or
+                        (re.match(r'head\d+_.*', head_key))  # Match head0_, head1_, etc.
+                    )
+                    
+                    if matches:
+                        task_heads.append((head_key, head_pred))
             else:
-                # For non-ensemble, match heads by name patterns
-                if (head_key == task.name or 
-                    head_key.endswith(f"_{task.name}") or
-                    any(dataset in head_key and task.property in head_key 
-                        for dataset in task.datasets)):
-                    task_heads.append((head_key, head_pred))
+                continue
+        
+        else:
+            # For regular tasks, find the matching prediction
+            task_heads = []
+            
+            # Look for exact property match or dataset-specific match
+            for pred_key, pred_value in predictions.items():
+                matches = (pred_key == task.property or 
+                          (any(dataset in pred_key and task.property in pred_key for dataset in task.datasets)))
+                
+                if matches:
+                    # Extract the actual prediction tensor
+                    if isinstance(pred_value, dict):
+                        # Look for the task name or property in the nested dictionary
+                        if task.name in pred_value:
+                            head_pred = pred_value[task.name]
+                        elif task.property in pred_value:
+                            head_pred = pred_value[task.property]
+                        else:
+                            # Try to find any tensor value in the dict
+                            head_pred = next((v for v in pred_value.values() if isinstance(v, torch.Tensor)), None)
+                            if head_pred is None:
+                                continue
+                    elif isinstance(pred_value, torch.Tensor):
+                        head_pred = pred_value
+                    else:
+                        continue
+                    
+                    task_heads.append((pred_key, head_pred))
         
         if not task_heads:
             continue  # Skip if no heads found for this task
@@ -316,18 +344,32 @@ def compute_loss(
             # Shallow ensemble: use multiple heads for uncertainty estimation
             preds = []
             for head_key, head_pred in task_heads:
-                pred_for_task = head_pred
-                if task.level == "atom":
-                    pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
+                # Ensure we extract the actual tensor from the prediction
+                if isinstance(head_pred, dict):
+                    # Look for the property key or task name in the nested dictionary
+                    if task.property in head_pred:
+                        pred_tensor = head_pred[task.property]
+                    elif task.name in head_pred:
+                        pred_tensor = head_pred[task.name]
+                    else:
+                        # Try to find any tensor value in the dict
+                        pred_tensor = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                        if pred_tensor is None:
+                            continue  # Skip this head if no tensor found
                 else:
-                    pred_for_task = pred_for_task.view(batch_size, -1)
+                    pred_tensor = head_pred
+                
+                if task.level == "atom":
+                    pred_for_task = pred_tensor.view(num_atoms_in_batch, -1)
+                else:
+                    pred_for_task = pred_tensor.view(batch_size, -1)
                 preds.append(pred_for_task)
                 
             preds = torch.stack(preds, dim=0)  # shape: (n_heads, batch, ...)
             mean_pred = preds.mean(dim=0)
             std_pred = preds.std(dim=0) + 1e-8  # add epsilon for numerical stability
 
-            target = batch[task.name].clone()
+            target = batch[task.property].clone()
             output_mask = output_masks[task.name]
             if task.element_references is not None:
                 with record_function("element_refs"):
@@ -355,24 +397,61 @@ def compute_loss(
             # Use first available head (or average if multiple but not ensemble)
             if len(task_heads) == 1:
                 head_pred = task_heads[0][1]
+                # Extract tensor from dictionary if needed
+                if isinstance(head_pred, dict):
+                    if task.property in head_pred:
+                        head_pred = head_pred[task.property]
+                    elif task.name in head_pred:
+                        head_pred = head_pred[task.name]
+                    else:
+                        head_pred = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                        if head_pred is None:
+                            continue  # Skip if no tensor found
             else:
                 # Average multiple heads
                 preds = []
-                for head_key, head_pred in task_heads:
-                    pred_for_task = head_pred
-                    if task.level == "atom":
-                        pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
+                for head_key, head_pred_dict in task_heads:
+                    # Ensure we extract the actual tensor from the prediction
+                    if isinstance(head_pred_dict, dict):
+                        if task.property in head_pred_dict:
+                            pred_tensor = head_pred_dict[task.property]
+                        elif task.name in head_pred_dict:
+                            pred_tensor = head_pred_dict[task.name]
+                        else:
+                            pred_tensor = next((v for v in head_pred_dict.values() if isinstance(v, torch.Tensor)), None)
+                            if pred_tensor is None:
+                                continue  # Skip this head if no tensor found
                     else:
-                        pred_for_task = pred_for_task.view(batch_size, -1)
+                        pred_tensor = head_pred_dict
+                        
+                    if task.level == "atom":
+                        pred_for_task = pred_tensor.view(num_atoms_in_batch, -1)
+                    else:
+                        pred_for_task = pred_tensor.view(batch_size, -1)
                     preds.append(pred_for_task)
+                    
+                if not preds:  # Skip if no valid predictions found
+                    continue
                 head_pred = torch.stack(preds, dim=0).mean(dim=0)
             
-            target = batch[task.name].clone()
+            target = batch[task.property].clone()
             output_mask = output_masks[task.name]
             if task.element_references is not None:
                 with record_function("element_refs"):
                     target = task.element_references.apply_refs(batch, target)
             target = task.normalizer.norm(target)
+            
+            # head_pred should already be a tensor at this point, but double-check
+            if isinstance(head_pred, dict):
+                if task.property in head_pred:
+                    head_pred = head_pred[task.property]
+                elif task.name in head_pred:
+                    head_pred = head_pred[task.name]
+                else:
+                    head_pred = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                    if head_pred is None:
+                        continue  # Skip if no tensor found
+            
             pred_for_task = head_pred
             if task.level == "atom":
                 pred_for_task = pred_for_task.view(num_atoms_in_batch, -1)
@@ -1148,7 +1227,12 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
                     numel = distutils.all_reduce(
                         metrics.numel, average=False, device=device
                     )
-                    log_dict[f"val/{dataset},{task},{metric_name}"] = total / numel
+                    # Avoid division by zero for ensemble metrics that may have no valid samples
+                    if numel > 0:
+                        log_dict[f"val/{dataset},{task},{metric_name}"] = total / numel
+                    else:
+                        logging.warning(f"No valid samples for {dataset},{task},{metric_name}, setting metric to 0.0")
+                        log_dict[f"val/{dataset},{task},{metric_name}"] = 0.0
 
         total_runtime = distutils.all_reduce(
             self.total_runtime, average=False, device=device

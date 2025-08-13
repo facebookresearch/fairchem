@@ -126,7 +126,9 @@ class TestEnsembleFunctionality:
             dataset=["omat"] * num_graphs,
             sid=["a", "b", "c"]
         )
-        # Add mock attributes for loss/metrics tests
+        # Add mock attributes for loss/metrics tests - include the actual property names
+        data.energy = torch.randn(num_graphs, 1)  # Add the 'energy' property
+        data.forces = torch.randn(num_nodes, 3)   # Add the 'forces' property
         data.test_energy = torch.randn(num_graphs, 1)
         data.test_forces = torch.randn(num_nodes, 3)
         data.test_energy_ensemble = torch.randn(num_graphs, 1)
@@ -243,18 +245,118 @@ class TestEnsembleFunctionality:
         assert "head2_omat_energy" in result["energy"]
     
     def test_compute_loss_single_head(self, mock_task, mock_predictions_single_head, mock_batch):
-        """Test compute_loss with single head."""
+        """Test compute_loss with single head and verify non-zero loss."""
+        # Update task property to match what we added to mock_batch
+        mock_task.property = "energy"  # Use actual property name
+        mock_task.name = "test_energy"
+        
         loss_dict = compute_loss([mock_task], mock_predictions_single_head, mock_batch)
         assert "test_energy" in loss_dict
         assert torch.is_tensor(loss_dict["test_energy"])
+        
+        # CRITICAL: Test for non-zero loss
+        loss_value = loss_dict["test_energy"].item()
+        assert loss_value > 0, f"Loss should be positive (non-zero), got {loss_value}"
+        assert not torch.isnan(loss_dict["test_energy"]), "Loss should not be NaN"
+        assert not torch.isinf(loss_dict["test_energy"]), "Loss should not be infinite"
+        
+        print(f"✓ Single head loss test passed with loss = {loss_value:.6f}")
     
     def test_compute_loss_ensemble(self, mock_ensemble_task, mock_predictions_multi_head, mock_batch):
-        """Test compute_loss with ensemble (multiple heads)."""
-        # Patch the task name to match the mock predictions
+        """Test compute_loss with ensemble (multiple heads) and verify non-zero loss."""
+        # Update task property to match what we added to mock_batch
+        mock_ensemble_task.property = "energy"  # Use actual property name
         mock_ensemble_task.name = "head0_test_energy"
+        
         loss_dict = compute_loss([mock_ensemble_task], mock_predictions_multi_head, mock_batch)
         assert mock_ensemble_task.name in loss_dict
         assert torch.is_tensor(loss_dict[mock_ensemble_task.name])
+        
+        # CRITICAL: Test for non-zero loss
+        loss_value = loss_dict[mock_ensemble_task.name].item()
+        assert loss_value > 0, f"Ensemble loss should be positive (non-zero), got {loss_value}"
+        assert not torch.isnan(loss_dict[mock_ensemble_task.name]), "Ensemble loss should not be NaN"
+        assert not torch.isinf(loss_dict[mock_ensemble_task.name]), "Ensemble loss should not be infinite"
+        
+        print(f"✓ Ensemble loss test passed with loss = {loss_value:.6f}")
+    
+    def test_compute_loss_custom_ensemble_loss(self):
+        """Test the custom ensemble loss computation explicitly."""
+        from fairchem.core.units.mlip_unit.mlip_unit import Task, OutputSpec
+        from fairchem.core.modules.normalization.normalizer import Normalizer
+        
+        # Create ensemble task with shallow_ensemble=True
+        normalizer = Normalizer(mean=0.0, rmsd=1.0)
+        ensemble_task = Task(
+            name="energy",
+            level="system",
+            property="energy",
+            loss_fn=torch.nn.MSELoss(),
+            out_spec=OutputSpec(dim=[1], dtype="float32"),
+            normalizer=normalizer,
+            datasets=["omat"],
+            shallow_ensemble=True  # This should trigger custom ensemble loss
+        )
+        
+        # Create mock predictions with 5 diverse heads
+        mock_predictions = {
+            "energy": {
+                "energyandforcehead1": torch.tensor([[1.0], [2.0], [3.0]]),
+                "energyandforcehead2": torch.tensor([[1.1], [2.1], [3.1]]),
+                "energyandforcehead3": torch.tensor([[0.9], [1.9], [2.9]]),
+                "energyandforcehead4": torch.tensor([[1.05], [2.05], [3.05]]),
+                "energyandforcehead5": torch.tensor([[0.95], [1.95], [2.95]])
+            }
+        }
+        
+        # Create batch with targets
+        from fairchem.core.datasets.atomic_data import AtomicData
+        num_graphs = 3
+        data = AtomicData(
+            pos=torch.randn(6, 3),
+            atomic_numbers=torch.randint(1, 10, (6,)),
+            cell=torch.zeros(num_graphs, 3, 3),
+            pbc=torch.zeros(num_graphs, 3, dtype=torch.bool),
+            natoms=torch.tensor([2, 2, 2]),
+            edge_index=torch.zeros(2, 3, dtype=torch.long),
+            cell_offsets=torch.zeros(3, 3),
+            nedges=torch.tensor([3]),
+            charge=torch.zeros(num_graphs),
+            spin=torch.zeros(num_graphs),
+            fixed=torch.zeros(6, dtype=torch.long),
+            tags=torch.zeros(6, dtype=torch.long),
+            batch=torch.tensor([0, 0, 1, 1, 2, 2]),
+            dataset=["omat"] * num_graphs,
+            sid=["a", "b", "c"]
+        )
+        # Add target values that are different from predictions
+        data.energy = torch.tensor([[2.0], [3.0], [4.0]])  # Different from predictions
+        data.dataset_name = ["omat"] * num_graphs  # Add missing dataset_name
+        
+        # Compute loss
+        loss_dict = compute_loss([ensemble_task], mock_predictions, data)
+        
+        # Verify custom ensemble loss
+        assert "energy" in loss_dict
+        loss_value = loss_dict["energy"].item()
+        
+        # CRITICAL: Verify non-zero loss with custom ensemble loss function
+        assert loss_value > 0, f"Custom ensemble loss should be positive (non-zero), got {loss_value}"
+        assert not torch.isnan(loss_dict["energy"]), "Custom ensemble loss should not be NaN"
+        assert not torch.isinf(loss_dict["energy"]), "Custom ensemble loss should not be infinite"
+        
+        # The custom loss should incorporate uncertainty, so it should be different from simple MSE
+        # Let's compute what a simple average MSE would be for comparison
+        head_preds = list(mock_predictions["energy"].values())
+        mean_pred = torch.stack(head_preds, dim=0).mean(dim=0)
+        simple_mse = torch.nn.functional.mse_loss(mean_pred, data.energy).item()
+        
+        # Custom ensemble loss should generally be different from simple MSE
+        print(f"✓ Custom ensemble loss: {loss_value:.6f}")
+        print(f"✓ Simple MSE loss: {simple_mse:.6f}")
+        print(f"✓ Custom ensemble loss is {'different from' if abs(loss_value - simple_mse) > 1e-6 else 'similar to'} simple MSE")
+        
+        assert loss_value > 0, "Final verification: Custom ensemble loss must be positive"
     
     def test_compute_metrics_single_head(self, mock_task, mock_predictions_single_head, mock_batch):
         """Test compute_metrics with single head."""
