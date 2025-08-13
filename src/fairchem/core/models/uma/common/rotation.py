@@ -40,7 +40,8 @@ def init_edge_rot_euler_angles(edge_distance_vec):
     alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
 
     # random gamma (roll)
-    gamma = torch.rand_like(alpha) * 2 * torch.pi
+    # gamma = torch.rand_like(alpha) * 2 * torch.pi
+    gamma = torch.zeros_like
 
     # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha
