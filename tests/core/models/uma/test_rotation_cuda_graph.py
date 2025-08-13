@@ -19,8 +19,8 @@ from torch.profiler import ProfilerActivity, profile
 
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.models.uma.common.rotation import (
-    init_edge_rot_mat,
-    rotation_to_wigner,
+    eulers_to_wigner,
+    init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 
@@ -40,18 +40,17 @@ def get_jds(lmax):
     return Jd_buffers
 
 
-def get_rotmat_and_wigner(edge_distance_vecs, jds, rot_clip=True):
-    edge_rot_mat = init_edge_rot_mat(edge_distance_vecs, rot_clip=True)
-    wigner = rotation_to_wigner(
-        edge_rot_mat,
+def get_rotmat_and_wigner(edge_distance_vecs, jds):
+    euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+    wigner = eulers_to_wigner(
+        euler_angles,
         0,
         len(jds) - 1,
         jds,
-        rot_clip=rot_clip,
     )
     wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-    return edge_rot_mat, wigner, wigner_inv
+    return wigner, wigner_inv
 
 
 @pytest.mark.gpu()
@@ -66,12 +65,10 @@ def test_rotation_no_graph_matches_graph_basic(lmax):
     graph_obj = RotMatWignerCudaGraph()
     graph_obj._capture_graph(edge_dist_vec, jds)
     seed_everywhere()
-    rot_mat_graph, wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
-        edge_dist_vec, jds
-    )
+    wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(edge_dist_vec, jds)
     seed_everywhere()
-    rot_mat, wigner, wigner_inv = get_rotmat_and_wigner(edge_dist_vec, jds)
-    assert torch.allclose(rot_mat_graph, rot_mat)
+    wigner, wigner_inv = get_rotmat_and_wigner(edge_dist_vec, jds)
+
     assert torch.allclose(wigner_graph, wigner, atol=1e-7)
     assert torch.allclose(wigner_inv_graph, wigner_inv, atol=1e-7)
 
@@ -83,35 +80,31 @@ def test_rotation_no_graph_matches_graph_shape_change():
     jds = get_jds(lmax=lmax)
     edge_dist_vec = torch.rand(torch.Size([120000, 3]), requires_grad=True).cuda()
     graph_obj = RotMatWignerCudaGraph()
-    rot_mat_graph, wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
-        edge_dist_vec, jds
-    )
+    wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(edge_dist_vec, jds)
     assert graph_obj.graph_capture_count == 1
     # now pass in a smaller input, should not trigger a graph capture
     seed_everywhere()
     edge_dist_vec2 = torch.rand(torch.Size([110000, 3]), requires_grad=True).cuda()
-    rot_mat_graph, wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
+    wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
         edge_dist_vec2, jds
     )
     seed_everywhere()
-    rot_mat, wigner, wigner_inv = get_rotmat_and_wigner(edge_dist_vec2, jds)
+    wigner, wigner_inv = get_rotmat_and_wigner(edge_dist_vec2, jds)
     assert graph_obj.graph_capture_count == 1
-    assert torch.allclose(rot_mat_graph, rot_mat)
     assert torch.allclose(wigner_graph, wigner, atol=1e-7)
     assert torch.allclose(wigner_inv_graph, wigner_inv, atol=1e-7)
     # now pass in a large input, should trigger a graph capture
     edge_dist_vec3 = torch.rand(torch.Size([130000, 3]), requires_grad=True).cuda()
-    rot_mat_graph, wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
+    wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
         edge_dist_vec3, jds
     )
     assert graph_obj.graph_capture_count == 2
-    assert rot_mat_graph.shape[0] == edge_dist_vec3.shape[0]
     assert wigner_graph.shape[0] == edge_dist_vec3.shape[0]
     assert wigner_inv_graph.shape[0] == edge_dist_vec3.shape[0]
 
 
-def wigner_grad(rot_mat, wigner, wigner_inv, edge_dist_vec):
-    sum = rot_mat.sum() + wigner.sum() + wigner_inv.sum()
+def wigner_grad(wigner, wigner_inv, edge_dist_vec):
+    sum = wigner.sum() + wigner_inv.sum()
     grad = torch.autograd.grad(sum, edge_dist_vec, create_graph=False)
     return grad
 
@@ -125,17 +118,13 @@ def test_rotation_graph_grads():
     graph_obj = RotMatWignerCudaGraph()
     graph_obj._capture_graph(edge_dist_vec, jds)
     seed_everywhere()
-    rot_mat_graph, wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
-        edge_dist_vec, jds
-    )
-    grad_graph = wigner_grad(
-        rot_mat_graph, wigner_graph, wigner_inv_graph, edge_dist_vec
-    )
+    wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(edge_dist_vec, jds)
+    grad_graph = wigner_grad(wigner_graph, wigner_inv_graph, edge_dist_vec)
 
     seed_everywhere()
     # edge_dist_vec = torch.rand(torch.Size([120000, 3]), requires_grad=True).cuda()
-    rot_mat, wigner, wigner_inv = get_rotmat_and_wigner(edge_dist_vec, jds)
-    grad_no_graph = wigner_grad(rot_mat, wigner, wigner_inv, edge_dist_vec)
+    wigner, wigner_inv = get_rotmat_and_wigner(edge_dist_vec, jds)
+    grad_no_graph = wigner_grad(wigner, wigner_inv, edge_dist_vec)
     assert torch.allclose(grad_graph[0], grad_no_graph[0], atol=1e-3)
 
 
@@ -171,10 +160,10 @@ def test_generate_traces():
     edge_dist_vec = torch.rand(torch.Size([120000, 3]), requires_grad=True).cuda()
 
     def call_fn():
-        rot_mat_graph, wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
+        wigner_graph, wigner_inv_graph = graph_obj.get_rotmat_and_wigner(
             edge_dist_vec, jds
         )
-        wigner_grad(rot_mat_graph, wigner_graph, wigner_inv_graph, edge_dist_vec)
+        wigner_grad(wigner_graph, wigner_inv_graph, edge_dist_vec)
 
     # these traces should be ~12ms long for each step on H100
     make_profile(
