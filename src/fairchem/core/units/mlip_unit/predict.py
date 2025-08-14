@@ -302,16 +302,60 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
                     # Multiple heads case - select appropriate head
                     if hasattr(task, 'head') and task.head in head_dict:
                         head_name = task.head
-                        value = head_dict[head_name]
+                        head_pred = head_dict[head_name]
+                        # Extract tensor from prediction (could be nested dict)
+                        if isinstance(head_pred, dict):
+                            if task.property in head_pred:
+                                value = head_pred[task.property]
+                            else:
+                                # Try to find any tensor value in the dict
+                                value = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                                if value is None:
+                                    continue
+                        else:
+                            value = head_pred
                     else:
                         # If only one head, use it; otherwise average or pick first
                         head_names = list(head_dict.keys())
                         if len(head_names) == 1:
-                            value = head_dict[head_names[0]]
+                            head_pred = head_dict[head_names[0]]
+                            # Extract tensor from prediction (could be nested dict)
+                            if isinstance(head_pred, dict):
+                                if task.property in head_pred:
+                                    value = head_pred[task.property]
+                                else:
+                                    # Try to find any tensor value in the dict
+                                    value = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                                    if value is None:
+                                        continue
+                            else:
+                                value = head_pred
                         else:
                             # Average multiple heads for this property
-                            head_values = [head_dict[head_name] for head_name in head_names]
-                            value = torch.stack(head_values).mean(dim=0)
+                            head_values = []
+                            for head_name in head_names:
+                                head_pred = head_dict[head_name]
+                                # Extract tensor from prediction (could be nested dict)
+                                if isinstance(head_pred, dict):
+                                    # Look for the property key in the nested dict
+                                    if task.property in head_pred:
+                                        head_tensor = head_pred[task.property]
+                                    else:
+                                        # Try to find any tensor value in the dict
+                                        head_tensor = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                                        if head_tensor is None:
+                                            continue
+                                elif isinstance(head_pred, torch.Tensor):
+                                    head_tensor = head_pred
+                                else:
+                                    continue
+                                head_values.append(head_tensor)
+                            
+                            if head_values:
+                                value = torch.stack(head_values).mean(dim=0)
+                            else:
+                                # Fallback if no valid tensors found
+                                continue
                 else:
                     # Single value case (backward compatibility)
                     value = head_dict
