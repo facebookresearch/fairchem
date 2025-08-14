@@ -670,6 +670,7 @@ class AtomicData:
 
     def cpu(self):
         r"""Copies all tensor attributes to CPU memory."""
+        self.apply(lambda x: x.detach())
         return self.apply(lambda x: x.cpu())
 
     def cuda(self, device=None, non_blocking=False):
