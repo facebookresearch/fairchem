@@ -11,6 +11,18 @@ on:
     types:
       - completed
 
+# The path to the sha of the commit we want to test will depend
+# on the trigger type. If a workflow_run trigger, then we want
+# the sha from the head of the branch that triggered it. For
+# pushes and manual triggers, we want the sha of the branch.
+env:
+  HEAD_SHA: |
+    ${{
+      github.event.workflow_run.head_sha ||
+      github.event.pull_request.head.sha ||
+      github.sha
+    }}
+
 jobs:
   test:
     runs-on: 32-core-ubuntu
@@ -24,23 +36,13 @@ jobs:
         python_version: ['3.10', '3.12']
 
     steps:
-      # Check out the code
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # The path to the sha of the commit we want to test will depend
-          # on the trigger type. If a workflow_run trigger, then we want
-          # the sha from the head of the branch that triggered it. For 
-          # pushes and manual triggers, we want the sha of the branch.
-          ref: |
-            ${{
-              github.event.workflow_run.head_sha ||
-              github.event.pull_request.head.sha ||
-              github.sha
-            }}
+          ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
           fetch-depth: 0
-      
+
       - name: Setup
         uses: ./.github/actions/multi-trigger-setup
         with:
@@ -77,27 +79,36 @@ jobs:
           make
           echo "$(readlink -f .)" >> $GITHUB_PATH
 
-      - name: Test core with pytest
+      - name: Core tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --cov-report=xml --cov=fairchem -c ./packages/fairchem-core/pyproject.toml
+          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s
+          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s --junitxml=junit-gpu.xml -o junit_family=legacy --cov-report=xml:gpu-coverage.xml
 
       - if: ${{ matrix.python_version == '3.12' }}
-        name: codecov-report
+        name: codecov-coverage
         uses: codecov/codecov-action@v5
         with:
-          fail_ci_if_error: false # optional (default = false)
-          files: ./coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }} # required
-          verbose: true # optional (default = false)
-      
+          fail_ci_if_error: false
+          files: ./coverage.xml,./gpu-coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+
+      - if: ${{ matrix.python_version == '3.12' }}
+        name: codecov-test-results
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./junit.xml,./junit-gpu.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          commit_parent: ${{ env.HEAD_SHA }}
+          verbose: true
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
@@ -116,29 +127,18 @@ jobs:
         python_version: ['3.12']
 
     steps:
-      
-      # Check out the code
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # The path to the sha of the commit we want to test will depend
-          # on the trigger type. If a workflow_run trigger, then we want
-          # the sha from the head of the branch that triggered it. For 
-          # pushes and manual triggers, we want the sha of the branch.
-          ref: |
-            ${{
-              github.event.workflow_run.head_sha ||
-              github.event.pull_request.head.sha ||
-              github.sha
-            }}
+          ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
           fetch-depth: 0
-      
+
       - name: Setup
         uses: ./.github/actions/multi-trigger-setup
         with:
           status-context: '${{ github.job }} (${{ matrix.python_version }})'
-      
+
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
         with:
@@ -155,7 +155,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
-      
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
