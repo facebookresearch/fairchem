@@ -7,25 +7,34 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import random
+import threading
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Protocol, Sequence
 
 import hydra
 import numpy as np
 import torch
+from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
+from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     get_device_for_local_rank,
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.inference.client import MLIPInferenceClient
+from fairchem.core.units.mlip_unit.inference.inference_server import (
+    InferenceServerProtocol,
+    MLIPInferenceServerMP,
+)
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
@@ -33,6 +42,9 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+# Constants
+SERVER_STARTUP_TIMEOUT = 60  # seconds
 
 
 def collate_predictions(predict_fn):
@@ -42,9 +54,11 @@ def collate_predictions(predict_fn):
     ):
         # Get the full prediction dictionary from the original predict method
         preds = predict_fn(predict_unit, data, undo_element_references)
+        if gp_utils.initialized():
+            data.batch = data.batch_full
         collated_preds = defaultdict(list)
         for i, dataset in enumerate(data.dataset):
-            for task in predict_unit.dataset_to_tasks[dataset]:
+            for task in predict_unit.datasets_to_tasks[dataset]:
                 if task.level == "system":
                     collated_preds[task.property].append(
                         preds[task.name][i].unsqueeze(0)
@@ -63,7 +77,14 @@ def collate_predictions(predict_fn):
     return collated_predict
 
 
-class MLIPPredictUnit(PredictUnit[AtomicData]):
+class MLIPPredictUnitProtocol(Protocol):
+    def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
+
+    @property
+    def datasets_to_tasks(self) -> dict[str, list]: ...
+
+
+class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
         inference_model_path: str,
@@ -76,7 +97,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
-        self.seed(seed)
+        self.set_seed(seed)
         # note these are different from the element references used for model training
         self.atom_refs = (
             {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
@@ -90,6 +111,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
             overrides = {}
         if "backbone" not in overrides:
             overrides["backbone"] = {}
+        # always disable always_use_pbc for inference
+        overrides["backbone"]["always_use_pbc"] = False
         if inference_settings.activation_checkpointing is not None:
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
@@ -117,9 +140,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         ]
         self.tasks = {t.name: t for t in tasks}
 
-        self.dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
-        assert set(self.dataset_to_tasks.keys()).issubset(
-            set(self.datasets)
+        self._datasets_to_tasks = get_datasets_to_tasks_map(self.tasks.values())
+        assert set(self._datasets_to_tasks.keys()).issubset(
+            set(self.model.module.backbone.dataset_list)
         ), "Datasets in tasks is not a strict subset of datasets in backbone."
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
@@ -133,16 +156,22 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         # store composition embedding of system the model was merged on
         self.merged_on = None
 
+        if self.direct_forces:
+            logging.warning(
+                "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
+                "energy surface and energy conservation errors."
+            )
+
     @property
     def direct_forces(self) -> bool:
         return self.model.module.backbone.direct_forces
 
     @property
-    def datasets(self) -> list[str]:
-        return self.model.module.backbone.dataset_list
+    def datasets_to_tasks(self) -> dict[str, list]:
+        return self._datasets_to_tasks
 
-    def seed(self, seed: int):
-        logging.info(f"Setting random seed to {seed}")
+    def set_seed(self, seed: int):
+        logging.debug(f"Setting random seed to {seed}")
         self._seed = seed
         random.seed(seed)
         np.random.seed(seed)
@@ -199,6 +228,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
+        if self.inference_mode.external_graph_gen and data.edge_index.shape[1] == 0:
+            raise ValueError(
+                "Cannot run inference with external graph generation on empty edge index. "
+                "Please ensure the input data has valid edges."
+            )
+
         data_device = data.to(self.device)
 
         if self.inference_mode.merge_mole:
@@ -243,7 +278,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData]):
         return pred_output
 
 
-def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+def get_datasets_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     """Create a mapping from dataset names to their associated tasks.
 
     Args:
@@ -258,3 +293,116 @@ def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
         for dataset_name in task.datasets:
             dset_to_tasks_map[dataset_name].append(task)
     return dict(dset_to_tasks_map)
+
+
+def run_server_entry(num_workers, port, predict_unit_config):
+    server: InferenceServerProtocol = MLIPInferenceServerMP(
+        num_workers=num_workers,
+        port=port,
+        predict_config=predict_unit_config,
+    )
+    server.run()
+
+
+class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
+    def __init__(
+        self,
+        inference_model_path: str,
+        device: str = "cpu",
+        overrides: dict | None = None,
+        inference_settings: InferenceSettings | None = None,
+        seed: int = 41,
+        atom_refs: dict | None = None,
+        server_config: dict | None = None,
+        client_config: dict | None = None,
+    ):
+        """
+        This PredictUnit can be used to run inference on a remote server.
+
+        It can be used in several modes:
+        1) If server_config is provided then it will start a local server in a thread and create a client to connect to it.
+        A separate client cannot be provided in this case.
+        2) If server_config is NOT provided and client_config is provided, we assume the remote server is already running
+        and we will create a client to connect to it.
+        """
+        super().__init__()
+        assert (server_config is not None) ^ (
+            client_config is not None
+        ), "Exactly one of server_config or client_config must be provided."
+
+        config = {}
+        self.server_process = None
+
+        # TODO, we need this just to get the datasets for the FAIRChemCalculator, this is not great, think about if
+        # we can remove this dependency
+        _mlip_pred_unit = MLIPPredictUnit(
+            inference_model_path=inference_model_path,
+            device="cpu",
+            overrides=overrides,
+            inference_settings=inference_settings,
+            seed=seed,
+            atom_refs=atom_refs,
+        )
+        self._datasets_to_tasks = copy.deepcopy(_mlip_pred_unit.datasets_to_tasks)
+        # del _mlip_pred_unit
+
+        if server_config is not None:
+            logging.info(f"Starting inference server with config {server_config}")
+            if "port" not in server_config:
+                server_config["port"] = get_free_port()
+            config["server"] = server_config
+            self.server_address = "localhost"
+            self.server_port = server_config.get("port")
+            self.workers = server_config.get("workers", 1)
+            predict_unit_config = {
+                "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
+                "inference_model_path": inference_model_path,
+                "device": device,
+                "overrides": overrides,
+                "inference_settings": inference_settings,
+                "seed": seed,
+                "atom_refs": atom_refs,
+            }
+
+            self.server: InferenceServerProtocol = MLIPInferenceServerMP(
+                num_workers=self.workers,
+                port=self.server_port,
+                predict_config=predict_unit_config,
+            )
+            self.server_thread = threading.Thread(target=self.server.run, args=())
+            self.server_thread.start()
+
+            # Wait for server to be ready before starting the client
+            self.server.wait_until_ready()
+
+        if client_config is not None:
+            logging.info(f"Connecting to inference server with config {client_config}")
+            self.client = hydra.utils.instantiate(client_config)
+        else:
+            self.client = MLIPInferenceClient(
+                server_address=self.server_address,
+                port=self.server_port,
+            )
+
+    def __del__(self):
+        # Explicitly shut down the server and join the thread
+        if hasattr(self, "server") and self.server is not None:
+            self.server.shutdown()
+        if hasattr(self, "server_thread") and self.server_thread.is_alive():
+            self.server_thread.join(timeout=5)
+
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
+        """
+        Predict method that sends data to the remote server and returns predictions.
+        """
+        if not hasattr(self, "client"):
+            raise RuntimeError(
+                "Client is not initialized. Ensure server_config or client_config is provided."
+            )
+        return self.client.call(data)
+
+    @property
+    def datasets_to_tasks(self) -> dict[str, list]:
+        return self._datasets_to_tasks
