@@ -1,7 +1,7 @@
 data_root_dir: /checkpoint/ocp/shared
 run_dir: /checkpoint/ocp/shared/performance_training
 account: ocp
-qos: ocp_high
+qos: alignment_shared
 mode: LOCAL
 device: CUDA
 ranks_per_node: 1

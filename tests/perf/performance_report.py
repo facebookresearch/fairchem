@@ -583,7 +583,7 @@ class Environment:
             if len(package_version := line.split("==")) == 2
         } | {
             package_version[0]: package_version[1]
-            for line in system_env.conda_packages.splitlines()
+            for line in (system_env.conda_packages or "").splitlines()
             if len(package_version := line.split()) >= 2
         }
 

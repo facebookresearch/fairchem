@@ -122,9 +122,8 @@ runner:
     bf16: ${bf16}
   max_epochs: ${epochs}
   evaluate_every_n_steps: 5000
+
   callbacks:
-    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
-      job_config: ${job}
     - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
       checkpoint_every_n_steps: 5000
       max_saved_checkpoints: 5

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Generator
 
 import pytest
+import torch
 
 from fairchem.core._cli import main
 from tests.perf.performance_report import PerformanceReport
@@ -74,6 +75,7 @@ def train_uma(path_to_config):
     sys_args = ["--config", path_to_config]
     sys.argv[1:] = sys_args
     main()
+    torch.cuda.synchronize()
 
 
 @pytest.mark.parametrize("test_case", generate_train_uma_test_cases())
