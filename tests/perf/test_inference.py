@@ -204,7 +204,7 @@ class MeanConvergenceChecker:
         Args:
             relative_mean_change_threshold: After each measurement, the mean
                 over all samples is calculated. The relative change in mean
-                values is defined as abs(mean_cur - mean_prev / mean_prev).
+                values is defined as abs((mean_cur - mean_prev) / mean_prev).
                 To be considered converged, that change must be below this
                 input threshold.
             required_samples_below_threshold: The number of samples in a row
