@@ -29,3 +29,5 @@ jobs:
           ruff --version
           ruff check src # tests has a lot of issues , TODO
           ruff format --check src # tests
+      - uses: pre-commit-ci/lite-action@v1.1.0
+        if: always()
