@@ -14,7 +14,6 @@ import random
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 import clusterscope
@@ -40,6 +39,7 @@ from submitit.slurm.slurm import SlurmJobEnvironment
 from fairchem.core.common import distutils
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
+    StrEnum,
     get_commit_hash,
     get_timestamp_uid,
     setup_env_vars,
@@ -59,22 +59,22 @@ CONFIG_FILE_NAME = "canonical_config.yaml"
 PREEMPTION_STATE_DIR_NAME = "preemption_state"
 
 
-class SchedulerType(str, Enum):
+class SchedulerType(StrEnum):
     LOCAL = "local"
     SLURM = "slurm"
 
 
-class DeviceType(str, Enum):
+class DeviceType(StrEnum):
     CPU = "cpu"
     CUDA = "cuda"
 
 
-class RunType(str, Enum):
+class RunType(StrEnum):
     RUN = "run"
     REDUCE = "reduce"
 
 
-class DistributedInitMethod(str, Enum):
+class DistributedInitMethod(StrEnum):
     TCP = "tcp"
     FILE = "file"
 

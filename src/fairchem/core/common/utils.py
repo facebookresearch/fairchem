@@ -28,6 +28,15 @@ import yaml
 import fairchem.core
 from fairchem.core.common.registry import registry
 
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        pass
+
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 

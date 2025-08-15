@@ -74,16 +74,13 @@ class FAIRChemCalculator(Calculator):
                 "energy surface and energy conservation errors."
             )
 
-        if isinstance(task_name, UMATask):
-            task_name = task_name.value
-
         if task_name is not None:
             assert (
                 task_name in predict_unit.datasets
             ), f"Given: {task_name}, Valid options are {predict_unit.datasets}"
-            self._task_name = task_name
+            self._task = UMATask(task_name)
         elif len(predict_unit.datasets) == 1:
-            self._task_name = predict_unit.datasets[0]
+            self._task = UMATask(predict_unit.datasets[0])
         else:
             raise RuntimeError(
                 f"A task name must be provided. Valid options are {predict_unit.datasets}"
@@ -108,6 +105,10 @@ class FAIRChemCalculator(Calculator):
             r_edges=False,
             r_data_keys=["spin", "charge"],
         )
+
+    @property
+    def task_name(self) -> str:
+        return self._task.value
 
     @classmethod
     def from_model_checkpoint(
@@ -153,10 +154,6 @@ class FAIRChemCalculator(Calculator):
                 f"{name_or_path=} is not a valid model name or checkpoint path"
             )
         return cls(predict_unit=predict_unit, task_name=task_name, seed=seed)
-
-    @property
-    def task_name(self) -> str:
-        return self._task_name
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
         """
