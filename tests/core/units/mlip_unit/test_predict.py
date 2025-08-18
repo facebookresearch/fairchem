@@ -122,13 +122,13 @@ def test_multiple_dataset_predict(uma_predict_unit):
 @pytest.mark.parametrize(
     "workers, device", [(1, "cpu"), (2, "cpu"), (4, "cpu"), (1, "cuda")]
 )
-def test_parallel_predict_unit_cpu(workers, device):
+def test_parallel_predict_unit(workers, device):
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
     ifsets = InferenceSettings(
         tf32=False,
         merge_mole=True,
         wigner_cuda=True,
-        activation_checkpointing=False,
+        activation_checkpointing=True,
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
@@ -152,7 +152,7 @@ def test_parallel_predict_unit_cpu(workers, device):
         atol=ATOL,
     )
     assert torch.allclose(
-        pp_results["forces"].detach().cpu().mean(),
-        normal_results["forces"].detach().cpu().mean(),
+        pp_results["forces"].detach().cpu(),
+        normal_results["forces"].detach().cpu(),
         atol=ATOL,
     )
