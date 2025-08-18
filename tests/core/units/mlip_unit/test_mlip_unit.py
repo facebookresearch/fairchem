@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from torchtnt.framework.state import State
     from torchtnt.framework.unit import TEvalUnit, TTrainUnit
 
-
 class TrainEndCallback(Callback):
     def __init__(
         self,

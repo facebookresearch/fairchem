@@ -81,13 +81,13 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/core/  --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --cov-report=xml --cov=fairchem -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest tests/core/ -s  --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --cov-report=xml --cov=fairchem -c ./packages/fairchem-core/pyproject.toml
 
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/core/ --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s
+          NCCL_DEBUG=INFO pytest tests/core/ -s --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s
           
 
       - if: ${{ matrix.python_version == '3.12' }}
@@ -155,7 +155,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/core/ --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest tests/core/ --durations=0 -s -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
       
       - name: Cleanup
         if: always()

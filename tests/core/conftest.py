@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from itertools import product
+import logging
 from random import choice
 from typing import TYPE_CHECKING
 
@@ -200,3 +201,10 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
             "a2g_args": {"r_data_keys": ["energy", "forces", "stress"]},
         }
     )
+
+
+@pytest.fixture(autouse=True)
+def run_around_tests():
+    logging.warning(f"CUDA MEMORY USED: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
+    yield
+    logging.warning(f"CUDA MEMORY USED: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
