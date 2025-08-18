@@ -674,6 +674,14 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
+        embeddings = emb["node_embedding"].detach()
+        if gp_utils.initialized():
+            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+
+        outputs["embeddings"] = (
+            {"embeddings": embeddings} if self.wrap_property else embeddings
+        )
+
         if self.regress_stress:
             grads = torch.autograd.grad(
                 [energy_part.sum()],
