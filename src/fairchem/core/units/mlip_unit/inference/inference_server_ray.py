@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import hydra
 import ray
+import torch.distributed as dist
 import websockets
 from torch.distributed.elastic.utils.distributed import get_free_port
 from websockets.asyncio.server import serve
@@ -20,8 +21,9 @@ from websockets.asyncio.server import serve
 if TYPE_CHECKING:
     from omegaconf import DictConfig
 
-from fairchem.core.common import distutils, gp_utils
+from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
+    assign_device_for_local_rank,
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
@@ -29,7 +31,8 @@ from fairchem.core.common.distutils import (
 logging.basicConfig(level=logging.DEBUG)
 
 
-@ray.remote(num_gpus=1, num_cpus=12)
+# @ray.remote(num_gpus=1, num_cpus=12)
+@ray.remote
 class MLIPWorker:
     def __init__(
         self, worker_id: int, world_size: int, master_port: int, predictor_config: dict
@@ -48,15 +51,16 @@ class MLIPWorker:
         self, worker_id: int, master_port: int, world_size: int, device: str
     ):
         # initialize distributed environment
+        # TODO, this wont work for multi-node, need to fix master addr
         setup_env_local_multi_gpu(worker_id, master_port)
+        # local_rank = int(os.environ["LOCAL_RANK"])
+        assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
-        dist_config = {
-            "distributed_backend": backend,
-            "world_size": world_size,
-            "cpu": device == "cpu",
-            "submit": False,
-        }
-        distutils.setup(dist_config)
+        dist.init_process_group(
+            backend=backend,
+            rank=worker_id,
+            world_size=world_size,
+        )
         gp_utils.setup_graph_parallel_groups(world_size, backend)
 
     def predict(self, data: bytes):
@@ -75,8 +79,9 @@ class MLIPInferenceServerWebSocket:
         # Initialize a pool of MLIPWorkers
         self.master_pg_port = get_free_port()
         ray.init(logging_level=logging.INFO)
+        options = {"num_gpus": 1} if predictor_config.get("device") == "cuda" else {}
         self.workers = [
-            MLIPWorker.remote(
+            MLIPWorker.options(**options).remote(
                 i, self.num_workers, self.master_pg_port, self.predictor_config
             )
             for i in range(self.num_workers)
@@ -91,6 +96,7 @@ class MLIPInferenceServerWebSocket:
             async for message in websocket:
                 # don't unpickle here, just pass bytes to workers
                 futures = [w.predict.remote(message) for w in self.workers]
+                # only need to retrieve results from the first worker since they are identical
                 results = ray.get(futures[0])
                 await websocket.send(results)
         except websockets.exceptions.ConnectionClosed:

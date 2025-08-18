@@ -1,5 +1,5 @@
 server:
-  workers: 2
+  workers: 1
   port: 8001
 
 predict_unit:

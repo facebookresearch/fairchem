@@ -50,6 +50,7 @@ def main():
             tf32=True,
             merge_mole=True,
             wigner_cuda=True,
+            compile=False,
             activation_checkpointing=False,
             internal_graph_gen_version=2,
             external_graph_gen=False,
@@ -58,16 +59,7 @@ def main():
     )
     atoms = get_fcc_carbon_xtal(5000)
 
-    # calc = FAIRChemCalculator(ppunit, task_name="omol")
-    # atoms.calc = calc
-    # print(atoms.get_potential_energy())
-    # # atoms = get_fcc_carbon_xtal(10001)
-    # # atoms.calc = calc
-    # # print(atoms.get_potential_energy())
-    # # del calc
-    # del calc.predictor
-
-    atomic_data = AtomicData.from_ase(atoms, task_name=["omol"])
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
     logging.info("Starting profile")
     qps, ns_per_day = get_qps(atomic_data, ppunit, warmups=10, timeiters=10)
     logging.info(f"QPS: {qps}, ns/day: {ns_per_day}")

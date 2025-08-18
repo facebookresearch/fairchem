@@ -30,10 +30,15 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
-from fairchem.core.units.mlip_unit.inference.client import MLIPInferenceClient
+from fairchem.core.units.mlip_unit.inference.client_websocket import (
+    SyncMLIPInferenceWebSocketClient,
+)
 from fairchem.core.units.mlip_unit.inference.inference_server import (
     InferenceServerProtocol,
     MLIPInferenceServerMP,
+)
+from fairchem.core.units.mlip_unit.inference.inference_server_ray import (
+    MLIPInferenceServerWebSocket,
 )
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
@@ -344,7 +349,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             atom_refs=atom_refs,
         )
         self._datasets_to_tasks = copy.deepcopy(_mlip_pred_unit.datasets_to_tasks)
-        # del _mlip_pred_unit
 
         if server_config is not None:
             logging.info(f"Starting inference server with config {server_config}")
@@ -364,25 +368,38 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 "atom_refs": atom_refs,
             }
 
-            self.server: InferenceServerProtocol = MLIPInferenceServerMP(
-                num_workers=self.workers,
+            self.server = MLIPInferenceServerWebSocket(
+                predictor_config=predict_unit_config,
                 port=self.server_port,
-                predict_config=predict_unit_config,
+                num_workers=self.workers,
             )
             self.server_thread = threading.Thread(target=self.server.run, args=())
             self.server_thread.start()
 
-            # Wait for server to be ready before starting the client
-            self.server.wait_until_ready()
+        self.client = SyncMLIPInferenceWebSocketClient(
+            host=self.server_address,
+            port=self.server_port,
+        )
 
-        if client_config is not None:
-            logging.info(f"Connecting to inference server with config {client_config}")
-            self.client = hydra.utils.instantiate(client_config)
-        else:
-            self.client = MLIPInferenceClient(
-                server_address=self.server_address,
-                port=self.server_port,
-            )
+        #     self.server: InferenceServerProtocol = MLIPInferenceServerMP(
+        #         num_workers=self.workers,
+        #         port=self.server_port,
+        #         predict_config=predict_unit_config,
+        #     )
+        #     self.server_thread = threading.Thread(target=self.server.run, args=())
+        #     self.server_thread.start()
+
+        #     # Wait for server to be ready before starting the client
+        #     self.server.wait_until_ready()
+
+        # if client_config is not None:
+        #     logging.info(f"Connecting to inference server with config {client_config}")
+        #     self.client = hydra.utils.instantiate(client_config)
+        # else:
+        #     self.client = MLIPInferenceClient(
+        #         server_address=self.server_address,
+        #         port=self.server_port,
+        #     )
 
     def __del__(self):
         # Explicitly shut down the server and join the thread
@@ -401,6 +418,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             raise RuntimeError(
                 "Client is not initialized. Ensure server_config or client_config is provided."
             )
+        # return self._mlip_pred_unit.predict(data)
         return self.client.call(data)
 
     @property

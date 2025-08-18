@@ -36,7 +36,7 @@ class SyncMLIPInferenceWebSocketClient:
         self.ws = None
 
     def connect(self):
-        self.ws = ws_connect(self.uri)
+        self.ws = ws_connect(self.uri, ping_timeout=300, ping_interval=60)
 
     def call(self, atomic_data):
         if not self.ws:
