@@ -205,6 +205,6 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
-    logging.warning(f"CUDA MEMORY USED: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
+    print(f"CUDA MEMORY USED BEFORE: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
     yield
-    logging.warning(f"CUDA MEMORY USED: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
+    print(f"CUDA MEMORY USED AFTER: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
