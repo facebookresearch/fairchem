@@ -74,7 +74,10 @@ def get_max_neighbors_mask(
     num_neighbors = get_counts(index, num_atoms)
 
     max_num_neighbors = num_neighbors.max()
-    num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
+    if max_num_neighbors_threshold > 0:
+        num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
+    else:
+        num_neighbors_thresholded = num_neighbors
 
     # Get number of (thresholded) neighbors per image
     image_indptr = torch.zeros(natoms.shape[0] + 1, device=device, dtype=torch.long)
@@ -317,6 +320,7 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
     if pbc is None and hasattr(data, "pbc"):
         data.pbc = torch.atleast_2d(data.pbc)
+        pbc = torch.BoolTensor([True, True, True])
         for i in range(3):
             if not torch.any(data.pbc[:, i]).item():
                 pbc[i] = False

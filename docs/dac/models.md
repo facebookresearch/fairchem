@@ -1,13 +1,31 @@
 
 # Pretrained models
 
-**2025 recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
-1. It is state-of-the-art in out-of-domain prediction accuracy
-2. It predicts total energies of a system, which are helpful for predicting properties beyond adsorption energies, and removes some ambiguity when your MOF may reconstruct. 
-3. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
-4. The UMA model is most likely to be updated in the future.
+## ODAC25 Models
 
-## ODAC23
+As part of the ODAC25 release, we released two sets of models:
+1. UMA models trained on a range of FAIR chemistry datasets including a subset of ODAC25, available at the [UMA HuggingFace site](https://huggingface.co/facebook/UMA)
+2. eSEN models trained only on ODAC25, available at the [ODAC25 HuggingFace site](https://huggingface.co/facebook/ODAC25)
+
+The UMA models were only trained on CO₂ and H₂O adsorbates, and are competitive with
+the eSEN models for these adsorbates. Since the UMA models were not trained on 
+N₂ and O₂, we strongly recommend using the eSEN models for these.
+
+If you use the ODAC25 trained models, please cite the following paper:
+
+```bib
+@misc{sriram2025odac25,
+    title={The Open DAC 2025 Dataset for Sorbent Discovery in Direct Air Capture}, 
+    author={Anuroop Sriram and Logan M. Brabson and Xiaohan Yu and Sihoon Choi and Kareem Abdelmaqsoud and Elias Moubarak and Pim de Haan and Sindy Löwe and Johann Brehmer and John R. Kitchin and Max Welling and C. Lawrence Zitnick and Zachary Ulissi and Andrew J. Medford and David S. Sholl},
+    year={2025},
+    eprint={},
+    archivePrefix={arXiv},
+    primaryClass={},
+    url={}, 
+}
+```
+
+## ODAC23 Models [Deprecated]
 * All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/facebookresearch/fairchem/tree/main/configs/odac) directory.
 
 ### S2EF models
