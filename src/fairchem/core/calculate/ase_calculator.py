@@ -70,7 +70,7 @@ class FAIRChemCalculator(Calculator):
         if isinstance(task_name, UMATask):
             task_name = task_name.value
 
-        valid_datasets = list(predict_unit.dataset_to_taskss.keys())
+        valid_datasets = list(predict_unit.dataset_to_tasks.keys())
         if task_name is not None:
             assert (
                 task_name in valid_datasets
@@ -84,7 +84,7 @@ class FAIRChemCalculator(Calculator):
             )
 
         self.implemented_properties = [
-            task.property for task in predict_unit.dataset_to_taskss[self.task_name]
+            task.property for task in predict_unit.dataset_to_tasks[self.task_name]
         ]
         if "energy" in self.implemented_properties:
             self.implemented_properties.append(
