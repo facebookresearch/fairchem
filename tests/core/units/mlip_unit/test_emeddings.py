@@ -35,7 +35,7 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
         datasets=["oc20"],
     )
     predictor.tasks["oc20_embeddings"] = oc20_embeddings_tasks
-    predictor.datasets_to_tasks["oc20"].append(oc20_embeddings_tasks)
+    predictor.dataset_to_tasks["oc20"].append(oc20_embeddings_tasks)
     predictor.model = predictor.model.to(torch.float64)
 
     a2g = partial(

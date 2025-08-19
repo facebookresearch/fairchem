@@ -59,7 +59,7 @@ def collate_predictions(predict_fn):
             data.batch = data.batch_full
         collated_preds = defaultdict(list)
         for i, dataset in enumerate(data.dataset):
-            for task in predict_unit.datasets_to_tasks[dataset]:
+            for task in predict_unit.dataset_to_tasks[dataset]:
                 if task.level == "system":
                     collated_preds[task.property].append(
                         preds[task.name][i].unsqueeze(0)
@@ -82,7 +82,7 @@ class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
     @property
-    def datasets_to_tasks(self) -> dict[str, list]: ...
+    def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
@@ -141,8 +141,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         ]
         self.tasks = {t.name: t for t in tasks}
 
-        self._datasets_to_tasks = get_datasets_to_tasks_map(self.tasks.values())
-        assert set(self._datasets_to_tasks.keys()).issubset(
+        self._dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
+        assert set(self._dataset_to_tasks.keys()).issubset(
             set(self.model.module.backbone.dataset_list)
         ), "Datasets in tasks is not a strict subset of datasets in backbone."
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
@@ -168,8 +168,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         return self.model.module.backbone.direct_forces
 
     @property
-    def datasets_to_tasks(self) -> dict[str, list]:
-        return self._datasets_to_tasks
+    def dataset_to_tasks(self) -> dict[str, list]:
+        return self._dataset_to_tasks
 
     def set_seed(self, seed: int):
         logging.debug(f"Setting random seed to {seed}")
@@ -279,7 +279,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         return pred_output
 
 
-def get_datasets_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     """Create a mapping from dataset names to their associated tasks.
 
     Args:
@@ -335,7 +335,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             seed=seed,
             atom_refs=atom_refs,
         )
-        self._datasets_to_tasks = copy.deepcopy(_mlip_pred_unit.datasets_to_tasks)
+        self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
         if server_config is not None:
             logging.info(f"Starting inference server with config {server_config}")
@@ -392,5 +392,5 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         return self.client.call(data)
 
     @property
-    def datasets_to_tasks(self) -> dict[str, list]:
-        return self._datasets_to_tasks
+    def dataset_to_tasks(self) -> dict[str, list]:
+        return self._dataset_to_tasks
