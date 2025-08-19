@@ -1,5 +1,5 @@
 run_dir: /checkpoint/ericqu/ESCAIPRUNDIR
-data_root_dir: /large_experiments/opencatalyst/datasets-asedb
+data_root_dir: /large_experiments/opencatalyst/foundation_models/benchmark
 mode: LOCAL
 device: CUDA
 ranks_per_node: 1
