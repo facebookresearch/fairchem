@@ -6,6 +6,7 @@ import timeit
 import numpy as np
 from ase import build
 
+from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -44,7 +45,7 @@ def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
 
 def main():
     ppunit = ParallelMLIPPredictUnit(
-        inference_model_path="/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt",
+        inference_model_path=pretrained_checkpoint_path_from_name("uma-s-1p1"),
         device="cuda",
         inference_settings=InferenceSettings(
             tf32=True,

@@ -28,10 +28,9 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
-# @ray.remote(num_gpus=1, num_cpus=12)
 @ray.remote
 class MLIPWorker:
     def __init__(

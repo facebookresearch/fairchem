@@ -443,32 +443,3 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         ((str(d), d.stat().st_mtime) for d in directory.iterdir() if d.is_dir()),
         key=lambda x: x[1],
     )
-
-
-def detach_dict_tensors(obj: dict | torch.Tensor) -> dict | torch.Tensor:
-    """
-    Recursively detaches all tensors in a nested dictionary, list, or tuple structure and moves them to CPU.
-
-    Args:
-        obj (dict | torch.Tensor): A dictionary (possibly nested) containing tensors, lists, tuples, or other dictionaries.
-
-    Returns:
-        The input structure with all tensors detached and moved to CPU. Non-tensor objects are returned unchanged.
-
-    Examples:
-        >>> import torch
-        >>> data = {'a': torch.tensor([1.0], requires_grad=True), 'b': [torch.tensor([2.0], requires_grad=True)]}
-        >>> result = detach_dict_tensors(data)
-        >>> result['a'].requires_grad
-        False
-        >>> result['a'].device.type
-        'cpu'
-    """
-    if hasattr(obj, "detach"):
-        return obj.detach().cpu()
-    elif isinstance(obj, dict):
-        return {k: detach_dict_tensors(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return type(obj)(detach_dict_tensors(item) for item in obj)
-    else:
-        return obj
