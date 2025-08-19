@@ -28,6 +28,7 @@ from fairchem.core.models.escaip.utils.graph_utils import (
     unpad_results,
 )
 from fairchem.core.models.escaip.utils.nn_utils import (
+    get_normalization_layer,
     init_linear_weights,
     no_weight_decay,
 )
@@ -196,27 +197,9 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         return no_weight_decay(self)
 
     def init_weights(self):
-        names = [
-            "ffn",
-            "feedforward",
-            "edge_hidden",
-            "node_hidden",
-            "edge_attr",
-            "embedding",
-            "message",
-        ]
-        for name, module in self.named_modules():
-            if isinstance(module, nn.Linear):
-                if isinstance(module, torch.nn.Linear):
-                    # check if the module is in the list of names
-                    if any(n in name for n in names):
-                        nn.init.xavier_uniform_(
-                            module.weight, gain=nn.init.calculate_gain("relu")
-                        )
-                    else:
-                        nn.init.xavier_uniform_(module.weight, gain=1.0)
-                if module.bias is not None:
-                    module.bias.data.zero_()
+        for _, module in self.named_modules():
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
 
 
 class EScAIPHeadBase(nn.Module, HeadInterface):
@@ -255,10 +238,19 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
             reg_cfg=self.reg_cfg,
             output_type="Scalar",
         )
+        self.node_norm = get_normalization_layer(self.reg_cfg.normalization)(
+            self.global_cfg.hidden_size
+        )
+        self.edge_norm = get_normalization_layer(self.reg_cfg.normalization)(
+            self.global_cfg.hidden_size
+        )
 
         self.post_init()
 
     def compiled_forward(self, edge_features, node_features, data: GraphAttentionData):
+        edge_features = self.edge_norm(edge_features)
+        node_features = self.node_norm(node_features)
+
         # get force direction from edge features
         force_direction = self.force_direction_layer(
             edge_features
@@ -307,14 +299,17 @@ class EScAIPEnergyHead(EScAIPHeadBase):
         )
         self.energy_reduce = self.gnn_cfg.energy_reduce
         self.use_global_readout = self.gnn_cfg.use_global_readout
+        self.node_norm = get_normalization_layer(self.reg_cfg.normalization)(
+            self.global_cfg.hidden_size
+        )
 
-        self.post_init(gain=0.1)
+        self.post_init()
 
     def compiled_forward(self, emb):
         if self.use_global_readout:
-            return self.energy_layer(emb["global_features"])
+            return self.energy_layer(self.node_norm(emb["global_features"]))
 
-        energy_output = self.energy_layer(emb["node_features"])
+        energy_output = self.energy_layer(self.node_norm(emb["node_features"]))
 
         # the following not compatible with torch.compile (grpah break)
         # energy_output = torch_scatter.scatter(energy_output, node_batch, dim=0, reduce="sum")
