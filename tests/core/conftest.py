@@ -205,6 +205,9 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
+    torch.cuda.empty_cache()    
     print(f"CUDA MEMORY USED BEFORE: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
     yield
+    torch.cuda.empty_cache()
     print(f"CUDA MEMORY USED AFTER: {torch.cuda.memory_allocated()/1024**2} {torch.cuda.memory_reserved()/1024**2}")
+    print(torch.cuda.memory_summary())
