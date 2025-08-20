@@ -15,6 +15,10 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     secrets: inherit
+  
+  perf-test:
+    uses: ./.github/workflows/perf-test.yml
+    secrets: inherit
 
   build:
     needs: test
@@ -39,7 +43,7 @@ jobs:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-core
           path: dist-core
@@ -64,7 +68,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-data-oc
           path: dist-data-oc
@@ -89,7 +93,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-demo-ocpapi
           path: dist-demo-ocpapi
@@ -114,7 +118,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami
