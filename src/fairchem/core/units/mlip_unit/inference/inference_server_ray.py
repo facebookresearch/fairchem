@@ -95,9 +95,10 @@ class MLIPInferenceServerWebSocket:
             async for message in websocket:
                 # don't unpickle here, just pass bytes to workers
                 futures = [w.predict.remote(message) for w in self.workers]
-                # only need to retrieve results from the first worker since they are identical
-                results = ray.get(futures[0])
-                await websocket.send(results)
+                # just get the first result that is ready since they are identical
+                # the rest of the futures should go out of scope and memory garbage collected
+                ready_ids, _ = ray.wait(futures, num_returns=1)
+                await websocket.send(ray.get(ready_ids[0]))
         except websockets.exceptions.ConnectionClosed:
             print("Client disconnected")
         except Exception as e:
