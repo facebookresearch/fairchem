@@ -9,12 +9,16 @@ from __future__ import annotations
 
 import copy
 import math
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 from torch.nn import Linear
 
 from .radial import RadialMLP
+
+if TYPE_CHECKING:
+    from fairchem.core.models.uma.common.so3 import CoefficientMapping
 
 
 class SO2_m_Conv(torch.nn.Module):
@@ -59,15 +63,16 @@ class SO2_m_Conv(torch.nn.Module):
         )
         self.fc.weight.data.mul_(1 / math.sqrt(2))
 
-    def forward(self, x_m):
+    def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x_m = self.fc(x_m)
-        x_r, x_i = x_m.split(self.out_channels_half, 2)
-        x_r_0, x_r_1 = x_r.split(1, 1)
-        x_i_0, x_i_1 = x_i.split(1, 1)
+        x_r, x_i = x_m.split(self.out_channels_half, dim=2)
+        x_r_0, x_r_1 = x_r.split(1, dim=1)
+        x_i_0, x_i_1 = x_i.split(1, dim=1)
         x_m_r = x_r_0 - x_i_1  # x_r[:, 0] - x_i[:, 1]
         x_m_i = x_r_1 + x_i_0  # x_r[:, 1] + x_i[:, 0]
-        return x_m_r.view(x_m.shape[0], -1, self.m_output_channels), x_m_i.view(
-            x_m.shape[0], -1, self.m_output_channels
+        return (
+            x_m_r.view(x_m.shape[0], -1, self.m_output_channels),
+            x_m_i.view(x_m.shape[0], -1, self.m_output_channels),
         )
 
 
@@ -80,7 +85,7 @@ class SO2_Convolution(torch.nn.Module):
         m_output_channels (int):    Number of output channels used during the SO(2) conv
         lmax (int):                 degrees (l)
         mmax (int):                 orders (m)
-        mappingReduced (CoefficientMappingModule): Used to extract a subset of m components
+        mappingReduced (CoefficientMapping): Used to extract a subset of m components
         internal_weights (bool):    If True, not using radial function to multiply inputs features
         edge_channels_list (list:int):  List of sizes of invariant edge embedding. For example, [input_channels, hidden_channels, hidden_channels].
         extra_m0_output_channels (int): If not None, return `out_embedding` and `extra_m0_features` (Tensor).
@@ -92,11 +97,11 @@ class SO2_Convolution(torch.nn.Module):
         m_output_channels: int,
         lmax: int,
         mmax: int,
-        mappingReduced,
+        mappingReduced: CoefficientMapping,
         internal_weights: bool = True,
         edge_channels_list: list[int] | None = None,
         extra_m0_output_channels: int | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
         self.m_output_channels = m_output_channels
@@ -151,7 +156,7 @@ class SO2_Convolution(torch.nn.Module):
         self,
         x: torch.Tensor,
         x_edge: torch.Tensor,
-    ):
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         # radial function
         if self.rad_func is not None:
             x_edge_by_m = self.rad_func(x_edge).split(self.edge_split_sizes, dim=1)
@@ -202,7 +207,7 @@ class SO2_Linear(torch.nn.Module):
         m_output_channels (int):    Number of output channels used during the SO(2) conv
         lmax (int):                 degrees (l)
         mmax (int):                 orders (m)
-        mappingReduced (CoefficientMappingModule): Used to extract a subset of m components
+        mappingReduced (CoefficientMapping): Used to extract a subset of m components
         internal_weights (bool):    If True, not using radial function to multiply inputs features
         edge_channels_list (list:int):  List of sizes of invariant edge embedding. For example, [input_channels, hidden_channels, hidden_channels].
     """
@@ -213,10 +218,10 @@ class SO2_Linear(torch.nn.Module):
         m_output_channels: int,
         lmax: int,
         mmax: int,
-        mappingReduced,
+        mappingReduced: CoefficientMapping,
         internal_weights: bool = False,
         edge_channels_list: list[int] | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
         self.m_output_channels = m_output_channels
@@ -255,7 +260,7 @@ class SO2_Linear(torch.nn.Module):
             self.edge_channels_list.append(int(num_channels_rad))
             self.rad_func = RadialMLP(self.edge_channels_list)
 
-    def forward(self, x, x_edge):
+    def forward(self, x: torch.Tensor, x_edge: torch.Tensor) -> torch.Tensor:
         batch_size = x.shape[0]
         out = []
 
