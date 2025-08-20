@@ -320,22 +320,52 @@ def compute_loss(
                 if matches:
                     # Extract the actual prediction tensor
                     if isinstance(pred_value, dict):
-                        # Look for the task name or property in the nested dictionary
-                        if task.name in pred_value:
-                            head_pred = pred_value[task.name]
-                        elif task.property in pred_value:
-                            head_pred = pred_value[task.property]
+                        # Check if this is an ensemble structure (multiple heads)
+                        # Look for head patterns in the keys
+                        head_keys = []
+                        import re
+                        for sub_key in pred_value.keys():
+                            if (re.match(rf'.*{task.property}.*head\d+$', sub_key) or 
+                                re.match(r'head\d+_.*', sub_key) or
+                                (sub_key.startswith(f"{task.property}_") and re.search(r'_\d+$', sub_key))):
+                                head_keys.append(sub_key)
+                        
+                        if head_keys:
+                            # This is an ensemble structure - extract all heads for averaging
+                            for head_key in head_keys:
+                                head_pred = pred_value[head_key]
+                                # Extract tensor from head prediction
+                                if isinstance(head_pred, dict):
+                                    if task.property in head_pred:
+                                        head_tensor = head_pred[task.property]
+                                    elif task.name in head_pred:
+                                        head_tensor = head_pred[task.name]
+                                    else:
+                                        head_tensor = next((v for v in head_pred.values() if isinstance(v, torch.Tensor)), None)
+                                        if head_tensor is None:
+                                            continue
+                                elif isinstance(head_pred, torch.Tensor):
+                                    head_tensor = head_pred
+                                else:
+                                    continue
+                                task_heads.append((head_key, head_tensor))
                         else:
-                            # Try to find any tensor value in the dict
-                            head_pred = next((v for v in pred_value.values() if isinstance(v, torch.Tensor)), None)
-                            if head_pred is None:
-                                continue
+                            # Not an ensemble structure - look for direct property match
+                            if task.name in pred_value:
+                                head_pred = pred_value[task.name]
+                            elif task.property in pred_value:
+                                head_pred = pred_value[task.property]
+                            else:
+                                # Try to find any tensor value in the dict
+                                head_pred = next((v for v in pred_value.values() if isinstance(v, torch.Tensor)), None)
+                                if head_pred is None:
+                                    continue
+                            task_heads.append((pred_key, head_pred))
                     elif isinstance(pred_value, torch.Tensor):
                         head_pred = pred_value
+                        task_heads.append((pred_key, head_pred))
                     else:
                         continue
-                    
-                    task_heads.append((pred_key, head_pred))
         
         if not task_heads:
             continue  # Skip if no heads found for this task
@@ -469,9 +499,11 @@ def compute_loss(
             )
             loss_dict[task.name] = loss
 
-    # Sanity check to make sure the compute graph is correct.
-    for lc in loss_dict.values():
-        assert hasattr(lc, "grad_fn")
+    # Sanity check to make sure the compute graph is correct during training.
+    # Skip this check during evaluation when gradients are disabled.
+    if torch.is_grad_enabled():
+        for lc in loss_dict.values():
+            assert hasattr(lc, "grad_fn"), f"Loss tensor should have grad_fn during training, got {lc}"
 
     return loss_dict
 
