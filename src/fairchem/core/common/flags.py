@@ -27,7 +27,6 @@ class Flags:
         self.parser.add_argument(
             "--mode",
             choices=["train", "predict", "run-relaxations", "validate"],
-            required=True,
             help="Whether to train the model, make predictions, or to run relaxations",
         )
         self.parser.add_argument(

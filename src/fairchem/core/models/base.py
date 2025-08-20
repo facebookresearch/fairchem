@@ -63,14 +63,10 @@ class GraphModelMixin:
         use_pbc_single = use_pbc_single or self.use_pbc_single
         otf_graph = otf_graph or self.otf_graph
 
-        if enforce_max_neighbors_strictly is not None:
-            pass
-        elif hasattr(self, "enforce_max_neighbors_strictly"):
-            # Not all models will have this attribute
-            enforce_max_neighbors_strictly = self.enforce_max_neighbors_strictly
-        else:
-            # Default to old behavior
-            enforce_max_neighbors_strictly = True
+        if enforce_max_neighbors_strictly is None:
+            enforce_max_neighbors_strictly = getattr(
+                self, "enforce_max_neighbors_strictly", True
+            )
 
         if not otf_graph:
             try:
@@ -242,6 +238,7 @@ class HydraModel(nn.Module, GraphModelMixin):
         finetune_config: dict | None = None,
         otf_graph: bool = True,
         pass_through_head_outputs: bool = False,
+        freeze_backbone: bool = False,
     ):
         super().__init__()
         self.device = None
@@ -254,6 +251,11 @@ class HydraModel(nn.Module, GraphModelMixin):
         # if finetune_config is provided, then attempt to load the model from the given finetune checkpoint
         starting_model = None
         if finetune_config is not None:
+            # Make it hard to sneak more fields into finetuneconfig
+            assert (
+                len(set(finetune_config.keys()) - {"starting_checkpoint", "override"})
+                == 0
+            )
             starting_model: HydraModel = load_model_and_weights_from_checkpoint(
                 finetune_config["starting_checkpoint"]
             )
@@ -263,6 +265,10 @@ class HydraModel(nn.Module, GraphModelMixin):
             assert isinstance(
                 starting_model, HydraModel
             ), "Can only finetune starting from other hydra models!"
+            # TODO this is a bit hacky to overrride attrs in the backbone
+            if "override" in finetune_config:
+                for key, value in finetune_config["override"].items():
+                    setattr(starting_model.backbone, key, value)
 
         if backbone is not None:
             backbone = copy.deepcopy(backbone)
@@ -281,6 +287,10 @@ class HydraModel(nn.Module, GraphModelMixin):
             raise RuntimeError(
                 "Backbone not specified and not found in the starting checkpoint"
             )
+
+        if freeze_backbone:
+            for param in self.backbone.parameters():
+                param.requires_grad = False
 
         if heads is not None:
             heads = copy.deepcopy(heads)

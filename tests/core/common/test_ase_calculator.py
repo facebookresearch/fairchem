@@ -14,6 +14,7 @@ import pytest
 import torch
 from ase.build import add_adsorbate, fcc111
 from ase.optimize import BFGS
+from huggingface_hub.utils._auth import get_token
 
 from fairchem.core.common.relaxation.ase_utils import OCPCalculator
 from fairchem.core.models.model_registry import model_name_to_local_file
@@ -29,20 +30,26 @@ def atoms() -> Atoms:
     add_adsorbate(atoms, "O", height=1.2, position="fcc")
     return atoms
 
-
-@pytest.fixture(
-    params=[
+available_models=[
         "SchNet-S2EF-OC20-All",
         "DimeNet++-S2EF-OC20-All",
         "GemNet-dT-S2EF-OC20-All",
         "PaiNN-S2EF-OC20-All",
         "GemNet-OC-Large-S2EF-OC20-All+MD",
         "SCN-S2EF-OC20-All+MD",
-        # Equiformer v2  # already tested in test_relaxation_final_energy
-        # "EquiformerV2-153M-S2EF-OC20-All+MD"
+        "PaiNN-IS2RE-OC20-All",
+        # "EquiformerV2-153M-S2EF-OC20-All+MD" # Equiformer v2  # already tested in test_relaxation_final_energy
         # eSCNm # already tested in test_random_seed_final_energy
         # "eSCN-L4-M2-Lay12-S2EF-OC20-2M"
-    ]
+]
+
+if get_token():
+    # Only run OMAT if we have a huggingface token!
+    available_models.append("EquiformerV2-31M-OMAT24")
+        
+
+@pytest.fixture(
+    params=available_models
 )
 def checkpoint_path(request, tmp_path):
     return model_name_to_local_file(request.param, tmp_path)
@@ -52,6 +59,27 @@ def checkpoint_path(request, tmp_path):
 # errors as part of the ASE calculator setup.
 def test_calculator_setup(checkpoint_path):
     _ = OCPCalculator(checkpoint_path=checkpoint_path, cpu=True)
+
+
+def test_energy_with_is2re_model(atoms, tmp_path, snapshot):
+    random.seed(1)
+    torch.manual_seed(1)
+
+    with pytest.raises(AttributeError):  # noqa
+        calc = OCPCalculator(
+            checkpoint_path=model_name_to_local_file("PaiNN-IS2RE-OC20-All", tmp_path),
+            cpu=True,
+        )
+        atoms.set_calculator(calc)
+        atoms.get_potential_energy()
+
+    calc = OCPCalculator(
+        checkpoint_path=model_name_to_local_file("PaiNN-IS2RE-OC20-All", tmp_path),
+        cpu=True,
+        only_output=["energy"],
+    )
+    atoms.set_calculator(calc)
+    assert snapshot == round(atoms.get_potential_energy(), 2)
 
 
 # test relaxation with EqV2
@@ -64,6 +92,9 @@ def test_relaxation_final_energy(atoms, tmp_path, snapshot) -> None:
         ),
         cpu=True,
     )
+
+    assert "energy" in calc.implemented_properties
+    assert "forces" in calc.implemented_properties
 
     atoms.set_calculator(calc)
     opt = BFGS(atoms)

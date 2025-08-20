@@ -11,11 +11,14 @@ import os
 
 import numpy as np
 import pytest
+import torch
+from ase import Atoms, db
 from ase.io import read
 from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
 
-from fairchem.core.preprocessing import AtomsToGraphs
 from fairchem.core.modules.evaluator import min_diff
+from fairchem.core.preprocessing import AtomsToGraphs
+
 
 @pytest.fixture(scope="class")
 def atoms_to_graphs_internals(request) -> None:
@@ -44,7 +47,17 @@ def atoms_to_graphs_internals(request) -> None:
         r_distances=True,
         r_data_keys=["stiffness_tensor"],
     )
+    test_object_only_stiffness = AtomsToGraphs(
+        max_neigh=200,
+        radius=6,
+        r_energy=False,
+        r_forces=False,
+        r_stress=False,
+        r_distances=False,
+        r_data_keys=["stiffness_tensor"],
+    )
     request.cls.atg = test_object
+    request.cls.atg_only_stiffness = test_object_only_stiffness
     request.cls.atoms = atoms
 
 
@@ -110,7 +123,9 @@ class TestAtomsToGraphs:
         # positions
         act_positions = self.atoms.get_positions()
         positions = data.pos.numpy()
-        mindiff = min_diff(act_positions, positions, self.atoms.get_cell(), self.atoms.pbc)        
+        mindiff = min_diff(
+            act_positions, positions, self.atoms.get_cell(), self.atoms.pbc
+        )
         np.testing.assert_allclose(mindiff, 0, atol=1e-6)
         # check energy value
         act_energy = self.atoms.get_potential_energy(apply_constraint=False)
@@ -130,9 +145,8 @@ class TestAtomsToGraphs:
             self.atoms.info["stiffness_tensor"], stiffness_tensor
         )
 
-    def test_convert_all(self) -> None:
+    def test_convert_all_atoms_list(self) -> None:
         # run convert_all on a list with one atoms object
-        # this does not test the atoms.db functionality
         atoms_list = [self.atoms]
         data_list = self.atg.convert_all(atoms_list)
         # check shape/values of features
@@ -143,7 +157,9 @@ class TestAtomsToGraphs:
         # positions
         act_positions = self.atoms.get_positions()
         positions = data_list[0].pos.numpy()
-        mindiff = min_diff(act_positions, positions, self.atoms.get_cell(), self.atoms.pbc)        
+        mindiff = min_diff(
+            act_positions, positions, self.atoms.get_cell(), self.atoms.pbc
+        )
         np.testing.assert_allclose(mindiff, 0, atol=1e-6)
         # check energy value
         act_energy = self.atoms.get_potential_energy(apply_constraint=False)
@@ -162,3 +178,65 @@ class TestAtomsToGraphs:
         np.testing.assert_allclose(
             self.atoms.info["stiffness_tensor"], stiffness_tensor
         )
+
+    def test_convert_all_ase_db(self, tmp_path_factory) -> None:
+        # run convert_all on an ASE db object
+
+        # There is a possible bug in ASE which makes this test annoying to write.
+        # AtomsRow.toatoms() has a calculator attached that computes a stress tensor # with the wrong shape: (9,). This makes convert_all fail due to an assertion in
+        # atoms.get_stress().
+
+        tmp_path = tmp_path_factory.mktemp("convert_all_test")
+        with db.connect(tmp_path / "asedb.db") as database:
+            database.write(self.atoms, data=self.atoms.info)
+            data_list = self.atg_only_stiffness.convert_all(database)
+
+        # additional data (ie stiffness_tensor)
+        stiffness_tensor = data_list[0].stiffness_tensor.numpy()
+        np.testing.assert_allclose(
+            self.atoms.info["stiffness_tensor"], stiffness_tensor
+        )
+
+    def test_convert_molecule(self) -> None:
+        # test converting a molecule with no unit cell
+        molecule = Atoms("2N", [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0)])
+        a2g = AtomsToGraphs(
+            max_neigh=200,
+            radius=6,
+            r_edges=True,
+            r_distances=True,
+        )
+        # this will raise an Singlular Matrix Error because the cell doesn't exist
+        with pytest.raises(np.linalg.LinAlgError):
+            a2g.convert(molecule)
+        # now add a molecular box
+        cell_size = 120.0
+        a2g = AtomsToGraphs(
+            max_neigh=200,
+            radius=6,
+            r_edges=True,
+            r_distances=True,
+            molecule_cell_size=cell_size,
+        )
+        converted_mol = a2g.convert(molecule)
+        assert torch.allclose(
+            converted_mol.cell[0],
+            torch.diag(torch.tensor([cell_size * 2, cell_size * 2, cell_size * 2 + 1])),
+        )
+        assert converted_mol.natoms == 2
+        assert torch.allclose(
+            converted_mol.pos[0], torch.tensor([cell_size, cell_size, cell_size])
+        )
+        assert torch.allclose(
+            converted_mol.pos[1], torch.tensor([cell_size, cell_size, cell_size + 1])
+        )
+        assert torch.allclose(converted_mol.edge_index, torch.tensor([[1, 0], [0, 1]]))
+
+    def test_convert_molecule_raises_assertion_with_cell(self) -> None:
+        molecule = Atoms("2N", [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0)], cell=[1, 1, 1])
+        a2g = AtomsToGraphs(
+            molecule_cell_size=120.0,
+            r_distances=True,
+        )
+        with pytest.raises(AssertionError):
+            a2g.convert(molecule)

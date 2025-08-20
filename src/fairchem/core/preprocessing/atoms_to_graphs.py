@@ -77,6 +77,8 @@ class AtomsToGraphs:
         Default is False, so the periodic boundary conditions will not be returned.
         r_data_keys (sequence of str, optional): Return values corresponding to given keys in atoms.info data with other
         properties. Default is None, so no data will be returned as properties.
+        molecule_cell_size: create a large molecular box with the atoms centered in the middle, units are Angstroms. This should be very large to make sure no atoms fall
+        outside the box, otherwise it will lead to errors. There is no computational penalty for making this box super large.
     """
 
     def __init__(
@@ -91,6 +93,7 @@ class AtomsToGraphs:
         r_pbc: bool = False,
         r_stress: bool = False,
         r_data_keys: Sequence[str] | None = None,
+        molecule_cell_size: float | None = None,
     ) -> None:
         self.max_neigh = max_neigh
         self.radius = radius
@@ -102,6 +105,7 @@ class AtomsToGraphs:
         self.r_edges = r_edges
         self.r_pbc = r_pbc
         self.r_data_keys = r_data_keys
+        self.molecule_cell_size = molecule_cell_size
 
     def _get_neighbors_pymatgen(self, atoms: ase.Atoms):
         """Preforms nearest neighbor search and returns edge index, distances,
@@ -180,19 +184,32 @@ class AtomsToGraphs:
         """
 
         # set the atomic numbers, positions, and cell
-        positions = np.array(atoms.get_positions(), copy=True)
-        pbc = np.array(atoms.pbc, copy=True)
-        cell = np.array(atoms.get_cell(complete=True), copy=True)
-        positions = wrap_positions(positions, cell, pbc=pbc, eps=0)
+        atoms_copy = atoms.copy()
+        # for molecules
+        if self.molecule_cell_size is not None:
+            assert (
+                atoms_copy.cell.volume == 0.0
+            ), "atoms must not have a unit cell to begin with to create a molecule cell"
+            # create a molecule box with the molecule centered on it if specified
+            atoms_copy.center(vacuum=(self.molecule_cell_size))
+            cell = np.array(atoms_copy.get_cell(), copy=True)
+            pbc = np.array([True, True, True])
+            positions = np.array(atoms_copy.get_positions(), copy=True)
+        else:  # for materials
+            cell = np.array(atoms_copy.get_cell(complete=True), copy=True)
+            pbc = np.array(atoms_copy.pbc, copy=True)
+            positions = np.array(atoms_copy.get_positions(), copy=True)
+            positions = wrap_positions(positions, cell, pbc=pbc, eps=0)
+            atoms_copy.set_positions(positions)
 
-        atomic_numbers = torch.Tensor(atoms.get_atomic_numbers())
+        atomic_numbers = torch.tensor(atoms.get_atomic_numbers(), dtype=torch.uint8)
         positions = torch.from_numpy(positions).float()
         cell = torch.from_numpy(cell).view(1, 3, 3).float()
         natoms = positions.shape[0]
 
         # initialized to torch.zeros(natoms) if tags missing.
         # https://wiki.fysik.dtu.dk/ase/_modules/ase/atoms.html#Atoms.get_tags
-        tags = torch.Tensor(atoms.get_tags())
+        tags = torch.tensor(atoms.get_tags(), dtype=torch.int)
 
         # put the minimum data in torch geometric data object
         data = Data(
@@ -210,8 +227,6 @@ class AtomsToGraphs:
         # optionally include other properties
         if self.r_edges:
             # run internal functions to get padded indices and distances
-            atoms_copy = atoms.copy()
-            atoms_copy.set_positions(positions)
             split_idx_dist = self._get_neighbors_pymatgen(atoms_copy)
             edge_index, edge_distances, cell_offsets = self._reshape_features(
                 *split_idx_dist
@@ -222,16 +237,22 @@ class AtomsToGraphs:
             data.edge_distance_vec = self.get_edge_distance_vec(
                 positions, edge_index, cell, cell_offsets
             )
+            data.nedges = edge_index.shape[1]
 
             del atoms_copy
         if self.r_energy:
             energy = atoms.get_potential_energy(apply_constraint=False)
             data.energy = energy
         if self.r_forces:
-            forces = torch.Tensor(atoms.get_forces(apply_constraint=False))
+            forces = torch.tensor(
+                atoms.get_forces(apply_constraint=False), dtype=torch.float32
+            )
             data.forces = forces
         if self.r_stress:
-            stress = torch.Tensor(atoms.get_stress(apply_constraint=False, voigt=False))
+            stress = torch.tensor(
+                atoms.get_stress(apply_constraint=False, voigt=False),
+                dtype=torch.float32,
+            )
             data.stress = stress
         if self.r_distances and self.r_edges:
             data.distances = edge_distances
@@ -245,13 +266,13 @@ class AtomsToGraphs:
                         fixed_idx[constraint.index] = 1
             data.fixed = fixed_idx
         if self.r_pbc:
-            data.pbc = torch.tensor(atoms.pbc)
+            data.pbc = torch.tensor(atoms.pbc, dtype=torch.bool)
         if self.r_data_keys is not None:
             for data_key in self.r_data_keys:
                 data[data_key] = (
                     atoms.info[data_key]
-                    if isinstance(atoms.info[data_key], (int, float))
-                    else torch.Tensor(atoms.info[data_key])
+                    if isinstance(atoms.info[data_key], (int, float, str))
+                    else torch.tensor(atoms.info[data_key])
                 )
 
         return data
@@ -291,18 +312,19 @@ class AtomsToGraphs:
         else:
             raise NotImplementedError
 
-        for atoms in tqdm(
+        for atoms_or_row in tqdm(
             atoms_iter,
             desc="converting ASE atoms collection to graphs",
             total=len(atoms_collection),
             unit=" systems",
             disable=disable_tqdm,
         ):
-            # check if atoms is an ASE Atoms object this for the ase.db case
-            data = self.convert(
-                atoms if isinstance(atoms, ase.atoms.Atoms) else atoms.toatoms()
-            )
-            data_list.append(data)
+            if isinstance(atoms_or_row, ase.db.row.AtomsRow):
+                atoms = atoms_or_row.toatoms(add_additional_information=True)
+                atoms.info = atoms.info["data"]
+                data_list.append(self.convert(atoms))
+            else:
+                data_list.append(self.convert(atoms_or_row))
 
         if collate_and_save:
             data, slices = collate(data_list)

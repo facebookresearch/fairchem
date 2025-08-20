@@ -804,7 +804,6 @@ class GemNetOC(nn.Module, GraphModelMixin):
         new_graph["vector"] = self.select_symmetric_edges(
             graph["vector"], mask, edge_reorder_idx, True
         )
-
         # Indices for swapping c->a and a->c (for symmetric MP)
         # To obtain these efficiently and without any index assumptions,
         # we get order the counter-edge IDs and then
@@ -863,7 +862,7 @@ class GemNetOC(nn.Module, GraphModelMixin):
 
         empty_image = subgraph["num_neighbors"] == 0
         if torch.any(empty_image):
-            raise ValueError(f"An image has no neighbors: sid={data.sid[empty_image]}")
+            logging.warning(f"An image has no neighbors: {data[empty_image]}")
         return subgraph
 
     def generate_graph_dict(self, data, cutoff, max_neighbors):
@@ -1267,7 +1266,7 @@ class GemNetOC(nn.Module, GraphModelMixin):
         x_E = self.out_mlp_E(torch.cat(xs_E, dim=-1))
         if self.direct_forces:
             x_F = self.out_mlp_F(torch.cat(xs_F, dim=-1))
-        with torch.cuda.amp.autocast(False):
+        with torch.autocast("cuda", enabled=False):
             E_t = self.out_energy(x_E.float())
             if self.direct_forces:
                 F_st = self.out_forces(x_F.float())
@@ -1465,7 +1464,7 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
     ) -> dict[str, torch.Tensor]:
         # Global output block for final predictions
         x_E = self.out_mlp_E(torch.cat(emb["xs_E"], dim=-1))
-        with torch.cuda.amp.autocast(False):
+        with torch.autocast("cuda", enabled=False):
             E_t = self.out_energy(x_E.float())
 
         nMolecules = torch.max(data.batch) + 1
@@ -1530,7 +1529,7 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
         self, data: Batch, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         if self.direct_forces:
-            with torch.cuda.amp.autocast(False):
+            with torch.autocast("cuda", enabled=False):
                 x_F = self.out_mlp_F(torch.cat(emb["xs_F"], dim=-1).float())
                 F_st = self.out_forces(x_F)
 

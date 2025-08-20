@@ -10,22 +10,26 @@ from __future__ import annotations
 import ast
 import collections
 import copy
+import datetime
 import errno
+import functools
 import importlib
 import itertools
 import json
 import logging
 import os
+import pathlib
 import subprocess
 import sys
 import time
 from bisect import bisect
 from contextlib import contextmanager
 from dataclasses import dataclass
-from functools import wraps
+from functools import reduce, wraps
 from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 import numpy as np
 import torch
@@ -36,11 +40,10 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from torch_geometric.data import Data
 from torch_geometric.utils import remove_self_loops
-from torch_scatter import scatter, segment_coo, segment_csr
+from torch_scatter import scatter
 
 import fairchem.core
 from fairchem.core.common.registry import registry
-from fairchem.core.modules.loss import AtomwiseL2Loss, L2MAELoss
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -714,7 +717,8 @@ def radius_graph_pbc(
 
     # Tensor of unit cells
     cells_per_dim = [
-        torch.arange(-rep, rep + 1, device=device, dtype=torch.float) for rep in max_rep
+        torch.arange(-rep.item(), rep.item() + 1, device=device, dtype=torch.float)
+        for rep in max_rep
     ]
     unit_cell = torch.cartesian_prod(*cells_per_dim)
     num_cells = len(unit_cell)
@@ -776,6 +780,24 @@ def radius_graph_pbc(
     return edge_index, unit_cell, num_neighbors_image
 
 
+def sum_partitions(x: torch.Tensor, partition_idxs: torch.Tensor) -> torch.Tensor:
+    sums = torch.zeros(partition_idxs.shape[0] - 1, device=x.device, dtype=x.dtype)
+    for idx in range(partition_idxs.shape[0] - 1):
+        sums[idx] = x[partition_idxs[idx] : partition_idxs[idx + 1]].sum()
+    return sums
+
+
+def get_counts(x: torch.Tensor, length: int):
+    dtype = x.dtype
+    device = x.device
+    return torch.zeros(length, device=device, dtype=dtype).scatter_reduce(
+        dim=0,
+        index=x,
+        src=torch.ones(x.shape[0], device=device, dtype=dtype),
+        reduce="sum",
+    )
+
+
 def get_max_neighbors_mask(
     natoms,
     index,
@@ -803,16 +825,15 @@ def get_max_neighbors_mask(
     num_atoms = natoms.sum()
 
     # Get number of neighbors
-    # segment_coo assumes sorted index
-    ones = index.new_ones(1).expand_as(index)
-    num_neighbors = segment_coo(ones, index, dim_size=num_atoms)
+    num_neighbors = get_counts(index, num_atoms)
+
     max_num_neighbors = num_neighbors.max()
     num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
 
     # Get number of (thresholded) neighbors per image
     image_indptr = torch.zeros(natoms.shape[0] + 1, device=device, dtype=torch.long)
     image_indptr[1:] = torch.cumsum(natoms, dim=0)
-    num_neighbors_image = segment_csr(num_neighbors_thresholded, image_indptr)
+    num_neighbors_image = sum_partitions(num_neighbors_thresholded, image_indptr)
 
     # If max_num_neighbors is below the threshold, return early
     if (
@@ -869,7 +890,7 @@ def get_max_neighbors_mask(
         # Recompute the number of neighbors
         num_neighbors_thresholded = num_neighbors.clamp(max=num_included_per_atom)
 
-        num_neighbors_image = segment_csr(num_neighbors_thresholded, image_indptr)
+        num_neighbors_image = sum_partitions(num_neighbors_thresholded, image_indptr)
 
     # Offset index_sort so that it indexes into index
     index_sort = index_sort + index_neighbor_offset.view(-1, 1).expand(
@@ -884,7 +905,6 @@ def get_max_neighbors_mask(
     # Create a mask to remove all pairs not in index_sort
     mask_num_neighbors = torch.zeros(len(index), device=device, dtype=bool)
     mask_num_neighbors.index_fill_(0, index_sort, True)
-
     return mask_num_neighbors, num_neighbors_image
 
 
@@ -954,21 +974,33 @@ class SeverityLevelBetween(logging.Filter):
         return self.min_level <= record.levelno < self.max_level
 
 
+def debug_log_entry_exit(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        logging.debug(f"{func.__name__}...")
+        result = func(*args, **kwargs)
+        logging.debug(f"{func.__name__} done")
+        return result
+
+    return wrapper
+
+
 def setup_logging() -> None:
     root = logging.getLogger()
-
     # Perform setup only if logging has not been configured
+    target_logging_level = getattr(logging, os.environ.get("LOGLEVEL", "INFO").upper())
+    root.setLevel(target_logging_level)
     if not root.hasHandlers():
-        root.setLevel(logging.INFO)
-
         log_formatter = logging.Formatter(
-            "%(asctime)s (%(levelname)s): %(message)s",
+            "%(asctime)s %(pathname)s:%(lineno)d: (%(levelname)s): %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
-        # Send INFO to stdout
+        # Send INFO (or target) to stdout
         handler_out = logging.StreamHandler(sys.stdout)
-        handler_out.addFilter(SeverityLevelBetween(logging.INFO, logging.WARNING))
+        handler_out.addFilter(
+            SeverityLevelBetween(target_logging_level, logging.WARNING)
+        )
         handler_out.setFormatter(log_formatter)
         root.addHandler(handler_out)
 
@@ -981,16 +1013,14 @@ def setup_logging() -> None:
 
 def compute_neighbors(data, edge_index):
     # Get number of neighbors
-    # segment_coo assumes sorted index
-    ones = edge_index[1].new_ones(1).expand_as(edge_index[1])
-    num_neighbors = segment_coo(ones, edge_index[1], dim_size=data.natoms.sum())
+    num_neighbors = get_counts(edge_index[1], data.natoms.sum())
 
     # Get number of neighbors per image
     image_indptr = torch.zeros(
         data.natoms.shape[0] + 1, device=data.pos.device, dtype=torch.long
     )
     image_indptr[1:] = torch.cumsum(data.natoms, dim=0)
-    return segment_csr(num_neighbors, image_indptr)
+    return sum_partitions(num_neighbors, image_indptr)
 
 
 def check_traj_files(batch, traj_dir) -> bool:
@@ -1031,72 +1061,74 @@ def new_trainer_context(*, config: dict[str, Any]):
     distutils.setup(config)
     if config["gp_gpus"] is not None:
         gp_utils.setup_gp(config)
-    try:
-        setup_imports(config)
-        trainer_name = config.get("trainer", "ocp")
-        # backwards compatibility for older configs
-        if trainer_name in ["forces", "equiformerv2_forces"]:
-            task_name = "s2ef"
-        elif trainer_name in ["energy", "equiformerv2_energy"]:
-            task_name = "is2re"
-        elif "multitask" in trainer_name:
-            task_name = "multitask"
-        else:
-            task_name = "ocp"
 
-        trainer_cls = registry.get_trainer_class(trainer_name)
-        assert trainer_cls is not None, "Trainer not found"
+    setup_imports(config)
+    trainer_name = config.get("trainer", "ocp")
+    # backwards compatibility for older configs
+    if trainer_name in ["forces", "equiformerv2_forces"]:
+        task_name = "s2ef"
+    elif trainer_name in ["energy", "equiformerv2_energy"]:
+        task_name = "is2re"
+    elif "multitask" in trainer_name:
+        task_name = "multitask"
+    else:
+        task_name = "ocp"
 
-        trainer_config = {
-            "model": config["model"],
-            "optimizer": config["optim"],
-            "identifier": config["identifier"],
-            "timestamp_id": config.get("timestamp_id", None),
-            "run_dir": config.get("run_dir", "./"),
-            "is_debug": config.get("is_debug", False),
-            "print_every": config.get("print_every", 10),
-            "seed": config.get("seed", 0),
-            "logger": config.get("logger", "wandb"),
-            "local_rank": config["local_rank"],
-            "amp": config.get("amp", False),
-            "cpu": config.get("cpu", False),
-            "slurm": config.get("slurm", {}),
-            "name": task_name,
-            "gp_gpus": config.get("gp_gpus"),
-        }
+    trainer_cls = registry.get_trainer_class(trainer_name)
+    assert trainer_cls is not None, "Trainer not found"
 
-        if task_name == "multitask":
-            trainer_config.update(
-                {
-                    "tasks": config.get("tasks", {}),
-                    "dataset_configs": config["datasets"],
-                    "combined_dataset_config": config.get("combined_dataset", {}),
-                    "evaluations": config.get("evaluations", {}),
-                }
-            )
-        else:
-            trainer_config.update(
-                {
-                    "task": config.get("task", {}),
-                    "outputs": config.get("outputs", {}),
-                    "dataset": config["dataset"],
-                    "loss_functions": config.get("loss_functions", {}),
-                    "evaluation_metrics": config.get("evaluation_metrics", {}),
-                }
-            )
-        trainer = trainer_cls(**trainer_config)
+    trainer_config = {
+        "model": config["model"],
+        "optimizer": config["optim"],
+        "identifier": config["identifier"],
+        "timestamp_id": config.get("timestamp_id", None),
+        "run_dir": config.get("run_dir", "./"),
+        "is_debug": config.get("is_debug", False),
+        "print_every": config.get("print_every", 10),
+        "seed": config.get("seed", 0),
+        "logger": config.get("logger", "wandb"),
+        "local_rank": config["local_rank"],
+        "amp": config.get("amp", False),
+        "cpu": config.get("cpu", False),
+        "slurm": config.get("slurm", {}),
+        "name": task_name,
+        "gp_gpus": config.get("gp_gpus"),
+    }
 
-        task_cls = registry.get_task_class(config["mode"])
-        assert task_cls is not None, "Task not found"
-        task = task_cls(config)
-        start_time = time.time()
-        ctx = _TrainingContext(config=original_config, task=task, trainer=trainer)
-        yield ctx
-        distutils.synchronize()
-        if distutils.is_master():
-            logging.info(f"Total time taken: {time.time() - start_time}")
-    finally:
-        distutils.cleanup()
+    if task_name == "multitask":
+        trainer_config.update(
+            {
+                "tasks": config.get("tasks", {}),
+                "dataset_configs": config["datasets"],
+                "combined_dataset_config": config.get("combined_dataset", {}),
+                "evaluations": config.get("evaluations", {}),
+            }
+        )
+    else:
+        trainer_config.update(
+            {
+                "task": config.get("task", {}),
+                "outputs": config.get("outputs", {}),
+                "dataset": config["dataset"],
+                "loss_functions": config.get("loss_functions", {}),
+                "evaluation_metrics": config.get("evaluation_metrics", {}),
+            }
+        )
+    trainer = trainer_cls(**trainer_config)
+
+    task_cls = registry.get_task_class(config["mode"])
+    assert task_cls is not None, "Task not found"
+    task = task_cls(config)
+    start_time = time.time()
+    ctx = _TrainingContext(config=original_config, task=task, trainer=trainer)
+    yield ctx
+    distutils.synchronize()
+    if distutils.is_master():
+        logging.info(f"Total time taken: {time.time() - start_time}")
+
+    logging.debug("Task complete. Running disutils cleanup")
+    distutils.cleanup()
+    logging.debug("Runner() complete")
 
 
 def _resolve_scale_factor_submodule(model: nn.Module, name: str):
@@ -1213,11 +1245,23 @@ def scatter_det(*args, **kwargs):
     return out
 
 
-def get_commit_hash():
+def get_commit_hash() -> str:
+    core_hash = get_commit_hash_for_repo(fairchem.core.__path__[0])
+    experimental_hash = None
+    try:
+        experimental_hash = get_commit_hash_for_repo(fairchem.experimental.__path__[0])
+        return f"core:{core_hash},experimental:{experimental_hash}"
+    except (NameError, AttributeError):
+        return f"core:{core_hash},experimental:NA"
+
+
+def get_commit_hash_for_repo(
+    git_repo_path: str,
+) -> str | None:
     try:
         commit_hash = (
             subprocess.check_output(
-                ["git", "-C", fairchem.core.__path__[0], "describe", "--always"],
+                ["git", "-C", git_repo_path, "describe", "--always"],
                 stderr=subprocess.DEVNULL,
             )
             .strip()
@@ -1416,21 +1460,6 @@ def update_config(base_config):
     return config
 
 
-def get_loss_module(loss_name):
-    if loss_name in ["l1", "mae"]:
-        loss_fn = nn.L1Loss()
-    elif loss_name == "mse":
-        loss_fn = nn.MSELoss()
-    elif loss_name == "l2mae":
-        loss_fn = L2MAELoss()
-    elif loss_name == "atomwisel2":
-        loss_fn = AtomwiseL2Loss()
-    else:
-        raise NotImplementedError(f"Unknown loss function name: {loss_name}")
-
-    return loss_fn
-
-
 def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
     if not os.path.isfile(checkpoint_path):
         raise FileNotFoundError(
@@ -1446,3 +1475,89 @@ def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
     matched_dict = match_state_dict(model.state_dict(), checkpoint["state_dict"])
     load_state_dict(model, matched_dict, strict=True)
     return model
+
+
+def get_timestamp_uid() -> str:
+    return datetime.datetime.now().strftime("%Y%m-%d%H-%M%S-") + str(uuid4())[:4]
+
+
+@torch.no_grad()
+def tensor_stats(name: str, x: torch.Tensor) -> dict:
+    return {
+        f"{name}.max": x.max().item(),
+        f"{name}.min": x.min().item(),
+        f"{name}.std": x.std().item(),
+        f"{name}.mean": x.mean().item(),
+        f"{name}.norm": torch.norm(x, p=2).item(),
+        f"{name}.nonzero_fraction": torch.nonzero(x).shape[0] / float(x.numel()),
+    }
+
+
+def get_weight_table(model: torch.nn.Module) -> tuple[list, list]:
+    stat_names = list(tensor_stats("weight", torch.Tensor([1])).keys())
+    columns = ["ParamName", "shape"] + stat_names + ["grad." + n for n in stat_names]
+    data = []
+    for param_name, params in model.named_parameters():
+        row_weight = list(tensor_stats(f"weights/{param_name}", params).values())
+        if params.grad is not None:
+            row_grad = list(tensor_stats(f"grad/{param_name}", params.grad).values())
+        else:
+            row_grad = [None] * len(row_weight)
+        data.append([param_name] + [params.shape] + row_weight + row_grad)  # noqa
+    return columns, data
+
+
+def get_checkpoint_format(config: dict) -> str:
+    # a temporary function to retrieve the checkpoint format from old configs
+    format = config.get("optim", {}).get("checkpoint_format", "pt")
+    assert format in (
+        "pt",
+        "dcp",
+    ), f"checkpoint format can only be pt or dcp, found {format}"
+    return format
+
+
+def get_deep(dictionary: dict, keys: str, default: str | None = None):
+    # given a nested dictionary and a dot separated query, retrieve the item
+    # example:
+    # get_deep(dictionary{"oc20":{"energy",1}}, keys="oc20.energy") -> 1
+    return reduce(
+        lambda d, key: d.get(key, default) if isinstance(d, dict) else default,
+        keys.split("."),
+        dictionary,
+    )
+
+
+def get_subdirectories_sorted_by_time(directory: str) -> list:
+    """
+    Get all subdirectories in a directory sorted by their last modification time.
+    Args:
+        directory (str): The path to the directory to search.
+    Returns:
+        list: A list of tuples containing the subdirectory path and its last modification time.
+    """
+    if not os.path.exists(directory):
+        return []
+
+    directory = pathlib.Path(directory)
+    return sorted(
+        ((str(d), d.stat().st_mtime) for d in directory.iterdir() if d.is_dir()),
+        key=lambda x: x[1],
+    )
+
+
+def get_cluster_name() -> str:
+    try:
+        return (
+            subprocess.check_output(
+                "scontrol show config | awk -F= '/ClusterName/ {print $2}' | xargs",
+                shell=True,
+            )
+            .decode()
+            .strip()
+        )
+    except subprocess.CalledProcessError as e:
+        logging.warning(
+            f"scontrol command failed, couldn't find cluster name, returning empty str as cluster name {e!s}"
+        )
+        return ""

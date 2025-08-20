@@ -9,11 +9,14 @@
 
 ![tests](https://github.com/FAIR-Chem/fairchem/actions/workflows/test.yml/badge.svg?branch=main)
 ![documentation](https://github.com/FAIR-Chem/fairchem/actions/workflows/deploy_docs.yml/badge.svg?branch=main)
+![PyPI - Version](https://img.shields.io/pypi/v/fairchem-core)
 ![Static Badge](https://img.shields.io/badge/python-3.9%2B-blue)
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new/FAIR-Chem/fairchem?quickstart=1)
 
 `fairchem` is the [FAIR](https://ai.meta.com/research/) Chemistry's centralized repository of all its data, models, demos, and application efforts for materials science and quantum chemistry.
+
+> :warning: **If you cloned the repo before January 17, 2025 and are actively developing, please read [this announcement](GIT-CHANGES-17-01-25.md).**
 
 ### Documentation
 If you are looking for `Open-Catalyst-Project/ocp`, it can now be found at [`fairchem.core`](src/fairchem/core). Visit its corresponding documentation [here](https://fair-chem.github.io/).
@@ -44,9 +47,9 @@ from ase.optimize import LBFGS
 from fairchem.core import OCPCalculator
 
 # Set up your system as an ASE atoms object
-slab = fcc100('Cu', (3, 3, 3), vacuum=8)
+slab = fcc100("Cu", (3, 3, 3), vacuum=8)
 adsorbate = molecule("CO")
-add_adsorbate(slab, adsorbate, 2.0, 'bridge')
+add_adsorbate(slab, adsorbate, 2.0, "bridge")
 
 calc = OCPCalculator(
     model_name="EquiformerV2-31M-S2EF-OC20-All+MD",
