@@ -22,8 +22,8 @@ from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.common.rotation import (
-    init_edge_rot_mat,
-    rotation_to_wigner,
+    eulers_to_wigner,
+    init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
@@ -269,22 +269,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             if self.rot_mat_wigner_cuda is None:
                 self.rot_mat_wigner_cuda = RotMatWignerCudaGraph()
             with record_function("obtain rotmat wigner cudagraph"):
-                edge_rot_mat, wigner, wigner_inv = (
-                    self.rot_mat_wigner_cuda.get_rotmat_and_wigner(
-                        edge_distance_vecs, Jd_buffers
-                    )
+                wigner, wigner_inv = self.rot_mat_wigner_cuda.get_rotmat_and_wigner(
+                    edge_distance_vecs, Jd_buffers
                 )
         else:
             with record_function("obtain rotmat wigner original"):
-                edge_rot_mat = init_edge_rot_mat(
-                    edge_distance_vecs, rot_clip=(not self.direct_forces)
-                )
-                wigner = rotation_to_wigner(
-                    edge_rot_mat,
+                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+                wigner = eulers_to_wigner(
+                    euler_angles,
                     0,
                     self.lmax,
                     Jd_buffers,
-                    rot_clip=(not self.direct_forces),
                 )
                 wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
@@ -299,7 +294,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         wigner_and_M_mapping_inv = torch.einsum(
             "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
         )
-        return edge_rot_mat, wigner_and_M_mapping, wigner_and_M_mapping_inv
+        return wigner_and_M_mapping, wigner_and_M_mapping_inv
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -456,7 +451,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (edge_rot_mat, wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
+            (wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
                 self._get_rotmat_and_wigner(
                     graph_dict["edge_distance_vec_full"],
                     use_cuda_graph=self.use_cuda_graph_wigner
@@ -464,8 +459,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     and not self.training,
                 )
             )
-            # As a sanity check this should all be 0, dist, 0 (dist = scalar distance)
-            # rotated_ones = torch.bmm(edge_rot_mat, graph_dict["edge_distance_vec"].unsqueeze(-1)).squeeze(-1)
             if gp_utils.initialized():
                 wigner_and_M_mapping = wigner_and_M_mapping_full[
                     graph_dict["edge_partition"]
