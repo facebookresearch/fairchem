@@ -3,31 +3,15 @@ from __future__ import annotations
 import logging
 import timeit
 
-import numpy as np
-from ase import build
-
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
 )
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
 logging.basicConfig(level=logging.INFO)
-
-
-def get_fcc_carbon_xtal(
-    num_atoms: int,
-    lattice_constant: float = 3.8,
-):
-    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
-    atoms = build.bulk("C", "fcc", a=lattice_constant)
-    n_cells = int(np.ceil(np.cbrt(num_atoms)))
-    atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
-    sampled_atoms = atoms[indices]
-    return sampled_atoms
-    # return AtomicData.from_ase(sampled_atoms, task_name=["omol"])
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):

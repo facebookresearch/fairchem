@@ -44,9 +44,6 @@ from fairchem.core.units.mlip_unit.utils import (
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
 
-# Constants
-SERVER_STARTUP_TIMEOUT = 60  # seconds
-
 
 def collate_predictions(predict_fn):
     @wraps(predict_fn)
