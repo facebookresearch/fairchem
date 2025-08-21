@@ -121,7 +121,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
-        charge_balanced_channels: list[int] | None = None ,
+        charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
     ):
         super().__init__()
@@ -297,26 +297,22 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self,
         x_message_prime,
         data_dict,
-        charges_by_channel_and_layer,
-        spins_by_channel_and_layer,
     ):
         for channel_idx in self.charge_balanced_channels:
-            x_message_prime, charges_for_layer = get_balanced_attribute(
+            x_message_prime, _ = get_balanced_attribute(
                 data_dict,
                 x_message_prime,
                 balance_channel_idx=channel_idx,
                 balance_attribute="charge",
             )
-            charges_by_channel_and_layer[channel_idx].append(charges_for_layer)
         for channel_idx in self.spin_balanced_channels:
-            x_message_prime, spins_for_layer = get_balanced_attribute(
+            x_message_prime, _ = get_balanced_attribute(
                 data_dict,
                 x_message_prime,
                 balance_channel_idx=channel_idx,
                 balance_attribute="spin",
                 balance_attribute_offset=1,
             )
-            spins_by_channel_and_layer[channel_idx].append(spins_for_layer)
         return x_message_prime
 
     def _get_rotmat_and_wigner(
@@ -607,8 +603,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 x_message = self.balance_channels(
                     x_message,
                     data_dict,
-                    self.charges_by_channel_and_layer,
-                    self.spins_by_channel_and_layer,
                 )
 
         # Final layer norm
