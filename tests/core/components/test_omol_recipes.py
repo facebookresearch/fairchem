@@ -15,16 +15,16 @@ from ase.optimize import BFGS
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.components.calculate.recipes.omol import (
+    conformers,
     distance_scaling,
-    geom_conformers,
+    ieea,
     ligand_pocket,
     ligand_strain,
     protonation,
     relax_job,
     single_point_job,
     singlepoint,
-    unoptimized_ieea,
-    unoptimized_spin_gap,
+    spin_gap,
 )
 
 
@@ -191,7 +191,7 @@ class TestOmolRecipes(unittest.TestCase):
 
     @patch("fairchem.core.components.calculate.recipes.omol.relax_job")
     @patch("fairchem.core.components.calculate.recipes.omol.tqdm")
-    def test_geom_conformers(self, mock_tqdm, mock_relax_job):
+    def test_conformers(self, mock_tqdm, mock_relax_job):
         """Test conformer geometry optimization."""
         mock_tqdm.side_effect = lambda x: x  # Pass through without progress bar
         mock_relax_job.return_value = {"test": "result"}
@@ -203,7 +203,7 @@ class TestOmolRecipes(unittest.TestCase):
             ]
         }
 
-        result = geom_conformers(input_data, self.calculator)
+        result = conformers(input_data, self.calculator)
 
         assert "molecule_family_1" in result
         assert "conf1" in result["molecule_family_1"]
@@ -235,7 +235,7 @@ class TestOmolRecipes(unittest.TestCase):
 
     @patch("fairchem.core.components.calculate.recipes.omol.single_point_job")
     @patch("fairchem.core.components.calculate.recipes.omol.tqdm")
-    def test_unoptimized_ieea(self, mock_tqdm, mock_single_point):
+    def test_ieea(self, mock_tqdm, mock_single_point):
         """Test unoptimized ionization energy and electron affinity calculations."""
         mock_tqdm.side_effect = lambda x: x
         mock_single_point.return_value = {"test": "ieea_result"}
@@ -248,7 +248,7 @@ class TestOmolRecipes(unittest.TestCase):
             }
         }
 
-        result = unoptimized_ieea(input_data, self.calculator)
+        result = ieea(input_data, self.calculator)
 
         assert "water_mol" in result
         assert "1" in result["water_mol"]
@@ -261,7 +261,7 @@ class TestOmolRecipes(unittest.TestCase):
 
     @patch("fairchem.core.components.calculate.recipes.omol.single_point_job")
     @patch("fairchem.core.components.calculate.recipes.omol.tqdm")
-    def test_unoptimized_spin_gap(self, mock_tqdm, mock_single_point):
+    def test_spin_gap(self, mock_tqdm, mock_single_point):
         """Test unoptimized spin gap calculations."""
         mock_tqdm.side_effect = lambda x: x
         mock_single_point.return_value = {"test": "spin_gap_result"}
@@ -273,7 +273,7 @@ class TestOmolRecipes(unittest.TestCase):
             }
         }
 
-        result = unoptimized_spin_gap(input_data, self.calculator)
+        result = spin_gap(input_data, self.calculator)
 
         assert "mcc_idx_61150_0" in result
         assert "1" in result["mcc_idx_61150_0"]
