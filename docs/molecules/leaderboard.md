@@ -1,6 +1,6 @@
 # OMol25 Leaderboard
 
-As part of the OMol25 release, we introduce a community leaderboard for researchers to submit their predictions to for evaluation - https://huggingface.co/spaces/fairchem/leaderboard.
+As part of the OMol25 release, we introduce a community leaderboard for researchers to submit their predictions to for evaluation - https://huggingface.co/spaces/facebook/fairchem_leaderboard.
 Below we outline the steps to generate predictions and submit them to the leaderboard.
 
 The leaderboard is broken into two different sections - "S2EF" and "Evaluations".
@@ -88,13 +88,13 @@ The download links for evaluation inputs can be found [here](https://huggingface
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
 
-* Ligand pocket: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L327
-* Ligand strain: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L376
-* Conformers: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L138
-* Protonation: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L188
-* IE/EA: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L237
-* Distance scaling: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L443
-* Spin gap: https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/recipes/omol.py#L286
+* Ligand pocket: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L321
+* Ligand strain: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L370
+* Conformers: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L138
+* Protonation: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L186
+* IE/EA: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L235
+* Distance scaling: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L437
+* Spin gap: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L282
 
 As an example:
 
