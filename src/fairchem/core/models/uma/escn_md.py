@@ -47,6 +47,42 @@ from .escn_md_block import eSCNMD_Block
 
 ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
 
+def get_balanced_attribute(
+    data_dict,
+    emb: dict[str, torch.Tensor],
+    balance_attribute="charge",
+    balance_attribute_offset=0,
+    balance_channel_idx=0,
+):
+    out_emb = emb.clone()
+
+    charge_unbalanced = emb[:, 0, balance_channel_idx]  # n x 2
+
+    system_scalars_part = torch.zeros(
+        len(data_dict["natoms"]),
+        device=emb.device,
+        dtype=emb.dtype,
+    )
+
+    system_scalars_part.index_add_(
+        0, data_dict["batch"], charge_unbalanced.view(-1)
+    )
+
+    assert not gp_utils.initialized()
+    system_scalar = system_scalars_part
+
+    correction = (
+        system_scalar
+        - (data_dict[balance_attribute] - balance_attribute_offset)
+    ) / data_dict.natoms
+
+    balanced_node_scalar = charge_unbalanced - correction[data_dict.batch]
+
+    out_emb[:, 0, balance_channel_idx] = out_emb[:, 0, balance_channel_idx]*0 + balanced_node_scalar
+
+    return out_emb, balanced_node_scalar
+
+
 
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
@@ -85,6 +121,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
+        charge_balanced_channels: list[int] | None = None ,
+        spin_balanced_channels: list[int] | None = None,
     ):
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -103,6 +141,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.regress_forces = regress_forces
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
+
+        #which channels to balance
+        self.charge_balanced_channels=charge_balanced_channels if charge_balanced_channels is not None else []
+        self.spin_balanced_channels=spin_balanced_channels if spin_balanced_channels is not None else []
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -250,6 +292,32 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             self.lmax, self.mmax
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
+
+    def balance_channels(
+        self,
+        x_message_prime,
+        data_dict,
+        charges_by_channel_and_layer,
+        spins_by_channel_and_layer,
+    ):
+        for channel_idx in self.charge_balanced_channels:
+            x_message_prime, charges_for_layer = get_balanced_attribute(
+                data_dict,
+                x_message_prime,
+                balance_channel_idx=channel_idx,
+                balance_attribute="charge",
+            )
+            charges_by_channel_and_layer[channel_idx].append(charges_for_layer)
+        for channel_idx in self.spin_balanced_channels:
+            x_message_prime, spins_for_layer = get_balanced_attribute(
+                data_dict,
+                x_message_prime,
+                balance_channel_idx=channel_idx,
+                balance_attribute="spin",
+                balance_attribute_offset=1,
+            )
+            spins_by_channel_and_layer[channel_idx].append(spins_for_layer)
+        return x_message_prime
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
@@ -534,6 +602,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping_inv,
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
+                )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    data_dict,
+                    self.charges_by_channel_and_layer,
+                    self.spins_by_channel_and_layer,
                 )
 
         # Final layer norm
