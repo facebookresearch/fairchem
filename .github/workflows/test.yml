@@ -84,13 +84,13 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s --junitxml=junit-gpu.xml -o junit_family=legacy --cov-report=xml:gpu-coverage.xml
+          NCCL_DEBUG=INFO  pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s --junitxml=junit-gpu.xml -o junit_family=legacy --cov-report=xml:gpu-coverage.xml
 
       - if: ${{ matrix.python_version == '3.12' }}
         name: codecov-coverage
@@ -156,8 +156,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
-
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
