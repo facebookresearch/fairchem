@@ -65,10 +65,10 @@ Module Contents
    .. py:attribute:: fc
 
 
-   .. py:method:: forward(x_m)
+   .. py:method:: forward(x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]
 
 
-.. py:class:: SO2_Convolution(sphere_channels: int, m_output_channels: int, lmax: int, mmax: int, mappingReduced, internal_weights: bool = True, edge_channels_list: list[int] | None = None, extra_m0_output_channels: int | None = None)
+.. py:class:: SO2_Convolution(sphere_channels: int, m_output_channels: int, lmax: int, mmax: int, mappingReduced: fairchem.core.models.uma.common.so3.CoefficientMapping, internal_weights: bool = True, edge_channels_list: list[int] | None = None, extra_m0_output_channels: int | None = None)
 
    Bases: :py:obj:`torch.nn.Module`
 
@@ -84,7 +84,7 @@ Module Contents
    :param mmax: orders (m)
    :type mmax: int
    :param mappingReduced: Used to extract a subset of m components
-   :type mappingReduced: CoefficientMappingModule
+   :type mappingReduced: CoefficientMapping
    :param internal_weights: If True, not using radial function to multiply inputs features
    :type internal_weights: bool
    :param edge_channels_list (list: int):  List of sizes of invariant edge embedding. For example, [input_channels, hidden_channels, hidden_channels].
@@ -130,10 +130,10 @@ Module Contents
    .. py:attribute:: edge_split_sizes
 
 
-   .. py:method:: forward(x: torch.Tensor, x_edge: torch.Tensor)
+   .. py:method:: forward(x: torch.Tensor, x_edge: torch.Tensor) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]
 
 
-.. py:class:: SO2_Linear(sphere_channels: int, m_output_channels: int, lmax: int, mmax: int, mappingReduced, internal_weights: bool = False, edge_channels_list: list[int] | None = None)
+.. py:class:: SO2_Linear(sphere_channels: int, m_output_channels: int, lmax: int, mmax: int, mappingReduced: fairchem.core.models.uma.common.so3.CoefficientMapping, internal_weights: bool = False, edge_channels_list: list[int] | None = None)
 
    Bases: :py:obj:`torch.nn.Module`
 
@@ -149,7 +149,7 @@ Module Contents
    :param mmax: orders (m)
    :type mmax: int
    :param mappingReduced: Used to extract a subset of m components
-   :type mappingReduced: CoefficientMappingModule
+   :type mappingReduced: CoefficientMapping
    :param internal_weights: If True, not using radial function to multiply inputs features
    :type internal_weights: bool
    :param edge_channels_list (list: int):  List of sizes of invariant edge embedding. For example, [input_channels, hidden_channels, hidden_channels].
@@ -187,6 +187,6 @@ Module Contents
 
 
 
-   .. py:method:: forward(x, x_edge)
+   .. py:method:: forward(x: torch.Tensor, x_edge: torch.Tensor) -> torch.Tensor
 
 

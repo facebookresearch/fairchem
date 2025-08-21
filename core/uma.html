@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../dac/models.html">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../autoapi/data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -625,7 +629,7 @@ document.write(`
                   
   <section class="tex2jax_ignore mathjax_ignore" id="uma-models">
 <h1>UMA Models<a class="headerlink" href="#uma-models" title="Link to this heading">#</a></h1>
-<p><a class="reference external" href="https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/">UMA</a> is an equivariant GNN that leverages a novel technique called Mixture of Linear Experts (MoLE) to give it the capacity to learn the largest multi-modal dataset to date (500M DFT examples), while preserving energy conservation and inference speed. Even a 6M active parameter (145M total) UMA model is able to acheieve SOTA accuracy on a wide range of domains such as materials, molecules and catalysis.</p>
+<p><a class="reference external" href="https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/">UMA</a> is an equivariant GNN that leverages a novel technique called Mixture of Linear Experts (MoLE) to give it the capacity to learn the largest multi-modal dataset to date (500M DFT examples), while preserving energy conservation and inference speed. Even a 6M active parameter (145M total) UMA model is able to acheieve SOTA accuracy on a wide range of domains such as materials, molecules and catalysis. <a class="reference external" href="https://arxiv.org/abs/2506.23971">Arxiv Paper</a></p>
 <p><img alt="UMA model architecture" src="../_images/uma.svg" /></p>
 <section id="the-uma-mixture-of-linear-experts-routing-function">
 <h2>The UMA Mixture-of-Linear-Experts routing function<a class="headerlink" href="#the-uma-mixture-of-linear-experts-routing-function" title="Link to this heading">#</a></h2>
@@ -650,19 +654,19 @@ document.write(`
 </thead>
 <tbody>
 <tr class="row-even"><td><p>omol</p></td>
-<td><p><a class="reference external" href="https://arxiv.org/abs/2505.08762">Omol25</a></p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2505.08762">OMol25</a></p></td>
 <td><p>wB97M-V/def2-TZVPD as implemented in ORCA6, including non-local dispersion. All solvation should be explicit.</p></td>
 <td><p>Biology, organic chemistry, protein folding, small-molecule pharmaceuticals, organic liquid properties, homogeneous catalysis</p></td>
 <td><p>total charge and spin multiplicity. If you don’t know what these are, you should be very careful if modeling charged or open-shell systems. This can be used to study radical chemistry or understand the impact of magnetic states on the structure of a molecule. All training data is aperiodic, so any periodic systems should be treated with some caution. Probably won’t work well for inorganic materials.</p></td>
 </tr>
 <tr class="row-odd"><td><p>omc</p></td>
-<td><p>Omc25</p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2508.02651">OMC25</a></p></td>
 <td><p>PBE+D3 as implemented in VASP.</p></td>
 <td><p>Pharmaceutical packaging, bio-inspired materials, organic electronics, organic LEDs</p></td>
 <td><p>UMA has not seen varying charge or spin multiplicity for the OMC task, and expects total_charge=0 and spin multiplicity=0 as model inputs.</p></td>
 </tr>
 <tr class="row-even"><td><p>omat</p></td>
-<td><p><a class="reference external" href="https://arxiv.org/abs/2410.12771">Omat24</a></p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2410.12771">OMat24</a></p></td>
 <td><p>PBE/PBE+U as implemented in VASP using Materials Project suggested settings, except with VASP 54 pseudopotentials. No dispersion.</p></td>
 <td><p>Inorganic materials discovery, solar photovoltaics, advanced alloys, superconductors, electronic materials, optical materials</p></td>
 <td><p>UMA has not seen varying charge or spin multiplicity for the OMat task, and expects total_charge=0 and spin multiplicity=0 as model inputs. Spin polarization effects are included, but you can’t select the magnetic state. Further, OMat24 did not fully sample possible spin states in the training data.</p></td>
@@ -674,7 +678,7 @@ document.write(`
 <td><p>UMA has not seen varying charge or spin multiplicity for the OC20 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. No oxides or explicit solvents are included in OC20. The model works surprisingly well for transition state searches given the nature of the training data, but you should be careful. RPBE works well for small molecules, but dispersion will be important for larger molecules on surfaces.</p></td>
 </tr>
 <tr class="row-even"><td><p>odac</p></td>
-<td><p><a class="reference external" href="https://arxiv.org/abs/2311.00341">ODac23</a></p></td>
+<td><p><a class="reference external" href="https://arxiv.org/abs/2311.00341">ODAC23</a></p></td>
 <td><p>PBE+D3 as implemented in VASP, with VASP5.4 pseudopotentials.</p></td>
 <td><p>Direct air capture, carbon capture and storage, CO2 conversion, catalysis</p></td>
 <td><p>UMA has not seen varying charge or spin multiplicity for the ODAC task, and expects total_charge=0 and spin multiplicity=0 as model inputs. The ODAC23 dataset only contains CO2/H2O water absorption, so anything more than might be inaccurate (e.g. hydrocarbons in MOFs). Further, there is a limited number of bare-MOF structures in the training data, so you should be careful if you are using a new MOF structure.</p></td>

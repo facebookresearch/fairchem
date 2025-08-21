@@ -72,6 +72,11 @@ Module Contents
    .. py:attribute:: _input_data
 
 
+   .. py:attribute:: _already_calculated
+      :value: False
+
+
+
    .. py:property:: calculator
       :type: ase.calculators.Calculator
 
@@ -142,8 +147,6 @@ Module Contents
 
 
    .. py:method:: load_state(checkpoint_location: str | None) -> None
-      :abstractmethod:
-
 
       Load a previously saved state from a checkpoint.
 

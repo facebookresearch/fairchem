@@ -39,6 +39,7 @@ Functions
 
 .. autoapisummary::
 
+   core.units.mlip_unit.mlip_unit.filter_inference_only_tasks
    core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint
    core.units.mlip_unit.mlip_unit.initialize_finetuning_model
    core.units.mlip_unit.mlip_unit.get_output_mask
@@ -75,19 +76,10 @@ Module Contents
 
 .. py:class:: TrainStrategy
 
-   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+   Bases: :py:obj:`fairchem.core.common.utils.StrEnum`
 
 
-   str(object='') -> str
-   str(bytes_or_buffer[, encoding[, errors]]) -> str
-
-   Create a new string object from the given object. If encoding or
-   errors is specified, then the object must expose a data buffer
-   that will be decoded using the given encoding and error handler.
-   Otherwise, returns the result of object.__str__() (if defined)
-   or repr(object).
-   encoding defaults to sys.getdefaultencoding().
-   errors defaults to 'strict'.
+   Enum where members are also (and must be) strings
 
 
    .. py:attribute:: DDP
@@ -114,10 +106,6 @@ Module Contents
       :type:  str
 
 
-   .. py:attribute:: loss_fn
-      :type:  torch.nn.Module
-
-
    .. py:attribute:: out_spec
       :type:  OutputSpec
 
@@ -128,6 +116,12 @@ Module Contents
 
    .. py:attribute:: datasets
       :type:  list[str]
+
+
+   .. py:attribute:: loss_fn
+      :type:  torch.nn.Module | None
+      :value: None
+
 
 
    .. py:attribute:: element_references
@@ -152,8 +146,19 @@ Module Contents
 
 
 
+   .. py:attribute:: inference_only
+      :type:  bool
+      :value: False
+
+
+
 .. py:data:: DEFAULT_EXCLUDE_KEYS
    :value: ['id', 'fid', 'absolute_idx', 'target_pos', 'ref_energy', 'pbc', 'nads', 'oc22',...
+
+
+.. py:function:: filter_inference_only_tasks(tasks: Sequence[Task]) -> list[Task]
+
+   Filter out tasks that are marked as inference_only.
 
 
 .. py:function:: convert_train_checkpoint_to_inference_checkpoint(dcp_checkpoint_loc: str, checkpoint_loc: str) -> None

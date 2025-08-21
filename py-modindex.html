@@ -31,7 +31,7 @@
     <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
@@ -190,16 +190,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -275,8 +275,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="dac/models.html">Pretrained models</a></li>
@@ -345,6 +344,7 @@
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -379,7 +379,11 @@
 <li class="toctree-l4"><a class="reference internal" href="autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="autoapi/data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -1237,6 +1241,11 @@ document.write(`
      <tr class="cg-3">
        <td></td>
        <td>&#160;&#160;&#160;
+       <a href="autoapi/core/scripts/diatomic_tests/index.html#module-core.scripts.diatomic_tests"><code class="xref">core.scripts.diatomic_tests</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-3">
+       <td></td>
+       <td>&#160;&#160;&#160;
        <a href="autoapi/core/scripts/download_data/index.html#module-core.scripts.download_data"><code class="xref">core.scripts.download_data</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-3">
@@ -1501,32 +1510,37 @@ document.write(`
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="autoapi/data/om/index.html#module-data.om"><code class="xref">data.om</code></a></td><td>
+       <a href="autoapi/data/omc/index.html#module-data.omc"><code class="xref">data.omc</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="autoapi/data/om/biomolecules/geom/sample_geom_drugs/index.html#module-data.om.biomolecules.geom.sample_geom_drugs"><code class="xref">data.om.biomolecules.geom.sample_geom_drugs</code></a></td><td>
+       <a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#module-data.omc.scripts.create_vasp_inputs"><code class="xref">data.omc.scripts.create_vasp_inputs</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="autoapi/data/om/biomolecules/geom/write_geom_drugs_structures/index.html#module-data.om.biomolecules.geom.write_geom_drugs_structures"><code class="xref">data.om.biomolecules.geom.write_geom_drugs_structures</code></a></td><td>
+       <a href="autoapi/data/omol/index.html#module-data.omol"><code class="xref">data.omol</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="autoapi/data/om/omdata/orca/index.html#module-data.om.omdata.orca"><code class="xref">data.om.omdata.orca</code></a></td><td>
+       <a href="autoapi/data/omol/modules/evaluator/index.html#module-data.omol.modules.evaluator"><code class="xref">data.omol.modules.evaluator</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="autoapi/data/om/omdata/orca/calc/index.html#module-data.om.omdata.orca.calc"><code class="xref">data.om.omdata.orca.calc</code></a></td><td>
+       <a href="autoapi/data/omol/orca/index.html#module-data.omol.orca"><code class="xref">data.omol.orca</code></a></td><td>
        <em></em></td></tr>
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="autoapi/data/om/omdata/orca/recipes/index.html#module-data.om.omdata.orca.recipes"><code class="xref">data.om.omdata.orca.recipes</code></a></td><td>
+       <a href="autoapi/data/omol/orca/calc/index.html#module-data.omol.orca.calc"><code class="xref">data.omol.orca.calc</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-4">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="autoapi/data/omol/orca/recipes/index.html#module-data.omol.orca.recipes"><code class="xref">data.omol.orca.recipes</code></a></td><td>
        <em></em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-o"><td></td><td>

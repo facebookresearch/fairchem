@@ -42,7 +42,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: get_normalization_layer(norm_type: str, lmax: int, num_channels: int, eps: float = 1e-05, affine: bool = True, normalization: str = 'component')
+.. py:function:: get_normalization_layer(norm_type: Literal['layer_norm', 'layer_norm_sh', 'rms_norm_sh'], lmax: int, num_channels: int, eps: float = 1e-05, affine: bool = True, normalization: str = 'component')
 
 .. py:function:: get_l_to_all_m_expand_index(lmax: int)
 

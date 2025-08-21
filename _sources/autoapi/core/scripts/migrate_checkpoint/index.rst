@@ -35,6 +35,7 @@ Functions
 
    core.scripts.migrate_checkpoint.find_new_module_name
    core.scripts.migrate_checkpoint.update_config
+   core.scripts.migrate_checkpoint.generate_stress_task_config
    core.scripts.migrate_checkpoint.migrate_checkpoint
 
 
@@ -85,7 +86,9 @@ Module Contents
 
 
 
-.. py:function:: migrate_checkpoint(checkpoint_path: torch.nn.Module, rm_static_keys: bool = True, task_add_stress: str | None = None, model_version: float = 1.0) -> dict
+.. py:function:: generate_stress_task_config(dataset_name, rmsd)
+
+.. py:function:: migrate_checkpoint(checkpoint_path: torch.nn.Module, rm_static_keys: bool = True, map_undefined_stress_to: str | None = None, add_stress: bool = False, task_add_stress: str | None = None, model_version: float = 1.0) -> dict
 
    Migrates a checkpoint by updating module imports and configurations.
 
@@ -98,6 +101,7 @@ Module Contents
    :param checkpoint_path: Path to the input checkpoint file
    :param rm_static_keys: Whether to remove static keys from the state dictionaries
    :param task_add_stress: If provided, adds stress tasks for datasets based on this task
+   :param model_version: Inject this model version into model
 
    :returns: Migrated checkpoint dict
 

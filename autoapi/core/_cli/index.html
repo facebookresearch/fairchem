@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="../../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../dac/models.html">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../../data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -759,16 +763,16 @@ LICENSE file in the root directory of this source tree.</p>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core._cli.SchedulerType" title="core._cli.SchedulerType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SchedulerType</span></code></a></p></td>
-<td><p>str(object='') -&gt; str</p></td>
+<td><p>Enum where members are also (and must be) strings</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#core._cli.DeviceType" title="core._cli.DeviceType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DeviceType</span></code></a></p></td>
-<td><p>str(object='') -&gt; str</p></td>
+<td><p>Enum where members are also (and must be) strings</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core._cli.RunType" title="core._cli.RunType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RunType</span></code></a></p></td>
-<td><p>str(object='') -&gt; str</p></td>
+<td><p>Enum where members are also (and must be) strings</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#core._cli.DistributedInitMethod" title="core._cli.DistributedInitMethod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DistributedInitMethod</span></code></a></p></td>
-<td><p>str(object='') -&gt; str</p></td>
+<td><p>Enum where members are also (and must be) strings</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core._cli.SlurmConfig" title="core._cli.SlurmConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SlurmConfig</span></code></a></p></td>
 <td><p></p></td>
@@ -862,16 +866,8 @@ LICENSE file in the root directory of this source tree.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="core._cli.SchedulerType">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core._cli.</span></span><span class="sig-name descname"><span class="pre">SchedulerType</span></span><a class="headerlink" href="#core._cli.SchedulerType" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">enum.Enum</span></code></p>
-<p>str(object=’’) -&gt; str
-str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
-<p>Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to sys.getdefaultencoding().
-errors defaults to ‘strict’.</p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.common.utils.StrEnum</span></code></p>
+<p>Enum where members are also (and must be) strings</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core._cli.SchedulerType.LOCAL">
 <span class="sig-name descname"><span class="pre">LOCAL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'local'</span></em><a class="headerlink" href="#core._cli.SchedulerType.LOCAL" title="Link to this definition">#</a></dt>
@@ -887,16 +883,8 @@ errors defaults to ‘strict’.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="core._cli.DeviceType">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core._cli.</span></span><span class="sig-name descname"><span class="pre">DeviceType</span></span><a class="headerlink" href="#core._cli.DeviceType" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">enum.Enum</span></code></p>
-<p>str(object=’’) -&gt; str
-str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
-<p>Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to sys.getdefaultencoding().
-errors defaults to ‘strict’.</p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.common.utils.StrEnum</span></code></p>
+<p>Enum where members are also (and must be) strings</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core._cli.DeviceType.CPU">
 <span class="sig-name descname"><span class="pre">CPU</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'cpu'</span></em><a class="headerlink" href="#core._cli.DeviceType.CPU" title="Link to this definition">#</a></dt>
@@ -912,16 +900,8 @@ errors defaults to ‘strict’.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="core._cli.RunType">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core._cli.</span></span><span class="sig-name descname"><span class="pre">RunType</span></span><a class="headerlink" href="#core._cli.RunType" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">enum.Enum</span></code></p>
-<p>str(object=’’) -&gt; str
-str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
-<p>Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to sys.getdefaultencoding().
-errors defaults to ‘strict’.</p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.common.utils.StrEnum</span></code></p>
+<p>Enum where members are also (and must be) strings</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core._cli.RunType.RUN">
 <span class="sig-name descname"><span class="pre">RUN</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'run'</span></em><a class="headerlink" href="#core._cli.RunType.RUN" title="Link to this definition">#</a></dt>
@@ -937,16 +917,8 @@ errors defaults to ‘strict’.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="core._cli.DistributedInitMethod">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core._cli.</span></span><span class="sig-name descname"><span class="pre">DistributedInitMethod</span></span><a class="headerlink" href="#core._cli.DistributedInitMethod" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">enum.Enum</span></code></p>
-<p>str(object=’’) -&gt; str
-str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
-<p>Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to sys.getdefaultencoding().
-errors defaults to ‘strict’.</p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.common.utils.StrEnum</span></code></p>
+<p>Enum where members are also (and must be) strings</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core._cli.DistributedInitMethod.TCP">
 <span class="sig-name descname"><span class="pre">TCP</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'tcp'</span></em><a class="headerlink" href="#core._cli.DistributedInitMethod.TCP" title="Link to this definition">#</a></dt>

@@ -85,12 +85,3 @@ Module Contents
 
 
 
-   .. py:method:: load_state(checkpoint_location: str | None) -> None
-
-      Load a previously saved state from a checkpoint.
-
-      :param checkpoint_location: Location of the checkpoint to load, or None if no checkpoint
-      :type checkpoint_location: str | None
-
-
-

@@ -36,7 +36,7 @@ Module Contents
 
 .. py:function:: set_mole_ac_start_index(module: torch.nn.Module, index: int) -> None
 
-.. py:class:: Edgewise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, edge_channels_list, mappingReduced, SO3_grid, cutoff, activation_checkpoint_chunk_size: int | None, act_type: str = 'gate')
+.. py:class:: Edgewise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, edge_channels_list: list[int], mappingReduced: fairchem.core.models.uma.common.so3.CoefficientMapping, SO3_grid: fairchem.core.models.uma.common.so3.SO3_Grid, cutoff: float, activation_checkpoint_chunk_size: int | None, act_type: typing_extensions.Literal[gate, s2] = 'gate')
 
    Bases: :py:obj:`torch.nn.Module`
 
@@ -121,7 +121,7 @@ Module Contents
    .. py:method:: forward_chunk(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0, ac_mole_start_idx: int = 0)
 
 
-.. py:class:: SpectralAtomwise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, SO3_grid)
+.. py:class:: SpectralAtomwise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, SO3_grid: fairchem.core.models.uma.common.so3.SO3_Grid)
 
    Bases: :py:obj:`torch.nn.Module`
 
@@ -188,7 +188,7 @@ Module Contents
    .. py:method:: forward(x)
 
 
-.. py:class:: GridAtomwise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, SO3_grid)
+.. py:class:: GridAtomwise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, SO3_grid: fairchem.core.models.uma.common.so3.SO3_Grid)
 
    Bases: :py:obj:`torch.nn.Module`
 
@@ -246,7 +246,7 @@ Module Contents
    .. py:method:: forward(x)
 
 
-.. py:class:: eSCNMD_Block(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, mappingReduced, SO3_grid, edge_channels_list: list[int], cutoff: float, norm_type: str, act_type: str, ff_type: str, activation_checkpoint_chunk_size: int | None)
+.. py:class:: eSCNMD_Block(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, mappingReduced: fairchem.core.models.uma.common.so3.CoefficientMapping, SO3_grid: fairchem.core.models.uma.common.so3.SO3_Grid, edge_channels_list: list[int], cutoff: float, norm_type: typing_extensions.Literal[layer_norm, layer_norm_sh, rms_norm_sh], act_type: typing_extensions.Literal[gate, s2], ff_type: typing_extensions.Literal[spectral, grid], activation_checkpoint_chunk_size: int | None)
 
    Bases: :py:obj:`torch.nn.Module`
 

@@ -97,7 +97,7 @@ Module Contents
    .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping_inv, node_offset=0)
 
 
-.. py:class:: ChgSpinEmbedding(embedding_type, embedding_target, embedding_size, grad, scale=1.0)
+.. py:class:: ChgSpinEmbedding(embedding_type: Literal['pos_emb', 'lin_emb', 'rand_emb'], embedding_target: Literal['charge', 'spin'], embedding_size: int, grad: bool, scale: float = 1.0)
 
    Bases: :py:obj:`torch.nn.Module`
 

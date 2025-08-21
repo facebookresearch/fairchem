@@ -31,7 +31,7 @@
     <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
@@ -187,16 +187,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -272,8 +272,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="dac/models.html">Pretrained models</a></li>
@@ -342,6 +341,7 @@
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -376,7 +376,11 @@
 <li class="toctree-l4"><a class="reference internal" href="autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="autoapi/data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -811,6 +815,12 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/datasets/collaters/mt_collater/index.html#core.datasets.collaters.mt_collater.MTCollater._add_missing_attr">_add_missing_attr() (core.datasets.collaters.mt_collater.MTCollater method)</a>
 </li>
+      <li><a href="autoapi/core/components/calculate/calculate_runner/index.html#core.components.calculate.calculate_runner.CalculateRunner._already_calculated">_already_calculated (core.components.calculate.calculate_runner.CalculateRunner attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.CalculateRunner._already_calculated">(core.components.calculate.CalculateRunner attribute)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer._analyze_geo_opt">_analyze_geo_opt (core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer attribute)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer._analyze_relaxed_geometry">_analyze_relaxed_geometry() (core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer method)</a>
@@ -885,10 +895,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.BalancedBatchSampler._dist_enabled">_dist_enabled() (core.common.data_parallel.BalancedBatchSampler static method)</a>
 </li>
-      <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer._elemental_references_path">_elemental_references_path (core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer attribute)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer._elemental_references_path">_elemental_references_path (core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer attribute)</a>
+</li>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor.ScaleFactor._enforce_consistency">_enforce_consistency() (core.modules.scaling.scale_factor.ScaleFactor method)</a>
 
       <ul>
@@ -1528,7 +1538,7 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.as_dict_handler">as_dict_handler() (in module core.components.benchmark.materials_discovery_reducer)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/recipes/index.html#data.om.omdata.orca.recipes.ase_relaxation">ase_relaxation() (in module data.om.omdata.orca.recipes)</a>
+      <li><a href="autoapi/data/omol/orca/recipes/index.html#data.omol.orca.recipes.ase_relaxation">ase_relaxation() (in module data.omol.orca.recipes)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/uma_speed_benchmark/index.html#core.components.benchmark.uma_speed_benchmark.ase_to_graph">ase_to_graph() (in module core.components.benchmark.uma_speed_benchmark)</a>
 </li>
@@ -1669,6 +1679,8 @@ document.write(`
       <li><a href="autoapi/core/datasets/base_dataset/index.html#core.datasets.base_dataset.BaseDataset">BaseDataset (class in core.datasets.base_dataset)</a>
 </li>
       <li><a href="autoapi/core/models/utils/basis/index.html#core.models.utils.basis.Basis">Basis (class in core.models.utils.basis)</a>
+</li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.BASIS_DICT">BASIS_DICT (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/core/models/utils/basis/index.html#core.models.utils.basis.Basis.basis_type">basis_type (core.models.utils.basis.Basis attribute)</a>
 </li>
@@ -1944,6 +1956,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.charge">charge (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.charge_deltas">charge_deltas() (in module data.omol.modules.evaluator)</a>
+</li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.charge_embedding">charge_embedding (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.CHARGE_RANGE">CHARGE_RANGE (in module core.units.mlip_unit.api.inference)</a>
@@ -2014,6 +2028,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/modules/exponential_moving_average/index.html#core.modules.exponential_moving_average.ExponentialMovingAverage.collected_params">collected_params (core.modules.exponential_moving_average.ExponentialMovingAverage attribute)</a>
 </li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.combined_plot">combined_plot() (in module core.scripts.diatomic_tests)</a>
+</li>
       <li><a href="autoapi/core/_cli/index.html#core._cli.Metadata.commit">commit (core._cli.Metadata attribute)</a>
 </li>
       <li><a href="autoapi/core/modules/transforms/index.html#core.modules.transforms.common_transform">common_transform() (in module core.modules.transforms)</a>
@@ -2045,6 +2061,10 @@ document.write(`
       <li><a href="autoapi/core/models/uma/common/so3/index.html#core.models.uma.common.so3.CoefficientMapping.complex_idx">complex_idx() (core.models.uma.common.so3.CoefficientMapping method)</a>
 </li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.compose_tensor">compose_tensor() (in module core.models.uma.escn_md)</a>
+</li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.compute_diatomic_curve">compute_diatomic_curve() (in module core.scripts.diatomic_tests)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.compute_distance_scaling_metrics">compute_distance_scaling_metrics() (in module data.omol.modules.evaluator)</a>
 </li>
       <li><a href="autoapi/adsorbml/scripts/dense_eval/index.html#adsorbml.scripts.dense_eval.compute_hybrid_success">compute_hybrid_success() (in module adsorbml.scripts.dense_eval)</a>
 </li>
@@ -2435,6 +2455,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/recipes/index.html#module-core.components.calculate.recipes">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes.adsorbml
 
@@ -2442,8 +2464,6 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/recipes/adsorbml/index.html#module-core.components.calculate.recipes.adsorbml">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes.adsorption
 
@@ -3005,6 +3025,13 @@ document.write(`
 </li>
       </ul></li>
       <li>
+    core.scripts.diatomic_tests
+
+      <ul>
+        <li><a href="autoapi/core/scripts/diatomic_tests/index.html#module-core.scripts.diatomic_tests">module</a>
+</li>
+      </ul></li>
+      <li>
     core.scripts.download_data
 
       <ul>
@@ -3190,14 +3217,14 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/modules/normalization/element_references/index.html#core.modules.normalization.element_references.create_element_references">create_element_references() (in module core.modules.normalization.element_references)</a>
 </li>
+      <li><a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#data.omc.scripts.create_vasp_inputs.create_input_generator">create_input_generator() (in module data.omc.scripts.create_vasp_inputs)</a>
+</li>
       <li><a href="autoapi/data/oc/core/interface_config/index.html#data.oc.core.interface_config.InterfaceConfig.create_interface_on_sites">create_interface_on_sites() (data.oc.core.interface_config.InterfaceConfig method)</a>
 
       <ul>
         <li><a href="autoapi/data/oc/core/index.html#data.oc.core.InterfaceConfig.create_interface_on_sites">(data.oc.core.InterfaceConfig method)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.create_masks">create_masks() (in module core.models.uma.common.rotation_cuda_graph)</a>
-</li>
       <li><a href="autoapi/core/modules/normalization/normalizer/index.html#core.modules.normalization.normalizer.create_normalizer">create_normalizer() (in module core.modules.normalization.normalizer)</a>
 </li>
       <li><a href="autoapi/data/oc/core/interface_config/index.html#data.oc.core.interface_config.InterfaceConfig.create_packmol_atoms">create_packmol_atoms() (data.oc.core.interface_config.InterfaceConfig method)</a>
@@ -3451,45 +3478,52 @@ document.write(`
 </li>
       </ul></li>
       <li>
-    data.om
+    data.omc
 
       <ul>
-        <li><a href="autoapi/data/om/index.html#module-data.om">module</a>
+        <li><a href="autoapi/data/omc/index.html#module-data.omc">module</a>
 </li>
       </ul></li>
       <li>
-    data.om.biomolecules.geom.sample_geom_drugs
+    data.omc.scripts.create_vasp_inputs
 
       <ul>
-        <li><a href="autoapi/data/om/biomolecules/geom/sample_geom_drugs/index.html#module-data.om.biomolecules.geom.sample_geom_drugs">module</a>
+        <li><a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#module-data.omc.scripts.create_vasp_inputs">module</a>
 </li>
       </ul></li>
       <li>
-    data.om.biomolecules.geom.write_geom_drugs_structures
+    data.omol
 
       <ul>
-        <li><a href="autoapi/data/om/biomolecules/geom/write_geom_drugs_structures/index.html#module-data.om.biomolecules.geom.write_geom_drugs_structures">module</a>
+        <li><a href="autoapi/data/omol/index.html#module-data.omol">module</a>
 </li>
       </ul></li>
       <li>
-    data.om.omdata.orca
+    data.omol.modules.evaluator
 
       <ul>
-        <li><a href="autoapi/data/om/omdata/orca/index.html#module-data.om.omdata.orca">module</a>
+        <li><a href="autoapi/data/omol/modules/evaluator/index.html#module-data.omol.modules.evaluator">module</a>
 </li>
       </ul></li>
       <li>
-    data.om.omdata.orca.calc
+    data.omol.orca
 
       <ul>
-        <li><a href="autoapi/data/om/omdata/orca/calc/index.html#module-data.om.omdata.orca.calc">module</a>
+        <li><a href="autoapi/data/omol/orca/index.html#module-data.omol.orca">module</a>
 </li>
       </ul></li>
       <li>
-    data.om.omdata.orca.recipes
+    data.omol.orca.calc
 
       <ul>
-        <li><a href="autoapi/data/om/omdata/orca/recipes/index.html#module-data.om.omdata.orca.recipes">module</a>
+        <li><a href="autoapi/data/omol/orca/calc/index.html#module-data.omol.orca.calc">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.omol.orca.recipes
+
+      <ul>
+        <li><a href="autoapi/data/omol/orca/recipes/index.html#module-data.omol.orca.recipes">module</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/datasets/collaters/mt_collater/index.html#core.datasets.collaters.mt_collater.MTCollater.data_list_collater">data_list_collater() (core.datasets.collaters.mt_collater.MTCollater method)</a>
@@ -3565,6 +3599,8 @@ document.write(`
       <li><a href="autoapi/core/scripts/uncompress/index.html#core.scripts.uncompress.decompress_list_of_files">decompress_list_of_files() (in module core.scripts.uncompress)</a>
 </li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.def_counts_df">def_counts_df (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
+</li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.Vertical.Default">Default (data.omol.orca.calc.Vertical attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.DEFAULT_CHARGE">DEFAULT_CHARGE (in module core.units.mlip_unit.api.inference)</a>
 </li>
@@ -3658,6 +3694,8 @@ document.write(`
 </li>
       <li><a href="autoapi/data/oc/utils/geometry/index.html#data.oc.utils.geometry.Geometry.distance_point_plane">distance_point_plane() (data.oc.utils.geometry.Geometry static method)</a>
 </li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.distance_scaling">distance_scaling() (in module data.omol.modules.evaluator)</a>
+</li>
       <li><a href="autoapi/core/_cli/index.html#core._cli.SchedulerConfig.distributed_init_method">distributed_init_method (core._cli.SchedulerConfig attribute)</a>
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.DISTRIBUTED_PORT">DISTRIBUTED_PORT (in module core.common.distutils)</a>
@@ -3718,6 +3756,8 @@ document.write(`
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.ECP_SIZE">ECP_SIZE (in module data.omol.orca.calc)</a>
+</li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.edge_channels">edge_channels (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 </li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.edge_channels_list">edge_channels_list (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
@@ -3872,9 +3912,7 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/uma/escn_moe/index.html#core.models.uma.escn_moe.eSCNMDMoeBackbone">eSCNMDMoeBackbone (class in core.models.uma.escn_moe)</a>
 </li>
-      <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.euler_from_edge_rot_mat">euler_from_edge_rot_mat() (in module core.models.uma.common.rotation_cuda_graph)</a>
-</li>
-      <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.eulers_to_wigner">eulers_to_wigner() (in module core.models.uma.common.rotation_cuda_graph)</a>
+      <li><a href="autoapi/core/models/uma/common/rotation/index.html#core.models.uma.common.rotation.eulers_to_wigner">eulers_to_wigner() (in module core.models.uma.common.rotation)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/omc_polymorph_reducer/index.html#core.components.benchmark.omc_polymorph_reducer.ev2kJ">ev2kJ (in module core.components.benchmark.omc_polymorph_reducer)</a>
 </li>
@@ -3985,6 +4023,8 @@ document.write(`
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.filename">filename (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
 </li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.SeverityLevelBetween.filter">filter() (core.common.utils.SeverityLevelBetween method)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.filter_inference_only_tasks">filter_inference_only_tasks() (in module core.units.mlip_unit.mlip_unit)</a>
 </li>
       <li><a href="autoapi/core/modules/scheduler/index.html#core.modules.scheduler.LRScheduler.filter_kwargs">filter_kwargs() (core.modules.scheduler.LRScheduler method)</a>
 </li>
@@ -4350,7 +4390,13 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/graph/compute/index.html#core.graph.compute.generate_graph">generate_graph() (in module core.graph.compute)</a>
 </li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.generate_plot">generate_plot() (in module core.scripts.diatomic_tests)</a>
+</li>
+      <li><a href="autoapi/core/scripts/migrate_checkpoint/index.html#core.scripts.migrate_checkpoint.generate_stress_task_config">generate_stress_task_config() (in module core.scripts.migrate_checkpoint)</a>
+</li>
       <li><a href="autoapi/core/components/benchmark/uma_speed_benchmark/index.html#core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner.generate_traces">generate_traces (core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner attribute)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.geom_conformers">geom_conformers() (in module data.omol.modules.evaluator)</a>
 </li>
       <li><a href="autoapi/data/oc/utils/geometry/index.html#data.oc.utils.geometry.Geometry">Geometry (class in data.oc.utils.geometry)</a>
 </li>
@@ -4534,12 +4580,12 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/kappa_runner/index.html#core.components.calculate.kappa_runner.get_kappa103_data_list">get_kappa103_data_list() (in module core.components.calculate.kappa_runner)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/models/uma/nn/layer_norm/index.html#core.models.uma.nn.layer_norm.get_l_to_all_m_expand_index">get_l_to_all_m_expand_index() (in module core.models.uma.nn.layer_norm)</a>
 </li>
       <li><a href="autoapi/core/scripts/make_lmdb_sizes/index.html#core.scripts.make_lmdb_sizes.get_lmdb_sizes_parser">get_lmdb_sizes_parser() (in module core.scripts.make_lmdb_sizes)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.get_logger_class">get_logger_class() (core.common.registry.Registry class method)</a>
 </li>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.get_loss_class">get_loss_class() (core.common.registry.Registry class method)</a>
@@ -4549,6 +4595,8 @@ document.write(`
       <li><a href="autoapi/core/graph/radius_graph_pbc/index.html#core.graph.radius_graph_pbc.get_max_neighbors_mask">get_max_neighbors_mask() (in module core.graph.radius_graph_pbc)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/phonon_runner/index.html#core.components.calculate.phonon_runner.get_mdr_phonon_data_list">get_mdr_phonon_data_list() (in module core.components.calculate.phonon_runner)</a>
+</li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.get_mem_estimate">get_mem_estimate() (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseAtomsDataset.get_metadata">get_metadata() (core.datasets.ase_datasets.AseAtomsDataset method)</a>
 
@@ -4576,6 +4624,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/units/mlip_unit/_metrics/index.html#core.units.mlip_unit._metrics.get_metrics_fn">get_metrics_fn() (in module core.units.mlip_unit._metrics)</a>
 </li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.get_model">get_model() (in module core.scripts.diatomic_tests)</a>
+</li>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.get_model_class">get_model_class() (core.common.registry.Registry class method)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.Client.get_models">get_models() (ocpapi.Client method)</a>
@@ -4590,6 +4640,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.get_most_recent_viable_checkpoint_path">get_most_recent_viable_checkpoint_path() (in module core.components.train.train_runner)</a>
 </li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.get_n_basis">get_n_basis() (in module data.omol.orca.calc)</a>
+</li>
       <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.AutoFrameDesorption.get_neb_frames">get_neb_frames() (cattsunami.core.autoframe.AutoFrameDesorption method)</a>
 
       <ul>
@@ -4603,6 +4655,8 @@ document.write(`
       <li><a href="autoapi/core/models/uma/nn/layer_norm/index.html#core.models.uma.nn.layer_norm.get_normalization_layer">get_normalization_layer() (in module core.models.uma.nn.layer_norm)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/nve_md_runner/index.html#core.components.calculate.nve_md_runner.get_nve_md_data">get_nve_md_data() (in module core.components.calculate.nve_md_runner)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.get_one_prot_diff_name_pairs">get_one_prot_diff_name_pairs() (in module data.omol.modules.evaluator)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.get_output_mask">get_output_mask() (in module core.units.mlip_unit.mlip_unit)</a>
 </li>
@@ -4635,6 +4689,8 @@ document.write(`
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.get_random_sites_on_triangle">get_random_sites_on_triangle() (in module data.oc.core.adsorbate_slab_config)</a>
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.get_rank">get_rank() (in module core.common.distutils)</a>
+</li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.get_relative_energies">get_relative_energies() (in module core.scripts.diatomic_tests)</a>
 </li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseAtomsDataset.get_relaxed_energy">get_relaxed_energy() (core.datasets.ase_datasets.AseAtomsDataset method)</a>
 
@@ -4681,6 +4737,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.get_subdirectories_sorted_by_time">get_subdirectories_sorted_by_time() (in module core.common.utils)</a>
+</li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.get_symm_break_block">get_symm_break_block() (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.AutoFrameTransfer.get_system_pairs_final">get_system_pairs_final() (cattsunami.core.autoframe.AutoFrameTransfer method)</a>
 </li>
@@ -4830,6 +4888,8 @@ document.write(`
         <li><a href="autoapi/core/models/uma/nn/so3_layers/index.html#core.models.uma.nn.so3_layers.SO3_Linear.in_features">(core.models.uma.nn.so3_layers.SO3_Linear attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#data.omc.scripts.create_vasp_inputs.INCAR_DIR">INCAR_DIR (in module data.omc.scripts.create_vasp_inputs)</a>
+</li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.index_drop_ddec_defective">index_drop_ddec_defective (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
 </li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.index_drop_ddec_pristine">index_drop_ddec_pristine (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
@@ -4864,6 +4924,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.inference_mode">inference_mode (core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.inference_only">inference_only (core.units.mlip_unit.mlip_unit.Task attribute)</a>
+</li>
       <li><a href="autoapi/core/components/benchmark/uma_speed_benchmark/index.html#core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner.inference_settings">inference_settings (core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.inference_settings_default">inference_settings_default() (in module core.units.mlip_unit.api.inference)</a>
@@ -4884,9 +4946,9 @@ document.write(`
         <li><a href="autoapi/data/oc/utils/flag_anomaly/index.html#data.oc.utils.flag_anomaly.DetectTrajAnomaly.init_atoms">(data.oc.utils.flag_anomaly.DetectTrajAnomaly attribute)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/models/uma/common/rotation/index.html#core.models.uma.common.rotation.init_edge_rot_mat">init_edge_rot_mat() (in module core.models.uma.common.rotation)</a>
+      <li><a href="autoapi/core/models/uma/common/rotation/index.html#core.models.uma.common.rotation.init_edge_rot_euler_angles">init_edge_rot_euler_angles() (in module core.models.uma.common.rotation)</a>
 </li>
-      <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.init_edge_rot_mat_cuda_graph">init_edge_rot_mat_cuda_graph() (in module core.models.uma.common.rotation_cuda_graph)</a>
+      <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.init_edge_rot_euler_angles_wigner_cuda_graph">init_edge_rot_euler_angles_wigner_cuda_graph() (in module core.models.uma.common.rotation_cuda_graph)</a>
 </li>
       <li><a href="autoapi/core/common/test_utils/index.html#core.common.test_utils.init_env_rank_and_launch_test">init_env_rank_and_launch_test() (in module core.common.test_utils)</a>
 </li>
@@ -4927,6 +4989,8 @@ document.write(`
       <li><a href="autoapi/data/oc/experimental/get_energies/index.html#data.oc.experimental.get_energies.input_folder">input_folder (in module data.oc.experimental.get_energies)</a>
 </li>
       <li><a href="autoapi/core/common/test_utils/index.html#core.common.test_utils.ForkedPdb.interaction">interaction() (core.common.test_utils.ForkedPdb method)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.interaction_energy_and_forces">interaction_energy_and_forces() (in module data.omol.modules.evaluator)</a>
 </li>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.InterfaceConfig">InterfaceConfig (class in data.oc.core)</a>
 
@@ -5158,6 +5222,12 @@ document.write(`
         <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.Lifetime">(class in ocpapi.workflows.adsorbates)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.ligand_pocket">ligand_pocket() (in module data.omol.modules.evaluator)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.ligand_strain">ligand_strain() (in module data.omol.modules.evaluator)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.ligand_strain_processing">ligand_strain_processing() (in module data.omol.modules.evaluator)</a>
+</li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.Linear_Force_Head.linear">linear (core.models.uma.escn_md.Linear_Force_Head attribute)</a>
 </li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.Linear_Energy_Head">Linear_Energy_Head (class in core.models.uma.escn_md)</a>
@@ -5251,33 +5321,9 @@ document.write(`
 </li>
         <li><a href="autoapi/core/components/benchmark/uma_speed_benchmark/index.html#core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner.load_state">(core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner method)</a>
 </li>
-        <li><a href="autoapi/core/components/calculate/adsorbml_runner/index.html#core.components.calculate.adsorbml_runner.AdsorbMLRunner.load_state">(core.components.calculate.adsorbml_runner.AdsorbMLRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/adsorption_runner/index.html#core.components.calculate.adsorption_runner.AdsorptionRunner.load_state">(core.components.calculate.adsorption_runner.AdsorptionRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/adsorption_singlepoint_runner/index.html#core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner.load_state">(core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner method)</a>
-</li>
         <li><a href="autoapi/core/components/calculate/calculate_runner/index.html#core.components.calculate.calculate_runner.CalculateRunner.load_state">(core.components.calculate.calculate_runner.CalculateRunner method)</a>
 </li>
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.CalculateRunner.load_state">(core.components.calculate.CalculateRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/elasticity_runner/index.html#core.components.calculate.elasticity_runner.ElasticityRunner.load_state">(core.components.calculate.elasticity_runner.ElasticityRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.ElasticityRunner.load_state">(core.components.calculate.ElasticityRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/kappa_runner/index.html#core.components.calculate.kappa_runner.KappaRunner.load_state">(core.components.calculate.kappa_runner.KappaRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/nve_md_runner/index.html#core.components.calculate.nve_md_runner.NVEMDRunner.load_state">(core.components.calculate.nve_md_runner.NVEMDRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/pairwise_ct_runner/index.html#core.components.calculate.pairwise_ct_runner.PairwiseCountRunner.load_state">(core.components.calculate.pairwise_ct_runner.PairwiseCountRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/phonon_runner/index.html#core.components.calculate.phonon_runner.MDRPhononRunner.load_state">(core.components.calculate.phonon_runner.MDRPhononRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/relaxation_runner/index.html#core.components.calculate.relaxation_runner.RelaxationRunner.load_state">(core.components.calculate.relaxation_runner.RelaxationRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.RelaxationRunner.load_state">(core.components.calculate.RelaxationRunner method)</a>
-</li>
-        <li><a href="autoapi/core/components/calculate/singlepoint_runner/index.html#core.components.calculate.singlepoint_runner.SinglePointRunner.load_state">(core.components.calculate.singlepoint_runner.SinglePointRunner method)</a>
 </li>
         <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.load_state">(core.components.evaluate.eval_runner.EvalRunner method)</a>
 </li>
@@ -5316,6 +5362,8 @@ document.write(`
         <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer.load_targets">(core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer static method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/units/mlip_unit/utils/index.html#core.units.mlip_unit.utils.load_tasks">load_tasks() (in module core.units.mlip_unit.utils)</a>
+</li>
       <li><a href="autoapi/core/_cli/index.html#core._cli.SchedulerType.LOCAL">LOCAL (core._cli.SchedulerType attribute)</a>
 </li>
       <li><a href="autoapi/ocpapi/workflows/log/index.html#ocpapi.workflows.log.log">log (in module ocpapi.workflows.log)</a>
@@ -5418,6 +5466,8 @@ document.write(`
         <li><a href="autoapi/ocpapi/workflows/retry/index.html#ocpapi.workflows.retry.RateLimitLogging.logger">(ocpapi.workflows.retry.RateLimitLogging attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.LOOSE_OPT_PARAMETERS">LOOSE_OPT_PARAMETERS (in module data.omol.orca.calc)</a>
+</li>
       <li><a href="autoapi/core/modules/loss/index.html#core.modules.loss.MAELoss.loss">loss (core.modules.loss.MAELoss attribute)</a>
 
       <ul>
@@ -5513,6 +5563,8 @@ document.write(`
       <ul>
         <li><a href="autoapi/core/_cli/index.html#core._cli.main">(in module core._cli)</a>
 </li>
+        <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.main">(in module core.scripts.diatomic_tests)</a>
+</li>
         <li><a href="autoapi/core/scripts/make_challenge_submission_file/index.html#core.scripts.make_challenge_submission_file.main">(in module core.scripts.make_challenge_submission_file)</a>
 </li>
         <li><a href="autoapi/core/scripts/make_submission_file/index.html#core.scripts.make_submission_file.main">(in module core.scripts.make_submission_file)</a>
@@ -5530,10 +5582,6 @@ document.write(`
         <li><a href="autoapi/data/oc/experimental/perturb_systems/index.html#data.oc.experimental.perturb_systems.main">(in module data.oc.experimental.perturb_systems)</a>
 </li>
         <li><a href="autoapi/data/oc/experimental/rattle_test/index.html#data.oc.experimental.rattle_test.main">(in module data.oc.experimental.rattle_test)</a>
-</li>
-        <li><a href="autoapi/data/om/biomolecules/geom/sample_geom_drugs/index.html#data.om.biomolecules.geom.sample_geom_drugs.main">(in module data.om.biomolecules.geom.sample_geom_drugs)</a>
-</li>
-        <li><a href="autoapi/data/om/biomolecules/geom/write_geom_drugs_structures/index.html#data.om.biomolecules.geom.write_geom_drugs_structures.main">(in module data.om.biomolecules.geom.write_geom_drugs_structures)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/scripts/make_lmdb_sizes/index.html#core.scripts.make_lmdb_sizes.make_lmdb_sizes">make_lmdb_sizes() (in module core.scripts.make_lmdb_sizes)</a>
@@ -5582,6 +5630,8 @@ document.write(`
         <li><a href="autoapi/core/common/logger/index.html#core.common.logger.WandBSingletonLogger.mark_preempting">(core.common.logger.WandBSingletonLogger method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.mat_dict">mat_dict (in module core.scripts.diatomic_tests)</a>
+</li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.match_state_dict">match_state_dict() (in module core.common.utils)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/materials_discovery_reducer/index.html#core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer">MaterialsDiscoveryReducer (class in core.components.benchmark.materials_discovery_reducer)</a>
@@ -5678,6 +5728,8 @@ document.write(`
         <li><a href="autoapi/core/datasets/mt_concat_dataset/index.html#core.datasets.mt_concat_dataset.ConcatDataset.metadata_hasattr">(core.datasets.mt_concat_dataset.ConcatDataset method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.Vertical.MetalOrganics">MetalOrganics (data.omol.orca.calc.Vertical attribute)</a>
+</li>
       <li><a href="autoapi/core/units/mlip_unit/_metrics/index.html#core.units.mlip_unit._metrics.Metrics.metric">metric (core.units.mlip_unit._metrics.Metrics attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/_metrics/index.html#core.units.mlip_unit._metrics.Metrics">Metrics (class in core.units.mlip_unit._metrics)</a>
@@ -6100,6 +6152,8 @@ document.write(`
 </li>
         <li><a href="autoapi/core/scripts/create_uma_finetune_dataset/index.html#module-core.scripts.create_uma_finetune_dataset">core.scripts.create_uma_finetune_dataset</a>
 </li>
+        <li><a href="autoapi/core/scripts/diatomic_tests/index.html#module-core.scripts.diatomic_tests">core.scripts.diatomic_tests</a>
+</li>
         <li><a href="autoapi/core/scripts/download_data/index.html#module-core.scripts.download_data">core.scripts.download_data</a>
 </li>
         <li><a href="autoapi/core/scripts/download_large_files/index.html#module-core.scripts.download_large_files">core.scripts.download_large_files</a>
@@ -6204,17 +6258,19 @@ document.write(`
 </li>
         <li><a href="autoapi/data/odac/setup_vasp/index.html#module-data.odac.setup_vasp">data.odac.setup_vasp</a>
 </li>
-        <li><a href="autoapi/data/om/index.html#module-data.om">data.om</a>
+        <li><a href="autoapi/data/omc/index.html#module-data.omc">data.omc</a>
 </li>
-        <li><a href="autoapi/data/om/biomolecules/geom/sample_geom_drugs/index.html#module-data.om.biomolecules.geom.sample_geom_drugs">data.om.biomolecules.geom.sample_geom_drugs</a>
+        <li><a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#module-data.omc.scripts.create_vasp_inputs">data.omc.scripts.create_vasp_inputs</a>
 </li>
-        <li><a href="autoapi/data/om/biomolecules/geom/write_geom_drugs_structures/index.html#module-data.om.biomolecules.geom.write_geom_drugs_structures">data.om.biomolecules.geom.write_geom_drugs_structures</a>
+        <li><a href="autoapi/data/omol/index.html#module-data.omol">data.omol</a>
 </li>
-        <li><a href="autoapi/data/om/omdata/orca/index.html#module-data.om.omdata.orca">data.om.omdata.orca</a>
+        <li><a href="autoapi/data/omol/modules/evaluator/index.html#module-data.omol.modules.evaluator">data.omol.modules.evaluator</a>
 </li>
-        <li><a href="autoapi/data/om/omdata/orca/calc/index.html#module-data.om.omdata.orca.calc">data.om.omdata.orca.calc</a>
+        <li><a href="autoapi/data/omol/orca/index.html#module-data.omol.orca">data.omol.orca</a>
 </li>
-        <li><a href="autoapi/data/om/omdata/orca/recipes/index.html#module-data.om.omdata.orca.recipes">data.om.omdata.orca.recipes</a>
+        <li><a href="autoapi/data/omol/orca/calc/index.html#module-data.omol.orca.calc">data.omol.orca.calc</a>
+</li>
+        <li><a href="autoapi/data/omol/orca/recipes/index.html#module-data.omol.orca.recipes">data.omol.orca.recipes</a>
 </li>
         <li><a href="autoapi/ocpapi/index.html#module-ocpapi">ocpapi</a>
 </li>
@@ -6246,6 +6302,8 @@ document.write(`
       <li><a href="autoapi/data/odac/setup_vasp/index.html#data.odac.setup_vasp.mof">mof (in module data.odac.setup_vasp)</a>
 </li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.mof_name">mof_name (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
+</li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.mol_dict">mol_dict (in module core.scripts.diatomic_tests)</a>
 </li>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.Solvent.molar_mass">molar_mass (data.oc.core.Solvent attribute)</a>
 
@@ -6324,6 +6382,8 @@ document.write(`
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.natoms">natoms (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/uma_speed_benchmark/index.html#core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner.natoms_list">natoms_list (core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner attribute)</a>
+</li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.NBO_FLAGS">NBO_FLAGS (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.nedges">nedges (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
@@ -6635,14 +6695,14 @@ document.write(`
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_end">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPEvalUnit.on_eval_epoch_start">on_eval_epoch_start() (core.units.mlip_unit.mlip_unit.MLIPEvalUnit method)</a>
 
       <ul>
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_start">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.on_train_end">on_train_end() (core.components.train.train_runner.TrainCheckpointCallback method)</a>
 
       <ul>
@@ -6663,7 +6723,7 @@ document.write(`
 </li>
       <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.AutoFrame.only_keep_unique_systems">only_keep_unique_systems() (cattsunami.core.autoframe.AutoFrame method)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.OPT_PARAMETERS">OPT_PARAMETERS (in module data.om.omdata.orca.calc)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.OPT_PARAMETERS">OPT_PARAMETERS (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/core/modules/scheduler/index.html#core.modules.scheduler.LRScheduler.optimizer">optimizer (core.modules.scheduler.LRScheduler attribute)</a>
 
@@ -6677,15 +6737,15 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/adsorption_runner/index.html#core.components.calculate.adsorption_runner.AdsorptionRunner.optimizer_cls">(core.components.calculate.adsorption_runner.AdsorptionRunner attribute)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.ORCA_ASE_SIMPLE_INPUT">ORCA_ASE_SIMPLE_INPUT (in module data.om.omdata.orca.calc)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.ORCA_ASE_SIMPLE_INPUT">ORCA_ASE_SIMPLE_INPUT (in module data.omol.orca.calc)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.ORCA_BASIS">ORCA_BASIS (in module data.om.omdata.orca.calc)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.ORCA_BASIS">ORCA_BASIS (in module data.omol.orca.calc)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.ORCA_BLOCKS">ORCA_BLOCKS (in module data.om.omdata.orca.calc)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.ORCA_BLOCKS">ORCA_BLOCKS (in module data.omol.orca.calc)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.ORCA_FUNCTIONAL">ORCA_FUNCTIONAL (in module data.om.omdata.orca.calc)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.ORCA_FUNCTIONAL">ORCA_FUNCTIONAL (in module data.omol.orca.calc)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.ORCA_SIMPLE_INPUT">ORCA_SIMPLE_INPUT (in module data.om.omdata.orca.calc)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.ORCA_SIMPLE_INPUT">ORCA_SIMPLE_INPUT (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.Slab.oriented_bulk">oriented_bulk (data.oc.core.Slab attribute)</a>
 
@@ -6694,6 +6754,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.os_environ_get_or_throw">os_environ_get_or_throw() (in module core.common.distutils)</a>
+</li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.Vertical.Oss">Oss (data.omol.orca.calc.Vertical attribute)</a>
 </li>
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.OCPCollater.otf_graph">otf_graph (core.common.data_parallel.OCPCollater attribute)</a>
 
@@ -6780,11 +6842,9 @@ document.write(`
 </li>
         <li><a href="autoapi/data/oc/structure_generator/index.html#data.oc.structure_generator.parse_args">(in module data.oc.structure_generator)</a>
 </li>
-        <li><a href="autoapi/data/om/biomolecules/geom/sample_geom_drugs/index.html#data.om.biomolecules.geom.sample_geom_drugs.parse_args">(in module data.om.biomolecules.geom.sample_geom_drugs)</a>
-</li>
-        <li><a href="autoapi/data/om/biomolecules/geom/write_geom_drugs_structures/index.html#data.om.biomolecules.geom.write_geom_drugs_structures.parse_args">(in module data.om.biomolecules.geom.write_geom_drugs_structures)</a>
-</li>
       </ul></li>
+      <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.parse_arguments">parse_arguments() (in module core.scripts.diatomic_tests)</a>
+</li>
       <li><a href="autoapi/cattsunami/run_validation/run_validation/index.html#cattsunami.run_validation.run_validation.parse_neb_info">parse_neb_info() (in module cattsunami.run_validation.run_validation)</a>
 </li>
       <li><a href="autoapi/adsorbml/scripts/dense_eval/index.html#adsorbml.scripts.dense_eval.parser">parser (in module adsorbml.scripts.dense_eval)</a>
@@ -6825,6 +6885,8 @@ document.write(`
         <li><a href="autoapi/core/scripts/preprocess_relaxed/index.html#core.scripts.preprocess_relaxed.parser">(in module core.scripts.preprocess_relaxed)</a>
 </li>
         <li><a href="autoapi/core/scripts/uncompress/index.html#core.scripts.uncompress.parser">(in module core.scripts.uncompress)</a>
+</li>
+        <li><a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#data.omc.scripts.create_vasp_inputs.parser">(in module data.omc.scripts.create_vasp_inputs)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/_cli/index.html#core._cli.SlurmConfig.partition">partition (core._cli.SlurmConfig attribute)</a>
@@ -6986,6 +7048,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.property">property (core.units.mlip_unit.mlip_unit.Task attribute)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.protonation_energies">protonation_energies() (in module data.omol.modules.evaluator)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -7301,6 +7365,10 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.revision">revision (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
 </li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.rmsd">rmsd() (in module data.omol.modules.evaluator)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.rmsd_mapping">rmsd_mapping() (in module data.omol.modules.evaluator)</a>
+</li>
       <li><a href="autoapi/core/modules/evaluator/index.html#core.modules.evaluator.rmse">rmse() (in module core.modules.evaluator)</a>
 
       <ul>
@@ -7308,8 +7376,6 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.rot_mat_wigner_cuda">rot_mat_wigner_cuda (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
-</li>
-      <li><a href="autoapi/core/models/uma/common/rotation/index.html#core.models.uma.common.rotation.rotation_to_wigner">rotation_to_wigner() (in module core.models.uma.common.rotation)</a>
 </li>
       <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.RotMatWignerCudaGraph">RotMatWignerCudaGraph (class in core.models.uma.common.rotation_cuda_graph)</a>
 </li>
@@ -7711,7 +7777,9 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/utils/basis/index.html#core.models.utils.basis.SINESmearing">SINESmearing (class in core.models.utils.basis)</a>
 </li>
-      <li><a href="autoapi/data/om/omdata/orca/recipes/index.html#data.om.omdata.orca.recipes.single_point_calculation">single_point_calculation() (in module data.om.omdata.orca.recipes)</a>
+      <li><a href="autoapi/data/omol/orca/recipes/index.html#data.omol.orca.recipes.single_point_calculation">single_point_calculation() (in module data.omol.orca.recipes)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.singlepoint">singlepoint() (in module data.omol.modules.evaluator)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/singlepoint_runner/index.html#core.components.calculate.singlepoint_runner.SinglePointRunner">SinglePointRunner (class in core.components.calculate.singlepoint_runner)</a>
 </li>
@@ -7731,8 +7799,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/benchmark/omc_polymorph_reducer/index.html#core.components.benchmark.omc_polymorph_reducer.sklearn_scipy_installed">sklearn_scipy_installed (in module core.components.benchmark.omc_polymorph_reducer)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.Slab">Slab (class in data.oc.core)</a>
 
       <ul>
@@ -7745,6 +7811,8 @@ document.write(`
         <li><a href="autoapi/ocpapi/client/models/index.html#ocpapi.client.models.Slab">(class in ocpapi.client.models)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig.slab">slab (data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig attribute)</a>
 
       <ul>
@@ -7939,11 +8007,15 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.spin">spin (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.spin_deltas">spin_deltas() (in module data.omol.modules.evaluator)</a>
+</li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.spin_embedding">spin_embedding (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.SPIN_RANGE">SPIN_RANGE (in module core.units.mlip_unit.api.inference)</a>
 </li>
       <li><a href="autoapi/core/scripts/make_submission_file/index.html#core.scripts.make_submission_file.SPLITS">SPLITS (in module core.scripts.make_submission_file)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.sr_or_lr">sr_or_lr() (in module data.omol.modules.evaluator)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.Bulk.src_id">src_id (ocpapi.Bulk attribute)</a>
 
@@ -8012,6 +8084,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/modules/exponential_moving_average/index.html#core.modules.exponential_moving_average.ExponentialMovingAverage.store">store() (core.modules.exponential_moving_average.ExponentialMovingAverage method)</a>
+</li>
+      <li><a href="autoapi/core/common/utils/index.html#core.common.utils.StrEnum">StrEnum (class in core.common.utils)</a>
 </li>
       <li><a href="autoapi/core/modules/transforms/index.html#core.modules.transforms.stress_reshape_transform">stress_reshape_transform() (in module core.modules.transforms)</a>
 </li>
@@ -8193,6 +8267,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/recipes/phonons/index.html#core.components.calculate.recipes.phonons.THz_to_K">THz_to_K (in module core.components.calculate.recipes.phonons)</a>
 </li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.TIGHT_OPT_PARAMETERS">TIGHT_OPT_PARAMETERS (in module data.omol.orca.calc)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/slab/index.html#data.oc.core.slab.tile_and_tag_atoms">tile_and_tag_atoms() (in module data.oc.core.slab)</a>
@@ -8323,6 +8399,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.UNIT_RESUME_CONFIG">UNIT_RESUME_CONFIG (in module core.units.mlip_unit.mlip_unit)</a>
 </li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.unoptimized_ie_ea">unoptimized_ie_ea() (in module data.omol.modules.evaluator)</a>
+</li>
+      <li><a href="autoapi/data/omol/modules/evaluator/index.html#data.omol.modules.evaluator.unoptimized_spin_gap">unoptimized_spin_gap() (in module data.omol.modules.evaluator)</a>
+</li>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.unregister">unregister() (core.common.registry.Registry class method)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.UnsupportedAdsorbateException">UnsupportedAdsorbateException</a>, <a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates.UnsupportedAdsorbateException">[1]</a>, <a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.UnsupportedAdsorbateException">[2]</a>
@@ -8343,6 +8423,8 @@ document.write(`
         <li><a href="autoapi/core/modules/exponential_moving_average/index.html#core.modules.exponential_moving_average.ExponentialMovingAverage.update">(core.modules.exponential_moving_average.ExponentialMovingAverage method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.update_batch_edges">update_batch_edges() (core.datasets.atomic_data.AtomicData method)</a>
+</li>
       <li><a href="autoapi/core/scripts/migrate_checkpoint/index.html#core.scripts.migrate_checkpoint.update_config">update_config() (in module core.scripts.migrate_checkpoint)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/utils/index.html#core.units.mlip_unit.utils.update_configs">update_configs() (in module core.units.mlip_unit.utils)</a>
@@ -8407,6 +8489,8 @@ document.write(`
 </li>
       <li><a href="autoapi/ocpapi/version/index.html#ocpapi.version.VERSION">VERSION (in module ocpapi.version)</a>
 </li>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.Vertical">Vertical (class in data.omol.orca.calc)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -8465,23 +8549,21 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/scripts/create_finetune_dataset/index.html#core.scripts.create_finetune_dataset.write_ase_db">write_ase_db() (in module core.scripts.create_finetune_dataset)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/scripts/preprocess_ef/index.html#core.scripts.preprocess_ef.write_images_to_lmdb">write_images_to_lmdb() (in module core.scripts.preprocess_ef)</a>
 
       <ul>
         <li><a href="autoapi/core/scripts/preprocess_relaxed/index.html#core.scripts.preprocess_relaxed.write_images_to_lmdb">(in module core.scripts.preprocess_relaxed)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/scripts/make_challenge_submission_file/index.html#core.scripts.make_challenge_submission_file.write_is2re_relaxations">write_is2re_relaxations() (in module core.scripts.make_challenge_submission_file)</a>
 
       <ul>
         <li><a href="autoapi/core/scripts/make_submission_file/index.html#core.scripts.make_submission_file.write_is2re_relaxations">(in module core.scripts.make_submission_file)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/data/om/omdata/orca/calc/index.html#data.om.omdata.orca.calc.write_orca_inputs">write_orca_inputs() (in module data.om.omdata.orca.calc)</a>
-</li>
-      <li><a href="autoapi/data/om/biomolecules/geom/sample_geom_drugs/index.html#data.om.biomolecules.geom.sample_geom_drugs.write_pickle">write_pickle() (in module data.om.biomolecules.geom.sample_geom_drugs)</a>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.write_orca_inputs">write_orca_inputs() (in module data.omol.orca.calc)</a>
 </li>
       <li><a href="autoapi/core/scripts/make_challenge_submission_file/index.html#core.scripts.make_challenge_submission_file.write_predictions">write_predictions() (in module core.scripts.make_challenge_submission_file)</a>
 
@@ -8539,14 +8621,6 @@ document.write(`
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/components/runner/index.html#core.components.runner.MockRunner.y">y (core.components.runner.MockRunner attribute)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="autoapi/core/models/uma/common/rotation/index.html#core.models.uma.common.rotation.YTOL">YTOL (in module core.models.uma.common.rotation)</a>
-
-      <ul>
-        <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.YTOL">(in module core.models.uma.common.rotation_cuda_graph)</a>
-</li>
-      </ul></li>
   </ul></td>
 </tr></table>
 

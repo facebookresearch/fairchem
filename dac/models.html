@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -62,7 +62,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Examples &amp; Tutorials" href="examples_tutorials/summary.html" />
-    <link rel="prev" title="Open Direct Air Capture 2023 (ODAC23)" href="datasets/odac.html" />
+    <link rel="prev" title="Datasets" href="datasets/summary.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../autoapi/data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -608,7 +612,8 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#odac23">ODAC23</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#odac25-models">ODAC25 Models</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#odac23-models-deprecated">ODAC23 Models [Deprecated]</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef-models">S2EF models</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#is2re-direct-models">IS2RE Direct models</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#is2rs">IS2RS</a></li>
@@ -627,15 +632,31 @@ document.write(`
                   
   <section class="tex2jax_ignore mathjax_ignore" id="pretrained-models">
 <h1>Pretrained models<a class="headerlink" href="#pretrained-models" title="Link to this heading">#</a></h1>
-<p><strong>2025 recommendation:</strong> We now suggest using the <a class="reference internal" href="../core/uma.html"><span class="doc std std-doc">UMA model</span></a>, trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints</p>
+<section id="odac25-models">
+<h2>ODAC25 Models<a class="headerlink" href="#odac25-models" title="Link to this heading">#</a></h2>
+<p>As part of the ODAC25 release, we released two sets of models:</p>
 <ol class="arabic simple">
-<li><p>It is state-of-the-art in out-of-domain prediction accuracy</p></li>
-<li><p>It predicts total energies of a system, which are helpful for predicting properties beyond adsorption energies, and removes some ambiguity when your MOF may reconstruct.</p></li>
-<li><p>The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc.</p></li>
-<li><p>The UMA model is most likely to be updated in the future.</p></li>
+<li><p>UMA models trained on a range of FAIR chemistry datasets including a subset of ODAC25, available at the <a class="reference external" href="https://huggingface.co/facebook/UMA">UMA HuggingFace site</a></p></li>
+<li><p>eSEN models trained only on ODAC25, available at the <a class="reference external" href="https://huggingface.co/facebook/ODAC25">ODAC25 HuggingFace site</a></p></li>
 </ol>
-<section id="odac23">
-<h2>ODAC23<a class="headerlink" href="#odac23" title="Link to this heading">#</a></h2>
+<p>The UMA models were only trained on CO₂ and H₂O adsorbates, and are competitive with
+the eSEN models for these adsorbates. Since the UMA models were not trained on
+N₂ and O₂, we strongly recommend using the eSEN models for these.</p>
+<p>If you use the ODAC25 trained models, please cite the following paper:</p>
+<div class="highlight-bib notranslate"><div class="highlight"><pre><span></span><span class="nc">@misc</span><span class="p">{</span><span class="nl">sriram2025odac25</span><span class="p">,</span>
+<span class="w">    </span><span class="na">title</span><span class="p">=</span><span class="s">{The Open DAC 2025 Dataset for Sorbent Discovery in Direct Air Capture}</span><span class="p">,</span><span class="w"> </span>
+<span class="w">    </span><span class="na">author</span><span class="p">=</span><span class="s">{Anuroop Sriram and Logan M. Brabson and Xiaohan Yu and Sihoon Choi and Kareem Abdelmaqsoud and Elias Moubarak and Pim de Haan and Sindy Löwe and Johann Brehmer and John R. Kitchin and Max Welling and C. Lawrence Zitnick and Zachary Ulissi and Andrew J. Medford and David S. Sholl}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">year</span><span class="p">=</span><span class="s">{2025}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">eprint</span><span class="p">=</span><span class="s">{}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">archivePrefix</span><span class="p">=</span><span class="s">{arXiv}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">primaryClass</span><span class="p">=</span><span class="s">{}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">url</span><span class="p">=</span><span class="s">{}</span><span class="p">,</span><span class="w"> </span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="odac23-models-deprecated">
+<h2>ODAC23 Models [Deprecated]<a class="headerlink" href="#odac23-models-deprecated" title="Link to this heading">#</a></h2>
 <ul class="simple">
 <li><p>All config files for the ODAC23 models are available in the <a class="reference external" href="https://github.com/facebookresearch/fairchem/tree/main/configs/odac"><code class="docutils literal notranslate"><span class="pre">configs/odac</span></code></a> directory.</p></li>
 </ul>
@@ -768,12 +789,12 @@ document.write(`
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="datasets/odac.html"
+       href="datasets/summary.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Open Direct Air Capture 2023 (ODAC23)</p>
+        <p class="prev-next-title">Datasets</p>
       </div>
     </a>
     <a class="right-next"
@@ -801,7 +822,8 @@ document.write(`
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#odac23">ODAC23</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#odac25-models">ODAC25 Models</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#odac23-models-deprecated">ODAC23 Models [Deprecated]</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef-models">S2EF models</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#is2re-direct-models">IS2RE Direct models</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#is2rs">IS2RS</a></li>

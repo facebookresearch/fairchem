@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Evaluation &#8212; fairchem</title>
+    <title>Evaluating pretrained models &#8212; fairchem</title>
   
   
   
@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -62,7 +62,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Fine-tuning" href="fine_tuning.html" />
-    <link rel="prev" title="Training" href="training.html" />
+    <link rel="prev" title="Training models from scratch" href="training.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="../uma.html">UMA Models</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Common tasks</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="training.html">Training</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="training.html">Training models from scratch</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../dac/models.html">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -585,7 +589,9 @@ document.write(`
   </button>
 `);
 </script>
-
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
 </div></div>
       
     </div>
@@ -596,11 +602,28 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Evaluation</h1>
+    <h1>Evaluating pretrained models</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
             
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-model-evaluations">Running Model Evaluations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#evaluation-configuration-file-format">Evaluation Configuration File Format</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#top-level-keys">Top-Level Keys</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#under-job">Under <code class="docutils literal notranslate"><span class="pre">job</span></code>:</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#under-runner">Under <code class="docutils literal notranslate"><span class="pre">runner</span></code>:</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-the-defaults-key-to-define-config-groups">Using the <code class="docutils literal notranslate"><span class="pre">defaults</span></code> key to define config groups</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
         </div>
     </div>
 </div>
@@ -610,9 +633,91 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="evaluation">
-<h1>Evaluation<a class="headerlink" href="#evaluation" title="Link to this heading">#</a></h1>
-<p>This repo provides a number of methods used to benchmark and evaluate the UMA models that will be helpful for apples-to-apples comparisons with the paper results. More details to be provided here soon.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="evaluating-pretrained-models">
+<h1>Evaluating pretrained models<a class="headerlink" href="#evaluating-pretrained-models" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">fairchemV2</span></code> provides a number of methods used to benchmark and evaluate the UMA models that will be helpful for apples-to-apples comparisons with the paper results. More details to be provided here soon.</p>
+<section id="running-model-evaluations">
+<h2>Running Model Evaluations<a class="headerlink" href="#running-model-evaluations" title="Link to this heading">#</a></h2>
+<p>To evaluate a UMA model using a pre-existing configuration file, follow these steps. Example configuration files used to evaluate uma models are stored in <code class="docutils literal notranslate"><span class="pre">configs/uma/evaluate</span></code>.</p>
+<ol class="arabic">
+<li><p><strong>Run the Evaluation Script</strong><br />
+To run an evaluation simply run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fairchem<span class="w"> </span>--config<span class="w"> </span>evaluation_config.yaml
+</pre></div>
+</div>
+<p>Replace <code class="docutils literal notranslate"><span class="pre">evaluation_config.yaml</span></code> with the desired config file. For example, <code class="docutils literal notranslate"><span class="pre">configs/uma/evaluate/uma_conserving.yaml</span></code></p>
+</li>
+<li><p><strong>Output</strong><br />
+Results will be logged according the specified logger. We currently only support Weights and Biases.</p></li>
+</ol>
+</section>
+<section id="evaluation-configuration-file-format">
+<h2>Evaluation Configuration File Format<a class="headerlink" href="#evaluation-configuration-file-format" title="Link to this heading">#</a></h2>
+<p>Evaluation configuration files are written in Hydra YAML format and specify how a model evaluation should be run. UMA evaluation configuration files, which can be used as templates to evaluate other models if needed, are located in <code class="docutils literal notranslate"><span class="pre">configs/uma/evaluate/</span></code>.</p>
+<section id="top-level-keys">
+<h3>Top-Level Keys<a class="headerlink" href="#top-level-keys" title="Link to this heading">#</a></h3>
+<p>Similar to training configuration files, the only allowed top-level keys are the <code class="docutils literal notranslate"><span class="pre">job</span></code> and <code class="docutils literal notranslate"><span class="pre">runner</span></code> keys as well interpolation keys that are resolved at runtime.</p>
+<ul class="simple">
+<li><p><strong>job</strong>: Contains all settings related to the evaluation job itself, including model, data, and logger configuration.</p></li>
+<li><p><strong>runner</strong>: Contains settings for the evaluation runner, such as which script to use and runtime options.</p></li>
+</ul>
+<p>Important configuration options are nested under these keys as follows:</p>
+<section id="under-job">
+<h4>Under <code class="docutils literal notranslate"><span class="pre">job</span></code>:<a class="headerlink" href="#under-job" title="Link to this heading">#</a></h4>
+<p>Specifications of how to run the actual job. The configuration options are the same here as those in a training job. Some notable flags are detailed below,</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">device_type</span></code>: The device to run model inference on (ie CUDA or CPU)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scheduler</span></code>: The compute scheduler specifications</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">logger</span></code>: Configuration for logging results.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span></code>: Logger type (e.g., <code class="docutils literal notranslate"><span class="pre">wandb</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">project</span></code>: Logging project name.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">entity</span></code>: (Optional) Logger entity/user.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">run_dir</span></code>: Directory where results and logs will be saved.</p></li>
+</ul>
+</section>
+<section id="under-runner">
+<h4>Under <code class="docutils literal notranslate"><span class="pre">runner</span></code>:<a class="headerlink" href="#under-runner" title="Link to this heading">#</a></h4>
+<p>The actual benchmark details such as model checkpoint and the dataset are specified under the runner flag. An evaluation run should use the <code class="docutils literal notranslate"><span class="pre">EvalRunner</span></code> class which relies on an <code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code> to run inference using a pretrained model.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dataloader</span></code>: Dataloader specification for the evaluation dataset.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_unit</span></code>: The specification of the <code class="docutils literal notranslate"><span class="pre">MLIPEvalUnit</span></code> to be used.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">tasks</span></code>: The prediction task configuration. In almost all cases you can think of, these should be loaded from a model checkpoint using the <code class="docutils literal notranslate"><span class="pre">fairchem.core.units.mlip_unit.utils.load_tasks</span></code> function.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: Defines how to load a pretrained model. We recommend using the <code class="docutils literal notranslate"><span class="pre">fairchem.core.units.mlip_unit.mlip_unit.load_inference_model</span></code> function to do so.</p></li>
+</ul>
+</li>
+</ul>
+</section>
+</section>
+<section id="using-the-defaults-key-to-define-config-groups">
+<h3>Using the <code class="docutils literal notranslate"><span class="pre">defaults</span></code> key to define config groups<a class="headerlink" href="#using-the-defaults-key-to-define-config-groups" title="Link to this heading">#</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">defaults</span></code> key is a Hydra feature that allows you to compose configuration files from modular config groups. Each entry under <code class="docutils literal notranslate"><span class="pre">defaults</span></code> refers to a config group (such as <code class="docutils literal notranslate"><span class="pre">model</span></code>, <code class="docutils literal notranslate"><span class="pre">data</span></code>, or other reusable components) that is merged into the final configuration at runtime. This makes it easy to swap out models, datasets, or other settings without duplicating configuration code.</p>
+<p>For example in the UMA evaluation configs we have set up the following config groups and defaults:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">omc_conserving</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my_eval_data</span>
+</pre></div>
+</div>
+<p>This will include the configuration from <code class="docutils literal notranslate"><span class="pre">configs/uma/evaluate/model/omc_conserving.yaml</span></code> and <code class="docutils literal notranslate"><span class="pre">configs/uma/evaluate/data/my_eval_data.yaml</span></code> into the main config. The <code class="docutils literal notranslate"><span class="pre">_self_</span></code> entry ensures the current file’s contents are included.</p>
+<p>You can create new config groups or override existing ones by changing the entries under <code class="docutils literal notranslate"><span class="pre">defaults</span></code>.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">defaults</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">cluster</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Configuration settings for a particular compute cluster</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">dataset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Configuration settings for the evaluation dataset</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">checkpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Configuration settings of the pretrained model checkpoint</span><span class="w"> </span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">_self_</span>
+</pre></div>
+</div>
+<p>Using config groups allows to easily override defaults in the cli. For example,</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fairchem<span class="w"> </span>--config<span class="w"> </span>evaluation_config.yaml<span class="w"> </span><span class="nv">cluster</span><span class="o">=</span>cluster_config<span class="w"> </span><span class="nv">checkpoint</span><span class="o">=</span>checkpoint_config
+</pre></div>
+</div>
+<p>Where <code class="docutils literal notranslate"><span class="pre">cluster_config</span></code> and <code class="docutils literal notranslate"><span class="pre">checkpoint_config</span></code> are cluster and checkpoint configuration files written to directories under cluster and checkpoint respectively. See the files in <code class="docutils literal notranslate"><span class="pre">configs/uma/evaluate</span></code> as a full example.</p>
+</section>
+</section>
 </section>
 
     <script type="text/x-thebe-config">
@@ -651,7 +756,7 @@ document.write(`
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Training</p>
+        <p class="prev-next-title">Training models from scratch</p>
       </div>
     </a>
     <a class="right-next"
@@ -669,6 +774,30 @@ document.write(`
             </div>
             
             
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#running-model-evaluations">Running Model Evaluations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#evaluation-configuration-file-format">Evaluation Configuration File Format</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#top-level-keys">Top-Level Keys</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#under-job">Under <code class="docutils literal notranslate"><span class="pre">job</span></code>:</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#under-runner">Under <code class="docutils literal notranslate"><span class="pre">runner</span></code>:</a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#using-the-defaults-key-to-define-config-groups">Using the <code class="docutils literal notranslate"><span class="pre">defaults</span></code> key to define config groups</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
               
             
           </div>

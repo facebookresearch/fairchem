@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../../../../../../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../../../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../dac/models.html">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../../scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../../scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../../data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../../data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../../data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../../../../ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -608,14 +612,12 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.YTOL"><code class="docutils literal notranslate"><span class="pre">YTOL</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.init_edge_rot_mat"><code class="docutils literal notranslate"><span class="pre">init_edge_rot_mat()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.init_edge_rot_euler_angles"><code class="docutils literal notranslate"><span class="pre">init_edge_rot_euler_angles()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.wigner_D"><code class="docutils literal notranslate"><span class="pre">wigner_D()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation._z_rot_mat"><code class="docutils literal notranslate"><span class="pre">_z_rot_mat()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.rotation_to_wigner"><code class="docutils literal notranslate"><span class="pre">rotation_to_wigner()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.eulers_to_wigner"><code class="docutils literal notranslate"><span class="pre">eulers_to_wigner()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -634,22 +636,11 @@ document.write(`
 <p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
 <p>This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.</p>
-<section id="attributes">
-<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
-<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.models.uma.common.rotation.YTOL" title="core.models.uma.common.rotation.YTOL"><code class="xref py py-obj docutils literal notranslate"><span class="pre">YTOL</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-</tbody>
-</table>
-</div>
-</section>
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.models.uma.common.rotation.init_edge_rot_mat" title="core.models.uma.common.rotation.init_edge_rot_mat"><code class="xref py py-obj docutils literal notranslate"><span class="pre">init_edge_rot_mat</span></code></a>(edge_distance_vec[, rot_clip])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.models.uma.common.rotation.init_edge_rot_euler_angles" title="core.models.uma.common.rotation.init_edge_rot_euler_angles"><code class="xref py py-obj docutils literal notranslate"><span class="pre">init_edge_rot_euler_angles</span></code></a>(edge_distance_vec)</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.models.uma.common.rotation.wigner_D" title="core.models.uma.common.rotation.wigner_D"><code class="xref py py-obj docutils literal notranslate"><span class="pre">wigner_D</span></code></a>(→ torch.Tensor)</p></td>
@@ -658,7 +649,7 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.models.uma.common.rotation._z_rot_mat" title="core.models.uma.common.rotation._z_rot_mat"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_z_rot_mat</span></code></a>(→ torch.Tensor)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.models.uma.common.rotation.rotation_to_wigner" title="core.models.uma.common.rotation.rotation_to_wigner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rotation_to_wigner</span></code></a>(→ torch.Tensor)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.models.uma.common.rotation.eulers_to_wigner" title="core.models.uma.common.rotation.eulers_to_wigner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eulers_to_wigner</span></code></a>(→ torch.Tensor)</p></td>
 <td><p>set &lt;rot_clip=True&gt; to handle gradient instability when using gradient-based force/stress prediction.</p></td>
 </tr>
 </tbody>
@@ -667,14 +658,9 @@ LICENSE file in the root directory of this source tree.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py data">
-<dt class="sig sig-object py" id="core.models.uma.common.rotation.YTOL">
-<span class="sig-prename descclassname"><span class="pre">core.models.uma.common.rotation.</span></span><span class="sig-name descname"><span class="pre">YTOL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.999999</span></em><a class="headerlink" href="#core.models.uma.common.rotation.YTOL" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
 <dl class="py function">
-<dt class="sig sig-object py" id="core.models.uma.common.rotation.init_edge_rot_mat">
-<span class="sig-prename descclassname"><span class="pre">core.models.uma.common.rotation.</span></span><span class="sig-name descname"><span class="pre">init_edge_rot_mat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_distance_vec</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rot_clip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.common.rotation.init_edge_rot_mat" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.models.uma.common.rotation.init_edge_rot_euler_angles">
+<span class="sig-prename descclassname"><span class="pre">core.models.uma.common.rotation.</span></span><span class="sig-name descname"><span class="pre">init_edge_rot_euler_angles</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_distance_vec</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.common.rotation.init_edge_rot_euler_angles" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -688,8 +674,8 @@ LICENSE file in the root directory of this source tree.</p>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="core.models.uma.common.rotation.rotation_to_wigner">
-<span class="sig-prename descclassname"><span class="pre">core.models.uma.common.rotation.</span></span><span class="sig-name descname"><span class="pre">rotation_to_wigner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_rot_mat</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_lmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_lmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Jd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rot_clip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.models.uma.common.rotation.rotation_to_wigner" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.models.uma.common.rotation.eulers_to_wigner">
+<span class="sig-prename descclassname"><span class="pre">core.models.uma.common.rotation.</span></span><span class="sig-name descname"><span class="pre">eulers_to_wigner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">eulers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_lmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_lmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Jd</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.models.uma.common.rotation.eulers_to_wigner" title="Link to this definition">#</a></dt>
 <dd><p>set &lt;rot_clip=True&gt; to handle gradient instability when using gradient-based force/stress prediction.</p>
 </dd></dl>
 
@@ -760,14 +746,12 @@ LICENSE file in the root directory of this source tree.</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.YTOL"><code class="docutils literal notranslate"><span class="pre">YTOL</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.init_edge_rot_mat"><code class="docutils literal notranslate"><span class="pre">init_edge_rot_mat()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.init_edge_rot_euler_angles"><code class="docutils literal notranslate"><span class="pre">init_edge_rot_euler_angles()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.wigner_D"><code class="docutils literal notranslate"><span class="pre">wigner_D()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation._z_rot_mat"><code class="docutils literal notranslate"><span class="pre">_z_rot_mat()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.rotation_to_wigner"><code class="docutils literal notranslate"><span class="pre">rotation_to_wigner()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.common.rotation.eulers_to_wigner"><code class="docutils literal notranslate"><span class="pre">eulers_to_wigner()</span></code></a></li>
 </ul>
 </li>
 </ul>

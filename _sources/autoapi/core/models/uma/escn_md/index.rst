@@ -46,7 +46,7 @@ Module Contents
 
 .. py:data:: ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
 
-.. py:class:: eSCNMDBackbone(max_num_elements: int = 100, sphere_channels: int = 128, lmax: int = 2, mmax: int = 2, grid_resolution: int | None = None, num_sphere_samples: int = 128, otf_graph: bool = False, max_neighbors: int = 300, use_pbc: bool = True, use_pbc_single: bool = True, cutoff: float = 5.0, edge_channels: int = 128, distance_function: str = 'gaussian', num_distance_basis: int = 512, direct_forces: bool = True, regress_forces: bool = True, regress_stress: bool = False, num_layers: int = 2, hidden_channels: int = 128, norm_type: str = 'rms_norm_sh', act_type: str = 'gate', ff_type: str = 'grid', activation_checkpointing: bool = False, chg_spin_emb_type: str = 'pos_emb', cs_emb_grad: bool = False, dataset_emb_grad: bool = False, dataset_list: list[str] | None = None, use_dataset_embedding: bool = True, use_cuda_graph_wigner: bool = False, radius_pbc_version: int = 1, always_use_pbc: bool = True)
+.. py:class:: eSCNMDBackbone(max_num_elements: int = 100, sphere_channels: int = 128, lmax: int = 2, mmax: int = 2, grid_resolution: int | None = None, num_sphere_samples: int = 128, otf_graph: bool = False, max_neighbors: int = 300, use_pbc: bool = True, use_pbc_single: bool = True, cutoff: float = 5.0, edge_channels: int = 128, distance_function: Literal['gaussian'] = 'gaussian', num_distance_basis: int = 512, direct_forces: bool = True, regress_forces: bool = True, regress_stress: bool = False, num_layers: int = 2, hidden_channels: int = 128, norm_type: str = 'rms_norm_sh', act_type: str = 'gate', ff_type: str = 'grid', activation_checkpointing: bool = False, chg_spin_emb_type: Literal['pos_emb', 'lin_emb', 'rand_emb'] = 'pos_emb', cs_emb_grad: bool = False, dataset_emb_grad: bool = False, dataset_list: list[str] | None = None, use_dataset_embedding: bool = True, use_cuda_graph_wigner: bool = False, radius_pbc_version: int = 1, always_use_pbc: bool = True)
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.uma.nn.mole_utils.MOLEInterface`
 
@@ -213,10 +213,10 @@ Module Contents
 
 
 
-   .. py:method:: _get_rotmat_and_wigner(edge_distance_vecs: torch.Tensor, use_cuda_graph: bool)
+   .. py:method:: _get_rotmat_and_wigner(edge_distance_vecs: torch.Tensor, use_cuda_graph: bool) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
-   .. py:method:: _get_displacement_and_cell(data_dict)
+   .. py:method:: _get_displacement_and_cell(data_dict: fairchem.core.datasets.atomic_data.AtomicData) -> tuple[torch.Tensor | None, torch.Tensor | None]
 
 
    .. py:method:: csd_embedding(charge, spin, dataset)
@@ -225,7 +225,7 @@ Module Contents
    .. py:method:: _generate_graph(data_dict)
 
 
-   .. py:method:: forward(data_dict) -> dict[str, torch.Tensor]
+   .. py:method:: forward(data_dict: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, torch.Tensor]
 
 
    .. py:method:: _init_gp_partitions(graph_dict, atomic_numbers_full)
@@ -237,12 +237,14 @@ Module Contents
 
 
    .. py:property:: num_params
+      :type: int
+
 
 
    .. py:method:: no_weight_decay() -> set
 
 
-.. py:class:: MLP_EFS_Head(backbone, prefix=None, wrap_property=True)
+.. py:class:: MLP_EFS_Head(backbone: eSCNMDBackbone, prefix: str | None = None, wrap_property: bool = True)
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.HeadInterface`
 
@@ -300,7 +302,7 @@ Module Contents
    .. py:attribute:: energy_block
 
 
-   .. py:method:: forward(data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
+   .. py:method:: forward(data: fairchem.core.datasets.atomic_data.AtomicData, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
 
       Head forward.
 
@@ -314,7 +316,7 @@ Module Contents
 
 
 
-.. py:class:: MLP_Energy_Head(backbone, reduce: str = 'sum')
+.. py:class:: MLP_Energy_Head(backbone: eSCNMDBackbone, reduce: str = 'sum')
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.HeadInterface`
 
@@ -363,7 +365,7 @@ Module Contents
    .. py:attribute:: energy_block
 
 
-   .. py:method:: forward(data_dict, emb: dict[str, torch.Tensor])
+   .. py:method:: forward(data_dict: fairchem.core.datasets.atomic_data.AtomicData, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
 
       Head forward.
 
@@ -377,7 +379,7 @@ Module Contents
 
 
 
-.. py:class:: Linear_Energy_Head(backbone, reduce: str = 'sum')
+.. py:class:: Linear_Energy_Head(backbone: eSCNMDBackbone, reduce: str = 'sum')
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.HeadInterface`
 
@@ -420,7 +422,7 @@ Module Contents
    .. py:attribute:: energy_block
 
 
-   .. py:method:: forward(data_dict, emb: dict[str, torch.Tensor])
+   .. py:method:: forward(data_dict: fairchem.core.datasets.atomic_data.AtomicData, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
 
       Head forward.
 
@@ -434,7 +436,7 @@ Module Contents
 
 
 
-.. py:class:: Linear_Force_Head(backbone)
+.. py:class:: Linear_Force_Head(backbone: eSCNMDBackbone)
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.HeadInterface`
 
@@ -474,7 +476,7 @@ Module Contents
    .. py:attribute:: linear
 
 
-   .. py:method:: forward(data_dict, emb: dict[str, torch.Tensor])
+   .. py:method:: forward(data_dict: fairchem.core.datasets.atomic_data.AtomicData, emb: dict[str, torch.Tensor])
 
       Head forward.
 
@@ -499,7 +501,7 @@ Module Contents
    :rtype: tensor
 
 
-.. py:class:: MLP_Stress_Head(backbone, reduce: str = 'mean')
+.. py:class:: MLP_Stress_Head(backbone: eSCNMDBackbone, reduce: str = 'mean')
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.HeadInterface`
 
@@ -551,7 +553,7 @@ Module Contents
    .. py:attribute:: l2_linear
 
 
-   .. py:method:: forward(data_dict, emb: dict[str, torch.Tensor])
+   .. py:method:: forward(data_dict: fairchem.core.datasets.atomic_data.AtomicData, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
 
       Head forward.
 

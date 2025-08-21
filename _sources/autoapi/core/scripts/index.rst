@@ -13,6 +13,7 @@ Submodules
    /autoapi/core/scripts/convert_hydra_to_release/index
    /autoapi/core/scripts/create_finetune_dataset/index
    /autoapi/core/scripts/create_uma_finetune_dataset/index
+   /autoapi/core/scripts/diatomic_tests/index
    /autoapi/core/scripts/download_data/index
    /autoapi/core/scripts/download_large_files/index
    /autoapi/core/scripts/eqv2_to_hydra_eqv2/index

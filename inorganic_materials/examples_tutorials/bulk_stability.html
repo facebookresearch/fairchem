@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../dac/models.html">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -650,7 +654,7 @@ document.write(`
 <span class="n">result</span> <span class="o">=</span> <span class="n">relax_job</span><span class="p">(</span>
     <span class="n">atoms</span><span class="p">,</span>
     <span class="n">method</span><span class="o">=</span><span class="s2">&quot;fairchem&quot;</span><span class="p">,</span>
-    <span class="n">name_or_path</span><span class="o">=</span><span class="s2">&quot;uma-s-1&quot;</span><span class="p">,</span>
+    <span class="n">name_or_path</span><span class="o">=</span><span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">,</span>
     <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">,</span>
     <span class="n">opt_params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;fmax&quot;</span><span class="p">:</span> <span class="mf">1e-3</span><span class="p">,</span> <span class="s2">&quot;optimizer&quot;</span><span class="p">:</span> <span class="n">LBFGS</span><span class="p">},</span>
 <span class="p">)</span>
@@ -658,10 +662,6 @@ document.write(`
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/torchtnt/utils/version.py:12: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools&lt;81.
-  import pkg_resources
-</pre></div>
-</div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 </pre></div>
 </div>
@@ -671,10 +671,10 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Setting random seed to 41
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-07-01-20-21-39-844066-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-08-21-00-35-17-389193-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-07-01-20-21-39-844066-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-08-21-00-35-17-389193-59941
 </pre></div>
 </div>
 </div>
@@ -688,10 +688,10 @@ document.write(`
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
  &#39;converged&#39;: np.True_,
- &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-07-01-20-21-39-844066-59941&#39;,
+ &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-08-21-00-35-17-389193-59941&#39;,
  &#39;input_atoms&#39;: {&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
-                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 7, 1, 20, 21, 40, 570271, tzinfo=datetime.timezone.utc),
-                                                         &#39;emmet_version&#39;: &#39;0.84.8&#39;,
+                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 8, 21, 0, 35, 18, 61699, tzinfo=datetime.timezone.utc),
+                                                         &#39;emmet_version&#39;: &#39;0.84.9&#39;,
                                                          &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
                                         &#39;chemsys&#39;: &#39;Cu&#39;,
                                         &#39;composition&#39;: Composition(&#39;Cu1&#39;),
@@ -712,21 +712,21 @@ document.write(`
                                                      &#39;version&#39;: &#39;2.6.0&#39;},
                                         &#39;volume&#39;: 11.761470249999999}},
  &#39;name&#39;: &#39;fairchem Relax&#39;,
- &#39;nid&#39;: &#39;runnervm1w6u6.fmwxo1vhichurb1wybuswyps5c.dx.internal.cloudapp.net&#39;,
- &#39;parameters&#39;: {&#39;version&#39;: &#39;2.3.0&#39;},
+ &#39;nid&#39;: &#39;runnervmy6chb.qbgdzmcscruuffo0kelb5mxrja.dx.internal.cloudapp.net&#39;,
+ &#39;parameters&#39;: {&#39;version&#39;: &#39;2.3.1.dev42+g00743398&#39;},
  &#39;parameters_opt&#39;: {&#39;fmax&#39;: 0.001,
                     &#39;max_steps&#39;: 1000,
                     &#39;maxstep&#39;: 0.2,
                     &#39;optimizer&#39;: &#39;LBFGS&#39;,
                     &#39;type&#39;: &#39;optimization&#39;},
- &#39;quacc_version&#39;: &#39;0.16.0&#39;,
- &#39;results&#39;: {&#39;energy&#39;: -3.7579006783217954,
+ &#39;quacc_version&#39;: &#39;0.17.0&#39;,
+ &#39;results&#39;: {&#39;energy&#39;: -3.7501682869643735,
              &#39;forces&#39;: array([[0., 0., 0.]], dtype=float32),
-             &#39;free_energy&#39;: -3.7579006783217954,
-             &#39;stress&#39;: array([-6.3947155e-03, -6.3947132e-03, -6.3947104e-03,  9.1077640e-10,
-       -2.4789384e-11, -2.3730695e-09], dtype=float32)},
- &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 7, 1, 20, 21, 40, 580795, tzinfo=datetime.timezone.utc),
-                                         &#39;emmet_version&#39;: &#39;0.84.8&#39;,
+             &#39;free_energy&#39;: -3.7501682869643735,
+             &#39;stress&#39;: array([-4.3533458e-03, -4.3533649e-03, -4.3533472e-03,  2.4918585e-11,
+        4.1308166e-09, -1.5957015e-10], dtype=float32)},
+ &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 8, 21, 0, 35, 18, 72468, tzinfo=datetime.timezone.utc),
+                                         &#39;emmet_version&#39;: &#39;0.84.9&#39;,
                                          &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
                         &#39;chemsys&#39;: &#39;Cu&#39;,
                         &#39;composition&#39;: Composition(&#39;Cu1&#39;),
@@ -747,11 +747,11 @@ document.write(`
                                      &#39;version&#39;: &#39;2.6.0&#39;},
                         &#39;volume&#39;: 11.761470249999999},
  &#39;trajectory&#39;: [Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]], calculator=SinglePointCalculator(...))],
- &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.7579006783217954,
+ &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.7501682869643735,
                          &#39;forces&#39;: array([[0., 0., 0.]]),
-                         &#39;free_energy&#39;: -3.7579006783217954,
-                         &#39;stress&#39;: array([-6.39471551e-03, -6.39471319e-03, -6.39471039e-03,  9.10776399e-10,
-       -2.47893841e-11, -2.37306952e-09])}]}
+                         &#39;free_energy&#39;: -3.7501682869643735,
+                         &#39;stress&#39;: array([-4.35334584e-03, -4.35336493e-03, -4.35334723e-03,  2.49185846e-11,
+        4.13081658e-09, -1.59570149e-10])}]}
 </pre></div>
 </div>
 </div>

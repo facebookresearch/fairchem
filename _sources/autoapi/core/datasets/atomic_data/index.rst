@@ -147,7 +147,7 @@ Module Contents
    .. py:method:: validate()
 
 
-   .. py:method:: from_ase(input_atoms: ase.Atoms, r_edges: bool = False, radius: float = 6.0, max_neigh: int | None = None, sid: str | None = None, molecule_cell_size: float | None = None, r_energy: bool = True, r_forces: bool = True, r_stress: bool = True, r_data_keys: list[str] | None = None, task_name: str | None = None) -> AtomicData
+   .. py:method:: from_ase(input_atoms: ase.Atoms, r_edges: bool = False, radius: float = 6.0, max_neigh: int | None = None, sid: str | None = None, molecule_cell_size: float | None = None, r_energy: bool = True, r_forces: bool = True, r_stress: bool = True, r_data_keys: list[str] | None = None, task_name: str | None = None, target_dtype: torch.dtype = torch.float32) -> AtomicData
       :classmethod:
 
 
@@ -327,6 +327,22 @@ Module Contents
       from the batch object.
       The batch object must have been created via :meth:`from_data_list` in
       order to be able to reconstruct the initial objects.
+
+
+
+   .. py:method:: update_batch_edges(edge_index: torch.Tensor, cell_offsets: torch.Tensor, nedges: torch.Tensor) -> AtomicData
+
+      Update the connectivity of each batched AtomicData sample.
+
+      :param edge_index: New batch edge_index (shape [2, total_edges]).
+      :type edge_index: torch.Tensor
+      :param cell_offsets: Cell offsets per edge (shape [total_edges, 3]).
+      :type cell_offsets: torch.Tensor
+      :param nedges: Number of edges per system (shape [num_systems]).
+      :type nedges: torch.Tensor
+
+      :returns: The updated batch object.
+      :rtype: AtomicData
 
 
 

@@ -60,6 +60,11 @@ Module Contents
    .. py:attribute:: a2g
 
 
+   .. py:property:: task_name
+      :type: str
+
+
+
    .. py:method:: from_model_checkpoint(name_or_path: str, task_name: fairchem.core.units.mlip_unit.api.inference.UMATask | None = None, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, seed: int = 41) -> FAIRChemCalculator
       :classmethod:
 
@@ -76,11 +81,6 @@ Module Contents
       :param overrides: Optional dictionary of settings to override default inference settings.
       :param device: Optional torch device to load the model onto.
       :param seed: Random seed for reproducibility. Defaults to 41.
-
-
-
-   .. py:property:: task_name
-      :type: str
 
 
 

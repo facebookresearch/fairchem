@@ -32,7 +32,7 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/togglebutton.css?v=13237357" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-thebe.css?v=4fa983c6" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -188,16 +188,16 @@
 
 <li class="toctree-l1"><a class="reference internal" href="../../../../../core/uma.html">UMA Models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor Interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 <li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; Custom Datasets</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/training.html">Training</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/evaluation.html">Evaluation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/workflows.html">Workflows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
@@ -273,8 +273,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../dac/datasets/odac.html">Open Direct Air Capture 2023 (ODAC23)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../dac/models.html">Pretrained models</a></li>
@@ -343,6 +342,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../scripts/download_data/index.html">core.scripts.download_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
@@ -377,7 +377,11 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
-<li class="toctree-l3"><a class="reference internal" href="../../../../data/om/index.html">data.om</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../../data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
 </ul>
 </details></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../../../ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -628,17 +632,19 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.name"><code class="docutils literal notranslate"><span class="pre">Task.name</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.level"><code class="docutils literal notranslate"><span class="pre">Task.level</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.property"><code class="docutils literal notranslate"><span class="pre">Task.property</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.loss_fn"><code class="docutils literal notranslate"><span class="pre">Task.loss_fn</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.out_spec"><code class="docutils literal notranslate"><span class="pre">Task.out_spec</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.normalizer"><code class="docutils literal notranslate"><span class="pre">Task.normalizer</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.datasets"><code class="docutils literal notranslate"><span class="pre">Task.datasets</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.loss_fn"><code class="docutils literal notranslate"><span class="pre">Task.loss_fn</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.element_references"><code class="docutils literal notranslate"><span class="pre">Task.element_references</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.metrics"><code class="docutils literal notranslate"><span class="pre">Task.metrics</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.train_on_free_atoms"><code class="docutils literal notranslate"><span class="pre">Task.train_on_free_atoms</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.eval_on_free_atoms"><code class="docutils literal notranslate"><span class="pre">Task.eval_on_free_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.inference_only"><code class="docutils literal notranslate"><span class="pre">Task.inference_only</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.DEFAULT_EXCLUDE_KEYS"><code class="docutils literal notranslate"><span class="pre">DEFAULT_EXCLUDE_KEYS</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.filter_inference_only_tasks"><code class="docutils literal notranslate"><span class="pre">filter_inference_only_tasks()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.initialize_finetuning_model"><code class="docutils literal notranslate"><span class="pre">initialize_finetuning_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.get_output_mask"><code class="docutils literal notranslate"><span class="pre">get_output_mask()</span></code></a></li>
@@ -749,7 +755,7 @@ LICENSE file in the root directory of this source tree.</p>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.TrainStrategy" title="core.units.mlip_unit.mlip_unit.TrainStrategy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TrainStrategy</span></code></a></p></td>
-<td><p>str(object='') -&gt; str</p></td>
+<td><p>Enum where members are also (and must be) strings</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Task</span></code></a></p></td>
 <td><p></p></td>
@@ -768,37 +774,40 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint" title="core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.filter_inference_only_tasks" title="core.units.mlip_unit.mlip_unit.filter_inference_only_tasks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">filter_inference_only_tasks</span></code></a>(→ list[Task])</p></td>
+<td><p>Filter out tasks that are marked as inference_only.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint" title="core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.initialize_finetuning_model" title="core.units.mlip_unit.mlip_unit.initialize_finetuning_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">initialize_finetuning_model</span></code></a>(→ torch.nn.Module)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.initialize_finetuning_model" title="core.units.mlip_unit.mlip_unit.initialize_finetuning_model"><code class="xref py py-obj docutils literal notranslate"><span class="pre">initialize_finetuning_model</span></code></a>(→ torch.nn.Module)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.get_output_mask" title="core.units.mlip_unit.mlip_unit.get_output_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_output_mask</span></code></a>(→ dict[str, torch.Tensor])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.get_output_mask" title="core.units.mlip_unit.mlip_unit.get_output_mask"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_output_mask</span></code></a>(→ dict[str, torch.Tensor])</p></td>
 <td><p>Get a dictionary of boolean masks for each task and dataset in a batch.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.get_output_masks" title="core.units.mlip_unit.mlip_unit.get_output_masks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_output_masks</span></code></a>(→ dict[str, torch.Tensor])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.get_output_masks" title="core.units.mlip_unit.mlip_unit.get_output_masks"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_output_masks</span></code></a>(→ dict[str, torch.Tensor])</p></td>
 <td><p>Same as above but for a list of tasks.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.compute_loss" title="core.units.mlip_unit.mlip_unit.compute_loss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_loss</span></code></a>(→ dict[str, float])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.compute_loss" title="core.units.mlip_unit.mlip_unit.compute_loss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_loss</span></code></a>(→ dict[str, float])</p></td>
 <td><p>Compute loss given a sequence of tasks</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.compute_metrics" title="core.units.mlip_unit.mlip_unit.compute_metrics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_metrics</span></code></a>(→ dict[str)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.compute_metrics" title="core.units.mlip_unit.mlip_unit.compute_metrics"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_metrics</span></code></a>(→ dict[str)</p></td>
 <td><p>Compute metrics and update running metrics for a given task</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.mt_collater_adapter" title="core.units.mlip_unit.mlip_unit.mt_collater_adapter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mt_collater_adapter</span></code></a>(tasks[, exclude_keys])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.mt_collater_adapter" title="core.units.mlip_unit.mlip_unit.mt_collater_adapter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mt_collater_adapter</span></code></a>(tasks[, exclude_keys])</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler" title="core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_consine_lr_scheduler</span></code></a>(...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler" title="core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_consine_lr_scheduler</span></code></a>(...)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit._get_optimizer_wd" title="core.units.mlip_unit.mlip_unit._get_optimizer_wd"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_optimizer_wd</span></code></a>(→ torch.optim.Optimizer)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit._get_optimizer_wd" title="core.units.mlip_unit.mlip_unit._get_optimizer_wd"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_optimizer_wd</span></code></a>(→ torch.optim.Optimizer)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit._reshard_fsdp" title="core.units.mlip_unit.mlip_unit._reshard_fsdp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_reshard_fsdp</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit._reshard_fsdp" title="core.units.mlip_unit.mlip_unit._reshard_fsdp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_reshard_fsdp</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.set_sampler_state" title="core.units.mlip_unit.mlip_unit.set_sampler_state"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_sampler_state</span></code></a>(→ None)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.set_sampler_state" title="core.units.mlip_unit.mlip_unit.set_sampler_state"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_sampler_state</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -835,16 +844,8 @@ LICENSE file in the root directory of this source tree.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.TrainStrategy">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">TrainStrategy</span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.TrainStrategy" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">enum.Enum</span></code></p>
-<p>str(object=’’) -&gt; str
-str(bytes_or_buffer[, encoding[, errors]]) -&gt; str</p>
-<p>Create a new string object from the given object. If encoding or
-errors is specified, then the object must expose a data buffer
-that will be decoded using the given encoding and error handler.
-Otherwise, returns the result of object.__str__() (if defined)
-or repr(object).
-encoding defaults to sys.getdefaultencoding().
-errors defaults to ‘strict’.</p>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.common.utils.StrEnum</span></code></p>
+<p>Enum where members are also (and must be) strings</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.TrainStrategy.DDP">
 <span class="sig-name descname"><span class="pre">DDP</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'ddp'</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.TrainStrategy.DDP" title="Link to this definition">#</a></dt>
@@ -876,11 +877,6 @@ errors defaults to ‘strict’.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.Task.loss_fn">
-<span class="sig-name descname"><span class="pre">loss_fn</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">torch.nn.Module</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Task.loss_fn" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.Task.out_spec">
 <span class="sig-name descname"><span class="pre">out_spec</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.OutputSpec" title="core.units.mlip_unit.mlip_unit.OutputSpec"><span class="pre">OutputSpec</span></a></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Task.out_spec" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -893,6 +889,11 @@ errors defaults to ‘strict’.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.Task.datasets">
 <span class="sig-name descname"><span class="pre">datasets</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Task.datasets" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.Task.loss_fn">
+<span class="sig-name descname"><span class="pre">loss_fn</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">torch.nn.Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Task.loss_fn" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -915,12 +916,23 @@ errors defaults to ‘strict’.</p>
 <span class="sig-name descname"><span class="pre">eval_on_free_atoms</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Task.eval_on_free_atoms" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.Task.inference_only">
+<span class="sig-name descname"><span class="pre">inference_only</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.Task.inference_only" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 <dl class="py data">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.DEFAULT_EXCLUDE_KEYS">
 <span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">DEFAULT_EXCLUDE_KEYS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['id',</span> <span class="pre">'fid',</span> <span class="pre">'absolute_idx',</span> <span class="pre">'target_pos',</span> <span class="pre">'ref_energy',</span> <span class="pre">'pbc',</span> <span class="pre">'nads',</span> <span class="pre">'oc22',...</span></em><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.DEFAULT_EXCLUDE_KEYS" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.filter_inference_only_tasks">
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.mlip_unit.</span></span><span class="sig-name descname"><span class="pre">filter_inference_only_tasks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tasks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.units.mlip_unit.mlip_unit.Task" title="core.units.mlip_unit.mlip_unit.Task"><span class="pre">Task</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.mlip_unit.filter_inference_only_tasks" title="Link to this definition">#</a></dt>
+<dd><p>Filter out tasks that are marked as inference_only.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint">
@@ -1520,17 +1532,19 @@ Below is a simple example of a user’s subclass of <code class="xref py py-clas
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.name"><code class="docutils literal notranslate"><span class="pre">Task.name</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.level"><code class="docutils literal notranslate"><span class="pre">Task.level</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.property"><code class="docutils literal notranslate"><span class="pre">Task.property</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.loss_fn"><code class="docutils literal notranslate"><span class="pre">Task.loss_fn</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.out_spec"><code class="docutils literal notranslate"><span class="pre">Task.out_spec</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.normalizer"><code class="docutils literal notranslate"><span class="pre">Task.normalizer</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.datasets"><code class="docutils literal notranslate"><span class="pre">Task.datasets</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.loss_fn"><code class="docutils literal notranslate"><span class="pre">Task.loss_fn</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.element_references"><code class="docutils literal notranslate"><span class="pre">Task.element_references</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.metrics"><code class="docutils literal notranslate"><span class="pre">Task.metrics</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.train_on_free_atoms"><code class="docutils literal notranslate"><span class="pre">Task.train_on_free_atoms</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.eval_on_free_atoms"><code class="docutils literal notranslate"><span class="pre">Task.eval_on_free_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.Task.inference_only"><code class="docutils literal notranslate"><span class="pre">Task.inference_only</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.DEFAULT_EXCLUDE_KEYS"><code class="docutils literal notranslate"><span class="pre">DEFAULT_EXCLUDE_KEYS</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.filter_inference_only_tasks"><code class="docutils literal notranslate"><span class="pre">filter_inference_only_tasks()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.convert_train_checkpoint_to_inference_checkpoint"><code class="docutils literal notranslate"><span class="pre">convert_train_checkpoint_to_inference_checkpoint()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.initialize_finetuning_model"><code class="docutils literal notranslate"><span class="pre">initialize_finetuning_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.mlip_unit.get_output_mask"><code class="docutils literal notranslate"><span class="pre">get_output_mask()</span></code></a></li>

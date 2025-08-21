@@ -351,7 +351,7 @@ Module Contents
    .. py:method:: forward(x: torch.Tensor) -> torch.Tensor
 
 
-.. py:class:: GateActivation(lmax: int, mmax: int, num_channels: int, m_prime=False)
+.. py:class:: GateActivation(lmax: int, mmax: int, num_channels: int, m_prime: bool = False)
 
    Bases: :py:obj:`torch.nn.Module`
 

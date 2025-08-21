@@ -62,6 +62,3 @@ Module Contents
    .. py:method:: save_state(checkpoint_location: str, is_preemption: bool = False) -> bool
 
 
-   .. py:method:: load_state(checkpoint_location: str | None) -> None
-
-

@@ -12,14 +12,6 @@ core.models.uma.common.rotation_cuda_graph
 
 
 
-Attributes
-----------
-
-.. autoapisummary::
-
-   core.models.uma.common.rotation_cuda_graph.YTOL
-
-
 Classes
 -------
 
@@ -35,18 +27,11 @@ Functions
 
    core.models.uma.common.rotation_cuda_graph.capture_rotmat_and_wigner_with_make_graph_callable
    core.models.uma.common.rotation_cuda_graph.edge_rot_and_wigner_graph_capture_region
-   core.models.uma.common.rotation_cuda_graph.create_masks
-   core.models.uma.common.rotation_cuda_graph.init_edge_rot_mat_cuda_graph
-   core.models.uma.common.rotation_cuda_graph.euler_from_edge_rot_mat
-   core.models.uma.common.rotation_cuda_graph.eulers_to_wigner
+   core.models.uma.common.rotation_cuda_graph.init_edge_rot_euler_angles_wigner_cuda_graph
 
 
 Module Contents
 ---------------
-
-.. py:data:: YTOL
-   :value: 0.999999
-
 
 .. py:class:: RotMatWignerCudaGraph
 
@@ -73,13 +58,7 @@ Module Contents
 
 .. py:function:: capture_rotmat_and_wigner_with_make_graph_callable(edge_dist_vec: torch.Tensor, jds: list[torch.Tensor])
 
-.. py:function:: edge_rot_and_wigner_graph_capture_region(edge_distance_vecs: torch.Tensor, Jd_buffers: list[torch.Tensor], x_hat: torch.Tensor, mask: torch.Tensor, neg_mask: torch.Tensor)
+.. py:function:: edge_rot_and_wigner_graph_capture_region(edge_distance_vecs: torch.Tensor, Jd_buffers: list[torch.Tensor])
 
-.. py:function:: create_masks(edge_distance_vec: torch.Tensor, x_hat: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]
-
-.. py:function:: init_edge_rot_mat_cuda_graph(edge_distance_vec: torch.Tensor, mask: torch.Tensor, neg_mask: torch.Tensor, x_hat: torch.Tensor) -> torch.Tensor
-
-.. py:function:: euler_from_edge_rot_mat(edge_rot_mat: torch.Tensor, x_hat: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-
-.. py:function:: eulers_to_wigner(alpha: torch.Tensor, beta: torch.Tensor, gamma: torch.Tensor, start_lmax: int, end_lmax: int, Jd: list[torch.Tensor]) -> torch.Tensor
+.. py:function:: init_edge_rot_euler_angles_wigner_cuda_graph(edge_distance_vec)
 

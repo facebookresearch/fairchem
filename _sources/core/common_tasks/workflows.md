@@ -11,8 +11,8 @@ kernelspec:
   name: python3
 ---
 
-Workflows
-------------------
+Calculation workflows with FAIRChem models
+------------------------------------------
 
 This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc) and simply specify the `fairchem` model type. Below is an example that uses the default elastic_tensor_flow flow.
 
@@ -31,7 +31,7 @@ result = elastic_tensor_flow(
     job_params={
         "all": dict(
             method="fairchem",
-            name_or_path="uma-s-1",
+            name_or_path="uma-s-1p1",
             task_name="omat",
         ),
     },
