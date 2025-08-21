@@ -34,7 +34,7 @@ def main():
         inference_settings=InferenceSettings(
             tf32=True,
             merge_mole=True,
-            wigner_cuda=True,
+            wigner_cuda=False,
             compile=False,
             activation_checkpointing=False,
             internal_graph_gen_version=2,
@@ -43,7 +43,10 @@ def main():
         server_config={"workers": 8},
     )
     atoms = get_fcc_carbon_xtal(5000)
-
+    # calc = FAIRChemCalculator(ppunit, task_name="omol")
+    # atoms.calc = calc
+    # print(atoms.get_potential_energy())
+    # ppunit.cleanup()
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
     logging.info("Starting profile")
     qps, ns_per_day = get_qps(atomic_data, ppunit, warmups=10, timeiters=10)

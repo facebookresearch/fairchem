@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 import torch
-from ase import Atoms
+from ase import Atoms, units
 from ase.build import add_adsorbate, bulk, fcc111, molecule
+from ase.md.langevin import Langevin
 from ase.optimize import BFGS
 
 from fairchem.core import FAIRChemCalculator
@@ -22,7 +23,8 @@ from fairchem.core.calculate.ase_calculator import (
     AllZeroUnitCellError,
     MixedPBCError,
 )
-from fairchem.core.units.mlip_unit.api.inference import UMATask
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATask
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
@@ -378,3 +380,58 @@ def test_random_seed_final_energy():
     for seed_a in set(seeds):
         for seed_b in set(seeds) - {seed_a}:
             assert results_by_seed[seed_a] != results_by_seed[seed_b]
+
+
+def run_md_simulation(calc, steps: int = 10):
+    atoms = molecule("H2O")
+    atoms.calc = calc
+
+    dyn = Langevin(
+        atoms,
+        timestep=0.1 * units.fs,
+        temperature_K=400,
+        friction=0.001 / units.fs,
+    )
+    dyn.run(steps=10)
+    expected_energy = -2079.86
+    assert np.allclose(atoms.get_potential_energy(), expected_energy, atol=1e-4)
+
+
+def test_simple_md():
+    inference_settings = InferenceSettings(
+        tf32=True,
+        merge_mole=True,
+        wigner_cuda=False,
+        compile=False,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    predictor = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cpu", inference_settings=inference_settings
+    )
+    calc = FAIRChemCalculator(predictor, task_name="omol")
+    run_md_simulation(calc, steps=10)
+
+
+def test_parallel_md():
+    inference_settings = InferenceSettings(
+        tf32=True,
+        merge_mole=True,
+        wigner_cuda=False,
+        compile=False,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    model_path = pretrained_mlip.pretrained_checkpoint_path_from_name("uma-s-1p1")
+    predictor = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device="cpu",
+        inference_settings=inference_settings,
+        server_config={"workers": 2},
+    )
+
+    calc = FAIRChemCalculator(predictor, task_name="omol")
+    run_md_simulation(calc, steps=10)
+    predictor.cleanup()

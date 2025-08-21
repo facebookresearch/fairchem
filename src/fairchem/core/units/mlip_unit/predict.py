@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import copy
 import logging
+import multiprocessing as mp
 import os
 import random
-import threading
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
@@ -293,6 +293,21 @@ def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     return dict(dset_to_tasks_map)
 
 
+def _run_server_process(predictor_config, port, num_workers, ready_queue):
+    """Function to run server in separate process"""
+    try:
+        server = MLIPInferenceServerWebSocket(
+            predictor_config=predictor_config,
+            port=port,
+            num_workers=num_workers,
+        )
+        # Signal that server is ready
+        ready_queue.put("ready")
+        server.run()
+    except Exception as e:
+        ready_queue.put(f"error: {e}")
+
+
 class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -352,13 +367,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 "atom_refs": atom_refs,
             }
 
-            self.server = MLIPInferenceServerWebSocket(
-                predictor_config=predict_unit_config,
-                port=self.server_port,
-                num_workers=self.workers,
+            self._start_server_process(
+                predict_unit_config, self.server_port, self.workers
             )
-            self.server_thread = threading.Thread(target=self.server.run, args=())
-            self.server_thread.start()
 
         if client_config is not None:
             logging.info(f"Connecting to inference server with config {client_config}")
@@ -369,12 +380,45 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 port=self.server_port,
             )
 
+    def _start_server_process(self, predict_unit_config, port, workers):
+        """Start server process and wait for it to be ready"""
+        # Create a queue to check server readiness
+        self.ready_queue = mp.Queue()
+
+        # Start server in separate process instead of thread
+        self.server_process = mp.Process(
+            target=_run_server_process,
+            args=(
+                predict_unit_config,
+                port,
+                workers,
+                self.ready_queue,
+            ),
+        )
+        self.server_process.start()
+
+        # Wait for server to be ready (with timeout)
+        try:
+            result = self.ready_queue.get(timeout=30)  # 30 second timeout
+            if result != "ready":
+                raise RuntimeError(f"Server failed to start: {result}")
+            logging.info("Server is ready")
+        except Exception as e:
+            if self.server_process.is_alive():
+                self.server_process.terminate()
+            raise e
+
+    def cleanup(self):
+        logging.info("Shutting down ParallelMLIPPredictUnit")
+        # Clean up server process if it was started locally
+        if hasattr(self, "server_process") and self.server_process.is_alive():
+            self.server_process.terminate()
+            self.server_process.join(timeout=10)
+            if self.server_process.is_alive():
+                self.server_process.kill()
+
     def __del__(self):
-        # Explicitly shut down the server and join the thread
-        if hasattr(self, "server") and self.server is not None:
-            self.server.shutdown()
-        if hasattr(self, "server_thread") and self.server_thread.is_alive():
-            self.server_thread.join(timeout=5)
+        self.cleanup()
 
     def predict(
         self, data: AtomicData, undo_element_references: bool = True

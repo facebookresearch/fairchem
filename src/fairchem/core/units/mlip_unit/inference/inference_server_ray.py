@@ -9,6 +9,7 @@ import asyncio
 import contextlib
 import logging
 import pickle
+import signal
 from typing import TYPE_CHECKING
 
 import hydra
@@ -90,6 +91,19 @@ class MLIPInferenceServerWebSocket:
             f"{self.predictor_config}, port: {self.port}, workers: {self.num_workers}"
         )
 
+        # Set up signal handlers for clean shutdown
+        self._setup_signal_handlers()
+
+    def _setup_signal_handlers(self):
+        """Set up signal handlers for graceful shutdown"""
+
+        def signal_handler(signum, frame):
+            logging.info(f"Received signal {signum}, initiating shutdown...")
+            self.shutdown()
+
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
     async def handler(self, websocket):
         try:
             async for message in websocket:
@@ -100,9 +114,11 @@ class MLIPInferenceServerWebSocket:
                 ready_ids, _ = ray.wait(futures, num_returns=1)
                 await websocket.send(ray.get(ready_ids[0]))
         except websockets.exceptions.ConnectionClosed:
-            print("Client disconnected")
+            logging.info("Client disconnected")
         except Exception as e:
-            print(f"Error: {e}")
+            logging.info(f"MLIPInferenceServer handler Error: {e}")
+        finally:
+            self.shutdown()
 
     async def start(self):
         self.stop_event = asyncio.Event()
@@ -119,17 +135,10 @@ class MLIPInferenceServerWebSocket:
 
     def shutdown(self):
         """Shutdown the server and clean up Ray resources"""
-        try:
+        if hasattr(self, "stop_event"):
             self.stop_event.set()
-            # Shutdown Ray workers
-            for worker in self.workers:
-                ray.kill(worker)
-
-            # Shutdown Ray
-            ray.shutdown()
-            logging.info("MLIPInferenceServerWebSocket shutdown complete")
-        except Exception as e:
-            logging.warning(f"Error during shutdown: {e}")
+        ray.shutdown()
+        logging.info("MLIPInferenceServerWebSocket shutdown complete")
 
 
 @hydra.main(
