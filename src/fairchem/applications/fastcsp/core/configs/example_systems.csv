@@ -1,0 +1,3 @@
+name,molecule_path,refcode
+ACETAC,/ACETAC03_mol_relaxed.xyz,ACETAC03
+GLYCIN,/GLYCIN20_mol_relaxed.xyz,"GLYCIN20,GLYCIN32,GLYCIN68,GLYCIN16,GLYCIN67,GLYCIN50"
