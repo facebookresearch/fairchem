@@ -135,9 +135,7 @@ def single_point_job(atoms: Atoms, calculator: Calculator) -> dict[str, Any]:
     return result
 
 
-def geom_conformers(
-    input_data: dict[str, Any], calculator: Calculator
-) -> dict[str, Any]:
+def conformers(input_data: dict[str, Any], calculator: Calculator) -> dict[str, Any]:
     """
     Calculate conformer energies and geometries.
 
@@ -234,9 +232,7 @@ def protonation(input_data: dict[str, Any], calculator: Calculator) -> dict[str,
     return all_results
 
 
-def unoptimized_ieea(
-    input_data: dict[str, Any], calculator: Calculator
-) -> dict[str, Any]:
+def ieea(input_data: dict[str, Any], calculator: Calculator) -> dict[str, Any]:
     """
     Calculate unoptimized ionization energies and electron affinities.
 
@@ -283,9 +279,7 @@ def unoptimized_ieea(
     return all_results
 
 
-def unoptimized_spin_gap(
-    input_data: dict[str, Any], calculator: Calculator
-) -> dict[str, Any]:
+def spin_gap(input_data: dict[str, Any], calculator: Calculator) -> dict[str, Any]:
     """
     Calculate unoptimized spin gap energies.
 

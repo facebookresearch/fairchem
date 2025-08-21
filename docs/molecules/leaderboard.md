@@ -11,7 +11,7 @@ The simplest way to get started is to have an ASE-compatible MLIP calculator tha
 
 ## S2EF
 The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. The download links for these datasets can be found [here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md)
-Validation and Test sets should contain 2,762,021 and 2,805,046 samples, respectively. 
+Validation and Test sets should contain 2,762,021 and 2,805,046 samples, respectively.
 
 Predictions must be saved as ".npz" files and shall contain the following information:
 ```
@@ -47,17 +47,24 @@ forces = []
 natoms = []
 data_ids = []
 for idx in range(len(dataset)):
-  atoms = dataset.get_atoms(idx)
-  atoms.calc = calc
-  ids.append(atoms.info["source"])
-  natoms.append(len(atoms))
-  data_ids.append(atoms.info["data_id"])
-  energy.append(atoms.get_potential_energy())
-  forces.append(atoms.get_forces())
+    atoms = dataset.get_atoms(idx)
+    atoms.calc = calc
+    ids.append(atoms.info["source"])
+    natoms.append(len(atoms))
+    data_ids.append(atoms.info["data_id"])
+    energy.append(atoms.get_potential_energy())
+    forces.append(atoms.get_forces())
 
 forces = np.concatenate(forces)
 
-np.savez_compressed("test_predictions.npz", ids=ids, energy=energy, forces=forces, natoms=natoms, data_ids=data_ids)
+np.savez_compressed(
+    "test_predictions.npz",
+    ids=ids,
+    energy=energy,
+    forces=forces,
+    natoms=natoms,
+    data_ids=data_ids,
+)
 ```
 
 > :warning: DISCLAIMER: The above example can be very slow on a single GPU and we encourage users to parallelize this however they like. We provide the example as a means to understand the expected format for the leaderboard.
@@ -67,15 +74,15 @@ Once a prediction file is generated, proceed to the leaderboard, fill in the sub
 ## Evaluations
 
 The following evaluations are currently available on the OMol25 leaderboard:
-* Ligand pocket
-* Ligand strain
-* Conformers
-* Protonation
-* IE/EA
-* Distance scaling
-* Spin gap
+* Ligand pocket: Protein-ligand interaction energy as a proxy to the binding energy, central to many biological processes.
+* Ligand strain: Ligand-strain energy is an important task to understanding protein-ligand binding.
+* Conformers: Identifying the lowest energy conformer is a crucial part of many biological and pharmaceutical tasks.
+* Protonation: As a proxy to pKa prediction, we evaluate energy differences of structures differing by one proton.
+* IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
+* Distance scaling: Short range and long range intermolecular interactions are essential for observable properties like phase changes, density, etc.
+* Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
 
-For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762). 
+For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 The download links for evaluation inputs can be found [here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
@@ -95,7 +102,7 @@ As an example:
 import json
 import pickle
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
-from fairchem.core.components.calculate.recipes.omol import unoptimized_spin_gap
+from fairchem.core.components.calculate.recipes.omol import spin_gap
 
 ### Define your MLIP calculator
 predictor = pretrained_mlip.get_predict_unit(args.checkpoint, device="cuda")
@@ -103,15 +110,15 @@ calc = calc = FAIRChemCalculator(predictor, task_name="omol")
 
 ### Load the desired evaluation task input data
 with open("path/to/spin_gap_inputs.pkl", "rb") as f:
-  spin_gap_data = pickle.load(f)
+    spin_gap_data = pickle.load(f)
 
-results = unoptimized_spin_gap(spin_gap_data, calc)
+results = spin_gap(spin_gap_data, calc)
 with open("spin_gap_results.json") as f:
-  json.dump(results, f)
+    json.dump(results, f)
 ```
 > :warning: DISCLAIMER: Conformers, Protonation, Ligand strain, and Distance scaling can be extremely slow on a single GPU and we encourage userse to parallelize this however they like.
 
 >:warning: We parallelize this using the [OMolRunner](https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/omol_runner.py#L24) to break up the inputs into chunks and parallelize them accordingly.
->The [OMolReducer](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/benchmark/omol_reducer.py) can then be used to combine results. The following [config](https://github.com/facebookresearch/fairchem/blob/omol_evals/configs/uma/benchmark/omol-geom.yaml) does this using a single script.
+>The [OMolReducer](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/benchmark/omol_reducer.py) can then be used to combine results.
 
 Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message. This should only take a few minutes.
