@@ -17,8 +17,8 @@ use_pbc_single: True
 
 cutoff: ${cutoff_radius}
 edge_channels: 128
-distance_function: gaussian
-num_distance_basis: 32
+distance_function: enveloped_bessel
+num_distance_basis: 8
 
 regress_forces: True
 regress_stress: ${regress_stress}

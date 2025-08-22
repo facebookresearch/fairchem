@@ -39,13 +39,17 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.radial import (
+    EnvelopedBesselBasis,
+    GaussianSmearing,
+)
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
 from .escn_md_block import eSCNMD_Block
 
 ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+
 
 def get_balanced_attribute(
     data_dict,
@@ -64,24 +68,22 @@ def get_balanced_attribute(
         dtype=emb.dtype,
     )
 
-    system_scalars_part.index_add_(
-        0, data_dict["batch"], charge_unbalanced.view(-1)
-    )
+    system_scalars_part.index_add_(0, data_dict["batch"], charge_unbalanced.view(-1))
 
     assert not gp_utils.initialized()
     system_scalar = system_scalars_part
 
     correction = (
-        system_scalar
-        - (data_dict[balance_attribute] - balance_attribute_offset)
+        system_scalar - (data_dict[balance_attribute] - balance_attribute_offset)
     ) / data_dict.natoms
 
     balanced_node_scalar = charge_unbalanced - correction[data_dict.batch]
 
-    out_emb[:, 0, balance_channel_idx] = out_emb[:, 0, balance_channel_idx]*0 + balanced_node_scalar
+    out_emb[:, 0, balance_channel_idx] = (
+        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
+    )
 
     return out_emb, balanced_node_scalar
-
 
 
 @registry.register_model("escnmd_backbone")
@@ -142,9 +144,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
 
-        #which channels to balance
-        self.charge_balanced_channels=charge_balanced_channels if charge_balanced_channels is not None else []
-        self.spin_balanced_channels=spin_balanced_channels if spin_balanced_channels is not None else []
+        # which channels to balance
+        self.charge_balanced_channels = (
+            charge_balanced_channels if charge_balanced_channels is not None else []
+        )
+        self.spin_balanced_channels = (
+            spin_balanced_channels if spin_balanced_channels is not None else []
+        )
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -228,6 +234,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.cutoff,
                 self.num_distance_basis,
                 2.0,
+            )
+        elif self.distance_function == "enveloped_bessel":
+            self.distance_expansion = EnvelopedBesselBasis(
+                self.num_distance_basis,
+                self.cutoff,
             )
         else:
             raise ValueError("Unknown distance function")

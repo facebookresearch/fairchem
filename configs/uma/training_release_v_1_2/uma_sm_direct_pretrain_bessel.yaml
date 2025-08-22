@@ -1,6 +1,6 @@
 defaults:
   - cluster: h100
-  - backbone: K4L2
+  - backbone: K4L2_bessel
   - dataset: uma_filter
   - element_refs: uma_v1_hof_lin_refs
   - tasks: uma_direct
@@ -19,7 +19,7 @@ job:
       cpus_per_task: ${cluster.cpus_per_task}
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
-  run_name: uma_sm_direct_single_head
+  run_name: uma_sm_direct_single_head_bessel
   logger:
     _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
     _partial_: true
