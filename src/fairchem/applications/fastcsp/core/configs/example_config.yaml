@@ -1,0 +1,73 @@
+root: "/path/to/project/directory"
+
+molecules: "configs/example_systems.csv" # File containing list of target molecules
+
+# Genarris configuration for structure generation
+genarris:
+  # Execution environment
+  python_cmd: "/path/to/python/with/genarris/installed" # Python interpreter with Genarris installed
+  genarris_script: "/path/to/genarris_master.py"        # Path to Genarris master script
+  mpi_launcher: "/path/to/mpirun"                       # MPI launcher: mpirun, srun, or custom path
+  base_config: "configs/gnrs_base.conf"                 # Base Genarris configuration template
+  # Structure generation parameters
+  vars:
+    Z: [1, 2, 3, 4, 6, 8] # [1] by default
+    spg_info: "standard" # "standard" by default
+    num_structures_per_spg: 500 # 500 by default
+  # Genarris SLURM job settings
+  slurm:
+    job-name: "genarris"
+    nodes: 1
+    ntasks-per-node: 40
+    time: 7200 # minutes
+
+# ML relaxation parameters
+relax:
+  calculator: "uma_sm_1p1_omc" # UMA model type (or uma_sm_1p1_omol)
+  optimizer: "BFGS"           # Optimization algorithm
+  fmax: 0.01                # Force convergence criterion (eV/Å)
+  max-steps: 1000           # Maximum optimization steps
+  fix-symmetry: false       # Do not preserve crystal symmetry
+  relax-cell: true          # Allow unit cell relaxation
+  slurm:
+    num_ranks: 1000
+
+
+# Structure comparison tolerances for Pymatgen's StructureMatcher
+# Deduplication parameters after structure generation with Genarris
+pre_relax_match_params:        # Before ML relaxation
+  ltol: 0.3                    # Lattice parameter tolerance
+  stol: 0.4                    # Site tolerance (Angstrom)
+  angle_tol: 5                 # Angle tolerance (degrees)
+
+# Deduplication parameters after relaxation
+post_relax_match_params:       # After ML relaxation
+  ltol: 0.2
+  stol: 0.3
+  angle_tol: 5
+
+# Structure filtering parameters for energy landscape
+energy_cutoff: 20              # Energy cutoff in kJ/mol above minimum
+density_cutoff: 10             # Density cutoff in g/cm³
+
+# TODO: add (optional) free energy config
+
+# (Optional) Experimental structure evaluation settings
+evaluate:
+  exp_structures: "path/to/exp/structures"   # Path to experimental structures
+  method: "csd"               # Either "csd" or "pymatgen"
+  csd:
+    python_cmd: "/path/to/python/with/csd/api/installed" # Python interpreter with CSD API installed
+    match_params:           # CSD matching tolerances if csd method is used
+      cluster: 20               # Cluster size for RMSD
+      rmsd_cutoff: 0.5          # RMSD cutoff in Angstrom
+  pymatgen:
+    match_params:           # Pymatgen matching tolerances if pymatgen method is used
+      ltol: 0.2
+      stol: 0.3
+      angle_tol: 5
+
+# (Optional) VASP DFT validation settings
+# Can add VASP submission parameters here
+vasp:
+  sym_prec: 1e-4              # Symmetry precision for DFT
