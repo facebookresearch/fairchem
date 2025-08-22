@@ -1,37 +1,28 @@
-include-paths:
-  - src/fairchem/data/omol
-  - packages/fairchem-data-omol
-tag-prefix: fairchem_data_omol
-tag-template: 'fairchem_data_omol-$RESOLVED_VERSION'
-name-template: 'fairchem_data_omol-$RESOLVED_VERSION'
-exclude-contributors: [github-actions]
-categories:
-  - title: New Features / Enhancements
-    labels: [enhancement]
-  - title: Bug Fixes
-    labels: [bug]
-  - title: Documentation
-    labels: [documentation]
-  - title: Tests
-    labels: [test]
-  - title: Deprecations
-    labels: [deprecation]
-  - title: Dependencies
-    labels: [dependencies]
-  - title: Other Changes
-    labels: ["*"]
-version-resolver:
-  major:
-    labels:
-      - 'major'
-  minor:
-    labels:
-      - 'minor'
-  patch:
-    labels:
-      - 'patch'
-  default: patch
-template: |
-  ## What’s Changed
+name: Release Drafter - fairchem-data-omol
 
-  $CHANGES
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/fairchem/data/omol/**'
+      - 'packages/fairchem-data-omol/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update_release_draft:
+    permissions:
+        # write permission is required to create a github release
+        contents: write
+        pull-requests: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          disable-autolabeler: true
+          config-name: release-drafter-data-omol.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
