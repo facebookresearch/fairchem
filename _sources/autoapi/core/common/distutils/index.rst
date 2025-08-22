@@ -44,6 +44,7 @@ Functions
    core.common.distutils.assign_device_for_local_rank
    core.common.distutils.get_device_for_local_rank
    core.common.distutils.setup_env_local
+   core.common.distutils.setup_env_local_multi_gpu
 
 
 Module Contents
@@ -108,4 +109,6 @@ Module Contents
 .. py:function:: get_device_for_local_rank() -> str
 
 .. py:function:: setup_env_local()
+
+.. py:function:: setup_env_local_multi_gpu(rank: int, port: int)
 

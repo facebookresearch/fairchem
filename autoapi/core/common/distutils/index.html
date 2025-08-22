@@ -317,6 +317,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../datasets/common_structures/index.html">core.datasets.common_structures</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/embeddings/index.html">core.datasets.embeddings</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/mt_concat_dataset/index.html">core.datasets.mt_concat_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/target_metadata_guesser/index.html">core.datasets.target_metadata_guesser</a></li>
@@ -635,6 +636,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.assign_device_for_local_rank"><code class="docutils literal notranslate"><span class="pre">assign_device_for_local_rank()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.get_device_for_local_rank"><code class="docutils literal notranslate"><span class="pre">get_device_for_local_rank()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.setup_env_local"><code class="docutils literal notranslate"><span class="pre">setup_env_local()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.setup_env_local_multi_gpu"><code class="docutils literal notranslate"><span class="pre">setup_env_local_multi_gpu()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -723,6 +725,9 @@ LICENSE file in the root directory of this source tree.</p>
 <td><p></p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.common.distutils.setup_env_local" title="core.common.distutils.setup_env_local"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_env_local</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.distutils.setup_env_local_multi_gpu" title="core.common.distutils.setup_env_local_multi_gpu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_env_local_multi_gpu</span></code></a>(rank, port)</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -850,6 +855,11 @@ LICENSE file in the root directory of this source tree.</p>
 <span class="sig-prename descclassname"><span class="pre">core.common.distutils.</span></span><span class="sig-name descname"><span class="pre">setup_env_local</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.common.distutils.setup_env_local" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="core.common.distutils.setup_env_local_multi_gpu">
+<span class="sig-prename descclassname"><span class="pre">core.common.distutils.</span></span><span class="sig-name descname"><span class="pre">setup_env_local_multi_gpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rank</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.distutils.setup_env_local_multi_gpu" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </section>
 </section>
 
@@ -940,6 +950,7 @@ LICENSE file in the root directory of this source tree.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.assign_device_for_local_rank"><code class="docutils literal notranslate"><span class="pre">assign_device_for_local_rank()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.get_device_for_local_rank"><code class="docutils literal notranslate"><span class="pre">get_device_for_local_rank()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.setup_env_local"><code class="docutils literal notranslate"><span class="pre">setup_env_local()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.distutils.setup_env_local_multi_gpu"><code class="docutils literal notranslate"><span class="pre">setup_env_local_multi_gpu()</span></code></a></li>
 </ul>
 </li>
 </ul>

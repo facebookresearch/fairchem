@@ -17,7 +17,9 @@ Classes
 
 .. autoapisummary::
 
+   core.units.mlip_unit.predict.MLIPPredictUnitProtocol
    core.units.mlip_unit.predict.MLIPPredictUnit
+   core.units.mlip_unit.predict.ParallelMLIPPredictUnit
 
 
 Functions
@@ -27,6 +29,7 @@ Functions
 
    core.units.mlip_unit.predict.collate_predictions
    core.units.mlip_unit.predict.get_dataset_to_tasks_map
+   core.units.mlip_unit.predict._run_server_process
 
 
 Module Contents
@@ -34,9 +37,54 @@ Module Contents
 
 .. py:function:: collate_predictions(predict_fn)
 
+.. py:class:: MLIPPredictUnitProtocol
+
+   Bases: :py:obj:`Protocol`
+
+
+   Base class for protocol classes.
+
+   Protocol classes are defined as::
+
+       class Proto(Protocol):
+           def meth(self) -> int:
+               ...
+
+   Such classes are primarily used with static type checkers that recognize
+   structural subtyping (static duck-typing).
+
+   For example::
+
+       class C:
+           def meth(self) -> int:
+               return 0
+
+       def func(x: Proto) -> int:
+           return x.meth()
+
+       func(C())  # Passes static type check
+
+   See PEP 544 for details. Protocol classes decorated with
+   @typing.runtime_checkable act as simple-minded runtime protocols that check
+   only the presence of given attributes, ignoring their type signatures.
+   Protocol classes can be generic, they are defined as::
+
+       class GenProto[T](Protocol):
+           def meth(self) -> T:
+               ...
+
+
+   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData, undo_element_references: bool) -> dict
+
+
+   .. py:property:: dataset_to_tasks
+      :type: dict[str, list]
+
+
+
 .. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None)
 
-   Bases: :py:obj:`torchtnt.framework.PredictUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ]
+   Bases: :py:obj:`torchtnt.framework.PredictUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`MLIPPredictUnitProtocol`
 
 
    The PredictUnit is an interface that can be used to organize your prediction logic. The core of it is the ``predict_step`` which
@@ -76,7 +124,7 @@ Module Contents
    .. py:attribute:: tasks
 
 
-   .. py:attribute:: dataset_to_tasks
+   .. py:attribute:: _dataset_to_tasks
 
 
    .. py:attribute:: device
@@ -100,12 +148,12 @@ Module Contents
 
 
 
-   .. py:property:: datasets
-      :type: list[str]
+   .. py:property:: dataset_to_tasks
+      :type: dict[str, list]
 
 
 
-   .. py:method:: seed(seed: int)
+   .. py:method:: set_seed(seed: int)
 
 
    .. py:method:: move_to_device()
@@ -136,5 +184,78 @@ Module Contents
 
    :returns: A dictionary mapping dataset names (str) to lists of Task objects
              that are associated with that dataset
+
+
+.. py:function:: _run_server_process(predictor_config, port, num_workers, ready_queue)
+
+   Function to run server in separate process
+
+
+.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, server_config: dict | None = None, client_config: dict | None = None)
+
+   Bases: :py:obj:`MLIPPredictUnitProtocol`
+
+
+   Base class for protocol classes.
+
+   Protocol classes are defined as::
+
+       class Proto(Protocol):
+           def meth(self) -> int:
+               ...
+
+   Such classes are primarily used with static type checkers that recognize
+   structural subtyping (static duck-typing).
+
+   For example::
+
+       class C:
+           def meth(self) -> int:
+               return 0
+
+       def func(x: Proto) -> int:
+           return x.meth()
+
+       func(C())  # Passes static type check
+
+   See PEP 544 for details. Protocol classes decorated with
+   @typing.runtime_checkable act as simple-minded runtime protocols that check
+   only the presence of given attributes, ignoring their type signatures.
+   Protocol classes can be generic, they are defined as::
+
+       class GenProto[T](Protocol):
+           def meth(self) -> T:
+               ...
+
+
+   .. py:attribute:: server_process
+      :value: None
+
+
+
+   .. py:attribute:: _dataset_to_tasks
+
+
+   .. py:method:: _start_server_process(predict_unit_config, port, workers)
+
+      Start server process and wait for it to be ready
+
+
+
+   .. py:method:: cleanup()
+
+
+   .. py:method:: __del__()
+
+
+   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData, undo_element_references: bool = True) -> dict[str, torch.tensor]
+
+      Predict method that sends data to the remote server and returns predictions.
+
+
+
+   .. py:property:: dataset_to_tasks
+      :type: dict[str, list]
+
 
 

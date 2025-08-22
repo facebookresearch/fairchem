@@ -32,7 +32,7 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: FAIRChemCalculator(predict_unit: fairchem.core.units.mlip_unit.MLIPPredictUnit, task_name: fairchem.core.units.mlip_unit.api.inference.UMATask | str | None = None, seed: int = 41)
+.. py:class:: FAIRChemCalculator(predict_unit: fairchem.core.units.mlip_unit.MLIPPredictUnit, task_name: fairchem.core.units.mlip_unit.api.inference.UMATask | str | None = None, seed: int | None = None)
 
    Bases: :py:obj:`ase.calculators.calculator.Calculator`
 
@@ -80,7 +80,7 @@ Module Contents
                                  use a custom InferenceSettings object.
       :param overrides: Optional dictionary of settings to override default inference settings.
       :param device: Optional torch device to load the model onto.
-      :param seed: Random seed for reproducibility. Defaults to 41.
+      :param seed: Random seed for reproducibility.
 
 
 

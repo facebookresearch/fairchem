@@ -14,6 +14,7 @@ Submodules
    /autoapi/core/datasets/ase_datasets/index
    /autoapi/core/datasets/atomic_data/index
    /autoapi/core/datasets/base_dataset/index
+   /autoapi/core/datasets/common_structures/index
    /autoapi/core/datasets/embeddings/index
    /autoapi/core/datasets/mt_concat_dataset/index
    /autoapi/core/datasets/target_metadata_guesser/index
