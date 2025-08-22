@@ -28,6 +28,8 @@ dependencies = [
     "ase==3.25.0",
     "ase-db-backends>=0.10.0",
     "clusterscope>=0.0.10",
+    "ray",
+    "websockets",
 ]
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
