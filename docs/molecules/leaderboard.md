@@ -64,7 +64,7 @@ np.savez_compressed(
 
 > :warning: DISCLAIMER: The above example can be very slow on a single GPU and we encourage users to parallelize this however they like. We provide the example as a means to understand the expected format for the leaderboard.
 
-Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select "Validation" or "Test" and hit submit. Stay on the page until you see the success message. This could take ~10-20 mins to evaluate the S2EF split.
+Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select "Validation" or "Test" and hit submit. Stay on the page until you see the success message.
 
 ## Evaluations
 
