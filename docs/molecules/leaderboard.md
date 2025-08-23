@@ -19,14 +19,12 @@ ids <class 'numpy.ndarray'>
 energy <class 'numpy.ndarray'>
 forces <class 'numpy.ndarray'>
 natoms <class 'numpy.ndarray'>
-data_ids <class 'numpy.ndarray'>
 ```
 Where,
 `ids` corresponds to the "source" key found in atoms.info
 `energy` is the predicted energy
 `forces` is the predicted forces, concatenated across all systems
 `natoms` is the number of atoms corresponding to each prediction
-`data_ids` is the data identifier "data_id" key found in atoms.info
 
 As an example:
 
@@ -45,13 +43,11 @@ ids = []
 energy = []
 forces = []
 natoms = []
-data_ids = []
 for idx in range(len(dataset)):
     atoms = dataset.get_atoms(idx)
     atoms.calc = calc
     ids.append(atoms.info["source"])
     natoms.append(len(atoms))
-    data_ids.append(atoms.info["data_id"])
     energy.append(atoms.get_potential_energy())
     forces.append(atoms.get_forces())
 
@@ -63,7 +59,6 @@ np.savez_compressed(
     energy=energy,
     forces=forces,
     natoms=natoms,
-    data_ids=data_ids,
 )
 ```
 
