@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 import torch
-from ase import Atoms
+from ase import Atoms, units
 from ase.build import add_adsorbate, bulk, fcc111, molecule
+from ase.md.langevin import Langevin
 from ase.optimize import BFGS
 
 from fairchem.core import FAIRChemCalculator
@@ -22,7 +23,8 @@ from fairchem.core.calculate.ase_calculator import (
     AllZeroUnitCellError,
     MixedPBCError,
 )
-from fairchem.core.units.mlip_unit.api.inference import UMATask
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATask
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
@@ -40,9 +42,9 @@ def all_calculators(mlip_predict_unit):
     """Generate calculators for all available datasets in the mlip predict unit"""
 
     def _calc_generator():
-        for dataset in mlip_predict_unit.datasets:
+        for dataset in mlip_predict_unit.dataset_to_tasks:
             # check that all single task models load without specifying task name
-            task_name = dataset if len(mlip_predict_unit.datasets) > 1 else None
+            task_name = dataset if len(mlip_predict_unit.dataset_to_tasks) > 1 else None
             yield FAIRChemCalculator(mlip_predict_unit, task_name=task_name)
 
     return _calc_generator
@@ -53,7 +55,7 @@ def omol_calculators(request):
     def _calc_generator():
         for model_name in pretrained_mlip.available_models:
             predict_unit = pretrained_mlip.get_predict_unit(model_name)
-            if "omol" in predict_unit.datasets:
+            if "omol" in predict_unit.dataset_to_tasks:
                 yield FAIRChemCalculator(predict_unit, task_name="omol")
 
     return _calc_generator
@@ -121,9 +123,10 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
 def test_no_task_name_single_task():
     for model_name in pretrained_mlip.available_models:
         predict_unit = pretrained_mlip.get_predict_unit(model_name)
-        if len(predict_unit.datasets) == 1:
+        datasets = list(predict_unit.dataset_to_tasks.keys())
+        if len(datasets) == 1:
             calc = FAIRChemCalculator(predict_unit)
-            assert calc.task_name == predict_unit.datasets[0]
+            assert calc.task_name == datasets[0]
 
 
 def test_calculator_unknown_task_raises_error():
@@ -137,14 +140,15 @@ def test_calculator_unknown_task_raises_error():
 def test_calculator_setup(all_calculators):
     for calc in all_calculators():
         implemented_properties = ["energy", "forces"]
+        datasets = list(calc.predictor.dataset_to_tasks.keys())
 
         # all conservative UMA checkpoints should support E/F/S!
         if (
             not calc.predictor.direct_forces
-            and len(calc.predictor.datasets) > 1
+            and len(datasets) > 1
             or calc.task_name != "omol"
         ):
-            print(len(calc.predictor.datasets), calc.task_name)
+            print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
 
         assert all(
@@ -172,9 +176,10 @@ def test_energy_calculation(request, atoms_fixture, all_calculators):
 
 @pytest.mark.gpu()
 def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
+    datasets = list(mlip_predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(
         mlip_predict_unit,
-        task_name=mlip_predict_unit.datasets[0],
+        task_name=datasets[0],
     )
 
     slab_atoms.calc = calc
@@ -197,9 +202,10 @@ def test_calculator_configurations(inference_settings, slab_atoms):
     predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1", inference_settings=inference_settings
     )
+    datasets = list(predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(
         predict_unit,
-        task_name=predict_unit.datasets[0],
+        task_name=datasets[0],
     )
     slab_atoms.calc = calc
     assert predict_unit.model.module.otf_graph is True
@@ -374,3 +380,58 @@ def test_random_seed_final_energy():
     for seed_a in set(seeds):
         for seed_b in set(seeds) - {seed_a}:
             assert results_by_seed[seed_a] != results_by_seed[seed_b]
+
+
+def run_md_simulation(calc, steps: int = 10):
+    atoms = molecule("H2O")
+    atoms.calc = calc
+
+    dyn = Langevin(
+        atoms,
+        timestep=0.1 * units.fs,
+        temperature_K=400,
+        friction=0.001 / units.fs,
+    )
+    dyn.run(steps=10)
+    expected_energy = -2079.86
+    assert np.allclose(atoms.get_potential_energy(), expected_energy, atol=1e-4)
+
+
+def test_simple_md():
+    inference_settings = InferenceSettings(
+        tf32=True,
+        merge_mole=True,
+        wigner_cuda=False,
+        compile=False,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    predictor = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cpu", inference_settings=inference_settings
+    )
+    calc = FAIRChemCalculator(predictor, task_name="omol")
+    run_md_simulation(calc, steps=10)
+
+
+def test_parallel_md():
+    inference_settings = InferenceSettings(
+        tf32=True,
+        merge_mole=True,
+        wigner_cuda=False,
+        compile=False,
+        activation_checkpointing=False,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    model_path = pretrained_mlip.pretrained_checkpoint_path_from_name("uma-s-1p1")
+    predictor = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device="cpu",
+        inference_settings=inference_settings,
+        server_config={"workers": 2},
+    )
+
+    calc = FAIRChemCalculator(predictor, task_name="omol")
+    run_md_simulation(calc, steps=10)
+    predictor.cleanup()
