@@ -4,8 +4,8 @@ on:
   workflow_call:
   workflow_dispatch:
   schedule:
-    # Run every night at midnight
-    - cron: "0 0 * * *"
+    # Run everyday at 8am UTC (midight or 1am pacific time)
+    - cron: "0 8 * * *"
 
 jobs:
   perf-test:
