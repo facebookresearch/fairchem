@@ -1,0 +1,43 @@
+defaults:
+  - cluster: v100
+  - checkpoint: uma_sm
+  - _self_
+
+benchmark_name: geom_conformers
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 400
+    slurm:
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma-benchmarks
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+
+runner:
+  _target_: fairchem.core.components.calculate.omol_runner.OMolRunner
+  calculator:
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
+    task_name: omol
+  input_data: ${cluster.data_root_dir}/conformer_inputs.pkl
+  benchmark_name: ${benchmark_name}
+  benchmark:
+    _target_: fairchem.core.components.calculate.recipes.omol.conformers
+    _partial_: True
+
+reducer:
+  _target_: fairchem.core.components.benchmark.omol_reducer.OMolReducer
+  benchmark_name: ${benchmark_name}
