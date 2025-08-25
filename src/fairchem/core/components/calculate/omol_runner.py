@@ -53,7 +53,7 @@ class OMolRunner(CalculateRunner):
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> list[dict[str, Any]]:
         """
-        Perform relaxation calculations on a subset of structures.
+        Perform calculations on a subset of structures.
 
         Splits the input data into chunks and processes the chunk corresponding to job_num.
 
