@@ -27,7 +27,6 @@ dependencies = [
     "torchtnt",
     "pyyaml",
     "wandb",
-    "ray",
     "websockets",
 ]
 
