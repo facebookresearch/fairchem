@@ -73,9 +73,9 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * Ligand strain: Ligand-strain energy is an important task to understanding protein-ligand binding.
 * Conformers: Identifying the lowest energy conformer is a crucial part of many biological and pharmaceutical tasks.
 * Protonation: As a proxy to pKa prediction, we evaluate energy differences of structures differing by one proton.
-* IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
 * Distance scaling: Short range and long range intermolecular interactions are essential for observable properties like phase changes, density, etc.
-* Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
+* IE/EA: The addition, removal, and transfer of electrons is central to many redox processes. (coming soon!)
+* Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts. (coming soon!)
 
 For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 The download links for evaluation inputs can be found [here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md).
@@ -87,8 +87,8 @@ Each evaluation task has its own unique structure, a detailed description of the
 * [Ligand strain](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L370)
 * [Conformers](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L138)
 * [Protonation](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L186)
-* [IE/EA](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L235)
 * [Distance scaling](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L437)
+* [IE/EA](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L235)
 * [Spin gap](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L282)
 
 As an example:
@@ -97,20 +97,20 @@ As an example:
 import json
 import pickle
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
-from fairchem.core.components.calculate.recipes.omol import spin_gap
+from fairchem.core.components.calculate.recipes.omol import ligand_pocket
 
 ### Define your MLIP calculator
 predictor = pretrained_mlip.get_predict_unit(args.checkpoint, device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 ### Load the desired evaluation task input data
-with open("path/to/spin_gap_inputs.pkl", "rb") as f:
-    spin_gap_data = pickle.load(f)
+with open("path/to/ligand_pocket_inputs.pkl", "rb") as f:
+    ligand_pocket_data = pickle.load(f)
 
-results = spin_gap(spin_gap_data, calc)
-with open("spin_gap_results.json") as f:
+results = ligand_pocket(ligand_pocket_data, calc)
+with open("ligand_pocket_results.json") as f:
     json.dump(results, f)
 ```
-> :warning: DISCLAIMER: Conformers, Protonation, Ligand strain, and Distance scaling can be extremely slow on a single GPU and we encourage userse to parallelize this however they like.
+> :warning: DISCLAIMER: Conformers, Protonation, Ligand strain, and Distance scaling can be quite slow on a single GPU and we encourage userse to parallelize this however they like.
 
 Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message.
