@@ -34,7 +34,7 @@ from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
 ### Define your MLIP calculator
 predictor = pretrained_mlip.get_predict_unit(args.checkpoint, device="cuda")
-calc = calc = FAIRChemCalculator(predictor, task_name="omol")
+calc = FAIRChemCalculator(predictor, task_name="omol")
 
 ### Read in the dataset you wish to submit predictions to
 dataset = AseDBDataset({"src": "path/to/omol/test_data"})
@@ -101,7 +101,7 @@ from fairchem.core.components.calculate.recipes.omol import spin_gap
 
 ### Define your MLIP calculator
 predictor = pretrained_mlip.get_predict_unit(args.checkpoint, device="cuda")
-calc = calc = FAIRChemCalculator(predictor, task_name="omol")
+calc = FAIRChemCalculator(predictor, task_name="omol")
 
 ### Load the desired evaluation task input data
 with open("path/to/spin_gap_inputs.pkl", "rb") as f:
@@ -112,8 +112,5 @@ with open("spin_gap_results.json") as f:
     json.dump(results, f)
 ```
 > :warning: DISCLAIMER: Conformers, Protonation, Ligand strain, and Distance scaling can be extremely slow on a single GPU and we encourage userse to parallelize this however they like.
-
->:warning: We parallelize this using the [OMolRunner](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/omol_runner.py#L24) to break up the inputs into chunks and parallelize them accordingly.
->The [OMolReducer](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/benchmark/omol_reducer.py) can then be used to combine results.
 
 Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message.
