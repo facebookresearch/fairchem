@@ -1,0 +1,50 @@
+defaults:
+  - cluster: fair_cluster
+  - checkpoint: escaip_tot_sm
+  - _self_
+
+benchmark_name: oc20-s2ef-id
+
+job:
+  run_name: ${checkpoint.model_name}
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    distributed_init_method: FILE
+    num_array_jobs: 128
+    slurm:
+      # account: ${cluster.account}
+      # qos: ${cluster.qos}
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      additional_parameters: ${cluster.additional_parameters}
+      timeout_hr: 24
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: ericqu
+    project: oc20_v2
+    group: ${checkpoint.model_name}
+    job_type: ${benchmark_name}
+
+runner:
+  _target_: fairchem.core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
+  calculator:
+    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+    name_or_path: ${checkpoint.ckpt_path}
+    task_name: oc20
+  evaluate_total_energy: False
+  adsorption_energy_model: False
+  input_data:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      # src: ${cluster.data_root_dir}/catalysis/s2ef/test/is
+      src: ${cluster.data_root_dir}/catalysis/s2ef/val/is
+
+reducer:
+  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
+  target_data_keys: ["energy", "forces"]
+  benchmark_name: ${benchmark_name}
+  index_name: sid
