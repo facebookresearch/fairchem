@@ -24,10 +24,24 @@ from ase.build.supercells import make_supercell
 from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE
-from phonopy import Phonopy
-from phonopy.harmonic.dynmat_to_fc import get_commensurate_points
-from pymatgen.core import Structure
-from pymatgen.io.phonopy import get_phonopy_structure, get_pmg_structure
+from monty.dev import requires
+
+try:
+    from pymatgen.core import Structure
+    from pymatgen.io.phonopy import get_phonopy_structure, get_pmg_structure
+
+    pmg_installed = True
+except ImportError:
+    pmg_installed = False
+
+try:
+    from phonopy import Phonopy
+    from phonopy.harmonic.dynmat_to_fc import get_commensurate_points
+
+    phonopy_installed = True
+except ImportError:
+    phonopy_installed = False
+
 
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
@@ -38,6 +52,8 @@ if TYPE_CHECKING:
 THz_to_K = ase.units._hplanck * 1e12 / ase.units._k
 
 
+@requires(phonopy_installed, message="Requires `phonopy` to be installed")
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def run_mdr_phonon_benchmark(
     mdr_phonon: Phonopy,
     calculator: Calculator,

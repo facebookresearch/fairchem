@@ -33,13 +33,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pymatgen.analysis.phase_diagram import Entry
-from pymatgen.core import Composition, Structure
+from monty.dev import requires
+
+try:
+    from pymatgen.analysis.phase_diagram import Entry
+    from pymatgen.core import Composition, Structure
+
+    pmg_installed = True
+except ImportError:
+    Entry, Composition, Structure = None, None, None
+    pmg_installed = False
+
 
 if TYPE_CHECKING:
     from pymatgen.util.typing import EntryLike
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def calc_energy_from_e_refs(
     struct_or_entry: EntryLike | Structure | Composition | str,
     ref_energies: dict[str, float],
