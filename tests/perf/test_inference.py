@@ -122,7 +122,7 @@ def test_pretrained_models(test_case, performance_report) -> None:
     #
     # In real tests at the time this was written, this saved around 20
     # minutes when using github runners (1 hour 10 minutes -> 49 minutes).
-    for task in predictor.datasets:
+    for task in predictor.dataset_to_tasks.keys():
         for atoms in test_case.structures:
 
             # Setup the prediction task
