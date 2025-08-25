@@ -13,9 +13,9 @@ import signal
 from typing import TYPE_CHECKING
 
 import hydra
-import ray
 import torch.distributed as dist
 import websockets
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from websockets.asyncio.server import serve
 
@@ -29,9 +29,18 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 
+try:
+    import ray
+
+    ray_installed = True
+except ImportError:
+    ray = None
+    ray_installed = False
+
 logging.basicConfig(level=logging.INFO)
 
 
+@requires(ray_installed, message="Requires `ray` to be installed")
 @ray.remote
 class MLIPWorker:
     def __init__(
