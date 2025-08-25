@@ -80,7 +80,7 @@ The following evaluations are currently available on the OMol25 leaderboard:
 For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
 The download links for evaluation inputs can be found [here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md).
 
-To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
+To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
 
 * [Ligand pocket](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L321)
@@ -113,7 +113,7 @@ with open("spin_gap_results.json") as f:
 ```
 > :warning: DISCLAIMER: Conformers, Protonation, Ligand strain, and Distance scaling can be extremely slow on a single GPU and we encourage userse to parallelize this however they like.
 
->:warning: We parallelize this using the [OMolRunner](https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/omol_runner.py#L24) to break up the inputs into chunks and parallelize them accordingly.
->The [OMolReducer](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/benchmark/omol_reducer.py) can then be used to combine results.
+>:warning: We parallelize this using the [OMolRunner](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/omol_runner.py#L24) to break up the inputs into chunks and parallelize them accordingly.
+>The [OMolReducer](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/benchmark/omol_reducer.py) can then be used to combine results.
 
 Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message.
