@@ -21,10 +21,10 @@ forces <class 'numpy.ndarray'>
 natoms <class 'numpy.ndarray'>
 ```
 Where,
-`ids` corresponds to the "source" key found in atoms.info
-`energy` is the predicted energy
-`forces` is the predicted forces, concatenated across all systems
-`natoms` is the number of atoms corresponding to each prediction
+- `ids` corresponds to the unique identifier, `atoms.info["source"]`
+- `energy` is the predicted energy
+- `forces` is the predicted forces, concatenated across all systems
+- `natoms` is the number of atoms corresponding to each prediction
 
 As an example:
 
@@ -83,13 +83,13 @@ The download links for evaluation inputs can be found [here](https://huggingface
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
 
-* Ligand pocket: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L321
-* Ligand strain: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L370
-* Conformers: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L138
-* Protonation: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L186
-* IE/EA: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L235
-* Distance scaling: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L437
-* Spin gap: https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L282
+* [Ligand pocket](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L321)
+* [Ligand strain](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L370)
+* [Conformers](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L138)
+* [Protonation](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L186)
+* [IE/EA](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L235)
+* [Distance scaling](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L437)
+* [Spin gap](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L282)
 
 As an example:
 
@@ -116,4 +116,4 @@ with open("spin_gap_results.json") as f:
 >:warning: We parallelize this using the [OMolRunner](https://github.com/facebookresearch/fairchem/blob/d790a4665dc55d880b23074d75be4f5160840e57/src/fairchem/core/components/calculate/omol_runner.py#L24) to break up the inputs into chunks and parallelize them accordingly.
 >The [OMolReducer](https://github.com/facebookresearch/fairchem/blob/omol_evals/src/fairchem/core/components/benchmark/omol_reducer.py) can then be used to combine results.
 
-Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message. This should only take a few minutes.
+Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message.
