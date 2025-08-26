@@ -18,7 +18,6 @@ from fairchem.applications.fastcsp.core.workflow.main import main
 
 def cli_main():
     """Main CLI entry point for fastcsp console script."""
-    # Set up command line argument parsing
     parser = argparse.ArgumentParser(
         description="FastCSP: Fast Crystal Structure Prediction Workflow",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -33,7 +32,7 @@ Workflow Stages:
   read_vasp_outputs       Process DFT results and compute validation metrics
 
 Usage:
-    fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
+  fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
 
 Example:
   fastcsp --config configs/example_config.yaml --stages generate process_generated relax filter
@@ -54,15 +53,15 @@ Example:
             "process_generated",
             "relax",
             "filter",
-            "evaluate",  # need CSD API License
-            "free_energy",  # TODO: implement "free_energy"
-            "create_vasp_inputs_relaxed",
+            "evaluate",  # optional, can require CSD API License
+            "free_energy",  # optional, TODO: implement "free_energy"
+            "create_vasp_inputs_relaxed",  # optional
             "create_vasp_inputs_unrelaxed",  # optional, if you want to create VASP inputs for unrelaxed structures
-            "submit_vasp",  # implement your own VASP job submission
-            "read_vasp_outputs",
+            "submit_vasp",  # optional, implement your own VASP job submission
+            "read_vasp_outputs",  # optional
         ],
         default=["generate", "process_generated", "relax", "filter"],
-        help="Workflow stages to execute (in order). Default: generate process_generated relax rank",
+        help="Workflow stages to execute (in order). Default: generate process_generated relax filter",
     )
 
     args = parser.parse_args()
