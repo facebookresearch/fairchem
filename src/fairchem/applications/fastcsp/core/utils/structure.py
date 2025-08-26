@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 from typing import TYPE_CHECKING
+
 import numpy as np
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.core.structure import Structure
@@ -26,6 +27,7 @@ from scipy import sparse
 
 if TYPE_CHECKING:
     from ase import Atoms
+
 
 def cif_to_structure(cif: str) -> Structure | None:
     """

@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
-import swifter  # For parallel DataFrame processing
+import swifter
 from p_tqdm import p_map
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.core.structure import Structure
