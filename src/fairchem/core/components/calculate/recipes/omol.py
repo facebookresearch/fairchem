@@ -123,6 +123,8 @@ def single_point_job(atoms: Atoms, calculator: Calculator) -> dict[str, Any]:
             "forces": Forces as a list (eV/Å),
         }
     """
+    # clear cache, especially for ieea + spin-gap
+    calculator.reset()
     atoms.calc = calculator
     energy = atoms.get_potential_energy()
     forces = atoms.get_forces()
