@@ -273,7 +273,9 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="simple">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac25.html">ODAC25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac23.html">Open Direct Air Capture 2023 (ODAC23) [Deprecated]</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../dac/models.html">Pretrained models</a></li>
@@ -669,10 +671,10 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:The &#39;seed&#39; argument is deprecated and will be removed in future versions. Please set the seed in the MLIPPredictUnit configuration instead.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-08-22-22-36-47-847294-40240
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-08-26-00-49-07-781484-40240
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-08-22-22-36-47-847294-40240
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-08-26-00-49-07-781484-40240
 </pre></div>
 </div>
 </div>
@@ -686,9 +688,9 @@ document.write(`
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
  &#39;converged&#39;: np.True_,
- &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-08-22-22-36-47-847294-40240&#39;,
+ &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-08-26-00-49-07-781484-40240&#39;,
  &#39;input_atoms&#39;: {&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
-                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 8, 22, 22, 36, 48, 525161, tzinfo=datetime.timezone.utc),
+                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 8, 26, 0, 49, 8, 448905, tzinfo=datetime.timezone.utc),
                                                          &#39;emmet_version&#39;: &#39;0.84.9&#39;,
                                                          &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
                                         &#39;chemsys&#39;: &#39;Cu&#39;,
@@ -711,19 +713,19 @@ document.write(`
                                         &#39;volume&#39;: 11.761470249999999}},
  &#39;name&#39;: &#39;fairchem Relax&#39;,
  &#39;nid&#39;: &#39;runnervmy6chb.fmwxo1vhichurb1wybuswyps5c.dx.internal.cloudapp.net&#39;,
- &#39;parameters&#39;: {&#39;version&#39;: &#39;2.3.1.dev45+g27e14361&#39;},
+ &#39;parameters&#39;: {&#39;version&#39;: &#39;2.3.1.dev48+gfa444094&#39;},
  &#39;parameters_opt&#39;: {&#39;fmax&#39;: 0.001,
                     &#39;max_steps&#39;: 1000,
                     &#39;maxstep&#39;: 0.2,
                     &#39;optimizer&#39;: &#39;LBFGS&#39;,
                     &#39;type&#39;: &#39;optimization&#39;},
  &#39;quacc_version&#39;: &#39;0.17.0&#39;,
- &#39;results&#39;: {&#39;energy&#39;: -3.7501685849875974,
+ &#39;results&#39;: {&#39;energy&#39;: -3.750168465778308,
              &#39;forces&#39;: array([[0., 0., 0.]], dtype=float32),
-             &#39;free_energy&#39;: -3.7501685849875974,
-             &#39;stress&#39;: array([-4.3533538e-03, -4.3533714e-03, -4.3533538e-03, -1.8100262e-10,
-        2.2783719e-09,  3.9537465e-10], dtype=float32)},
- &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 8, 22, 22, 36, 48, 536139, tzinfo=datetime.timezone.utc),
+             &#39;free_energy&#39;: -3.750168465778308,
+             &#39;stress&#39;: array([-4.3533538e-03, -4.3533714e-03, -4.3533510e-03,  1.8829971e-09,
+        4.4220925e-09,  6.0692973e-10], dtype=float32)},
+ &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 8, 26, 0, 49, 8, 459409, tzinfo=datetime.timezone.utc),
                                          &#39;emmet_version&#39;: &#39;0.84.9&#39;,
                                          &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
                         &#39;chemsys&#39;: &#39;Cu&#39;,
@@ -745,11 +747,11 @@ document.write(`
                                      &#39;version&#39;: &#39;2.6.0&#39;},
                         &#39;volume&#39;: 11.761470249999999},
  &#39;trajectory&#39;: [Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]], calculator=SinglePointCalculator(...))],
- &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.7501685849875974,
+ &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.750168465778308,
                          &#39;forces&#39;: array([[0., 0., 0.]]),
-                         &#39;free_energy&#39;: -3.7501685849875974,
-                         &#39;stress&#39;: array([-4.35335375e-03, -4.35337145e-03, -4.35335375e-03, -1.81002616e-10,
-        2.27837194e-09,  3.95374650e-10])}]}
+                         &#39;free_energy&#39;: -3.750168465778308,
+                         &#39;stress&#39;: array([-4.35335375e-03, -4.35337145e-03, -4.35335096e-03,  1.88299709e-09,
+        4.42209247e-09,  6.06929729e-10])}]}
 </pre></div>
 </div>
 </div>
