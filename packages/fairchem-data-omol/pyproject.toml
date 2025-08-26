@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
 build-backend = "hatchling.build"
 
 [project]
-name = "fairchem.data.omol"
+name = "fairchem-data-omol"
 dynamic = ["version", "readme"]
 description = "Code for generating OMOL input configurations"
 license = {text = "MIT License"}
