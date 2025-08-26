@@ -136,8 +136,8 @@ jobs:
       ( github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_data_omol-') ) || startsWith(github.event.release.tag_name, 'fairchem_data_omol-')
 
     environment:
-      name: test-pypi
-      url: https://test.pypi.org/p/fairchem-data-omol/
+      name: pypi
+      url: https://pypi.org/p/fairchem-data-omol/
 
     permissions:
       id-token: write

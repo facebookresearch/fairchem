@@ -13,9 +13,9 @@ import signal
 from typing import TYPE_CHECKING
 
 import hydra
-import ray
 import torch.distributed as dist
 import websockets
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from websockets.asyncio.server import serve
 
@@ -29,14 +29,31 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 
+try:
+    import ray
+    from ray import remote
+
+    ray_installed = True
+except ImportError:
+    ray = None
+
+    def remote(cls):
+        # dummy
+        return cls
+
+    ray_installed = False
+
 logging.basicConfig(level=logging.INFO)
 
 
-@ray.remote
+@remote
 class MLIPWorker:
     def __init__(
         self, worker_id: int, world_size: int, master_port: int, predictor_config: dict
     ):
+        if ray_installed is False:
+            raise RuntimeError("Requires `ray` to be installed")
+
         self.worker_id = worker_id
         self._distributed_setup(
             worker_id, master_port, world_size, predictor_config.get("device", "cpu")
@@ -69,6 +86,7 @@ class MLIPWorker:
         return pickle.dumps(result)
 
 
+@requires(ray_installed, message="Requires `ray` to be installed")
 class MLIPInferenceServerWebSocket:
     def __init__(self, predictor_config: dict, port=8001, num_workers=1):
         logging.basicConfig(level=logging.INFO)
