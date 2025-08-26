@@ -10,6 +10,7 @@ license = {text = "MIT License"}
 dependencies = [
     "fairchem-core",
     "p_tqdm",
+    "pymatgen",
     "swifter"
 ]
 
