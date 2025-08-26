@@ -6,7 +6,7 @@ LICENSE file in the root directory of this source tree.
 
 FastCSP - Fast Crystal Structure Prediction Workflow
 
-Main entry point orchestrating the complete FastCSP crystal structure prediction workflow.
+Main entry point orchestrating the complete FastCSP workflow.
 """
 
 from __future__ import annotations
@@ -22,14 +22,17 @@ def cli_main():
         description="FastCSP: Fast Crystal Structure Prediction Workflow",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Workflow Stages:
-  generate                Generate crystal structures using Genarris
-  process_generated       Process and deduplicate Genarris outputs
-  relax                   Perform UMA-based structure relaxation
-  filter                  Energy filtering and duplicate removal for ranking
-  evaluate                Compare against experimental data (needs CSD license)
-  create_vasp_inputs      Generate DFT input files for validation
-  read_vasp_outputs       Process DFT results and compute validation metrics
+Available Workflow Stages:
+  generate                      Generate crystal structures using Genarris
+  process_generated             Process and deduplicate Genarris outputs
+  relax                         Perform UMA-based structure relaxations
+  filter                        Filtering and duplicate removal for ranking
+  evaluate                      Compare against experimental structures
+  free_energy                   Compute free energy corrections
+  create_vasp_inputs_relaxed    Generate VASP inputs from relaxed structures for validation
+  create_vasp_inputs_unrelaxed  Generate VASP inputs from unrelaxed structures for validation
+  submit_vasp                   Submit VASP jobs
+  read_vasp_outputs             Process VASP and compute validation metrics
 
 Usage:
   fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
