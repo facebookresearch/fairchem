@@ -21,14 +21,14 @@ jobs:
       statuses: write
 
     steps:
-    
+
     # Check out the code
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         # The path to the sha of the commit we want to build will depend
         # on the trigger type. If a workflow_run trigger, then we want
-        # the sha from the head of the branch that triggered it. For 
+        # the sha from the head of the branch that triggered it. For
         # pushes and manual triggers, we want the sha of the branch.
         ref: |
           ${{
@@ -38,7 +38,7 @@ jobs:
           }}
         # Optional: get full history if needed
         fetch-depth: 0
-    
+
     - name: Setup
       uses: ./.github/actions/multi-trigger-setup
       with:
@@ -56,7 +56,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e packages/fairchem-core[docs,adsorbml,quacc] -e packages/fairchem-data-oc[dev] -e packages/fairchem-applications-cattsunami
+        pip install -e packages/fairchem-core[docs,adsorbml,extras] -e packages/fairchem-data-oc[dev] -e packages/fairchem-applications-cattsunami
+        pip install -r tests/requirements.txt # pin test packages
 
     # Build the book
     - name: Build the book
@@ -76,7 +77,7 @@ jobs:
       with:
         name: docs-html
         path: docs/_build/html/*
-    
+
     - name: Cleanup
       if: always()
       uses: ./.github/actions/multi-trigger-cleanup
