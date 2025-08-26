@@ -77,7 +77,8 @@ parts:
   chapters:
   - file: dac/datasets/summary
     sections:
-    - file: dac/datasets/odac
+    - file: dac/datasets/odac25
+    - file: dac/datasets/odac23
   - file: dac/models
   - file: dac/examples_tutorials/summary
     sections:
