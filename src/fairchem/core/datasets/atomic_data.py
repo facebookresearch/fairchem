@@ -500,8 +500,12 @@ class AtomicData:
             cell=dictionary["cell"],
             pbc=dictionary["pbc"],
             natoms=dictionary["natoms"],
-            edge_index=dictionary.get("edge_index", torch.empty((2, 0), dtype=torch.long)),
-            cell_offsets=dictionary.get("cell_offsets", torch.empty((0, 3), dtype=torch.float)),
+            edge_index=dictionary.get(
+                "edge_index", torch.empty((2, 0), dtype=torch.long)
+            ),
+            cell_offsets=dictionary.get(
+                "cell_offsets", torch.empty((0, 3), dtype=torch.float)
+            ),
             nedges=dictionary.get("nedges", torch.tensor([0], dtype=torch.long)),
             charge=dictionary.get("charge", 0),
             spin=dictionary.get("spin", 0),
