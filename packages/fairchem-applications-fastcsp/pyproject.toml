@@ -26,7 +26,7 @@ vasp = ["atomate2"]
 fastcsp = "fairchem.applications.fastcsp.core.cli:cli_main"
 
 [project.urls]
-repository = "http://github.com/Fair-Chem/src/fairchem/applications/fastcsp"
+repository = "https://github.com/facebookresearch/fairchem/applications/fastcsp"
 documentation = "https://fair-chem.github.io/"
 
 [tool.hatch.version]
