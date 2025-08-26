@@ -9,8 +9,7 @@ description = "FastCSP: Accelerated Molecular Crystal Structure Prediction with 
 license = {text = "MIT License"}
 dependencies = [
     "fairchem-core",
-    "pyarrow",
-    "submitit",
+    "p_tqdm",
     "swifter"
 ]
 
@@ -21,7 +20,7 @@ dependencies = [
 # Do NOT expect 'pip install fairchem-applications-fastcsp[genarris]' or '[csd]' to install Genarris or CSD Python API.
 genarris = []
 csd = []
-vasp = ["fairchem-data-omc",]
+vasp = ["atomate2"]
 
 [project.scripts]
 fastcsp = "fairchem.applications.fastcsp.core.cli:cli_main"
