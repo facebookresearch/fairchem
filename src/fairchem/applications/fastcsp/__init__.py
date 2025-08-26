@@ -12,5 +12,4 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("fairchem.applications.fastcsp")
 except PackageNotFoundError:
-    # package is not installed
     __version__ = ""

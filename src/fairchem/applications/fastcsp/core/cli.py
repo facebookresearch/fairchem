@@ -7,12 +7,6 @@ LICENSE file in the root directory of this source tree.
 FastCSP - Fast Crystal Structure Prediction Workflow
 
 Main entry point orchestrating the complete FastCSP crystal structure prediction workflow.
-
-Usage:
-    fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
-
-Example:
-    fastcsp --config configs/example_config.yaml --stages generate process_generated relax rank
 """
 
 from __future__ import annotations
@@ -33,13 +27,16 @@ Workflow Stages:
   generate                Generate crystal structures using Genarris
   process_generated       Process and deduplicate Genarris outputs
   relax                   Perform UMA-based structure relaxation
-  rank                    Energy filtering and duplicate removal for ranking
+  filter                  Energy filtering and duplicate removal for ranking
   evaluate                Compare against experimental data (needs CSD license)
   create_vasp_inputs      Generate DFT input files for validation
   read_vasp_outputs       Process DFT results and compute validation metrics
 
+Usage:
+    fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
+
 Example:
-  fastcsp --config configs/example_config.yaml --stages generate process_generated relax rank
+  fastcsp --config configs/example_config.yaml --stages generate process_generated relax filter
         """,
     )
 
@@ -56,7 +53,7 @@ Example:
             "generate",  # need Genarris installed
             "process_generated",
             "relax",
-            "rank",
+            "filter",
             "evaluate",  # need CSD API License
             "free_energy",  # TODO: implement "free_energy"
             "create_vasp_inputs_relaxed",
@@ -64,7 +61,7 @@ Example:
             "submit_vasp",  # implement your own VASP job submission
             "read_vasp_outputs",
         ],
-        default=["generate", "process_generated", "relax", "rank"],
+        default=["generate", "process_generated", "relax", "filter"],
         help="Workflow stages to execute (in order). Default: generate process_generated relax rank",
     )
 

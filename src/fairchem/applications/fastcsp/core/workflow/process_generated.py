@@ -179,7 +179,7 @@ def process_genarris_outputs_single(
 
 
 def process_genarris_outputs(
-    base_dir: Path,
+    input_dir: Path,
     output_dir: Path,
     ltol: float = 0.2,
     stol: float = 0.3,
@@ -192,18 +192,18 @@ def process_genarris_outputs(
     Args:
         base_dir: Root directory containing multiple molecule directories
         output_dir: Output directory where processed results will be saved
-        npartitions: Number of partitions for distributed processing
         ltol: Lattice parameter tolerance for structure deduplication
         stol: Site tolerance for structure deduplication
         angle_tol: Angle tolerance for structure deduplication
+        npartitions: Number of partitions for distributed processing
 
     Returns:
         List of submitit job objects for monitoring execution status
     """
     # Collect all molecule/conformer combinations for processing
     job_args = []
-    for mol_dir in base_dir.iterdir():
-        for conf_dir in mol_dir.iterdir():
+    for mol_dir in input_dir.iterdir():  # for each system
+        for conf_dir in mol_dir.iterdir():  # for each conformer
             processed_dir = output_dir / mol_dir.name / conf_dir.name
 
             # Skip if already processed
@@ -227,7 +227,6 @@ def process_genarris_outputs(
         job_args,
         job_name="process_genarris_outputs",
         output_dir=output_dir / "slurm",
-        partition="ocp,learnaccel",
         cpus_per_task=80,
         mem_gb=400,
         timeout_min=1000,

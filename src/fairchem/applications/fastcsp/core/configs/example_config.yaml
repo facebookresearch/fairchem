@@ -14,12 +14,14 @@ genarris:
     Z: [1, 2, 3, 4, 6, 8] # [1] by default
     spg_info: "standard" # "standard" by default
     num_structures_per_spg: 500 # 500 by default
+    read_z_from_file: false # read z from "molecules" file
+    read_spg_from_file: false # read spg from "molecules" file
   # Genarris SLURM job settings
   slurm:
     job-name: "genarris"
     nodes: 1
     ntasks-per-node: 40
-    time: 7200 # minutes
+    time: 10800 # minutes
 
 # ML relaxation parameters
 relax:
@@ -39,6 +41,7 @@ pre_relax_match_params:        # Before ML relaxation
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
+  npartitions: 1000
 
 # Deduplication parameters after relaxation
 post_relax_match_params:       # After ML relaxation
@@ -47,8 +50,9 @@ post_relax_match_params:       # After ML relaxation
   angle_tol: 5
 
 # Structure filtering parameters for energy landscape
-energy_cutoff: 20              # Energy cutoff in kJ/mol above minimum
-density_cutoff: 10             # Density cutoff in g/cm³
+filter:
+  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum
+  density_cutoff: 10           # Density cutoff in g/cm³
 
 # TODO: add (optional) free energy config
 

@@ -13,6 +13,7 @@ generation, and batch processing of multiple molecules.
 
 from __future__ import annotations
 
+import ast
 import shutil
 from configparser import ConfigParser
 from pathlib import Path
@@ -137,22 +138,24 @@ def create_genarris_jobs(
         │   │   └── Z4/
         │   └── conformer2/
         └── molecule2/
-
-    Note:
-        Jobs are submitted immediately to the SLURM scheduler. Use the returned job
-        objects to monitor progress and collect results when complete.
     """
+    print(f"Starting Genarris generation for {mol_info["name"]}")
+
     # Genarris base config file
     gnrs_base_config = gnrs_config.get("base_config")
     if gnrs_base_config is None:
         raise KeyError("Genarris 'base_config' section is missing in the config file.")
+    print(f"Genarris base configuration defined in {gnrs_base_config}")
 
     # parameters for each Genarris run
     gnrs_vars = gnrs_config.get("vars", {})
     if gnrs_vars == {}:
         print(
-            "Genarris generation parameters are not provided. Using default parameters."
+            "Genarris generation parameters are not provided. Using default parameters:"
         )
+        print("Z=1 and 500 structures per all compatible space groups")
+    else:
+        print(f"Genarris generation parameters are {gnrs_vars} ")
     z_list = [str(z) for z in gnrs_vars.get("Z", [1])]  # by default only Z=1 is used
     num_structures_per_spg = gnrs_vars.get(
         "num_structures_per_spg", 500
@@ -161,19 +164,19 @@ def create_genarris_jobs(
         "spg_info", "standard"
     )  # all compatible spacegroups by default
 
-    # molecule specific spg and z info from csv file if provided
+    # molecule specific spg and z_list info from csv file if provided
     if gnrs_vars.get("read_spg_from_file", False):
-        spg_info = [int(mol_info["spg"])]
-        spg_info = str(spg_info)
+        spg_info = str(ast.literal_eval(mol_info["spg"]))
     if gnrs_vars.get("read_z_from_file", False):
-        z_list = [str(mol_info["z"])]
+        z_list = [str(z) for z in ast.literal_eval(mol_info["z"])]
 
-    mol = mol_info["name"]  # CSD refcode
+    mol = mol_info["name"]  # System name
 
     # conf_path can be a geometry file or
     # a path to a folder containing multiple
     # conformers in .xyz, .extxyz, or .mol formats
     allowed_extensions = [".xyz", ".extxyz", ".mol"]
+
     conf_path = Path(mol_info["molecule_path"])
     if conf_path.is_file():
         if Path(conf_path).suffix not in allowed_extensions:
@@ -195,7 +198,7 @@ def create_genarris_jobs(
 
     jobs = []
     for conf, conf_path in conf_name_list.items():  # for each conformer
-        for z in z_list:  # for each Z
+        for z in z_list:
             single_gnrs_folder = output_dir / mol / conf / z
             single_gnrs_folder.mkdir(parents=True, exist_ok=True)
 
@@ -247,7 +250,7 @@ def run_genarris_jobs(output_dir: str | Path, config: dict[str, Any]):
     and manages job submission and monitoring.
 
     Args:
-        root: Base output directory path
+        output_dir: Base output directory path
         config: Master configuration dictionary containing:
             - molecule_info: Dictionary of molecules and conformer paths
             - genarris: Genarris-specific configuration including:
@@ -285,24 +288,26 @@ def run_genarris_jobs(output_dir: str | Path, config: dict[str, Any]):
             "ntasks-per-node": 1,
             "time": 7200,  # minutes
         }
-        print("SLURM info is not provided. Using default parameters.")
+        print("SLURM info is not provided for Genarris.")
+        print("Using default parameters.")
+    print(f"SLURM info for Genarris. {slurm_info}")
 
     executor = submitit.AutoExecutor(folder=output_dir.parent / "slurm")
     executor.update_parameters(
-        slurm_job_name=slurm_info.get("job-name", "genarris"),
-        nodes=slurm_info.get("nodes", 1),
-        tasks_per_node=slurm_info.get("ntasks-per-node", 1),
-        timeout_min=slurm_info.get("time", 7200),  # minutes
+        slurm_job_name=slurm_info["job-name"],
+        nodes=slurm_info["nodes"],
+        tasks_per_node=slurm_info["ntasks-per-node"],
+        timeout_min=slurm_info["time"],
         slurm_use_srun=False,
         cpus_per_task=1,
     )
 
+    molecules_file = config["molecules"]
+    molecules_list = pd.read_csv(molecules_file).to_dict(orient="records")
+
     # Create Genarris jobs for each conformer
     jobs = []
     with executor.batch():
-        molecules_file = config["molecules"]
-        molecules_list = pd.read_csv(molecules_file).to_dict(orient="records")
-
         for mol_info in tqdm(molecules_list):
             jobs += create_genarris_jobs(
                 mol_info,
@@ -319,9 +324,6 @@ def run_genarris_jobs(output_dir: str | Path, config: dict[str, Any]):
 if __name__ == "__main__":
     """
     Example usage for Genarris crystal structure generation.
-
-    This example demonstrates how to run Genarris jobs for crystal structure
-    generation using a specific configuration file with molecule definitions.
     """
     import yaml
 
