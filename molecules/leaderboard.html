@@ -61,6 +61,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'molecules/leaderboard';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="FAQ" href="FAQ.html" />
+    <link rel="prev" title="Pretrained models" href="models.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -122,8 +124,6 @@
     <div class="bd-container__inner bd-page-width">
       
       
-      
-        
       
       <div class="bd-sidebar-primary bd-sidebar">
         
@@ -217,13 +217,14 @@
 <li class="toctree-l1"><a class="reference internal" href="../core/generative_models.html">Generative Models</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="datasets/omol25.html">OMol25</a></li>
 <li class="toctree-l2"><a class="reference internal" href="datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="models.html">Pretrained models</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">OMol25 Leaderboard</a></li>
 <li class="toctree-l1"><a class="reference internal" href="FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
@@ -638,7 +639,7 @@ Evaluations correspond to several chemistry relevant tasks (spin gap, ligand-str
 <p>The simplest way to get started is to have an ASE-compatible MLIP calculator that can make energy and force predictions.</p>
 <section id="s2ef">
 <h2>S2EF<a class="headerlink" href="#s2ef" title="Link to this heading">#</a></h2>
-<p>The leadebroard supports S2EF evaluations for both the OMol25 “Validation” and “Test” sets. The download links for these datasets can be found <a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md">here</a>
+<p>The leadebroard supports S2EF evaluations for both the OMol25 “Validation” and “Test” sets. The download links for these datasets can be found <a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits">🔗 here</a>.
 Validation and Test sets should contain 2,762,021 and 2,805,046 samples, respectively.</p>
 <p>Predictions must be saved as “.npz” files and shall contain the following information:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>ids &lt;class &#39;numpy.ndarray&#39;&gt;
@@ -704,7 +705,7 @@ natoms &lt;class &#39;numpy.ndarray&#39;&gt;
 <li><p>Distance scaling: Short range and long range intermolecular interactions are essential for observable properties like phase changes, density, etc.</p></li>
 </ul>
 <p>For a detailed descripion of each task we refer people to the original <a class="reference external" href="https://arxiv.org/pdf/2505.08762">manuscript</a>.
-The download links for evaluation inputs can be found <a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md">here</a>.</p>
+The download links for evaluation inputs can be found <a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data">🔗 here</a>.</p>
 <p>To generate prediction files for the different tasks, we have released a set of <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py">recipes</a> to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:</p>
 <ul class="simple">
@@ -770,6 +771,24 @@ Each evaluation task has its own unique structure, a detailed description of the
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="models.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Pretrained models</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="FAQ.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">FAQ</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               

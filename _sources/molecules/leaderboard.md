@@ -10,7 +10,7 @@ Evaluations correspond to several chemistry relevant tasks (spin gap, ligand-str
 The simplest way to get started is to have an ASE-compatible MLIP calculator that can make energy and force predictions.
 
 ## S2EF
-The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. The download links for these datasets can be found [here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md)
+The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. The download links for these datasets can be found [🔗 here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits).
 Validation and Test sets should contain 2,762,021 and 2,805,046 samples, respectively.
 
 Predictions must be saved as ".npz" files and shall contain the following information:
@@ -76,7 +76,7 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * Distance scaling: Short range and long range intermolecular interactions are essential for observable properties like phase changes, density, etc.
 
 For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
-The download links for evaluation inputs can be found [here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md).
+The download links for evaluation inputs can be found [🔗 here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
