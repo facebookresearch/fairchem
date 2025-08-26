@@ -22,7 +22,16 @@ from ase.calculators.singlepoint import SinglePointCalculator, SinglePointDFTCal
 from ase.constraints import FixAtoms
 from ase.geometry import wrap_positions
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
-from pymatgen.io.ase import AseAtomsAdaptor
+from monty.dev import requires
+
+try:
+    from pymatgen.io.ase import AseAtomsAdaptor
+
+    pmg_installed = True
+except ImportError:
+    AseAtomsAdaptor = None
+    pmg_installed = False
+
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
 
@@ -68,14 +77,10 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
     return f"{indent_str}{key}={out}"
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
     """Preforms nearest neighbor search and returns edge index, distances,
     and cell offsets"""
-    if AseAtomsAdaptor is None:
-        raise RuntimeError(
-            "Unable to import pymatgen.io.ase.AseAtomsAdaptor. Make sure pymatgen is properly installed."
-        )
-
     struct = AseAtomsAdaptor.get_structure(atoms)
 
     # tol of 1e-8 should remove all self loops
@@ -786,6 +791,27 @@ class AtomicData:
         The batch object must have been created via :meth:`from_data_list` in
         order to be able to reconstruct the initial objects."""
         return [self.get_example(i) for i in range(self.num_graphs)]
+
+    def update_batch_edges(
+        self, edge_index: torch.Tensor, cell_offsets: torch.Tensor, nedges: torch.Tensor
+    ) -> AtomicData:
+        r"""Update the connectivity of each batched AtomicData sample.
+
+        Args:
+            edge_index (torch.Tensor): New batch edge_index (shape [2, total_edges]).
+            cell_offsets (torch.Tensor): Cell offsets per edge (shape [total_edges, 3]).
+            nedges (torch.Tensor): Number of edges per system (shape [num_systems]).
+
+        Returns:
+            AtomicData: The updated batch object.
+        """
+        self.edge_index = edge_index
+        self.cell_offsets = cell_offsets
+        self.nedges = nedges
+        edge_slices = [0] + torch.cumsum(nedges, dim=0).tolist()
+        self.__slices__["edge_index"] = edge_slices
+        self.__slices__["cell_offsets"] = edge_slices
+        return self
 
 
 def atomicdata_list_to_batch(

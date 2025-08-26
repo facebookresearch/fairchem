@@ -11,8 +11,8 @@ kernelspec:
   name: python3
 ---
 
-Workflows
-------------------
+Calculation workflows with FAIRChem models
+------------------------------------------
 
 This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc) and simply specify the `fairchem` model type. Below is an example that uses the default elastic_tensor_flow flow.
 

@@ -59,6 +59,12 @@ def create_yaml(
         template_ft["defaults"][0]["data"] = REGRESSION_LABEL_TO_TASK_YAML[
             regression_tasks
         ].stem
+        template_ft["train_dataset"]["dataset_configs"][dataset_name] = template_ft[
+            "train_dataset"
+        ]["dataset_configs"].pop("DATASET_NAME")
+        template_ft["val_dataset"]["dataset_configs"][dataset_name] = template_ft[
+            "val_dataset"
+        ]["dataset_configs"].pop("DATASET_NAME")
     with open(output_dir / UMA_SM_FINETUNE_YAML, "w") as yaml_file:
         yaml.dump(template_ft, yaml_file, default_flow_style=False, sort_keys=False)
 
@@ -120,6 +126,9 @@ if __name__ == "__main__":
     force_rms, linref_coeff = compute_normalizer_and_linear_reference(
         train_path, args.num_workers
     )
+    # don't use force rms if doing energy only training
+    if args.regression_tasks == "e":
+        force_rms = 1.0
     val_path = args.output_dir / "val"
     launch_processing(args.val_dir, val_path, args.num_workers)
 
