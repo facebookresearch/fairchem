@@ -14,13 +14,14 @@ the same number of channels and input features are of shape (N, sphere_basis, C)
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 import torch
 import torch.nn as nn
 
 
 def get_normalization_layer(
-    norm_type: str,
+    norm_type: Literal["layer_norm", "layer_norm_sh", "rms_norm_sh"],
     lmax: int,
     num_channels: int,
     eps: float = 1e-5,
