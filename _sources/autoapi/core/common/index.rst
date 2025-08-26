@@ -25,7 +25,6 @@ Submodules
    /autoapi/core/common/profiler_utils/index
    /autoapi/core/common/registry/index
    /autoapi/core/common/test_utils/index
-   /autoapi/core/common/tutorial_utils/index
    /autoapi/core/common/typing/index
    /autoapi/core/common/utils/index
 

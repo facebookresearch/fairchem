@@ -310,7 +310,6 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/profiler_utils/index.html">core.common.profiler_utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/registry/index.html">core.common.registry</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/test_utils/index.html">core.common.test_utils</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../../../common/tutorial_utils/index.html">core.common.tutorial_utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/typing/index.html">core.common.typing</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/utils/index.html">core.common.utils</a></li>
 </ul>
@@ -616,9 +615,11 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.ray_installed"><code class="docutils literal notranslate"><span class="pre">ray_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker"><code class="docutils literal notranslate"><span class="pre">MLIPWorker</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.worker_id"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.worker_id</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.predict_unit"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.predict_unit</span></code></a></li>
@@ -658,6 +659,17 @@ document.write(`
 <span id="core-units-mlip-unit-inference-inference-server-ray"></span><h1>core.units.mlip_unit.inference.inference_server_ray<a class="headerlink" href="#module-core.units.mlip_unit.inference.inference_server_ray" title="Link to this heading">#</a></h1>
 <p>Sequential request server with parallel model execution
 Usage: python server.py –workers 4 –port 8000</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.inference.inference_server_ray.ray_installed" title="core.units.mlip_unit.inference.inference_server_ray.ray_installed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ray_installed</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -685,6 +697,11 @@ Usage: python server.py –workers 4 –port 8000</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.units.mlip_unit.inference.inference_server_ray.ray_installed">
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.inference.inference_server_ray.</span></span><span class="sig-name descname"><span class="pre">ray_installed</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#core.units.mlip_unit.inference.inference_server_ray.ray_installed" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="core.units.mlip_unit.inference.inference_server_ray.MLIPWorker">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.inference.inference_server_ray.</span></span><span class="sig-name descname"><span class="pre">MLIPWorker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">worker_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">world_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_port</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictor_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker" title="Link to this definition">#</a></dt>
@@ -827,9 +844,11 @@ Usage: python server.py –workers 4 –port 8000</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.ray_installed"><code class="docutils literal notranslate"><span class="pre">ray_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker"><code class="docutils literal notranslate"><span class="pre">MLIPWorker</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.worker_id"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.worker_id</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.predict_unit"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.predict_unit</span></code></a></li>

@@ -18,6 +18,14 @@ core.components.calculate.recipes.elastic
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.components.calculate.recipes.elastic.pmg_installed
+
+
 Functions
 ---------
 
@@ -28,6 +36,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: pmg_installed
+   :value: True
+
 
 .. py:function:: calculate_elasticity(atoms: ase.Atoms, calculator: ase.calculators.calculator.Calculator, norm_strains: collections.abc.Sequence[float] | float = (-0.01, -0.005, 0.005, 0.01), shear_strains: collections.abc.Sequence[float] | float = (-0.06, -0.03, 0.03, 0.06), relax_initial: bool = True, relax_strained: bool = True, use_equilibrium_stress: bool = True, **relax_kwargs) -> dict[str, Any]
 

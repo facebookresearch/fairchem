@@ -25,6 +25,8 @@ Attributes
 
 .. autoapisummary::
 
+   core.components.calculate.recipes.phonons.pmg_installed
+   core.components.calculate.recipes.phonons.phonopy_installed
    core.components.calculate.recipes.phonons.THz_to_K
 
 
@@ -42,6 +44,14 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: pmg_installed
+   :value: True
+
+
+.. py:data:: phonopy_installed
+   :value: True
+
 
 .. py:data:: THz_to_K
 

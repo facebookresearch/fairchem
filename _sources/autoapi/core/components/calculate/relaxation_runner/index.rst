@@ -12,6 +12,14 @@ core.components.calculate.relaxation_runner
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.components.calculate.relaxation_runner.pmg_installed
+
+
 Classes
 -------
 
@@ -22,6 +30,10 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:data:: pmg_installed
+   :value: True
+
 
 .. py:class:: RelaxationRunner(calculator: ase.calculators.calculator.Calculator, input_data: fairchem.core.datasets.AseDBDataset, calculate_properties: collections.abc.Sequence[str], save_relaxed_atoms: bool = True, normalize_properties_by: dict[str, str] | None = None, save_target_properties: collections.abc.Sequence[str] | None = None, **relax_kwargs)
 

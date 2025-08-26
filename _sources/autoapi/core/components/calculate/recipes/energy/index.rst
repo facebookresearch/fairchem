@@ -36,6 +36,14 @@ core.components.calculate.recipes.energy
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.components.calculate.recipes.energy.pmg_installed
+
+
 Functions
 ---------
 
@@ -46,6 +54,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: pmg_installed
+   :value: True
+
 
 .. py:function:: calc_energy_from_e_refs(struct_or_entry: pymatgen.util.typing.EntryLike | pymatgen.core.Structure | pymatgen.core.Composition | str, ref_energies: dict[str, float], total_energy: float | None = None) -> float
 

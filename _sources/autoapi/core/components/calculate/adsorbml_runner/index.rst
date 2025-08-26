@@ -12,6 +12,14 @@ core.components.calculate.adsorbml_runner
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.components.calculate.adsorbml_runner.pmg_installed
+
+
 Classes
 -------
 
@@ -22,6 +30,10 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:data:: pmg_installed
+   :value: True
+
 
 .. py:class:: AdsorbMLRunner(calculator: ase.calculators.calculator.Calculator, input_data_path: str, place_on_relaxed_slab: bool = False, save_relaxed_atoms: bool = True, adsorption_energy_model: bool = False, num_placements: int = 100, optimizer_cls: type[ase.optimize.Optimizer] = LBFGS, fmax: float = 0.02, steps: int = 300)
 

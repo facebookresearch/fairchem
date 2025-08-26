@@ -10,6 +10,14 @@ core.units.mlip_unit.inference.inference_server_ray
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.units.mlip_unit.inference.inference_server_ray.ray_installed
+
+
 Classes
 -------
 
@@ -29,6 +37,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: ray_installed
+   :value: True
+
 
 .. py:class:: MLIPWorker(worker_id: int, world_size: int, master_port: int, predictor_config: dict)
 

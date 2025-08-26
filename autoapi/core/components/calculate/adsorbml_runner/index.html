@@ -308,7 +308,6 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../common/profiler_utils/index.html">core.common.profiler_utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../common/registry/index.html">core.common.registry</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../common/test_utils/index.html">core.common.test_utils</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../../common/tutorial_utils/index.html">core.common.tutorial_utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../common/typing/index.html">core.common.typing</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../common/utils/index.html">core.common.utils</a></li>
 </ul>
@@ -614,8 +613,10 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.pmg_installed"><code class="docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.result_glob_pattern</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner._save_relaxed_atoms</span></code></a></li>
@@ -648,6 +649,17 @@ document.write(`
 <p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
 <p>This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.adsorbml_runner.pmg_installed" title="core.components.calculate.adsorbml_runner.pmg_installed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -661,6 +673,11 @@ LICENSE file in the root directory of this source tree.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.components.calculate.adsorbml_runner.pmg_installed">
+<span class="sig-prename descclassname"><span class="pre">core.components.calculate.adsorbml_runner.</span></span><span class="sig-name descname"><span class="pre">pmg_installed</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#core.components.calculate.adsorbml_runner.pmg_installed" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="core.components.calculate.adsorbml_runner.AdsorbMLRunner">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.adsorbml_runner.</span></span><span class="sig-name descname"><span class="pre">AdsorbMLRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">place_on_relaxed_slab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_relaxed_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adsorption_energy_model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_placements</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">type</span><span class="p"><span class="pre">[</span></span><span class="pre">ase.optimize.Optimizer</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">LBFGS</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner" title="Link to this definition">#</a></dt>
@@ -814,8 +831,10 @@ processes the input data in chunks, and saves the results.</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.pmg_installed"><code class="docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.result_glob_pattern</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.adsorbml_runner.AdsorbMLRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner._save_relaxed_atoms</span></code></a></li>

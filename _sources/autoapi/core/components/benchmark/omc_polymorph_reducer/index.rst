@@ -18,6 +18,7 @@ Attributes
 .. autoapisummary::
 
    core.components.benchmark.omc_polymorph_reducer.sklearn_scipy_installed
+   core.components.benchmark.omc_polymorph_reducer.pmg_installed
    core.components.benchmark.omc_polymorph_reducer.ev2kJ
 
 
@@ -33,6 +34,10 @@ Module Contents
 ---------------
 
 .. py:data:: sklearn_scipy_installed
+   :value: True
+
+
+.. py:data:: pmg_installed
    :value: True
 
 

@@ -308,7 +308,6 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/profiler_utils/index.html">core.common.profiler_utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/registry/index.html">core.common.registry</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/test_utils/index.html">core.common.test_utils</a></li>
-<li class="toctree-l4"><a class="reference internal" href="../../../../common/tutorial_utils/index.html">core.common.tutorial_utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/typing/index.html">core.common.typing</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../common/utils/index.html">core.common.utils</a></li>
 </ul>
@@ -614,8 +613,10 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.recipes.energy.pmg_installed"><code class="docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.recipes.energy.calc_energy_from_e_refs"><code class="docutils literal notranslate"><span class="pre">calc_energy_from_e_refs()</span></code></a></li>
 </ul>
 </li>
@@ -653,6 +654,17 @@ authors or copyright holders be liable for any claim, damages or other
 liability, whether in an action of contract, tort or otherwise, arising from,
 out of or in connection with the software or the use or other dealings in the
 software.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.recipes.energy.pmg_installed" title="core.components.calculate.recipes.energy.pmg_installed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -666,6 +678,11 @@ software.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.components.calculate.recipes.energy.pmg_installed">
+<span class="sig-prename descclassname"><span class="pre">core.components.calculate.recipes.energy.</span></span><span class="sig-name descname"><span class="pre">pmg_installed</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#core.components.calculate.recipes.energy.pmg_installed" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="core.components.calculate.recipes.energy.calc_energy_from_e_refs">
 <span class="sig-prename descclassname"><span class="pre">core.components.calculate.recipes.energy.</span></span><span class="sig-name descname"><span class="pre">calc_energy_from_e_refs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">struct_or_entry</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pymatgen.util.typing.EntryLike</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">pymatgen.core.Structure</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">pymatgen.core.Composition</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_energies</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_energy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#core.components.calculate.recipes.energy.calc_energy_from_e_refs" title="Link to this definition">#</a></dt>
@@ -757,8 +774,10 @@ energy) in the same units as input energies.</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.recipes.energy.pmg_installed"><code class="docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.recipes.energy.calc_energy_from_e_refs"><code class="docutils literal notranslate"><span class="pre">calc_energy_from_e_refs()</span></code></a></li>
 </ul>
 </li>

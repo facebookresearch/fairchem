@@ -19,6 +19,7 @@ Attributes
 
 .. autoapisummary::
 
+   core.datasets.atomic_data.pmg_installed
    core.datasets.atomic_data.IndexType
    core.datasets.atomic_data._REQUIRED_KEYS
    core.datasets.atomic_data._OPTIONAL_KEYS
@@ -46,6 +47,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: pmg_installed
+   :value: True
+
 
 .. py:data:: IndexType
 
