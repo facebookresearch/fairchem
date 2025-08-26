@@ -13,7 +13,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     distributed_init_method: FILE
-    num_array_jobs: 200
+    num_array_jobs: 5
     slurm:
       partition: ${cluster.partition}
       mem_gb: ${cluster.mem_gb}
