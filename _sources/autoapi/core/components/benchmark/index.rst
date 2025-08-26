@@ -25,6 +25,7 @@ Submodules
    /autoapi/core/components/benchmark/materials_discovery_reducer/index
    /autoapi/core/components/benchmark/nvemd_reducer/index
    /autoapi/core/components/benchmark/omc_polymorph_reducer/index
+   /autoapi/core/components/benchmark/omol_reducer/index
    /autoapi/core/components/benchmark/uma_speed_benchmark/index
 
 

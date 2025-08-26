@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>core.components.calculate.recipes &#8212; fairchem</title>
+    <title>core.components.benchmark.omol_reducer &#8212; fairchem</title>
   
   
   
@@ -58,7 +58,7 @@
     <script async="async" src="../../../../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/core/components/calculate/recipes/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/core/components/benchmark/omol_reducer/index';</script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -489,7 +489,7 @@
       
       
       
-      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fautoapi/core/components/calculate/recipes/index.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fautoapi/core/components/benchmark/omol_reducer/index.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -519,7 +519,7 @@
       
       
       
-      <li><a href="../../../../../_sources/autoapi/core/components/calculate/recipes/index.rst" target="_blank"
+      <li><a href="../../../../../_sources/autoapi/core/components/benchmark/omol_reducer/index.rst" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -603,7 +603,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>core.components.calculate.recipes</h1>
+    <h1>core.components.benchmark.omol_reducer</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -613,7 +613,22 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.R"><code class="docutils literal notranslate"><span class="pre">R</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.M"><code class="docutils literal notranslate"><span class="pre">M</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer"><code class="docutils literal notranslate"><span class="pre">OMolReducer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.benchmark_name"><code class="docutils literal notranslate"><span class="pre">OMolReducer.benchmark_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.benchmark_labels"><code class="docutils literal notranslate"><span class="pre">OMolReducer.benchmark_labels</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.evaluator"><code class="docutils literal notranslate"><span class="pre">OMolReducer.evaluator</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.join_results"><code class="docutils literal notranslate"><span class="pre">OMolReducer.join_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.save_results"><code class="docutils literal notranslate"><span class="pre">OMolReducer.save_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.compute_metrics"><code class="docutils literal notranslate"><span class="pre">OMolReducer.compute_metrics()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
             </nav>
         </div>
@@ -625,24 +640,120 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-core.components.calculate.recipes">
-<span id="core-components-calculate-recipes"></span><h1>core.components.calculate.recipes<a class="headerlink" href="#module-core.components.calculate.recipes" title="Link to this heading">#</a></h1>
-<section id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="adsorbml/index.html">core.components.calculate.recipes.adsorbml</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adsorption/index.html">core.components.calculate.recipes.adsorption</a></li>
-<li class="toctree-l1"><a class="reference internal" href="elastic/index.html">core.components.calculate.recipes.elastic</a></li>
-<li class="toctree-l1"><a class="reference internal" href="energy/index.html">core.components.calculate.recipes.energy</a></li>
-<li class="toctree-l1"><a class="reference internal" href="local_env/index.html">core.components.calculate.recipes.local_env</a></li>
-<li class="toctree-l1"><a class="reference internal" href="omol/index.html">core.components.calculate.recipes.omol</a></li>
-<li class="toctree-l1"><a class="reference internal" href="phonons/index.html">core.components.calculate.recipes.phonons</a></li>
-<li class="toctree-l1"><a class="reference internal" href="relax/index.html">core.components.calculate.recipes.relax</a></li>
-<li class="toctree-l1"><a class="reference internal" href="thermal_conductivity/index.html">core.components.calculate.recipes.thermal_conductivity</a></li>
-<li class="toctree-l1"><a class="reference internal" href="utils/index.html">core.components.calculate.recipes.utils</a></li>
-</ul>
+  <section id="module-core.components.benchmark.omol_reducer">
+<span id="core-components-benchmark-omol-reducer"></span><h1>core.components.benchmark.omol_reducer<a class="headerlink" href="#module-core.components.benchmark.omol_reducer" title="Link to this heading">#</a></h1>
+<p>Copyright (c) Meta, Inc. and its affiliates.</p>
+<p>This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.benchmark.omol_reducer.R" title="core.components.benchmark.omol_reducer.R"><code class="xref py py-obj docutils literal notranslate"><span class="pre">R</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.components.benchmark.omol_reducer.M" title="core.components.benchmark.omol_reducer.M"><code class="xref py py-obj docutils literal notranslate"><span class="pre">M</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
 </div>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.benchmark.omol_reducer.OMolReducer" title="core.components.benchmark.omol_reducer.OMolReducer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OMolReducer</span></code></a></p></td>
+<td><p>A common pandas DataFrame reducer for benchmarks</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.R">
+<span class="sig-prename descclassname"><span class="pre">core.components.benchmark.omol_reducer.</span></span><span class="sig-name descname"><span class="pre">R</span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.R" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.M">
+<span class="sig-prename descclassname"><span class="pre">core.components.benchmark.omol_reducer.</span></span><span class="sig-name descname"><span class="pre">M</span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.M" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.benchmark.omol_reducer.</span></span><span class="sig-name descname"><span class="pre">OMolReducer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">benchmark_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">evaluator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">benchmark_labels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer</span></code></p>
+<p>A common pandas DataFrame reducer for benchmarks</p>
+<p>Results are assumed to be saved as json files that can be read into pandas dataframes.
+Only mean absolute error is computed for common columns in the predicted results and target data</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer.benchmark_name">
+<span class="sig-name descname"><span class="pre">benchmark_name</span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer.benchmark_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer.benchmark_labels">
+<span class="sig-name descname"><span class="pre">benchmark_labels</span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer.benchmark_labels" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer.evaluator">
+<span class="sig-name descname"><span class="pre">evaluator</span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer.evaluator" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer.join_results">
+<span class="sig-name descname"><span class="pre">join_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">glob_pattern</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.DataFrame</span></span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer.join_results" title="Link to this definition">#</a></dt>
+<dd><p>Join results from multiple JSON files into a single DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results_dir</strong> – Directory containing result files</p></li>
+<li><p><strong>glob_pattern</strong> – Pattern to match result files</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Combined DataFrame containing all results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer.save_results">
+<span class="sig-name descname"><span class="pre">save_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer.save_results" title="Link to this definition">#</a></dt>
+<dd><p>Save joined results to a compressed json file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – results: Combined results from join_results</p></li>
+<li><p><strong>results_dir</strong> – Directory containing result files</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.benchmark.omol_reducer.OMolReducer.compute_metrics">
+<span class="sig-name descname"><span class="pre">compute_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.DataFrame</span></span></span><a class="headerlink" href="#core.components.benchmark.omol_reducer.OMolReducer.compute_metrics" title="Link to this definition">#</a></dt>
+<dd><p>Compute mean absolute error metrics for common columns between results and targets.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – DataFrame containing prediction results</p></li>
+<li><p><strong>run_name</strong> – Name of the current run, used as index in the metrics DataFrame</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame containing computed metrics with run_name as index</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 </section>
 
@@ -659,7 +770,7 @@ document.write(`
         },
         kernelOptions: {
             name: "python3",
-            path: "./autoapi/core/components/calculate/recipes"
+            path: "./autoapi/core/components/benchmark/omol_reducer"
         },
         predefinedOutput: true
     }
@@ -692,7 +803,22 @@ document.write(`
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.R"><code class="docutils literal notranslate"><span class="pre">R</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.M"><code class="docutils literal notranslate"><span class="pre">M</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer"><code class="docutils literal notranslate"><span class="pre">OMolReducer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.benchmark_name"><code class="docutils literal notranslate"><span class="pre">OMolReducer.benchmark_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.benchmark_labels"><code class="docutils literal notranslate"><span class="pre">OMolReducer.benchmark_labels</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.evaluator"><code class="docutils literal notranslate"><span class="pre">OMolReducer.evaluator</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.join_results"><code class="docutils literal notranslate"><span class="pre">OMolReducer.join_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.save_results"><code class="docutils literal notranslate"><span class="pre">OMolReducer.save_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.benchmark.omol_reducer.OMolReducer.compute_metrics"><code class="docutils literal notranslate"><span class="pre">OMolReducer.compute_metrics()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
   </nav></div>
 

@@ -25,6 +25,7 @@ Submodules
    /autoapi/core/components/calculate/elasticity_runner/index
    /autoapi/core/components/calculate/kappa_runner/index
    /autoapi/core/components/calculate/nve_md_runner/index
+   /autoapi/core/components/calculate/omol_runner/index
    /autoapi/core/components/calculate/pairwise_ct_runner/index
    /autoapi/core/components/calculate/phonon_runner/index
    /autoapi/core/components/calculate/recipes/index

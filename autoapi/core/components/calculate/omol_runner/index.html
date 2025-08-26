@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>core.components.calculate.recipes &#8212; fairchem</title>
+    <title>core.components.calculate.omol_runner &#8212; fairchem</title>
   
   
   
@@ -58,7 +58,7 @@
     <script async="async" src="../../../../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/core/components/calculate/recipes/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/core/components/calculate/omol_runner/index';</script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -489,7 +489,7 @@
       
       
       
-      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fautoapi/core/components/calculate/recipes/index.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fautoapi/core/components/calculate/omol_runner/index.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -519,7 +519,7 @@
       
       
       
-      <li><a href="../../../../../_sources/autoapi/core/components/calculate/recipes/index.rst" target="_blank"
+      <li><a href="../../../../../_sources/autoapi/core/components/calculate/omol_runner/index.rst" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -603,7 +603,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>core.components.calculate.recipes</h1>
+    <h1>core.components.calculate.omol_runner</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -613,7 +613,20 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner"><code class="docutils literal notranslate"><span class="pre">OMolRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">OMolRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.benchmark_name"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.benchmark"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.input_keys"><code class="docutils literal notranslate"><span class="pre">OMolRunner.input_keys</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.calculate"><code class="docutils literal notranslate"><span class="pre">OMolRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.write_results"><code class="docutils literal notranslate"><span class="pre">OMolRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.save_state"><code class="docutils literal notranslate"><span class="pre">OMolRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
             </nav>
         </div>
@@ -625,24 +638,105 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-core.components.calculate.recipes">
-<span id="core-components-calculate-recipes"></span><h1>core.components.calculate.recipes<a class="headerlink" href="#module-core.components.calculate.recipes" title="Link to this heading">#</a></h1>
-<section id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="adsorbml/index.html">core.components.calculate.recipes.adsorbml</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adsorption/index.html">core.components.calculate.recipes.adsorption</a></li>
-<li class="toctree-l1"><a class="reference internal" href="elastic/index.html">core.components.calculate.recipes.elastic</a></li>
-<li class="toctree-l1"><a class="reference internal" href="energy/index.html">core.components.calculate.recipes.energy</a></li>
-<li class="toctree-l1"><a class="reference internal" href="local_env/index.html">core.components.calculate.recipes.local_env</a></li>
-<li class="toctree-l1"><a class="reference internal" href="omol/index.html">core.components.calculate.recipes.omol</a></li>
-<li class="toctree-l1"><a class="reference internal" href="phonons/index.html">core.components.calculate.recipes.phonons</a></li>
-<li class="toctree-l1"><a class="reference internal" href="relax/index.html">core.components.calculate.recipes.relax</a></li>
-<li class="toctree-l1"><a class="reference internal" href="thermal_conductivity/index.html">core.components.calculate.recipes.thermal_conductivity</a></li>
-<li class="toctree-l1"><a class="reference internal" href="utils/index.html">core.components.calculate.recipes.utils</a></li>
-</ul>
+  <section id="module-core.components.calculate.omol_runner">
+<span id="core-components-calculate-omol-runner"></span><h1>core.components.calculate.omol_runner<a class="headerlink" href="#module-core.components.calculate.omol_runner" title="Link to this heading">#</a></h1>
+<p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
+<p>This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.</p>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.omol_runner.OMolRunner" title="core.components.calculate.omol_runner.OMolRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OMolRunner</span></code></a></p></td>
+<td><p>Runner for OMol's evaluation tasks.</p></td>
+</tr>
+</tbody>
+</table>
 </div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.omol_runner.</span></span><span class="sig-name descname"><span class="pre">OMolRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">benchmark_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">benchmark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate.CalculateRunner</span></code></p>
+<p>Runner for OMol’s evaluation tasks.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.benchmark_name">
+<span class="sig-name descname"><span class="pre">benchmark_name</span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.benchmark_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.benchmark">
+<span class="sig-name descname"><span class="pre">benchmark</span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.benchmark" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.input_keys">
+<span class="sig-name descname"><span class="pre">input_keys</span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.input_keys" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.omol_runner.OMolRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.omol_runner.OMolRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 </section>
 
@@ -659,7 +753,7 @@ document.write(`
         },
         kernelOptions: {
             name: "python3",
-            path: "./autoapi/core/components/calculate/recipes"
+            path: "./autoapi/core/components/calculate/omol_runner"
         },
         predefinedOutput: true
     }
@@ -692,7 +786,20 @@ document.write(`
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner"><code class="docutils literal notranslate"><span class="pre">OMolRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">OMolRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.benchmark_name"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.benchmark"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.input_keys"><code class="docutils literal notranslate"><span class="pre">OMolRunner.input_keys</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.calculate"><code class="docutils literal notranslate"><span class="pre">OMolRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.write_results"><code class="docutils literal notranslate"><span class="pre">OMolRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.omol_runner.OMolRunner.save_state"><code class="docutils literal notranslate"><span class="pre">OMolRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
   </nav></div>
 

@@ -15,6 +15,7 @@ Submodules
    /autoapi/core/components/calculate/recipes/elastic/index
    /autoapi/core/components/calculate/recipes/energy/index
    /autoapi/core/components/calculate/recipes/local_env/index
+   /autoapi/core/components/calculate/recipes/omol/index
    /autoapi/core/components/calculate/recipes/phonons/index
    /autoapi/core/components/calculate/recipes/relax/index
    /autoapi/core/components/calculate/recipes/thermal_conductivity/index
