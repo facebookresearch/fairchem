@@ -3,6 +3,7 @@ name: tests
 on:
   workflow_call:
   workflow_dispatch:
+  merge_group:
   push:
     branches: [main]
   workflow_run:
