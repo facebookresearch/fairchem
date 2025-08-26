@@ -19,9 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
-from fairchem.applications.fastcsp.core.dft.vasp import (
-    create_vasp_relaxation_jobs,
-)
+from fairchem.applications.fastcsp.core.dft.vasp import create_vasp_relaxation_jobs
 from fairchem.applications.fastcsp.core.dft.vasp_utils import collate_vasp_outputs
 from fairchem.applications.fastcsp.core.utils.configuration import (
     reorder_stages_by_dependencies,
@@ -155,14 +153,14 @@ def main(args: argparse.Namespace):
 
     # 1. Generate putative structures using Genarris
     if "generate" in args.stages:
-        print("Starting Genarris generation.")
+        print("Starting Genarris generation...")
         jobs = run_genarris_jobs(output_dir=root / "genarris", config=config)
         wait_for_jobs(jobs)
-        print(f"Finished Genarris generation for {len(jobs)} jobs.")
+        print(f"Finished Genarris generation with {len(jobs)} jobs.")
 
-    # 2. Read Genarris outputs, deduplicate and create Parquet files
+    # 2. Read Genarris outputs, deduplicate, and create Parquet files
     if "process_generated" in args.stages:
-        print("Starting deduplication of Genarris structures.")
+        print("Starting deduplication of Genarris structures...")
         pre_relax_match_params = config.get("pre_relax_match_params", {})
         jobs = process_genarris_outputs(
             input_dir=root / "genarris",
@@ -176,8 +174,9 @@ def main(args: argparse.Namespace):
         print(f"Finished deduplicating structures from Genarris with {len(jobs)} jobs.")
 
     # 3. Relax structures using UMA MLIP
-    relax_output_dir, relax_params = get_relax_path_and_parameters(config)
     if "relax" in args.stages:
+        print("Starting ML-relaxation of deduplicated structures...")
+        relax_output_dir, relax_params = get_relax_path_and_parameters(config)
         jobs = run_relax_jobs(
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "relaxed_structures",
@@ -185,9 +184,11 @@ def main(args: argparse.Namespace):
             slurm_config=config["relax"].get("slurm", {}),
         )
         wait_for_jobs(jobs)
+        print(f"Finished relaxing structures with {len(jobs)} jobs.")
 
     # 4. Filter, deduplicate, and rank structures
     if "filter" in args.stages:
+        print("Starting filtering and deduplication of ML-relaxed structures...")
         jobs = filter_and_deduplicate_structures(
             input_dir=relax_output_dir / "raw_structures",
             output_dir=relax_output_dir / "filtered_structures",
@@ -198,18 +199,23 @@ def main(args: argparse.Namespace):
             angle_tol=config["post_relax_match_params"]["angle_tol"],
         )
         wait_for_jobs(jobs)
+        print(
+            "Finished filtering and deduplication of ML-relaxed structures with {len(jobs)} jobs."
+        )
 
-    # 5. Compute structure matches using either CSD API or pymatgen StructureMatcher
-    # Compares predicted structures against experimental references
+    # 5. (Optional) Compare predicted structures to experimental
+    # using either CSD API or pymatgen StructureMatcher
     if "evaluate" in args.stages:
+        print("Starting evaluating for structure matches to experimental structures...")
         compute_structure_matches(
             input_dir=relax_output_dir / "filtered_structures",
             output_dir=relax_output_dir / "matched_structures",
             molecules_file=config["molecules"],
             method=config["evaluate"]["method"],
         )
+        print("Finished evaluation against experimental structures.")
 
-    # 6. Calculate free energies for structures
+    # 6. (Optional) Calculate free energies for structures
     # TODO: Implementation in progress - will be available soon
     if "free_energy" in args.stages:
         print("Free energy calculations requested...")
@@ -218,18 +224,22 @@ def main(args: argparse.Namespace):
             relax_output_dir / "free_energy_results",
             config,
         )
+        print("Finished free energy calculations.")
 
     # 7. (Optional) Create VASP input files for DFT validation
     # Generates VASP inputs for ML-relaxed structures
     if "create_vasp_inputs_relaxed" in args.stages:
+        print("Creating VASP inputs for ML-relaxed structures.")
         create_vasp_relaxation_jobs(
             relax_output_dir / "matched_structures",
             relax_output_dir / "vasp_inputs",
             sym_prec=config["vasp"].get("sym_prec", 1e-5),
         )
+        print("Finished creating VASP inputs for ML-relaxed structures.")
 
     # Generate VASP inputs for unrelaxed structures for comparison
     if "create_vasp_inputs_unrelaxed" in args.stages:
+        print("Creating VASP inputs for unrelaxed structures.")
         create_vasp_relaxation_jobs(
             relax_output_dir / "matched_structures",
             relax_output_dir / "vasp_inputs_unrelaxed",
@@ -237,6 +247,7 @@ def main(args: argparse.Namespace):
             unrelaxed=True,
             sym_prec=config["vasp"]["sym_prec"],
         )
+        print("Finished creating VASP inputs for unrelaxed structures.")
 
     # 8. Submit VASP jobs
     # Users should implement their own function for their specific setup

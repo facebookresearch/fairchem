@@ -139,7 +139,7 @@ def create_genarris_jobs(
         │   └── conformer2/
         └── molecule2/
     """
-    print(f"Starting Genarris generation for {mol_info["name"]}")
+    print(f"Starting Genarris generation for {mol_info['name']}")
 
     # Genarris base config file
     gnrs_base_config = gnrs_config.get("base_config")

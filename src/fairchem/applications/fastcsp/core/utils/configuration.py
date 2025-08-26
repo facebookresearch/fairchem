@@ -20,7 +20,7 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
     """
     Validate that the configuration contains all required keys for the specified stages.
 
-    This function performs comprehensive validation of the FastCSP configuration,
+    This function performs validation of the FastCSP configuration,
     including checking for required keys, validating nested configurations,
     type checking critical parameters, and ensuring value constraints are met.
 
@@ -28,7 +28,6 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
         config: Configuration dictionary to validate
         stages: List of workflow stages that will be executed
     """
-    # Define required config schema
     required_base_keys = ["root"]
 
     # Stage-specific required keys
@@ -171,7 +170,7 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         >>> stages = ["evaluate", "relax", "generate"]
         >>> reorder_stages_by_dependencies(stages)
         ["generate", "relax", "evaluate"]
-        # Note: Only reorders, doesn't add missing dependencies
+        # Note: Only reorders, doesn't add in-between dependencies
     """
     # Define the canonical order of all possible stages
     canonical_order = [
@@ -187,18 +186,14 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "read_vasp_outputs",
     ]
 
-    # Only reorder the requested stages without adding dependencies
     requested_stages = set(stages)
 
-    # Filter canonical order to only include requested stages
     reordered = [stage for stage in canonical_order if stage in requested_stages]
 
-    # Add any stages that weren't in canonical order (future extensibility)
     missing_stages = requested_stages - set(reordered)
     if missing_stages:
         print(f"Warning: Unknown stages found: {missing_stages}")
 
-    # Report any changes made
     if reordered != stages:
         print(f"Reordered stages from: {stages}")
         print(f"                   to: {reordered}")
