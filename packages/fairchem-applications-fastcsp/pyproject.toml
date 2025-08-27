@@ -17,10 +17,11 @@ dependencies = [
 [project.optional-dependencies]
 # These are not installed by default. The following dependencies require manual installation and cannot be installed via pip:
 #   - genarris: see https://github.com/Yi5817/Genarris for installation instructions.
-#   - csd-python-api: requires a valid CCDC license and see https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html for installation instructions.
+#   - csd-python-api: requires a valid CCDC license, see https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html for installation instructions.
 # Do NOT expect 'pip install fairchem-applications-fastcsp[genarris]' or '[csd]' to install Genarris or CSD Python API.
 genarris = []
 csd = []
+free_energy = [] # TODO
 vasp = ["atomate2"]
 
 [project.scripts]
