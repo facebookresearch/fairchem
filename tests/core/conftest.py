@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from itertools import product
+import logging
 from random import choice
 from typing import TYPE_CHECKING
 
@@ -200,3 +201,12 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
             "a2g_args": {"r_data_keys": ["energy", "forces", "stress"]},
         }
     )
+
+
+@pytest.fixture(autouse=True)
+def run_around_tests():
+    # If debugging GPU memory issues, uncomment this print statement
+    # to get full GPU memory allocations before each test runs
+    #print(torch.cuda.memory_summary())
+    yield
+    torch.cuda.empty_cache()
