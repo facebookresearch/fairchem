@@ -35,3 +35,4 @@ predict_unit:
     external_graph_gen: False
 
 lmp_in: "lammps_in_example.file"
+task_name: "omc"

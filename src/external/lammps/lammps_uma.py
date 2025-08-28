@@ -149,19 +149,22 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
         fixed=fixed,
         tags=tags,
         batch=batch,
-        dataset=["omat"],
+        dataset=[lmp._task_name],
     )
     results = predictor.predict(atomic_data)
     f[:] = results["forces"].cpu().numpy()[:]
     lmp.fix_external_set_energy_global(FIX_EXT_ID, results["energy"].item())
 
 
-def run_lammps_with_uma(predictor: MLIPPredictUnitProtocol, lammps_input_path: str):
+def run_lammps_with_uma(
+    predictor: MLIPPredictUnitProtocol, lammps_input_path: str, task_name: str
+):
     machine = None
     if "LAMMPS_MACHINE_NAME" in os.environ:
         machine = os.environ["LAMMPS_MACHINE_NAME"]
     lmp = lammps(name=machine, cmdargs=["-nocite", "-log", "none", "-echo", "screen"])
     lmp._predictor = predictor
+    lmp._task_name = task_name
 
     run_cmds = []
     with open(lammps_input_path) as f:
@@ -183,7 +186,7 @@ def run_lammps_with_uma(predictor: MLIPPredictUnitProtocol, lammps_input_path: s
 )
 def main(cfg: DictConfig):
     predict_unit = hydra.utils.instantiate(cfg.predict_unit)
-    run_lammps_with_uma(predict_unit, cfg.lmp_in)
+    run_lammps_with_uma(predict_unit, cfg.lmp_in, cfg.task_name)
 
 
 if __name__ == "__main__":
