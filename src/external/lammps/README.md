@@ -10,7 +10,7 @@ This lammps integration uses the lammps "fix external" command to run the extern
 ## Usage notes that differ from regular lammps workflows:
 * User can write lammps scripts in the usual way (see lammps_in_example.file)
 * User should *NOT* define other types of forces such as "pair_style", "bond_style" in their scripts. These forces will get added together with UMA forces and most likely produce false results
-* User need to define atom types consistent with UMA which maps atomic numbers directly to their Ids, ie: atom type 1 == H, 2 == Li etc..
+* UMA uses atomic numbers so we try to guess the atomic number from the provided atomic masses, make sure you provide the right masses for your atom types
 
 ## Install and run
 User can install lammps however they like but the simplest is to install via conda (https://docs.lammps.org/Install_conda.html). Next install fairchem into the same conda env and then you can run like so:

@@ -118,7 +118,7 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
     # force copy here, otherwise we can accident modify the original array in lammps
     atom_type_np = lmp.numpy.extract_atom("type")
     masses = lmp.numpy.extract_atom("mass")
-    # TODO: do this only once?
+    # TODO: do this only once at the beginning to the sim and cache it
     atomic_mass_arr = masses[atom_type_np]
     atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
     # TODO  is there a way to check atom types are mapped correctly?

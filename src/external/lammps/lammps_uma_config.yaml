@@ -1,3 +1,4 @@
+# Use parallel predict unit for multi-gpu
 # predict_unit:
 #   _target_: fairchem.core.units.mlip_unit.predict.ParallelMLIPPredictUnit
 #   inference_model_path:
@@ -16,6 +17,7 @@
 #   server_config:
 #     workers: 1
 
+# Use normal predict unit
 predict_unit:
   _target_: fairchem.core.units.mlip_unit.load_predict_unit
   path:
