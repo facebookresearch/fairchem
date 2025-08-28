@@ -124,7 +124,7 @@ def run_lammps_with_uma(predictor: MLIPPredictUnitProtocol, lammps_input_path: s
         lmp.command(FIX_EXTERNAL_CMD)
         lmp.set_fix_external_callback(FIX_EXT_ID, fix_external_call_back, lmp)
         lmp.commands_list(run_cmds)
-    del predictor
+    del lmp._predictor
 
 
 @hydra.main(
