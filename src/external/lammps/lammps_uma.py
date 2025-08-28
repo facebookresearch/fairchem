@@ -37,6 +37,54 @@ def check_atom_id_match_masses(types_arr, masses):
         ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
 
 
+def lookup_atomic_number_by_mass(mass_arr: np.ndarray | float) -> np.ndarray | int:
+    """
+    Lookup atomic numbers by closest atomic masses.
+
+    Args:
+        mass_arr (float or np.ndarray): Target atomic mass(es)
+
+    Returns:
+        int or np.ndarray: Atomic number(s)
+
+    Raises:
+        ValueError: If any mass doesn't match within 0.1 tolerance
+    """
+    # Convert input to numpy array
+    mass_arr = np.asarray(mass_arr)
+    scalar_input = mass_arr.ndim == 0
+
+    # Ensure we work with at least 1D array
+    if scalar_input:
+        mass_arr = mass_arr.reshape(1)
+
+    # Convert ASE atomic masses to numpy array (skip index 0 which is empty)
+    reference_masses = np.array(atomic_masses[1:])
+
+    # Calculate absolute differences for all input masses vs all reference masses
+    # Shape: (len(mass_arr), len(reference_masses))
+    diffs = np.abs(mass_arr[:, np.newaxis] - reference_masses[np.newaxis, :])
+
+    # Find minimum difference and corresponding index for each input mass
+    min_indices = np.argmin(diffs, axis=1)
+    min_diffs = np.min(diffs, axis=1)
+
+    # Check if any mass is outside tolerance
+    bad_matches = min_diffs > 0.1
+    if np.any(bad_matches):
+        bad_masses = mass_arr[bad_matches]
+        raise ValueError(f"No atomic mass found within 0.1 of {bad_masses}")
+
+    # Add 1 because we skipped index 0
+    atomic_numbers = min_indices + 1
+
+    # Return scalar if input was scalar
+    if scalar_input:
+        return atomic_numbers[0]
+
+    return atomic_numbers
+
+
 def separate_run_commands(input_script: str) -> str:
     lines = input_script.splitlines()
     run_cmds = []
@@ -68,10 +116,11 @@ def cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
 
 def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
     # force copy here, otherwise we can accident modify the original array in lammps
-    atom_type_np = lmp.numpy.extract_atom("type").copy()
-    if ntimestep == 0:
-        atom_mass_np = lmp.numpy.extract_atom("mass").copy()
-        check_atom_id_match_masses(atom_type_np, atom_mass_np)
+    atom_type_np = lmp.numpy.extract_atom("type")
+    masses = lmp.numpy.extract_atom("mass")
+    # TODO: do this only once?
+    atomic_mass_arr = masses[atom_type_np]
+    atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
     # TODO  is there a way to check atom types are mapped correctly?
     predictor = lmp._predictor
     pos = torch.tensor(x, dtype=torch.float32)
@@ -88,7 +137,7 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
     batch = torch.zeros(nlocal, dtype=torch.long)
     atomic_data = AtomicData(
         pos=pos,
-        atomic_numbers=torch.tensor(atom_type_np, dtype=torch.long),
+        atomic_numbers=torch.tensor(atomic_numbers),
         cell=cell,
         pbc=pbc,
         natoms=torch.tensor([nlocal], dtype=torch.long),
