@@ -11,7 +11,7 @@ requires-python = ">=3.9, <3.13"
 dependencies = [
     "torch~=2.6.0",
     "numpy>=2.0,<2.3",
-    "lmdb<=1.7.0",
+    "lmdb>=1.7.3",
     "numba>=0.61.2",
     "e3nn>=0.5",
     "huggingface_hub>=0.27.1",

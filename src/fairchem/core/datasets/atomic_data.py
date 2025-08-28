@@ -456,24 +456,24 @@ class AtomicData:
         assert self.num_graphs == 1, "Data object must contain a single graph."
 
         atoms = ase.Atoms(
-            numbers=self.atomic_numbers.numpy(),
-            positions=self.pos.numpy(),
-            cell=self.cell.squeeze().numpy(),
+            numbers=self.atomic_numbers.cpu().numpy(),
+            positions=self.pos.cpu().numpy(),
+            cell=self.cell.squeeze().cpu().numpy(),
             pbc=self.pbc.squeeze().tolist(),
             constraint=FixAtoms(mask=self.fixed.bool().tolist()),
-            tags=self.tags.numpy(),
+            tags=self.tags.cpu().numpy(),
         )
 
         if self.__keys__.intersection(["energy", "forces", "stress"]):
             fields = {}
-            if self.energy is not None:
-                fields["energy"] = self.energy.numpy()
-            if self.forces is not None:
-                fields["forces"] = self.forces.numpy()
-            if self.stress is not None:
+            if hasattr(self, "energy") and self.energy is not None:
+                fields["energy"] = self.energy.cpu().numpy()
+            if hasattr(self, "forces") and self.forces is not None:
+                fields["forces"] = self.forces.cpu().numpy()
+            if hasattr(self, "stress") and self.stress is not None:
                 if self.stress.shape == (3, 3):
                     fields["stress"] = full_3x3_to_voigt_6_stress(
-                        self.stress.squeeze().numpy()
+                        self.stress.squeeze().cpu().numpy()
                     )
                 elif self.stress.shape == (6,):
                     fields["stress"] = self.stress.squeeze().numpy()

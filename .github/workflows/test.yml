@@ -3,6 +3,7 @@ name: tests
 on:
   workflow_call:
   workflow_dispatch:
+  merge_group:
   push:
     branches: [main]
   workflow_run:
@@ -37,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
@@ -129,7 +130,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed

@@ -7,6 +7,6 @@ torch==2.6.0
 torchtnt==0.2.4
 numpy==2.2.5
 scikit-learn==1.6.1
-lmdb==1.6.2
+lmdb==1.7.3
 pymatgen==v2025.6.14
 ray==2.48.0
