@@ -128,7 +128,7 @@ class LBFGS:
             setattr(self.optimizable.batch, name, value)
 
         return self.optimizable.converged(
-            forces=None, fmax=self.fmax, max_forces=max_forces
+            forces=None, fmax=self.fmax, max_forces=max_forces, full_batch=True
         )
 
     def determine_step(self, dr):

@@ -256,6 +256,7 @@ class OptimizableBatch(Optimizable):
         forces: torch.Tensor | NDArray | None,
         fmax: float,
         max_forces: torch.Tensor | None = None,
+        full_batch: bool = False,
     ) -> bool:
         """Check if norm of all predicted forces are below fmax"""
         if forces is not None:
@@ -277,7 +278,10 @@ class OptimizableBatch(Optimizable):
                 self._update_mask = torch.logical_and(self._update_mask, update_mask)
             update_mask = self._update_mask
 
-        return not torch.any(update_mask).item()
+        if full_batch:
+            return update_mask[self.batch.batch].logical_not()
+        else:
+            return not torch.any(update_mask[self.batch.batch]).item()
 
     def get_atoms_list(self) -> list[Atoms]:
         """Get ase Atoms objects corresponding to the batch"""
