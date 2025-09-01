@@ -149,6 +149,15 @@ def qm9_transform(data_object: AtomicData, config) -> AtomicData:
     return data_object
 
 
+def remove_field_if_sid_contains(data_object: AtomicData, config) -> AtomicData:
+    for field in config["fields"]:
+        if hasattr(data_object, field):
+            getattr(data_object, field)[
+                [config["needle"] in x for x in data_object.sid]
+            ] = torch.inf
+    return data_object
+
+
 def omol_transform(data_object: AtomicData, config) -> AtomicData:
     # make periodic with molecule centered in large cell
     atomic_numbers, positions, cell = _get_molecule_cell(data_object)
