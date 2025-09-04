@@ -25,6 +25,13 @@ def test_to_ase_single(ase_atoms):
     assert atoms.get_chemical_formula() == "H2O"
 
 
+@pytest.mark.gpu
+def test_to_ase_single_cuda(ase_atoms):
+    atomic_data = AtomicData.from_ase(ase_atoms).cuda()
+    atoms = atomic_data.to_ase_single()
+    assert atoms.get_chemical_formula() == "H2O"
+
+    
 @pytest.fixture
 def batch_edgeless():
     # Create AtomicData batch of two ase.Atoms molecules without edges
