@@ -710,6 +710,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         lr_output_scaling_factor: float = 1.0,
         cutoff_lr: float = -1.0,  # extra for LR, -1 means the sr cutoff is used for electrostatics/magnetic terms
         normalize_charges_tf: bool = True,  # extra for LR
+        equil_charges_tf: bool = True,  # extra for LR
     ):
         super().__init__()
         
@@ -854,6 +855,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.conv_function_tf = conv_function_tf
         self.lr_output_scaling_factor = lr_output_scaling_factor
         self.normalize_charges_tf = normalize_charges_tf
+        self.equil_charges_tf = equil_charges_tf
 
         if cutoff_lr < 0.0:
             self.cutoff_lr = cutoff
@@ -1379,6 +1381,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         self.heisenberg_tf = backbone.heisenberg_tf
         self.latent_charge_tf = backbone.latent_charge_tf
         self.normalize_charges_tf = backbone.normalize_charges_tf
+        self.equil_charges_tf = backbone.equil_charges_tf
 
         self.lr_comp_size = 1
         if self.heisenberg_tf:
@@ -1400,6 +1403,22 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
                 nn.SiLU(),
                 nn.Linear(self.hidden_channels_lr, self.lr_comp_size, bias=True),
             )
+            if self.equil_charges_tf:
+                self.hardness_output_lr = nn.Sequential(
+                    nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, 1, bias=True),
+                )
+                
+                self.electroneg_output_lr = nn.Sequential(
+                    nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, 1, bias=True),
+                )
 
         if self.heisenberg_tf:
             self.coupling_nn = nn.Sequential(
@@ -1425,6 +1444,11 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
 
         if self.lr_comp_size == 1:
             results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
+            if self.equil_charges_tf:
+                hardness = self.hardness_output_lr(node_features)
+                electroneg = self.electroneg_output_lr(node_features)
+                results["hardness"] = hardness.view(-1, 1, 1)   
+                results["electroneg"] = electroneg.view(-1, 1, 1)
             
             # TODO: renormalize charges if 
             if self.normalize_charges_tf:
@@ -1516,9 +1540,10 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             batch=data["batch"],
             conv_function_tf=self.conv_function_tf,
         )
+        
 
         #################################### HACK REMOVE LATER ####################################
-        
+        '''
         sid = data.get("sid", None)
         import numpy as np
         import os
@@ -1557,11 +1582,16 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         
         if sid is not None:
             np.save(file_name_ids, sid)
-        
+        '''
         #################################### HACK REMOVE LATER ####################################
 
         results["energy"] = energy_output_lr_dict["potential"]
         
+        if self.equil_charges_tf:
+            en_electrostatic = (charge_dict["electroneg"] * charge_dict["charges"]).view(-1)
+            en_hardness = 0.5 * (charge_dict["hardness"] * charge_dict["charges"]**2).view(-1)
+            results["energy"] += en_electrostatic + en_hardness
+
         if self.heisenberg_tf:
             energy_spin = heisenberg_potential_full_from_edge_inds(
                 edge_index=edges_lr,
@@ -1603,12 +1633,13 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data)
             #print("energy_part: ", energy_part, " E_lr: ", lr_energy["energy"].abs().sum())
-            e_lr_diagnose = scatter_add(
-                lr_energy["energy"], 
-                data["batch"],
-                dim=0,
-            )
+            #e_lr_diagnose = scatter_add(
+            #    lr_energy["energy"], 
+            #    data["batch"],
+            #    dim=0,
+            #)
             energy_part.index_add_(0, data["batch"], lr_energy["energy"])
+        
         if self.heisenberg_tf:
             # print energy spin sum along batch
             e_diagnose = scatter_add(
@@ -1649,6 +1680,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
+        
         elif self.regress_forces:
             forces = (
                 -1
@@ -1723,6 +1755,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         self.heisenberg_tf = backbone.heisenberg_tf
         self.latent_charge_tf = backbone.latent_charge_tf
         self.normalize_charges_tf = backbone.normalize_charges_tf
+        self.equil_charges_tf = backbone.equil_charges_tf
 
         self.lr_comp_size = 1
         if self.heisenberg_tf:
@@ -1745,6 +1778,23 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
                 nn.Linear(self.hidden_channels_lr, self.lr_comp_size, bias=True),
             )
 
+            if self.equil_charges_tf:
+                self.hardness_output_lr = nn.Sequential(
+                    nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, 1, bias=True),
+                )
+                
+                self.electroneg_output_lr = nn.Sequential(
+                    nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, 1, bias=True),
+                )
+
         if self.heisenberg_tf:
             self.coupling_nn = nn.Sequential(
                 nn.Linear(1, self.hidden_channels_lr, bias=True),
@@ -1759,11 +1809,16 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
             charges_raw = self.q_output_lr(node_features)
+            if self.equil_charges_tf:
+                hardness = self.hardness_output_lr(node_features)
+                electroneg = self.electroneg_output_lr(node_features)
+                results["hardness"] = hardness.view(-1, 1, 1)   
+                results["electroneg"] = electroneg.view(-1, 1, 1)
 
         if self.lr_comp_size == 1:
             results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
             
-            # TODO: renormalize charges if 
+            
             if self.normalize_charges_tf:
                 global_charges = scatter_add(
                     charges_raw.view(-1, 1), 
@@ -1777,11 +1832,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
                 charges_raw = true_charge_broadcasted * charges_raw / global_charges_broadcasted
                 results["charges"] = charges_raw
                 
-                """global_charges = scatter_add(
-                    charges_raw.view(-1, 1), 
-                    data["batch"], 
-                    dim=0,
-                )"""
+
                 #print("renormalized global_charges: ", global_charges)
 
         if self.lr_comp_size == 2:
@@ -1804,7 +1855,8 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
                 s_total=global_spin_batchwise,
                 q_total=global_charges_batchwise
             ) # return [N_atoms, 2]
-            print("charges_renorm: ", charges_renorm.shape)
+            
+            #print("charges_renorm: ", charges_renorm.shape)
 
             results["charges_raw"] = charges_renorm.abs()
             results["charges"] = charges_renorm.abs().sum(dim=1).view(-1, 1, 1) 
@@ -1812,6 +1864,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
                 charges_renorm[:, 0] - charges_renorm[:, 1]
             ).view(-1, 1, 1) 
             
+        
         return results
 
     def get_lr_energies(self, emb, data, return_charges: bool = False):
@@ -1837,8 +1890,14 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             batch=data["batch"],
             conv_function_tf=self.conv_function_tf,
         )
-
+        
         results["energy"] = energy_output_lr_dict["potential"]
+
+        if self.equil_charges_tf:
+            en_electrostatic = (charge_dict["electroneg"] * charge_dict["charges"]).view(-1)
+            en_hardness = 0.5 * (charge_dict["hardness"] * charge_dict["charges"]**2).view(-1)
+            results["energy"] += en_electrostatic + en_hardness
+         
 
         if self.heisenberg_tf:
             energy_spin = heisenberg_potential_full_from_edge_inds(
@@ -1874,8 +1933,8 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
 
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data_dict)
-            #print("energy_part: ", energy, " lr_energy: ", lr_energy["energy"].sum())
             energy.index_add_(0, data_dict["batch"], lr_energy["energy"])
+
 
         if self.heisenberg_tf:
             #print("energy_part: ", energy, " lr_energy_spin: ", lr_energy["energy_spin"].sum())
