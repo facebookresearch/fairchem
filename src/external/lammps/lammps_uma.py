@@ -152,8 +152,18 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
         dataset=[lmp._task_name],
     )
     results = predictor.predict(atomic_data)
+    assert "forces" in results, "forces must be in results"
     f[:] = results["forces"].cpu().numpy()[:]
     lmp.fix_external_set_energy_global(FIX_EXT_ID, results["energy"].item())
+
+    # TODO: do we always want to apply the virial here? even during nve?
+    # stress = virial/volume
+    assert "stress" in results, "stress must be in results to compute virial"
+    volume = torch.det(cell).abs().item()
+    v = (results["stress"].cpu() * volume)[0]
+    # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
+    virial_arr = [v[0], v[4], v[8], v[1], v[2], v[5]]
+    lmp.fix_external_set_virial_global(FIX_EXT_ID, virial_arr)
 
 
 def run_lammps_with_uma(
@@ -165,7 +175,6 @@ def run_lammps_with_uma(
     lmp = lammps(name=machine, cmdargs=["-nocite", "-log", "none", "-echo", "screen"])
     lmp._predictor = predictor
     lmp._task_name = task_name
-
     run_cmds = []
     with open(lammps_input_path) as f:
         input_script = f.read()
@@ -176,7 +185,7 @@ def run_lammps_with_uma(
         lmp.command(FIX_EXTERNAL_CMD)
         lmp.set_fix_external_callback(FIX_EXT_ID, fix_external_call_back, lmp)
         lmp.commands_list(run_cmds)
-    del lmp._predictor
+    return lmp
 
 
 @hydra.main(
@@ -186,7 +195,9 @@ def run_lammps_with_uma(
 )
 def main(cfg: DictConfig):
     predict_unit = hydra.utils.instantiate(cfg.predict_unit)
-    run_lammps_with_uma(predict_unit, cfg.lmp_in, cfg.task_name)
+    lmp = run_lammps_with_uma(predict_unit, cfg.lmp_in, cfg.task_name)
+    # this is required to cleanup the predictor
+    del lmp._predictor
 
 
 if __name__ == "__main__":
