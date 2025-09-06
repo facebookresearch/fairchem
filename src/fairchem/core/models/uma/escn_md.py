@@ -451,24 +451,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
+            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
                 self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec_full"],
+                    graph_dict["edge_distance_vec"],
                     use_cuda_graph=self.use_cuda_graph_wigner
                     and "cuda" in get_device_for_local_rank()
                     and not self.training,
                 )
             )
-            if gp_utils.initialized():
-                wigner_and_M_mapping = wigner_and_M_mapping_full[
-                    graph_dict["edge_partition"]
-                ]
-                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full[
-                    graph_dict["edge_partition"]
-                ]
-            else:
-                wigner_and_M_mapping = wigner_and_M_mapping_full
-                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
 
         ###############################################################
         # Initialize node embeddings
