@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Optional, use if you use setuptools_scm
 
@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: |
           # add packages that are supposed to be built to this list
-          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami
+          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol
           do
             pushd packages/$package
             hatch build
@@ -58,3 +58,9 @@ jobs:
         with:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami/*
+
+      - name: Upload data-omol artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-data-omol
+          path: dist-data-omol/*

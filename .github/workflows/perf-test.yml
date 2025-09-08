@@ -1,0 +1,66 @@
+name: perf-tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    # Run everyday at 8am UTC (midight or 1am pacific time)
+    - cron: "0 8 * * *"
+
+jobs:
+  perf-test:
+    runs-on: 4-core-ubuntu-gpu-t4
+    permissions:
+      contents: read
+      # Needed to manually set commit status
+      statuses: write
+    strategy:
+      max-parallel: 10
+      matrix:
+        python_version: ['3.12']
+    
+    steps:
+      # Check out the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # The path to the sha of the commit we want to test will depend
+          # on the trigger type. If a workflow_run trigger, then we want
+          # the sha from the head of the branch that triggered it. For 
+          # pushes and manual triggers, we want the sha of the branch.
+          ref: |
+            ${{
+              github.event.workflow_run.head_sha ||
+              github.event.pull_request.head.sha ||
+              github.sha
+            }}
+          # Optional: get full history if needed
+          fetch-depth: 0
+      
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+            status-context: '${{ github.job }} (${{ matrix.python_version }})'
+      
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Install core dependencies and package
+        run: |
+          python -m pip install --upgrade pip
+          pip install packages/fairchem-core[dev]
+          pip install -r tests/requirements.txt # pin test packages
+      
+      - name: Performance tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: pytest tests/perf -s -c ./packages/fairchem-core/pyproject.toml -vv
+      
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+        
