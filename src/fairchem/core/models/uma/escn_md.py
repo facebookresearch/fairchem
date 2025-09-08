@@ -125,7 +125,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if activation_checkpointing:
             # The size of edge blocks to use in activation checkpointing
             activation_checkpoint_chunk_size = ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
-
+        print(activation_checkpoint_chunk_size)
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
