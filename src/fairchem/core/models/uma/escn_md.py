@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
-ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 32
 
 
 def my_backward_hook(grad):
@@ -543,12 +543,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
             # graph_dict["edge_distance"].register_hook(my_backward_hook)
-            x_edge = torch.cat(
-                (edge_distance_embedding, source_embeddings, target_embeddings), dim=1
-            )
+            # x_edge = torch.cat(
+            #     (edge_distance_embedding, source_embeddings, target_embeddings), dim=1
+            # )
             # graph_dict["edge_distance"].register_hook(my_backward_hook)
             # x_message.register_hook(my_backward_hook)
-            print("X", x_message.abs().mean())
+            # print("X", x_message.abs().mean())
             # print(torch.cuda.memory.memory_summary())
 
             # wigner_and_M_mapping_inv.register_hook(my_backward_hook)
@@ -558,9 +558,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                # need a better way to figure this out TODO
+                # passing x_edge is better in training
+                # passing components is better inference
                 x_message = self.blocks[i](
                     x_message,
-                    x_edge,
+                    edge_distance_embedding,
+                    source_atom_embedding,
+                    target_atom_embedding,
                     graph_dict["edge_distance"],
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,

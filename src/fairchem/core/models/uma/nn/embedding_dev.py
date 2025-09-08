@@ -49,9 +49,9 @@ class InferenceChunkedEdgeEmbedding(torch.autograd.Function):
         ) = input_tensors if input_tensors is not None else ctx.saved_tensors
 
         if grad_S is not None:
-            g_edge_distance_embedding = []
-            g_wigner_and_M_mapping_inv = []
-            g_edge_distance = []
+            g_edge_distance_embedding = torch.zeros_like(edge_distance_embedding)
+            g_wigner_and_M_mapping_inv = torch.zeros_like(wigner_and_M_mapping_inv)
+            g_edge_distance = torch.zeros_like(edge_distance)
 
         grad_ctx = torch.no_grad() if grad_S is None else torch.enable_grad()
         with grad_ctx:  # TODO could swap these two loops/ctx
@@ -69,6 +69,7 @@ class InferenceChunkedEdgeEmbedding(torch.autograd.Function):
                 ctx.activation_checkpoint_chunk_size, dim=0
             )
 
+            edge_offset = 0
             for idx in range(len(edge_index_partitions)):
                 (
                     _x,
@@ -94,6 +95,7 @@ class InferenceChunkedEdgeEmbedding(torch.autograd.Function):
                     ),
                     dim=1,
                 )
+                n_edges = x_edge.shape[0]
 
                 out_x = ctx.forward_chunk(
                     _x,
@@ -123,9 +125,16 @@ class InferenceChunkedEdgeEmbedding(torch.autograd.Function):
                         # retain_graph=True,
                         # allow_unused=True
                     )
-                    g_edge_distance_embedding.append(this_g_edge_distance_embedding)
-                    g_wigner_and_M_mapping_inv.append(this_g_wigner_and_M_mapping_inv)
-                    g_edge_distance.append(this_g_edge_distance)
+                    g_edge_distance_embedding[edge_offset : edge_offset + n_edges] = (
+                        this_g_edge_distance_embedding
+                    )
+                    g_wigner_and_M_mapping_inv[edge_offset : edge_offset + n_edges] = (
+                        this_g_wigner_and_M_mapping_inv
+                    )
+                    g_edge_distance[edge_offset : edge_offset + n_edges] = (
+                        this_g_edge_distance
+                    )
+                edge_offset += n_edges
 
         if grad_S is None:
             return x
@@ -134,12 +143,12 @@ class InferenceChunkedEdgeEmbedding(torch.autograd.Function):
             return (
                 None,  # forward_chunk (callable)
                 None,  # g_x,
-                torch.cat(g_edge_distance_embedding, dim=0),
+                g_edge_distance_embedding,
                 None,  # g_source_atom_embedding,
                 None,  # g_target_atom_embedding,
-                torch.cat(g_edge_distance, dim=0),
+                g_edge_distance,
                 None,  # edge_index,
-                torch.cat(g_wigner_and_M_mapping_inv, dim=0),
+                g_wigner_and_M_mapping_inv,
                 None,  # node_offset
                 None,  # create_graph_for_input (bool)
             )
