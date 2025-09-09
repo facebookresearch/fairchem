@@ -22,17 +22,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: mamba-org/setup-micromamba@v1
+      - uses: mamba-org/setup-micromamba@v2
         with:
-          micromamba-version: 'latest'
           generate-run-shell: true # This is the default behavior
-
-      - name: Create environment and install dependencies
-        run: micromamba create -n test_env python=3.12 pip -c conda-forge
-
-      - name: Activate environment and install project dependencies
-        run: |
-          micromamba activate test_env
+          environment-name: test_env # Specifies a new environment to be created
+          create-args: python=3.12 # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v5
