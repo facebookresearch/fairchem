@@ -493,6 +493,7 @@ def main(
                 min_nodes=1,
                 max_nodes=1,
                 nproc_per_node=scheduler_cfg.ranks_per_node,
+                start_method=scheduler_cfg.get("start_method", "spawn"),
                 rdzv_backend="c10d",
                 max_restarts=0,
             )
