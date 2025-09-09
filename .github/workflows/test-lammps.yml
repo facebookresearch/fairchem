@@ -46,6 +46,7 @@ jobs:
           python-version:  ${{ matrix.python_version }}
 
       - name: Install core dependencies and package
+        shell: micromamba-shell {0}
         run: |
           micromamba install lammps
           python -m pip install --upgrade pip
@@ -54,10 +55,12 @@ jobs:
           pip install -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
+        shell: micromamba-shell {0}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
