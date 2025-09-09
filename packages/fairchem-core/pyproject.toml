@@ -18,7 +18,7 @@ dependencies = [
     "ase>=3.25.0",
     "ase-db-backends>=0.10.0",
     "monty>=v2025.1.3",
-    "clusterscope>=0.0.10",
+    "clusterscope==0.0.10",
     "requests",
     "orjson",
     "tqdm",
