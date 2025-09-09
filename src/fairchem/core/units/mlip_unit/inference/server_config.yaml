@@ -1,0 +1,8 @@
+server:
+  workers: 1
+  port: 8001
+
+predict_unit:
+  _target_: fairchem.core.units.mlip_unit.load_predict_unit
+  path: "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt"
+  device: cuda
