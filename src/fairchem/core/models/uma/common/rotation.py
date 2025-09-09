@@ -101,6 +101,32 @@ def eulers_to_wigner(
     """
     alpha, beta, gamma = eulers
 
+    for idx in range(alpha.shape[0]):
+        print(
+            "1,edge,x,alpha,beta",
+            idx,
+            edge_rot_mat[idx],
+            x[idx],
+            mask[idx],
+            alpha[idx],
+            beta[idx],
+            flush=True,
+        )
+        if mask[idx]:
+            torch.autograd.grad(
+                alpha[idx] + beta[idx], x[idx], create_graph=True, allow_unused=True
+            )
+            torch.autograd.grad(alpha[idx], x, create_graph=True, allow_unused=True)
+            torch.autograd.grad(beta[idx], x, create_graph=True, allow_unused=True)
+            torch.autograd.grad(
+                alpha[idx] + beta[idx], x, create_graph=True, allow_unused=True
+            )
+    print("done", flush=True)
+    for idx in range(alpha.shape[0]):
+        print(
+            "2,edge,x,alpha,beta", idx, edge_rot_mat[idx], x[idx], alpha[idx], beta[idx]
+        )
+
     size = int((end_lmax + 1) ** 2) - int((start_lmax) ** 2)
     wigner = torch.zeros(len(alpha), size, size, device=alpha.device, dtype=alpha.dtype)
     start = 0
