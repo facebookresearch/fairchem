@@ -695,6 +695,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 [energy_part.sum()],
                 [data["pos_original"], emb["displacement"]],
                 create_graph=self.training,
+                retain_graph=True,
             )
             if gp_utils.initialized():
                 grads = (
@@ -717,7 +718,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             forces = (
                 -1
                 * torch.autograd.grad(
-                    energy_part.sum(), data["pos"], create_graph=self.training
+                    energy_part.sum(), data["pos"], create_graph=self.training, retain_graph=True
                 )[0]
             )
             if gp_utils.initialized():
