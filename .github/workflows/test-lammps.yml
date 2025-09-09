@@ -37,7 +37,6 @@ jobs:
         python_version: ['3.12']
 
     steps:
-    steps:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           miniconda-version: "latest"
