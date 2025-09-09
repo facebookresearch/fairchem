@@ -7,6 +7,24 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_run:
+    workflows:
+      - "contributor check"
+    types:
+      - completed
+
+# The path to the sha of the commit we want to test will depend
+# on the trigger type. If a workflow_run trigger, then we want
+# the sha from the head of the branch that triggered it. For
+# pushes and manual triggers, we want the sha of the branch.
+env:
+  HEAD_SHA: |
+    ${{
+      github.event.workflow_run.head_sha ||
+      github.event.pull_request.head.sha ||
+      github.sha
+    }}
+
 
 jobs:
   test_gpu_conda:
