@@ -21,13 +21,18 @@ jobs:
         python_version: ['3.12']
 
     steps:
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v1
         with:
-          miniconda-version: "latest"
-          channels: bioconda, conda-forge, defaults
-          use-only-tar-bz2: true  # IMPORTANT: This needs to be set for caching to work properly!
-          auto-update-conda: true
-          auto-activate-base: true
+          micromamba-version: 'latest'
+          generate-run-shell: true # This is the default behavior
+
+      - name: Create environment and install dependencies
+        run: micromamba create -n test_env python=3.12 pip -c conda-forge
+
+      - name: Activate environment and install project dependencies
+        run: |
+          micromamba activate test_env
 
       - name: Checkout code
         uses: actions/checkout@v5
@@ -48,7 +53,7 @@ jobs:
 
       - name: Install core dependencies and package
         run: |
-          conda install lammps
+          micromamba install lammps
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras]
           pip install packages/fairchem-lammps
