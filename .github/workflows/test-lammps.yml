@@ -4,6 +4,7 @@ on:
   workflow_call:
   workflow_dispatch:
   merge_group:
+  pull_request:
   push:
     branches: [main]
 
