@@ -79,6 +79,12 @@ class DistributedInitMethod(StrEnum):
     FILE = "file"
 
 
+class StartMethod(StrEnum):
+    SPAWN = "spawn"
+    FORK = "fork"
+    FORKSERVER = "forkserver"
+
+
 @dataclass
 class SlurmConfig:
     mem_gb: int = 80
@@ -97,6 +103,7 @@ class SlurmConfig:
 class SchedulerConfig:
     mode: SchedulerType = SchedulerType.LOCAL
     distributed_init_method: DistributedInitMethod = DistributedInitMethod.TCP
+    start_method: StartMethod = StartMethod.SPAWN
     ranks_per_node: int = 1
     num_nodes: int = 1
     num_array_jobs: int = 1
@@ -493,7 +500,7 @@ def main(
                 min_nodes=1,
                 max_nodes=1,
                 nproc_per_node=scheduler_cfg.ranks_per_node,
-                start_method=scheduler_cfg.get("start_method", "spawn"),
+                start_method=scheduler_cfg.start_method,
                 rdzv_backend="c10d",
                 max_restarts=0,
             )
