@@ -99,22 +99,25 @@ def edge_rot_and_wigner_graph_capture_region(
 
 
 def init_edge_rot_euler_angles_wigner_cuda_graph(edge_distance_vec):
+    edge_vec_0 = edge_distance_vec
+    edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
+
     # make unit vectors
-    xyz = torch.nn.functional.normalize(edge_distance_vec)
+    xyz = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
 
     # are we standing at the north pole
     mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
 
+    # compute alpha and beta
+
     # latitude (beta)
     beta = torch.acos(xyz[:, 1])
-    beta[mask] = beta[mask].detach()
 
     # longitude (alpha)
     alpha = torch.atan2(xyz[:, 0], xyz[:, 2])
-    alpha[mask] = alpha[mask].detach()
 
     # random gamma (roll)
-    gamma = torch.rand_like(alpha) * (2 * torch.pi)
+    gamma = torch.rand_like(alpha) * 2 * torch.pi
     # gamma = torch.zeros_like(alpha)
 
     # intrinsic to extrinsic swap
