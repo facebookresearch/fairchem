@@ -19,11 +19,11 @@ from typing import TYPE_CHECKING, Optional
 import clusterscope
 import hydra
 import numpy as np
+import torch
 from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
 
 from fairchem.core.common import gp_utils
-import torch
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
