@@ -23,6 +23,7 @@ from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
 
 from fairchem.core.common import gp_utils
+import torch
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -173,13 +174,10 @@ class JobConfig:
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
-        cluster = ""
         try:
-            if self.scheduler.start_method == StartMethod.SPAWN:
-                # clusterscope initializes CUDA context, which will break start_methods like fork
-                cluster = clusterscope.cluster()
+            cluster = clusterscope.cluster()
         except RuntimeError:
-            pass
+            cluster = ""
         self.metadata = Metadata(
             commit=get_commit_hash(),
             log_dir=os.path.join(self.run_dir, self.timestamp_id, LOG_DIR_NAME),
@@ -199,8 +197,6 @@ class JobConfig:
 
 
 def _set_seeds(seed: int) -> None:
-    import torch
-
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -208,8 +204,6 @@ def _set_seeds(seed: int) -> None:
 
 
 def _set_deterministic_mode() -> None:
-    import torch
-
     # this is required for full cuda deterministic mode
     logging.info("Setting deterministic mode!")
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
