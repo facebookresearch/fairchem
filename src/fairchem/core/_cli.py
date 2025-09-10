@@ -103,7 +103,7 @@ class SlurmConfig:
 class SchedulerConfig:
     mode: SchedulerType = SchedulerType.LOCAL
     distributed_init_method: DistributedInitMethod = DistributedInitMethod.TCP
-    start_method: StartMethod = StartMethod.SPAWN
+    start_method: StartMethod = StartMethod.SPAWN # this is only used when `mode=LOCAL`
     ranks_per_node: int = 1
     num_nodes: int = 1
     num_array_jobs: int = 1
