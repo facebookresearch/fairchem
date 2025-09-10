@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Optional
 import clusterscope
 import hydra
 import numpy as np
-import torch
 from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
 
@@ -197,6 +196,8 @@ class JobConfig:
 
 
 def _set_seeds(seed: int) -> None:
+    import torch
+
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -204,6 +205,8 @@ def _set_seeds(seed: int) -> None:
 
 
 def _set_deterministic_mode() -> None:
+    import torch
+
     # this is required for full cuda deterministic mode
     logging.info("Setting deterministic mode!")
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
