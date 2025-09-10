@@ -173,10 +173,13 @@ class JobConfig:
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)
+        cluster = ""
         try:
-            cluster = clusterscope.cluster()
+            if scheduler.start_method == StartMethod.SPAWN:
+                # clusterscope initializes CUDA context, which will break start_methods like fork
+                cluster = clusterscope.cluster()
         except RuntimeError:
-            cluster = ""
+            pass
         self.metadata = Metadata(
             commit=get_commit_hash(),
             log_dir=os.path.join(self.run_dir, self.timestamp_id, LOG_DIR_NAME),
