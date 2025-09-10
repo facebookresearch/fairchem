@@ -175,7 +175,7 @@ class JobConfig:
         self.run_dir = os.path.abspath(self.run_dir)
         cluster = ""
         try:
-            if scheduler.start_method == StartMethod.SPAWN:
+            if self.scheduler.start_method == StartMethod.SPAWN:
                 # clusterscope initializes CUDA context, which will break start_methods like fork
                 cluster = clusterscope.cluster()
         except RuntimeError:
