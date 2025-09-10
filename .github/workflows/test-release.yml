@@ -36,7 +36,7 @@ jobs:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-core
           path: dist-core
@@ -62,7 +62,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-data-oc
           path: dist-data-oc
@@ -88,7 +88,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-demo-ocpapi
           path: dist-demo-ocpapi
@@ -114,7 +114,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami
@@ -124,4 +124,30 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           verbose: true
           packages-dir: dist-applications-cattsunami/
+          skip-existing: true
+
+  release-data-omol:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_data_omol-')
+
+    environment:
+      name: test-pypi
+      url: https://test.pypi.org/p/fairchem-data-omol/
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist-data-omol
+          path: dist-data-omol
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          verbose: true
+          packages-dir: dist-data-omol/
           skip-existing: true

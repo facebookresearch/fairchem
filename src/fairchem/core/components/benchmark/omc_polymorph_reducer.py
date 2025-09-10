@@ -13,9 +13,6 @@ import ase.units
 import numpy as np
 import pandas as pd
 from monty.dev import requires
-from pymatgen.analysis.local_env import JmolNN
-from pymatgen.analysis.structure_matcher import StructureMatcher
-from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
 from tqdm import tqdm
 
 from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
@@ -31,10 +28,19 @@ try:
 except ImportError:
     sklearn_scipy_installed = False
 
+try:
+    from pymatgen.analysis.local_env import JmolNN
+    from pymatgen.analysis.structure_matcher import StructureMatcher
+    from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
+
+    pmg_installed = True
+except ImportError:
+    pmg_installed = False
 
 ev2kJ = ase.units.eV * ase.units.mol / ase.units.kJ
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 @requires(
     sklearn_scipy_installed, "Requires `scipy` and `scikit-learn` to be installed"
 )

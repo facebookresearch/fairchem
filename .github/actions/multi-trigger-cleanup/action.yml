@@ -1,0 +1,36 @@
+# Steps to run at the end of workflow jobs that can be triggered
+# by workflow_run
+
+name: 'Multi trigger cleanup'
+inputs:
+  status-context:
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    # If triggered on workflow_run or workflow_dispatch, the status
+    # won't be automatically added to any PRs associated with this
+    # change, so we need to set the status manually.
+    - name: Report final status after trigger
+      if: ${{
+          github.event_name == 'workflow_run'
+          || github.event_name == 'workflow_dispatch'
+        }}
+      uses: actions/github-script@v7
+      env:
+        OWNER: ${{ github.repository_owner }}
+        REPO: ${{ github.event.repository.name }}
+        SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        STATE: ${{ job.status }}
+        CONTEXT: ${{ inputs.status-context }}
+        TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      with:
+        script: |
+          github.rest.repos.createCommitStatus({
+            owner: process.env.OWNER,
+            repo: process.env.REPO,
+            sha: process.env.SHA,
+            state: process.env.STATE,
+            context: process.env.CONTEXT,
+            target_url: process.env.TARGET_URL,
+          });

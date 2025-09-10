@@ -15,12 +15,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pymatgen.analysis.elasticity import DeformedStructureSet, ElasticTensor, Strain
-from pymatgen.io.ase import AseAtomsAdaptor
+from monty.dev import requires
 
 from fairchem.core.components.calculate.recipes.relax import (
     relax_atoms,
 )
+
+try:
+    from pymatgen.analysis.elasticity import DeformedStructureSet, ElasticTensor, Strain
+    from pymatgen.io.ase import AseAtomsAdaptor
+
+    pmg_installed = True
+except ImportError:
+    pmg_installed = False
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -29,6 +36,7 @@ if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def calculate_elasticity(
     atoms: Atoms,
     calculator: Calculator,

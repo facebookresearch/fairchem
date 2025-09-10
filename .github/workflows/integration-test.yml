@@ -15,7 +15,7 @@ jobs:
         python_version: ['3.10', '3.12']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Python ${{ matrix.python_version }}
         uses: actions/setup-python@v5
         with:
@@ -37,6 +37,7 @@ jobs:
           pip install -e packages/fairchem-data-oc[dev]
           pip install -e packages/fairchem-demo-ocpapi[dev]
           pip install -e packages/fairchem-applications-cattsunami
+          pip install -r tests/requirements.txt # pin test packages
 
       - name: Integration tests
         run: | # skip-ocpapi-integration skips expensive tests with the tag "@pytest.mark.ocpapi_integration_test"

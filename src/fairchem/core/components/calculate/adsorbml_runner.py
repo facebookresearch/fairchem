@@ -14,17 +14,25 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import numpy as np
 import pandas as pd
 from ase.optimize import LBFGS
-from pymatgen.io.ase import MSONAtoms
+from monty.dev import requires
 from tqdm import tqdm
 
 from fairchem.core.components.calculate import CalculateRunner
 from fairchem.core.components.calculate.recipes.adsorbml import run_adsorbml
+
+try:
+    from pymatgen.io.ase import MSONAtoms
+
+    pmg_installed = True
+except ImportError:
+    pmg_installed = False
 
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
     from ase.optimize import Optimizer
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 class AdsorbMLRunner(CalculateRunner):
     """
     Run the AdsorbML pipeline to identify the global minima adsorption energy.
@@ -154,6 +162,3 @@ class AdsorbMLRunner(CalculateRunner):
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
         return True
-
-    def load_state(self, checkpoint_location: str | None) -> None:
-        return
