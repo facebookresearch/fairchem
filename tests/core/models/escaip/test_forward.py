@@ -4,17 +4,15 @@ Modified from tests/core/models/uma/test_compile.py
 
 from __future__ import annotations
 
-import itertools
+import os
 import random
-from functools import partial
 
 import numpy as np
 import pytest
 import torch
-from ase import build
 
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.escaip.EScAIP import (
     EScAIPBackbone,
@@ -24,6 +22,16 @@ from fairchem.core.models.escaip.EScAIP import (
 MAX_ELEMENTS = 100
 
 
+def make_deterministic():
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"  # set before any CUDA init
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+    torch.set_float32_matmul_precision("high")
+
+
 def seed_everywhere(seed=0):
     random.seed(seed)
     np.random.seed(seed)
@@ -31,33 +39,9 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
-def ase_to_graph(atoms, neighbors: int, cutoff: float):
-    data_object = AtomicData.from_ase(
-        atoms,
-        max_neigh=neighbors,
-        radius=cutoff,
-        r_edges=True,
-    )
-    data_object.natoms = torch.tensor(len(atoms))
-    data_object.charge = torch.LongTensor([0])
-    data_object.spin = torch.LongTensor([0])
-    data_object.dataset = "omol"
-    data_object.pos.requires_grad = True
-    data_loader = torch.utils.data.DataLoader(
-        [data_object],
-        collate_fn=partial(data_list_collater, otf_graph=True),
-        batch_size=1,
-        shuffle=False,
-    )
-    return next(iter(data_loader))
-
-
-def get_diamond_tg_data(neighbors: int, cutoff: float, size: int, device: str):
-    # get torch geometric data object for diamond
-    # atoms = build.bulk("C", "diamond", a=3.567, cubic=True)
-    atoms = build.bulk("Cu", "fcc", a=3.58, cubic=True)
-    atoms = atoms.repeat((size, size, size))
-    return ase_to_graph(atoms, neighbors, cutoff).to(device)
+def get_sample_data(num_atoms: int):
+    samples = get_fcc_carbon_xtal(num_atoms)
+    return AtomicData.from_ase(samples)
 
 
 def get_backbone_config(
@@ -142,6 +126,7 @@ def get_escaip_full(
 
 @pytest.mark.gpu()
 def test_compile_full_gpu():
+    make_deterministic()
     torch.compiler.reset()
     device = "cuda"
     cutoff = 6.0
@@ -152,10 +137,8 @@ def test_compile_full_gpu():
         model_no_compile.parameters(), model_compile.parameters()
     ):
         param.data = param_compile.data.clone()
-    sizes = range(3, 7)
-    neighbors = range(30, 100, 5)
-    for size, neigh in list(itertools.product(sizes, neighbors)):
-        data = get_diamond_tg_data(neigh, cutoff, size, device)
+    for size in range(3, 10):
+        data = get_sample_data(size).to(device)
         seed_everywhere()
         output = model_no_compile(data)["efs_head"]
         seed_everywhere()
@@ -163,3 +146,56 @@ def test_compile_full_gpu():
         assert torch.allclose(output["energy"], output_compiled["energy"], atol=1e-5)
         assert torch.allclose(output["forces"], output_compiled["forces"], atol=1e-4)
         assert torch.allclose(output["stress"], output_compiled["stress"], atol=1e-5)
+
+
+@pytest.mark.gpu()
+def test_fixed_forward_full_gpu():
+    make_deterministic()
+    torch.compiler.reset()
+    device = "cuda"
+    cutoff = 6.0
+    seed_everywhere()
+    # get model
+    model = get_escaip_full(cutoff=cutoff, use_compile=False, device=device)
+    model.train()
+    seed_everywhere()
+    # get optimizer
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=0.01, momentum=0.0, weight_decay=0.0
+    )
+    optimizer.zero_grad(set_to_none=True)
+    seed_everywhere()
+    # get data
+    data = get_sample_data(10).to(device)
+    seed_everywhere()
+    # get output
+    output = model(data)["efs_head"]
+    seed_everywhere()
+    # get loss and backward (dummy loss)
+    loss = output["energy"] + output["forces"].sum() + output["stress"].sum()
+    loss.backward()
+    seed_everywhere()
+    optimizer.step()
+    seed_everywhere()
+
+    # load fixed results
+    results_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "fixed_results.pt"
+    )
+    fixed_results = torch.load(results_path)
+    # compare fixed_results with output and model weights
+    model_weights = model.state_dict()
+    model_output = output
+    for key in fixed_results["model_weights"]:
+        assert torch.allclose(
+            fixed_results["model_weights"][key], model_weights[key], atol=1e-5
+        )
+    assert torch.allclose(
+        fixed_results["model_output"]["energy"], model_output["energy"], atol=1e-5
+    )
+    assert torch.allclose(
+        fixed_results["model_output"]["forces"], model_output["forces"], atol=1e-4
+    )
+    assert torch.allclose(
+        fixed_results["model_output"]["stress"], model_output["stress"], atol=1e-5
+    )
