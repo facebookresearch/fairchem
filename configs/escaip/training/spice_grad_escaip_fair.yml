@@ -15,6 +15,7 @@ job:
     slurm:
       mem_gb: ${cluster.mem_gb}
       timeout_hr: ${cluster.timeout_hr}
+      partition: ${cluster.partition}
       cpus_per_task: ${cluster.cpus_per_task}
       additional_parameters: ${cluster.additional_parameters}
   debug: ${cluster.debug}
@@ -44,21 +45,6 @@ regress_stress: False
 direct_forces: False
 
 spice_forces_key: spice_forces
-
-# dataset_list: ["omol"]
-
-exclude_keys: [
-  "id", # only oc20,oc22 have this
-  "fid", # only oc20,oc22 have this
-  "absolute_idx", # only ani has this
-  "target_pos", # only ani has this
-  "ref_energy", # only ani/geom have this
-  "pbc", # only ani/transition1x have this
-  "nads", # oc22
-  "oc22", # oc22
-  "formation_energy", # spice
-  "total_charge", # spice
-]
 
 train_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
@@ -101,7 +87,6 @@ train_dataloader:
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${tasks}
-    exclude_keys: ${exclude_keys}
 
 eval_dataloader:
   _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
@@ -116,7 +101,6 @@ eval_dataloader:
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${tasks}
-    exclude_keys: ${exclude_keys}
 
 heads:
   energyandforcehead:

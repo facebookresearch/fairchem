@@ -14,6 +14,7 @@ job:
     num_nodes: 16
     slurm:
       mem_gb: ${cluster.mem_gb}
+      partition: ${cluster.partition}
       timeout_hr: ${cluster.timeout_hr}
       cpus_per_task: ${cluster.cpus_per_task}
       additional_parameters: ${cluster.additional_parameters}
@@ -86,7 +87,6 @@ train_dataloader:
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${tasks}
-    exclude_keys: ${exclude_keys}
 
 eval_dataloader:
   _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
@@ -101,7 +101,6 @@ eval_dataloader:
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${tasks}
-    exclude_keys: ${exclude_keys}
 
 heads:
   mptrj_energy:

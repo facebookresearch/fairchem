@@ -8,6 +8,7 @@ regress_forces: True
 regress_stress: ${regress_stress}
 use_compile: ${direct_forces}
 use_padding: ${direct_forces}
+dataset_list: ${dataset_list}
 
 
 # Molecular Graph Configs
