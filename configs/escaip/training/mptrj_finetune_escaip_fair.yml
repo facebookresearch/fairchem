@@ -28,7 +28,8 @@ job:
 
 starting_checkpoint: /checkpoint/ericqu/ESCAIPRUNDIR/202506-1623-4946-2248/checkpoints/final/inference_ckpt.pt
 
-fp16: False
+dataset_list: ["mptrj"]
+
 epochs: 50
 steps: null # 80B atoms, 128 ranks, max atoms 350 (mean atoms 300)
 max_atoms: 250
@@ -41,19 +42,6 @@ direct_forces: False
 
 mptrj_forces_key: mptrj_forces
 mptrj_stress_key: mptrj_stress
-
-exclude_keys: [
-  "id", # only oc20,oc22 have this
-  "fid", # only oc20,oc22 have this
-  "absolute_idx", # only ani has this
-  "target_pos", # only ani has this
-  "ref_energy", # only ani/geom have this
-  "pbc", # only ani/transition1x have this
-  "nads", # oc22
-  "oc22", # oc22
-  "formation_energy", # spice
-  "total_charge", # spice
-]
 
 train_dataset:
   _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
@@ -158,7 +146,6 @@ runner:
       steps: ${steps}
     print_every: 10
     clip_grad_norm: 100
-    fp16: ${fp16}
   max_epochs: ${epochs}
   max_steps: ${steps}
   evaluate_every_n_steps: 5000
