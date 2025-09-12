@@ -10,23 +10,47 @@ from __future__ import annotations
 import torch
 
 
+# TODO: this gives wrong forces in special cases!
+class Safeacos(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return torch.acos(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x,) = ctx.saved_tensors
+        norms = x.pow(2)
+        grad_input = -grad_output / torch.sqrt(1 - norms)
+        return torch.where(grad_input.isfinite(), grad_input, 0.0)
+
+
+# TODO: this gives wrong forces in special cases!
+class Safeatan2(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, y, x):
+        ctx.save_for_backward(y, x)
+        return torch.atan2(y, x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        y, x = ctx.saved_tensors
+        norms = x.pow(2) + y.pow(2)
+        safe_norms = torch.where(norms == 0.0, 1, norms)
+        return (x / safe_norms) * grad_output, -(y / safe_norms) * grad_output
+
+
 def init_edge_rot_euler_angles(edge_distance_vec):
-    # make unit vectors
     xyz = torch.nn.functional.normalize(edge_distance_vec)
 
-    # are we standing at the north pole
-    mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
-
     # latitude (beta)
-    beta = torch.acos(xyz[:, 1])
-    beta[mask] = beta[mask].detach()
+    beta = Safeacos.apply(xyz[:, 1])
 
     # longitude (alpha)
-    alpha = torch.atan2(xyz[:, 0], xyz[:, 2])
-    alpha[mask] = alpha[mask].detach()
+    alpha = Safeatan2.apply(xyz[:, 0], xyz[:, 2])
 
     # random gamma (roll)
-    gamma = torch.rand_like(alpha) * (2 * torch.pi)
+    gamma = torch.rand_like(alpha) * 2 * torch.pi
     # gamma = torch.zeros_like(alpha)
 
     # intrinsic to extrinsic swap
