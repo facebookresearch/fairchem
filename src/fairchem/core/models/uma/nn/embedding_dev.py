@@ -78,7 +78,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
+        edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
         node_offset=0,
@@ -99,10 +99,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x_edge_embedding = torch.cat((x_edge_m_0, x_edge_m_pad), dim=1)
         x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
-        # envelope
-        dist_scaled = edge_distance / self.cutoff
-        env = self.envelope(dist_scaled)
-        x_edge_embedding = x_edge_embedding * env.view(-1, 1, 1)
+        x_edge_embedding = x_edge_embedding * edge_envelope
 
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
@@ -115,7 +112,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
+        edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
         node_offset=0,
@@ -124,7 +121,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             return self.forward_chunk(
                 x,
                 x_edge,
-                edge_distance,
+                edge_envelope,
                 edge_index,
                 wigner_and_M_mapping_inv,
                 node_offset,
@@ -136,7 +133,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_inv_partitions = wigner_and_M_mapping_inv.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
-        edge_distance_parititons = edge_distance.split(
+        edge_envelope_parititons = edge_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -146,7 +143,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 self.forward_chunk,
                 x,
                 x_edge_partitions[idx],
-                edge_distance_parititons[idx],
+                edge_envelope_parititons[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
                 node_offset,

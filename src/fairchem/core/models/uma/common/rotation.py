@@ -7,40 +7,26 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
-
 import torch
 
 
 def init_edge_rot_euler_angles(edge_distance_vec):
-    edge_vec_0 = edge_distance_vec
-    edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
-
-    # Make sure the atoms are far enough apart
-    # assert torch.min(edge_vec_0_distance) < 0.0001
-    if len(edge_vec_0_distance) > 0 and torch.min(edge_vec_0_distance) < 0.0001:
-        logging.error(f"Error edge_vec_0_distance: {torch.min(edge_vec_0_distance)}")
-
     # make unit vectors
-    xyz = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
+    xyz = torch.nn.functional.normalize(edge_distance_vec)
 
     # are we standing at the north pole
     mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
 
-    # compute alpha and beta
-
     # latitude (beta)
-    beta = xyz.new_zeros(xyz.shape[0])
-    beta[~mask] = torch.acos(xyz[~mask, 1])
-    beta[mask] = torch.acos(xyz[mask, 1]).detach()
+    beta = torch.acos(xyz[:, 1])
+    beta[mask] = beta[mask].detach()
 
     # longitude (alpha)
-    alpha = torch.zeros_like(beta)
-    alpha[~mask] = torch.atan2(xyz[~mask, 0], xyz[~mask, 2])
-    alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
+    alpha = torch.atan2(xyz[:, 0], xyz[:, 2])
+    alpha[mask] = alpha[mask].detach()
 
     # random gamma (roll)
-    gamma = torch.rand_like(alpha) * 2 * torch.pi
+    gamma = torch.rand_like(alpha) * (2 * torch.pi)
     # gamma = torch.zeros_like(alpha)
 
     # intrinsic to extrinsic swap

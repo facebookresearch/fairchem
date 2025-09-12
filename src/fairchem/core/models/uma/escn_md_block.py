@@ -24,7 +24,6 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole import MOLE
-from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 
@@ -48,7 +47,6 @@ class Edgewise(torch.nn.Module):
         edge_channels_list: list[int],
         mappingReduced: CoefficientMapping,
         SO3_grid: SO3_Grid,
-        cutoff: float,
         # Enables activation checkpointing of edges in
         # activation_checkpoint_chunk_size size edge blocks
         activation_checkpoint_chunk_size: int | None,
@@ -109,9 +107,6 @@ class Edgewise(torch.nn.Module):
             extra_m0_output_channels=None,
         )
 
-        self.cutoff = cutoff
-        self.envelope = PolynomialEnvelope(exponent=5)
-
         self.out_mask = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(
             self.lmax, self.mmax
         )
@@ -120,7 +115,7 @@ class Edgewise(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
+        edge_envelope,
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
@@ -130,7 +125,7 @@ class Edgewise(torch.nn.Module):
             return self.forward_chunk(
                 x,
                 x_edge,
-                edge_distance,
+                edge_envelope,
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
@@ -145,7 +140,7 @@ class Edgewise(torch.nn.Module):
         wigner_inv_partitions = wigner_and_M_mapping_inv.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
-        edge_distance_parititons = edge_distance.split(
+        edge_envelope_parititons = edge_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -159,7 +154,7 @@ class Edgewise(torch.nn.Module):
                     self.forward_chunk,
                     x,
                     x_edge_partitions[idx],
-                    edge_distance_parititons[idx],
+                    edge_envelope_parititons[idx],
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
@@ -178,7 +173,7 @@ class Edgewise(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
+        edge_envelope,
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
@@ -212,9 +207,7 @@ class Edgewise(torch.nn.Module):
             x_message = self.so2_conv_2(x_message, x_edge)
 
             # envelope
-            dist_scaled = edge_distance / self.cutoff
-            env = self.envelope(dist_scaled)
-            x_message = x_message * env.view(-1, 1, 1)
+            x_message = x_message * edge_envelope
 
             # Rotate back the irreps
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
@@ -319,7 +312,6 @@ class eSCNMD_Block(torch.nn.Module):
         mappingReduced: CoefficientMapping,
         SO3_grid: SO3_Grid,
         edge_channels_list: list[int],
-        cutoff: float,
         norm_type: Literal["layer_norm", "layer_norm_sh", "rms_norm_sh"],
         act_type: Literal["gate", "s2"],
         ff_type: Literal["spectral", "grid"],
@@ -343,7 +335,6 @@ class eSCNMD_Block(torch.nn.Module):
             edge_channels_list=edge_channels_list,
             mappingReduced=mappingReduced,
             SO3_grid=SO3_grid,
-            cutoff=cutoff,
             act_type=act_type,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )

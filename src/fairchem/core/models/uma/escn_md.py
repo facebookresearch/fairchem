@@ -40,7 +40,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
@@ -237,7 +237,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.mappingReduced,
                 self.SO3_grid,
                 self.edge_channels_list,
-                self.cutoff,
                 self.norm_type,
                 self.act_type,
                 self.ff_type,
@@ -361,9 +360,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
+            # assert (
+            #     pbc.all() or (~pbc).all()
+            # ), "We can only accept pbc that is all true or all false"
             logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
@@ -498,6 +497,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
+        self.envelope = PolynomialEnvelope(exponent=5)
+        dist_scaled = graph_dict["edge_distance"] / self.cutoff
+        edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
+
         # edge degree embedding
         with record_function("edge embedding"):
             edge_distance_embedding = self.distance_expansion(
@@ -515,7 +518,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_distance"],
+                edge_envelope,
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 graph_dict["node_offset"],
@@ -529,7 +532,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
-                    graph_dict["edge_distance"],
+                    edge_envelope,
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
@@ -561,9 +564,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             gp_utils.get_gp_world_size(),
         )[gp_utils.get_gp_rank()]
 
-        assert (
-            node_partition.numel() > 0
-        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+        # assert (
+        #     node_partition.numel() > 0
+        # ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
         edge_partition = torch.where(
             torch.logical_and(
                 edge_index[1] >= node_partition.min(),
