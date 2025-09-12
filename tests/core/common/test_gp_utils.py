@@ -85,7 +85,7 @@ def test_scatter_tensors(
 
 def scatter_gather_fn(input: torch.Tensor, dim: int = 0):
     x = scatter_to_model_parallel_region(input, dim)
-    return gather_from_model_parallel_region(x, dim)
+    return gather_from_model_parallel_region(x, input.shape[dim] ,dim)
 
 
 @pytest.mark.parametrize(

@@ -40,7 +40,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
@@ -237,7 +237,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.mappingReduced,
                 self.SO3_grid,
                 self.edge_channels_list,
-                self.cutoff,
                 self.norm_type,
                 self.act_type,
                 self.ff_type,
@@ -361,9 +360,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     "pbc" in data_dict
                 ), "Since always_use_pbc is False, pbc conditions must be supplied by the input data"
                 pbc = data_dict["pbc"]
-            assert (
-                pbc.all() or (~pbc).all()
-            ), "We can only accept pbc that is all true or all false"
+                assert (
+                    pbc.all() or (~pbc).all()
+                ), "We can only accept pbc that is all true or all false"
             logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
@@ -498,6 +497,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
+        self.envelope = PolynomialEnvelope(exponent=5)
+        dist_scaled = graph_dict["edge_distance"] / self.cutoff
+        edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
+
         # edge degree embedding
         with record_function("edge embedding"):
             edge_distance_embedding = self.distance_expansion(
@@ -515,9 +518,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_distance"],
+                edge_envelope,
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                data_dict["atomic_numbers_full"].shape[0],
                 graph_dict["node_offset"],
             )
 
@@ -529,10 +533,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
-                    graph_dict["edge_distance"],
+                    edge_envelope,
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
+                    data_dict["atomic_numbers_full"].shape[0],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -544,6 +549,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "displacement": displacement,
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
+            "node_offset": graph_dict["node_offset"],
         }
         return out
 
@@ -556,14 +562,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         edge_distance = graph_dict["edge_distance"]
         edge_distance_vec_full = graph_dict["edge_distance_vec"]
 
+        world_size = gp_utils.get_gp_world_size()
+        assert (
+            atomic_numbers_full.shape[0] >= world_size
+        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+
         node_partition = torch.tensor_split(
-            torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
-            gp_utils.get_gp_world_size(),
+            torch.arange(atomic_numbers_full.shape[0]).to(atomic_numbers_full.device),
+            world_size,
         )[gp_utils.get_gp_rank()]
 
-        assert (
-            node_partition.numel() > 0
-        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
         edge_partition = torch.where(
             torch.logical_and(
                 edge_index[1] >= node_partition.min(),
@@ -682,13 +690,12 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
 
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
-        )
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
@@ -816,7 +823,10 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+            size_list = gp_utils.size_list_fn(
+                data_dict["atomic_numbers_full"].shape[0], gp_utils.get_gp_world_size()
+            )
+            forces = gp_utils.gather_from_model_parallel_region(forces, size_list)
         return {"forces": forces}
 
 

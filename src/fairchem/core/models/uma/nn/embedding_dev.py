@@ -78,31 +78,69 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
+        edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
-        x_edge_m_0 = x_edge_m_0.reshape(
+        x_edge_m_0 = x_edge_m_0.view(
             -1, self.m_0_num_coefficients, self.sphere_channels
         )
-        x_edge_m_pad = torch.zeros(
-            (
-                x_edge_m_0.shape[0],
-                (self.m_all_num_coefficents - self.m_0_num_coefficients),
-                self.sphere_channels,
-            ),
+
+        x_edge_embedding = torch.zeros(
+            x_edge_m_0.shape[0],
+            x_edge_m_0.shape[1]
+            + self.m_all_num_coefficents
+            - self.m_0_num_coefficients,
+            x_edge_m_0.shape[2],
             device=x_edge_m_0.device,
             dtype=x_edge_m_0.dtype,
         )
-        x_edge_embedding = torch.cat((x_edge_m_0, x_edge_m_pad), dim=1)
+        x_edge_embedding[:, : x_edge_m_0.shape[1]] = x_edge_m_0
+
         x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
-        # envelope
-        dist_scaled = edge_distance / self.cutoff
-        env = self.envelope(dist_scaled)
-        x_edge_embedding = x_edge_embedding * env.view(-1, 1, 1)
+        x_edge_embedding = x_edge_embedding * edge_envelope
+
+        # TODO is this needed?
+        x_edge_embedding = x_edge_embedding.to(x.dtype)
+
+        return x.index_add(
+            0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
+        )
+
+    def forward_chunk_gp(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping_inv,
+        natoms,
+        node_offset=0,
+    ):
+        x_edge_m_0 = self.rad_func(x_edge)
+        x_edge_m_0 = x_edge_m_0.view(
+            -1, self.m_0_num_coefficients, self.sphere_channels
+        )
+
+        x_edge_embedding = torch.zeros(
+            x_edge_m_0.shape[0],
+            x_edge_m_0.shape[1]
+            + self.m_all_num_coefficents
+            - self.m_0_num_coefficients,
+            x_edge_m_0.shape[2],
+            device=x_edge_m_0.device,
+            dtype=x_edge_m_0.dtype,
+        )
+        breakpoint()
+        x_edge_embedding[:, : x_edge_m_0.shape[1]] = x_edge_m_0
+
+        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
+
+        x_edge_embedding = x_edge_embedding * edge_envelope
 
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
@@ -115,18 +153,40 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
+        edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
+            # if True or gp_utils.initialized():
+            #     group = get_gp_group()
+            #     rank = get_gp_rank()
+            #     world_size = dist.get_world_size(group=group)
+            #     size_list=size_list_fn(natoms, world_size)
+
+            #     n_chunks=2
+            #     for chunk_idx in range(n_chunks):
+            #         node_offset = (natoms // n_chunks) * chunk_idx
+
+            #         self.forward_chunk_gp(
+            #             x,
+            #             x_edge,
+            #             edge_envelope,
+            #             edge_index,
+            #             wigner_and_M_mapping_inv,
+            #             natoms,
+            #             node_offset,
+            #         )
+
             return self.forward_chunk(
                 x,
                 x_edge,
-                edge_distance,
+                edge_envelope,
                 edge_index,
                 wigner_and_M_mapping_inv,
+                natoms,
                 node_offset,
             )
 
@@ -136,7 +196,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_inv_partitions = wigner_and_M_mapping_inv.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
-        edge_distance_parititons = edge_distance.split(
+        edge_envelope_parititons = edge_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -146,9 +206,10 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 self.forward_chunk,
                 x,
                 x_edge_partitions[idx],
-                edge_distance_parititons[idx],
+                edge_envelope_parititons[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
+                natoms,
                 node_offset,
                 use_reentrant=False,
             )
