@@ -119,6 +119,7 @@ class Edgewise(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset: int = 0,
     ):
         if self.activation_checkpoint_chunk_size is None:
@@ -129,6 +130,7 @@ class Edgewise(torch.nn.Module):
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
+                natoms,
                 node_offset,
             )
         edge_index_partitions = edge_index.split(
@@ -158,6 +160,7 @@ class Edgewise(torch.nn.Module):
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
+                    natoms,
                     node_offset,
                     ac_mole_start_idx,
                     use_reentrant=False,
@@ -177,6 +180,7 @@ class Edgewise(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
@@ -185,7 +189,9 @@ class Edgewise(torch.nn.Module):
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
+            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                x, natoms, node_offset, dim=0
+            )
             x_source = x_full[edge_index[0]]
             x_target = x_full[edge_index[1]]
         else:
@@ -368,6 +374,7 @@ class eSCNMD_Block(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        natoms,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -385,6 +392,7 @@ class eSCNMD_Block(torch.nn.Module):
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
+                natoms,
                 node_offset,
             )
             x = x + x_res
