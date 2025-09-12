@@ -1,5 +1,5 @@
 
-# FAIRChem & Custom Datasets
+# FAIRChem & custom datasets
 
 ## Datasets in `fairchem`:
 `fairchem` provides training and evaluation code for tasks and models that take arbitrary
@@ -13,7 +13,7 @@ tasks, data, and metrics, please read the documentations and respective papers:
  - [OC20NEB](catalysts/datasets/oc20neb)
  - [OMat24](inorganic_materials/datasets/omat24)
  - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
-
+ - [OMC25](molecules/datasets/omc25)
 
 There are multiple ways to train and evaluate FAIRChem models on data other than OC20 and OC22. Writing an LMDB is the most performant option. However, ASE-based dataset formats are also included as a convenience for people with existing data who simply want to try fairchem tools without needing to learn about LMDBs.
 

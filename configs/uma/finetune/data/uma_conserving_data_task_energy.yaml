@@ -24,12 +24,12 @@ val_dataset:
     stress_reshape_transform:
       dataset_name: ${data.dataset_name}
 
-regress_stress: False
-pass_through_head_outputs: False
+regress_stress: True
+pass_through_head_outputs: True
 
 heads:
-  energy:
-    module: fairchem.core.models.uma.escn_md.MLP_Energy_Head
+  efs:
+    module: fairchem.core.models.uma.escn_md.MLP_EFS_Head
 
 tasks_list:
 - _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
@@ -59,3 +59,31 @@ tasks_list:
   metrics:
     - mae
     - per_atom_mae
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: forces
+  level: atom
+  property: forces
+  out_spec:
+    dim: [3]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: ${data.normalizer_rmsd}
+  datasets:
+    - ${data.dataset_name}
+  inference_only: True
+- _target_: fairchem.core.units.mlip_unit.mlip_unit.Task
+  name: stress
+  level: system
+  property: stress
+  out_spec:
+    dim: [1, 9]
+    dtype: float32
+  normalizer:
+    _target_: fairchem.core.modules.normalization.normalizer.Normalizer
+    mean: 0.0
+    rmsd: ${data.normalizer_rmsd}
+  datasets:
+    - ${data.dataset_name}
+  inference_only: True

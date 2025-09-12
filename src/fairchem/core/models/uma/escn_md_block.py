@@ -8,10 +8,12 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
+from typing_extensions import Literal
 
 from fairchem.core.common import gp_utils
 from fairchem.core.models.uma.common.so3 import CoefficientMapping
@@ -27,6 +29,9 @@ from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 
+if TYPE_CHECKING:
+    from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+
 
 def set_mole_ac_start_index(module: nn.Module, index: int) -> None:
     for submodule in module.modules():
@@ -41,15 +46,15 @@ class Edgewise(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        edge_channels_list,
-        mappingReduced,
-        SO3_grid,
-        cutoff,
+        edge_channels_list: list[int],
+        mappingReduced: CoefficientMapping,
+        SO3_grid: SO3_Grid,
+        cutoff: float,
         # Enables activation checkpointing of edges in
         # activation_checkpoint_chunk_size size edge blocks
         activation_checkpoint_chunk_size: int | None,
-        act_type: str = "gate",
         last_layer: bool = False,
+        act_type: Literal["gate", "s2"] = "gate",
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -240,7 +245,7 @@ class SpectralAtomwise(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        SO3_grid,
+        SO3_grid: SO3_Grid,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -283,7 +288,7 @@ class GridAtomwise(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        SO3_grid,
+        SO3_grid: SO3_Grid,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -317,13 +322,13 @@ class eSCNMD_Block(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        mappingReduced,
-        SO3_grid,
+        mappingReduced: CoefficientMapping,
+        SO3_grid: SO3_Grid,
         edge_channels_list: list[int],
         cutoff: float,
-        norm_type: str,
-        act_type: str,
-        ff_type: str,
+        norm_type: Literal["layer_norm", "layer_norm_sh", "rms_norm_sh"],
+        act_type: Literal["gate", "s2"],
+        ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
         last_layer: bool = False,
     ) -> None:

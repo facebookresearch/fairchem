@@ -14,9 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from monty.dev import requires
-from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
-from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEntry
-from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
 from tqdm import tqdm
 
 from fairchem.core.components.benchmark import JsonDFReducer
@@ -30,6 +27,9 @@ try:
     from matbench_discovery.metrics.discovery import stable_metrics
     from matbench_discovery.metrics.geo_opt import calc_geo_opt_metrics
     from matbench_discovery.structure import symmetry
+    from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
+    from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEntry
+    from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
     from pymatviz.enums import Key
 
     mbd_installed = True
