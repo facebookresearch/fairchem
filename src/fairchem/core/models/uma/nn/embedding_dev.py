@@ -110,6 +110,43 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
         )
 
+    def forward_chunk_gp(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping_inv,
+        node_offset=0,
+    ):
+        x_edge_m_0 = self.rad_func(x_edge)
+        x_edge_m_0 = x_edge_m_0.view(
+            -1, self.m_0_num_coefficients, self.sphere_channels
+        )
+
+        x_edge_embedding = torch.zeros(
+            x_edge_m_0.shape[0],
+            x_edge_m_0.shape[1]
+            + self.m_all_num_coefficents
+            - self.m_0_num_coefficients,
+            x_edge_m_0.shape[2],
+            device=x_edge_m_0.device,
+            dtype=x_edge_m_0.dtype,
+        )
+        breakpoint()
+        x_edge_embedding[:, : x_edge_m_0.shape[1]] = x_edge_m_0
+
+        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
+
+        x_edge_embedding = x_edge_embedding * edge_envelope
+
+        # TODO is this needed?
+        x_edge_embedding = x_edge_embedding.to(x.dtype)
+
+        return x.index_add(
+            0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
+        )
+
     def forward(
         self,
         x,
@@ -120,6 +157,15 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
+            # self.forward_chunk_gp(
+            #     x,
+            #     x_edge,
+            #     edge_envelope,
+            #     edge_index,
+            #     wigner_and_M_mapping_inv,
+            #     node_offset,
+            # )
+
             return self.forward_chunk(
                 x,
                 x_edge,
