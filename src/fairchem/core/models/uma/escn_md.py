@@ -50,7 +50,13 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
-ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 32
+
+
+def my_backward_hook(grad):
+    print(f"Backward hook called on tensor x. Received gradient: {grad}")
+    breakpoint()
+    return grad
 
 
 @registry.register_model("escnmd_backbone")
@@ -119,7 +125,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if activation_checkpointing:
             # The size of edge blocks to use in activation checkpointing
             activation_checkpoint_chunk_size = ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
-
+        print(activation_checkpoint_chunk_size)
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
@@ -423,6 +429,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
+        # print("START",torch.cuda.memory.memory_summary())
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -503,32 +510,62 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
-            source_embedding = self.source_embedding(
-                data_dict["atomic_numbers_full"][graph_dict["edge_index"][0]]
+            source_atom_embedding = self.source_embedding(
+                data_dict["atomic_numbers_full"]
             )
-            target_embedding = self.target_embedding(
-                data_dict["atomic_numbers_full"][graph_dict["edge_index"][1]]
-            )
-            x_edge = torch.cat(
-                (edge_distance_embedding, source_embedding, target_embedding), dim=1
-            )
+
+            target_atom_embedding = self.target_embedding(
+                data_dict["atomic_numbers_full"]
+            )  # [graph_dict["edge_index"][1]]
+
+            source_embeddings = source_atom_embedding[graph_dict["edge_index"][0]]
+            target_embeddings = target_atom_embedding[graph_dict["edge_index"][1]]
+
+            # source_embedding = self.source_embedding(
+            #     data_dict["atomic_numbers_full"][graph_dict["edge_index"][0]]
+            # )
+            # target_embedding = self.target_embedding(
+            #     data_dict["atomic_numbers_full"][graph_dict["edge_index"][1]]
+            # )
+            # x_edge = torch.cat(
+            #     (edge_distance_embedding, source_embedding, target_embedding), dim=1
+            # )
+
             x_message = self.edge_degree_embedding(
                 x_message,
-                x_edge,
+                edge_distance_embedding,
+                source_atom_embedding,
+                target_atom_embedding,
                 graph_dict["edge_distance"],
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 graph_dict["node_offset"],
             )
 
+            # graph_dict["edge_distance"].register_hook(my_backward_hook)
+            # x_edge = torch.cat(
+            #     (edge_distance_embedding, source_embeddings, target_embeddings), dim=1
+            # )
+            # graph_dict["edge_distance"].register_hook(my_backward_hook)
+            # x_message.register_hook(my_backward_hook)
+            # print("X", x_message.abs().mean())
+            # print(torch.cuda.memory.memory_summary())
+
+            # wigner_and_M_mapping_inv.register_hook(my_backward_hook)
+
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                # need a better way to figure this out TODO
+                # passing x_edge is better in training
+                # passing components is better inference
                 x_message = self.blocks[i](
                     x_message,
-                    x_edge,
+                    edge_distance_embedding,
+                    source_atom_embedding,
+                    target_atom_embedding,
                     graph_dict["edge_distance"],
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
@@ -536,6 +573,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
+            print("XX", x_message.abs().mean())
+
+        print("DONE ALL LAYERS")
 
         # Final layer norm
         x_message = self.norm(x_message)
@@ -723,6 +763,9 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             if gp_utils.initialized():
                 forces = gp_utils.reduce_from_model_parallel_region(forces)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+
+        print("FORCES2", outputs[forces_key].abs().mean())
+        breakpoint()
         return outputs
 
 
