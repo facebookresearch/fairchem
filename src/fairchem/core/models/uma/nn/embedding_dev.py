@@ -81,6 +81,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
@@ -117,6 +118,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
@@ -154,17 +156,29 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_envelope,
         edge_index,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
-            # self.forward_chunk_gp(
-            #     x,
-            #     x_edge,
-            #     edge_envelope,
-            #     edge_index,
-            #     wigner_and_M_mapping_inv,
-            #     node_offset,
-            # )
+            # if True or gp_utils.initialized():
+            #     group = get_gp_group()
+            #     rank = get_gp_rank()
+            #     world_size = dist.get_world_size(group=group)
+            #     size_list=size_list_fn(natoms, world_size)
+
+            #     n_chunks=2
+            #     for chunk_idx in range(n_chunks):
+            #         node_offset = (natoms // n_chunks) * chunk_idx
+
+            #         self.forward_chunk_gp(
+            #             x,
+            #             x_edge,
+            #             edge_envelope,
+            #             edge_index,
+            #             wigner_and_M_mapping_inv,
+            #             natoms,
+            #             node_offset,
+            #         )
 
             return self.forward_chunk(
                 x,
@@ -172,6 +186,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 edge_envelope,
                 edge_index,
                 wigner_and_M_mapping_inv,
+                natoms,
                 node_offset,
             )
 
@@ -194,6 +209,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 edge_envelope_parititons[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
+                natoms,
                 node_offset,
                 use_reentrant=False,
             )

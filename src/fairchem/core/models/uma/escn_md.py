@@ -521,6 +521,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 edge_envelope,
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                data_dict["atomic_numbers_full"].shape[0],
                 graph_dict["node_offset"],
             )
 
@@ -822,12 +823,10 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(
-                forces,
-                data_dict["atomic_numbers_full"].shape[0],
-                emb["node_offset"],
-                dim=0,
+            size_list = gp_utils.size_list_fn(
+                data_dict["atomic_numbers_full"].shape[0], gp_utils.get_gp_world_size()
             )
+            forces = gp_utils.gather_from_model_parallel_region(forces, size_list)
         return {"forces": forces}
 
 

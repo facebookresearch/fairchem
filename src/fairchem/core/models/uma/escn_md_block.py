@@ -189,9 +189,8 @@ class Edgewise(torch.nn.Module):
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
-                x, natoms, node_offset, dim=0
-            )
+            size_list = gp_utils.size_list_fn(natoms, gp_utils.get_gp_world_size())
+            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, size_list)
             x_source = x_full[edge_index[0]]
             x_target = x_full[edge_index[1]]
         else:
