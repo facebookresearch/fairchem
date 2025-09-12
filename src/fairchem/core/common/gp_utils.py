@@ -286,6 +286,20 @@ class ReduceFromModelParallelRegion(torch.autograd.Function):
         return grad_output
 
 
+# this returns the values in place
+class ScatterToModelParallelRegion(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input: torch.Tensor, dim: int = -1) -> torch.Tensor:
+        result = _split(input, dim)
+        ctx.save_for_backward(torch.tensor(dim))
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        (dim,) = ctx.saved_tensors
+        return _gather_with_padding(grad_output.clone(), dim.item()), None
+
+
 class GatherFromModelParallelRegion(torch.autograd.Function):
     @staticmethod
     def forward(
@@ -358,6 +372,13 @@ def copy_to_model_parallel_region(input: torch.Tensor) -> torch.Tensor:
 def reduce_from_model_parallel_region(input: torch.Tensor) -> torch.Tensor:
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
     return ReduceFromModelParallelRegion.apply(input)
+
+
+def scatter_to_model_parallel_region(
+    input: torch.Tensor, dim: int = -1
+) -> torch.Tensor:
+    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
+    return ScatterToModelParallelRegion.apply(input, dim)
 
 
 def gather_from_model_parallel_region(
