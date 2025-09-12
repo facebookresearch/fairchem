@@ -97,7 +97,7 @@ class SlurmConfig:
     account: Optional[str] = (
         None  # omegaconf in python 3.9 does not backport annotations
     )
-    additional_parameters: dict = field(default_factory=lambda: {})
+    additional_parameters: Optional[dict] = None
 
 
 @dataclass
