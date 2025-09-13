@@ -141,7 +141,7 @@ class MLIPInferenceServerWebSocket:
     async def start(self):
         self.stop_event = asyncio.Event()
 
-        async with serve(self.handler, self.host, self.port):
+        async with serve(self.handler, self.host, self.port, max_size=10 * 1024 * 1024):
             print(f"WebSocket server started on port {self.port}")
 
             with contextlib.suppress(asyncio.CancelledError):

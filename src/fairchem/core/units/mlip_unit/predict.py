@@ -91,6 +91,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        assert_on_nans: bool = False,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
@@ -153,6 +154,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # store composition embedding of system the model was merged on
         self.merged_on = None
+
+        self.assert_on_nans = assert_on_nans
 
         if self.direct_forces:
             logging.warning(
@@ -232,6 +235,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "Please ensure the input data has valid edges."
             )
 
+        if self.assert_on_nans:
+            nan_check_list = ["pos", "cell", "atomic_numbers"]
+            for key in nan_check_list:
+                assert not torch.isnan(data[key]).any(), f"NaNs found in {key}"
+                assert not torch.isinf(data[key]).any(), f"Infs found in {key}"
+
         data_device = data.to(self.device)
 
         if self.inference_mode.merge_mole:
@@ -268,6 +277,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 pred_output[task_name] = task.normalizer.denorm(
                     output[task_name][task.property]
                 )
+                if self.assert_on_nans:
+                    assert (
+                        not torch.isnan(pred_output[task_name]).any()
+                    ), f"NaNs found in prediction for task {task_name}.{task.property}"
+                    assert (
+                        not torch.isinf(pred_output[task_name]).any()
+                    ), f"Infs found in prediction for task {task_name}.{task.property}"
                 if undo_element_references and task.element_references is not None:
                     pred_output[task_name] = task.element_references.undo_refs(
                         data_device, pred_output[task_name]
@@ -317,6 +333,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        assert_on_nans: bool = False,
         server_config: dict | None = None,
         client_config: dict | None = None,
     ):
@@ -365,6 +382,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 "inference_settings": inference_settings,
                 "seed": seed,
                 "atom_refs": atom_refs,
+                "assert_on_nans": assert_on_nans,
             }
 
             self._start_server_process(
