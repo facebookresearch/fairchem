@@ -1,0 +1,12 @@
+run_dir: /checkpoint/ericqu/ESCAIPRUNDIR
+data_root_dir: /large_experiments/opencatalyst/datasets-asedb
+mode: LOCAL
+device: CUDA
+ranks_per_node: 1
+dataloader_workers: 8
+timeout_hr: 72
+debug: True
+mem_gb: 80
+cpus_per_task: 10
+partition: scavenge
+additional_parameters: null
