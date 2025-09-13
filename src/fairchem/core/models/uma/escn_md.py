@@ -502,6 +502,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dist_scaled = graph_dict["edge_distance"] / self.cutoff
         edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
 
+        _, node_edge_counts = torch.unique(
+            graph_dict["edge_index"][1], return_counts=True
+        )
+        node_edge_offsets = node_edge_counts.cumsum(0)
+
         # edge degree embedding
         with record_function("edge embedding"):
             edge_distance_embedding = self.distance_expansion(
@@ -523,6 +528,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 data_dict["atomic_numbers_full"].shape[0],
+                node_edge_offsets,
                 graph_dict["node_offset"],
             )
 
