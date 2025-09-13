@@ -679,15 +679,15 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
         _output = self.energy_block(_input)
         node_energy = _output.view(-1, 1, 1)
-        energy_part = torch.zeros(
+        energy = torch.zeros(
             len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
         )
-        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
+        energy.index_add_(0, data["batch_full"], node_energy.view(-1))
 
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
+        # if gp_utils.initialized():
+        #     energy = gp_utils.reduce_from_model_parallel_region(energy_part)
+        # else:
+        #     energy = energy_part
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
@@ -700,7 +700,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         if self.regress_stress:
             grads = torch.autograd.grad(
-                [energy_part.sum()],
+                [energy.sum()],
                 [data["pos_original"], emb["displacement"]],
                 create_graph=self.training,
             )
@@ -725,7 +725,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             forces = (
                 -1
                 * torch.autograd.grad(
-                    energy_part.sum(), data["pos"], create_graph=self.training
+                    energy.sum(), data["pos"], create_graph=self.training
                 )[0]
             )
             if gp_utils.initialized():

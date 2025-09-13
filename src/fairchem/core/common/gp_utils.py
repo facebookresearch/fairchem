@@ -157,6 +157,7 @@ def get_gp_world_size() -> int:
 ########## DIST METHODS ##########
 
 
+@torch.enable_grad()
 def pad_tensor(
     tensor: torch.Tensor, dim: int = -1, target_size: int | None = None
 ) -> torch.Tensor:
@@ -215,9 +216,35 @@ def size_list_fn(size, parts):
     return [size // parts + (1 if idx < size % parts else 0) for idx in range(parts)]
 
 
+def _gather_assume_padded(
+    input: torch.Tensor, size_list, async_op=False
+) -> torch.Tensor:
+    group = get_gp_group()
+    world_size = dist.get_world_size(group=group)
+    if world_size == 1:
+        return input
+
+    assert max(size_list) == min(size_list)
+
+    # gloo does not support all_gather with different sized tensors
+    slice_size = max(size_list)
+    all_atoms = torch.zeros(
+        (slice_size * world_size,) + input.shape[1:],
+        device=input.device,
+        dtype=input.dtype,
+    )
+    tensor_list = list(all_atoms.split(slice_size, dim=0))
+
+    handle = dist.all_gather(tensor_list, input, group=group, async_op=async_op)
+    if async_op:
+        # assert(tensor_list[rank].requires_grad==True)
+        return all_atoms, handle
+
+    return all_atoms, None
+
+
 def _gather_with_padding_gloo(
-    input: torch.Tensor,
-    size_list,
+    input: torch.Tensor, size_list, async_op=False
 ) -> torch.Tensor:
     group = get_gp_group()
     rank = get_gp_rank()
@@ -233,11 +260,18 @@ def _gather_with_padding_gloo(
         dtype=input.dtype,
     )
     tensor_list = list(all_atoms.split(slice_size, dim=0))
+    # assert(input.requires_grad==True)
     if input.shape[0] < slice_size:
+        rg = input.requires_grad
         input = pad_tensor(input, 0, slice_size)
+        assert input.requires_grad == rg
 
-    dist.all_gather(tensor_list, input, group=group)
+    handle = dist.all_gather(tensor_list, input, group=group, async_op=async_op)
+    # assert(input.requires_grad==True)
     tensor_list[rank] = input  # pop back in our local copy (requires grad)
+    if async_op:
+        # assert(tensor_list[rank].requires_grad==True)
+        return tensor_list, handle
 
     tensor_list = [
         tensor.narrow(0, 0, size) for tensor, size in zip(tensor_list, size_list)
@@ -316,6 +350,31 @@ class GatherFromModelParallelRegion(torch.autograd.Function):
         return result, None, None
 
 
+class GatherFromModelParallelRegionSumGradAsync(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input: torch.Tensor, size_list: int) -> torch.Tensor:
+        ctx.save_for_backward(torch.tensor(input.shape[0], dtype=torch.long))
+        return _gather_assume_padded(input, size_list, True)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor, _):
+        (size,) = ctx.saved_tensors
+        group = get_gp_group()
+        # use dist internal # does not work
+        # reduced_grad_output = grad_output.clone()
+        # dist.all_reduce(
+        #    reduced_grad_output, group=group
+        # )  # This is an inplace operation
+        # grad_output = reduced_grad_output
+
+        # use functional version instead
+        # TODO maybe use async ?
+        grad_output = all_reduce(grad_output, group=group)
+
+        result = _split(grad_output, 0)
+        return result[:size], None, None
+
+
 class GatherFromModelParallelRegionSumGrad(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input: torch.Tensor, size_list: int) -> torch.Tensor:
@@ -386,6 +445,13 @@ def gather_from_model_parallel_region_sum_grad(
 ) -> torch.Tensor:
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
     return GatherFromModelParallelRegionSumGrad.apply(input, size_list)
+
+
+def gather_from_model_parallel_region_sum_grad_async(
+    input: torch.Tensor, size_list
+) -> torch.Tensor:
+    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
+    return GatherFromModelParallelRegionSumGradAsync.apply(input, size_list)
 
 
 def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
