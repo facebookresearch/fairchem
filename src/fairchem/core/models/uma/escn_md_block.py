@@ -117,7 +117,7 @@ class Edgewise(torch.nn.Module):
             self.lmax, self.mmax
         )
 
-    def forward(
+    def forward_gp_staggered(
         self,
         x,
         x_edge,
@@ -128,93 +128,74 @@ class Edgewise(torch.nn.Module):
         natoms,
         node_offset: int = 0,
     ):
-        if self.activation_checkpoint_chunk_size is None:
-            if gp_utils.initialized():
-                group = gp_utils.get_gp_group()
-                rank = get_gp_rank()
-                world_size = dist.get_world_size(group=group)
+        group = gp_utils.get_gp_group()
+        rank = get_gp_rank()
+        world_size = dist.get_world_size(group=group)
 
-                n_chunks = 3
-                sizes = torch.tensor(
-                    [
-                        size_list_fn(chunk_for_rank, n_chunks)
-                        for chunk_for_rank in size_list_fn(natoms, world_size)
-                    ]
-                )
+        n_chunks = 3
+        sizes = torch.tensor(
+            [
+                size_list_fn(chunk_for_rank, n_chunks)
+                for chunk_for_rank in size_list_fn(natoms, world_size)
+            ]
+        )
 
-                # print("RANK",rank,sizes)
+        # distribute into subchunks
+        results = []
+        rank_offset = node_offset
+        for chunk_idx in range(n_chunks):
+            _chunk_natoms = sizes[:, chunk_idx].sum()
+            _local_natoms = sizes[rank, chunk_idx]
+            _local_node_offset = sizes[
+                rank, :chunk_idx
+            ].sum()  # relative to local atoms
+            _global_node_offset = rank_offset + _local_node_offset
 
-                # distribute into subchunks
-                results = []
-                rank_offset = node_offset
-                for chunk_idx in range(n_chunks):
-                    _chunk_natoms = sizes[:, chunk_idx].sum()
-                    _local_natoms = sizes[rank, chunk_idx]
-                    _local_node_offset = sizes[
-                        rank, :chunk_idx
-                    ].sum()  # relative to local atoms
-                    _global_node_offset = rank_offset + _local_node_offset
-
-                    edge_partition = edge_partition_by_node_idxs(
-                        _global_node_offset,
-                        _global_node_offset + _local_natoms - 1,
-                        edge_index,
-                    )
-
-                    # print("RANK",rank,"INPUTINNER",x.shape,edge_partition.shape, edge_index.shape, _local_natoms,_global_node_offset, natoms)
-                    out = self.forward_chunk(
-                        x,
-                        x_edge[edge_partition],
-                        edge_envelope[edge_partition],
-                        edge_index[:, edge_partition],
-                        wigner_and_M_mapping[edge_partition],
-                        wigner_and_M_mapping_inv[edge_partition],
-                        natoms_local=_local_natoms,
-                        node_offset=_global_node_offset,
-                    )
-                    # print("RANK out",rank,"OUTPUTINNER",out.shape,[ rank_size_list[chunk_idx] for rank_size_list in sizes ])
-
-                    out_global = gp_utils.gather_from_model_parallel_region_sum_grad(
-                        out, [rank_size_list[chunk_idx] for rank_size_list in sizes]
-                    )
-                    results.append(out_global)
-
-                # locally reconstruct full atom embeddings
-                full_list = []
-                for rank_idx in range(world_size):
-                    for chunk_idx in range(n_chunks):
-                        _chunk_offset = sizes[:rank_idx, chunk_idx].sum()
-                        _local_natoms = sizes[rank_idx, chunk_idx]
-                        full_list.append(
-                            results[chunk_idx][
-                                _chunk_offset : _chunk_offset + _local_natoms
-                            ]
-                        )
-                full_output = torch.cat(full_list, dim=0)
-                print("RANK", rank, "XXOUTPUT", full_output.shape)
-                # assert ret.isclose(full_output[node_offset:node_offset+ret.shape[0]]).to(torch.float).mean()>0.99
-                # return full_output[node_offset:node_offset+ret.shape[0]],full_output
-                print(
-                    "GP!!RET",
-                    rank,
-                    x.abs().mean(),
-                    full_output.shape,
-                    full_output.abs().mean(),
-                )
-                return full_output
-
-            ret = self.forward_chunk(
-                x,
-                x_edge,
-                edge_envelope,
+            edge_partition = edge_partition_by_node_idxs(
+                _global_node_offset,
+                _global_node_offset + _local_natoms - 1,
                 edge_index,
-                wigner_and_M_mapping,
-                wigner_and_M_mapping_inv,
-                x.shape[0],
-                node_offset=node_offset,
             )
-            print("NON GP!!RET", x.abs().mean(), ret.shape, ret.abs().mean())
-            return ret
+
+            out = self.forward_chunk(
+                x,
+                x_edge[edge_partition],
+                edge_envelope[edge_partition],
+                edge_index[:, edge_partition],
+                wigner_and_M_mapping[edge_partition],
+                wigner_and_M_mapping_inv[edge_partition],
+                natoms_local=_local_natoms,
+                node_offset=_global_node_offset,
+            )
+
+            # TODO make async
+            out_global = gp_utils.gather_from_model_parallel_region_sum_grad(
+                out, [rank_size_list[chunk_idx] for rank_size_list in sizes]
+            )
+            results.append(out_global)
+
+        # locally reconstruct full atom embeddings
+        full_list = []
+        for rank_idx in range(world_size):
+            for chunk_idx in range(n_chunks):
+                _chunk_offset = sizes[:rank_idx, chunk_idx].sum()
+                _local_natoms = sizes[rank_idx, chunk_idx]
+                full_list.append(
+                    results[chunk_idx][_chunk_offset : _chunk_offset + _local_natoms]
+                )
+        return torch.cat(full_list, dim=0)
+
+    def forward_checkpoint(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping,
+        wigner_and_M_mapping_inv,
+        natoms,
+        node_offset: int = 0,
+    ):
         edge_index_partitions = edge_index.split(
             self.activation_checkpoint_chunk_size, dim=1
         )
@@ -254,6 +235,33 @@ class Edgewise(torch.nn.Module):
                 new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
         return torch.stack(new_embeddings).sum(axis=0)
 
+    def forward(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping,
+        wigner_and_M_mapping_inv,
+        natoms,
+        node_offset: int = 0,
+    ):
+        forward_func = self.forward_chunk
+        if gp_utils.initialized():
+            forward_func = self.forward_gp_staggered
+        elif self.activation_checkpoint_chunk_size is not None:
+            forward_func = self.forward_checkpoint
+        return forward_func(
+            x,
+            x_edge,
+            edge_envelope,
+            edge_index,
+            wigner_and_M_mapping,
+            wigner_and_M_mapping_inv,
+            x.shape[0],
+            node_offset=node_offset,
+        )
+
     def forward_chunk(
         self,
         x_full,
@@ -270,12 +278,6 @@ class Edgewise(torch.nn.Module):
         # work properly with MoLE together
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
-        # if gp_utils.initialized():
-        #     size_list = gp_utils.size_list_fn(natoms, gp_utils.get_gp_world_size())
-        #     x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, size_list)
-        #     x_source = x_full[edge_index[0]]
-        #     x_target = x_full[edge_index[1]]
-        # else:
         x_source = x_full[edge_index[0]]
         x_target = x_full[edge_index[1]]
 
@@ -309,7 +311,6 @@ class Edgewise(torch.nn.Module):
         new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
         # reset ac start index
         set_mole_ac_start_index(self, 0)
-        # print("DONE LAYER")
         return new_embedding
 
 

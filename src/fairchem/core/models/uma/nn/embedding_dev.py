@@ -93,7 +93,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         natoms,
         node_offset=0,
     ):
-        # print("GP", get_gp_rank(), x.shape)
         x_edge_m_0 = self.rad_func(x_edge)
         x_edge_m_0 = x_edge_m_0.view(
             -1, self.m_0_num_coefficients, self.sphere_channels
@@ -121,7 +120,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
         )
 
-    def forward(
+    def forward_gp_staggered(
         self,
         x,
         x_edge,
@@ -131,77 +130,71 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         natoms,
         node_offset=0,
     ):
-        if self.activation_checkpoint_chunk_size is None:
-            if gp_utils.initialized():
-                group = get_gp_group()
-                rank = get_gp_rank()
-                world_size = dist.get_world_size(group=group)
+        group = get_gp_group()
+        rank = get_gp_rank()
+        world_size = dist.get_world_size(group=group)
 
-                n_chunks = 3
-                sizes = torch.tensor(
-                    [
-                        size_list_fn(chunk_for_rank, n_chunks)
-                        for chunk_for_rank in size_list_fn(natoms, world_size)
-                    ]
-                )
+        n_chunks = 3
+        sizes = torch.tensor(
+            [
+                size_list_fn(chunk_for_rank, n_chunks)
+                for chunk_for_rank in size_list_fn(natoms, world_size)
+            ]
+        )
 
-                # distribute into subchunks
-                results = []
-                rank_offset = node_offset
-                for chunk_idx in range(n_chunks):
-                    _chunk_natoms = sizes[:, chunk_idx].sum()
-                    _local_natoms = sizes[rank, chunk_idx]
-                    _local_node_offset = sizes[
-                        rank, :chunk_idx
-                    ].sum()  # relative to local atoms
-                    _global_node_offset = rank_offset + _local_node_offset
+        # distribute into subchunks
+        results = []
+        rank_offset = node_offset
+        for chunk_idx in range(n_chunks):
+            _chunk_natoms = sizes[:, chunk_idx].sum()
+            _local_natoms = sizes[rank, chunk_idx]
+            _local_node_offset = sizes[
+                rank, :chunk_idx
+            ].sum()  # relative to local atoms
+            _global_node_offset = rank_offset + _local_node_offset
 
-                    edge_partition = edge_partition_by_node_idxs(
-                        _global_node_offset,
-                        _global_node_offset + _local_natoms - 1,
-                        edge_index,
-                    )
-
-                    out = self.forward_chunk(
-                        x[_local_node_offset : _local_node_offset + _local_natoms],
-                        x_edge[edge_partition],
-                        edge_envelope[edge_partition],
-                        edge_index[:, edge_partition],
-                        wigner_and_M_mapping_inv[edge_partition],
-                        _chunk_natoms,
-                        _global_node_offset,
-                    )
-
-                    out_global = gp_utils.gather_from_model_parallel_region_sum_grad(
-                        out, [rank_size_list[chunk_idx] for rank_size_list in sizes]
-                    )
-                    results.append(out_global)
-
-                # locally reconstruct full atom embeddings
-                full_list = []
-                for rank_idx in range(world_size):
-                    for chunk_idx in range(n_chunks):
-                        _chunk_offset = sizes[:rank_idx, chunk_idx].sum()
-                        _local_natoms = sizes[rank_idx, chunk_idx]
-                        full_list.append(
-                            results[chunk_idx][
-                                _chunk_offset : _chunk_offset + _local_natoms
-                            ]
-                        )
-                full_output = torch.cat(full_list, dim=0)
-                # assert ret.isclose(full_output[node_offset:node_offset+ret.shape[0]]).to(torch.float).mean()>0.99
-                return full_output
-
-            return self.forward_chunk(
-                x,
-                x_edge,
-                edge_envelope,
+            edge_partition = edge_partition_by_node_idxs(
+                _global_node_offset,
+                _global_node_offset + _local_natoms - 1,
                 edge_index,
-                wigner_and_M_mapping_inv,
-                natoms,
-                node_offset,
             )
 
+            out = self.forward_chunk(
+                x[_local_node_offset : _local_node_offset + _local_natoms],
+                x_edge[edge_partition],
+                edge_envelope[edge_partition],
+                edge_index[:, edge_partition],
+                wigner_and_M_mapping_inv[edge_partition],
+                _chunk_natoms,
+                _global_node_offset,
+            )
+
+            out_global = gp_utils.gather_from_model_parallel_region_sum_grad(
+                out, [rank_size_list[chunk_idx] for rank_size_list in sizes]
+            )
+            results.append(out_global)
+
+        # locally reconstruct full atom embeddings
+        full_list = []
+        for rank_idx in range(world_size):
+            for chunk_idx in range(n_chunks):
+                _chunk_offset = sizes[:rank_idx, chunk_idx].sum()
+                _local_natoms = sizes[rank_idx, chunk_idx]
+                full_list.append(
+                    results[chunk_idx][_chunk_offset : _chunk_offset + _local_natoms]
+                )
+        return torch.cat(full_list, dim=0)
+
+    def forward_checkpoint(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping_inv,
+        natoms,
+        node_offset=0,
+    ):
         edge_index_partitions = edge_index.split(
             self.activation_checkpoint_chunk_size, dim=1
         )
@@ -227,6 +220,31 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             )
 
         return x
+
+    def forward(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping_inv,
+        natoms,
+        node_offset=0,
+    ):
+        forward_func = self.forward_chunk
+        if gp_utils.initialized():
+            forward_func = self.forward_gp_staggered
+        elif self.activation_checkpoint_chunk_size is not None:
+            forward_func = self.forward_checkpoint
+        return forward_func(
+            x,
+            x_edge,
+            edge_envelope,
+            edge_index,
+            wigner_and_M_mapping_inv,
+            x.shape[0],
+            node_offset=node_offset,
+        )
 
 
 class ChgSpinEmbedding(nn.Module):
