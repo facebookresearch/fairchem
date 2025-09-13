@@ -215,24 +215,13 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 else:
                     tensor_list.append(local_out)
 
-            results_aync_merged.append(
-                torch.cat(
-                    tensor_list,
-                    dim=0,
-                )
-            )
+            results_aync_merged.append(tensor_list)
 
         # # locally reconstruct full atom embeddings
         full_list_async = []
         for rank_idx in range(world_size):
             for chunk_idx in range(n_chunks):
-                _chunk_offset = sizes[:rank_idx, chunk_idx].sum()
-                _local_natoms = sizes[rank_idx, chunk_idx]
-                full_list_async.append(
-                    results_aync_merged[chunk_idx][
-                        _chunk_offset : _chunk_offset + _local_natoms
-                    ]
-                )
+                full_list_async.append(results_aync_merged[chunk_idx][rank_idx])
         return torch.cat(full_list_async, dim=0)
 
     def forward_checkpoint(

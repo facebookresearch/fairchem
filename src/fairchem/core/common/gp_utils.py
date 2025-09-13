@@ -237,7 +237,6 @@ def _gather_assume_padded(
 
     handle = dist.all_gather(tensor_list, input, group=group, async_op=async_op)
     if async_op:
-        # assert(tensor_list[rank].requires_grad==True)
         return all_atoms, handle
 
     return all_atoms, None
