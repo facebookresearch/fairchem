@@ -485,6 +485,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
 
         sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
+        sys_node_embedding_full = csd_mixed_emb[data_dict["batch_full"]]
         x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
 
         ###
@@ -538,7 +539,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     data_dict["atomic_numbers_full"].shape[0],
-                    sys_node_embedding=sys_node_embedding,
+                    sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
                 )
 
@@ -755,17 +756,17 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
         ).view(-1, 1, 1)
 
-        energy_part = torch.zeros(
+        energy = torch.zeros(
             len(data_dict["natoms"]),
             device=node_energy.device,
             dtype=node_energy.dtype,
         )
 
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
+        energy.index_add_(0, data_dict["batch_full"], node_energy.view(-1))
+        # if gp_utils.initialized():
+        #    energy = gp_utils.reduce_from_model_parallel_region(energy_part)
+        # else:
+        #    energy = energy_part
 
         if self.reduce == "sum":
             return {"energy": energy}
@@ -822,11 +823,11 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
-        if gp_utils.initialized():
-            size_list = gp_utils.size_list_fn(
-                data_dict["atomic_numbers_full"].shape[0], gp_utils.get_gp_world_size()
-            )
-            forces = gp_utils.gather_from_model_parallel_region(forces, size_list)
+        # if gp_utils.initialized():
+        #    size_list = gp_utils.size_list_fn(
+        #        data_dict["atomic_numbers_full"].shape[0], gp_utils.get_gp_world_size()
+        #    )
+        #    forces = gp_utils.gather_from_model_parallel_region(forces, size_list)
         return {"forces": forces}
 
 

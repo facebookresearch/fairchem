@@ -27,6 +27,15 @@ _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
 
 
+def edge_partition_by_node_idxs(min_node, max_node, edge_index):
+    return torch.where(
+        torch.logical_and(
+            edge_index[1] >= min_node,
+            edge_index[1] <= max_node,  # TODO: 0 or 1?
+        )
+    )[0]
+
+
 def ensure_div(a: int, b: int) -> None:
     assert a % b == 0
 
@@ -202,11 +211,8 @@ def _split(input: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return torch.split(input, sizes, dim=dim)[rank]
 
 
-def size_list_fn(natoms, world_size):
-    return [
-        natoms // world_size + (1 if idx < natoms % world_size else 0)
-        for idx in range(world_size)
-    ]
+def size_list_fn(size, parts):
+    return [size // parts + (1 if idx < size % parts else 0) for idx in range(parts)]
 
 
 def _gather_with_padding_gloo(
