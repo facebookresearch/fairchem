@@ -505,7 +505,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         _, node_edge_counts = torch.unique(
             graph_dict["edge_index"][1], return_counts=True
         )
-        node_edge_offsets = node_edge_counts.cumsum(0)
+        # TODO where should this cpu transfer go? can this be non blocking?
+        node_edge_offsets = node_edge_counts.cumsum(0).cpu()
 
         # edge degree embedding
         with record_function("edge embedding"):
@@ -545,6 +546,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     data_dict["atomic_numbers_full"].shape[0],
+                    node_edge_offsets,
                     sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
                 )
