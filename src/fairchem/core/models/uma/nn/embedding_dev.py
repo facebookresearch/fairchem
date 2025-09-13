@@ -242,7 +242,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             edge_envelope,
             edge_index,
             wigner_and_M_mapping_inv,
-            x.shape[0],
+            natoms,
             node_offset=node_offset,
         )
 
