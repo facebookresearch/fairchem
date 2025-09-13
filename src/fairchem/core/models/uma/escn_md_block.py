@@ -132,7 +132,7 @@ class Edgewise(torch.nn.Module):
         rank = get_gp_rank()
         world_size = dist.get_world_size(group=group)
 
-        n_chunks = 3
+        n_chunks = 4
         sizes = torch.tensor(
             [
                 size_list_fn(chunk_for_rank, n_chunks)
@@ -141,15 +141,16 @@ class Edgewise(torch.nn.Module):
         )
 
         # distribute into subchunks
-        results = []
+        results_async = []
         rank_offset = node_offset
         for chunk_idx in range(n_chunks):
-            _chunk_natoms = sizes[:, chunk_idx].sum()
             _local_natoms = sizes[rank, chunk_idx]
             _local_node_offset = sizes[
                 rank, :chunk_idx
             ].sum()  # relative to local atoms
             _global_node_offset = rank_offset + _local_node_offset
+
+            padded_size = sizes[:, chunk_idx].max().item()
 
             edge_partition = edge_partition_by_node_idxs(
                 _global_node_offset,
@@ -157,7 +158,7 @@ class Edgewise(torch.nn.Module):
                 edge_index,
             )
 
-            out = self.forward_chunk(
+            out_not_padded = self.forward_chunk(
                 x,
                 x_edge[edge_partition],
                 edge_envelope[edge_partition],
@@ -168,22 +169,58 @@ class Edgewise(torch.nn.Module):
                 node_offset=_global_node_offset,
             )
 
-            # TODO make async
-            out_global = gp_utils.gather_from_model_parallel_region_sum_grad(
-                out, [rank_size_list[chunk_idx] for rank_size_list in sizes]
-            )
-            results.append(out_global)
+            size_list = [rank_size_list[chunk_idx] for rank_size_list in sizes]
 
-        # locally reconstruct full atom embeddings
-        full_list = []
+            out_padded = torch.zeros(
+                (padded_size, *out_not_padded.shape[1:]),
+                device=out_not_padded.device,
+                dtype=out_not_padded.dtype,
+            )
+            out_padded[: out_not_padded.shape[0]] = out_not_padded
+
+            out_global_async = (
+                gp_utils.gather_from_model_parallel_region_sum_grad_async(
+                    out_padded, [padded_size for _ in range(world_size)]
+                )
+            )
+            results_async.append(
+                (size_list, padded_size, out_not_padded, *out_global_async)
+            )
+
+        # wait for async ops to finish
+        results_aync_merged = []
+        for size_list, padded_size, local_out, all_atoms, handle in results_async:
+            handle.wait()
+            tensor_list = []
+            for idx in range(world_size):
+                if idx != rank:
+                    tensor_list.append(
+                        all_atoms[
+                            padded_size * idx : padded_size * idx + size_list[idx]
+                        ]
+                    )
+                else:
+                    tensor_list.append(local_out)
+
+            results_aync_merged.append(
+                torch.cat(
+                    tensor_list,
+                    dim=0,
+                )
+            )
+
+        # # locally reconstruct full atom embeddings
+        full_list_async = []
         for rank_idx in range(world_size):
             for chunk_idx in range(n_chunks):
                 _chunk_offset = sizes[:rank_idx, chunk_idx].sum()
                 _local_natoms = sizes[rank_idx, chunk_idx]
-                full_list.append(
-                    results[chunk_idx][_chunk_offset : _chunk_offset + _local_natoms]
+                full_list_async.append(
+                    results_aync_merged[chunk_idx][
+                        _chunk_offset : _chunk_offset + _local_natoms
+                    ]
                 )
-        return torch.cat(full_list, dim=0)
+        return torch.cat(full_list_async, dim=0)
 
     def forward_checkpoint(
         self,
