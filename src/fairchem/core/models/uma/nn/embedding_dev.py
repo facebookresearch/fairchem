@@ -92,6 +92,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         natoms,
         node_edge_offsets,
         node_offset=0,
+        out=None,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
         x_edge_m_0 = x_edge_m_0.view(
@@ -145,44 +146,36 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         # distribute into subchunks
         results_async = []
         rank_offset = node_offset
+        x_partitions = x.split(size_list_fn(x.shape[0], n_chunks), dim=0)
+        edge_splits = (
+            node_edge_offsets[sizes[rank].cumsum(0) - 1]
+            .diff(prepend=torch.tensor([0]))
+            .tolist()
+        )
+        wigner_and_M_mapping_inv_partitions = wigner_and_M_mapping_inv.split(
+            edge_splits, dim=0
+        )
+
+        x_edge_partitions = x_edge.split(edge_splits, dim=0)
+        edge_envelope_partitions = edge_envelope.split(edge_splits, dim=0)
+        edge_index_partitions = edge_index.split(edge_splits, dim=1)
+
+        padded_size = sizes.max().item()
+
+        _local_node_offset = 0
         for chunk_idx in range(n_chunks):
-            _chunk_natoms = sizes[:, chunk_idx].sum()
-            _local_natoms = sizes[rank, chunk_idx]
-            _local_node_offset = sizes[
-                rank, :chunk_idx
-            ].sum()  # relative to local atoms
             _global_node_offset = rank_offset + _local_node_offset
 
-            padded_size = sizes[:, chunk_idx].max().item()
-
-            # edge_partition = edge_partition_by_node_idxs(
-            #     _global_node_offset,
-            #     _global_node_offset + _local_natoms - 1,
-            #     edge_index,
-            # )
-            edge_partition_start = (
-                node_edge_offsets[_local_node_offset - 1]
-                if _local_node_offset > 0
-                else 0
-            )
-            edge_partition_end = node_edge_offsets[
-                _local_node_offset + _local_natoms - 1
-            ]
-
-            # assert wigner_and_M_mapping_inv[edge_partition].isclose(wigner_and_M_mapping_inv[edge_partition_start:edge_partition_end]).all()
-
             out_not_padded = self.forward_chunk(
-                x[_local_node_offset : _local_node_offset + _local_natoms],
-                x_edge[edge_partition_start:edge_partition_end],
-                edge_envelope[edge_partition_start:edge_partition_end],
-                edge_index[:, edge_partition_start:edge_partition_end],
-                wigner_and_M_mapping_inv[edge_partition_start:edge_partition_end],
-                _chunk_natoms,
+                x_partitions[chunk_idx],
+                x_edge_partitions[chunk_idx],
+                edge_envelope_partitions[chunk_idx],
+                edge_index_partitions[chunk_idx],
+                wigner_and_M_mapping_inv_partitions[chunk_idx],
+                sizes[:, chunk_idx].sum(),
                 node_edge_offsets,
                 _global_node_offset,
             )
-
-            size_list = [rank_size_list[chunk_idx] for rank_size_list in sizes]
 
             out_padded = torch.zeros(
                 (padded_size, *out_not_padded.shape[1:]),
@@ -197,8 +190,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 )
             )
             results_async.append(
-                (size_list, padded_size, out_not_padded, *out_global_async)
+                (sizes[:, chunk_idx], padded_size, out_not_padded, *out_global_async)
             )
+            _local_node_offset += sizes[rank, chunk_idx]
 
         # wait for async ops to finish
         results_aync_merged = []
