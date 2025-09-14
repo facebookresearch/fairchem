@@ -126,6 +126,9 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset: int = 0,
     ):
         group = gp_utils.get_gp_group()
@@ -173,6 +176,9 @@ class Edgewise(torch.nn.Module):
                 wigner_and_M_mapping_inv_partitions[chunk_idx],
                 natoms_local=padded_size,  # sizes[rank, chunk_idx],
                 node_edge_offsets=node_edge_offsets,
+                sizes=sizes,
+                padded_size=padded_size,
+                edge_splits=edge_splits,
                 node_offset=_global_node_offset,
             )
 
@@ -224,6 +230,9 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset: int = 0,
     ):
         edge_index_partitions = edge_index.split(
@@ -254,6 +263,10 @@ class Edgewise(torch.nn.Module):
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
                     x.shape[0],
+                    node_edge_offsets,
+                    sizes,
+                    padded_size,
+                    edge_splits,
                     node_offset,
                     ac_mole_start_idx,
                     use_reentrant=False,
@@ -275,6 +288,9 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset: int = 0,
     ):
         forward_func = self.forward_chunk
@@ -291,6 +307,9 @@ class Edgewise(torch.nn.Module):
             wigner_and_M_mapping_inv,
             x.shape[0],
             node_edge_offsets,
+            sizes,
+            padded_size,
+            edge_splits,
             node_offset=node_offset,
         )
 
@@ -304,6 +323,9 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms_local,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
@@ -492,6 +514,9 @@ class eSCNMD_Block(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -511,6 +536,9 @@ class eSCNMD_Block(torch.nn.Module):
                 wigner_and_M_mapping_inv,
                 natoms,
                 node_edge_offsets,
+                sizes,
+                padded_size,
+                edge_splits,
                 node_offset,
             )
             x = x + x_res

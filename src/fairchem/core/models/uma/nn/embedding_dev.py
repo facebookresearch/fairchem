@@ -129,29 +129,21 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset=0,
     ):
         group = get_gp_group()
         rank = get_gp_rank()
         world_size = dist.get_world_size(group=group)
 
-        n_chunks = 3
-        sizes = torch.tensor(
-            [
-                size_list_fn(chunk_for_rank, n_chunks)
-                for chunk_for_rank in size_list_fn(natoms, world_size)
-            ]
-        )
-
+        n_chunks = sizes.shape[1]
         # distribute into subchunks
         results_async = []
         rank_offset = node_offset
         x_partitions = x.split(size_list_fn(x.shape[0], n_chunks), dim=0)
-        edge_splits = (
-            node_edge_offsets[sizes[rank].cumsum(0) - 1]
-            .diff(prepend=torch.tensor([0]))
-            .tolist()
-        )
+
         wigner_and_M_mapping_inv_partitions = wigner_and_M_mapping_inv.split(
             edge_splits, dim=0
         )
@@ -159,8 +151,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x_edge_partitions = x_edge.split(edge_splits, dim=0)
         edge_envelope_partitions = edge_envelope.split(edge_splits, dim=0)
         edge_index_partitions = edge_index.split(edge_splits, dim=1)
-
-        padded_size = sizes.max().item()
 
         _local_node_offset = 0
         for chunk_idx in range(n_chunks):
@@ -227,6 +217,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset=0,
     ):
         edge_index_partitions = edge_index.split(
@@ -249,7 +242,10 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
                 natoms,
-                node_offset,
+                node_edge_offsets,
+                sizes,
+                padded_size,
+                edge_splits,
                 use_reentrant=False,
             )
 
@@ -264,6 +260,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset=0,
     ):
         forward_func = self.forward_chunk
@@ -279,6 +278,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             wigner_and_M_mapping_inv,
             natoms,
             node_edge_offsets,
+            sizes,
+            padded_size,
+            edge_splits,
             node_offset=node_offset,
         )
 

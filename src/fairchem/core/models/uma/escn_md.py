@@ -17,6 +17,7 @@ from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import get_device_for_local_rank
+from fairchem.core.common.gp_utils import size_list_fn
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
@@ -450,24 +451,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
+            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
                 self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec_full"],
+                    graph_dict["edge_distance_vec"],
                     use_cuda_graph=self.use_cuda_graph_wigner
                     and "cuda" in get_device_for_local_rank()
                     and not self.training,
                 )
             )
-            if gp_utils.initialized():
-                wigner_and_M_mapping = wigner_and_M_mapping_full[
-                    graph_dict["edge_partition"]
-                ]
-                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full[
-                    graph_dict["edge_partition"]
-                ]
-            else:
-                wigner_and_M_mapping = wigner_and_M_mapping_full
-                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
 
         ###############################################################
         # Initialize node embeddings
@@ -508,6 +499,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # TODO where should this cpu transfer go? can this be non blocking?
         node_edge_offsets = node_edge_counts.cumsum(0).cpu()
 
+        if gp_utils.initialized():
+            n_chunks = 4
+            sizes = torch.tensor(
+                [
+                    size_list_fn(chunk_for_rank, n_chunks)
+                    for chunk_for_rank in size_list_fn(
+                        data_dict["atomic_numbers_full"].shape[0],
+                        gp_utils.get_gp_world_size(),
+                    )
+                ]
+            )
+            edge_splits = (
+                node_edge_offsets[sizes[gp_utils.get_gp_rank()].cumsum(0) - 1]
+                .diff(prepend=torch.tensor([0]))
+                .tolist()
+            )
+            padded_size = sizes.max().item()
+        else:
+            sizes = None
+            edge_splits = None
+            padded_size = None
+
         # edge degree embedding
         with record_function("edge embedding"):
             edge_distance_embedding = self.distance_expansion(
@@ -530,6 +543,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 wigner_and_M_mapping_inv,
                 data_dict["atomic_numbers_full"].shape[0],
                 node_edge_offsets,
+                sizes,
+                padded_size,
+                edge_splits,
                 graph_dict["node_offset"],
             )
 
@@ -547,6 +563,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping_inv,
                     data_dict["atomic_numbers_full"].shape[0],
                     node_edge_offsets,
+                    sizes,
+                    padded_size,
+                    edge_splits,
                     sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -581,25 +600,25 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             world_size,
         )[gp_utils.get_gp_rank()]
 
-        edge_partition = torch.where(
-            torch.logical_and(
-                edge_index[1] >= node_partition.min(),
-                edge_index[1] <= node_partition.max(),  # TODO: 0 or 1?
-            )
-        )[0]
+        _, node_edge_counts = torch.unique(edge_index[1], return_counts=True)
+        # TODO where should this cpu transfer go? can this be non blocking?
+        node_edge_offsets = node_edge_counts.cumsum(0).cpu()
+        start_idx = (
+            node_edge_offsets[node_partition[0] - 1] if node_partition[0] > 0 else 0
+        )
+        end_idx = node_edge_offsets[node_partition[-1]]
 
         # full versions of data
         graph_dict["edge_distance_vec_full"] = edge_distance_vec_full
         graph_dict["edge_distance_full"] = edge_distance
         graph_dict["edge_index_full"] = edge_index
-        graph_dict["edge_partition"] = edge_partition
         graph_dict["node_partition"] = node_partition
 
         # gp versions of data
-        graph_dict["edge_index"] = edge_index[:, edge_partition]
-        graph_dict["edge_distance"] = edge_distance[edge_partition]
-        graph_dict["edge_distance_vec"] = edge_distance_vec_full[edge_partition]
-        graph_dict["node_offset"] = node_partition.min().item()
+        graph_dict["edge_index"] = edge_index[:, start_idx:end_idx]
+        graph_dict["edge_distance"] = edge_distance[start_idx:end_idx]
+        graph_dict["edge_distance_vec"] = edge_distance_vec_full[start_idx:end_idx]
+        graph_dict["node_offset"] = node_partition[0]
 
         return graph_dict
 
