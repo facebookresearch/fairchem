@@ -91,6 +91,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_edge_offsets,
+        sizes,
+        padded_size,
+        edge_splits,
         node_offset=0,
         out=None,
     ):
@@ -164,6 +167,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 wigner_and_M_mapping_inv_partitions[chunk_idx],
                 sizes[:, chunk_idx].sum(),
                 node_edge_offsets,
+                sizes,
+                padded_size,
+                edge_splits,
                 _global_node_offset,
             )
 

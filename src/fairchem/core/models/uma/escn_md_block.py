@@ -19,7 +19,6 @@ from typing_extensions import Literal
 from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
     get_gp_rank,
-    size_list_fn,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -135,23 +134,11 @@ class Edgewise(torch.nn.Module):
         rank = get_gp_rank()
         world_size = dist.get_world_size(group=group)
 
-        n_chunks = 4
-        sizes = torch.tensor(
-            [
-                size_list_fn(chunk_for_rank, n_chunks)
-                for chunk_for_rank in size_list_fn(natoms, world_size)
-            ]
-        )
-
+        n_chunks = sizes.shape[1]
         # distribute into subchunks
         results_async = []
         rank_offset = node_offset
 
-        edge_splits = (
-            node_edge_offsets[sizes[rank].cumsum(0) - 1]
-            .diff(prepend=torch.tensor([0]))
-            .tolist()
-        )
         wigner_and_M_mapping_partitions = wigner_and_M_mapping.split(edge_splits, dim=0)
         wigner_and_M_mapping_inv_partitions = wigner_and_M_mapping_inv.split(
             edge_splits, dim=0
@@ -160,8 +147,6 @@ class Edgewise(torch.nn.Module):
         x_edge_partitions = x_edge.split(edge_splits, dim=0)
         edge_envelope_partitions = edge_envelope.split(edge_splits, dim=0)
         edge_index_partitions = edge_index.split(edge_splits, dim=1)
-
-        padded_size = sizes.max().item()
 
         _local_node_offset = 0
         for chunk_idx in range(n_chunks):
