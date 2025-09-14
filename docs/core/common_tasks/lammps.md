@@ -38,7 +38,12 @@ Assuming you have a classic lammps .in script, to run it, make the following cha
 2. Make sure the units are in "metal"
 3. Make sure there is only 1 run command at the bottom of the script
 
-To run, use the python entrypoint `luma` (shortcut name for the [python lammps_uma.py script](https://github.com/facebookresearch/fairchem/pull/1454))
+To run, use the python entrypoint `lmp_fc` (shortcut name for the [python lammps_fc.py script](https://github.com/facebookresearch/fairchem/pull/1454))
 ```
-luma lmp_in="lammps_in_example.file"  task_name="omc"
+lmp_fc lmp_in="lammps_in_example.file"  task_name="omol"
+```
+
+To try running with multiple gpus in parallel (this will only benefit large inputs/models, for small systems this might even run slower due to the communication bottleneck)
+```
+lmp_fc lmp_in="lammps_in_example.file" task_name="omol" predict_unit='${parallel_predict_unit}'
 ```
