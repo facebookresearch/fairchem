@@ -7,7 +7,7 @@ from ase.build import bulk
 from ase.md.langevin import Langevin
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
-from fairchem.lammps.lammps_uma import run_lammps_with_uma
+from fairchem.lammps.lammps_fc import run_lammps_with_fairchem
 
 from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate import pretrained_mlip
@@ -76,7 +76,7 @@ def run_ase_nve():
 
 def run_lammps(input_file):
     predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
-    lmp = run_lammps_with_uma(predictor, input_file, "omat")
+    lmp = run_lammps_with_fairchem(predictor, input_file, "omat")
     return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
 
 
