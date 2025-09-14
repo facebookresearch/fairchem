@@ -413,11 +413,40 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 node_partition
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
+
+            _, node_edge_counts = torch.unique(
+                graph_dict["edge_index"][1], return_counts=True
+            )
+
+            node_edge_offsets = node_edge_counts.cumsum(0).cpu()
+            graph_dict["n_chunks"] = 4
+            graph_dict["sizes"] = torch.tensor(
+                [
+                    size_list_fn(chunk_for_rank, graph_dict["n_chunks"])
+                    for chunk_for_rank in size_list_fn(
+                        data_dict["atomic_numbers_full"].shape[0],
+                        gp_utils.get_gp_world_size(),
+                    )
+                ]
+            )
+            graph_dict["edge_splits"] = (
+                node_edge_offsets[
+                    graph_dict["sizes"][gp_utils.get_gp_rank()].cumsum(0) - 1
+                ]
+                .diff(prepend=torch.tensor([0]))
+                .tolist()
+            )
+            graph_dict["padded_size"] = graph_dict["sizes"].max().item()
+
         else:
             graph_dict["node_offset"] = 0
             graph_dict["edge_distance_vec_full"] = graph_dict["edge_distance_vec"]
             graph_dict["edge_distance_full"] = graph_dict["edge_distance"]
             graph_dict["edge_index_full"] = graph_dict["edge_index"]
+            graph_dict["n_chunks"] = 1
+            graph_dict["sizes"] = None
+            graph_dict["edge_splits"] = None
+            graph_dict["padded_size"] = None
 
         return graph_dict
 
@@ -493,33 +522,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dist_scaled = graph_dict["edge_distance"] / self.cutoff
         edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
 
-        _, node_edge_counts = torch.unique(
-            graph_dict["edge_index"][1], return_counts=True
-        )
         # TODO where should this cpu transfer go? can this be non blocking?
-        node_edge_offsets = node_edge_counts.cumsum(0).cpu()
-
-        if gp_utils.initialized():
-            n_chunks = 4
-            sizes = torch.tensor(
-                [
-                    size_list_fn(chunk_for_rank, n_chunks)
-                    for chunk_for_rank in size_list_fn(
-                        data_dict["atomic_numbers_full"].shape[0],
-                        gp_utils.get_gp_world_size(),
-                    )
-                ]
-            )
-            edge_splits = (
-                node_edge_offsets[sizes[gp_utils.get_gp_rank()].cumsum(0) - 1]
-                .diff(prepend=torch.tensor([0]))
-                .tolist()
-            )
-            padded_size = sizes.max().item()
-        else:
-            sizes = None
-            edge_splits = None
-            padded_size = None
 
         # edge degree embedding
         with record_function("edge embedding"):
@@ -542,10 +545,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 data_dict["atomic_numbers_full"].shape[0],
-                node_edge_offsets,
-                sizes,
-                padded_size,
-                edge_splits,
+                graph_dict["sizes"],
+                graph_dict["padded_size"],
+                graph_dict["edge_splits"],
                 graph_dict["node_offset"],
             )
 
@@ -562,10 +564,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     data_dict["atomic_numbers_full"].shape[0],
-                    node_edge_offsets,
-                    sizes,
-                    padded_size,
-                    edge_splits,
+                    graph_dict["sizes"],
+                    graph_dict["padded_size"],
+                    graph_dict["edge_splits"],
                     sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
                 )
