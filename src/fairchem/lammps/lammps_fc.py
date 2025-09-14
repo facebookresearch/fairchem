@@ -174,7 +174,7 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
         lmp.fix_external_set_virial_global(FIX_EXT_ID, virial_arr)
 
 
-def run_lammps_with_uma(
+def run_lammps_with_fairchem(
     predictor: MLIPPredictUnitProtocol, lammps_input_path: str, task_name: str
 ):
     machine = None
@@ -203,7 +203,7 @@ def run_lammps_with_uma(
 )
 def main(cfg: DictConfig):
     predict_unit = hydra.utils.instantiate(cfg.predict_unit)
-    lmp = run_lammps_with_uma(predict_unit, cfg.lmp_in, cfg.task_name)
+    lmp = run_lammps_with_fairchem(predict_unit, cfg.lmp_in, cfg.task_name)
     # this is required to cleanup the predictor
     del lmp._predictor
 
