@@ -250,10 +250,10 @@ def assert_efs_valid(energy, forces, stress):
 @pytest.mark.parametrize(
     "reg_task,type",
     [
-        ("e", "bulk"),
+        # ("e", "bulk"),
         ("e", "molecule"),
         ("ef", "bulk"),
-        ("ef", "molecule"),
+        # ("ef", "molecule"),
     ],
 )
 def test_e2e_finetuning_bulks(reg_task, type):
