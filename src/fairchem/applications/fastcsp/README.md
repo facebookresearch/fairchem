@@ -50,7 +50,7 @@ FastCSP creates a well-organized directory structure to manage all data and resu
 
 ```
 your_project_root/
-├── fastcsp.log                     # Main workflow log file
+├── FastCSP.log                     # Main workflow log file
 ├── molecules.csv                   # Input: Molecule definitions and conformer paths
 ├── config.yaml                     # Workflow configuration file
 │
@@ -197,13 +197,13 @@ FastCSP provides comprehensive logging and progress tracking:
 
 ```bash
 # Monitor workflow progress
-tail -f your_project_root/fastcsp.log
+tail -f your_project_root/FastCSP.log
 
 # Check SLURM job status
 squeue -u $USER
 
 # View stage completion in log
-grep "STAGE COMPLETE" your_project_root/fastcsp.log
+grep "STAGE COMPLETE" your_project_root/FastCSP.log
 ```
 
 ## Citation
