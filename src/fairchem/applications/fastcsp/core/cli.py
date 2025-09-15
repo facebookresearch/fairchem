@@ -17,7 +17,7 @@ from fairchem.applications.fastcsp.core.workflow.main import main
 
 
 def cli_main():
-    """Main CLI entry point for fastcsp console script."""
+    """Main CLI entry point for FastCSP workflow."""
     parser = argparse.ArgumentParser(
         description="FastCSP: Fast Crystal Structure Prediction Workflow",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -43,11 +43,13 @@ Example:
     )
 
     parser.add_argument(
+        "-c",
         "--config",
         required=True,
         help="Path to YAML configuration file containing workflow parameters",
     )
     parser.add_argument(
+        "-s",
         "--stages",
         type=str,
         nargs="*",

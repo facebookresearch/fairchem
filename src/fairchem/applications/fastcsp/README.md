@@ -1,31 +1,214 @@
-## FastCSP: Accelerated Molecular Crystal Structure Prediction with Universal Model for Atoms
+# FastCSP: Accelerated Molecular Crystal Structure Prediction with Universal Model for Atoms
 
-### Overview of FastCSP workflow
+FastCSP is a complete computational workflow for predicting molecular crystal structures for rigid molecules by combining random structure generation and machine learning-based optimization without requiring high-accuracy DFT validation.
 
-Starting from a molecular conformer, [`Genarris 3.0`](https://github.com/Yi5817/Genarris) generates a diverse set of random crystal structures. The generated structures undergo optimization with Rigid Press and deduplication is performed to remove similar structures. The remaining structures are fully relaxed using the UMA model from [`fairchem`](https://fair-chem.github.io/) and undergo another round of deduplication. The final ranking may be based on UMA lattice energy, or optionally, on Helmholtz or Gibbs free energies at finite temperature and pressure, also calculated using UMA.
+## Overview
 
-### Getting started
-Configured for use:
-1. Install `fairchem-core`: [instructions](https://fair-chem.github.io/core/install.html)
-2. Pip install fairchem-applications-fastcsp `pip install fairchem-applications-fastcsp`
+FastCSP provides an end-to-end workflow for crystal structure prediction that scales from initial structure generation to experimental validation:
 
+<div align="center">
+<img src="fastcsp.svg" alt="FastCSP Workflow Overview" width="800"/>
+</div>
 
-Configured for local development:
+### Workflow Stages
+
+1. **Structure Generation**: [`Genarris 3.0`](https://github.com/Yi5817/Genarris) generates putative crystal structures and pymatgen's StructureMatcher deduplicates them.
+2. **ML Relaxation**: Structures are fully relaxed using the Universal Model for Atoms (UMA) from [`fairchem`](https://fair-chem.github.io/).
+3. **Filtering & Deduplication**: Property filtering, structure deduplication using pymatgen's StructureMatcher and validation generates the energy landscape at 0 K.
+4. **Experimental Validation** (Optional): Evaluation through comparison against experimental crystal structures using PackingSimilarity from CSD Python API [requires [CCDC license](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html)] or pymatgen's StructureMatcher.
+5. **Free Energy Calculations** (Optional): Free energy corrections are computed and a corrected energy landscape becomes available.
+6. **DFT Validation** (Optional): Generation of VASP input files, submission [requires VASP license] and parsing of VASP. Final structure comparison using DFT-optimized geometries for ground accuracy.
+
+### Key Features
+
+**High-Performance Computing Integration:**
+- Native SLURM support for parallel processing across compute clusters
+- Automatic job dependency management and fault tolerance
+- Scalable from single molecules to large datasets
+
+**Advanced Structure Analysis:**
+- Multi-level structure comparison: pre/post-relaxation deduplication
+- Configurable similarity metrics for crystallographic matching
+
+**Flexible Workflow Control:**
+- Modular stage-based execution - run complete pipeline or individual steps
+- Resume capability - skip already completed stages
+- Comprehensive logging system with restart capability
+
+### Performance & Scalability
+
+FastCSP is designed for production-scale crystal structure prediction campaigns:
+- **Structure Generation**: 500+ structures per molecule within hour (depending on space group and Z complexity)
+- **ML Relaxation**: tens of seconds per structure on modern GPUs
+- **Structure Comparison**: Efficient parallel processing of large structure databases
+- **Memory Usage**: Optimized for large datasets with batching
+- **Storage**: Compressed Parquet format for efficient structure storage
+
+## Output Directory Structure
+
+FastCSP creates a well-organized directory structure to manage all data and results:
+
+```
+your_project_root/
+├── fastcsp.log                     # Main workflow log file
+├── molecules.csv                   # Input: Molecule definitions and conformer paths
+├── config.yaml                     # Workflow configuration file
+│
+├── genarris/                       # Stage 1: Raw Genarris structure generation
+│   ├── MOLECULE1/
+│   │   ├── MOLECULE1_mol_Z1/
+│   │   │   ├── ui.conf
+│   │   │   ├── slurm.sh
+│   │   │   ├── Genarris.out
+│   │   │   └── structures.json
+│   │   └── MOLECULE1_mol_Z2/
+│   └── MOLECULE2/
+│
+├── raw_structures/                 # Stage 2: Processed and deduplicated structures
+│   ├── MOLECULE1/
+│   │   ├── MOLECULE1_mol/
+│   │   │   └── partition_id=*/
+│   │   │       └── *.parquet      # Structures in Parquet format
+│   │   └── MOLECULE1_conf2/
+│   └── MOLECULE2/
+│
+└── relaxed/                        # Stage 3+: ML relaxation and analysis results
+    └── uma_sm_1p1_omc_bfgs_0.01_1000_relaxcell/  # Named by ML model + optimizer settings
+        ├── slurm/                  # SLURM job management files
+        │   ├── *.out
+        │   ├── *.err
+        │   └── submitit_logs/
+        │
+        ├── raw_structures/         # Stage 3: ML-relaxed crystal structures
+        │   ├── MOLECULE1/
+        │   │   └── MOLECULE1_mol/
+        │   │       └── partition_id=*/
+        │   │           └── *.parquet  # Relaxed structures with energies
+        │   └── MOLECULE2/
+        │
+        ├── filtered_structures/    # Stage 4: Energy-filtered and deduplicated structures
+        │   ├── MOLECULE1/
+        │   │   └── MOLECULE1_mol/
+        │   │       └── *.parquet      # Best structures ranked by energy
+        │   └── MOLECULE2/
+        │
+        ├── matched_structures/     # Stage 5: Structures compared to experimental data
+        │   ├── MOLECULE1/
+        │   │   └── MOLECULE1_mol/
+        │   │       └── *.parquet      # Structures with experimental similarity scores
+        │   └── MOLECULE2/
+        │
+        ├── vasp_inputs/           # Stage 6 (Optional): DFT validation input files
+        │   ├── MOLECULE1/
+        │   │   └── structure_001/
+        │   │       ├── INCAR
+        │   │       ├── POSCAR
+        │   │       ├── POTCAR
+        │   │       └── KPOINTS
+        │   └── MOLECULE2/
+        │
+        └── vasp_structures/       # Stage 7 (Optional): DFT-optimized results
+            ├── MOLECULE1/
+            │   └── MOLECULE1_mol/
+            │       └── *.parquet      # DFT-relaxed structures with final energies
+            └── MOLECULE2/
+```
+
+### Key Data Files
+
+- **Parquet Files**: Compressed columnar storage containing structure data, energies, lattice parameters, and metadata
+- **CIF Strings**: Stored within Parquet files for easy structure visualization and analysis
+- **JSON Files**: Raw Genarris outputs with structure information
+- **Log Files**: Comprehensive workflow logs with timestamps, stage progress, and error tracking
+
+## Getting Started
+
+### Prerequisites
+- Python 3.9+
+- SLURM cluster environment for parallel processing
+- GPU resources for efficient ML relaxations
+
+### Installation
 1. Clone the [fairchem repo](https://github.com/facebookresearch/fairchem/tree/main)
-2. Install `fairchem-core`: [instructions](https://fair-chem.github.io/core/install.html)
-3. Install this repository `pip install -e packages/fairchem-applications-fastcsp`
+2. Install FastCSP: `pip install -e packages/fairchem-applications-fastcsp`
 
-External dependencies:
-1. [`Genarris 3.0`](https://github.com/Yi5817/Genarris) should be installed separately in the current or separate environment.
-2. Optionally, if using [`CSD Python API`](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html) for the final evaluations, install it in the current or separate environment.
+### External Dependencies
+- **(Required)** [`Genarris 3.0`](https://github.com/Yi5817/Genarris): Crystal structure generation engine
+- **(Optional)** [`CSD Python API`](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html): For experimental structure comparison (requires license)
+- **(Optional)** [`VASP`](https://www.vasp.at/): For DFT validation (requires license)
 
-### Running `FastCSP`
+### Basic Usage
 
-Entire FastCSP workflow is controlled with a configuration file. An example file can be found in [configs](core/configs).
+**Complete Workflow:**
+```bash
+# Run full crystal structure prediction pipeline
+fastcsp --config config.yaml --stages generate process_generated relax filter
+```
 
-### Citing `FastCSP`
+**Stage-by-Stage Execution:**
+```bash
+# Generate structures only
+fastcsp --config config.yaml --stages generate
 
-If you use this workflow in your work, please consider citing:
+# Run relaxation and filtering
+fastcsp --config config.yaml --stages relax filter
+
+# Evaluate against experimental data
+fastcsp --config config.yaml --stages evaluate
+```
+
+**Restart Capability:**
+```bash
+# FastCSP automatically detects completed stages and resumes from the last incomplete stage
+fastcsp --config config.yaml --stages generate process_generated relax filter
+```
+
+### Available Workflow Stages
+
+| Stage | Description | Output |
+|-------|-------------|--------|
+| `generate` | Generate crystal structures using Genarris | `genarris/` directory |
+| `process_generated` | Process and deduplicate Genarris outputs | `raw_structures/` directory |
+| `relax` | Perform UMA-based structure relaxation | `relaxed/` directory |
+| `filter` | Energy filtering and duplicate removal | `filtered_structures/` directory |
+| `evaluate` | Compare against experimental data | `matched_structures/` directory |
+| `create_vasp_inputs_relaxed` | Generate DFT input files for relaxed structures | `vasp_inputs/` directory |
+| `create_vasp_inputs_unrelaxed` | Generate DFT input files for unrelaxed structures | `vasp_inputs_unrelaxed/` directory |
+| `submit_vasp` | Submit VASP jobs (requires user customization) | SLURM job submissions |
+| `read_vasp_outputs` | Process DFT results and validation metrics | `vasp_structures/` directory |
+
+### Configuration
+
+FastCSP uses YAML configuration files to control all workflow parameters. Example configurations can be found in `core/configs/example_config.yaml`.
+
+**Key Configuration Sections:**
+- `molecules`: Path to input molecule CSV file
+- `root`: Base directory for all outputs
+- `genarris`: Structure generation parameters and SLURM configuration
+- `pre_relaxation_filter`: Deduplication tolerances
+- `relax`: ML relaxation settings and SLURM configuration
+- `post_relaxation_filter`: Property cutoffs and deduplication tolerances
+- `evaluate`: Experimental comparison settings
+- `logging`: Log file settings and verbosity levels
+
+### Monitoring Progress
+
+FastCSP provides comprehensive logging and progress tracking:
+
+```bash
+# Monitor workflow progress
+tail -f your_project_root/fastcsp.log
+
+# Check SLURM job status
+squeue -u $USER
+
+# View stage completion in log
+grep "STAGE COMPLETE" your_project_root/fastcsp.log
+```
+
+## Citation
+
+If you use FastCSP in your research, please cite:
 
 ```bibtex
 @misc{gharakhanyan2025fastcsp,
@@ -38,3 +221,8 @@ If you use this workflow in your work, please consider citing:
   url={https://arxiv.org/abs/2508.02641},
 }
 ```
+
+## Support & Contribution
+
+- **Issues**: [GitHub Issues](https://github.com/facebookresearch/fairchem/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/facebookresearch/fairchem/discussions)
