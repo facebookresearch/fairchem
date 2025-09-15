@@ -129,11 +129,15 @@ class Edgewise(torch.nn.Module):
         edge_splits,
         node_offset: int = 0,
     ):
+        # print("BLOCK",sizes)
+        # gloo= dist.backend() == 'gloo'
         group = gp_utils.get_gp_group()
         rank = get_gp_rank()
         world_size = dist.get_world_size(group=group)
 
         n_chunks = sizes.shape[1]
+        rank_sizes = sizes[rank].tolist()
+        chunk_sizes = [sizes[:, chunk_idx].tolist() for chunk_idx in range(n_chunks)]
         # distribute into subchunks
         results_async = []
         rank_offset = node_offset
@@ -148,53 +152,60 @@ class Edgewise(torch.nn.Module):
         edge_index_partitions = edge_index.split(edge_splits, dim=1)
 
         _local_node_offset = 0
+        # preallocated_output=torch.zeros((padded_size*n_chunks,*x.shape[1:]),device=x.device,dtype=x.dtype)
         for chunk_idx in range(n_chunks):
             _global_node_offset = rank_offset + _local_node_offset
 
-            out_padded = self.forward_chunk(
+            out = self.forward_chunk(
                 x,
                 x_edge_partitions[chunk_idx],
                 edge_envelope_partitions[chunk_idx],
                 edge_index_partitions[chunk_idx],
                 wigner_and_M_mapping_partitions[chunk_idx],
                 wigner_and_M_mapping_inv_partitions[chunk_idx],
-                natoms_local=padded_size,  # sizes[rank, chunk_idx],
+                natoms_local=rank_sizes[chunk_idx],  # required for compile not to break
                 sizes=sizes,
                 padded_size=padded_size,
                 edge_splits=edge_splits,
                 node_offset=_global_node_offset,
             )
-
+            # print("NEW XX",sizes[:,chunk_idx].tolist())
             out_global_async = (
                 gp_utils.gather_from_model_parallel_region_sum_grad_async(
-                    out_padded, [padded_size for _ in range(world_size)]
+                    out,
+                    chunk_sizes[chunk_idx],  # [padded_size for _ in range(world_size)]
                 )
             )
-            results_async.append(
-                (
-                    sizes[:, chunk_idx],
-                    padded_size,
-                    out_padded.split(sizes[rank, chunk_idx], dim=0)[0],
-                    *out_global_async,
+            with record_function("STAG1"):
+                results_async.append(
+                    (
+                        chunk_sizes[chunk_idx],
+                        padded_size,
+                        out,
+                        *out_global_async,
+                    )
                 )
-            )
-            _local_node_offset += sizes[rank, chunk_idx]
+            with record_function("STAG2"):
+                _local_node_offset += rank_sizes[chunk_idx]
 
         # wait for async ops to finish
         results_aync_merged = []
         for size_list, padded_size, local_out, all_atoms, handle in results_async:
-            handle.wait()
-            tensor_list = []
-            for idx in range(world_size):
-                if idx != rank:
-                    tensor_list.append(
-                        all_atoms[
-                            padded_size * idx : padded_size * idx + size_list[idx]
-                        ]
-                    )
-                else:
-                    tensor_list.append(local_out)
-            results_aync_merged.append(tensor_list)
+            if handle is not None:
+                handle.wait()
+            if dist.get_backend() == "gloo":
+                # need to deal with padding
+                all_atoms_splits = all_atoms.split(max(size_list), dim=0)
+                all_atoms = torch.cat(
+                    [
+                        all_atoms_splits[idx][: size_list[idx]]
+                        for idx in range(len(size_list))
+                    ]
+                )
+
+            all_atoms_split = list(all_atoms.split(size_list))
+            all_atoms_split[rank] = local_out
+            results_aync_merged.append(all_atoms_split)
 
         # # locally reconstruct full atom embeddings
         full_list_async = []
