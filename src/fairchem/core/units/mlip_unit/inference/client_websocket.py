@@ -8,7 +8,7 @@ from websockets.sync.client import connect as ws_connect
 
 
 class AsyncMLIPInferenceWebSocketClient:
-    def __init__(self, host, port, max_size=10 * 1024 * 1024):  # 10MB default
+    def __init__(self, host, port, max_size=100 * 1024 * 1024):  # 100MB default
         self.uri = f"ws://{host}:{port}"
         self.websocket = None
         self.max_size = max_size
@@ -32,7 +32,7 @@ class AsyncMLIPInferenceWebSocketClient:
 
 
 class SyncMLIPInferenceWebSocketClient:
-    def __init__(self, host, port, max_size=10 * 1024 * 1024):  # 10MB default
+    def __init__(self, host, port, max_size=100 * 1024 * 1024):  # 100MB default
         self.uri = f"ws://{host}:{port}"
         self.ws = None
         self.max_size = max_size

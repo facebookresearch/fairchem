@@ -126,8 +126,7 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         node_offset: int = 0,
     ):
-        # we perform the all gather upfront once during each forward call so we don't need to repeat this
-        # multiple times during activation checkpointing.
+        # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
             x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
         else:
