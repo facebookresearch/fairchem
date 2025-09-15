@@ -350,23 +350,10 @@ class GatherFromModelParallelRegion(torch.autograd.Function):
 
 
 class GatherFromModelParallelRegionSumGradAsync(torch.autograd.Function):
-    def finalize_output(ctx, all_atoms, handle):
-        if handle is not None:
-            handle.wait()
-
-        if ctx.backend == "gloo":
-            # need to deal with padding
-            all_atoms_splits = all_atoms.split(ctx.padded_size, dim=0)
-            return torch.cat(
-                [
-                    all_atoms_splits[idx][: ctx.size_list[idx]]
-                    for idx in range(len(ctx.size_list))
-                ]
-            )
-        return all_atoms
-
     @staticmethod
-    def forward(ctx, input: torch.Tensor, size_list: List[int]) -> torch.Tensor:
+    def forward(
+        ctx, input: torch.Tensor, size_list: list[int], async_op
+    ) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
         ctx.offset = sum(size_list[: ctx.rank])
@@ -401,7 +388,7 @@ class GatherFromModelParallelRegionSumGradAsync(torch.autograd.Function):
             )
             tensor_list = list(all_atoms.split(ctx.size_list, dim=0))
         ctx.all_atoms_shape = all_atoms.shape
-        handle = dist.all_gather(tensor_list, input, group=ctx.group, async_op=True)
+        handle = dist.all_gather(tensor_list, input, group=ctx.group, async_op=async_op)
         return all_atoms, handle
 
     @staticmethod
@@ -451,7 +438,7 @@ class GatherFromModelParallelRegionSumGradAsync(torch.autograd.Function):
         #     result=grad_output[ctx.padded_size*ctx.rank:ctx.padded_size*ctx.rank+ctx.shape[0]]
         # else:
         #     result=grad_output[ctx.offset:ctx.offset+ctx.shape[0]]
-        return result, None, None
+        return result, None, None, None
 
 
 class GatherFromModelParallelRegionSumGrad(torch.autograd.Function):
@@ -527,10 +514,10 @@ def gather_from_model_parallel_region_sum_grad(
 
 
 def gather_from_model_parallel_region_sum_grad_async(
-    input: torch.Tensor, size_list
+    input: torch.Tensor, size_list, async_op
 ) -> torch.Tensor:
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
-    return GatherFromModelParallelRegionSumGradAsync.apply(input, size_list)
+    return GatherFromModelParallelRegionSumGradAsync.apply(input, size_list, async_op)
 
 
 def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:

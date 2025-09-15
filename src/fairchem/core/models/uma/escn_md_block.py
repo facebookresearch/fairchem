@@ -115,6 +115,53 @@ class Edgewise(torch.nn.Module):
             self.lmax, self.mmax
         )
 
+    def forward_gp_single(
+        self,
+        x,
+        x_edge,
+        edge_envelope,
+        edge_index,
+        wigner_and_M_mapping,
+        wigner_and_M_mapping_inv,
+        natoms,
+        sizes,
+        padded_size,
+        edge_splits,
+        node_offset: int = 0,
+    ):
+        size_list = sizes[:, 0].tolist()
+
+        out = self.forward_chunk(
+            x,
+            x_edge,
+            edge_envelope,
+            edge_index,
+            wigner_and_M_mapping,
+            wigner_and_M_mapping_inv,
+            natoms_local=size_list[
+                gp_utils.get_gp_rank()
+            ],  # required for compile not to break
+            sizes=None,
+            padded_size=0,
+            edge_splits=None,
+            node_offset=node_offset,
+        )
+
+        all_atoms, _ = gp_utils.gather_from_model_parallel_region_sum_grad_async(
+            out, size_list, False
+        )
+
+        if dist.get_backend() == "gloo":
+            # need to deal with padding
+            all_atoms_splits = all_atoms.split(max(size_list), dim=0)
+            return torch.cat(
+                [
+                    all_atoms_splits[idx][: size_list[idx]]
+                    for idx in range(len(size_list))
+                ]
+            )
+        return all_atoms
+
     def forward_gp_staggered(
         self,
         x,
@@ -173,14 +220,14 @@ class Edgewise(torch.nn.Module):
             out_global_async = (
                 gp_utils.gather_from_model_parallel_region_sum_grad_async(
                     out,
-                    chunk_sizes[chunk_idx],  # [padded_size for _ in range(world_size)]
+                    chunk_sizes[chunk_idx],
+                    True,  # [padded_size for _ in range(world_size)]
                 )
             )
             with record_function("STAG1"):
                 results_async.append(
                     (
                         chunk_sizes[chunk_idx],
-                        padded_size,
                         out,
                         *out_global_async,
                     )
@@ -190,18 +237,20 @@ class Edgewise(torch.nn.Module):
 
         # wait for async ops to finish
         results_aync_merged = []
-        for size_list, padded_size, local_out, all_atoms, handle in results_async:
+        for size_list, local_out, all_atoms_padded, handle in results_async:
             if handle is not None:
                 handle.wait()
             if dist.get_backend() == "gloo":
                 # need to deal with padding
-                all_atoms_splits = all_atoms.split(max(size_list), dim=0)
+                all_atoms_splits = all_atoms_padded.split(max(size_list), dim=0)
                 all_atoms = torch.cat(
                     [
                         all_atoms_splits[idx][: size_list[idx]]
                         for idx in range(len(size_list))
                     ]
                 )
+            else:
+                all_atoms = all_atoms_padded
 
             all_atoms_split = list(all_atoms.split(size_list))
             all_atoms_split[rank] = local_out
@@ -286,7 +335,9 @@ class Edgewise(torch.nn.Module):
     ):
         forward_func = self.forward_chunk
         if gp_utils.initialized():
-            forward_func = self.forward_gp_staggered
+            # forward_func = self.forward_gp_staggered
+            print("NEW GP SINGLE!")
+            forward_func = self.forward_gp_single
         elif self.activation_checkpoint_chunk_size is not None:
             forward_func = self.forward_checkpoint
         return forward_func(
@@ -346,6 +397,7 @@ class Edgewise(torch.nn.Module):
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
 
         # Compute the sum of the incoming neighboring messages for each target node
+        print("NATOMS_LOCAL", natoms_local, x_message.shape[1:])
         new_embedding = torch.zeros(
             (natoms_local,) + x_message.shape[1:],
             dtype=x_message.dtype,
