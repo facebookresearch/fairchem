@@ -53,5 +53,8 @@ class SyncMLIPInferenceWebSocketClient:
         result = pickle.loads(response)
         return result
 
+    def __del__(self):
+        self.close()
+
     def close(self):
         self.ws.close()

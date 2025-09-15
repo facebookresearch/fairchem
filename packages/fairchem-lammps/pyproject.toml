@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-lammps"
+description = "Fairchem extension package to use LAMMPs with fairchem models"
+license = {text = "GnuV2 License"}
+dynamic = ["version", "readme"]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "fairchem.core>=2.4.0",
+]
+
+[project.scripts]
+lmp_fc = "fairchem.lammps.lammps_fc:main"
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem"
+home = "https://opencatalystproject.org/"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match fairchem_core-*'
+
+[tool.hatch.build]
+directory = "../../dist-lammps"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/lammps"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/lammps"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/lammps/README.md" },
+  { path = "src/fairchem/lammps/LICENSE.md" },
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts  =  "-p no:warnings -x --quiet -rxXs --color yes"
+filterwarnings  = [
+    'ignore::UserWarning',
+    'ignore::FutureWarning',
+    'ignore::RuntimeWarning'
+    ]
+testpaths = ["tests/lammps"]
+
+[tool.coverage.run]
+source = ["fairchem.lammps"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

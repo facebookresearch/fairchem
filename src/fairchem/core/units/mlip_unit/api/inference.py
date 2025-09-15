@@ -17,6 +17,7 @@ class UMATask(StrEnum):
     OMAT = "omat"
     ODAC = "odac"
     OC20 = "oc20"
+    OC25 = "oc25"
     OMC = "omc"
 
 

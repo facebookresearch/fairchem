@@ -7,11 +7,22 @@ The leaderboard is broken into two different sections - "S2EF" and "Evaluations"
 Structure to Energy and Forces (S2EF) is the most straightforward evaluation for MLIPs - given a structure, how well can you predict the total energy and per-atom forces.
 Evaluations correspond to several chemistry relevant tasks (spin gap, ligand-strain, etc.) introduced in OMol25 to evaluate MLIPs beyond simple energy and force metrics (see the [paper](https://arxiv.org/pdf/2505.08762) for more details).
 
-The simplest way to get started is to have an ASE-compatible MLIP calculator that can make energy and force predictions.
+The simplest way to get started is to have an ASE-compatible MLIP calculator that can make energy and force predictions. Input data for the different benchmarks can be downloaded below.
+
+## 💾 Download
+
+| Benchmarks | URL | 
+|----------|----------|
+| S2EF (Val/Test)   | https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits     |
+| Evaluations    | https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data     | 
 
 ## S2EF
-The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. The download links for these datasets can be found [🔗 here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits).
-Validation and Test sets should contain 2,762,021 and 2,805,046 samples, respectively.
+The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. Validation labels are already accessible in the released dataset for local benchmarking and debugging, so we highly encourage users to make Test submissions to fairly and accurately compare models. The size of each split is as follows:
+
+| Split | Size | 
+|----------|----------|
+| Val   | 2,762,021 |
+| Test    | 2,805,046     | 
 
 Predictions must be saved as ".npz" files and shall contain the following information:
 ```
@@ -51,6 +62,7 @@ for idx in range(len(dataset)):
     energy.append(atoms.get_potential_energy())
     forces.append(atoms.get_forces())
 
+### Do not forget this! Your submission will fail.
 forces = np.concatenate(forces)
 
 np.savez_compressed(
@@ -74,18 +86,21 @@ The following evaluations are currently available on the OMol25 leaderboard:
 * Conformers: Identifying the lowest energy conformer is a crucial part of many biological and pharmaceutical tasks.
 * Protonation: As a proxy to pKa prediction, we evaluate energy differences of structures differing by one proton.
 * Distance scaling: Short range and long range intermolecular interactions are essential for observable properties like phase changes, density, etc.
+* IE/EA: The addition, removal, and transfer of electrons is central to many redox processes.
+* Spin gap: Differences between spin states can play a critical role of molecular optic devices and photactive catalysts.
 
 For a detailed descripion of each task we refer people to the original [manuscript](https://arxiv.org/pdf/2505.08762).
-The download links for evaluation inputs can be found [🔗 here](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data).
 
 To generate prediction files for the different tasks, we have released a set of [recipes](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py) to be used with ASE-compatible calculators.
 Each evaluation task has its own unique structure, a detailed description of the expected output is provided in the recipe docstrings. The following recipes should be used to evaluate the corresponding task:
 
-* [Ligand pocket](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L321)
-* [Ligand strain](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L370)
-* [Conformers](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L138)
-* [Protonation](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L186)
-* [Distance scaling](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L437)
+* [Ligand pocket](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L323)
+* [Ligand strain](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L372)
+* [Conformers](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L140)
+* [Protonation](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L188)
+* [Distance scaling](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L439)
+* [IE/EA](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L237)
+* [Spin gap](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L284)
 
 As an example:
 
