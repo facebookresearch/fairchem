@@ -37,8 +37,8 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
             "nested": {"genarris": ["python_cmd", "genarris_script", "base_config"]},
         },
         "process_generated": {
-            "keys": ["pre_relax_match_params"],
-            "nested": {"pre_relax_match_params": ["ltol", "stol", "angle_tol"]},
+            "keys": ["pre_relaxation_filter"],
+            "nested": {"pre_relaxation_filter": ["ltol", "stol", "angle_tol"]},
         },
         "relax": {
             "keys": ["relax"],
@@ -53,9 +53,17 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
                 ]
             },
         },
-        "rank": {
-            "keys": ["energy_cutoff", "density_cutoff", "post_relax_match_params"],
-            "nested": {"post_relax_match_params": ["ltol", "stol", "angle_tol"]},
+        "filter": {
+            "keys": ["post_relaxation_filter"],
+            "nested": {
+                "post_relaxation_filter": [
+                    "energy_cutoff",
+                    "density_cutoff",
+                    "ltol",
+                    "stol",
+                    "angle_tol",
+                ]
+            },
         },
         "evaluate": {
             "keys": ["evaluate"],
@@ -137,7 +145,7 @@ def _validate_config_values(config: dict[str, Any]) -> None:
         raise ValueError("'density_cutoff' is problematic")
 
     # Tolerance parameter validation
-    for param_set in ["pre_relax_match_params", "post_relax_match_params"]:
+    for param_set in ["pre_relaxation_filter", "post_relaxation_filter"]:
         if param_set in config:
             _validate_tolerance_params(config[param_set], param_set)
 
@@ -146,11 +154,9 @@ def _validate_tolerance_params(params: dict[str, Any], param_set_name: str) -> N
     """Validate tolerance parameters are positive numbers."""
     tolerance_params = ["ltol", "stol", "angle_tol"]
     for param in tolerance_params:
-        if (
-            param in params
-            and not isinstance(params[param], (int, float))
-            or params[param] <= 0
-        ):
+        if (param in params and not isinstance(params[param], (int, float))) or params[
+            param
+        ] <= 0:
             raise ValueError(
                 f"'{param}' in '{param_set_name}' must be a positive number"
             )
@@ -177,7 +183,7 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "generate",
         "process_generated",
         "relax",
-        "rank",
+        "filter",
         "evaluate",
         "free_energy",
         "create_vasp_inputs_relaxed",
