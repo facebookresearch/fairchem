@@ -4,20 +4,38 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Structure filtering utilities for FastCSP.
+Post-Relaxation Structure Filtering, Deduplication, and Ranking Module
 
-This module provides comprehensive filtering capabilities for crystal structures
-based on energy, density, connectivity, and other criteria.
+This module provides comprehensive functionality for processing ML-relaxed crystal structures
+to generate a final ranked energy landscape. It implements filtering, deduplication,
+and structure quality control measures.
+
+Key Features:
+- Energy and density-based filtering with configurable cutoffs
+- Structure deduplication using pymatgen's StructureMatcher
+- Control checks for structural integrity
+- SLURM integration for scalable computation
+
+Filtering Process:
+1. Energy Filtering: Remove structures beyond energy cutoff from global minimum
+2. Density Filtering: Filter structures with unrealistic densities
+3. Structure Deduplication: Remove similar structures
+4. Structure Quality Control: Validate chemical composition and bonding integrity
+5. Ranking: Sort structures by energy to create energy landscape
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
-from fairchem.applications.fastcsp.core.utils.slurm import submit_slurm_jobs
+from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
+from fairchem.applications.fastcsp.core.utils.slurm import (
+    get_filter_slurm_config,
+    submit_slurm_jobs,
+)
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_no_changes_in_covalent_matrix,
     check_no_changes_in_Z,
@@ -33,15 +51,31 @@ if TYPE_CHECKING:
 KJ_PER_MOL_TO_EV = eV / (kJ / mol)
 
 
+def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
+    """
+    Extract and validate post-relaxation filtering parameters from workflow configuration.
+    """
+    match_config = config.get("post_relax_match_params", {})
+    return {
+        "energy_cutoff": match_config.get("energy-cutoff", 20.0),  # default 20 kJ/mol
+        "density_cutoff": match_config.get("density-cutoff", 100),  # default 0.1 g/cm³
+        "ltol": match_config.get("ltol", 0.2),  # default lattice tolerance
+        "stol": match_config.get("stol", 0.3),  # default site tolerance
+        "angle_tol": match_config.get(
+            "angle_tol", 5
+        ),  # default angle tolerance in degrees
+    }
+
+
 def filter_and_deduplicate_structures_single(
-    root: Path,
-    output_path: Path,
-    energy_cutoff_kj_per_mol: float = 20,
-    root_unrelaxed: Path | None = None,
+    input_dir: Path,
+    output_dir: Path,
+    energy_cutoff: float = 20,
+    density_cutoff: float = 2.5,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
-    density_cutoff: float = 2.5,
+    root_unrelaxed: Path | None = None,
 ):
     """
     Apply energy-based filtering and structure deduplication to a single dataset.
@@ -55,12 +89,12 @@ def filter_and_deduplicate_structures_single(
     Args:
         root: Path to input parquet file with structure data
         output_path: Directory where filtered results will be saved
-        energy_cutoff_kj_per_mol: Maximum energy above minimum (kJ/mol)
-        root_unrelaxed: Path to unrelaxed structures for comparison
+        energy_cutoff: Maximum energy above minimum (kJ/mol)
+        density_cutoff: Maximum allowed density (g/cm³) for filtering
         ltol: Lattice parameter tolerance for structure matching
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
-        density_cutoff: Maximum allowed density (g/cm³) for filtering
+        root_unrelaxed: Path to unrelaxed structures for comparison
 
     Filtering Workflow:
         1. Validate connectivity preservation during relaxation
@@ -70,7 +104,7 @@ def filter_and_deduplicate_structures_single(
         5. Save filtered and deduplicated results
     """
     # Load structure dataset from parquet format
-    structures_df = pd.read_parquet(root, engine="pyarrow")
+    structures_df = pd.read_parquet(input_dir, engine="pyarrow")
 
     # 1. Validate connectivity preservation during ML relaxation
     if root_unrelaxed is not None:
@@ -104,19 +138,22 @@ def filter_and_deduplicate_structures_single(
 
         # Save intermediate results with connectivity validation flags
         structures_df.to_parquet(
-            root.parent.with_suffix(".updated") / root.name,
+            input_dir.parent.with_suffix(".updated") / input_dir.name,
             engine="pyarrow",
             compression="zstd",
             partition_cols=["partition_id"],
         )
-        print("Saved updated dataframe to ", root.parent.with_suffix(".updated"))
+        logger = get_central_logger()
+        logger.info(
+            f"Saved updated dataframe to {input_dir.parent.with_suffix('.updated')}"
+        )
 
     # 2. Apply multi-stage filtering workflow
-    print("Before filtering by density: ", structures_df.shape)
+    logger.info(f"Before filtering by density: {structures_df.shape}")
     structures_df = structures_df[
         structures_df["density"] < density_cutoff
     ]  # Remove unphysically dense structures
-    print("After filtering by density: ", structures_df.shape)
+    logger.info(f"After filtering by density: {structures_df.shape}")
 
     # Filter by convergence status and connectivity preservation
     # TODO: keep disordered structures that fail connectivity check
@@ -126,10 +163,9 @@ def filter_and_deduplicate_structures_single(
 
     # Apply energy-based cutoff relative to global minimum
     min_energy = structures_df_filtered["energy_relaxed_per_molecule"].min()
-    energy_cutoff = energy_cutoff_kj_per_mol / KJ_PER_MOL_TO_EV  # Convert to eV
     structures_df_filtered = structures_df_filtered[
         structures_df_filtered["energy_relaxed_per_molecule"]
-        < min_energy + energy_cutoff
+        < min_energy + energy_cutoff / KJ_PER_MOL_TO_EV
     ]
 
     # Convert CIF strings to pymatgen Structures for deduplication
@@ -153,51 +189,58 @@ def filter_and_deduplicate_structures_single(
     structures_df_deduped = structures_df_deduped.drop(columns=["structure"])
 
     # Save filtered and deduplicated results
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
     structures_df_deduped.to_parquet(
-        output_path,
+        output_dir,
         engine="pyarrow",
         compression="zstd",
     )
 
 
 def filter_and_deduplicate_structures(
-    root: Path,
-    output_path: Path,
-    energy_cutoff_kj_per_mol: float,
-    root_unrelaxed: Path | None,
+    input_dir: Path,
+    output_dir: Path,
+    post_relax_config: dict[str, Any],
+    energy_cutoff: float,
+    density_cutoff: float,
     ltol: float,
     stol: float,
     angle_tol: float,
-    density_cutoff: float,
+    root_unrelaxed: Path | None = None,
 ):
     """
     Orchestrate parallel filtering and deduplication across multiple structure datasets.
 
     Args:
-        root: Root directory containing multiple dataset directories
-        output_path: Base directory for filtered output files
-        energy_cutoff_kj_per_mol: Energy threshold above minimum (kJ/mol)
-        root_unrelaxed: Root directory with unrelaxed structures
+        input_dir: Root directory containing multiple dataset directories
+        output_dir: Base directory for filtered output files
+        post_relax_config: Configuration dictionary containing SLURM and filtering parameters
+        energy_cutoff: Energy threshold above minimum (kJ/mol)
+        density_cutoff: Maximum density threshold (g/cm³)
         ltol: Lattice parameter tolerance for structure matching
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
-        density_cutoff: Maximum density threshold (g/cm³)
+        root_unrelaxed: Root directory with unrelaxed structures
 
     Returns:
         List of submitit job objects for monitoring progress
     """
+    logger = get_central_logger()
+
+    # Get SLURM configuration
+    slurm_params = get_filter_slurm_config(post_relax_config)
+
     # Collect all dataset directories for processing
-    direcs = list(root.iterdir())
+    direcs = list(input_dir.iterdir())
 
     # Prepare job arguments
     job_args = []
     for dir_path in direcs:
-        output_file = output_path / f"{dir_path.name}.parquet"
+        output_file = output_dir / f"{dir_path.name}.parquet"
 
         # Skip datasets that have already been processed
         if output_file.exists():
-            print(f"Skipping {dir_path} because {output_file} already exists")
+            logger.info(f"Skipping {dir_path} because {output_file} already exists")
             continue
 
         unrelaxed_path = root_unrelaxed / dir_path.name if root_unrelaxed else None
@@ -208,12 +251,12 @@ def filter_and_deduplicate_structures(
                 (
                     dir_path,
                     output_file,
-                    energy_cutoff_kj_per_mol,
-                    unrelaxed_path,
+                    energy_cutoff,
+                    density_cutoff,
                     ltol,
                     stol,
                     angle_tol,
-                    density_cutoff,
+                    unrelaxed_path,
                 ),
                 {},
             )
@@ -221,10 +264,6 @@ def filter_and_deduplicate_structures(
 
     return submit_slurm_jobs(
         job_args,
-        job_name="filter_and_deduplicate_structures",
-        output_dir=root / "slurm",
-        partition="ocp,learnaccel",
-        cpus_per_task=80,
-        mem_gb=400,
-        timeout_min=1000,
+        output_dir=input_dir / "slurm",
+        **slurm_params,
     )

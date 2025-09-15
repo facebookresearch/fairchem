@@ -4,7 +4,20 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Crystal structure relaxation module
+Crystal Structure Relaxation Module for FastCSP
+
+This module provides functionality for relaxing crystal structures using machine learning
+interatomic potentials (MLIPs), specifically the Universal Model for Atoms (UMA) from
+the FAIRChem toolkit.
+
+Key Features:
+- UMA-based ML potential calculations for accurate and efficient structure optimization
+- Batch processing for high-throughput structure relaxation
+- SLURM integration for parallel GPU-accelerated relaxations
+
+The module supports multiple UMA model tasks:
+- uma_sm_1p1_omc: UMA's OMC task [RECOMMENDED]
+- uma_sm_1p1_omol: UMA's OMoltask
 """
 
 from __future__ import annotations
@@ -19,6 +32,7 @@ from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
 from ase.optimize import BFGS, FIRE, LBFGS
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
+from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_no_changes_in_covalent_matrix,
     check_no_changes_in_Z,
@@ -45,7 +59,9 @@ CHECKPOINTS = {
 
 
 def create_calculator(relax_config):
-    """Create UMA ML potential calculator for structure relaxation."""
+    """
+    Create UMA ML potential calculator for structure relaxation.
+    """
     if CHECKPOINTS[relax_config["calculator"]]["checkpoint"] is not None:
         predictor = mlip_unit.load_predict_unit(
             CHECKPOINTS[relax_config["calculator"]]["checkpoint"], device="cuda"
@@ -63,10 +79,35 @@ def create_calculator(relax_config):
     return calc
 
 
-def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
-    """Generate relaxation parameters and output directory from config."""
+def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[dict[str, Any], Path]:
+    """
+    Generate relaxation parameters and determine output directory from workflow configuration.
+
+    This function processes the global configuration to extract relaxation-specific parameters
+    and constructs a standardized output directory name based on the relaxation settings.
+
+    Args:
+        config: Full workflow configuration dictionary containing 'relax' section
+
+    Returns:
+        tuple: (relaxation_parameters_dict, output_directory_path)
+            - relaxation_parameters_dict: Processed relaxation configuration
+            - output_directory_path: Path where relaxed structures will be stored
+
+    Configuration Parameters:
+        - calculator: ML model to use ("uma-s-1p1-omc" default)
+        - optimizer: Optimization algorithm ("bfgs", "fire", "lbfgs")
+        - fmax: Force convergence criterion (0.01 eV/Å default)
+        - max-steps: Maximum optimization steps (1000 default)
+        - fix-symmetry: Preserve crystallographic symmetry during relaxation
+        - relax-cell: Allow unit cell parameters to change during optimization
+
+    Notes:
+        Output directory name encodes all relaxation parameters for reproducibility
+        and easy identification of different relaxation runs.
+    """
     root = Path(config["root"]).resolve()
-    relax_config = config["relax"]
+    relax_config = config.get("relax", {})
 
     relax_params = {
         "root": root,
@@ -87,12 +128,35 @@ def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[Path, dict[str, An
     relax_output_dir = root / "relaxed" / relax_output_dir
 
     logger = get_central_logger()
+    logger.info("Relaxation configuration:")
+    logger.info(f"Relaxation config: {relax_config}")
     logger.info(f"Relaxation output directory: {relax_output_dir}")
     return relax_params, relax_output_dir
 
 
 def relax_atoms_batch(atoms_list, relax_config, calc):
-    """Relax multiple structures in a single batch using torch optimizer."""
+    """
+    Relax multiple crystal structures simultaneously using batch optimization.
+
+    This function performs efficient batch relaxation of multiple structures.
+
+    Args:
+        atoms_list: List of ASE Atoms objects to be relaxed
+        relax_config: Dictionary containing relaxation parameters:
+            - optimizer: Must be "batch_lbfgs" for this function
+            - relax_cell: Whether to optimize unit cell parameters
+            - fix_symmetry: Must be False (not supported in batch mode)
+            - fmax: Force convergence criterion in eV/Å
+            - max_steps: Maximum optimization steps
+        calc: FAIRChemCalculator instance
+    Returns:
+        list[ASE.Atoms]: Relaxed structures with updated info dictionary containing:
+            - 'converged': Boolean indicating if optimization converged
+            - 'energy': Final potential energy in eV
+
+    Raises:
+        AssertionError: If fix_symmetry is True or optimizer is not "batch_lbfgs"
+    """
     from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
     from fairchem.core.optim.lbfgs_torch import LBFGS as FairchemLBFGS
     from fairchem.core.optim.optimizable import (
@@ -127,7 +191,37 @@ def relax_atoms_batch(atoms_list, relax_config, calc):
 
 
 def relax_atoms(atoms, relax_config, calc):
-    """Relax a single structure using ASE optimizer."""
+    """
+    Relax a single crystal structure using ASE-compatible optimizers.
+
+    This function performs structure optimization using traditional ASE optimizers
+    (BFGS, FIRE, L-BFGS) with optional unit cell relaxation and symmetry preservation.
+    Includes comprehensive quality control checks to ensure structural integrity.
+
+    Args:
+        atoms: ASE Atoms object representing the crystal structure
+        relax_config: Dictionary containing relaxation parameters:
+            - optimizer: Optimization algorithm ("bfgs", "fire", "lbfgs")
+            - relax_cell: Whether to optimize unit cell parameters
+            - fix_symmetry: Whether to preserve crystallographic symmetry
+            - fmax: Force convergence criterion in eV/Å
+            - max_steps: Maximum optimization steps
+        calc: Calculator instance
+
+    Returns:
+        ASE.Atoms: Relaxed structure with updated info dictionary containing:
+            - 'converged': Boolean indicating if optimization converged
+            - 'energy': Final potential energy in eV
+            - 'n_steps': Number of optimization steps taken
+
+    Raises:
+        ValueError: If an unsupported optimizer is specified
+        RuntimeError: If structural integrity checks fail after relaxation
+
+    Quality Control Checks:
+        - Atomic composition conservation (Z-number preservation)
+        - Covalent bonding network conservation
+    """
     # Apply symmetry constraint if requested
     if relax_config["fix_symmetry"]:
         atoms.set_constraint(FixSymmetry(atoms))
@@ -208,12 +302,10 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
             atoms_relaxed = [
                 relax_atoms(atoms, relax_config, calc) for atoms in tqdm(atoms_list)
             ]
-        print(atoms_relaxed)
         # Extract properties
         structures_relaxed = [
             AseAtomsAdaptor.get_structure(atoms) for atoms in atoms_relaxed
         ]
-        print(structures_relaxed)
         structures_df["relaxed_cif"] = [
             structure.to(fmt="cif") for structure in structures_relaxed
         ]
@@ -269,27 +361,12 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
 def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     """Submit parallel structure relaxation jobs to SLURM."""
 
+    # Configure SLURM parameters
+    relax_slurm_config, executor_params = get_relax_slurm_config(relax_config)
+
     # Set up SLURM executor with GPU requirements
-    relax_slurm_config = relax_config.get("slurm", {})
-    if relax_slurm_config == {}:
-        relax_slurm_config = {
-            "job-name": "relax",
-            "gpus_per_node": 1,
-            "cpus_per_task": 10,
-            "mem_gb": 50,
-            "time": 1000,  # minutes
-        }
     executor = submitit.AutoExecutor(folder=output_dir.parent / "slurm")
-    executor.update_parameters(
-        slurm_job_name=relax_slurm_config.get("job-name", "relax"),
-        timeout_min=relax_slurm_config.get("time", 1000),
-        gpus_per_node=relax_slurm_config.get("gpus_per_node", 1),
-        cpus_per_task=relax_slurm_config.get("cpus_per_task", 10),
-        mem_gb=relax_slurm_config.get("mem_gb", 50),
-        slurm_partition=relax_slurm_config.get(
-            "partition", "learnaccel,learnfair,ocp,scavenge"
-        ),
-    )
+    executor.update_parameters(**executor_params)
 
     logger = get_central_logger()
 
@@ -319,6 +396,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
             )
             jobs.append(job)
 
+    logger = get_central_logger()
     logger.info(
         f"Submitted {len(jobs)} relaxation jobs: {jobs[0].job_id.split('_')[0] if jobs else 'none'}"
     )
@@ -331,7 +409,7 @@ if __name__ == "__main__":
 
     import yaml
 
-    # Set up argument parser for standalone execution
+    # Set up argument Parser for standalone execution
     parser = argparse.ArgumentParser(
         description="Crystal Structure Relaxations with UMA"
     )

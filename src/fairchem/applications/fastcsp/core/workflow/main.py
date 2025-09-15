@@ -1,5 +1,5 @@
 """
-Copyright (c) Meta Platforms, Inc. and def detect_restart(root_dir: Path, log_file: str = "fastcsp.log") -> bool:
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -7,7 +7,23 @@ LICENSE file in the root directory of this source tree.
 FastCSP - Fast Crystal Structure Prediction Workflow
 
 This module provides the main orchestration script for the FastCSP (Fast Crystal Structure
-Prediction) workflow.
+Prediction) workflow. It coordinates the execution of all workflow stages including structure
+generation, relaxation, filtering, evaluation, and optional DFT validation.
+
+Key Features:
+- Stage-based workflow execution with dependency management
+- Automatic restart capability with progress detection
+- SLURM integration for high-performance computing
+
+The workflow stages are:
+1. generate: Generate crystal structures using Genarris
+2. process_generated: Process and deduplicate raw structures
+3. relax: ML-based structure relaxation using UMA
+4. filter: Energy filtering and final deduplication
+5. evaluate: Compare against experimental data (optional)
+6. create_vasp_inputs_*: Generate DFT input files (optional)
+7. submit_vasp: Submit DFT calculations (optional)
+8. read_vasp_outputs: Process DFT results (optional)
 """
 
 from __future__ import annotations
@@ -29,7 +45,23 @@ if TYPE_CHECKING:
 
 
 def load_config(args: argparse.Namespace) -> dict[str, Any]:
-    """Load and validate FastCSP workflow configuration."""
+    """
+    Load and validate FastCSP workflow configuration from YAML file.
+
+    This function reads the configuration file specified in the command line arguments,
+    loads it as a YAML document, and validates it against the required stages.
+
+    Args:
+        args: Command line arguments containing the config file path and stages
+
+    Returns:
+        dict: Validated configuration dictionary containing all workflow parameters
+
+    Raises:
+        FileNotFoundError: If the configuration file doesn't exist
+        yaml.YAMLError: If the configuration file is not valid YAML
+        ValueError: If the configuration is missing required parameters for requested stages
+    """
     with open(args.config) as config_file:
         config = yaml.safe_load(config_file)
     validate_config(config, args.stages)
@@ -38,14 +70,65 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
 
 def detect_restart(root_dir: Path, log_file: str = "FastCSP.log") -> bool:
     """
-    Detect if this is a restart by checking if log file already exists.
+    Detect if this is a workflow restart by checking for existing log file.
+
+    This function determines whether the current execution is a fresh start or
+    a restart of a previous workflow by checking if the log file already exists
+    and contains data.
+
+    Args:
+        root_dir: Root directory where the log file would be located
+        log_file: Name of the log file to check (default: "FastCSP.log")
+
+    Returns:
+        bool: True if this appears to be a restart (log file exists with content),
+              False for a fresh start
     """
     log_path = root_dir / log_file
     return log_path.exists() and log_path.stat().st_size > 0
 
 
 def main(args: argparse.Namespace) -> None:
-    """Main orchestration function for FastCSP workflow."""
+    """
+    Main orchestration function for the FastCSP crystal structure prediction workflow.
+
+    This function coordinates the execution of all FastCSP workflow stages in the correct
+    dependency order. It handles:
+    - Configuration loading and validation
+    - Workspace setup and logging initialization
+    - Restart detection and state management
+    - Stage-by-stage execution with job dependency handling
+    - Progress monitoring and error reporting
+
+    The workflow supports both complete pipeline execution and selective stage execution,
+    with automatic dependency resolution and restart capability.
+
+    Workflow Stages Executed:
+    1. generate: Crystal structure generation using Genarris
+    2. process_generated: Structure processing and initial deduplication
+    3. relax: ML-based structure relaxation using Universal Model for Atoms
+    4. filter: Energy filtering and final structure deduplication
+    5. evaluate: Experimental structure comparison (optional)
+    6. create_vasp_inputs_*: DFT input file generation (optional)
+    7. submit_vasp: DFT job submission (optional, requires customization)
+    8. read_vasp_outputs: DFT result processing and analysis (optional)
+
+    Args:
+        args: Command line arguments containing:
+            - config: Path to YAML configuration file
+            - stages: List of workflow stages to execute
+
+    Raises:
+        FileNotFoundError: If required input files are missing
+        ValueError: If configuration validation fails
+        RuntimeError: If any workflow stage fails to complete successfully
+
+    Side Effects:
+        - Creates workspace directory structure
+        - Generates log files and progress tracking
+        - Submits SLURM jobs for parallel processing
+        - Creates intermediate and final result files
+    """
     # Load configuration and set up workspace
     config = load_config(args)
     root = Path(config["root"]).resolve()
@@ -107,6 +190,7 @@ def main(args: argparse.Namespace) -> None:
         jobs = process_genarris_outputs(
             input_dir=root / "genarris",
             output_dir=root / "raw_structures",
+            pre_relax_config=pre_relax_config,
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
@@ -152,6 +236,7 @@ def main(args: argparse.Namespace) -> None:
         jobs = filter_and_deduplicate_structures(
             input_dir=relax_output_dir / "raw_structures",
             output_dir=relax_output_dir / "filtered_structures",
+            post_relax_config=post_relax_config,
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
             density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
             ltol=post_relax_config["ltol"],
