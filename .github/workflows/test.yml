@@ -166,6 +166,7 @@ jobs:
 
   test_lammps_gpu:
     runs-on: 4-core-ubuntu-gpu-t4
+    needs: test_gpu # wait for test_gpu to finish first
     permissions:
       contents: read
       # Needed to manually set commit status
