@@ -4,14 +4,25 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Structure conversion and manipulation utilities for FastCSP.
-Structure validation utilities for FastCSP.
+Structure Conversion, Manipulation, and Validation Utilities for FastCSP
 
-This module provides functions to validate that crystal structures maintain
-their chemical integrity during ML-based relaxation processes.
+This module provides essential utilities for handling crystal structures throughout
+the FastCSP workflow. It implements efficient conversions between different structure
+representations, validation algorithms for structural integrity, and functions
+for high-throughput crystal structure processing.
 
-This module provides utilities for converting between different structure formats
-(CIF, ASE Atoms, pymatgen Structure) and basic structure manipulation operations.
+Key Features:
+- Structure hashing for efficient comparison and caching
+- Distributed processing support with consistent partitioning
+- Chemical composition validation and bonding analysis
+- Quality control checks for structural integrity
+
+Structure Validation:
+- Atomic composition conservation (Z-number preservation)
+- Covalent bonding network analysis using coordination environments
+
+The module is designed for both individual structure operations and batch processing
+of large crystal structure datasets common in high-throughput materials discovery.
 """
 
 from __future__ import annotations
@@ -31,32 +42,49 @@ if TYPE_CHECKING:
 
 def cif_to_structure(cif: str) -> Structure | None:
     """
-    Convert CIF string to pymatgen Structure object.
+    Convert CIF (Crystallographic Information File) string to pymatgen Structure object.
+
+    Args:
+        cif: CIF format string containing crystal structure data
+
+    Returns:
+        Structure object if conversion successful, None if cif is empty/invalid
     """
     return Structure.from_str(cif, fmt="cif") if cif else None
 
 
 def cif_to_atoms(cif: str) -> Atoms | None:
     """
-    Convert CIF string to ASE Atoms object.
+    Convert CIF string to ASE (Atomic Simulation Environment) Atoms object.
+
+    This function provides a direct path from CIF format to ASE Atoms objects,
+    which are commonly used for structure optimization and analysis.
+
+    Args:
+        cif: CIF format string containing crystal structure data
+
+    Returns:
+        ASE Atoms object if conversion successful, None if cif is empty/invalid
     """
     return AseAtomsAdaptor.get_atoms(cif_to_structure(cif)) if cif else None
 
 
 def get_partition_id(key: str, npartitions: int = 1000) -> int:
     """
-    Generate consistent partition ID for distributed processing.
+    Generate a consistent partition ID for distributed processing of structures.
 
-    Creates a deterministic partition identifier based on MD5 hashing of the input key.
-    This ensures consistent assignment of data to processing partitions across
-    different runs, enabling reproducible distributed processing.
+    This function creates deterministic partitioning for parallel processing,
+    ensuring that structures with the same key always map to the same partition.
 
     Args:
-        key: String identifier for data element (e.g., structure_id, formula)
-        npartitions: Total number of partitions for load balancing (default: 1000)
+        key: String identifier for the structure (e.g., molecule_name + space_group)
+        npartitions: Total number of partitions for distribution (default: 1000)
 
     Returns:
-        Partition ID in range [0, npartitions-1]
+        int: Partition ID in range [0, npartitions-1]
+
+    Notes:
+        - Deterministic: same key always produces same partition ID
     """
     key_encoded = key.encode("utf-8")
     md5_hash = hashlib.md5()
@@ -155,7 +183,6 @@ def check_no_changes_in_covalent_matrix(
         - Detect atom overlaps that lead to artificial bonding
         - Identify relaxation artifacts that break molecular integrity
         - Filter out reconstructions that change chemical connectivity
-        - Ensure ML relaxation preserves intended molecular structure
     """
     # Handle error cases where structures couldn't be processed
     if initial_atoms is None or final_atoms is None:
@@ -214,7 +241,6 @@ def check_no_changes_in_Z(
     Use Cases:
         - Detect molecular fragmentation during relaxation
         - Identify aggregation events that merge separate molecules
-        - Quality control for structures with multiple molecular units
         - Less strict than full connectivity validation
     """
     # Handle error cases where structures couldn't be processed

@@ -4,10 +4,22 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Structure deduplication utilities for FastCSP.
+Structure Deduplication Utilities for FastCSP
 
-This module provides algorithms for removing duplicate crystal structures
-using pymatgen StructureMatcher with hash-based pre-filtering for performance.
+Key Features:
+- Hierarchical deduplication: fast pre-filtering followed by detailed comparison
+- Parallel processing for scalable performance on large structure databases
+- Configurable tolerance parameters for different similarity requirements
+
+Deduplication Strategy:
+1. Fast Pre-filtering: Group structures by binned properties
+2. Crystallographic Comparison: Apply StructureMatcher within each group
+3. Clustering: Identify connected components of similar structures
+4. Representative Selection: Choose optimal representative from each cluster
+
+The module is optimized for crystal structure prediction workflows where hundreds
+to thousands of structures per molecule need to be efficiently deduplicated while
+preserving all unique polymorphs and avoiding false positive matches.
 """
 
 from __future__ import annotations
@@ -15,6 +27,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
+from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.structure import get_structure_hash
 from p_tqdm import p_map
 from pymatgen.analysis.structure_matcher import StructureMatcher
@@ -26,38 +39,6 @@ if TYPE_CHECKING:
 def process_structure_group(group_data, ltol=0.2, stol=0.3, angle_tol=5):
     """
     Apply crystallographic deduplication within a pre-filtered structure group.
-
-    Performs detailed crystallographic comparison using pymatgen StructureMatcher
-    on structures that have been pre-filtered by hash-based grouping. This two-stage
-    approach (hash pre-filtering + detailed comparison) dramatically improves
-    deduplication efficiency for large structure datasets.
-
-    Args:
-        group_data: (indices, structures) where:
-                   - indices: List of original DataFrame indices
-                   - structures: List of pymatgen Structure objects
-        ltol: Lattice parameter tolerance (fractional difference)
-        stol: Site tolerance (Ångström) for atomic position matching
-        angle_tol: Angle tolerance (degrees) for lattice angle matching
-
-    Returns:
-        List of (index, subgroup_id) tuples assigning each structure
-        to a crystallographic equivalence class within the group
-
-    Algorithm:
-        1. Handle trivial case: single structure returns immediately
-        2. Initialize StructureMatcher with specified tolerances
-        3. Use greedy clustering approach:
-           - Take first unmatched structure as reference
-           - Find all structures matching the reference
-           - Assign matched structures to same subgroup
-           - Repeat with remaining unmatched structures
-        4. Return subgroup assignments for all structures
-
-    Complexity:
-        - Worst case: O(n²) comparisons for n structures
-        - Typical case: Much better due to hash pre-filtering
-        - Memory efficient: processes one group at a time
     """
     indices, structures = group_data
 
@@ -108,7 +89,7 @@ def deduplicate_structures(
     stol: float = 0.3,
     angle_tol: float = 5,
     n_jobs: int = 120,
-    remove_duplicates: bool = True,
+    remove_duplicates: bool = False,
     hash_density: bool = True,
     hash_volume: bool = True,
 ):
@@ -117,38 +98,11 @@ def deduplicate_structures(
 
     Implements a two-stage deduplication algorithm that combines hash-based pre-filtering
     with detailed crystal comparison for optimal performance on large scale.
-
-    Args:
-        df: DataFrame containing structures with 'structure' and 'z' columns
-        ltol: Lattice parameter tolerance for StructureMatcher
-        stol: Site tolerance for StructureMatcher
-        angle_tol: Angle tolerance for StructureMatcher
-        n_jobs: Number of parallel processes for deduplication (default: 120)
-        remove_duplicates: Whether to keep only one structure per group
-        hash_density: Include density in hash for geometric grouping
-        hash_volume: Include volume in hash for size-based grouping
-
-    Returns:
-        DataFrame with added 'group_index' column indicating
-        crystallographically equivalent structures. Optionally
-        filtered to remove duplicates if remove_duplicates=True.
-
-    Algorithm Overview:
-        1. **Hash-based Pre-filtering**: Group structures by chemical formula,
-           Z value, and optionally density/volume bins
-        2. **Parallel Processing**: Use p_map to process hash groups in parallel
-        3. **Crystallographic Comparison**: Apply StructureMatcher within each hash group
-        4. **Group Assignment**: Assign unique group_index to each equivalence class
-        5. **Optional Filtering**: Remove duplicates keeping one representative per group
-
-    Performance Benefits:
-        - Hash pre-filtering reduces expensive comparisons by orders of magnitude
-        - Parallel processing across hash groups for optimal CPU utilization
-        - Memory efficient: processes groups independently
-        - Scales to datasets with millions of structures
     """
+    logger = get_central_logger()
+
     # Stage 1: Generate hash-based groups for pre-filtering
-    print("Generating structure hashes for pre-filtering...")
+    logger.info("Generating structure hashes for pre-filtering...")
     hashes = df[["structure", "z"]].apply(
         lambda x: get_structure_hash(
             x["structure"],
@@ -164,7 +118,7 @@ def deduplicate_structures(
     for i, h in enumerate(hashes):
         hash_groups[h].append(i)
     hash_groups = list(hash_groups.items())
-    print("Number of unique hashes: ", len(hash_groups))
+    logger.info(f"Number of unique hashes: {len(hash_groups)}")
 
     # Stage 2: Prepare data for parallel crystallographic comparison
     groups_to_process = []
@@ -174,7 +128,7 @@ def deduplicate_structures(
 
     # Stage 3: Parallel crystallographic deduplication within hash groups
     num_groups = len(groups_to_process)
-    print(f"Processing {num_groups} hash groups in parallel...")
+    logger.info(f"Processing {num_groups} hash groups in parallel...")
     results = p_map(
         process_structure_group,  # Function to process each group
         groups_to_process,  # List of (indices, structures) tuples
@@ -191,10 +145,9 @@ def deduplicate_structures(
             # Create globally unique group identifier
             all_matches.append((idx, f"{hash_val}_{subgroup}"))
 
-    print(
-        "Number of groups: ",
-        len({match[1] for match in all_matches}),
-        len(all_matches),
+    unique_groups = len({match[1] for match in all_matches})
+    logger.info(
+        f"Deduplication completed: {unique_groups} unique groups from {len(all_matches)} structures"
     )
 
     # Stage 5: Apply group assignments to DataFrame
@@ -203,7 +156,8 @@ def deduplicate_structures(
 
     # Stage 6: Optional duplicate removal (keep one representative per group)
     if remove_duplicates:
-        print("Removing duplicates, keeping one structure per group...")
-        df.drop_duplicates(subset=["group_index"], inplace=True)
+        logger.info("Removing duplicates, keeping one structure per group...")
+        df_deduped = df.drop_duplicates(subset=["group_index"])
+        return df_deduped
 
     return df

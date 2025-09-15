@@ -4,11 +4,28 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Input validation utilities for the FastCSP workflow.
+Configuration Validation and Management for FastCSP Workflow
 
-This module provides comprehensive validation for FastCSP inputs,
-ensuring all required parameters are present and have valid values before
-workflow execution begins.
+This module provides comprehensive configuration validation and management utilities
+for the FastCSP crystal structure prediction workflow. It ensures that all required
+parameters are present and valid before workflow execution begins, preventing
+runtime failures and providing clear error messages for configuration issues.
+
+Key Features:
+- Stage-specific configuration validation with detailed requirements checking
+- Nested configuration parameter validation for complex workflow sections
+- Type checking and value constraint validation for critical parameters
+- Dependency resolution and stage ordering based on workflow requirements
+- Clear error reporting with specific guidance for configuration fixes
+
+Configuration Structure:
+The module validates configurations across multiple workflow stages including:
+- generate: Genarris structure generation parameters
+- process_generated: Pre-relaxation filtering and deduplication settings
+- relax: ML relaxation parameters and optimization settings
+- filter: Post-relaxation filtering and energy landscape construction
+- evaluate: Experimental comparison and validation settings
+- VASP integration: DFT validation and comparison workflows
 """
 
 from __future__ import annotations
@@ -192,16 +209,19 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "read_vasp_outputs",
     ]
 
+    from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
+
+    logger = get_central_logger()
     requested_stages = set(stages)
 
     reordered = [stage for stage in canonical_order if stage in requested_stages]
 
     missing_stages = requested_stages - set(reordered)
     if missing_stages:
-        print(f"Warning: Unknown stages found: {missing_stages}")
+        logger.warning(f"Unknown stages found: {missing_stages}")
 
     if reordered != stages:
-        print(f"Reordered stages from: {stages}")
-        print(f"                   to: {reordered}")
+        logger.info(f"Reordered stages from: {stages}")
+        logger.info(f"                   to: {reordered}")
 
     return reordered
