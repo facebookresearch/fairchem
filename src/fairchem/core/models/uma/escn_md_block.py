@@ -129,6 +129,7 @@ class Edgewise(torch.nn.Module):
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
                 x,
+                x.shape[0],
                 x_edge,
                 edge_distance,
                 edge_index,
