@@ -93,6 +93,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset=0,
         out=None,
     ):
@@ -133,10 +134,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset=0,
     ):
-        size_list = sizes[:, 0].tolist()
-
         out = self.forward_chunk(
             x,
             x_edge,
@@ -147,13 +147,17 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             0,
             0,
             None,
+            gloo_backend,
             node_offset=node_offset,
         )
-        all_atoms, _ = gp_utils.gather_from_model_parallel_region_sum_grad_async(
-            out, size_list, False
-        )
 
-        if dist.get_backend() == "gloo":
+        if gloo_backend:
+            size_list = size_list_fn(natoms, gp_utils.get_gp_world_size())
+            all_atoms, _ = (
+                gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
+                    out, size_list, False
+                )
+            )
             # need to deal with padding
             all_atoms_splits = all_atoms.split(max(size_list), dim=0)
             return torch.cat(
@@ -162,6 +166,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                     for idx in range(len(size_list))
                 ]
             )
+        all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+            out, natoms
+        )
         return all_atoms
 
     def forward_gp_staggered(
@@ -175,6 +182,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset=0,
     ):
         group = get_gp_group()
@@ -210,14 +218,24 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 sizes,
                 padded_size,
                 edge_splits,
+                gloo_backend,
                 _global_node_offset,
             )
 
-            out_global_async = (
-                gp_utils.gather_from_model_parallel_region_sum_grad_async(
-                    out, chunk_sizes[chunk_idx], True
+            if gloo_backend:
+                out_global_async = (
+                    gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
+                        out,
+                        chunk_sizes[chunk_idx],
+                        True,
+                    )
                 )
-            )
+            else:
+                out_global_async = (
+                    gp_utils.gather_from_model_parallel_region_sum_grad_async(
+                        out, True, natoms
+                    )
+                )
             results_async.append(
                 (
                     chunk_sizes[chunk_idx],
@@ -237,7 +255,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         ) in results_async:
             if handle is not None:
                 handle.wait()
-            if dist.get_backend() == "gloo":
+            if gloo_backend:
                 # need to deal with padding
                 all_atoms_splits = all_atoms_padded.split(max(size_list), dim=0)
                 all_atoms = torch.cat(
@@ -271,6 +289,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset=0,
     ):
         edge_index_partitions = edge_index.split(
@@ -296,6 +315,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 sizes,
                 padded_size,
                 edge_splits,
+                gloo_backend,
                 use_reentrant=False,
             )
 
@@ -312,6 +332,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset=0,
     ):
         forward_func = self.forward_chunk
@@ -332,6 +353,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             sizes,
             padded_size,
             edge_splits,
+            gloo_backend,
             node_offset=node_offset,
         )
         return ret
@@ -384,6 +406,7 @@ class ChgSpinEmbedding(nn.Module):
         else:
             raise ValueError(f"embedding type {self.embedding_type} not implemented")
 
+    @torch.compiler.disable
     def forward(self, x):
         # null token for spin is 0
         # charge is default 0

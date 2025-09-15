@@ -19,6 +19,7 @@ from typing_extensions import Literal
 from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
     get_gp_rank,
+    size_list_fn,
 )
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
@@ -127,10 +128,10 @@ class Edgewise(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset: int = 0,
     ):
-        size_list = sizes[:, 0].tolist()
-
+        size_list = size_list_fn(natoms, gp_utils.get_gp_world_size())
         out = self.forward_chunk(
             x,
             x_edge,
@@ -144,14 +145,16 @@ class Edgewise(torch.nn.Module):
             sizes=None,
             padded_size=0,
             edge_splits=None,
+            gloo_backend=gloo_backend,
             node_offset=node_offset,
         )
 
-        all_atoms, _ = gp_utils.gather_from_model_parallel_region_sum_grad_async(
-            out, size_list, False
-        )
-
-        if dist.get_backend() == "gloo":
+        if gloo_backend:
+            all_atoms, _ = (
+                gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
+                    out, size_list, False
+                )
+            )
             # need to deal with padding
             all_atoms_splits = all_atoms.split(max(size_list), dim=0)
             return torch.cat(
@@ -160,6 +163,9 @@ class Edgewise(torch.nn.Module):
                     for idx in range(len(size_list))
                 ]
             )
+        all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+            out, natoms
+        )
         return all_atoms
 
     def forward_gp_staggered(
@@ -174,10 +180,9 @@ class Edgewise(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset: int = 0,
     ):
-        # print("BLOCK",sizes)
-        # gloo= dist.backend() == 'gloo'
         group = gp_utils.get_gp_group()
         rank = get_gp_rank()
         world_size = dist.get_world_size(group=group)
@@ -214,16 +219,25 @@ class Edgewise(torch.nn.Module):
                 sizes=sizes,
                 padded_size=padded_size,
                 edge_splits=edge_splits,
+                gloo_backend=gloo_backend,
                 node_offset=_global_node_offset,
             )
-            # print("NEW XX",sizes[:,chunk_idx].tolist())
-            out_global_async = (
-                gp_utils.gather_from_model_parallel_region_sum_grad_async(
-                    out,
-                    chunk_sizes[chunk_idx],
-                    True,  # [padded_size for _ in range(world_size)]
+            if gloo_backend:
+                out_global_async = (
+                    gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
+                        out,
+                        chunk_sizes[chunk_idx],
+                        True,  # [padded_size for _ in range(world_size)]
+                    )
                 )
-            )
+            else:
+                out_global_async = (
+                    gp_utils.gather_from_model_parallel_region_sum_grad_async(
+                        out,
+                        True,  # [padded_size for _ in range(world_size)]
+                        natoms,
+                    )
+                )
             with record_function("STAG1"):
                 results_async.append(
                     (
@@ -240,7 +254,7 @@ class Edgewise(torch.nn.Module):
         for size_list, local_out, all_atoms_padded, handle in results_async:
             if handle is not None:
                 handle.wait()
-            if dist.get_backend() == "gloo":
+            if gloo_backend:
                 # need to deal with padding
                 all_atoms_splits = all_atoms_padded.split(max(size_list), dim=0)
                 all_atoms = torch.cat(
@@ -275,6 +289,7 @@ class Edgewise(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset: int = 0,
     ):
         edge_index_partitions = edge_index.split(
@@ -308,6 +323,7 @@ class Edgewise(torch.nn.Module):
                     sizes,
                     padded_size,
                     edge_splits,
+                    gloo_backend,
                     node_offset,
                     ac_mole_start_idx,
                     use_reentrant=False,
@@ -331,12 +347,12 @@ class Edgewise(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset: int = 0,
     ):
         forward_func = self.forward_chunk
         if gp_utils.initialized():
             # forward_func = self.forward_gp_staggered
-            print("NEW GP SINGLE!")
             forward_func = self.forward_gp_single
         elif self.activation_checkpoint_chunk_size is not None:
             forward_func = self.forward_checkpoint
@@ -351,6 +367,7 @@ class Edgewise(torch.nn.Module):
             sizes,
             padded_size,
             edge_splits,
+            gloo_backend,
             node_offset=node_offset,
         )
 
@@ -366,6 +383,7 @@ class Edgewise(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
@@ -397,7 +415,6 @@ class Edgewise(torch.nn.Module):
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
 
         # Compute the sum of the incoming neighboring messages for each target node
-        print("NATOMS_LOCAL", natoms_local, x_message.shape[1:])
         new_embedding = torch.zeros(
             (natoms_local,) + x_message.shape[1:],
             dtype=x_message.dtype,
@@ -557,6 +574,7 @@ class eSCNMD_Block(torch.nn.Module):
         sizes,
         padded_size,
         edge_splits,
+        gloo_backend,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -578,6 +596,7 @@ class eSCNMD_Block(torch.nn.Module):
                 sizes,
                 padded_size,
                 edge_splits,
+                gloo_backend,
                 node_offset,
             )
             x = x + x_res

@@ -50,6 +50,7 @@ from .escn_md_block import eSCNMD_Block
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
+from torch import distributed as dist
 
 ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
 
@@ -414,30 +415,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
 
-            _, node_edge_counts = torch.unique(
-                graph_dict["edge_index"][1], return_counts=True
-            )
-
-            node_edge_offsets = node_edge_counts.cumsum(0).cpu()
-            graph_dict["n_chunks"] = 1
-            graph_dict["sizes"] = torch.tensor(
-                [
-                    size_list_fn(chunk_for_rank, graph_dict["n_chunks"])
-                    for chunk_for_rank in size_list_fn(
-                        data_dict["atomic_numbers_full"].shape[0],
-                        gp_utils.get_gp_world_size(),
-                    )
-                ]
-            )
-            graph_dict["edge_splits"] = (
-                node_edge_offsets[
-                    graph_dict["sizes"][gp_utils.get_gp_rank()].cumsum(0) - 1
-                ]
-                .diff(prepend=torch.tensor([0]))
-                .tolist()
-            )
-            graph_dict["padded_size"] = graph_dict["sizes"].max().item()
-
         else:
             graph_dict["node_offset"] = 0
             graph_dict["edge_distance_vec_full"] = graph_dict["edge_distance_vec"]
@@ -452,6 +429,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
+        gloo_backend = dist.get_backend() == "gloo"
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -529,12 +507,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
-            source_embedding = self.source_embedding(
-                data_dict["atomic_numbers_full"][graph_dict["edge_index"][0]]
-            )
-            target_embedding = self.target_embedding(
-                data_dict["atomic_numbers_full"][graph_dict["edge_index"][1]]
-            )
+            source_embedding = self.source_embedding(data_dict["atomic_numbers_full"])[
+                graph_dict["edge_index"][0]
+            ]
+            target_embedding = self.target_embedding(data_dict["atomic_numbers_full"])[
+                graph_dict["edge_index"][1]
+            ]
             x_edge = torch.cat(
                 (edge_distance_embedding, source_embedding, target_embedding), dim=1
             )
@@ -548,6 +526,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["sizes"],
                 graph_dict["padded_size"],
                 graph_dict["edge_splits"],
+                gloo_backend,
                 graph_dict["node_offset"],
             )
 
@@ -567,6 +546,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["sizes"],
                     graph_dict["padded_size"],
                     graph_dict["edge_splits"],
+                    gloo_backend,
                     sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -582,6 +562,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         }
         return out
 
+    @torch.compiler.disable
     def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
         """Graph Parallel
         This creates the required partial tensors for each rank given the full tensors.
@@ -620,6 +601,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         graph_dict["edge_distance"] = edge_distance[start_idx:end_idx]
         graph_dict["edge_distance_vec"] = edge_distance_vec_full[start_idx:end_idx]
         graph_dict["node_offset"] = node_partition[0]
+
+        _, node_edge_counts = torch.unique(
+            graph_dict["edge_index"][1], return_counts=True
+        )
+
+        node_edge_offsets = node_edge_counts.cumsum(0).cpu()
+        graph_dict["n_chunks"] = 1
+        graph_dict["sizes"] = torch.tensor(
+            [
+                size_list_fn(chunk_for_rank, graph_dict["n_chunks"])
+                for chunk_for_rank in size_list_fn(
+                    atomic_numbers_full.shape[0],
+                    gp_utils.get_gp_world_size(),
+                )
+            ]
+        )
+        graph_dict["edge_splits"] = (
+            node_edge_offsets[graph_dict["sizes"][gp_utils.get_gp_rank()].cumsum(0) - 1]
+            .diff(prepend=torch.tensor([0]))
+            .tolist()
+        )
+        graph_dict["padded_size"] = graph_dict["sizes"].max().item()
 
         return graph_dict
 
