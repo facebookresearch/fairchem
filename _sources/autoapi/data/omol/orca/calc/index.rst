@@ -28,6 +28,7 @@ Attributes
    data.omol.orca.calc.LOOSE_OPT_PARAMETERS
    data.omol.orca.calc.OPT_PARAMETERS
    data.omol.orca.calc.TIGHT_OPT_PARAMETERS
+   data.omol.orca.calc.EVAL_OPT_PARAMETERS
 
 
 Classes
@@ -83,6 +84,8 @@ Module Contents
 .. py:data:: OPT_PARAMETERS
 
 .. py:data:: TIGHT_OPT_PARAMETERS
+
+.. py:data:: EVAL_OPT_PARAMETERS
 
 .. py:class:: Vertical(*args, **kwds)
 

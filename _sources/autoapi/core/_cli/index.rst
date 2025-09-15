@@ -193,6 +193,12 @@ Module Contents
 
 
 
+   .. py:attribute:: additional_parameters
+      :type:  Optional[dict]
+      :value: None
+
+
+
 .. py:class:: SchedulerConfig
 
    .. py:attribute:: mode
