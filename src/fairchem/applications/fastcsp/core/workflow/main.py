@@ -173,7 +173,7 @@ def main(args: argparse.Namespace) -> None:
         jobs = run_genarris_jobs(
             output_dir=root / "genarris",
             genarris_config=genarris_config,
-            molecules_file=config["molecules"],  # validate this
+            molecules_file=config["molecules"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(logger, "Genarris generation", len(jobs))
@@ -251,7 +251,6 @@ def main(args: argparse.Namespace) -> None:
 
     # 5. (Optional) Compare predicted structures to experimental
     # using either CSD API or pymatgen StructureMatcher
-    # TODO: Implementation in progress - will be available soon
     if "evaluate" in args.stages:
         logging.log_stage_start(
             logger, "evaluating for structure matches to experimental structures"
@@ -265,13 +264,10 @@ def main(args: argparse.Namespace) -> None:
         compute_structure_matches(
             input_dir=relax_output_dir / "filtered_structures",
             output_dir=relax_output_dir / "matched_structures",
-            config=eval_config,
-            molecules_file=config["molecules"],
+            eval_config=eval_config,
+            target_xtals_dir=config["evaluate"]["target_xtals_dir"],
         )
         logging.log_stage_complete(logger, "evaluation against experimental structures")
-
-    logger.info("🎉 FastCSP workflow completed successfully!")
-    logger.info("=" * 80)
 
     # 6. (Optional) Calculate free energies for structures
     # TODO: Implementation in progress - will be available soon
@@ -376,3 +372,6 @@ def main(args: argparse.Namespace) -> None:
             logging.log_stage_complete(
                 logger, "reading VASP outputs and computing structure matches"
             )
+
+    logger.info("🎉 FastCSP workflow completed successfully!")
+    logger.info("=" * 80)
