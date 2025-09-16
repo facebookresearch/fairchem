@@ -103,3 +103,36 @@ predictor = pretrained_mlip.get_predict_unit(
     "uma-s-1p1", device="cuda", inference_settings=settings
 )
 ```
+
+## Multi-GPU Inference
+
+UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we use a client-server architecture for maximum flexibility and scaling into large scale parallelism. We use a light-weight websocket [client](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/inference/client_websocket.py#L33), and a websocket [server](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/inference/inference_server_ray.py) that then uses [ray](https://www.ray.io/) to launch Ray Actors for each GPU-rank under the hood. This allows us to seemlessly scale to any infrastructure that can run Ray.
+
+To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called [ParallelMLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/cb1b95fffe8a5bc0276203c13ecd222244b8e7b6/src/fairchem/core/units/mlip_unit/predict.py#L311)
+
+For example, we can create a predictor with 8 GPU workers in a very similiar way to MLIPPredictUnit:
+
+```{code-cell} python3
+from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+
+inference_settings = InferenceSettings(
+    tf32=True,
+    merge_mole=True,
+    wigner_cuda=False,
+    compile=False,
+    activation_checkpointing=False,
+    internal_graph_gen_version=2,
+    external_graph_gen=False,
+)
+
+predictor = ParallelMLIPPredictUnit(
+    inference_model_path=pretrained_checkpoint_path_from_name("uma-s-1p1"),
+    device="cuda",
+    inference_settings=inference_settings,
+    server_config={"workers": 8},
+)
+```
+
+This will automatically create a Ray server on your local machine and use a local client to connect to it. You can also easily manually create a [server](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/inference/inference_server_ray.py) running elsewhere (for example on a very large GPU cluster) and then use a separate client to connect to it.
