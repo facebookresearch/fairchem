@@ -57,6 +57,9 @@ Module Contents
    .. py:method:: call(atomic_data)
 
 
+   .. py:method:: __del__()
+
+
    .. py:method:: close()
 
 

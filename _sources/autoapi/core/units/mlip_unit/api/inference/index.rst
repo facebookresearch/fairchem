@@ -77,6 +77,11 @@ Module Contents
 
 
 
+   .. py:attribute:: OC25
+      :value: 'oc25'
+
+
+
    .. py:attribute:: OMC
       :value: 'omc'
 
