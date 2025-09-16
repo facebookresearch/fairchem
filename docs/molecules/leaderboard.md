@@ -19,7 +19,7 @@ The simplest way to get started is to have an ASE-compatible MLIP calculator tha
 ## Install the necessary packages
 ```
 pip install "fairchem-core>=2.5.0"
-pip install "fairchem-data-omol>=0.2"
+pip install "fairchem-data-omol>=0.1.1"
 ```
 
 ## S2EF
