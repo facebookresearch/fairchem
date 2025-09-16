@@ -235,12 +235,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "Please ensure the input data has valid edges."
             )
 
-        if self.assert_on_nans:
-            nan_check_list = ["pos", "cell", "atomic_numbers"]
-            for key in nan_check_list:
-                assert not torch.isnan(data[key]).any(), f"NaNs found in {key}"
-                assert not torch.isinf(data[key]).any(), f"Infs found in {key}"
-
         data_device = data.to(self.device)
 
         if self.inference_mode.merge_mole:
@@ -278,12 +272,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                     output[task_name][task.property]
                 )
                 if self.assert_on_nans:
-                    assert (
-                        not torch.isnan(pred_output[task_name]).any()
-                    ), f"NaNs found in prediction for task {task_name}.{task.property}"
-                    assert (
-                        not torch.isinf(pred_output[task_name]).any()
-                    ), f"Infs found in prediction for task {task_name}.{task.property}"
+                    assert torch.isfinite(
+                        pred_output[task_name]
+                    ).all(), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
                 if undo_element_references and task.element_references is not None:
                     pred_output[task_name] = task.element_references.undo_refs(
                         data_device, pred_output[task_name]
