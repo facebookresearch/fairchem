@@ -131,6 +131,7 @@ class Edgewise(torch.nn.Module):
         gloo_backend,
         node_offset: int = 0,
     ):
+        rank = gp_utils.get_gp_rank()
         size_list = size_list_fn(natoms, gp_utils.get_gp_world_size())
         out = self.forward_chunk(
             x,
@@ -139,9 +140,7 @@ class Edgewise(torch.nn.Module):
             edge_index,
             wigner_and_M_mapping,
             wigner_and_M_mapping_inv,
-            natoms_local=size_list[
-                gp_utils.get_gp_rank()
-            ],  # required for compile not to break
+            natoms_local=size_list[rank],  # required for compile not to break
             sizes=None,
             padded_size=0,
             edge_splits=None,
@@ -166,6 +165,9 @@ class Edgewise(torch.nn.Module):
         all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
             out, natoms
         )
+        offset = sum(size_list[:rank])
+        all_atoms[offset : offset + out.shape[0]] = out
+        print("X", all_atoms.requires_grad)
         return all_atoms
 
     def forward_gp_staggered(

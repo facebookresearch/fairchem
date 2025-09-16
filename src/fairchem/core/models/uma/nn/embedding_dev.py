@@ -137,6 +137,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         gloo_backend,
         node_offset=0,
     ):
+        rank = gp_utils.get_gp_rank()
         out = self.forward_chunk(
             x,
             x_edge,
@@ -169,6 +170,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
             out, natoms
         )
+        offset = sum(size_list[:rank])
+        all_atoms[offset : offset + out.shape[0]] = out
+        print(all_atoms.requires_grad)
         return all_atoms
 
     def forward_gp_staggered(

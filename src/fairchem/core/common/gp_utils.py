@@ -499,11 +499,19 @@ class GatherFromModelParallelRegionSumGradNoAsync(torch.autograd.Function):
         #         tensor_list.append(all_atoms.narrow(0,offset,size))
         #         offset+=size
         # with torch.no_grad():
-        tensor_list = list(all_atoms.split(ctx.size_list, dim=0))
+        # tensor_list = list(all_atoms.split(ctx.size_list, dim=0))
+        tensor_list = [
+            torch.empty(
+                (size,) + input.shape[1:],
+                device=input.device,
+                dtype=input.dtype,
+                requires_grad=False,
+            )
+            for size in ctx.size_list
+        ]
         # print("ALL ATOMS",all_atoms.requires_grad,[ t.requires_grad for t in tensor_list])
         ctx.all_atoms_shape = all_atoms.shape
-        with torch.no_grad():
-            dist.all_gather(tensor_list, input, group=ctx.group, async_op=False)
+        dist.all_gather(tensor_list, input, group=ctx.group, async_op=False)
         return all_atoms
 
     @staticmethod
