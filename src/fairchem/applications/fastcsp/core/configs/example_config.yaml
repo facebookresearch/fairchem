@@ -27,7 +27,7 @@ genarris:
 
 # Structure comparison tolerances for Pymatgen's StructureMatcher
 # Deduplication parameters after structure generation with Genarris
-pre_relaxation:        # Before ML relaxation
+pre_relaxation_filter:        # Before ML relaxation
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
@@ -45,7 +45,7 @@ relax:
     num_ranks: 1000
 
 # Filtering criteria and deduplication parameters after relaxation
-post_relaxation:       # After ML relaxation
+post_relaxation_filter:       # After ML relaxation
   energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum
   density_cutoff: 10           # Density cutoff in g/cm³
   ltol: 0.2
@@ -56,10 +56,11 @@ post_relaxation:       # After ML relaxation
 
 # (Optional) Experimental structure evaluation settings
 evaluate:
-  exp_structures: path/to/exp/structures   # Path to experimental structures
   method: csd               # Either "csd" or "pymatgen"
+  target_xtals_dir: /path/to/experimental/crystal/structures # Directory with experimental structures (CIF format)
   csd:
     python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
+    num_cpus: 60                # Number of CPUs for parallel CSD evaluation
     match_params:           # CSD matching tolerances if csd method is used
       cluster: 20               # Cluster size for RMSD
       rmsd_cutoff: 0.5          # RMSD cutoff in Angstrom
