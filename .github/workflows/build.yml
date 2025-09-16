@@ -64,3 +64,9 @@ jobs:
         with:
           name: dist-data-omol
           path: dist-data-omol/*
+
+      - name: Upload lammps artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-lammps
+          path: dist-lammps/*
