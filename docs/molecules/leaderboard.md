@@ -104,8 +104,8 @@ Each evaluation task has its own unique structure, a detailed description of the
 
 Install the necessary packages:
 ```
-pip install fairchem-core
-pip install fairchem-data-omol
+pip install "fairchem-core>=2.5.0"
+pip install "fairchem-data-omol>0.2"
 ```
 
 As an example, to run the `ligand_pocket` evaluation:
