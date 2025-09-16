@@ -102,13 +102,13 @@ Each evaluation task has its own unique structure, a detailed description of the
 * [IE/EA](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L237)
 * [Spin gap](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L284)
 
-First, install the necessary packages:
+Install the necessary packages:
 ```
 pip install fairchem-core
 pip install fairchem-data-omol
 ```
 
-As an example:
+As an example, to run the `ligand_pocket` evaluation:
 
 ```python
 import json
