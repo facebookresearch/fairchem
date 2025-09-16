@@ -13,8 +13,8 @@ The simplest way to get started is to have an ASE-compatible MLIP calculator tha
 
 | Benchmarks | URL | 
 |----------|----------|
-| S2EF (Val/Test)   | https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits     |
-| Evaluations    | https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data     | 
+| S2EF (Val/Test)   | [https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits)     |
+| Evaluations    | [https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data)     | 
 
 ## S2EF
 The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. Validation labels are already accessible in the released dataset for local benchmarking and debugging, so we highly encourage users to make Test submissions to fairly and accurately compare models. The size of each split is as follows:
