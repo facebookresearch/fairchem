@@ -617,6 +617,7 @@ document.write(`
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#download">💾 Download</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#install-the-necessary-packages">Install the necessary packages</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef">S2EF</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#evaluations">Evaluations</a></li>
 </ul>
@@ -648,13 +649,20 @@ Evaluations correspond to several chemistry relevant tasks (spin gap, ligand-str
 </thead>
 <tbody>
 <tr class="row-even"><td><p>S2EF (Val/Test)</p></td>
-<td><p>https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits">https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits</a></p></td>
 </tr>
 <tr class="row-odd"><td><p>Evaluations</p></td>
-<td><p>https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data</p></td>
+<td><p><a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data">https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data</a></p></td>
 </tr>
 </tbody>
 </table>
+</div>
+</section>
+<section id="install-the-necessary-packages">
+<h2>Install the necessary packages<a class="headerlink" href="#install-the-necessary-packages" title="Link to this heading">#</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="s2">&quot;fairchem-core&gt;=2.5.0&quot;</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="s2">&quot;fairchem-data-omol&gt;=0.1.1&quot;</span>
+</pre></div>
 </div>
 </section>
 <section id="s2ef">
@@ -754,7 +762,7 @@ Each evaluation task has its own unique structure, a detailed description of the
 <li><p><a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L237">IE/EA</a></p></li>
 <li><p><a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L284">Spin gap</a></p></li>
 </ul>
-<p>As an example:</p>
+<p>As an example, to run the <code class="docutils literal notranslate"><span class="pre">ligand_pocket</span></code> evaluation:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">pickle</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_mlip</span><span class="p">,</span> <span class="n">FAIRChemCalculator</span>
@@ -845,6 +853,7 @@ Each evaluation task has its own unique structure, a detailed description of the
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#download">💾 Download</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#install-the-necessary-packages">Install the necessary packages</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#s2ef">S2EF</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#evaluations">Evaluations</a></li>
 </ul>

@@ -13,8 +13,14 @@ The simplest way to get started is to have an ASE-compatible MLIP calculator tha
 
 | Benchmarks | URL | 
 |----------|----------|
-| S2EF (Val/Test)   | https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits     |
-| Evaluations    | https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data     | 
+| S2EF (Val/Test)   | [https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits)     |
+| Evaluations    | [https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data)     | 
+
+## Install the necessary packages
+```
+pip install "fairchem-core>=2.5.0"
+pip install "fairchem-data-omol>=0.1.1"
+```
 
 ## S2EF
 The leadebroard supports S2EF evaluations for both the OMol25 "Validation" and "Test" sets. Validation labels are already accessible in the released dataset for local benchmarking and debugging, so we highly encourage users to make Test submissions to fairly and accurately compare models. The size of each split is as follows:
@@ -102,7 +108,8 @@ Each evaluation task has its own unique structure, a detailed description of the
 * [IE/EA](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L237)
 * [Spin gap](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/omol.py#L284)
 
-As an example:
+
+As an example, to run the `ligand_pocket` evaluation:
 
 ```python
 import json
