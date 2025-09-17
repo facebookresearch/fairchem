@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
+from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -428,7 +429,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
-        gloo_backend = False  # dist.get_backend() == "gloo"
+        gloo_backend = dist.get_backend() == "gloo"
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]

@@ -6,7 +6,7 @@ defaults:
   - _self_
 
 job:
-  device_type: CUDA
+  device_type: CPU
   scheduler:
     mode: LOCAL
     distributed_init_method: FILE

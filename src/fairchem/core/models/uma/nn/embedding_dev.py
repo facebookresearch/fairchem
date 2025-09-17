@@ -131,8 +131,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         gloo_backend,
         node_offset=0,
     ):
-        size_list = size_list_fn(natoms, gp_utils.get_gp_world_size())
-        rank = gp_utils.get_gp_rank()
         out = self.forward_chunk(
             x,
             x_edge,
@@ -147,25 +145,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             node_offset=node_offset,
         )
 
-        if gloo_backend:
-            all_atoms, _ = (
-                gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
-                    out, size_list, False
-                )
-            )
-            # need to deal with padding
-            all_atoms_splits = all_atoms.split(max(size_list), dim=0)
-            return torch.cat(
-                [
-                    all_atoms_splits[idx][: size_list[idx]]
-                    for idx in range(len(size_list))
-                ]
-            )
-
-        all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
-            out, natoms, gloo_backend=False
+        return gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+            out, natoms, gloo_backend=gloo_backend
         )
-        return all_atoms
 
     def forward_gp_staggered(
         self,
@@ -218,25 +200,12 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 _global_node_offset,
             )
 
-            if gloo_backend:
-                out_global_async = (
-                    gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
-                        out,
-                        chunk_sizes[chunk_idx],
-                        True,
-                    )
-                )
-            else:
-                out_global_async = (
-                    gp_utils.gather_from_model_parallel_region_sum_grad_async(
-                        out, True, natoms
-                    )
-                )
             results_async.append(
                 (
                     chunk_sizes[chunk_idx],
-                    out,
-                    *out_global_async,
+                    *gp_utils.gather_from_model_parallel_region_sum_grad_async(
+                        out, True, natoms
+                    ),
                 )
             )
             _local_node_offset += sizes[rank, chunk_idx]
@@ -245,23 +214,16 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         results_aync_merged = []
         for (
             size_list,
-            local_out,
             tensor_list_w_padding,
             handle,
         ) in results_async:
             if handle is not None:
                 handle.wait()
-            all_atoms = torch.cat(
-                [
-                    t.narrow(0, 0, s) if t.shape[0] != s else t
-                    for t, s in zip(tensor_list_w_padding, size_list)
-                ],
-                dim=0,
-            )
-
-            all_atoms_split = list(all_atoms.split(size_list))
-            all_atoms_split[rank] = local_out
-            results_aync_merged.append(all_atoms_split)
+            tensors_wo_padding = [
+                t.narrow(0, 0, s) if t.shape[0] != s else t
+                for t, s in zip(tensor_list_w_padding, size_list)
+            ]
+            results_aync_merged.append(tensors_wo_padding)
 
         # # locally reconstruct full atom embeddings
         full_list_async = []

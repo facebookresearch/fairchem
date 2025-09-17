@@ -148,25 +148,9 @@ class Edgewise(torch.nn.Module):
             node_offset=node_offset,
         )
 
-        # print("Xout", out.requires_grad)
-        if gloo_backend:
-            all_atoms, _ = (
-                gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
-                    out, size_list, False
-                )
-            )
-            all_atoms_splits = all_atoms.split(max(size_list), dim=0)
-            return torch.cat(
-                [
-                    all_atoms_splits[idx][: size_list[idx]]
-                    for idx in range(len(size_list))
-                ]
-            )
-
-        all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
-            out, natoms, gloo_backend=False
+        return gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+            out, natoms, gloo_backend=gloo_backend
         )
-        return all_atoms
 
     def forward_gp_staggered(
         self,
@@ -204,7 +188,6 @@ class Edgewise(torch.nn.Module):
         edge_index_partitions = edge_index.split(edge_splits, dim=1)
 
         _local_node_offset = 0
-        # preallocated_output=torch.zeros((padded_size*n_chunks,*x.shape[1:]),device=x.device,dtype=x.dtype)
         for chunk_idx in range(n_chunks):
             _global_node_offset = rank_offset + _local_node_offset
 
@@ -222,49 +205,28 @@ class Edgewise(torch.nn.Module):
                 gloo_backend=gloo_backend,
                 node_offset=_global_node_offset,
             )
-            if gloo_backend:
-                out_global_async = (
-                    gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
+            results_async.append(
+                (
+                    chunk_sizes[chunk_idx],
+                    *gp_utils.gather_from_model_parallel_region_sum_grad_async(
                         out,
-                        chunk_sizes[chunk_idx],
-                        True,  # [padded_size for _ in range(world_size)]
-                    )
-                )
-            else:
-                out_global_async = (
-                    gp_utils.gather_from_model_parallel_region_sum_grad_async(
-                        out,
-                        True,  # [padded_size for _ in range(world_size)]
+                        True,
                         natoms,
-                    )
+                    ),
                 )
-            with record_function("STAG1"):
-                results_async.append(
-                    (
-                        chunk_sizes[chunk_idx],
-                        out,
-                        *out_global_async,
-                    )
-                )
-            with record_function("STAG2"):
-                _local_node_offset += rank_sizes[chunk_idx]
+            )
+            _local_node_offset += rank_sizes[chunk_idx]
 
         # wait for async ops to finish
         results_aync_merged = []
-        for size_list, local_out, tensor_list_w_padding, handle in results_async:
+        for size_list, tensor_list_w_padding, handle in results_async:
             if handle is not None:
                 handle.wait()
-            all_atoms = torch.cat(
-                [
-                    t.narrow(0, 0, s) if t.shape[0] != s else t
-                    for t, s in zip(tensor_list_w_padding, size_list)
-                ],
-                dim=0,
-            )
-
-            all_atoms_split = list(all_atoms.split(size_list))
-            all_atoms_split[rank] = local_out
-            results_aync_merged.append(all_atoms_split)
+            tensors_wo_padding = [
+                t.narrow(0, 0, s) if t.shape[0] != s else t
+                for t, s in zip(tensor_list_w_padding, size_list)
+            ]
+            results_aync_merged.append(tensors_wo_padding)
 
         # # locally reconstruct full atom embeddings
         full_list_async = []
