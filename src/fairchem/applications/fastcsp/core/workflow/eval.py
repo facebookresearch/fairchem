@@ -6,64 +6,56 @@ LICENSE file in the root directory of this source tree.
 
 Crystal Structure Evaluation Module
 
-This module provides functionality for evaluating predicted crystal structures against
-experimental references using two methods:
-1. Cambridge Structural Database (CSD) and their Python API for packing similarity
-2. Pymatgen StructureMatcher for crystallographic comparison
-
-The evaluation uses:
-- CSD: packing similarity metrics with increasing shell sizes (RMSD15, RMSD20, RMSD30)
-- Pymatgen: crystallographic structure matching with lattice and site tolerances
-
-The evaluation workflow:
-1. Parse predicted crystal structures from CIF format
-2. Load experimental reference structures from CSD or CIF files
-3. Compute similarity using either CSD packing similarity or pymatgen StructureMatcher
-4. Filter and rank matches based on similarity thresholds
-5. Generate comprehensive evaluation reports
-
-Requires:
-- CSD Python API license for CSD-based comparisons (optional)
-- Pymatgen for crystallographic structure matching
-- Target crystal structures in CIF format
-- Swifter for parallel DataFrame processing
+Evaluate predicted crystal structures against experimental references using:
+- CSD Python API for packing similarity (local CPU execution)
+- Pymatgen StructureMatcher (SLURM distributed execution)
 """
 
 from __future__ import annotations
 
+import random
 from pathlib import Path
 from typing import Any, Optional
 
 import pandas as pd
 import swifter
+from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
+from fairchem.applications.fastcsp.core.utils.slurm import submit_slurm_jobs
 from p_tqdm import p_map
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.core.structure import Structure
 
-# Default directory containing experimental crystal structures
-TARGET_XTALS_DIR = Path(
-    "/private/home/anuroops/workspace/chemistry/fairchem-cmu-csp/data/CSP/target_xtals"
-)
 
-# Configure swifter for parallel processing of structure comparisons
-swifter.set_defaults(
-    npartitions=1000,  # Number of data partitions for parallel processing
-    dask_threshold=1,  # Minimum data size to trigger Dask usage
-    scheduler="processes",  # Use multiprocessing for CPU-intensive comparisons
-    progress_bar=True,  # Show progress during evaluation
-    progress_bar_desc="Evaluating",
-    allow_dask_on_strings=False,  # Disable Dask for string operations
-    force_parallel=False,  # Allow automatic parallel/serial decision
-)
+def get_eval_config(config: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Extract evaluation configuration from config dictionary."""
+    logger = get_central_logger()
+    eval_config = config.get("evaluate", {})
+    eval_method = eval_config.get("method", "csd").lower()
+
+    if eval_method not in ["csd", "pymatgen"]:
+        logger.error(f"Invalid evaluation method '{eval_method}' specified.")
+        raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
+
+    eval_config["method"] = eval_method
+
+    if eval_method == "csd":
+        csd_config = eval_config.get("csd", {})
+        eval_config["csd_python_cmd"] = csd_config.get("python_cmd", "python")
+        eval_config["num_cpus"] = csd_config.get("num_cpus", 1)
+    elif eval_method == "pymatgen":
+        pmg_params = eval_config.get("pymatgen_match_params", {})
+        eval_config["pymatgen_match_params"] = {
+            "ltol": pmg_params.get("ltol", 0.1),
+            "stol": pmg_params.get("stol", 0.1),
+            "angle_tol": pmg_params.get("angle_tol", 5.0),
+        }
+
+    return eval_config
 
 
 def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
     """
-    Configure CCDC PackingSimilarity settings for crystal structure comparison.
-
-    Sets up the parameters for comparing crystal structures using the CCDC
-    packing similarity algorithm, which evaluates structural similarity based
-    on molecular packing arrangements within a specified coordination shell.
+    Configure CCDC settings for crystal structure comparison.
 
     Args:
         shell_size: Number of molecules to include in the packing shell analysis.
@@ -77,484 +69,376 @@ def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
                           structure comparisons.
 
     Note:
-        Distance and angle tolerances are automatically scaled based on shell_size
-        to balance sensitivity with computational efficiency.
+        Distance and angle tolerances are automatically scaled based on shell_size.
     """
-    from ccdc.crystal import PackingSimilarity
+    try:
+        from ccdc.crystal import PackingSimilarity
+    except ImportError as e:
+        raise ImportError("CSD Python API required for CCDC matching.") from e
 
     se = PackingSimilarity()
     # Configure packing shell parameters
     se.settings.packing_shell_size = shell_size
-    se.settings.distance_tolerance = (shell_size + 5) / 100  # Scale with shell size
-    se.settings.angle_tolerance = shell_size + 5  # Degrees
+    se.settings.distance_tolerance = (shell_size + 5) / 100
+    se.settings.angle_tolerance = shell_size + 5
     se.settings.ignore_hydrogen_positions = ignore_H
     se.settings.allow_molecular_differences = mol_diff
     return se
 
 
-def match(row, target_xtals, shell_size=30):
+def match_structures(row, target_structures, method="csd", **kwargs):
     """
     Compare a single predicted crystal structure against experimental references.
 
     Evaluates whether a predicted crystal structure matches any of the provided
-    experimental reference structures using CCDC packing similarity analysis.
-    Returns the best match if similarity criteria are met.
+    experimental reference structures using either CCDC packing similarity or
+    pymatgen StructureMatcher.
 
     Args:
         row: DataFrame row containing structure data with 'relaxed_cif' column
-             containing the CIF string of the predicted structure
-        target_xtals: Dictionary mapping reference codes to CCDC Crystal objects
-                     containing experimental structures for comparison
-        shell_size: Size of the molecular coordination shell for packing analysis
+        target_structures: Dictionary mapping reference codes to target structures
+                          (CCDC Crystal objects for CSD, pymatgen Structure for pymatgen)
+        method: Evaluation method ('csd' or 'pymatgen')
+        **kwargs: Method-specific parameters
+                 For CSD: shell_size (default 30)
+                 For pymatgen: ltol, stol, angle_tol
 
     Returns:
-        tuple: (refcode, rmsd) where:
-               - refcode: Reference code of the best matching experimental structure,
-                         or None if no match found
-               - rmsd: Root mean square deviation of the match in Angstroms,
-                      or None if no match found
-
-    Note:
-        A match is considered valid only if the number of matched molecules
-        equals or exceeds the specified shell_size, ensuring structural
-        similarity across the entire coordination environment.
+        tuple: (refcode, metric) where:
+               - refcode: Reference code of the best matching structure, or None
+               - metric: RMSD for CSD or RMS distance for pymatgen, or None
     """
-    from ccdc.crystal import Crystal
+    logger = get_central_logger()
 
-    # Parse the predicted crystal structure from CIF format
+    if method == "csd":
+        return _match_csd(row, target_structures, logger, **kwargs)
+    elif method == "pymatgen":
+        return _match_pymatgen(row, target_structures, logger, **kwargs)
+    else:
+        logger.error(f"Unknown matching method: {method}")
+        return None, None
+
+
+def _match_csd(row, target_xtals, logger, shell_size=30):
+    """CSD-specific matching logic."""
+    try:
+        from ccdc.crystal import Crystal
+    except ImportError as e:
+        raise ImportError("CSD Python API required for CCDC matching.") from e
+
     try:
         gen_xtal = Crystal.from_string(row.relaxed_cif, "cif")
     except Exception as e:
-        print(f"Error parsing {row.relaxed_cif}: {e}")
+        logger.error(f"Error parsing CSD structure {row.structure_id}: {e}")
         return None, None
 
-    # Configure packing similarity evaluation
     se = ccdc_match_settings(shell_size=shell_size)
 
-    # Compare against all experimental reference structures
     for refcode, target_xtal in target_xtals.items():
         results = se.compare(gen_xtal, target_xtal)
-        # Check if match meets minimum shell size requirement
         if results is not None and results.nmatched_molecules >= shell_size:
-            print(
-                f"Matched[{shell_size}] {row.structure_id} | {refcode}: {results.rmsd}",
-                flush=True,
+            logger.info(
+                f"CSD Match[{shell_size}] {row.structure_id} | {refcode}: {results.rmsd}"
             )
             return refcode, results.rmsd
     return None, None
 
 
-def ccdc_match_file(
-    generated_xtals_path: Path,
-    refcodes: list[str],
-    output_path: Path,
-    target_xtals_dir: Path = TARGET_XTALS_DIR,
-):
-    """
-    Evaluate all predicted crystal structures in a file against experimental references.
-
-    Performs comprehensive structure matching for all predicted structures in a
-    Parquet file using a hierarchical approach with increasing shell sizes
-    (RMSD15 → RMSD20 → RMSD30). Only structures passing lower thresholds are
-    evaluated at higher levels for computational efficiency.
-
-    Args:
-        generated_xtals_path: Path to Parquet file containing predicted structures
-                             with 'relaxed_cif' and energy columns
-        refcodes: List of CSD reference codes for experimental structures to match against
-        output_path: Directory to save evaluation results
-        target_xtals_dir: Directory containing experimental CIF files
-
-    Workflow:
-        1. Load experimental reference structures from CIF files
-        2. Sort predicted structures by energy (lowest first)
-        3. Evaluate RMSD15 matches for all structures
-        4. For RMSD15 matches, compute RMSD20
-        5. For RMSD20 matches, compute RMSD30
-        6. Save comprehensive results with match information
-
-    Output:
-        Parquet file with original structure data plus match columns:
-        - match15, rmsd15: RMSD15 evaluation results
-        - match20, rmsd20: RMSD20 evaluation results (if RMSD15 matched)
-        - match30, rmsd30: RMSD30 evaluation results (if RMSD20 matched)
-
-    Note:
-        Hierarchical evaluation significantly reduces computational time by only
-        performing expensive high-shell comparisons on promising candidates.
-    """
-    from ccdc.crystal import Crystal
-
-    # Check if results already exist to avoid recomputation
-    outfile = output_path / f"{generated_xtals_path.stem}.parquet"
-    if outfile.exists():
-        print(f"Skipping {generated_xtals_path} because it already exists")
-        return
-
-    print(f"Evaluating {generated_xtals_path}")
-
-    # Load experimental reference structures
-    target_xtals = {
-        refcode: Crystal.from_string(
-            (target_xtals_dir / f"{refcode}.cif").read_text(), "cif"
-        )
-        for refcode in refcodes.split(",")
-    }
-    print("Target xtals:", target_xtals.keys())
-
-    # Load and sort predicted structures by energy
-    df = pd.read_parquet(generated_xtals_path, engine="pyarrow")
-    df.sort_values(by="energy_relaxed_per_molecule", inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    print("Number of structures:", df.shape[0])
-
-    # Level 1: RMSD15 evaluation for all structures
-    results15 = df.swifter.apply(
-        lambda row: match(row, target_xtals, shell_size=15),
-        axis=1,
-        result_type="expand",
-    )
-    df[["match15", "rmsd15"]] = results15
-
-    # Level 2: RMSD20 evaluation only for RMSD15 matches
-    df15 = df[df["match15"].notna()]
-    print("df15 shape:", df15.shape)
-    if df15.shape[0] > 0:
-        results20 = df15.swifter.apply(
-            lambda row: match(row, target_xtals, shell_size=20),
-            axis=1,
-            result_type="expand",
-        )
-        results20.columns = ["match20", "rmsd20"]
-        df.loc[df15.index, ["match20", "rmsd20"]] = results20
-    else:
-        df[["match20", "rmsd20"]] = None
-
-    # Level 3: RMSD30 evaluation only for RMSD20 matches
-    df20 = df[df["match20"].notna()]
-    print("df20 shape:", df20.shape)
-    if df20.shape[0] > 0:
-        results30 = df20.swifter.apply(
-            lambda row: match(row, target_xtals, shell_size=30),
-            axis=1,
-            result_type="expand",
-        )
-        results30.columns = ["match30", "rmsd30"]
-        df.loc[df20.index, ["match30", "rmsd30"]] = results30
-    else:
-        df[["match30", "rmsd30"]] = None
-
-    # Display summary of matches found
-    print(df[["match20", "rmsd20", "match30", "rmsd30"]])
-
-    # Save comprehensive evaluation results
-    output_path.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(
-        outfile,
-        engine="pyarrow",
-        compression="zstd",
-    )
-    print(f"Saved file: {outfile}")
-
-
-def pymatgen_match(
-    row,
-    target_structures: dict[str, Structure],
-    ltol: float = 0.2,
-    stol: float = 0.3,
-    angle_tol: float = 5,
-):
-    """
-    Compare a single predicted crystal structure against experimental references using pymatgen.
-
-    Uses pymatgen StructureMatcher to evaluate whether a predicted crystal structure
-    matches any of the provided experimental reference structures based on
-    crystallographic comparison of lattice parameters and atomic positions.
-
-    Args:
-        row: DataFrame row containing structure data with 'relaxed_cif' column
-             containing the CIF string of the predicted structure
-        target_structures: Dictionary mapping reference codes to pymatgen Structure objects
-                          containing experimental structures for comparison
-        ltol: Lattice parameter tolerance (fractional difference)
-        stol: Site tolerance (Ångström) for atomic position matching
-        angle_tol: Angle tolerance (degrees) for lattice angle matching
-
-    Returns:
-        tuple: (refcode, rms_dist) where:
-               - refcode: Reference code of the best matching experimental structure,
-                         or None if no match found
-               - rms_dist: RMS distance metric from StructureMatcher,
-                          or None if no match found
-
-    Note:
-        Unlike CSD-based matching, pymatgen matching provides boolean results
-        with RMS distance metrics for matched structures.
-    """
+def _match_pymatgen(row, target_structures, logger, ltol=0.2, stol=0.3, angle_tol=5):
+    """Pymatgen-specific matching logic."""
     try:
-        # Parse the predicted crystal structure from CIF format
         pred_structure = Structure.from_str(row.relaxed_cif, fmt="cif")
     except Exception as e:
-        print(f"Error parsing structure {row.structure_id}: {e}")
+        logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None
 
-    # Configure StructureMatcher with specified tolerances
     matcher = StructureMatcher(ltol=ltol, stol=stol, angle_tol=angle_tol)
-
-    # Compare against all experimental reference structures
     best_match = None
     best_rms_dist = float("inf")
 
     for refcode, target_structure in target_structures.items():
         if matcher.fit(pred_structure, target_structure):
-            # Get RMS distance for the match
             rms_dist = matcher.get_rms_dist(pred_structure, target_structure)[0]
             if rms_dist < best_rms_dist:
                 best_match = refcode
                 best_rms_dist = rms_dist
 
     if best_match is not None:
-        print(
-            f"Pymatgen Match: {row.structure_id} | {best_match}: {best_rms_dist:.4f}",
-            flush=True,
+        logger.info(
+            f"Pymatgen Match: {row.structure_id} | {best_match}: {best_rms_dist:.4f}"
         )
         return best_match, best_rms_dist
 
     return None, None
 
 
-def load_target_structures_from_cifs(
-    target_xtals_dir: Path, refcodes: list[str]
-) -> dict[str, Structure]:
-    """
-    Load experimental reference structures from CIF files for pymatgen comparison.
-
-    Loads crystal structures from CIF files in the target directory and converts them
-    to pymatgen Structure objects for crystallographic comparison.
-
-    Args:
-        target_xtals_dir: Directory containing CIF files with experimental structures
-        refcodes: List of reference codes to load (should match CIF filenames)
-
-    Returns:
-        Dictionary mapping reference codes to pymatgen Structure objects
-
-    Note:
-        - CIF files should be named as "{refcode}.cif"
-        - Structures that fail to load are skipped with warning messages
-    """
+def load_target_structures(target_xtals_dir: Path, refcodes: list[str], method: str):
+    """Load experimental reference structures from CIF files."""
+    logger = get_central_logger()
     target_structures = {}
+
+    if method == "csd":
+        try:
+            from ccdc.crystal import Crystal
+        except ImportError as e:
+            raise ImportError("CSD Python API required for CCDC matching.") from e
 
     for refcode in refcodes:
         cif_file = target_xtals_dir / f"{refcode}.cif"
-        if cif_file.exists():
-            try:
+        if not cif_file.exists():
+            logger.warning(f"CIF file not found: {cif_file}")
+            continue
+        try:
+            if method == "csd":
+                structure = Crystal.from_string(cif_file.read_text(), "cif")
+            elif method == "pymatgen":
                 structure = Structure.from_file(str(cif_file))
-                target_structures[refcode] = structure
-                print(f"Loaded reference structure: {refcode}")
-            except Exception as e:
-                print(f"Warning: Could not load {refcode}.cif: {e}")
-        else:
-            print(f"Warning: CIF file not found: {cif_file}")
+            target_structures[refcode] = structure
+        except Exception as e:
+            logger.warning(f"Could not load {method} {refcode}.cif: {e}")
 
     return target_structures
 
 
-def pymatgen_match_file(
+def evaluate_structures_file(
     generated_xtals_path: Path,
     refcodes: list[str],
     output_path: Path,
-    match_params: dict[str, float],
-    target_xtals_dir: Path = TARGET_XTALS_DIR,
+    target_xtals_dir: Path,
+    method: str = "csd",
+    **method_params,
 ):
     """
-    Evaluate all predicted crystal structures in a file using pymatgen StructureMatcher.
-
-    Performs crystallographic structure matching for all predicted structures in a
-    Parquet file using pymatgen's StructureMatcher with specified tolerances.
+    Unified function to evaluate predicted crystal structures against experimental references.
 
     Args:
         generated_xtals_path: Path to Parquet file containing predicted structures
         refcodes: List of experimental reference codes for comparison
-        output_path: Directory where evaluation results will be saved
-        match_params: Dictionary containing matching tolerances:
-                     - ltol: Lattice parameter tolerance
-                     - stol: Site tolerance
-                     - angle_tol: Angle tolerance
+        output_path: Directory to save evaluation results
         target_xtals_dir: Directory containing experimental CIF files
-
-    Output:
-        Creates a Parquet file with original structure data plus:
-        - pymatgen_match: Reference code of matched structure or None
-        - pymatgen_rms_dist: RMS distance of the match or None
-
-    Note:
-        Uses swifter for parallel processing to efficiently handle large structure sets.
+        method: Evaluation method ('csd' or 'pymatgen')
+        **method_params: Method-specific parameters
     """
-    # Check if output already exists
-    output_file = output_path / generated_xtals_path.name
-    if output_file.exists():
-        print(f"Output file already exists, skipping: {output_file}")
-        return
+    logger = get_central_logger()
 
-    # Load predicted structures
-    df = pd.read_parquet(generated_xtals_path, engine="pyarrow")
-
-    # Load experimental reference structures
-    target_structures = load_target_structures_from_cifs(target_xtals_dir, refcodes)
-
-    if not target_structures:
-        print(f"No reference structures loaded for {generated_xtals_path.name}")
-        # Save original dataframe with null match columns
-        df["pymatgen_match"] = None
-        df["pymatgen_rms_dist"] = None
-        output_path.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(output_file, engine="pyarrow")
-        return
-
-    # Perform pymatgen-based structure matching
-    print(f"Running pymatgen matching for {generated_xtals_path.name}")
-    results = df.swifter.apply(
-        lambda row: pymatgen_match(
-            row,
-            target_structures,
-            ltol=match_params["ltol"],
-            stol=match_params["stol"],
-            angle_tol=match_params["angle_tol"],
-        ),
-        axis=1,
+    swifter.set_defaults(
+        npartitions=1000,
+        dask_threshold=1,
+        scheduler="processes",
+        progress_bar=True,
+        progress_bar_desc="Evaluating",
+        allow_dask_on_strings=False,
+        force_parallel=False,
     )
 
-    # Extract match results
-    df["pymatgen_match"] = results.apply(lambda x: x[0])
-    df["pymatgen_rms_dist"] = results.apply(lambda x: x[1])
+    if method == "csd":
+        outfile = output_path / f"{generated_xtals_path.stem}.parquet"
+    else:
+        outfile = output_path / generated_xtals_path.name
 
-    # Save results
+    if outfile.exists():
+        logger.info(f"Output file already exists, skipping: {outfile}")
+        return
+
+    logger.info(f"Evaluating {generated_xtals_path.name}")
+
+    target_structures = load_target_structures(target_xtals_dir, refcodes, method)
+    if not target_structures:
+        logger.warning(
+            f"No reference structures loaded for {generated_xtals_path.name}"
+        )
+        return
+
+    filtered_df = pd.read_parquet(generated_xtals_path, engine="pyarrow")
+
+    if method == "csd":
+        # CSD hierarchical evaluation (RMSD15 → RMSD20 → RMSD30)
+        filtered_df = filtered_df.sort_values(by="energy_relaxed_per_molecule")
+        filtered_df = filtered_df.reset_index(drop=True)
+        logger.info(f"Number of structures: {filtered_df.shape[0]}")
+
+        # Level 1: RMSD15 evaluation
+        results15 = filtered_df.swifter.apply(
+            lambda row: match_structures(
+                row, target_structures, method="csd", shell_size=15
+            ),
+            axis=1,
+            result_type="expand",
+        )
+        filtered_df[["match15", "rmsd15"]] = results15
+
+        # Level 2: RMSD20 evaluation only for RMSD15 matches
+        df15 = filtered_df[filtered_df["match15"].notna()]
+        if df15.shape[0] > 0:
+            results20 = df15.swifter.apply(
+                lambda row: match_structures(
+                    row, target_structures, method="csd", shell_size=20
+                ),
+                axis=1,
+                result_type="expand",
+            )
+            results20.columns = ["match20", "rmsd20"]
+            filtered_df.loc[df15.index, ["match20", "rmsd20"]] = results20
+        else:
+            filtered_df[["match20", "rmsd20"]] = None
+
+        # Level 3: RMSD30 evaluation only for RMSD20 matches
+        df20 = filtered_df[filtered_df["match20"].notna()]
+        if df20.shape[0] > 0:
+            results30 = df20.swifter.apply(
+                lambda row: match_structures(
+                    row, target_structures, method="csd", shell_size=30
+                ),
+                axis=1,
+                result_type="expand",
+            )
+            results30.columns = ["match30", "rmsd30"]
+            filtered_df.loc[df20.index, ["match30", "rmsd30"]] = results30
+        else:
+            filtered_df[["match30", "rmsd30"]] = None
+
+        matches_summary = filtered_df[
+            ["match20", "rmsd20", "match30", "rmsd30"]
+        ].dropna()
+        if not matches_summary.empty:
+            logger.info(f"Found {len(matches_summary)} structures with CSD matches")
+
+    elif method == "pymatgen":
+        results = filtered_df.swifter.apply(
+            lambda row: match_structures(
+                row, target_structures, method="pymatgen", **method_params
+            ),
+            axis=1,
+        )
+        filtered_df["pymatgen_match"] = results.apply(lambda x: x[0])
+        filtered_df["pymatgen_rmsd"] = results.apply(lambda x: x[1])
+
     output_path.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_file, engine="pyarrow")
-    print(f"Saved pymatgen evaluation results: {output_file}")
+    filtered_df.to_parquet(outfile, engine="pyarrow", compression="zstd")
+
+    logger.info(f"Saved {method.upper()} evaluation results: {outfile}")
 
 
 def compute_structure_matches(
     input_dir: Path,
     output_dir: Path,
-    molecules_file: Path,
-    config: Optional[dict[str, Any]] = None,
+    eval_config: dict[str, Any],
+    molecules_file: str | Path,
+    target_xtals_dir: Path,
 ):
     """
-    Orchestrate structure matching evaluation for all predicted crystal structures.
-
-    Main function that coordinates the evaluation of predicted crystal structures
-    against experimental references. Supports both CSD-based packing similarity
-    and pymatgen-based crystallographic matching based on configuration.
+    Structure matching evaluation for all predicted crystal structures.
 
     Args:
-        root: Directory containing predicted structure files (Parquet format)
-              Each file should contain structures for a single molecule
-        output_path: Directory to save evaluation results
+        input_dir: Directory containing predicted structure files (Parquet format)
+        output_dir: Directory to save evaluation results
+        eval_config: Evaluation configuration dictionary
         molecules_file: CSV file mapping molecule names to CSD reference codes
-                      Expected columns: 'name', 'refcode'
-        config: Optional configuration dictionary containing:
-               - evaluation_method: 'csd' (default) or 'pymatgen'
-               - pymatgen_match_params: tolerances for pymatgen matching
-                 (ltol, stol, angle_tol)
-
-    Workflow:
-        1. Discover all structure files in the root directory
-        2. Load molecule name to reference code mapping
-        3. Determine evaluation method from config (CSD vs pymatgen)
-        4. Launch parallel evaluation jobs for all molecule files
-        5. Save consolidated evaluation results
-
-    Output:
-        For each input file, creates a corresponding Parquet file with:
-        - Original structure data (energies, coordinates, etc.)
-        - Match results based on selected method:
-          * CSD: match15/20/30 with RMSD values
-          * Pymatgen: pymatgen_match with RMS distance
+        target_xtals_dir: Directory containing experimental CIF files
 
     Note:
-        - Uses parallel processing (p_map) to efficiently handle large datasets
-        - Files with "bkp" in the name are automatically excluded from processing
-        - Default method is CSD-based if no config provided or method not specified
+        Uses the unified evaluate_structures_file function for both CSD and pymatgen methods.
     """
+    logger = get_central_logger()
+
     # Discover all structure files to evaluate
-    paths = list(input_dir.iterdir())
+    parquet_files = list(input_dir.iterdir())
+    random.shuffle(parquet_files)
 
-    # Randomize processing order for better load balancing
-    import random
+    # Load molecule name to CSD reference code mapping
+    molecules_df = pd.read_csv(molecules_file)
+    name_to_refcodes = dict(zip(molecules_df["name"], molecules_df["refcode"]))
 
-    random.shuffle(paths)
+    # Filter out backup files and prepare evaluation
+    parquet_files = [path for path in parquet_files if "bkp" not in path.name]
+    refcodes_list = [
+        name_to_refcodes[Path(path).stem].split(",") for path in parquet_files
+    ]
 
-    # Load molecule name to reference code mapping
-    df = pd.read_csv(molecules_file)
-    name_to_refcodes = dict(zip(df["name"], df["refcode"]))
+    # Determine evaluation method and parameters
+    method = eval_config["method"]
+    method_params = {}
 
-    # Import parallel processing utility
+    if eval_config["method"] == "pymatgen":
+        logger.info("Using pymatgen StructureMatcher for structure evaluation")
+        method_params = {
+            "ltol": eval_config.get("pymatgen_match_params", {}).get("ltol", 0.2),
+            "stol": eval_config.get("pymatgen_match_params", {}).get("stol", 0.3),
+            "angle_tol": eval_config.get("pymatgen_match_params", {}).get(
+                "angle_tol", 5
+            ),
+        }
+        logger.info(f"Pymatgen matching parameters: {method_params}")
+    elif eval_config["method"] == "csd":
+        logger.info("Using CSD Python API for structure evaluation")
 
-    # Filter out backup files and prepare parallel evaluation
-    paths = [path for path in paths if "bkp" not in path.name]
-    refcodes = [name_to_refcodes[Path(path).stem] for path in paths]
+    if method == "csd":
+        # CSD: Use p_map for local CPU execution
+        logger.info("Using CSD Python API for structure evaluation (p_map)")
 
-    # Determine evaluation method from config
-    evaluation_method = "csd"  # Default to CSD method
-    if config and "evaluate" in config and "method" in config["evaluate"]:
-        evaluation_method = config["evaluate"]["method"].lower()
-    elif config and "evaluation_method" in config:
-        # Backward compatibility
-        evaluation_method = config["evaluation_method"].lower()
+        args_list = []
+        for i, parquet_file in enumerate(parquet_files):
+            args_list.append(
+                (parquet_file, refcodes_list[i], output_dir, target_xtals_dir, method)
+            )
 
-    if evaluation_method == "pymatgen":
-        # Use pymatgen-based structure matching
-        print("Using pymatgen StructureMatcher for structure evaluation")
-
-        # Get matching parameters from config or use defaults
-        match_params = {"ltol": 0.2, "stol": 0.3, "angle_tol": 5}
-        if (
-            config
-            and "evaluate" in config
-            and "pymatgen_match_params" in config["evaluate"]
-        ):
-            match_params.update(config["evaluate"]["pymatgen_match_params"])
-        elif config and "pymatgen_match_params" in config:
-            # Backward compatibility
-            match_params.update(config["pymatgen_match_params"])
-
-        print(f"Pymatgen matching parameters: {match_params}")
-
-        # Execute parallel pymatgen evaluation
         p_map(
-            pymatgen_match_file,
-            paths,
-            refcodes,
-            [output_dir] * len(paths),
-            [match_params] * len(paths),
-            num_cpus=30,
+            lambda args: evaluate_structures_file(*args),
+            args_list,
+            num_cpus=eval_config.get("num_cpus", 1),
         )
-    else:
-        # Use CSD-based packing similarity (default method)
-        print("Using CSD packing similarity for structure evaluation")
 
-        # Execute parallel CSD evaluation
-        p_map(ccdc_match_file, paths, refcodes, [output_dir] * len(paths), num_cpus=30)
+    elif method == "pymatgen":
+        # Pymatgen: Use SLURM distributed execution
+        logger.info("Using pymatgen StructureMatcher for structure evaluation (SLURM)")
+
+        # Get SLURM configuration
+        slurm_params = eval_config.get("slurm", {})
+
+        # Prepare job arguments for submitit
+        job_args = []
+        for i, parquet_file in enumerate(parquet_files):
+            job_args.append(
+                (
+                    evaluate_structures_file,
+                    (
+                        parquet_file,
+                        refcodes_list[i],
+                        output_dir,
+                        target_xtals_dir,
+                        method,
+                    ),
+                    method_params,
+                )
+            )
+
+        submit_slurm_jobs(
+            job_args,
+            output_dir=output_dir / "slurm",
+            job_name="fastcsp_eval_pymatgen",
+            **slurm_params,
+        )
 
 
 if __name__ == "__main__":
-    """
-    Example usage for structure evaluation.
+    """Example usage for structure evaluation."""
+    import yaml
 
-    This example demonstrates how to run structure matching evaluation
-    on a specific dataset with filtered structures from a relaxation run.
-    """
-    # Define paths for a specific evaluation run
     root = Path("./").resolve()
+    config_path = Path("configs/example_config.yaml")
 
-    # Execute structure matching evaluation
+    with open(config_path) as config_file:
+        config = yaml.safe_load(config_file)
+
+    eval_config = get_eval_config(config)
+
     compute_structure_matches(
-        root=root / "filtered_structures",  # Directory with predicted structures
-        output_path=root
-        / "matched_structures",  # Output directory for evaluation results
-        molecules_file=Path(
-            "configs/example_systems.csv"
-        ),  # Molecule to refcode mapping
+        input_dir=root / "filtered_structures",
+        output_dir=root / "matched_structures",
+        eval_config=eval_config,
+        molecules_file=Path("configs/example_systems.csv"),
+        target_xtals_dir=root / "target_structures",
     )
+
+    logger = get_central_logger()
+    logger.info("Structure evaluation completed")
