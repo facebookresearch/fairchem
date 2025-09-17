@@ -22,7 +22,7 @@ jobs:
     steps:
       # Check out the code
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # The path to the sha of the commit we want to test will depend
           # on the trigger type. If a workflow_run trigger, then we want

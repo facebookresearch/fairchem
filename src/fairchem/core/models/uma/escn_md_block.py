@@ -126,9 +126,16 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         node_offset: int = 0,
     ):
+        # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
+        if gp_utils.initialized():
+            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
+        else:
+            x_full = x
+
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
-                x,
+                x_full,
+                x.shape[0],
                 x_edge,
                 edge_distance,
                 edge_index,
@@ -153,11 +160,13 @@ class Edgewise(torch.nn.Module):
         # when chunking, we need to keep track of the start index of the chunk and give this information
         # to the mole layers
         ac_mole_start_idx = 0
+
         for idx in range(len(edge_index_partitions)):
             new_embeddings.append(
                 torch.utils.checkpoint.checkpoint(
                     self.forward_chunk,
-                    x,
+                    x_full,
+                    x.shape[0],
                     x_edge_partitions[idx],
                     edge_distance_parititons[idx],
                     edge_index_partitions[idx],
@@ -176,7 +185,8 @@ class Edgewise(torch.nn.Module):
 
     def forward_chunk(
         self,
-        x,
+        x_full,
+        x_original_shape,
         x_edge,
         edge_distance,
         edge_index,
@@ -189,13 +199,8 @@ class Edgewise(torch.nn.Module):
         # work properly with MoLE together
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
-        if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
-            x_source = x_full[edge_index[0]]
-            x_target = x_full[edge_index[1]]
-        else:
-            x_source = x[edge_index[0]]
-            x_target = x[edge_index[1]]
+        x_source = x_full[edge_index[0]]
+        x_target = x_full[edge_index[1]]
 
         x_message = torch.cat((x_source, x_target), dim=2)
 
@@ -221,7 +226,7 @@ class Edgewise(torch.nn.Module):
 
         # Compute the sum of the incoming neighboring messages for each target node
         new_embedding = torch.zeros(
-            (x.shape[0],) + x_message.shape[1:],
+            (x_original_shape,) + x_message.shape[1:],
             dtype=x_message.dtype,
             device=x_message.device,
         )
