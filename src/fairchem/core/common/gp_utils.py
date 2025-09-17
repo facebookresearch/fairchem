@@ -13,7 +13,7 @@ from typing import Any
 
 import torch
 from torch import distributed as dist
-from torch.distributed.nn.functional import all_gather, all_reduce, reduce_scatter
+from torch.distributed.nn.functional import all_reduce, reduce_scatter
 
 """
 Functions to support graph parallel training.
@@ -547,6 +547,22 @@ class GatherFromModelParallelRegionSumGradNoAsync(torch.autograd.Function):
         return result, None
 
 
+class GatherFromModelParallelRegionSumGradPaddedAsync(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
+        ctx.rank = get_gp_rank()
+        ctx.group = get_gp_group()
+        tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
+        handle = dist.all_gather(tensor_list, input, group=ctx.group, async_op=True)
+        return tuple(tensor_list), handle
+
+    @staticmethod
+    def backward(ctx, *grad_outputs):
+        local_grad_output = grad_outputs[ctx.rank]
+        output_tensor = torch.empty_like(local_grad_output)
+        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group), None
+
+
 class GatherFromModelParallelRegionSumGradPaddedNoAsync(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
@@ -655,16 +671,7 @@ def gather_from_model_parallel_region_sum_grad(
     return GatherFromModelParallelRegionSumGrad.apply(input, size_list)
 
 
-def gather_from_model_parallel_region_sum_grad_noasync(
-    input: torch.Tensor, natoms: int, gloo_backend: bool
-) -> torch.Tensor:
-    # TODO REMOVE ASSDERT?
-    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
-    # input = input.contiguous()
-    world_size = get_gp_world_size()
-    size_list = size_list_fn(natoms, world_size)
-    padded_size = natoms // world_size + (1 if natoms % world_size != 0 else 0)
-
+def pad_input(input: torch.Tensor, padded_size: int):
     # pad using functional
     # if input.shape[0]!=padded_size:
     #    input=torch.nn.functional.pad(input,(0,0,0,0,0,1)).contiguous()
@@ -683,13 +690,30 @@ def gather_from_model_parallel_region_sum_grad_noasync(
     input = input.contiguous()
     assert input.shape[0] == padded_size
 
+    return input
+
+
+def gather_from_model_parallel_region_sum_grad_noasync(
+    input: torch.Tensor, natoms: int, gloo_backend: bool
+) -> torch.Tensor:
+    # TODO REMOVE ASSDERT?
+    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
+    world_size = get_gp_world_size()
+    size_list = size_list_fn(natoms, world_size)
+
+    input = pad_input(
+        input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
+    )
+
     if gloo_backend:
         tensor_list_w_padding = (
             GatherFromModelParallelRegionSumGradPaddedNoAsyncGLOO.apply(input)
         )
     else:
-        tensor_list_w_padding = all_gather(input, group=get_gp_group())
-        # tensor_list_w_padding= GatherFromModelParallelRegionSumGradPaddedNoAsync.apply(input)
+        # tensor_list_w_padding = all_gather(input, group=get_gp_group())
+        tensor_list_w_padding = GatherFromModelParallelRegionSumGradPaddedNoAsync.apply(
+            input
+        )
 
     # return torch.cat([t[:s] for t, s in zip(tensor_list_w_padding, size_list)], dim=0)
     return torch.cat(
@@ -705,7 +729,23 @@ def gather_from_model_parallel_region_sum_grad_async(
     input: torch.Tensor, async_op: bool, natoms: int
 ) -> torch.Tensor:
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
-    return GatherFromModelParallelRegionSumGradAsync.apply(input, async_op, natoms)
+
+    # TODO REMOVE ASSDERT?
+    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
+    world_size = get_gp_world_size()
+    size_list = size_list_fn(natoms, world_size)
+
+    input = pad_input(
+        input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
+    )
+
+    if False and gloo_backend:
+        tensor_list_w_padding = (
+            GatherFromModelParallelRegionSumGradPaddedNoAsyncGLOO.apply(input)
+        )
+    else:
+        # tensor_list_w_padding = all_gather(input, group=get_gp_group())
+        return GatherFromModelParallelRegionSumGradPaddedAsync.apply(input)
 
 
 def gather_from_model_parallel_region_sum_grad_async_gloo(

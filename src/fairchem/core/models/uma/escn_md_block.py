@@ -251,20 +251,16 @@ class Edgewise(torch.nn.Module):
 
         # wait for async ops to finish
         results_aync_merged = []
-        for size_list, local_out, all_atoms_padded, handle in results_async:
+        for size_list, local_out, tensor_list_w_padding, handle in results_async:
             if handle is not None:
                 handle.wait()
-            if gloo_backend:
-                # need to deal with padding
-                all_atoms_splits = all_atoms_padded.split(max(size_list), dim=0)
-                all_atoms = torch.cat(
-                    [
-                        all_atoms_splits[idx][: size_list[idx]]
-                        for idx in range(len(size_list))
-                    ]
-                )
-            else:
-                all_atoms = all_atoms_padded
+            all_atoms = torch.cat(
+                [
+                    t.narrow(0, 0, s) if t.shape[0] != s else t
+                    for t, s in zip(tensor_list_w_padding, size_list)
+                ],
+                dim=0,
+            )
 
             all_atoms_split = list(all_atoms.split(size_list))
             all_atoms_split[rank] = local_out
