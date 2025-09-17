@@ -366,7 +366,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
 
 
 
-#@pytest.mark.gpu()
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "train_config, dataset_config",
     [

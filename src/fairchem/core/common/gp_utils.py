@@ -471,7 +471,9 @@ def pad_input(input: torch.Tensor, padded_size: int):
             [
                 input,
                 torch.zeros(
-                    (1, *input.shape[1:]), device=input.device, dtype=input.dtype
+                    (padded_size - input.shape[0], *input.shape[1:]),
+                    device=input.device,
+                    dtype=input.dtype,
                 ),
             ],
             dim=0,
