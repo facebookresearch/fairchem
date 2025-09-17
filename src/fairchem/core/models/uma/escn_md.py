@@ -534,7 +534,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
-                print("WTF", gp_utils.get_gp_rank(), x_message.abs().mean())
+                # print("WTF", gp_utils.get_gp_rank(), x_message.abs().mean())
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,

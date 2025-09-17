@@ -148,15 +148,13 @@ class Edgewise(torch.nn.Module):
             node_offset=node_offset,
         )
 
-        print("Xout", out.requires_grad)
+        # print("Xout", out.requires_grad)
         if gloo_backend:
             all_atoms, _ = (
                 gp_utils.gather_from_model_parallel_region_sum_grad_async_gloo(
                     out, size_list, False
                 )
             )
-            print("Xgloo", all_atoms.requires_grad)
-            # need to deal with padding
             all_atoms_splits = all_atoms.split(max(size_list), dim=0)
             return torch.cat(
                 [
@@ -164,12 +162,10 @@ class Edgewise(torch.nn.Module):
                     for idx in range(len(size_list))
                 ]
             )
+
         all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
-            out, natoms
+            out, natoms, gloo_backend=False
         )
-        # offset = sum(size_list[:rank])
-        # all_atoms[offset : offset + out.shape[0]] = out
-        print("X", all_atoms.requires_grad)
         return all_atoms
 
     def forward_gp_staggered(
