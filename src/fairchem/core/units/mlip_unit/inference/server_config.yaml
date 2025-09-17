@@ -1,0 +1,19 @@
+server:
+  workers: 1
+  port: 8001
+
+predict_unit:
+  _target_: fairchem.core.units.mlip_unit.load_predict_unit
+  path:
+    _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+    model_name: "uma-s-1p1"
+  device: cuda
+  inference_settings:
+    _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+    tf32: True
+    merge_mole: True,
+    wigner_cuda: False
+    compile: False
+    activation_checkpointing: False
+    internal_graph_gen_version: 2
+    external_graph_gen: False

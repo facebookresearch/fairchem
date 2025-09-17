@@ -12,7 +12,6 @@ import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import numpy as np
@@ -45,6 +44,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
+from fairchem.core.common.utils import StrEnum
 from fairchem.core.components.train.train_runner import Checkpointable
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
@@ -75,7 +75,7 @@ class OutputSpec:
     dtype: str
 
 
-class TrainStrategy(str, Enum):
+class TrainStrategy(StrEnum):
     DDP = "ddp"
     FSDP = "fsdp"
 

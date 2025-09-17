@@ -8,14 +8,16 @@ file in the root directory of this source tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+
+from fairchem.core.common.utils import StrEnum
 
 
-class UMATask(str, Enum):
+class UMATask(StrEnum):
     OMOL = "omol"
     OMAT = "omat"
     ODAC = "odac"
     OC20 = "oc20"
+    OC25 = "oc25"
     OMC = "omc"
 
 

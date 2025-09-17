@@ -22,7 +22,16 @@ from ase.calculators.singlepoint import SinglePointCalculator, SinglePointDFTCal
 from ase.constraints import FixAtoms
 from ase.geometry import wrap_positions
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
-from pymatgen.io.ase import AseAtomsAdaptor
+from monty.dev import requires
+
+try:
+    from pymatgen.io.ase import AseAtomsAdaptor
+
+    pmg_installed = True
+except ImportError:
+    AseAtomsAdaptor = None
+    pmg_installed = False
+
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
 
@@ -68,14 +77,10 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
     return f"{indent_str}{key}={out}"
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
     """Preforms nearest neighbor search and returns edge index, distances,
     and cell offsets"""
-    if AseAtomsAdaptor is None:
-        raise RuntimeError(
-            "Unable to import pymatgen.io.ase.AseAtomsAdaptor. Make sure pymatgen is properly installed."
-        )
-
     struct = AseAtomsAdaptor.get_structure(atoms)
 
     # tol of 1e-8 should remove all self loops
@@ -451,24 +456,24 @@ class AtomicData:
         assert self.num_graphs == 1, "Data object must contain a single graph."
 
         atoms = ase.Atoms(
-            numbers=self.atomic_numbers.numpy(),
-            positions=self.pos.numpy(),
-            cell=self.cell.squeeze().numpy(),
+            numbers=self.atomic_numbers.cpu().numpy(),
+            positions=self.pos.cpu().numpy(),
+            cell=self.cell.squeeze().cpu().numpy(),
             pbc=self.pbc.squeeze().tolist(),
             constraint=FixAtoms(mask=self.fixed.bool().tolist()),
-            tags=self.tags.numpy(),
+            tags=self.tags.cpu().numpy(),
         )
 
         if self.__keys__.intersection(["energy", "forces", "stress"]):
             fields = {}
-            if self.energy is not None:
-                fields["energy"] = self.energy.numpy()
-            if self.forces is not None:
-                fields["forces"] = self.forces.numpy()
-            if self.stress is not None:
+            if hasattr(self, "energy") and self.energy is not None:
+                fields["energy"] = self.energy.cpu().numpy()
+            if hasattr(self, "forces") and self.forces is not None:
+                fields["forces"] = self.forces.cpu().numpy()
+            if hasattr(self, "stress") and self.stress is not None:
                 if self.stress.shape == (3, 3):
                     fields["stress"] = full_3x3_to_voigt_6_stress(
-                        self.stress.squeeze().numpy()
+                        self.stress.squeeze().cpu().numpy()
                     )
                 elif self.stress.shape == (6,):
                     fields["stress"] = self.stress.squeeze().numpy()

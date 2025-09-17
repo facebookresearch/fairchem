@@ -16,6 +16,7 @@ parts:
   - file: core/common_tasks/summary
     sections:
     - file: core/common_tasks/ase_calculator
+    - file: core/common_tasks/lammps
     - file: core/common_tasks/batch_inference
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
@@ -30,7 +31,7 @@ parts:
     sections:
     - file: core/uma_examples/uma_tutorial
   - file: core/generative_models
-  
+
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
@@ -38,6 +39,7 @@ parts:
     - file: molecules/datasets/omol25
     - file: molecules/datasets/omc25
   - file: molecules/models
+  - file: molecules/leaderboard
   - file: molecules/FAQ
 - caption: Heterogeneous Catalysis
   chapters:
@@ -77,7 +79,8 @@ parts:
   chapters:
   - file: dac/datasets/summary
     sections:
-    - file: dac/datasets/odac
+    - file: dac/datasets/odac25
+    - file: dac/datasets/odac23
   - file: dac/models
   - file: dac/examples_tutorials/summary
     sections:

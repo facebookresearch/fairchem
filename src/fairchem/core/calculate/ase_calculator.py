@@ -41,8 +41,8 @@ class FAIRChemCalculator(Calculator):
         self,
         predict_unit: MLIPPredictUnit,
         task_name: UMATask | str | None = None,
-        head_name: str | None = None,
-        seed: int = 41,
+        head_name: str | None = None, 
+        seed: int = 41,  # deprecated
     ):
         """
         Initialize the FAIRChemCalculator from a model MLIPPredictUnit
@@ -54,7 +54,6 @@ class FAIRChemCalculator(Calculator):
                 Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
             head_name (str, optional): Name of the specific head to use for predictions.
                 If None, will use the single head if only one exists, or average all heads.
-            seed (int, optional): Random seed for reproducibility. Defaults to 42.
         Notes:
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge`
               and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
@@ -66,31 +65,26 @@ class FAIRChemCalculator(Calculator):
 
         super().__init__()
 
-        # check that external graph gen is not set!
-        if predict_unit.inference_mode.external_graph_gen is not False:
-            raise RuntimeError(
-                "FAIRChemCalculator can only be used with external_graph_gen False inference settings."
-            )
-
-        if predict_unit.model.module.backbone.direct_forces:
+        if seed is not None:
             logging.warning(
-                "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
-                "energy surface and energy conservation errors."
+                "The 'seed' argument is deprecated and will be removed in future versions. "
+                "Please set the seed in the MLIPPredictUnit configuration instead."
             )
 
         if isinstance(task_name, UMATask):
             task_name = task_name.value
 
+        valid_datasets = list(predict_unit.dataset_to_tasks.keys())
         if task_name is not None:
             assert (
-                task_name in predict_unit.datasets
-            ), f"Given: {task_name}, Valid options are {predict_unit.datasets}"
-            self._task_name = task_name
-        elif len(predict_unit.datasets) == 1:
-            self._task_name = predict_unit.datasets[0]
+                task_name in valid_datasets
+            ), f"Given: {task_name}, Valid options are {valid_datasets}"
+            self._task = UMATask(task_name)
+        elif len(valid_datasets) == 1:
+            self._task = UMATask(valid_datasets[0])
         else:
             raise RuntimeError(
-                f"A task name must be provided. Valid options are {predict_unit.datasets}"
+                f"A task name must be provided. Valid options are {valid_datasets}"
             )
 
         self.implemented_properties = [
@@ -102,17 +96,18 @@ class FAIRChemCalculator(Calculator):
             )  # Free energy is a copy of energy, see docstring above
 
         self.predictor = predict_unit
-        self.predictor.seed(seed)
         self.head_name = head_name
 
         self.a2g = partial(
             AtomicData.from_ase,
-            max_neigh=self.predictor.model.module.backbone.max_neighbors,
-            radius=self.predictor.model.module.backbone.cutoff,
             task_name=self.task_name,
             r_edges=False,
             r_data_keys=["spin", "charge"],
         )
+
+    @property
+    def task_name(self) -> str:
+        return self._task.value
 
     @classmethod
     def from_model_checkpoint(
@@ -139,7 +134,7 @@ class FAIRChemCalculator(Calculator):
             device: Optional torch device to load the model onto.
             head_name: Name of the specific head to use for predictions. If None, will use the single head
                 if only one exists, or average all heads.
-            seed: Random seed for reproducibility. Defaults to 41.
+            seed: Random seed for reproducibility.
         """
 
         if name_or_path in pretrained_mlip.available_models:
