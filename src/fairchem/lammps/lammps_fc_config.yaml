@@ -1,0 +1,33 @@
+if_settings:
+  _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+  tf32: True
+  merge_mole: True
+  wigner_cuda: False
+  compile: False
+  activation_checkpointing: False
+  internal_graph_gen_version: 2
+  external_graph_gen: False
+
+# Use normal predict unit
+local_predict_unit:
+  _target_: fairchem.core.units.mlip_unit.load_predict_unit
+  path:
+    _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+    model_name: "uma-s-1p1"
+  device: cuda
+  inference_settings: ${if_settings}
+
+# Use parallel predict unit for multi-gpu
+parallel_predict_unit:
+  _target_: fairchem.core.units.mlip_unit.predict.ParallelMLIPPredictUnit
+  inference_model_path:
+    _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+    model_name: "uma-s-1p1"
+  device: cuda
+  inference_settings: ${if_settings}
+  server_config:
+    workers: 8
+
+predict_unit: ${local_predict_unit}
+lmp_in: "lammps_in_example.file"
+task_name: "omol"

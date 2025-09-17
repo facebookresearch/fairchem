@@ -85,13 +85,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
-
-      - name: Core GPU tests
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          NCCL_DEBUG=INFO  pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml -s --junitxml=junit-gpu.xml -o junit_family=legacy --cov-report=xml:gpu-coverage.xml
+          NCCL_DEBUG=INFO pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - if: ${{ matrix.python_version == '3.12' }}
         name: codecov-coverage
@@ -158,6 +152,64 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+      - name: Cleanup
+        if: always()
+        uses: ./.github/actions/multi-trigger-cleanup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+
+  test_lammps_gpu:
+    runs-on: 4-core-ubuntu-gpu-t4
+    permissions:
+      contents: read
+      # Needed to manually set commit status
+      statuses: write
+    strategy:
+      max-parallel: 1
+      matrix:
+        python_version: ['3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          generate-run-shell: true # This is the default behavior
+          environment-name: test_env # Specifies a new environment to be created
+          create-args: python=3.12 # Specifies packages to install into the new environment
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          # Optional: get full history if needed
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/multi-trigger-setup
+        with:
+          status-context: '${{ github.job }} (${{ matrix.python_version }})'
+
+      - name: Set up Python ${{ matrix.python_version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version:  ${{ matrix.python_version }}
+
+      - name: Install core dependencies and package
+        shell: micromamba-shell {0}
+        run: |
+          micromamba install lammps
+          python -m pip install --upgrade pip
+          pip install packages/fairchem-core[dev,extras]
+          pip install packages/fairchem-lammps
+          pip install -r tests/requirements.txt # pin test packages
+
+      - name: Core GPU tests
+        shell: micromamba-shell {0}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
+
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
