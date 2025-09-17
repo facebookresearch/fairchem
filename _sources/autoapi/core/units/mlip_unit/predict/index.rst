@@ -82,7 +82,7 @@ Module Contents
 
 
 
-.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None)
+.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False)
 
    Bases: :py:obj:`torchtnt.framework.PredictUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`MLIPPredictUnitProtocol`
 
@@ -143,6 +143,9 @@ Module Contents
 
 
 
+   .. py:attribute:: assert_on_nans
+
+
    .. py:property:: direct_forces
       :type: bool
 
@@ -191,7 +194,7 @@ Module Contents
    Function to run server in separate process
 
 
-.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, server_config: dict | None = None, client_config: dict | None = None)
+.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, server_config: dict | None = None, client_config: dict | None = None)
 
    Bases: :py:obj:`MLIPPredictUnitProtocol`
 

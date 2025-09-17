@@ -640,16 +640,18 @@ document.write(`
 <li><p>We currently only support <code class="docutils literal notranslate"><span class="pre">metal</span></code> <a class="reference external" href="https://docs.lammps.org/units.html">units</a>, ie: energy in <code class="docutils literal notranslate"><span class="pre">ev</span></code> and forces in <code class="docutils literal notranslate"><span class="pre">ev/A</span></code></p></li>
 <li><p>User can write lammps scripts in the usual way (see lammps_in_example.file)</p></li>
 <li><p>User should <em>NOT</em> define other types of forces such as “pair_style”, “bond_style” in their scripts. These forces will get added together with UMA forces and most likely produce false results</p></li>
-<li><p>UMA uses atomic numbers so we try to guess the atomic number from the provided atomic masses in your Lammps scripts. Just make sure you provide the right masses for your atom types - this makes it easy so that you don’t need to redefine atomic element mappings with Lammps</p></li>
+<li><p>UMA uses atomic numbers so we try to guess the atomic number from the provided atomic masses in your Lammps scripts. Just make sure you provide the right masses for your atom types - this makes it easy so that you don’t need to redefine atomic element mappings with Lammps. <em>This assumption fails if you use isotopes or non standard atomic masses, but we don’t expect our models to work in those cases anyways</em></p></li>
 </ul>
 </section>
 <section id="install-and-run">
 <h1>Install and run<a class="headerlink" href="#install-and-run" title="Link to this heading">#</a></h1>
 <p>User can install lammps however they like but the simplest is to install via conda (https://docs.lammps.org/Install_conda.html) if you don’t need any bells and whistles.</p>
-<p>For conda install, simple activate the conda env with lammps and install fairchem into it. For manual Lammps installs, you need to provide python paths so Lammps can find fairchem. We separate the lammps integration code into a standalone package (fairchem-lammps). Please note fairchem-lammps uses the GnuV2 License as is required by any code that uses Lammps, instead of the MIT License used by the Fairchem repository.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="n">activate</span> <span class="n">lammps</span><span class="o">-</span><span class="n">env</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">fairchem</span><span class="o">/</span><span class="n">packages</span><span class="o">/</span><span class="n">fairchem</span><span class="o">-</span><span class="n">core</span><span class="p">[</span><span class="n">extras</span><span class="p">]</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">fairchem</span><span class="o">/</span><span class="n">packages</span><span class="o">/</span><span class="n">lammps</span>
+<p>For conda install, simple activate the conda env with lammps and install fairchem into it. For manual Lammps installs, you need to provide python paths so Lammps can find fairchem. We separate the lammps integration code into a standalone package (fairchem-lammps). Please note fairchem-lammps uses the GnuV2 License as is required by any code that uses Lammps, instead of the MIT License used by the Fairchem repository. Note the “extras” is required to install for multi-GPU inference.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># first install conda and lammps following the instructions above</span>
+<span class="c1"># then activate the environment and install fairchem</span>
+<span class="n">conda</span> <span class="n">activate</span> <span class="n">lammps</span><span class="o">-</span><span class="n">env</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">fairchem</span><span class="o">-</span><span class="n">core</span><span class="p">[</span><span class="n">extras</span><span class="p">]</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">fairchem</span><span class="o">-</span><span class="n">lammps</span>
 </pre></div>
 </div>
 <p>Assuming you have a classic lammps .in script, to run it, make the following changes to your script</p>

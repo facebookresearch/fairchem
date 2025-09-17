@@ -118,7 +118,7 @@ Module Contents
    .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0)
 
 
-   .. py:method:: forward_chunk(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0, ac_mole_start_idx: int = 0)
+   .. py:method:: forward_chunk(x_full, x_original_shape, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, node_offset: int = 0, ac_mole_start_idx: int = 0)
 
 
 .. py:class:: SpectralAtomwise(sphere_channels: int, hidden_channels: int, lmax: int, mmax: int, SO3_grid: fairchem.core.models.uma.common.so3.SO3_Grid)

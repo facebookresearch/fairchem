@@ -16,7 +16,7 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: AsyncMLIPInferenceWebSocketClient(host, port)
+.. py:class:: AsyncMLIPInferenceWebSocketClient(host, port, max_size=100 * 1024 * 1024)
 
    .. py:attribute:: uri
 
@@ -24,6 +24,9 @@ Module Contents
    .. py:attribute:: websocket
       :value: None
 
+
+
+   .. py:attribute:: max_size
 
 
    .. py:method:: connect()
@@ -41,7 +44,7 @@ Module Contents
 
 
 
-.. py:class:: SyncMLIPInferenceWebSocketClient(host, port)
+.. py:class:: SyncMLIPInferenceWebSocketClient(host, port, max_size=100 * 1024 * 1024)
 
    .. py:attribute:: uri
 
@@ -49,6 +52,9 @@ Module Contents
    .. py:attribute:: ws
       :value: None
 
+
+
+   .. py:attribute:: max_size
 
 
    .. py:method:: connect()
