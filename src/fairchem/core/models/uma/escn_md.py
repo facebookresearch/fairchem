@@ -608,7 +608,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         node_edge_offsets = node_edge_counts.cumsum(0).cpu()
-        graph_dict["n_chunks"] = 2
+        graph_dict["n_chunks"] = 1
         graph_dict["sizes"] = torch.tensor(
             [
                 size_list_fn(chunk_for_rank, graph_dict["n_chunks"])
