@@ -317,21 +317,37 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         for dataset_name in self.dataset_names:
             dataset_mask = np_dataset_names == dataset_name
             for key, head_output_tensor in head_output.items():
-                # TODO cant we use torch.zeros here?
-                output_tensor = head_output_tensor.new_zeros(
-                    head_output_tensor.shape
-                )  # float('inf'))
-                if dataset_mask.any():
-                    if output_tensor.shape[0] == dataset_mask.shape[0]:
-                        output_tensor[dataset_mask] = head_output_tensor[dataset_mask]
-                    else:  # assume atoms are the first dimension
-                        atoms_mask = torch.isin(
-                            data_batch_full,
-                            torch.where(torch.from_numpy(dataset_mask))[0],
+                # If head_output_tensor is a dict, loop over its items
+                if isinstance(head_output_tensor, dict):
+                    for subkey, tensor_val in head_output_tensor.items():
+                        output_tensor = tensor_val.new_zeros(tensor_val.shape)
+                        if dataset_mask.any():
+                            if output_tensor.shape[0] == dataset_mask.shape[0]:
+                                output_tensor[dataset_mask] = tensor_val[dataset_mask]
+                            else:
+                                atoms_mask = torch.isin(
+                                    data_batch_full,
+                                    torch.where(torch.from_numpy(dataset_mask))[0],
+                                )
+                                output_tensor[atoms_mask] = tensor_val[atoms_mask]
+                        # Avoid redundant naming when key and subkey are the same
+                        output_key = f"{dataset_name}_{key}" if key == subkey else f"{dataset_name}_{key}_{subkey}"
+                        full_output[output_key] = (
+                            {subkey: output_tensor} if self.wrap_property else output_tensor
                         )
-                        output_tensor[atoms_mask] = head_output_tensor[atoms_mask]
-                full_output[f"{dataset_name}_{key}"] = (
-                    {key: output_tensor} if self.wrap_property else output_tensor
-                )
+                else:
+                    output_tensor = head_output_tensor.new_zeros(head_output_tensor.shape)
+                    if dataset_mask.any():
+                        if output_tensor.shape[0] == dataset_mask.shape[0]:
+                            output_tensor[dataset_mask] = head_output_tensor[dataset_mask]
+                        else:
+                            atoms_mask = torch.isin(
+                                data_batch_full,
+                                torch.where(torch.from_numpy(dataset_mask))[0],
+                            )
+                            output_tensor[atoms_mask] = head_output_tensor[atoms_mask]
+                    full_output[f"{dataset_name}_{key}"] = (
+                        {key: output_tensor} if self.wrap_property else output_tensor
+                    )
 
         return full_output

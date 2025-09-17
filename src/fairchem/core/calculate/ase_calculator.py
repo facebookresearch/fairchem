@@ -13,6 +13,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+import torch
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
 
@@ -40,7 +41,8 @@ class FAIRChemCalculator(Calculator):
         self,
         predict_unit: MLIPPredictUnit,
         task_name: UMATask | str | None = None,
-        seed: int | None = None,  # deprecated
+        head_name: str | None = None, 
+        seed: int = 41,  # deprecated
     ):
         """
         Initialize the FAIRChemCalculator from a model MLIPPredictUnit
@@ -50,6 +52,8 @@ class FAIRChemCalculator(Calculator):
             task_name (UMATask or str, optional): Name of the task to use if using a UMA checkpoint.
                 Determines default key names for energy, forces, and stress.
                 Can be one of 'omol', 'omat', 'oc20', 'odac', or 'omc'.
+            head_name (str, optional): Name of the specific head to use for predictions.
+                If None, will use the single head if only one exists, or average all heads.
         Notes:
             - For models that require total charge and spin multiplicity (currently UMA models on omol mode), `charge`
               and `spin` (corresponding to `spin_multiplicity`) are pulled from `atoms.info` during calculations.
@@ -92,6 +96,7 @@ class FAIRChemCalculator(Calculator):
             )  # Free energy is a copy of energy, see docstring above
 
         self.predictor = predict_unit
+        self.head_name = head_name
 
         self.a2g = partial(
             AtomicData.from_ase,
@@ -112,6 +117,7 @@ class FAIRChemCalculator(Calculator):
         inference_settings: InferenceSettings | str = "default",
         overrides: dict | None = None,
         device: Literal["cuda", "cpu"] | None = None,
+        head_name: str | None = None,
         seed: int = 41,
     ) -> FAIRChemCalculator:
         """Instantiate a FAIRChemCalculator from a checkpoint file.
@@ -126,6 +132,8 @@ class FAIRChemCalculator(Calculator):
                 use a custom InferenceSettings object.
             overrides: Optional dictionary of settings to override default inference settings.
             device: Optional torch device to load the model onto.
+            head_name: Name of the specific head to use for predictions. If None, will use the single head
+                if only one exists, or average all heads.
             seed: Random seed for reproducibility.
         """
 
@@ -147,7 +155,31 @@ class FAIRChemCalculator(Calculator):
             raise ValueError(
                 f"{name_or_path=} is not a valid model name or checkpoint path"
             )
-        return cls(predict_unit=predict_unit, task_name=task_name, seed=seed)
+        return cls(predict_unit=predict_unit, task_name=task_name, head_name=head_name, seed=seed)
+
+    @property
+    def task_name(self) -> str:
+        return self._task_name
+
+    def get_available_heads(self) -> dict[str, list[str]]:
+        """Get available heads for each property.
+        
+        Returns:
+            Dictionary mapping property names to lists of available head names
+        """
+        return self.predictor.get_available_heads()
+
+    def list_available_heads_for_property(self, property_name: str) -> list[str]:
+        """List available heads for a specific property.
+        
+        Args:
+            property_name: Name of the property (e.g., 'energy', 'forces', 'stress')
+            
+        Returns:
+            List of available head names for the given property
+        """
+        available_heads = self.get_available_heads()
+        return available_heads.get(property_name, [])
 
     def check_state(self, atoms: Atoms, tol: float = 1e-15) -> list:
         """
@@ -210,20 +242,101 @@ class FAIRChemCalculator(Calculator):
 
             # Collect the results into self.results
             self.results = {}
+            # Map from property name to the correct task key for this dataset
+            dataset = getattr(self, 'task_name', None)
             for calc_key in self.implemented_properties:
-                if calc_key == "energy":
-                    energy = float(pred[calc_key].detach().cpu().numpy()[0])
+                # Compose the expected task key (e.g., 'oc20_energy')
+                if dataset is not None:
+                    task_key = f"{dataset}_{calc_key}"
+                else:
+                    task_key = calc_key
+                # Patch: if 'free_energy' is not in pred, set it to pred['energy']
+                if calc_key == "free_energy" and "free_energy" not in pred and "energy" in pred:
+                    preds = pred["energy"]
+                elif task_key in pred:
+                    preds = pred[task_key]
+                elif calc_key in pred:
+                    preds = pred[calc_key]
+                else:
+                    continue  # Skip if not available
+                self.results[calc_key] = preds
+                
+                # Handle multiple heads for this property
+                if isinstance(preds, dict):
+                    # Find heads that match the current task/dataset
+                    relevant_heads = {}
+                    for head_key, head_pred in preds.items():
+                        # Check if this head is relevant to the current task/dataset
+                        if (head_key == calc_key or  # exact property match
+                            self.task_name in head_key or  # task name in head key
+                            any(task.name in head_key for task in self.predictor.dataset_to_tasks[self.task_name] 
+                                if task.property == calc_key)):  # task name matches
+                            relevant_heads[head_key] = head_pred
+                    
+                    if not relevant_heads:
+                        # Fallback: use all heads if none specifically match
+                        relevant_heads = preds
+                    
+                    head_names = list(relevant_heads.keys())
+                    head_predictions = list(relevant_heads.values())
+                    
+                    if self.head_name is not None:
+                        # Use specific head if requested
+                        if self.head_name in relevant_heads:
+                            selected_pred = relevant_heads[self.head_name]
+                        else:
+                            # Try partial matching
+                            matching_heads = [k for k in relevant_heads.keys() if self.head_name in k]
+                            if len(matching_heads) == 1:
+                                selected_pred = relevant_heads[matching_heads[0]]
+                            elif len(matching_heads) > 1:
+                                raise ValueError(f"Multiple heads match '{self.head_name}': {matching_heads}")
+                            else:
+                                raise ValueError(f"Head '{self.head_name}' not found for property '{calc_key}'. Available heads: {head_names}")
+                        std_pred = None
+                    elif len(head_predictions) == 1:
+                        # Use single head if only one exists
+                        selected_pred = head_predictions[0]
+                        std_pred = None
+                    else:
+                        # Average multiple heads
+                        stacked = torch.stack([p.detach().cpu() for p in head_predictions], dim=0)
+                        selected_pred = stacked.mean(dim=0)
+                        # Also compute standard deviation
+                        std_pred = stacked.std(dim=0)
+                else:
+                    # Single prediction (backward compatibility)
+                    selected_pred = preds
+                    std_pred = None
 
-                    self.results["energy"] = self.results["free_energy"] = (
-                        energy  # Free energy is a copy of energy
-                    )
-                if calc_key == "forces":
-                    forces = pred[calc_key].detach().cpu().numpy()
+                if calc_key == "energy":
+                    energy = float(selected_pred.detach().cpu().numpy()[0])
+                    self.results["energy"] = self.results["free_energy"] = energy
+                    
+                    # Add standard deviation if available
+                    if std_pred is not None:
+                        energy_std = float(std_pred.numpy()[0])
+                        self.results["energy_std"] = energy_std
+                        
+                elif calc_key == "forces":
+                    forces = selected_pred.detach().cpu().numpy()
                     self.results["forces"] = forces
-                if calc_key == "stress":
-                    stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
+                    
+                    # Add standard deviation if available
+                    if std_pred is not None:
+                        forces_std = std_pred.numpy()
+                        self.results["forces_std"] = forces_std
+                        
+                elif calc_key == "stress":
+                    stress = selected_pred.detach().cpu().numpy().reshape(3, 3)
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
+                    
+                    # Add standard deviation if available
+                    if std_pred is not None:
+                        stress_std = std_pred.numpy().reshape(3, 3)
+                        stress_voigt_std = full_3x3_to_voigt_6_stress(stress_std)
+                        self.results["stress_std"] = stress_voigt_std
 
     def _get_single_atom_energies(self, atoms) -> dict:
         """
@@ -250,7 +363,7 @@ class FAIRChemCalculator(Calculator):
             energy = atom_refs[int(elt)]
         if energy is None:
             raise ValueError("This model has not stored this element with this charge.")
-        results["energy"] = energy
+        results["energy"] = results["free_energy"] = energy
         results["forces"] = np.array([[0.0] * 3])
         results["stress"] = np.array([0.0] * 6)
         return results

@@ -94,6 +94,7 @@ class SlurmConfig:
     additional_parameters: Optional[dict] = None
 
 
+
 @dataclass
 class SchedulerConfig:
     mode: SchedulerType = SchedulerType.LOCAL

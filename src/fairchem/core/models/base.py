@@ -178,15 +178,22 @@ class HydraModel(nn.Module):
         emb = self.backbone(data)
         # Predict all output properties for all structures in the batch for now.
         out = {}
-        for k in self.output_heads:
+        for k, head in self.output_heads.items():
             with torch.autocast(
-                device_type=self.device, enabled=self.output_heads[k].use_amp
+                device_type=self.device, enabled=getattr(head, 'use_amp', False)
             ):
                 if self.pass_through_head_outputs:
-                    out.update(self.output_heads[k](data, emb))
+                    out.update(head(data, emb))
                 else:
-                    out[k] = self.output_heads[k](data, emb)
-
+                    head_output = head(data, emb)
+                    
+                    # For ensemble support, organize outputs by property then head
+                    # Head output could be like {"omat_energy": tensor, "omat_forces": tensor}
+                    # We want to convert to {"omat_energy": {"head_name": tensor}, "omat_forces": {"head_name": tensor}}
+                    for property_key, property_value in head_output.items():
+                        if property_key not in out:
+                            out[property_key] = {}
+                        out[property_key][k] = property_value
         return out
 
 
