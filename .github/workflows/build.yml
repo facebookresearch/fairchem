@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: |
           # add packages that are supposed to be built to this list
-          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol
+          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol fairchem-lammps
           do
             pushd packages/$package
             hatch build

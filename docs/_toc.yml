@@ -15,7 +15,7 @@ parts:
   - file: core/uma
   - file: core/common_tasks/summary
     sections:
-    - file: core/common_tasks/ase_calculator_and_inference
+    - file: core/common_tasks/ase_calculator
     - file: core/common_tasks/lammps
     - file: core/common_tasks/batch_inference
     - file: core/common_tasks/ase_dataset_creation
