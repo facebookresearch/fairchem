@@ -3,8 +3,8 @@
 job:
   scheduler:
     mode: LOCAL
-  #   ranks_per_node: 2
-  # graph_parallel_group_size: 2
+    ranks_per_node: 2
+  graph_parallel_group_size: 2
 
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
@@ -21,8 +21,8 @@ runner:
     tf32: True
     activation_checkpointing: False
     merge_mole: True
-    compile: True
+    compile: False
     wigner_cuda: False
     external_graph_gen: True
     internal_graph_gen_version: 2
-  generate_traces: True
+  #generate_traces: True
