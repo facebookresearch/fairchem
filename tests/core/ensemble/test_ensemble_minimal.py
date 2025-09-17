@@ -61,7 +61,69 @@ def test_ensemble_fine_tuning_workflow():
     for expected_head in expected_heads:
         assert expected_head in actual_heads, f"Missing head: {expected_head}"
     
-    print(f"✓ Successfully created ensemble model with {len(model.output_heads)} heads")
+    print("✓ Ensemble fine-tuning workflow test passed")
+
+
+def test_ensemble_head_configuration():
+    """Test using MLP_EFS_Ensemble_Head in model configuration."""
+    import torch
+    from fairchem.core.units.mlip_unit.mlip_unit import initialize_finetuning_model
+    from fairchem.core import pretrained_mlip
+    
+    available_models = pretrained_mlip.available_models
+
+    # Use uma-s-1p1 if available
+    checkpoint_name = "uma-s-1p1" if "uma-s-1p1" in available_models else list(available_models.keys())[0]
+    
+    # Create configuration using the new efficient ensemble head
+    heads_config = {
+        "ensemble_head": {
+            "module": "fairchem.core.models.uma.escn_md.MLP_EFS_Ensemble_Head",
+            "num_ensemble": 5,
+            "wrap_property": True
+        }
+    }
+    
+    # Get checkpoint path
+    from fairchem.core.calculate.pretrained_mlip import _MODEL_CKPTS
+    from huggingface_hub import hf_hub_download
+    
+    model_checkpoint = _MODEL_CKPTS.checkpoints[checkpoint_name]
+    checkpoint_path = hf_hub_download(
+        filename=model_checkpoint.filename,
+        repo_id=model_checkpoint.repo_id,
+        subfolder=model_checkpoint.subfolder,
+        revision=model_checkpoint.revision,
+    )
+    
+    # Initialize model with ensemble head
+    model = initialize_finetuning_model(
+        checkpoint_location=checkpoint_path,
+        heads=heads_config
+    )
+    
+    # Test that the head was created correctly
+    assert hasattr(model, 'heads')
+    assert 'ensemble_head' in model.heads
+    
+    from fairchem.core.models.uma.escn_md import MLP_EFS_Ensemble_Head
+    assert isinstance(model.heads['ensemble_head'], MLP_EFS_Ensemble_Head)
+    assert model.heads['ensemble_head'].num_ensemble == 5
+    
+    # Test inference with the ensemble head
+    atoms = bulk('Cu', 'fcc', a=3.6, cubic=True)
+    atoms = atoms * (2, 1, 1)  # Small system for quick testing
+    
+    calculator = FAIRChemCalculator(model=model)
+    
+    # Should be able to compute energy and forces
+    energy = atoms.get_potential_energy()
+    forces = atoms.get_forces()
+    
+    assert isinstance(energy, float)
+    assert forces.shape == (len(atoms), 3)
+    
+    print("✓ Ensemble head configuration test passed")
 
 
 def test_ase_calculator_basic_functionality():

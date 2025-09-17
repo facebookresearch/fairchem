@@ -901,3 +901,154 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
         stress = compose_tensor(iso_stress.unsqueeze(1), aniso_stress)
 
         return {"stress": stress}
+
+
+class MLP_EFS_Ensemble_Head(nn.Module, HeadInterface):
+    """
+    Efficient ensemble head that computes 5 ensemble predictions while sharing computation.
+    All 5 energy predictions use the same shared input, and forces/stresses are computed
+    in a single autograd.grad call for maximum efficiency.
+    """
+    def __init__(self, backbone, num_ensemble=5, prefix=None, wrap_property=True):
+        super().__init__()
+        backbone.energy_block = None
+        backbone.force_block = None
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+        self.num_ensemble = num_ensemble
+        self.prefix = prefix
+        self.wrap_property = wrap_property
+
+        self.sphere_channels = backbone.sphere_channels
+        self.hidden_channels = backbone.hidden_channels
+        
+        # Create multiple energy blocks for ensemble
+        self.energy_blocks = nn.ModuleList()
+        for i in range(self.num_ensemble):
+            energy_block = nn.Sequential(
+                nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
+                nn.SiLU(),
+                nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
+                nn.SiLU(),
+                nn.Linear(self.hidden_channels, 1, bias=True),
+            )
+            self.energy_blocks.append(energy_block)
+
+        # TODO: this is not very clean, bug-prone.
+        # but is currently necessary for finetuning pretrained models that did not have
+        # the direct_forces flag set to False
+        backbone.direct_forces = False
+        assert (
+            not backbone.direct_forces
+        ), "EFS head is only used for gradient-based forces/stress."
+
+    @conditional_grad(torch.enable_grad())
+    def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        if self.prefix:
+            energy_key = f"{self.prefix}_energy"
+            forces_key = f"{self.prefix}_forces"
+            stress_key = f"{self.prefix}_stress"
+        else:
+            energy_key = "energy"
+            forces_key = "forces"
+            stress_key = "stress"
+
+        outputs = {}
+        
+        # Get shared input - computed once for efficiency
+        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
+        
+        # Compute all ensemble energy predictions using the same shared input
+        ensemble_energies = []
+        ensemble_energy_parts = []
+        
+        for i, energy_block in enumerate(self.energy_blocks):
+            _output = energy_block(_input)
+            node_energy = _output.view(-1, 1, 1)
+            energy_part = torch.zeros(
+                len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
+            )
+            energy_part.index_add_(0, data["batch"], node_energy.view(-1))
+
+            if gp_utils.initialized():
+                energy = gp_utils.reduce_from_model_parallel_region(energy_part)
+            else:
+                energy = energy_part
+                
+            ensemble_energies.append(energy)
+            ensemble_energy_parts.append(energy_part)
+
+        # Store energies with ensemble head naming convention
+        for i, energy in enumerate(ensemble_energies):
+            head_name = f"energyandforcehead{i+1}"
+            if self.wrap_property:
+                outputs[energy_key] = outputs.get(energy_key, {})
+                outputs[energy_key][head_name] = {"energy": energy}
+            else:
+                outputs[f"{energy_key}_{head_name}"] = energy
+
+        # Compute forces/stresses efficiently with single autograd call
+        if self.regress_stress:
+            # Sum all ensemble energy parts for efficient gradient computation
+            total_energy_part = sum(ensemble_energy_parts)
+            
+            grads = torch.autograd.grad(
+                [total_energy_part.sum()],
+                [data["pos_original"], emb["displacement"]],
+                create_graph=self.training,
+                retain_graph=True,
+                allow_unused=True,
+            )
+            if gp_utils.initialized():
+                grads = (
+                    gp_utils.reduce_from_model_parallel_region(grads[0]),
+                    gp_utils.reduce_from_model_parallel_region(grads[1]),
+                )
+
+            forces = torch.neg(grads[0])
+            virial = grads[1].view(-1, 3, 3)
+            volume = torch.det(data["cell"]).abs().unsqueeze(-1)
+            stress = virial / volume.view(-1, 1, 1)
+            virial = torch.neg(virial)
+            stress = stress.view(
+                -1, 9
+            )  # NOTE to work better with current Multi-task trainer
+            
+            # Store forces/stresses for all ensemble heads
+            for i in range(self.num_ensemble):
+                head_name = f"energyandforcehead{i+1}"
+                if self.wrap_property:
+                    outputs[forces_key] = outputs.get(forces_key, {})
+                    outputs[stress_key] = outputs.get(stress_key, {})
+                    outputs[forces_key][head_name] = {"forces": forces}
+                    outputs[stress_key][head_name] = {"stress": stress}
+                else:
+                    outputs[f"{forces_key}_{head_name}"] = forces
+                    outputs[f"{stress_key}_{head_name}"] = stress
+            
+            data["cell"] = emb["orig_cell"]
+            
+        elif self.regress_forces:
+            # Compute forces for each ensemble member separately to maintain gradient diversity
+            for i, energy_part in enumerate(ensemble_energy_parts):
+                head_name = f"energyandforcehead{i+1}"
+                
+                grad = torch.autograd.grad(
+                    energy_part.sum(), data["pos"], create_graph=self.training, retain_graph=True, allow_unused=True
+                )[0]
+                
+                if grad is not None:
+                    forces = -1 * grad
+                    if gp_utils.initialized():
+                        forces = gp_utils.reduce_from_model_parallel_region(forces)
+                else:
+                    # If gradient is None, create zero forces with correct shape
+                    forces = torch.zeros_like(data["pos"])
+                
+                if self.wrap_property:
+                    outputs[forces_key] = outputs.get(forces_key, {})
+                    outputs[forces_key][head_name] = {"forces": forces}
+                else:
+                    outputs[f"{forces_key}_{head_name}"] = forces
+        
+        return outputs

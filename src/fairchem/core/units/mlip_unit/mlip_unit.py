@@ -528,10 +528,18 @@ def compute_metrics(
     else:
         natoms_masked = batch.natoms[output_mask]
         output_size = output_mask.sum()
+    
+    # Debug logging for troubleshooting
     if output_size == 0:
+        logging.debug(f"No valid samples for task {task.name} on dataset {dataset_name}: output_mask sum = {output_mask.sum()}")
         return {metric_name: Metrics() for metric_name in task.metrics}
 
     task_property_preds = predictions.get(task.property, {})
+    
+    # Debug: log available prediction keys
+    if not task_property_preds:
+        logging.debug(f"No predictions found for property {task.property}. Available properties: {list(predictions.keys())}")
+        return {metric_name: Metrics() for metric_name in task.metrics}
     
     # Find all heads that correspond to this specific task
     task_heads = []
@@ -543,8 +551,19 @@ def compute_metrics(
             any(dataset in head_key and task.property in head_key 
                 for dataset in task.datasets)):
             task_heads.append((head_key, head_pred))
+        # Additional matching for ensemble heads (e.g., energyandforcehead1, energyandforcehead2)
+        elif ("head" in head_key.lower() and task.property in head_key.lower()):
+            task_heads.append((head_key, head_pred))
+    
+    # If still no matches and we have predictions for this property, use all available heads
+    # This handles cases where heads are named generically (like energyandforcehead1)
+    # and we're looking at a specific property (like energy or forces)
+    if not task_heads and task_property_preds:
+        task_heads = list(task_property_preds.items())
+        logging.debug(f"Using fallback head matching for task {task.name}: found {len(task_heads)} heads")
     
     if not task_heads:
+        logging.debug(f"No heads matched for task {task.name} with property {task.property}. Available heads: {list(task_property_preds.keys())}")
         return {metric_name: Metrics() for metric_name in task.metrics}
 
     if getattr(task, "shallow_ensemble", False) and len(task_heads) > 1:
@@ -552,7 +571,24 @@ def compute_metrics(
         metrics_per_head = []
         for head_key, head_pred in task_heads:
             target_masked = batch[task.name][output_mask]
-            pred = head_pred.clone()
+            
+            # Handle nested prediction structure
+            if isinstance(head_pred, dict):
+                # If head_pred is a dict, look for the property key within it
+                if task.property in head_pred:
+                    pred = head_pred[task.property].clone()
+                else:
+                    # If property not found, try to find any tensor value
+                    tensor_values = [v for v in head_pred.values() if hasattr(v, 'clone')]
+                    if tensor_values:
+                        pred = tensor_values[0].clone()
+                    else:
+                        logging.warning(f"No tensor found in head_pred for head {head_key}, task {task.name}")
+                        continue
+            else:
+                # Direct tensor case
+                pred = head_pred.clone()
+            
             pred = task.normalizer.denorm(pred)
             if task.element_references is not None:
                 pred = task.element_references.undo_refs(batch, pred)
@@ -568,7 +604,14 @@ def compute_metrics(
         if metrics_per_head:
             agg_metrics = {}
             for metric_name in task.metrics:
-                agg_metrics[metric_name] = sum(m[metric_name] for m in metrics_per_head) / len(metrics_per_head)
+                # Properly aggregate Metrics objects
+                aggregated_metric = Metrics()
+                for m in metrics_per_head:
+                    aggregated_metric += m[metric_name]
+                # Average the metrics over the heads
+                if aggregated_metric.numel > 0:
+                    aggregated_metric.metric = aggregated_metric.total / aggregated_metric.numel
+                agg_metrics[metric_name] = aggregated_metric
             return agg_metrics
         else:
             return {metric_name: Metrics() for metric_name in task.metrics}
@@ -577,12 +620,40 @@ def compute_metrics(
         if len(task_heads) == 1:
             head_pred = task_heads[0][1]
         else:
-            # Average multiple heads
-            preds = [head_pred for head_key, head_pred in task_heads]
-            head_pred = torch.stack(preds, dim=0).mean(dim=0)
+            # Average multiple heads - need to extract tensors first
+            tensor_preds = []
+            for head_key, head_pred in task_heads:
+                if isinstance(head_pred, dict):
+                    if task.property in head_pred:
+                        tensor_preds.append(head_pred[task.property])
+                    else:
+                        tensor_values = [v for v in head_pred.values() if hasattr(v, 'clone')]
+                        if tensor_values:
+                            tensor_preds.append(tensor_values[0])
+                else:
+                    tensor_preds.append(head_pred)
+            
+            if tensor_preds:
+                head_pred = torch.stack(tensor_preds, dim=0).mean(dim=0)
+            else:
+                logging.warning(f"No valid predictions found for task {task.name}")
+                return {metric_name: Metrics() for metric_name in task.metrics}
                 
+        # Handle nested prediction structure for single head case too
+        if isinstance(head_pred, dict):
+            if task.property in head_pred:
+                pred = head_pred[task.property].clone()
+            else:
+                tensor_values = [v for v in head_pred.values() if hasattr(v, 'clone')]
+                if tensor_values:
+                    pred = tensor_values[0].clone()
+                else:
+                    logging.warning(f"No tensor found in head_pred for task {task.name}")
+                    return {metric_name: Metrics() for metric_name in task.metrics}
+        else:
+            pred = head_pred.clone()
+            
         target_masked = batch[task.name][output_mask]
-        pred = head_pred.clone()
         pred = task.normalizer.denorm(pred)
         if task.element_references is not None:
             pred = task.element_references.undo_refs(batch, pred)
