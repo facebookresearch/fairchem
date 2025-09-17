@@ -36,8 +36,6 @@ def get_eval_config(config: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         logger.error(f"Invalid evaluation method '{eval_method}' specified.")
         raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
 
-    eval_config["method"] = eval_method
-
     if eval_method == "csd":
         csd_config = eval_config.get("csd", {})
         eval_config["csd_python_cmd"] = csd_config.get("python_cmd", "python")
