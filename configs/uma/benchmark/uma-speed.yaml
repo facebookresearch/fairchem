@@ -10,7 +10,7 @@ job:
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 10
-  natoms_list: [8000]
+  natoms_list: [1000]
   model_checkpoints: {
     "uma_sm_cons": "/home/misko/checkpoints/uma_sm_130525.pt"
   }
@@ -22,7 +22,7 @@ runner:
     tf32: True
     activation_checkpointing: False
     merge_mole: True
-    compile: True
+    compile: False
     wigner_cuda: False
     external_graph_gen: True
     internal_graph_gen_version: 2

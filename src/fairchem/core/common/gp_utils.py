@@ -323,7 +323,7 @@ class GatherFromModelParallelRegion(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         result = _split(grad_output, 0)
-        return result, None, None
+        return result, None
 
 
 class GatherFromModelParallelRegionSumGradPaddedAsync(torch.autograd.Function):
@@ -376,7 +376,7 @@ class GatherFromModelParallelRegionSumGradPaddedNoAsyncGLOO(torch.autograd.Funct
         result = grad_output[
             ctx.padded_size * ctx.rank : ctx.padded_size * ctx.rank + ctx.shape[0]
         ]
-        return result, None
+        return result
 
 
 class GatherFromModelParallelRegionSumGrad(torch.autograd.Function):
@@ -459,17 +459,25 @@ def pad_input(input: torch.Tensor, padded_size: int):
 
     # pad using manual tensor cat
     if input.shape[0] != padded_size:
-        _input = torch.empty(
-            (padded_size, *input.shape[1:]),
-            device=input.device,
-            dtype=input.dtype,
+        #     _input = torch.empty(
+        #         (padded_size, *input.shape[1:]),
+        #         device=input.device,
+        #         dtype=input.dtype,
+        #     )
+        #     _input[: input.shape[0]] = input
+        #     _input[input.shape[0] :] = 0
+        #     input = _input
+        input = torch.cat(
+            [
+                input,
+                torch.zeros(
+                    (1, *input.shape[1:]), device=input.device, dtype=input.dtype
+                ),
+            ],
+            dim=0,
         )
-        _input[: input.shape[0]] = input
-        _input[input.shape[0] :] = 0
-        input = _input
 
-    input = input.contiguous()
-    assert input.shape[0] == padded_size
+        assert input.shape[0] == padded_size
 
     return input
 
