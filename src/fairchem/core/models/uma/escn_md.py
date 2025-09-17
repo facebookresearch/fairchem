@@ -50,7 +50,6 @@ from .escn_md_block import eSCNMD_Block
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
-from torch import distributed as dist
 
 ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
 
@@ -429,7 +428,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
-        gloo_backend = dist.get_backend() == "gloo"
+        gloo_backend = False  # dist.get_backend() == "gloo"
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -535,6 +534,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                print("WTF", gp_utils.get_gp_rank(), x_message.abs().mean())
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
@@ -708,6 +708,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs = {}
         _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
+        # TODO FOR GP ONLY RUN THIS ON THE SUBSET OF NODES WE OWN
         _output = self.energy_block(_input)
         node_energy = _output.view(-1, 1, 1)
         energy = torch.zeros(

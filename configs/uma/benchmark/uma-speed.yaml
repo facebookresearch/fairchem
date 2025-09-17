@@ -1,10 +1,11 @@
 #fairchem -c puma_speed.yaml +run_dir_root=/path/to/run_dir
 
 job:
+  device_type: CPU
   scheduler:
     mode: LOCAL
-    ranks_per_node: 2
-  graph_parallel_group_size: 2
+    ranks_per_node: 3
+  graph_parallel_group_size: 3
 
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner

@@ -41,7 +41,7 @@ class Safeatan2(torch.autograd.Function):
 
 
 def init_edge_rot_euler_angles(edge_distance_vec):
-    xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1,1)
+    xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1, 1)
 
     # latitude (beta)
     beta = Safeacos.apply(xyz[:, 1])

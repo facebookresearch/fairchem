@@ -366,7 +366,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
 
 
 
-#@pytest.mark.gpu()
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "train_config, dataset_config",
     [
@@ -426,8 +426,8 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
                 )
                 relative_diffs = [
                     (
-                        gp_params_and_grads["grad"][idx]
-                        - non_gp_params_and_grads["grad"][idx]
+                        gp_params_and_grads["grad"][idx].cpu()
+                        - non_gp_params_and_grads["grad"][idx].cpu()
                     ).abs()
                     / torch.tensor(
                         [

@@ -102,7 +102,10 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             -1, self.m_0_num_coefficients, self.sphere_channels
         )
 
-        x_edge_embedding = torch.nn.functional.pad(x_edge_m_0,(0,0,0,(self.m_all_num_coefficents - self.m_0_num_coefficients)))
+        x_edge_embedding = torch.nn.functional.pad(
+            x_edge_m_0,
+            (0, 0, 0, (self.m_all_num_coefficents - self.m_0_num_coefficients)),
+        )
 
         x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
@@ -151,6 +154,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 )
             )
             # need to deal with padding
+            print("EGDGEgloo requires", all_atoms.requires_grad, out.requires_grad)
             all_atoms_splits = all_atoms.split(max(size_list), dim=0)
             return torch.cat(
                 [
@@ -161,9 +165,10 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         all_atoms = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
             out, natoms
         )
-        #offset = sum(size_list[:rank])
-        #print("EDGE EMBED",all_atoms[offset : offset + out.shape[0]].abs().mean(),out.abs().mean(),all_atoms.requires_grad,all_atoms.grad_fn)
-        #all_atoms[offset : offset + out.shape[0]] = out
+        print("EGDGE requires", all_atoms.requires_grad, out.requires_grad)
+        # offset = sum(size_list[:rank])
+        # print("EDGE EMBED",all_atoms[offset : offset + out.shape[0]].abs().mean(),out.abs().mean(),all_atoms.requires_grad,all_atoms.grad_fn)
+        # all_atoms[offset : offset + out.shape[0]] = out
         return all_atoms
 
     def forward_gp_staggered(

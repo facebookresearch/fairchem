@@ -13,7 +13,7 @@ from typing import Any
 
 import torch
 from torch import distributed as dist
-from torch.distributed.nn.functional import all_reduce
+from torch.distributed.nn.functional import all_gather, all_reduce, reduce_scatter
 
 """
 Functions to support graph parallel training.
@@ -367,6 +367,7 @@ class GatherFromModelParallelRegionSumGradAsyncGLOO(torch.autograd.Function):
             device=input.device,
             dtype=input.dtype,
         )
+        # TODO CAN OPTIMIZE< dont need all zeros!
         if input.shape[0] != ctx.padded_size:
             _input = torch.zeros(
                 (ctx.padded_size, *input.shape[1:]),
@@ -381,6 +382,7 @@ class GatherFromModelParallelRegionSumGradAsyncGLOO(torch.autograd.Function):
 
         ctx.all_atoms_shape = all_atoms.shape
         handle = dist.all_gather(tensor_list, input, group=ctx.group, async_op=async_op)
+        print("NO WAY THIS WORKS")
         return all_atoms, handle
 
     @staticmethod
@@ -390,6 +392,7 @@ class GatherFromModelParallelRegionSumGradAsyncGLOO(torch.autograd.Function):
             device=grad_output.device,
             dtype=grad_output.dtype,
         )
+        print("WTF IS GOIN ON???")
 
         dist.all_to_all_single(
             output=output_tensor,
@@ -512,26 +515,25 @@ class GatherFromModelParallelRegionSumGradNoAsync(torch.autograd.Function):
         # print("ALL ATOMS",all_atoms.requires_grad,[ t.requires_grad for t in tensor_list])
         ctx.all_atoms_shape = all_atoms.shape
         dist.all_gather(tensor_list, input, group=ctx.group, async_op=False)
-        return all_atoms
+        return tensor_list
 
     @staticmethod
-    def backward(ctx, grad_output: torch.Tensor):
-        output_tensor = torch.empty(
-            (ctx.shape[0] * ctx.world_size,) + ctx.shape[1:],
-            device=grad_output.device,
-            dtype=grad_output.dtype,
-        )
+    def backward(ctx, grad_outputs):
+        local_grad_output = grad_outputs[ctx.rank]
+        output_tensor = torch.empty_like(local_grad_output)
 
-        dist.all_to_all_single(
-            output=output_tensor,
-            input=grad_output,
-            output_split_sizes=[ctx.shape[0]] * ctx.world_size,
-            input_split_sizes=ctx.size_list,
-            group=ctx.group,
-            async_op=False,
-        )
-        # handle.wait()
-        result = output_tensor.view(ctx.world_size, *ctx.shape).sum(dim=0)
+        dist.reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
+        result = output_tensor
+        # dist.all_to_all_single(
+        #     output=output_tensor,
+        #     input=grad_output,
+        #     output_split_sizes=[ctx.shape[0]] * ctx.world_size,
+        #     input_split_sizes=ctx.size_list,
+        #     group=ctx.group,
+        #     async_op=False,
+        # )
+        # # handle.wait()
+        # result = output_tensor.view(ctx.world_size, *ctx.shape).sum(dim=0)
 
         # #previous
         # grad_output = all_reduce(grad_output, group=ctx.group)
@@ -542,6 +544,51 @@ class GatherFromModelParallelRegionSumGradNoAsync(torch.autograd.Function):
         #     result=grad_output[ctx.padded_size*ctx.rank:ctx.padded_size*ctx.rank+ctx.shape[0]]
         # else:
         #     result=grad_output[ctx.offset:ctx.offset+ctx.shape[0]]
+        return result, None
+
+
+class GatherFromModelParallelRegionSumGradPaddedNoAsync(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
+        ctx.rank = get_gp_rank()
+        ctx.group = get_gp_group()
+        ctx.shape = input.shape
+        ctx.world_size = get_gp_world_size()
+
+        tensor_list = [torch.empty_like(input) for _ in range(ctx.world_size)]
+        # print("ALL ATOMS",all_atoms.requires_grad,[ t.requires_grad for t in tensor_list])
+        dist.all_gather(tensor_list, input, group=ctx.group, async_op=False)
+        return tuple(tensor_list)
+        # return [ tensor_list[idx] if idx!=ctx.rank else input for idx in range(ctx.world_size)]
+
+    @staticmethod
+    def backward(ctx, *grad_outputs):
+        local_grad_output = grad_outputs[ctx.rank]
+        output_tensor = torch.empty_like(local_grad_output)
+        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
+        # dist.reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
+        # result=output_tensor
+        tensor_list = [torch.empty_like(tensor) for tensor in grad_outputs]
+        dist.all_to_all(
+            tensor_list,
+            list(grad_outputs),
+            group=ctx.group,
+            async_op=False,
+        )
+        # handle.wait()
+        result = torch.stack(tensor_list).sum(dim=0)
+
+        # previous
+        # grad_output = all_reduce(torch.cat(grad_outputs,dim=0), group=ctx.group)
+        # ctx.padded_size=grad_outputs[0].shape[0]
+        # print("GRAD OUTPUT SHAPE",[ t.shape for t in grad_outputs],grad_output.shape)
+        # #result = _split(grad_output, 0)
+        # #result=torch.split(grad_output,ctx.size_list)[ctx.rank]
+        # if True or ctx.gloo_backend:
+        #     result=grad_output[ctx.padded_size*ctx.rank:ctx.padded_size*ctx.rank+ctx.shape[0]]
+        # else:
+        #     result=grad_output[ctx.offset:ctx.offset+ctx.shape[0]]
+        # print("PADDED ALL REDUCE BACK")
         return result, None
 
 
@@ -620,8 +667,32 @@ def gather_from_model_parallel_region_sum_grad(
 def gather_from_model_parallel_region_sum_grad_noasync(
     input: torch.Tensor, natoms: int
 ) -> torch.Tensor:
+    # TODO REMOVE ASSDERT?
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
-    return GatherFromModelParallelRegionSumGradNoAsync.apply(input, natoms)
+    input = input.contiguous()
+    world_size = get_gp_world_size()
+    size_list = size_list_fn(natoms, world_size)
+    padded_size = natoms // world_size + (1 if natoms % world_size != 0 else 0)
+    # if input.shape[0]!=padded_size:
+    #     input=torch.nn.functional.pad(input,(0,1)).contiguous()
+
+    # print("INPUTA SHAPE AND REQUIRES GRAD",input.shape,input.requires_grad)
+    if input.shape[0] != padded_size:
+        _input = torch.empty(
+            (padded_size, *input.shape[1:]),
+            device=input.device,
+            dtype=input.dtype,
+        )
+        _input[: input.shape[0]] = input
+        _input[input.shape[0] :] = 0
+        input = _input.contiguous()
+    assert input.shape[0] == padded_size
+    # print("INPUTB SHAPE AND REQUIRES GRAD",input.shape,input.requires_grad)
+    # tensor_list_w_padding= GatherFromModelParallelRegionSumGradNoAsync.apply(input, natoms)
+    # tensor_list_w_padding= GatherFromModelParallelRegionSumGradPaddedNoAsync.apply(input)
+    tensor_list_w_padding = all_gather(input, group=get_gp_group())
+    # print("GP RANK",get_gp_rank(),"DP",get_dp_rank(),input.requires_grad,input.grad_fn,[ (t.requires_grad,t.grad_fn) for t in tensor_list_w_padding])
+    return torch.cat([t[:s] for t, s in zip(tensor_list_w_padding, size_list)], dim=0)
 
 
 def gather_from_model_parallel_region_sum_grad_async(

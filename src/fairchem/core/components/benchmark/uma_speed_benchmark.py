@@ -77,9 +77,9 @@ def get_fcc_carbon_xtal(
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
     def timefunc():
-        out=predictor.predict(data)
-        print(out['energy'].abs().mean())
-        print("FORCES",out['forces'].abs().mean())
+        out = predictor.predict(data)
+        print(out["energy"].abs().mean())
+        print("FORCES", out["forces"].abs().mean())
         torch.cuda.synchronize()
 
     for _ in range(warmups):
