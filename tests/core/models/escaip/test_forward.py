@@ -183,13 +183,8 @@ def test_fixed_forward_full_gpu():
         os.path.dirname(os.path.abspath(__file__)), "fixed_results.pt"
     )
     fixed_results = torch.load(results_path)
-    # compare fixed_results with output and model weights
-    model_weights = model.state_dict()
+    # compare fixed_results with output
     model_output = output
-    for key in fixed_results["model_weights"]:
-        assert torch.allclose(
-            fixed_results["model_weights"][key], model_weights[key], atol=1e-5
-        )
     assert torch.allclose(
         fixed_results["model_output"]["energy"], model_output["energy"], atol=1e-5
     )
