@@ -58,14 +58,13 @@ Module Contents
 
    This is an abstract Dataset that includes helpful utilities for turning
    ASE atoms objects into OCP-usable data objects. This should not be instantiated directly
-   as get_atoms_object and load_dataset_get_ids are not implemented in this base class.
+   as get_atoms and _load_dataset_get_ids are not implemented in this base class.
 
    Derived classes must add at least two things:
-       self.get_atoms_object(id): a function that takes an identifier and returns a corresponding atoms object
+       self.get_atoms(id): a function that takes an identifier and returns a corresponding atoms object
 
-       self.load_dataset_get_ids(config: dict): This function is responsible for any initialization/loads
-           of the dataset and importantly must return a list of all possible identifiers that can be passed into
-           self.get_atoms_object(id)
+       self._load_dataset_get_ids(config: dict): This function is responsible for any initialization/loads
+           of the dataset. The values it returns will be accessed by index using self.get_atoms(idx).
 
    Identifiers need not be any particular type.
 
@@ -91,7 +90,7 @@ Module Contents
    .. py:method:: __getitem__(idx)
 
 
-   .. py:method:: get_atoms(idx: str | int) -> ase.Atoms
+   .. py:method:: get_atoms(idx: int) -> ase.Atoms
       :abstractmethod:
 
 
@@ -164,7 +163,7 @@ Module Contents
    .. py:method:: _load_dataset_get_ids(config) -> list[pathlib.Path]
 
 
-   .. py:method:: get_atoms(idx: str | int) -> ase.Atoms
+   .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
 
    .. py:method:: get_relaxed_energy(identifier) -> float
@@ -237,7 +236,7 @@ Module Contents
    .. py:method:: _load_dataset_get_ids(config) -> list[str]
 
 
-   .. py:method:: get_atoms(idx: str) -> ase.Atoms
+   .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
 
    .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict

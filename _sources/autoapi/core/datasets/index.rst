@@ -179,7 +179,7 @@ Package Contents
    .. py:method:: _load_dataset_get_ids(config) -> list[pathlib.Path]
 
 
-   .. py:method:: get_atoms(idx: str | int) -> ase.Atoms
+   .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
 
    .. py:method:: get_relaxed_energy(identifier) -> float
@@ -252,7 +252,7 @@ Package Contents
    .. py:method:: _load_dataset_get_ids(config) -> list[str]
 
 
-   .. py:method:: get_atoms(idx: str) -> ase.Atoms
+   .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
 
    .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict

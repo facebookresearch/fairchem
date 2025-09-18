@@ -736,12 +736,11 @@ without needing to pass a callable (which is currently difficult to do with main
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.datasets.base_dataset.BaseDataset</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">abc.ABC</span></code></p>
 <p>This is an abstract Dataset that includes helpful utilities for turning
 ASE atoms objects into OCP-usable data objects. This should not be instantiated directly
-as get_atoms_object and load_dataset_get_ids are not implemented in this base class.</p>
+as get_atoms and _load_dataset_get_ids are not implemented in this base class.</p>
 <dl>
-<dt>Derived classes must add at least two things:</dt><dd><p>self.get_atoms_object(id): a function that takes an identifier and returns a corresponding atoms object</p>
+<dt>Derived classes must add at least two things:</dt><dd><p>self.get_atoms(id): a function that takes an identifier and returns a corresponding atoms object</p>
 <dl class="simple">
-<dt>self.load_dataset_get_ids(config: dict): This function is responsible for any initialization/loads</dt><dd><p>of the dataset and importantly must return a list of all possible identifiers that can be passed into
-self.get_atoms_object(id)</p>
+<dt>self._load_dataset_get_ids(config: dict): This function is responsible for any initialization/loads</dt><dd><p>of the dataset. The values it returns will be accessed by index using self.get_atoms(idx).</p>
 </dd>
 </dl>
 </dd>
@@ -784,7 +783,7 @@ self.get_atoms_object(id)</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.datasets.ase_datasets.AseAtomsDataset.get_atoms">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.ase_datasets.AseAtomsDataset.get_atoms" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.ase_datasets.AseAtomsDataset.get_atoms" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -862,7 +861,7 @@ object. Useful for applying tags, for example.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.datasets.ase_datasets.AseReadDataset.get_atoms">
-<span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.ase_datasets.AseReadDataset.get_atoms" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.ase_datasets.AseReadDataset.get_atoms" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -934,7 +933,7 @@ object. Useful for applying tags, for example.</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.datasets.ase_datasets.AseReadMultiStructureDataset.get_atoms">
-<span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.ase_datasets.AseReadMultiStructureDataset.get_atoms" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.ase_datasets.AseReadMultiStructureDataset.get_atoms" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
