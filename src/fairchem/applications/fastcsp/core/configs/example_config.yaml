@@ -31,7 +31,7 @@ pre_relaxation_filter:        # Before ML relaxation
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
-  npartitions: 1000
+  npartitions: 1000            # Size of slurm array
 
 # ML relaxation parameters
 relax:
