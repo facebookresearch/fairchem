@@ -4,13 +4,13 @@ job:
   device_type: CUDA
   scheduler:
     mode: LOCAL
-    ranks_per_node: 8
-  graph_parallel_group_size: 8
+    ranks_per_node: _RANKS_
+  graph_parallel_group_size: _RANKS_
 
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 10
-  natoms_list: [1000]
+  natoms_list: [_NATOMS_]
   model_checkpoints: {
     "uma_sm_cons": "/home/misko/checkpoints/uma_sm_130525.pt"
   }
@@ -22,8 +22,8 @@ runner:
     tf32: True
     activation_checkpointing: False
     merge_mole: True
-    compile: True
+    compile: _COMPILE_
     wigner_cuda: False
     external_graph_gen: True
     internal_graph_gen_version: 2
-  #generate_traces: True
+  generate_traces: True
