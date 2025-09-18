@@ -52,5 +52,23 @@
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
         }
+    },
+    "esen-sm-conserving-all-oc25": {
+        "filename": "esen_sm_conserve.pt",
+        "repo_id": "facebook/OC25",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "iso_atom_elem_refs.yaml"
+        }
+    },
+    "esen-md-direct-all-oc25": {
+        "filename": "esen_md_direct.pt",
+        "repo_id": "facebook/OC25",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "iso_atom_elem_refs.yaml"
+        }
     }
 }
