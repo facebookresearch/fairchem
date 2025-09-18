@@ -579,13 +579,19 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
 
         node_partition = torch.tensor_split(
-            torch.arange(atomic_numbers_full.shape[0]).to(atomic_numbers_full.device),
+            torch.arange(
+                atomic_numbers_full.shape[0]
+            ),  # .to(atomic_numbers_full.device),
             world_size,
         )[gp_utils.get_gp_rank()]
 
+        graph_dict["n_chunks"] = 1
         _, node_edge_counts = torch.unique(edge_index[1], return_counts=True)
         # TODO where should this cpu transfer go? can this be non blocking?
-        node_edge_offsets = node_edge_counts.cumsum(0).cpu()
+
+        node_edge_offsets = node_edge_counts.cumsum(
+            0
+        )  # node_edge_offsets[node_idx]=how many edges go to node_idx
         start_idx = (
             node_edge_offsets[node_partition[0] - 1] if node_partition[0] > 0 else 0
         )
@@ -603,12 +609,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         graph_dict["edge_distance_vec"] = edge_distance_vec_full[start_idx:end_idx]
         graph_dict["node_offset"] = node_partition[0]
 
-        _, node_edge_counts = torch.unique(
-            graph_dict["edge_index"][1], return_counts=True
-        )
-
-        node_edge_offsets = node_edge_counts.cumsum(0).cpu()
-        graph_dict["n_chunks"] = 1
         graph_dict["sizes"] = torch.tensor(
             [
                 size_list_fn(chunk_for_rank, graph_dict["n_chunks"])
@@ -616,14 +616,33 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     atomic_numbers_full.shape[0],
                     gp_utils.get_gp_world_size(),
                 )
-            ]
-        )
-        graph_dict["edge_splits"] = (
-            node_edge_offsets[graph_dict["sizes"][gp_utils.get_gp_rank()].cumsum(0) - 1]
-            .diff(prepend=torch.tensor([0]))
-            .tolist()
+            ],
         )
         graph_dict["padded_size"] = graph_dict["sizes"].max().item()
+
+        if graph_dict["n_chunks"] > 1:
+            # want to compute how many edges each split has
+            # first lets find how many edges up to and inbetween start, intermediates..., end nodes, then take the diff
+            graph_dict["edge_splits"] = (
+                node_edge_offsets[
+                    graph_dict["sizes"][gp_utils.get_gp_rank()].cumsum(0)
+                    + node_partition[0]
+                    - 1
+                ]
+                .diff(
+                    prepend=torch.tensor(
+                        [
+                            node_edge_offsets[node_partition[0] - 1]
+                            if node_partition[0] > 0
+                            else 0
+                        ],
+                        device=node_edge_offsets.device,
+                    )
+                )
+                .tolist()
+            )
+        else:
+            graph_dict["edge_splits"] = None
 
         return graph_dict
 
