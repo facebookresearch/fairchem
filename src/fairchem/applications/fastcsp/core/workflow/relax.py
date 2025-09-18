@@ -31,11 +31,11 @@ import submitit
 from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
 from ase.optimize import BFGS, FIRE, LBFGS
+from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import get_relax_slurm_config
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_no_changes_in_covalent_matrix,
-    check_no_changes_in_Z,
 )
 from pymatgen.core import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -43,6 +43,8 @@ from tqdm import tqdm
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.units import mlip_unit
+
+EV_TO_KJ_PER_MOL = (kJ / mol) / eV
 
 CHECKPOINTS = {
     "uma_sm_1p1_omc": {  # RECOMMENDED: UMA w/ OMC task
@@ -313,26 +315,8 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
         structures_df["density"] = [
             structure.density for structure in structures_relaxed
         ]
-        structures_df["lattice_a"] = [
-            structure.lattice.a for structure in structures_relaxed
-        ]
-        structures_df["lattice_b"] = [
-            structure.lattice.b for structure in structures_relaxed
-        ]
-        structures_df["lattice_c"] = [
-            structure.lattice.c for structure in structures_relaxed
-        ]
-        structures_df["lattice_alpha"] = [
-            structure.lattice.alpha for structure in structures_relaxed
-        ]
-        structures_df["lattice_beta"] = [
-            structure.lattice.beta for structure in structures_relaxed
-        ]
-        structures_df["lattice_gamma"] = [
-            structure.lattice.gamma for structure in structures_relaxed
-        ]
         structures_df["energy_relaxed"] = [
-            atoms.get_potential_energy() for atoms in atoms_relaxed
+            atoms.get_potential_energy() * EV_TO_KJ_PER_MOL for atoms in atoms_relaxed
         ]
         structures_df["energy_relaxed_per_molecule"] = (
             structures_df["energy_relaxed"] / structures_df["z"]
@@ -342,10 +326,6 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
         ]
 
         # Validate structural integrity after relaxation
-        structures_df["Z_unchanged"] = [
-            check_no_changes_in_Z(atoms_initial, atoms_relaxed)
-            for atoms_initial, atoms_relaxed in zip(atoms_list, atoms_relaxed)
-        ]
         structures_df["connectivity_unchanged"] = [
             check_no_changes_in_covalent_matrix(atoms_initial, atoms_relaxed)
             for atoms_initial, atoms_relaxed in zip(atoms_list, atoms_relaxed)
@@ -383,7 +363,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     logger.info(f"Number of input files to relax: {len(input_files)}")
 
     jobs = []
-    num_ranks = relax_config.get("num_ranks", 1000)
+    num_ranks = relax_slurm_config.get("num_ranks", 1000)
     with executor.batch():
         for rank in range(min(num_ranks, len(input_files))):
             input_files_rank = input_files[rank::num_ranks]

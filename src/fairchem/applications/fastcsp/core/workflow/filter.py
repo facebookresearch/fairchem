@@ -29,7 +29,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.deduplicate import deduplicate_structures
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 from fairchem.applications.fastcsp.core.utils.slurm import (
@@ -38,7 +37,6 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
 )
 from fairchem.applications.fastcsp.core.utils.structure import (
     check_no_changes_in_covalent_matrix,
-    check_no_changes_in_Z,
     cif_to_atoms,
     cif_to_structure,
 )
@@ -46,9 +44,6 @@ from p_tqdm import p_map
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-# Energy conversion constant for unit standardization
-KJ_PER_MOL_TO_EV = eV / (kJ / mol)
 
 
 def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -131,11 +126,6 @@ def filter_and_deduplicate_structures_single(
             num_cpus=120,  # Parallel processing for connectivity validation
         )
 
-        # Validate molecular unit count preservation (less strict check)
-        structures_df["Z_unchanged"] = p_map(
-            check_no_changes_in_Z, initial_atoms, final_atoms, num_cpus=120
-        )
-
         # Save intermediate results with connectivity validation flags
         structures_df.to_parquet(
             input_dir.parent.with_suffix(".updated") / input_dir.name,
@@ -165,7 +155,7 @@ def filter_and_deduplicate_structures_single(
     min_energy = structures_df_filtered["energy_relaxed_per_molecule"].min()
     structures_df_filtered = structures_df_filtered[
         structures_df_filtered["energy_relaxed_per_molecule"]
-        < min_energy + energy_cutoff / KJ_PER_MOL_TO_EV
+        < min_energy + energy_cutoff
     ]
 
     # Convert CIF strings to pymatgen Structures for deduplication

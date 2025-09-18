@@ -188,14 +188,7 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
 
     Returns:
         List of stages reordered according to dependency requirements
-
-    Example:
-        >>> stages = ["evaluate", "relax", "generate"]
-        >>> reorder_stages_by_dependencies(stages)
-        ["generate", "relax", "evaluate"]
-        # Note: Only reorders, doesn't add in-between dependencies
     """
-    # Define the canonical order of all possible stages
     canonical_order = [
         "generate",
         "process_generated",
@@ -212,8 +205,8 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
     from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 
     logger = get_central_logger()
-    requested_stages = set(stages)
 
+    requested_stages = set(stages)
     reordered = [stage for stage in canonical_order if stage in requested_stages]
 
     missing_stages = requested_stages - set(reordered)

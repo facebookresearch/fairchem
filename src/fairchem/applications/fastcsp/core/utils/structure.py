@@ -34,7 +34,6 @@ import numpy as np
 from pymatgen.analysis.local_env import JmolNN
 from pymatgen.core.structure import Structure
 from pymatgen.io.ase import AseAtomsAdaptor
-from scipy import sparse
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -211,66 +210,3 @@ def check_no_changes_in_covalent_matrix(
     # Check that both bonding networks are identical
     # Any difference indicates bond formation/breaking during relaxation
     return np.array_equal(initial_nn_matrix, final_nn_matrix)
-
-
-def check_no_changes_in_Z(
-    initial_atoms: Atoms | None, final_atoms: Atoms | None
-) -> bool:
-    """
-    Verify that the number of connected molecular components (Z) is preserved during relaxation.
-
-    Validates that ML relaxation doesn't cause molecular fragmentation or aggregation
-    by comparing the number of connected components in the bonding network. This is
-    a more lenient check than covalent matrix comparison, focusing on overall
-    molecular integrity rather than specific bond preservation.
-
-    Args:
-        initial_atoms: Original structure before relaxation
-        final_atoms: Structure after ML-based relaxation
-
-    Returns:
-        True if number of connected components is preserved, False otherwise
-        Returns False if either structure is None (error handling)
-
-    Algorithm:
-        1. Build covalent bonding adjacency matrices for both structures
-        2. Use scipy sparse graph algorithms to find connected components
-        3. Compare the number of connected components (Z values)
-        4. Return True only if Z values are identical
-
-    Use Cases:
-        - Detect molecular fragmentation during relaxation
-        - Identify aggregation events that merge separate molecules
-        - Less strict than full connectivity validation
-    """
-    # Handle error cases where structures couldn't be processed
-    if initial_atoms is None or final_atoms is None:
-        return False
-
-    # Convert ASE Atoms to pymatgen Structures for bonding analysis
-    initial_structure = AseAtomsAdaptor.get_structure(initial_atoms)
-    final_structure = AseAtomsAdaptor.get_structure(final_atoms)
-
-    # Build adjacency matrix for initial structure
-    initial_nn_info = JmolNN().get_all_nn_info(initial_structure)
-    initial_nn_matrix = np.zeros((len(initial_nn_info), len(initial_nn_info)))
-
-    for i in range(len(initial_nn_info)):
-        for j in range(len(initial_nn_info[i])):
-            initial_nn_matrix[i, initial_nn_info[i][j]["site_index"]] = 1
-
-    # Count connected components in initial structure using graph theory
-    Z1 = sparse.csgraph.connected_components(initial_nn_matrix)[0]
-
-    # Build adjacency matrix for final (relaxed) structure
-    final_nn_info = JmolNN().get_all_nn_info(final_structure)
-    final_nn_matrix = np.zeros((len(final_nn_info), len(final_nn_info)))
-    for i in range(len(final_nn_info)):
-        for j in range(len(final_nn_info[i])):
-            final_nn_matrix[i, final_nn_info[i][j]["site_index"]] = 1
-
-    # Count connected components in final structure
-    Z2 = sparse.csgraph.connected_components(final_nn_matrix)[0]
-
-    # Verify that the number of molecular units is preserved
-    return Z1 == Z2
