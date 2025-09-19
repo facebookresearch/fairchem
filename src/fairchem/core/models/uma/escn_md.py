@@ -296,48 +296,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
 
-    def _get_displacement_and_cell(
-        self, data_dict: AtomicData
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        ###############################################################
-        # gradient-based forces/stress
-        ###############################################################
-        displacement = None
-        orig_cell = None
-        if self.regress_stress and not self.direct_forces:
-            displacement = torch.zeros(
-                (3, 3),
-                dtype=data_dict["pos"].dtype,
-                device=data_dict["pos"].device,
-            )
-            num_batch = len(data_dict["natoms"])
-            displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
-            displacement.requires_grad = True
-            symmetric_displacement = 0.5 * (
-                displacement + displacement.transpose(-1, -2)
-            )
-            if data_dict["pos"].requires_grad is False:
-                data_dict["pos"].requires_grad = True
-            data_dict["pos_original"] = data_dict["pos"]
-            data_dict["pos"] = data_dict["pos"] + torch.bmm(
-                data_dict["pos"].unsqueeze(-2),
-                torch.index_select(symmetric_displacement, 0, data_dict["batch"]),
-            ).squeeze(-2)
-
-            orig_cell = data_dict["cell"]
-            data_dict["cell"] = data_dict["cell"] + torch.bmm(
-                data_dict["cell"], symmetric_displacement
-            )
-
-        if (
-            not self.regress_stress
-            and self.regress_forces
-            and not self.direct_forces
-            and data_dict["pos"].requires_grad is False
-        ):
-            data_dict["pos"].requires_grad = True
-        return displacement, orig_cell
-
     def csd_embedding(self, charge, spin, dataset):
         with record_function("charge spin dataset embeddings"):
             # Add charge, spin, and dataset embeddings
@@ -423,6 +381,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
+        if not data_dict["pos"].requires_grad:
+            data_dict["pos"].requires_grad = True
+        if not data_dict["cell"].requires_grad:
+            data_dict["cell"].requires_grad = True
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -438,9 +400,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             batch_full=data_dict["batch_full"],
             csd_mixed_emb=csd_mixed_emb,
         )
-
-        with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = self._get_displacement_and_cell(data_dict)
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
@@ -541,8 +500,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         x_message = self.norm(x_message)
         out = {
             "node_embedding": x_message,
-            "displacement": displacement,
-            "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
         return out
@@ -693,7 +650,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         if self.regress_stress:
             grads = torch.autograd.grad(
                 [energy_part.sum()],
-                [data["pos_original"], emb["displacement"]],
+                [data["pos"], data["cell"]],
                 create_graph=self.training,
             )
             if gp_utils.initialized():
@@ -702,17 +659,22 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                     gp_utils.reduce_from_model_parallel_region(grads[1]),
                 )
 
+            forces_prod_pos = grads[0].T @ data["pos"]
+            virial = (
+                grads[1] @ data["cell"] + (forces_prod_pos + forces_prod_pos.T) / 2
+            ).view(-1, 3, 3)
+
             forces = torch.neg(grads[0])
-            virial = grads[1].view(-1, 3, 3)
             volume = torch.det(data["cell"]).abs().unsqueeze(-1)
             stress = virial / volume.view(-1, 1, 1)
             virial = torch.neg(virial)
             stress = stress.view(
                 -1, 9
             )  # NOTE to work better with current Multi-task trainer
+
+            # a=1
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
-            data["cell"] = emb["orig_cell"]
         elif self.regress_forces:
             forces = (
                 -1
