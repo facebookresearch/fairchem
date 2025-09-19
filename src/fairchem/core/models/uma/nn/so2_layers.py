@@ -65,9 +65,9 @@ class SO2_m_Conv(torch.nn.Module):
 
     def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x_m = self.fc(x_m)
-        x_r, x_i = x_m.split(self.out_channels_half, dim=2)
-        x_r_0, x_r_1 = x_r.split(1, dim=1)
-        x_i_0, x_i_1 = x_i.split(1, dim=1)
+        x_r_0, x_i_0, x_r_1, x_i_1 = x_m.reshape(
+            x_m.shape[0], -1, self.out_channels_half
+        ).split(1, dim=1)
         x_m_r = x_r_0 - x_i_1  # x_r[:, 0] - x_i[:, 1]
         x_m_i = x_r_1 + x_i_0  # x_r[:, 1] + x_i[:, 0]
         return (

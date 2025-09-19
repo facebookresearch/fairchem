@@ -13,7 +13,7 @@ from typing import Literal
 import torch
 import torch.nn as nn
 
-from .radial import PolynomialEnvelope, RadialMLP
+from .radial import RadialMLP
 
 
 class EdgeDegreeEmbedding(torch.nn.Module):
@@ -72,7 +72,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self.rescale_factor = rescale_factor
 
         self.cutoff = cutoff
-        self.envelope = PolynomialEnvelope(exponent=5)
 
     def forward_chunk(
         self,
@@ -81,6 +80,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
+        edge_envelope,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
@@ -99,10 +99,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x_edge_embedding = torch.cat((x_edge_m_0, x_edge_m_pad), dim=1)
         x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
-        # envelope
-        dist_scaled = edge_distance / self.cutoff
-        env = self.envelope(dist_scaled)
-        x_edge_embedding = x_edge_embedding * env.view(-1, 1, 1)
+        x_edge_embedding = x_edge_embedding * edge_envelope
 
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
@@ -118,6 +115,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
+        edge_envelope,
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
@@ -127,6 +125,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 edge_distance,
                 edge_index,
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 node_offset,
             )
 
@@ -139,6 +138,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_distance_parititons = edge_distance.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
+        edge_envelope_partitions = edge_envelope.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
 
         for idx in range(len(edge_index_partitions)):
@@ -149,6 +151,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 edge_distance_parititons[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
+                edge_envelope_partitions[idx],
                 node_offset,
                 use_reentrant=False,
             )
