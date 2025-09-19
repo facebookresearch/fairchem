@@ -113,7 +113,7 @@ def inference_settings_turbo():
         activation_checkpointing=True,
         merge_mole=True,
         compile=True,
-        wigner_cuda=True,
+        wigner_cuda=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
