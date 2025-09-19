@@ -581,7 +581,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         graph_dict["node_offset"] = node_partition[0]
 
-        graph_dict["n_chunks"] = 2
+        graph_dict["n_chunks"] = 1
 
         if graph_dict["n_chunks"] > 1:
             graph_dict["sizes"] = torch.tensor(
