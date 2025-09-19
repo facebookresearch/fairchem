@@ -266,7 +266,7 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
     calc = create_calculator(relax_config)
 
     for input_file in tqdm(input_files):
-        output_file = output_dir / input_file.relative_to(
+        output_file = output_dir.parent / input_file.relative_to(
             output_dir.parent.parent.parent
         )
         if output_file.exists():
