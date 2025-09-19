@@ -44,7 +44,7 @@ from tqdm import tqdm
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.units import mlip_unit
 
-EV_TO_KJ_PER_MOL = (kJ / mol) / eV
+EV_TO_KJ_PER_MOL = eV / (kJ / mol)
 
 CHECKPOINTS = {
     "uma_sm_1p1_omc": {  # RECOMMENDED: UMA w/ OMC task
@@ -358,7 +358,9 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     input_files = [
         file
         for file in input_files
-        if not (output_dir / file.relative_to(output_dir.parent.parent.parent)).exists()
+        if not (
+            output_dir.parent / file.relative_to(output_dir.parent.parent.parent)
+        ).exists()
     ]
     logger.info(f"Number of input files to relax: {len(input_files)}")
 
