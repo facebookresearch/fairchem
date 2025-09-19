@@ -98,6 +98,8 @@ def filter_and_deduplicate_structures_single(
         4. Deduplication with pymatgen StructureMatcher
         5. Save filtered and deduplicated results
     """
+    logger = get_central_logger()
+
     # Load structure dataset from parquet format
     structures_df = pd.read_parquet(input_dir, engine="pyarrow")
 
@@ -133,7 +135,6 @@ def filter_and_deduplicate_structures_single(
             compression="zstd",
             partition_cols=["partition_id"],
         )
-        logger = get_central_logger()
         logger.info(
             f"Saved updated dataframe to {input_dir.parent.with_suffix('.updated')}"
         )
@@ -254,6 +255,6 @@ def filter_and_deduplicate_structures(
 
     return submit_slurm_jobs(
         job_args,
-        output_dir=input_dir / "slurm",
+        output_dir=output_dir.parent / "slurm",
         **slurm_params,
     )
