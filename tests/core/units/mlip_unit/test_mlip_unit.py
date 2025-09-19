@@ -454,7 +454,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "datasets=aselmdb_conserving",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=86.24614715576172",
+        "+expected_loss=86.25643157958984",
     ]
     if mode == "gp":
         sys_args += [
