@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-applications-fastcsp"
+dynamic = ["version", "readme"]
+description = "FastCSP: Accelerated Molecular Crystal Structure Prediction with Universal Model for Atoms"
+license = {text = "MIT License"}
+dependencies = [
+    "fairchem-core",
+    "p_tqdm",
+    "pymatgen",
+    "swifter"
+]
+
+[project.optional-dependencies]
+free_energy = [] # TODO
+vasp = ["atomate2"]
+
+[project.scripts]
+fastcsp = "fairchem.applications.fastcsp.core.cli:cli_main"
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem/applications/fastcsp"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match fairchem_applications_fastcsp-*'
+
+[tool.hatch.build]
+directory = "../../dist-applications-fastcsp"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/applications/fastcsp"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/applications/fastcsp"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/applications/fastcsp/README.md" }
+]
