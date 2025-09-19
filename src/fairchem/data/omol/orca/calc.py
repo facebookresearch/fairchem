@@ -13,6 +13,7 @@ from shutil import which
 
 from ase import Atoms
 from ase.calculators.orca import ORCA, OrcaProfile
+from ase.optimize import LBFGS
 from sella import Sella
 
 # ECP sizes taken from Table 6.5 in the Orca 5.0.3 manual
@@ -163,6 +164,12 @@ TIGHT_OPT_PARAMETERS = {
         "order": 0,
         "internal": True,
     },
+}
+EVAL_OPT_PARAMETERS = {
+    "optimizer": LBFGS,
+    "fmax": 0.01,
+    "max_steps": 500,
+    "optimizer_kwargs": {},
 }
 
 
