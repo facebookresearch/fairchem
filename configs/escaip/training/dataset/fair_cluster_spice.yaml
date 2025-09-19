@@ -1,0 +1,31 @@
+spice_train:
+  splits:
+    train:
+      src:
+        - /checkpoint/ericqu/spice_asedb_2/train
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: spice_energy
+    forces: ${spice_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: spice
+
+spice_val:
+  splits:
+    val:
+      src:
+        - /checkpoint/ericqu/spice_asedb_2/val
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: spice_energy
+    forces: ${spice_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: spice

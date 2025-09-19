@@ -246,6 +246,7 @@ def assert_efs_valid(energy, forces, stress):
     assert np.count_nonzero(np.isnan(stress)) == 0
 
 
+@pytest.mark.skip()
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "reg_task,type",

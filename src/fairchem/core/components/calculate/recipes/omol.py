@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from ase import Atoms
     from ase.calculators.calculator import Calculator
 
-from fairchem.data.omol.orca.calc import TIGHT_OPT_PARAMETERS
+from fairchem.data.omol.orca.calc import EVAL_OPT_PARAMETERS
 from pymatgen.io.ase import MSONAtoms
 from tqdm import tqdm
 
@@ -178,7 +178,7 @@ def conformers(input_data: dict[str, Any], calculator: Calculator) -> dict[str, 
         for conformer in conformers:
             sid = conformer["sid"]
             initial_atoms = conformer["initial_atoms"]
-            results = relax_job(initial_atoms, calculator, TIGHT_OPT_PARAMETERS)
+            results = relax_job(initial_atoms, calculator, EVAL_OPT_PARAMETERS)
             conformer_results[sid] = results
 
         all_results[molecule_family] = conformer_results
@@ -226,7 +226,7 @@ def protonation(input_data: dict[str, Any], calculator: Calculator) -> dict[str,
         states = input_data[molecule_family]
         for state in states:
             initial_atoms = states[state]["initial_atoms"]
-            results = relax_job(initial_atoms, calculator, TIGHT_OPT_PARAMETERS)
+            results = relax_job(initial_atoms, calculator, EVAL_OPT_PARAMETERS)
 
             state_results[state] = results
 
@@ -427,7 +427,7 @@ def ligand_strain(input_data: dict[str, Any], calculator: Calculator) -> dict[st
         # Gas-phase conformers parts
         conformer_prediction = {}
         for idx, initial_atoms in enumerate(ligand_system["conformers"]):
-            results = relax_job(initial_atoms, calculator, TIGHT_OPT_PARAMETERS)
+            results = relax_job(initial_atoms, calculator, EVAL_OPT_PARAMETERS)
 
             conformer_prediction[idx] = results
         complex_results["gas_phase"] = conformer_prediction
