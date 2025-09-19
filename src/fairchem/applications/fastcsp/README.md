@@ -12,12 +12,12 @@ FastCSP provides an end-to-end workflow for crystal structure prediction that sc
 
 ### Workflow Stages
 
-1. **Structure Generation**: [`Genarris 3.0`](https://github.com/Yi5817/Genarris) generates putative crystal structures and pymatgen's StructureMatcher deduplicates them.
-2. **ML Relaxation**: Structures are fully relaxed using the Universal Model for Atoms (UMA) from [`fairchem`](https://fair-chem.github.io/).
-3. **Filtering & Deduplication**: Property filtering, structure deduplication using pymatgen's StructureMatcher and validation generates the energy landscape at 0 K.
-4. **Experimental Validation** (Optional): Evaluation through comparison against experimental crystal structures using PackingSimilarity from CSD Python API [requires [CCDC license](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html)] or pymatgen's StructureMatcher.
-5. **Free Energy Calculations** (Optional): Free energy corrections are computed and a corrected energy landscape becomes available.
-6. **DFT Validation** (Optional): Generation of VASP input files, submission [requires VASP license] and parsing of VASP. Final structure comparison using DFT-optimized geometries for ground accuracy.
+1. **Structure Generation**: [`Genarris 3.0`](https://github.com/Yi5817/Genarris) generates putative crystal structures.
+2. **Deduplication**: Pymatgen's StructureMatcher deduplicates generated structures.
+3. **ML Relaxation**: Structures are fully relaxed using the Universal Model for Atoms (UMA) from [`fairchem`](https://fair-chem.github.io/).
+4. **Filtering & Deduplication**: Property filtering, structure deduplication using pymatgen's StructureMatcher and validation generates the energy landscape at 0 K.
+5. **Experimental Validation** (Optional): Evaluation through comparison against experimental crystal structures using PackingSimilarity from CSD Python API [requires [CCDC license](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html)] or pymatgen's StructureMatcher.
+6. **Free Energy Calculations** (Optional): Free energy corrections are computed and a corrected energy landscape becomes available.
 
 ### Key Features
 
