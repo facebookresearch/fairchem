@@ -291,7 +291,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
     ):
         forward_func = self.forward_chunk
         if gp_utils.initialized():
-            if sizes.shape[1] == 1:
+            if sizes is None or sizes.shape[1] == 1:
                 forward_func = self.forward_gp_single
             else:
                 forward_func = self.forward_gp_staggered

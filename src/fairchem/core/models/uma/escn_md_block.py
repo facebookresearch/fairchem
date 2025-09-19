@@ -310,8 +310,10 @@ class Edgewise(torch.nn.Module):
     ):
         forward_func = self.forward_chunk
         if gp_utils.initialized():
-            # forward_func = self.forward_gp_staggered
-            forward_func = self.forward_gp_single
+            if sizes is None or sizes.shape == 1:
+                forward_func = self.forward_gp_single
+            else:
+                forward_func = self.forward_gp_staggered
         elif self.activation_checkpoint_chunk_size is not None:
             forward_func = self.forward_checkpoint
         return forward_func(
