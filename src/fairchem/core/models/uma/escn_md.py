@@ -337,8 +337,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
 
-            if data_dict['cell'].shape[0]==1:
-                cell_per_edge = data_dict['cell'].expand(data_dict['edge_index'].shape[1],-1,-1)
+            if data_dict["cell"].shape[0] == 1:
+                cell_per_edge = data_dict["cell"].expand(
+                    data_dict["edge_index"].shape[1], -1, -1
+                )
             else:
                 cell_per_edge = data_dict["cell"].repeat_interleave(
                     data_dict["nedges"], dim=0
