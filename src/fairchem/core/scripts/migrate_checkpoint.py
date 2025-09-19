@@ -53,10 +53,11 @@ class RenameUnpickler(pickle.Unpickler):
         return super().find_class(find_new_module_name(module), name)
 
 
-def generate_stress_task_config(dataset_name, rmsd):
+def generate_stress_task_config(dataset_name, rmsd, single_task_model=False):
+    name = f"{dataset_name}_stress" if not single_task_model else "stress"
     return {
         "_target_": "fairchem.core.units.mlip_unit.mlip_unit.Task",
-        "name": f"{dataset_name}_stress",
+        "name": name,
         "level": "system",
         "property": "stress",
         "loss_fn": {
@@ -151,16 +152,22 @@ def migrate_checkpoint(
         datasets_with_stress = set()
         datasets_to_rmsd = {}
         # find output datasets
+        single_task_model = False
         for task in checkpoint.tasks_config:
             if "_energy" in task.name:
                 output_dataset_names.add(task.name.replace("_energy", ""))
                 datasets_to_rmsd[task.name.replace("_energy", "")] = task["normalizer"][
                     "rmsd"
                 ]
+            if task.name == "energy":  # generic energy task, for single dataset models
+                output_dataset_names.add(task.datasets[0])
+                datasets_to_rmsd[task.datasets[0]] = task["normalizer"]["rmsd"]
+                single_task_model = True
+                
         for dataset_name in output_dataset_names - datasets_with_stress:
             checkpoint.tasks_config.append(
                 generate_stress_task_config(
-                    dataset_name, datasets_to_rmsd[dataset_name]
+                    dataset_name, datasets_to_rmsd[dataset_name], single_task_model
                 )
             )
 
