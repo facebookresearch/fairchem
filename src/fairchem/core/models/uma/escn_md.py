@@ -336,9 +336,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
-            cell_per_edge = data_dict["cell"].repeat_interleave(
-                data_dict["nedges"], dim=0
-            )
+
+            if data_dict['cell'].shape[0]==1:
+                cell_per_edge = data_dict['cell'].expand(data_dict['edge_index'].shape[1],-1,-1)
+            else:
+                cell_per_edge = data_dict["cell"].repeat_interleave(
+                    data_dict["nedges"], dim=0
+                )
+
             shifts = torch.einsum(
                 "ij,ijk->ik",
                 data_dict["cell_offsets"].to(cell_per_edge.dtype),
@@ -671,8 +676,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             stress = stress.view(
                 -1, 9
             )  # NOTE to work better with current Multi-task trainer
-
-            # a=1
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
         elif self.regress_forces:
