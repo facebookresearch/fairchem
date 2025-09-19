@@ -88,6 +88,9 @@ class InferenceSettings:
     # to whatever is in the checkpoint
     internal_graph_gen_version: int | None = None
 
+    # Number of internal torch threads to use for inference
+    torch_num_threads: int | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed

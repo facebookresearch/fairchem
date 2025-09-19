@@ -106,6 +106,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
+        if inference_settings.torch_num_threads is not None:
+            torch.set_num_threads(inference_settings.torch_num_threads)
+            torch.set_num_interop_threads(inference_settings.torch_num_threads)
+
         if overrides is None:
             overrides = {}
         if "backbone" not in overrides:
