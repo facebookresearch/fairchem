@@ -70,11 +70,6 @@ evaluate:
       stol: 0.3
       angle_tol: 5
 
-# (Optional) VASP DFT validation settings
-# Can add VASP submission parameters here
-vasp:
-  sym_prec: 1e-4              # Symmetry precision for DFT
-
 # (Optional) Logging configuration
 logging:
   level: "INFO"            # Logging level: DEBUG, INFO, WARNING, ERROR

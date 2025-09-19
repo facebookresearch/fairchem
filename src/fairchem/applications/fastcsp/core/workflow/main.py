@@ -8,7 +8,7 @@ FastCSP - Fast Crystal Structure Prediction Workflow
 
 This module provides the main orchestration script for the FastCSP (Fast Crystal Structure
 Prediction) workflow. It coordinates the execution of all workflow stages including structure
-generation, relaxation, filtering, evaluation, and optional DFT validation.
+generation, relaxation, filtering, and optional evaluation.
 
 Key Features:
 - Stage-based workflow execution with dependency management
@@ -21,9 +21,6 @@ The workflow stages are:
 3. relax: ML-based structure relaxation using UMA
 4. filter: Energy filtering and final deduplication
 5. evaluate: Compare against experimental data (optional)
-6. create_vasp_inputs_*: Generate DFT input files (optional)
-7. submit_vasp: Submit DFT calculations (optional)
-8. read_vasp_outputs: Process DFT results (optional)
 """
 
 from __future__ import annotations
@@ -48,9 +45,6 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
     """
     Load and validate FastCSP workflow configuration from YAML file.
 
-    This function reads the configuration file specified in the command line arguments,
-    loads it as a YAML document, and validates it against the required stages.
-
     Args:
         args: Command line arguments containing the config file path and stages
 
@@ -72,10 +66,6 @@ def detect_restart(root_dir: Path, log_file: str = "FastCSP.log") -> bool:
     """
     Detect if this is a workflow restart by checking for existing log file.
 
-    This function determines whether the current execution is a fresh start or
-    a restart of a previous workflow by checking if the log file already exists
-    and contains data.
-
     Args:
         root_dir: Root directory where the log file would be located
         log_file: Name of the log file to check (default: "FastCSP.log")
@@ -92,26 +82,12 @@ def main(args: argparse.Namespace) -> None:
     """
     Main orchestration function for the FastCSP crystal structure prediction workflow.
 
-    This function coordinates the execution of all FastCSP workflow stages in the correct
-    dependency order. It handles:
-    - Configuration loading and validation
-    - Workspace setup and logging initialization
-    - Restart detection and state management
-    - Stage-by-stage execution with job dependency handling
-    - Progress monitoring and error reporting
-
-    The workflow supports both complete pipeline execution and selective stage execution,
-    with automatic dependency resolution and restart capability.
-
     Workflow Stages Executed:
     1. generate: Crystal structure generation using Genarris
     2. process_generated: Structure processing and initial deduplication
     3. relax: ML-based structure relaxation using Universal Model for Atoms
     4. filter: Energy filtering and final structure deduplication
     5. evaluate: Experimental structure comparison (optional)
-    6. create_vasp_inputs_*: DFT input file generation (optional)
-    7. submit_vasp: DFT job submission (optional, requires customization)
-    8. read_vasp_outputs: DFT result processing and analysis (optional)
 
     Args:
         args: Command line arguments containing:
@@ -282,96 +258,6 @@ def main(args: argparse.Namespace) -> None:
         logger.info(
             "Please check future releases or contact the developers for updates."
         )
-
-    # # Optional VASP validation stages
-    vasp_stages = [
-        "create_vasp_inputs_relaxed",
-        "create_vasp_inputs_unrelaxed",
-        "submit_vasp",
-        "read_vasp_outputs",
-    ]
-
-    # TODO: Implementation in progress - will be available soon
-    if any(stage in args.stages for stage in vasp_stages):
-        try:
-            from fairchem.applications.fastcsp.core.dft.vasp import (
-                collate_vasp_outputs,
-                create_vasp_inputs_relaxed,
-                create_vasp_inputs_unrelaxed,
-            )
-        except ImportError:
-            logger.warning("atomate2 not installed. VASP functionality disabled.")
-            return
-        # 7. Generates VASP inputs for ML-relaxed structures
-        if "create_vasp_inputs_relaxed" in args.stages:
-            logger.info("Creating VASP inputs for ML-relaxed structures.")
-            create_vasp_inputs_relaxed(
-                config=config,
-                root=root,
-            )
-            logger.info("Finished creating VASP inputs for ML-relaxed structures.")
-
-        # 7'. Generate VASP inputs for unrelaxed structures
-        if "create_vasp_inputs_unrelaxed" in args.stages:
-            logging.log_stage_start(
-                logger, "creating VASP inputs for unrelaxed structures"
-            )
-            create_vasp_inputs_unrelaxed(
-                relaxed_dir=relax_output_dir / "matched_structures",
-                output_dir=relax_output_dir / "vasp_inputs_unrelaxed",
-                unrelaxed_dir=root / "raw_structures",
-                unrelaxed=True,
-                sym_prec=config["vasp"]["sym_prec"],
-            )
-            logging.log_stage_complete(
-                logger, "creating VASP inputs for unrelaxed structures"
-            )
-
-        # 8. Submit VASP jobs
-        # Users should implement their own function for their specific setup
-        if "submit_vasp" in args.stages:
-            logging.log_stage_start(logger, "VASP job submission")
-            logger.info("VASP job submission requested...")
-            logger.info("Please implement your own VASP job submission function.")
-            logger.info(
-                "This stage is intentionally left for users to customize based on their cluster environment."
-            )
-            logger.info(
-                "You can use the VASP input files created in the 'vasp_inputs' directory."
-            )
-            logger.info(
-                "Example: modify submit_vasp_jobs() in fairchem.applications.fastcsp.core.dft.vasp"
-            )
-            logger.info("or create your own submission script for your job scheduler.")
-
-            # Uncomment and modify this line to use your VASP submission function:
-            # submit_vasp_jobs(relax_output_dir / "vasp_inputs", relax_output_dir / "vasp_jobs.txt")
-            logging.log_stage_complete(logger, "VASP job submission setup")
-
-        # 9. Read VASP outputs and compute matches against experimental data
-        if "read_vasp_outputs" in args.stages:
-            logging.log_stage_start(
-                logger, "reading VASP outputs and computing structure matches"
-            )
-            # read VASP outputs
-            jobs = collate_vasp_outputs(
-                relax_output_dir / "matched_structures",
-                relax_output_dir / "vasp_inputs",
-                relax_output_dir / "vasp_structures",
-            )
-            wait_for_jobs(jobs)
-            logger.info(f"Collated VASP outputs from {len(jobs)} jobs")
-
-            # Compute matches for DFT-relaxed structures
-            compute_structure_matches(
-                relax_output_dir / "vasp_structures",
-                relax_output_dir / "vasp_matched_structures",
-                config["molecules"],
-                config,
-            )
-            logging.log_stage_complete(
-                logger, "reading VASP outputs and computing structure matches"
-            )
 
     logger.info("🎉 FastCSP workflow completed successfully!")
     logger.info("=" * 80)

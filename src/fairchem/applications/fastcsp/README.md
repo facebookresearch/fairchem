@@ -97,21 +97,6 @@ your_project_root/
         │   │   └── MOLECULE1_mol/
         │   │       └── *.parquet      # Structures with experimental similarity scores
         │   └── MOLECULE2/
-        │
-        ├── vasp_inputs/           # Stage 6 (Optional): DFT validation input files
-        │   ├── MOLECULE1/
-        │   │   └── structure_001/
-        │   │       ├── INCAR
-        │   │       ├── POSCAR
-        │   │       ├── POTCAR
-        │   │       └── KPOINTS
-        │   └── MOLECULE2/
-        │
-        └── vasp_structures/       # Stage 7 (Optional): DFT-optimized results
-            ├── MOLECULE1/
-            │   └── MOLECULE1_mol/
-            │       └── *.parquet      # DFT-relaxed structures with final energies
-            └── MOLECULE2/
 ```
 
 ### Key Data Files
@@ -135,7 +120,6 @@ your_project_root/
 ### External Dependencies
 - **(Required)** [`Genarris 3.0`](https://github.com/Yi5817/Genarris): Crystal structure generation engine
 - **(Optional)** [`CSD Python API`](https://downloads.ccdc.cam.ac.uk/documentation/API/installation_notes.html): For experimental structure comparison (requires license)
-- **(Optional)** [`VASP`](https://www.vasp.at/): For DFT validation (requires license)
 
 ### Basic Usage
 
@@ -172,10 +156,6 @@ fastcsp --config config.yaml --stages generate process_generated relax filter
 | `relax` | Perform UMA-based structure relaxation | `relaxed/` directory |
 | `filter` | Energy filtering and duplicate removal | `filtered_structures/` directory |
 | `evaluate` | Compare against experimental data | `matched_structures/` directory |
-| `create_vasp_inputs_relaxed` | Generate DFT input files for relaxed structures | `vasp_inputs/` directory |
-| `create_vasp_inputs_unrelaxed` | Generate DFT input files for unrelaxed structures | `vasp_inputs_unrelaxed/` directory |
-| `submit_vasp` | Submit VASP jobs (requires user customization) | SLURM job submissions |
-| `read_vasp_outputs` | Process DFT results and validation metrics | `vasp_structures/` directory |
 
 ### Configuration
 

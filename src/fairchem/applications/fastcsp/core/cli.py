@@ -29,10 +29,6 @@ Available Workflow Stages:
   filter                        Filtering and duplicate removal for ranking
   evaluate                      Compare against experimental structures
   free_energy                   Compute free energy corrections
-  create_vasp_inputs_relaxed    Generate VASP inputs from relaxed structures for validation
-  create_vasp_inputs_unrelaxed  Generate VASP inputs from unrelaxed structures for validation
-  submit_vasp                   Submit VASP jobs
-  read_vasp_outputs             Process VASP and compute validation metrics
 
 Usage:
   fastcsp --config <config.yaml> --stages <stage1> <stage2> ...
@@ -60,10 +56,6 @@ Example:
             "filter",
             "evaluate",  # optional, can require CSD API License
             "free_energy",  # optional, TODO: implement "free_energy"
-            "create_vasp_inputs_relaxed",  # optional
-            "create_vasp_inputs_unrelaxed",  # optional, if you want to create VASP inputs for unrelaxed structures
-            "submit_vasp",  # optional, implement your own VASP job submission
-            "read_vasp_outputs",  # optional
         ],
         default=["generate", "process_generated", "relax", "filter"],
         help="Workflow stages to execute (in order). Default: generate process_generated relax filter",

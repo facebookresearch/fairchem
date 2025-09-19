@@ -31,10 +31,6 @@ fairchem/applications/fastcsp/core/
 │   ├── configuration.py     # Configuration validation and parsing
 │   └── deduplicate.py       # Structure deduplication
 │
-├── dft/                     # DFT integration modules (optional)
-│   ├── vasp.py              # VASP input generation with atomate2
-│   └── vasp_utils.py        # VASP output parsing and analysis
-│
 └── configs/                 # Example configuration files
     └── example_config.yaml  # Complete workflow configuration template
 ```
@@ -53,8 +49,6 @@ Input: molecules.csv + config.yaml
 [filter] → relaxed/<calculator_and_optimizer_info>/filtered_structures/ (ranked by energy)
         ↓
 [evaluate] → relaxed/<calculator_and_optimizer_info>/matched_structures/ (experimental comparison)
-        ↓
-[vasp] → relaxed/<calculator_and_optimizer_info>/vasp_structures/ (DFT-validated, optional)
 ```
 
 ## Configuration Management

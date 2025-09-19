@@ -196,10 +196,6 @@ def reorder_stages_by_dependencies(stages: list[str]) -> list[str]:
         "filter",
         "evaluate",
         "free_energy",
-        "create_vasp_inputs_relaxed",
-        "create_vasp_inputs_unrelaxed",
-        "submit_vasp",
-        "read_vasp_outputs",
     ]
 
     from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
