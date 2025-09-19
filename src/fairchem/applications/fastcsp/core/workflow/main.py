@@ -218,7 +218,6 @@ def main(args: argparse.Namespace) -> None:
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
-            root_unrelaxed=root / "raw_structures",
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(

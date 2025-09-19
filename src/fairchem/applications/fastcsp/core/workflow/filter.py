@@ -115,8 +115,8 @@ def filter_and_deduplicate_structures_single(
         )
 
         # Convert CIF strings to atomic structures for connectivity analysis
-        final_atoms = structures_df["relaxed_cif"].swifter.apply(cif_to_atoms)
-        initial_atoms = structures_df["cif"].swifter.apply(cif_to_atoms)
+        final_atoms = structures_df["relaxed_cif"].apply(cif_to_atoms)
+        initial_atoms = structures_df["cif"].apply(cif_to_atoms)
 
         # Validate bonding network preservation during relaxation
         structures_df["connectivity_unchanged"] = p_map(
@@ -159,9 +159,9 @@ def filter_and_deduplicate_structures_single(
     ]
 
     # Convert CIF strings to pymatgen Structures for deduplication
-    structures_df_filtered["structure"] = structures_df_filtered[
-        "relaxed_cif"
-    ].swifter.apply(cif_to_structure)
+    structures_df_filtered["structure"] = structures_df_filtered["relaxed_cif"].apply(
+        cif_to_structure
+    )
 
     # Apply deduplication without hash-based pre-filtering
     # (disable density/volume hashing for final deduplication)
@@ -220,7 +220,7 @@ def filter_and_deduplicate_structures(
     # Get SLURM configuration
     slurm_params = get_filter_slurm_config(post_relax_config)
 
-    # Collect all dataset directories for processing
+    # Collect all paruqet directories for processing
     direcs = list(input_dir.iterdir())
 
     # Prepare job arguments
