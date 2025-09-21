@@ -41,10 +41,8 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sphere_channels: int,
         lmax: int,
         mmax: int,
-        max_num_elements: int,
         edge_channels_list,
         rescale_factor,
-        cutoff,
         mappingReduced,
         # Enables activation checkpointing in size of
         # activation_checkpoint_chunk_size edge blocks
@@ -62,16 +60,13 @@ class EdgeDegreeEmbedding(torch.nn.Module):
 
         # Create edge scalar (invariant to rotations) features
         # Embedding function of the atomic numbers
-        self.max_num_elements = max_num_elements
-        self.edge_channels_list = copy.deepcopy(edge_channels_list)
+        edge_channels_list = copy.deepcopy(edge_channels_list)
 
         # Embedding function of distance
-        self.edge_channels_list.append(self.m_0_num_coefficients * self.sphere_channels)
-        self.rad_func = RadialMLP(self.edge_channels_list)
+        edge_channels_list.append(self.m_0_num_coefficients * self.sphere_channels)
+        self.rad_func = RadialMLP(edge_channels_list)
 
         self.rescale_factor = rescale_factor
-
-        self.cutoff = cutoff
 
     def forward_chunk(
         self,

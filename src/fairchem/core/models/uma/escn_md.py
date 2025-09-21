@@ -212,10 +212,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             sphere_channels=self.sphere_channels,
             lmax=self.lmax,
             mmax=self.mmax,
-            max_num_elements=self.max_num_elements,
             edge_channels_list=self.edge_channels_list,
             rescale_factor=5.0,  # NOTE: sqrt avg degree
-            cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
