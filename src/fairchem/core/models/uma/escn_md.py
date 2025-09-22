@@ -529,7 +529,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
-                print("XMESSAGE", x_message.abs().mean())
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
@@ -672,19 +671,25 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             stress_key = "stress"
 
         outputs = {}
-        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        # TODO FOR GP ONLY RUN THIS ON THE SUBSET OF NODES WE OWN
+        _input = (
+            emb["node_embedding"]
+            .narrow(1, 0, 1)
+            .squeeze(1)
+            .narrow(0, emb["node_offset"], data["batch"].shape[0])
+        )
         _output = self.energy_block(_input)
+
         node_energy = _output.view(-1, 1, 1)
-        # .narrow(0,emb['node_offset'],data["batch"].shape[0])
 
         total_energies = torch.zeros(
             len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
         )
-        total_energies.index_add_(0, data["batch_full"], node_energy.view(-1))
+        total_energies.index_add_(0, data["batch"], node_energy.view(-1))
 
-        energy = node_energy.narrow(0, emb["node_offset"], data["batch"].shape[0])
-        # print("NE",node_energy.shape,total_energy,energy.shape)
+        if gp_utils.initialized():
+            # TODO optimize here for MD, we already have all embeddings can skip all_gather
+            # just run energy block
+            total_energies = gp_utils.reduce_from_model_parallel_region(total_energies)
 
         outputs[energy_key] = (
             {"energy": total_energies} if self.wrap_property else total_energies
@@ -699,7 +704,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         if self.regress_stress:
             grads = torch.autograd.grad(
-                [energy.sum()],
+                [node_energy.sum()],
                 [data["pos_original"], emb["displacement"]],
                 create_graph=self.training,
             )
@@ -727,7 +732,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             forces = (
                 -1
                 * torch.autograd.grad(
-                    energy.sum(), data["pos"], create_graph=self.training
+                    node_energy.sum(), data["pos"], create_graph=self.training
                 )[0]
             )
             if gp_utils.initialized():
