@@ -122,27 +122,6 @@ def test_ase_get_metadata(ase_dataset):
     assert ase_dataset[0].get_metadata("natoms", [0])[0] == 3
 
 
-def test_ase_metadata_guesser(ase_dataset):
-    dataset, _ = ase_dataset
-
-    metadata = dataset.sample_property_metadata()
-
-    # Confirm energy metadata guessed properly
-    assert metadata["targets"]["energy"]["extensive"] is False
-    assert metadata["targets"]["energy"]["shape"] == ()
-    assert metadata["targets"]["energy"]["type"] == "per-image"
-
-    # Confirm forces metadata guessed properly
-    assert metadata["targets"]["forces"]["shape"] == (3,)
-    assert metadata["targets"]["forces"]["extensive"] is True
-    assert metadata["targets"]["forces"]["type"] == "per-atom"
-
-    # Confirm stress metadata guessed properly
-    assert metadata["targets"]["stress"]["shape"] == (3, 3)
-    assert metadata["targets"]["stress"]["extensive"] is False
-    assert metadata["targets"]["stress"]["type"] == "per-image"
-
-
 def test_db_add_delete(tmp_path, structures):
     database = db.connect(tmp_path / "asedb.db")
     for _i, atoms in enumerate(structures):

@@ -26,7 +26,6 @@ from fairchem.core.common.registry import registry
 from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.base_dataset import BaseDataset
-from fairchem.core.datasets.target_metadata_guesser import guess_property_metadata
 from fairchem.core.modules.transforms import DataTransforms
 
 
@@ -152,25 +151,6 @@ class AseAtomsDataset(BaseDataset, ABC):
             "If relaxed energies are saved with the atoms info dictionary, they can be used by passing the keys in "
             "the r_data_keys argument under a2g_args."
         )
-
-    def sample_property_metadata(self, num_samples: int = 100) -> dict:
-        metadata = {}
-
-        if num_samples < len(self):
-            metadata["targets"] = guess_property_metadata(
-                [
-                    self.get_atoms(idx)
-                    for idx in np.random.choice(
-                        len(self), size=(num_samples,), replace=False
-                    )
-                ]
-            )
-        else:
-            metadata["targets"] = guess_property_metadata(
-                [self.get_atoms(idx) for idx in range(len(self))]
-            )
-
-        return metadata
 
     def get_metadata(self, attr, idx):
         # try the parent method
@@ -388,9 +368,6 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
 
         return atoms
 
-    def sample_property_metadata(self, num_samples: int = 100) -> dict:
-        return {}
-
     def get_relaxed_energy(self, identifier) -> float:
         relaxed_atoms = ase.io.read(
             "".join(identifier.split(" ")[:-1]), **self.ase_read_args
@@ -554,12 +531,3 @@ class AseDBDataset(AseAtomsDataset):
         for db in self.dbs:
             if hasattr(db, "close"):
                 db.close()
-
-    def sample_property_metadata(self, num_samples: int = 100) -> dict:
-        logging.warning(
-            "You specific a folder of ASE dbs, so it's impossible to know which metadata to use. Using the first!"
-        )
-        if self.dbs[0].metadata == {}:
-            return super().sample_property_metadata(num_samples)
-
-        return copy.deepcopy(self.dbs[0].metadata)
