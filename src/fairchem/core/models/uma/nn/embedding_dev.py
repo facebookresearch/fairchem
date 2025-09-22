@@ -12,7 +12,6 @@ from typing import Literal
 
 import torch
 import torch.nn as nn
-from torch import distributed as dist
 
 from fairchem.core.common import gp_utils
 
@@ -127,6 +126,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         natoms,
         node_offset=0,
+        gloo_backend: bool = True,
     ):
         if self.activation_checkpoint_chunk_size is None:
             x = self.forward_chunk(
@@ -164,7 +164,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 )
 
         if gp_utils.initialized():
-            gloo_backend = (not gp_utils.initialized()) or dist.get_backend() == "gloo"
             x = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
                 x, natoms, gloo_backend=gloo_backend
             )

@@ -126,16 +126,21 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
         node_offset: int = 0,
+        gloo_backend: bool = True,
     ):
-        if gp_utils.initialized():
-            rank = gp_utils.get_gp_rank()
-            size_list = size_list_fn(x.shape[0], gp_utils.get_gp_world_size())
-            natoms = x.shape[0]
+        full_natoms = x.shape[0]
+        local_natoms = (
+            x.shape[0]
+            if not gp_utils.initialized()
+            else size_list_fn(x.shape[0], gp_utils.get_gp_world_size())[
+                gp_utils.get_gp_rank()
+            ]
+        )
 
         if self.activation_checkpoint_chunk_size is None:
             x = self.forward_chunk(
                 x,
-                x.shape[0] if not gp_utils.initialized() else size_list[rank],
+                local_natoms,
                 x_edge,
                 edge_distance,
                 edge_index,
@@ -169,7 +174,7 @@ class Edgewise(torch.nn.Module):
                     torch.utils.checkpoint.checkpoint(
                         self.forward_chunk,
                         x,
-                        x.shape[0],
+                        local_natoms,
                         x_edge_partitions[idx],
                         edge_distance_parititons[idx],
                         edge_index_partitions[idx],
@@ -190,7 +195,7 @@ class Edgewise(torch.nn.Module):
             # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
             x = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
-                x, natoms, gloo_backend=True
+                x, full_natoms, gloo_backend=gloo_backend
             )
         return x
 
@@ -395,6 +400,7 @@ class eSCNMD_Block(torch.nn.Module):
         wigner_and_M_mapping_inv,
         sys_node_embedding=None,
         node_offset: int = 0,
+        gloo_backend: bool = True,
     ):
         x_res = x
         x = self.norm_1(x)
@@ -411,6 +417,7 @@ class eSCNMD_Block(torch.nn.Module):
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
                 node_offset,
+                gloo_backend=gloo_backend,
             )
             x = x + x_res
 

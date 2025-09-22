@@ -4,13 +4,13 @@ job:
   device_type: CUDA
   scheduler:
     mode: LOCAL
-    ranks_per_node: 2
-  graph_parallel_group_size: 2
+    ranks_per_node: 8
+  graph_parallel_group_size: 8
 
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 10
-  natoms_list: [1000]
+  natoms_list: [8000]
   model_checkpoints: {
     "uma_sm_cons": "/home/misko/checkpoints/uma_sm_130525.pt"
   }

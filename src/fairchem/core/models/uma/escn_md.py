@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
+from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -427,6 +428,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
         natoms = data_dict["atomic_numbers_full"].shape[0]
+        gloo_backend = (not gp_utils.initialized()) or dist.get_backend() == "gloo"
 
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
@@ -522,6 +524,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 wigner_and_M_mapping_inv,
                 natoms,
                 graph_dict["node_offset"],
+                gloo_backend=gloo_backend,
             )
 
         ###############################################################
@@ -538,6 +541,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping_inv,
                     sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
+                    gloo_backend=gloo_backend,
                 )
 
         # Final layer norm
