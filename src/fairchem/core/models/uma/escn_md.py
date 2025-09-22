@@ -400,8 +400,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_index": data_dict["edge_index"],
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
-                "node_offset": 0,
             }
+        graph_dict["node_offset"] = 0  # default value
 
         if gp_utils.initialized():
             graph_dict = self._init_gp_partitions(
@@ -412,8 +412,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["node_partition"]
             ]
             data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
-        else:
-            graph_dict["node_offset"] = 0
 
         return graph_dict
 
