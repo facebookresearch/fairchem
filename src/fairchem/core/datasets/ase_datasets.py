@@ -261,6 +261,9 @@ class AseReadDataset(AseAtomsDataset):
             warnings.warn(f"{err} occured for: {idx}", stacklevel=2)
             raise err
 
+        if "sid" not in atoms.info:
+            atoms.info["sid"] = str_file
+
         return atoms
 
     def get_relaxed_energy(self, identifier) -> float:
@@ -512,6 +515,10 @@ class AseDBDataset(AseAtomsDataset):
 
     def get_atoms(self, idx: int) -> ase.Atoms:
         """Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
+
+        NOTE: if the row data in the database does not include a entry "sid" for the system id,
+            The integer idx will be used.
+
         Args:
             idx (int): index in dataset
 
@@ -533,6 +540,9 @@ class AseDBDataset(AseAtomsDataset):
         # put data back into atoms info
         if isinstance(atoms_row.data, dict):
             atoms.info.update(atoms_row.data)
+
+        if "sid" not in atoms.info:
+            atoms.info["sid"] = idx
 
         return atoms
 
