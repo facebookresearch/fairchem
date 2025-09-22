@@ -1,5 +1,12 @@
 #fairchem -c puma_speed.yaml +run_dir_root=/path/to/run_dir
 
+job:
+  device_type: CUDA
+  scheduler:
+    mode: LOCAL
+    ranks_per_node: 2
+  graph_parallel_group_size: 2
+
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 10
@@ -18,4 +25,4 @@ runner:
     compile: False
     wigner_cuda: False
     external_graph_gen: True
-    internal_graph_gen_version
+    internal_graph_gen_version: 2

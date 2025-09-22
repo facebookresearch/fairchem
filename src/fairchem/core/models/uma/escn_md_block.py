@@ -20,6 +20,7 @@ from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,
 )
+from fairchem.core.models.uma.nn.embedding_dev import size_list_fn
 from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
@@ -126,16 +127,15 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping_inv,
         node_offset: int = 0,
     ):
-        # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
-        else:
-            x_full = x
+            rank = gp_utils.get_gp_rank()
+            size_list = size_list_fn(x.shape[0], gp_utils.get_gp_world_size())
+            natoms = x.shape[0]
 
         if self.activation_checkpoint_chunk_size is None:
-            return self.forward_chunk(
-                x_full,
-                x.shape[0],
+            x = self.forward_chunk(
+                x,
+                x.shape[0] if not gp_utils.initialized() else size_list[rank],
                 x_edge,
                 edge_distance,
                 edge_index,
@@ -143,50 +143,61 @@ class Edgewise(torch.nn.Module):
                 wigner_and_M_mapping_inv,
                 node_offset,
             )
-        edge_index_partitions = edge_index.split(
-            self.activation_checkpoint_chunk_size, dim=1
-        )
-        wigner_partitions = wigner_and_M_mapping.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        edge_distance_parititons = edge_distance.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
-        new_embeddings = []
-        # when chunking, we need to keep track of the start index of the chunk and give this information
-        # to the mole layers
-        ac_mole_start_idx = 0
-
-        for idx in range(len(edge_index_partitions)):
-            new_embeddings.append(
-                torch.utils.checkpoint.checkpoint(
-                    self.forward_chunk,
-                    x_full,
-                    x.shape[0],
-                    x_edge_partitions[idx],
-                    edge_distance_parititons[idx],
-                    edge_index_partitions[idx],
-                    wigner_partitions[idx],
-                    wigner_inv_partitions[idx],
-                    node_offset,
-                    ac_mole_start_idx,
-                    use_reentrant=False,
-                )
+        else:
+            edge_index_partitions = edge_index.split(
+                self.activation_checkpoint_chunk_size, dim=1
             )
-            ac_mole_start_idx += edge_index_partitions[idx].shape[1]
+            wigner_partitions = wigner_and_M_mapping.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
+            wigner_inv_partitions = wigner_and_M_mapping_inv.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
+            edge_distance_parititons = edge_distance.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
+            x_edge_partitions = x_edge.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
+            new_embeddings = []
+            # when chunking, we need to keep track of the start index of the chunk and give this information
+            # to the mole layers
+            ac_mole_start_idx = 0
 
-            if len(new_embeddings) > 8:
-                new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
-        return torch.stack(new_embeddings).sum(axis=0)
+            for idx in range(len(edge_index_partitions)):
+                new_embeddings.append(
+                    torch.utils.checkpoint.checkpoint(
+                        self.forward_chunk,
+                        x,
+                        x.shape[0],
+                        x_edge_partitions[idx],
+                        edge_distance_parititons[idx],
+                        edge_index_partitions[idx],
+                        wigner_partitions[idx],
+                        wigner_inv_partitions[idx],
+                        node_offset,
+                        ac_mole_start_idx,
+                        use_reentrant=False,
+                    )
+                )
+                ac_mole_start_idx += edge_index_partitions[idx].shape[1]
+
+                if len(new_embeddings) > 8:
+                    new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
+
+                x = torch.stack(new_embeddings).sum(axis=0)
+
+            # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
+        if gp_utils.initialized():
+            x = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+                x, natoms, gloo_backend=True
+            )
+        return x
 
     def forward_chunk(
         self,
         x_full,
-        x_original_shape,
+        natoms_local,
         x_edge,
         edge_distance,
         edge_index,
@@ -226,7 +237,7 @@ class Edgewise(torch.nn.Module):
 
         # Compute the sum of the incoming neighboring messages for each target node
         new_embedding = torch.zeros(
-            (x_original_shape,) + x_message.shape[1:],
+            (natoms_local,) + x_message.shape[1:],
             dtype=x_message.dtype,
             device=x_message.device,
         )

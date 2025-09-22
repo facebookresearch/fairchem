@@ -426,6 +426,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
+        natoms = data_dict["atomic_numbers_full"].shape[0]
 
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
@@ -486,6 +487,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
 
         sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
+        sys_node_embedding_full = csd_mixed_emb[data_dict["batch_full"]]
         x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
 
         ###
@@ -518,6 +520,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_distance"],
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                natoms,
                 graph_dict["node_offset"],
             )
 
@@ -526,6 +529,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                print("XMESSAGE", x_message.abs().mean())
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
@@ -533,7 +537,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
-                    sys_node_embedding=sys_node_embedding,
+                    sys_node_embedding=sys_node_embedding_full,
                     node_offset=graph_dict["node_offset"],
                 )
 
@@ -682,13 +686,13 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+        # embeddings = emb["node_embedding"].detach()
+        # if gp_utils.initialized():
+        # #     embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
 
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
-        )
+        # outputs["embeddings"] = (
+        #     {"embeddings": embeddings} if self.wrap_property else embeddings
+        # )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
@@ -748,17 +752,17 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
         ).view(-1, 1, 1)
 
-        energy_part = torch.zeros(
+        energy = torch.zeros(
             len(data_dict["natoms"]),
             device=node_energy.device,
             dtype=node_energy.dtype,
         )
 
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
+        energy.index_add_(0, data_dict["batch_full"], node_energy.view(-1))
+        # if gp_utils.initialized():
+        #    energy = gp_utils.reduce_from_model_parallel_region(energy_part)
+        # else:
+        #    energy = energy_part
 
         if self.reduce == "sum":
             return {"energy": energy}
@@ -815,8 +819,8 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
-        if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+        # if gp_utils.initialized():
+        #     forces = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(forces, data_dict['atomic_numbers_full'].shape[0],True)
         return {"forces": forces}
 
 

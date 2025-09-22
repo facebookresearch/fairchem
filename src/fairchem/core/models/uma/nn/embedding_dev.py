@@ -12,8 +12,15 @@ from typing import Literal
 
 import torch
 import torch.nn as nn
+from torch import distributed as dist
+
+from fairchem.core.common import gp_utils
 
 from .radial import PolynomialEnvelope, RadialMLP
+
+
+def size_list_fn(size, parts):
+    return [size // parts + (1 if idx < size % parts else 0) for idx in range(parts)]
 
 
 class EdgeDegreeEmbedding(torch.nn.Module):
@@ -118,10 +125,11 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
+        natoms,
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
-            return self.forward_chunk(
+            x = self.forward_chunk(
                 x,
                 x_edge,
                 edge_distance,
@@ -129,28 +137,36 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 wigner_and_M_mapping_inv,
                 node_offset,
             )
+        else:
+            edge_index_partitions = edge_index.split(
+                self.activation_checkpoint_chunk_size, dim=1
+            )
+            wigner_inv_partitions = wigner_and_M_mapping_inv.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
+            edge_distance_parititons = edge_distance.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
+            x_edge_partitions = x_edge.split(
+                self.activation_checkpoint_chunk_size, dim=0
+            )
 
-        edge_index_partitions = edge_index.split(
-            self.activation_checkpoint_chunk_size, dim=1
-        )
-        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        edge_distance_parititons = edge_distance.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
+            for idx in range(len(edge_index_partitions)):
+                x = torch.utils.checkpoint.checkpoint(
+                    self.forward_chunk,
+                    x,
+                    x_edge_partitions[idx],
+                    edge_distance_parititons[idx],
+                    edge_index_partitions[idx],
+                    wigner_inv_partitions[idx],
+                    node_offset,
+                    use_reentrant=False,
+                )
 
-        for idx in range(len(edge_index_partitions)):
-            x = torch.utils.checkpoint.checkpoint(
-                self.forward_chunk,
-                x,
-                x_edge_partitions[idx],
-                edge_distance_parititons[idx],
-                edge_index_partitions[idx],
-                wigner_inv_partitions[idx],
-                node_offset,
-                use_reentrant=False,
+        if gp_utils.initialized():
+            gloo_backend = (not gp_utils.initialized()) or dist.get_backend() == "gloo"
+            x = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+                x, natoms, gloo_backend=gloo_backend
             )
 
         return x
