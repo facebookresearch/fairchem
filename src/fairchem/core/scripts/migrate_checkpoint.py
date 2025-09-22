@@ -53,10 +53,10 @@ class RenameUnpickler(pickle.Unpickler):
         return super().find_class(find_new_module_name(module), name)
 
 
-def generate_stress_task_config(dataset_name, rmsd):
+def generate_stress_task_config(dataset_name, task_name, rmsd):
     return {
         "_target_": "fairchem.core.units.mlip_unit.mlip_unit.Task",
-        "name": f"{dataset_name}_stress",
+        "name": task_name,
         "level": "system",
         "property": "stress",
         "loss_fn": {
@@ -168,7 +168,9 @@ def migrate_checkpoint(
             for dataset_name in output_dataset_names - datasets_with_stress:
                 checkpoint.tasks_config.append(
                     generate_stress_task_config(
-                        dataset_name, datasets_to_rmsd[dataset_name]
+                        dataset_name,
+                        f"{dataset_name}_stress",
+                        datasets_to_rmsd[dataset_name],
                     )
                 )
         else:
@@ -184,7 +186,7 @@ def migrate_checkpoint(
             ), f"Expected exactly one dataset for energy task, found {energy_task.datasets}"
             checkpoint.tasks_config.append(
                 generate_stress_task_config(
-                    energy_task.datasets[0], energy_task["normalizer"]["rmsd"]
+                    energy_task.datasets[0], "stress", energy_task["normalizer"]["rmsd"]
                 )
             )
 
