@@ -27,7 +27,7 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.omol_runner.OMolRunner
+  _target_: fairchem.core.components.calculate.single.omol_runner.OMolRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
@@ -35,7 +35,7 @@ runner:
   input_data: ${cluster.data_root_dir}/distance_scaling_inputs.pkl
   benchmark_name: ${benchmark_name}
   benchmark:
-    _target_: fairchem.core.components.calculate.recipes.omol.distance_scaling
+    _target_: fairchem.core.components.calculate.single.recipes.omol.distance_scaling
     _partial_: True
 
 reducer:
