@@ -190,7 +190,7 @@ class Edgewise(torch.nn.Module):
                 if len(new_embeddings) > 8:
                     new_embeddings = [torch.stack(new_embeddings).sum(axis=0)]
 
-                x = torch.stack(new_embeddings).sum(axis=0)
+            x = torch.stack(new_embeddings).sum(axis=0)
 
             # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
