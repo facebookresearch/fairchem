@@ -48,9 +48,11 @@ runner:
     damping: 1.2
     alpha: 80
   input_data:
-    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
-    config:
-      src: ${cluster.data_root_dir}/catalysis/is2re/is/data.aselmdb
+    _target_: fairchem.core.datasets.atoms_sequence.AtomsDatasetSequence
+    dataset:
+      _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+      config:
+        src: ${cluster.data_root_dir}/catalysis/is2re/is/data.aselmdb
 
 reducer:
   _target_: fairchem.core.components.benchmark.adsorption_reducer.AdsorptionReducer

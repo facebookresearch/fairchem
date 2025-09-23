@@ -37,9 +37,11 @@ runner:
   evaluate_total_energy: False
   adsorption_energy_model: False
   input_data:
-    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
-    config:
-      src: ${cluster.data_root_dir}/catalysis/s2ef/test/is
+    _target_: fairchem.core.datasets.atoms_sequence.AtomsDatasetSequence
+    dataset:
+      _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+      config:
+        src: ${cluster.data_root_dir}/catalysis/s2ef/test/is
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer

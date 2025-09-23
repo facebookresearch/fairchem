@@ -33,9 +33,11 @@ runner:
     name_or_path: ${checkpoint.ckpt_path}
     task_name: omc
   input_data:
-    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
-    config:
-      src: ${cluster.data_root_dir}/omc/7bt-polymorphs/7bt-polymorphs-is.aselmdb
+    _target_: fairchem.core.datasets.atoms_sequence.AtomsDatasetSequence
+    dataset:
+      _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+      config:
+        src: ${cluster.data_root_dir}/omc/7bt-polymorphs/7bt-polymorphs-is.aselmdb
   save_relaxed_atoms: True
   calculate_properties: [ "energy" ]
   save_target_properties: ["energy", "molecule_id", "atoms_relaxed"]

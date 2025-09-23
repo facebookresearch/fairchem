@@ -35,9 +35,11 @@ runner:
     name_or_path: ${checkpoint.ckpt_path}
     task_name: omat
   input_data:
-    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
-    config:
-      src: ${cluster.data_root_dir}/materials/mp-elasticity/mp-pbe-elasticity-2025.3.aselmdb
+    _target_: fairchem.core.datasets.atoms_sequence.AtomsDatasetSequence
+    dataset:
+      _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+      config:
+        src: ${cluster.data_root_dir}/materials/mp-elasticity/mp-pbe-elasticity-2025.3.aselmdb
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
