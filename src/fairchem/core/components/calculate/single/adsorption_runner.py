@@ -92,7 +92,7 @@ class AdsorptionRunner(CalculateRunner):
         all_results = []
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running relaxations"):
-            atoms = self.input_data.get_atoms(i)
+            atoms = self.input_data[i]
             results = adsorb_atoms(
                 atoms,
                 self.calculator,
