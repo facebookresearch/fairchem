@@ -15,7 +15,7 @@ dependencies = [
     "numba>=0.61.2",
     "e3nn>=0.5",
     "huggingface_hub>=0.27.1",
-    "ase>=3.25.0",
+    "ase>=3.26.0",
     "ase-db-backends>=0.10.0",
     "monty>=v2025.1.3",
     "clusterscope==0.0.12",
