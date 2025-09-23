@@ -83,8 +83,8 @@ The data are stored and accessible via storage on the Eagle cluster at Argonne N
 [General Issues](https://github.com/facebookresearch/fairchem)
 
 Dataset questions?
-* Muhammed Shuaibi (mshuaibi@meta.com)
-* Daniel Levine (levineds@meta.com)
+* [Muhammed Shuaibi](mshuaibi@meta.com)
+* [Daniel Levine](levineds@meta.com)
 
 Cluster/Access questions?
-* Ben Blaiszik (blaiszik@gmail.com)
+* [Ben Blaiszik](blaiszik@uchicago.edu)
