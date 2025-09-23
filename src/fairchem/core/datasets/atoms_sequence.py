@@ -7,17 +7,17 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, overload, runtime_checkable
-
-from ase import Atoms
+from numbers import Number
+from typing import TYPE_CHECKING, Protocol, overload, runtime_checkable
 
 if TYPE_CHECKING:
+    from ase import Atoms
+
     from fairchem.core.datasets.ase_datasets import AseAtomsDataset
 
 
 @runtime_checkable
-class AtomsSequence(Sequence[Atoms]):
+class AtomsSequence(Protocol):
     @overload
     def __getitem__(self, index: int) -> Atoms: ...
 
@@ -38,7 +38,7 @@ class AtomsDatasetSequence:
         self.dataset = dataset
 
     def __getitem__(self, index) -> Atoms:
-        if isinstance(index, int):
+        if isinstance(index, Number):
             return self.dataset.get_atoms(index)
         else:
             raise IndexError("Unsupported indexing")
