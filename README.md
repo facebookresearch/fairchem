@@ -39,8 +39,8 @@ demos, and application efforts for materials science and quantum chemistry.
 > for such calculations, you can find a OMat24 specific calculations of reference unary compounds and MP2020-style
 > anion and GGA/GGA+U mixing corrections in the [OMat24 Hugging Face repo](https://huggingface.co/datasets/facebook/OMAT24).
 > Do not use MP2020 corrections or use the MP references compounds when using OMat24 trained models. Additional care
-> must be taken when computing energy differences, such as formation and energy above hull since DFT pseudopotentials
-> are different and magnetic ground states may differ as well.
+> must be taken when computing energy differences, such as formation and energy above hull and comparing with calculations
+> in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
 
 ## Read our latest release post!
 Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
