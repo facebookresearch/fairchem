@@ -14,13 +14,21 @@ from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 import numpy as np
 import pandas as pd
-import phonopy
+from monty.dev import requires
 from tqdm import tqdm
 
 from fairchem.core.components.calculate import CalculateRunner
 from fairchem.core.components.calculate.recipes.phonons import (
     run_mdr_phonon_benchmark,
 )
+
+try:
+    import phonopy
+
+    phonopy_installed = True
+except ImportError:
+    phonopy_installed = False
+
 
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
@@ -35,6 +43,7 @@ def get_mdr_phonon_data_list(index_df_path, phonon_file_path, debug=False):
     return phonon_yamls
 
 
+@requires(phonopy_installed, message="Requires `phonopy` to be installed")
 class MDRPhononRunner(CalculateRunner):
     """Calculate elastic tensor for a set of structures."""
 
