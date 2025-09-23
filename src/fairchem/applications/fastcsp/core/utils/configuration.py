@@ -84,7 +84,7 @@ def validate_config(config: dict[str, Any], stages: list[str]) -> None:
         },
         "evaluate": {
             "keys": ["evaluate"],
-            "nested": {"evaluate": ["exp_structures", "method"]},
+            "nested": {"evaluate": ["target_xtals_dir", "method"]},
         },
     }
 
