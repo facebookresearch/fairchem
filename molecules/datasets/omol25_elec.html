@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Training models from scratch &#8212; fairchem</title>
+    <title>Open Molecule 2025 Electronic Structures Dataset &#8212; fairchem</title>
   
   
   
@@ -58,11 +58,9 @@
     <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'core/common_tasks/training';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'molecules/datasets/omol25_elec';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Evaluating pretrained models" href="evaluation.html" />
-    <link rel="prev" title="FAIRChem &amp; custom datasets" href="ase_dataset_creation.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -125,6 +123,8 @@
       
       
       
+        
+      
       <div class="bd-sidebar-primary bd-sidebar">
         
 
@@ -176,33 +176,33 @@
         </ul>
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation &amp; License</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">UMA Quick Start w/ ASE</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/install.html">Installation &amp; License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
-<ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="../intro.html">GNNs for Chemistry</a></li>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro.html">GNNs for Chemistry</a></li>
 
 
-<li class="toctree-l1"><a class="reference internal" href="../uma.html">UMA Models</a></li>
-<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Common tasks</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="ase_calculator.html">Inference using ASE and Predictor interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/uma.html">UMA Models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
 
 
 
 
-<li class="toctree-l2"><a class="reference internal" href="lammps.html">LAMMPs Integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/lammps.html">LAMMPs Integration</a></li>
 
 
-<li class="toctree-l2"><a class="reference internal" href="batch_inference.html">Batch inference with UMA models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Training models from scratch</a></li>
-<li class="toctree-l2"><a class="reference internal" href="evaluation.html">Evaluating pretrained models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="fine_tuning.html">Fine-tuning</a></li>
-<li class="toctree-l2"><a class="reference internal" href="workflows.html">Calculation workflows with FAIRChem models</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../uma_faq.html">FAQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
@@ -218,18 +218,18 @@
 
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../generative_models.html">Generative Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/generative_models.html">Generative Models</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25.html">OMol25</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="omc25.html">OMC25</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">Pretrained models</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../molecules/leaderboard.html">OMol25 Leaderboard</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../models.html">Pretrained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../leaderboard.html">OMol25 Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../FAQ.html">FAQ</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
 <ul class="nav bd-sidenav">
@@ -291,9 +291,9 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Learn More</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="../intro_series.html">Why model atoms for climate?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro_series.html">Why model atoms for climate?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../videos/technical_talks.html">Technical presentations</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">fairchem documentation</span></p>
 <ul class="nav bd-sidenav">
@@ -496,7 +496,7 @@
       
       
       
-      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fcore/common_tasks/training.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fmolecules/datasets/omol25_elec.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -526,7 +526,7 @@
       
       
       
-      <li><a href="../../_sources/core/common_tasks/training.md" target="_blank"
+      <li><a href="../../_sources/molecules/datasets/omol25_elec.md" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -610,7 +610,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Training models from scratch</h1>
+    <h1>Open Molecule 2025 Electronic Structures Dataset</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -620,15 +620,9 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fairchem-training-framework-overview">Fairchem training framework overview</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fairchemv2">Fairchemv2</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fairchemv2-config-structure">Fairchemv2 config structure</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-configurations-for-a-local-run">Example configurations for a local run:</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#config-object-instantiation">Config Object Instantiation</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-instantiation-with-partial-functions">Runtime instantiation with partial functions</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#training-uma">Training UMA</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data-description">Data Description</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-access-the-data">How to Access the Data</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#contact-us">Contact Us</a></li>
 </ul>
             </nav>
         </div>
@@ -640,122 +634,96 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="training-models-from-scratch">
-<h1>Training models from scratch<a class="headerlink" href="#training-models-from-scratch" title="Link to this heading">#</a></h1>
-<p>This repo is uses to train large state-of-the-art graph neural networks from scratch on datasets like OC20, OMol25, or OMat24, among others. We now provide a simple CLI to handle this using your own custom datasets, but we suggest fine-tuning one of the existing checkpoints first before trying a from-scratch training.</p>
-<section id="fairchem-training-framework-overview">
-<h2>Fairchem training framework overview<a class="headerlink" href="#fairchem-training-framework-overview" title="Link to this heading">#</a></h2>
-<p>Fairchem training framework currently is a simple SPMD (Single Program Multiple Data) paradigm training framework. It is made of several components:</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="open-molecule-2025-electronic-structures-dataset">
+<h1>Open Molecule 2025 Electronic Structures Dataset<a class="headerlink" href="#open-molecule-2025-electronic-structures-dataset" title="Link to this heading">#</a></h1>
+<p>The Open Molecules 2025 (OMol25) dataset represents the largest dataset of its kind, with more than 100 million density functional theory (DFT) calculations at the ωB97M-V/def2-TZVPD level of theory, spanning several chemical domains including small molecules, biomolecules, metal complexes, and electrolytes.</p>
+<p>At release, the OMol25 dataset provided structure energies, per-atom forces, and Lowdin/Mulliken charges and spins, where available. These properties were sufficient to train state-of-the-art machine learning interatomic potentials (MLIPs) and are already demonstrating incredible performance across a wide range of applications. However, to maximize the community benefit of these calculations, we have partnered with the <a class="reference external" href="https://www.anl.gov/">Department of Energy’s Argonne National Laboratory</a> to provide access to the raw DFT outputs and additional files for the OMol25 dataset.</p>
+<p>By releasing the ORCA output files, users will be able to parse NBO orbital/bonding information, reduced orbital populations, Fock matrices, and more. By releasing the ORCA GBW files, users will be able to run electronic structure post-processing in order to obtain higher quality partial charges and partial spins and a variety of more advanced electronic features that could be extremely valuable for physics-informed ML models. Finally, the release will provide critical high quality data for nascent ML models that train directly on electron densities.</p>
+<section id="data-description">
+<h2>Data Description<a class="headerlink" href="#data-description" title="Link to this heading">#</a></h2>
+<p>The OMol25 dataset is broken into several training splits - All and 4M. The 4M split corresponds to a randomly sampled 4M subset of the full OMol25 dataset. Given the size of the full dataset, O(petabytes), we are first releasing all electronic structure and ORCA output data for the 4M split. Based on community interest, we will work to provide the full dataset.</p>
+<p>For each calculation, the following data is available:</p>
+<ul class="simple">
+<li><p><strong>orca.tar.zst</strong>: Bundle of the raw ORCA outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="n">tar</span> <span class="o">--</span><span class="n">zstd</span> <span class="o">-</span><span class="n">xvf</span> <span class="n">orca</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">zst</span>
+<span class="n">orca</span><span class="o">.</span><span class="n">engrad</span>
+<span class="n">orca</span><span class="o">.</span><span class="n">inp</span>
+<span class="n">orca</span><span class="o">.</span><span class="n">inp</span><span class="o">.</span><span class="n">orig</span>
+<span class="n">orca</span><span class="o">.</span><span class="n">out</span>
+<span class="n">orca</span><span class="o">.</span><span class="n">xyz</span>
+<span class="n">orca_property</span><span class="o">.</span><span class="n">txt</span>
+<span class="n">orca_stderr</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>orca.gbw.zstd0</strong>: Geometry-Basis-Wavefunction file - containing molecular orbitals and wavefunction information for the converged SCF.</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="n">zstd</span> <span class="o">-</span><span class="n">d</span> <span class="n">orca</span><span class="o">.</span><span class="n">gbw</span><span class="o">.</span><span class="n">zstd0</span> <span class="o">-</span><span class="n">o</span> <span class="n">orca</span><span class="o">.</span><span class="n">gbw</span>
+<span class="n">orca</span><span class="o">.</span><span class="n">gbw</span><span class="o">.</span><span class="n">zstd0</span>      <span class="p">:</span> <span class="mi">9462880</span> <span class="nb">bytes</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>density_mat.npz</strong>: The upper-triangle of the density matrix (“orca.scfp”) (two in the case of unrestricted systems with the addition of the spin density (“orca.scfr”)). This vectorized form of the density can be inflated into a symmetric matrix with the following code:</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="c1"># Load the NPZ file</span>
+<span class="k">with</span> <span class="n">np</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="s1">&#39;density_mat.npz&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">loaded_data</span><span class="p">:</span>
+    <span class="n">dens_vector</span> <span class="o">=</span> <span class="n">loaded_data</span><span class="p">[</span><span class="s1">&#39;orca.scfp&#39;</span><span class="p">]</span>
+
+<span class="c1"># Re-inflate the symmetric matrix</span>
+<span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">8</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">dens_vector</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+<span class="n">mat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span><span class="n">n</span><span class="p">))</span>
+<span class="n">mat</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">triu_indices</span><span class="p">(</span><span class="n">n</span><span class="p">)]</span> <span class="o">=</span> <span class="n">dens_vector</span>
+<span class="n">mat</span> <span class="o">=</span> <span class="n">mat</span> <span class="o">+</span> <span class="n">mat</span><span class="o">.</span><span class="n">T</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">mat</span><span class="o">.</span><span class="n">diagonal</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>The dataset is organized on the Argonne cluster based on how we organized it internally for generation. The easiest way to find systems that you may be interested in is by using the ASE-DB format of the dataset that can be downloaded at <a class="reference external" href="https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits">train_4M.tar.gz</a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># pip install fairchem-core if not already installed</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">AseDBDataset</span>
+
+<span class="n">dataset</span> <span class="o">=</span> <span class="n">AseDBDataset</span><span class="p">({</span><span class="s2">&quot;src&quot;</span><span class="p">:</span> <span class="s2">&quot;path/to/train_4M/&quot;</span><span class="p">})</span>
+<span class="n">indices</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dataset</span><span class="p">))</span>
+
+<span class="n">argonne_paths</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">:</span>
+    <span class="c1"># ASE Atoms object that can be visualized/examined</span>
+    <span class="n">atoms</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">get_atoms</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+    <span class="c1"># Check if this is a system you care about. </span>
+    <span class="n">is_relevant</span> <span class="o">=</span> <span class="n">is_atoms_object_relevant</span><span class="p">(</span><span class="n">atoms</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">is_relevant</span><span class="p">:</span>
+	<span class="c1"># Extract the relative path that matches the Argonne cluster</span>
+       <span class="n">relative_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">atoms</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;source&quot;</span><span class="p">])</span>
+	<span class="n">argonne_paths</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">relative_dir</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="how-to-access-the-data">
+<h2>How to Access the Data<a class="headerlink" href="#how-to-access-the-data" title="Link to this heading">#</a></h2>
+<p>The data are stored and accessible via storage on the Eagle cluster at Argonne National Laboratory. For free access to the data, you will need to do the following:</p>
 <ol class="arabic simple">
-<li><p>A user cli (<code class="docutils literal notranslate"><span class="pre">fairchem</span></code>) and launcher - can run jobs locally using <a class="reference external" href="https://docs.pytorch.org/docs/stable/distributed.elastic.html">torch distributed elastic</a> or on <a class="reference external" href="https://slurm.schedmd.com/documentation.html">Slurm</a>. More environments may be supported in the future.</p></li>
-<li><p>Configuration - we strictly use <a class="reference external" href="https://hydra.cc/docs/intro/">Hydra yamls</a> for configuration.</p></li>
-<li><p>A Runner interface - the core program code that is replicated to run on all ranks. An optional Reducer is also available for evaluation jobs.
-Runners are distinct user functions are that run on a single rank (ie: GPU). They describe separate high level tasks such as Train, Eval, Predict, Relaxations, MD etc. Anyone can write a new runner if its functionality is sufficiently different than the ones that already exist.</p></li>
-<li><p>Trainer - we use <a class="reference external" href="https://docs.pytorch.org/tnt/stable/">TorchTNT</a> as a light-weight training loop. This allow us to cleanly separate the dataloading loading from the training loop. TNT is Pytorch’s replacement for Pytorch Lightning - which has become severely bloated and difficult to use over the years; so we opt’d for the simpler option. Units are concepts in TorchTNT that provide a basic interface for training, evaluation and predict. These replace trainers in fairchemv1. You should write a new unit when the model paradigm is significantly different, ie: Training a Multitask-MLIP is one unit, training a diffusion model should be another Unit.</p></li>
+<li><p>Fill in the <a class="reference external" href="https://forms.gle/RyGGmbMkDSQ57wS2A">access form</a>. Use institutional credentials where possible with Globus.</p></li>
+<li><p>After acceptance (this step requires human validation, so may take some time), navigate to the collection with the following link: <a class="reference external" href="https://app.globus.org/file-manager?origin_id=0b73865a-ff20-4f57-a1d7-573d86b54624&amp;amp;origin_path=%2F">Globus OMol25 Collection</a>.</p>
+<ul class="simple">
+<li><p>Acceptance will trigger an email to be sent to the address used in the form.</p></li>
+</ul>
+</li>
+<li><p>To download the data, you can access via HTTPS calls (slower) or by downloading the <a class="reference external" href="https://www.globus.org/globus-connect-personal">Globus Connect Personal client</a> (preferred method) and creating a local endpoint.</p></li>
 </ol>
 </section>
-<section id="fairchemv2">
-<h2>Fairchemv2<a class="headerlink" href="#fairchemv2" title="Link to this heading">#</a></h2>
-<p>Fairchem uses a single <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/_cli.py">cli</a> for running jobs. It accepts a single argument, the location of the Hydra yaml. This is intentional to make sure all configuration is fully captured and avoid bloating of the command line interface. Because of the flexibility of Hydra yamls, use can still provide additional parameters and overrides using the <a class="reference external" href="https://hydra.cc/docs/advanced/override_grammar/basic/">hydra override syntax</a>.</p>
-<p>The cli can launch jobs locally using <a class="reference external" href="https://docs.pytorch.org/docs/stable/distributed.elastic.html">torch distributed elastic</a> OR on <a class="reference external" href="https://slurm.schedmd.com/documentation.html">Slurm</a>.</p>
-<section id="fairchemv2-config-structure">
-<h3>Fairchemv2 config structure<a class="headerlink" href="#fairchemv2-config-structure" title="Link to this heading">#</a></h3>
-<p>A fairchem config is composed of only 2 valid top level keys: “job” (Job Config) and “runner” (Runner Config). Additionally you can add key/values that are used by the OmegaConf interpolation syntax to replace fields. Other than these, no other top-level keys are permitted.
-JobConfig represents configuration parameters that describe the overall job (mostly infra parameters) such as number of nodes, log locations, loggers etc. This is a structured config and must strictly adhere to the JobConfig class.
-Runner Config describe the user code. This part of config is recursively instantiated at the start of a job using hydra instantiation framework.</p>
-</section>
-<section id="example-configurations-for-a-local-run">
-<h3>Example configurations for a local run:<a class="headerlink" href="#example-configurations-for-a-local-run" title="Link to this heading">#</a></h3>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">job</span><span class="p">:</span>
-  <span class="n">device_type</span><span class="p">:</span> <span class="n">CUDA</span>
-  <span class="n">scheduler</span><span class="p">:</span>
-    <span class="n">mode</span><span class="p">:</span> <span class="n">LOCAL</span>
-    <span class="n">ranks_per_node</span><span class="p">:</span> <span class="mi">4</span>
-  <span class="n">run_name</span><span class="p">:</span> <span class="n">local_training_run</span>
-</pre></div>
-</div>
-<p>Example configurations for a slurm run:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>job:
-  device_type: CUDA
-  scheduler:
-    mode: SLURM
-    ranks_per_node: 8
-    num_nodes: 4
-    slurm:
-      account: ${cluster.account}
-      qos: ${cluster.qos}
-      mem_gb: ${cluster.mem_gb}
-      cpus_per_task: ${cluster.cpus_per_task}
-  run_dir: /path/to/output
-  run_name: slurm_run_example
-</pre></div>
-</div>
-</section>
-<section id="config-object-instantiation">
-<h3>Config Object Instantiation<a class="headerlink" href="#config-object-instantiation" title="Link to this heading">#</a></h3>
-<p>To keep our configs explict (configs should be thought of as extension of code), we prefer to use the hydra instantiation framework throughout; the config is always fully described by a corresponding python class and should never be a standalone dictionary.</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># this is bad</span>
-<span class="c1"># because we have no idea what where to find the code</span>
-<span class="c1"># that uses runner or where variables x and y are actually used</span>
-<span class="n">runner</span><span class="p">:</span>
-	<span class="n">x</span><span class="p">:</span> <span class="mi">5</span>
-	<span class="n">y</span><span class="p">:</span> <span class="mi">6</span>
-
-<span class="c1"># this is good</span>
-<span class="c1"># now we know which class runner corresponds to and that x,y are</span>
-<span class="c1"># just initializer variables of runner. If we need to check the defintion</span>
-<span class="c1"># or understand the code, we can simply goto runner.py</span>
-<span class="n">runner</span><span class="p">:</span>
-  <span class="n">_target_</span><span class="p">:</span> <span class="n">fairchem</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">componets</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">Runner</span>
-  <span class="n">x</span><span class="p">:</span> <span class="mi">5</span>
-  <span class="n">y</span><span class="p">:</span> <span class="mi">6</span>
-</pre></div>
-</div>
-</section>
-<section id="runtime-instantiation-with-partial-functions">
-<h3>Runtime instantiation with partial functions<a class="headerlink" href="#runtime-instantiation-with-partial-functions" title="Link to this heading">#</a></h3>
-<p>While we want to use static instantiation as much as possible, there will be lots of cases where certain objects require runtime inputs to create. For example, if we want to create a pytorch optimizer, we can give it all the arguments except the model parameters (because its only known at runtime).</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>optimizer:
-  _target_: torch.optim.AdamW
-  params: ?? # this is only known at runtime
-  lr: 8e-4
-  weight_decay: 1e-3
-</pre></div>
-</div>
-<p>In this case we can use a partial function, now instead of creating an optimizer object, we create a python partial function that can then be used to instantiate the optimizer in code later</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">optimizer_fn</span><span class="p">:</span>
-  <span class="n">_target_</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span>
-  <span class="n">_partial_</span><span class="p">:</span> <span class="n">true</span>
-  <span class="n">lr</span><span class="p">:</span> <span class="mf">8e-4</span>
-  <span class="n">weight_decay</span><span class="p">:</span> <span class="mf">1e-3</span>
- <span class="c1"># later in the runner</span>
- <span class="n">optimizer</span> <span class="o">=</span> <span class="n">optimizer_fn</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span>
-</pre></div>
-</div>
-</section>
-</section>
-<section id="training-uma">
-<h2>Training UMA<a class="headerlink" href="#training-uma" title="Link to this heading">#</a></h2>
-<p>The UMA model is completely defined <a class="reference external" href="https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/core/models/uma">here</a>. It is also called “escn_md” during internal development since it was based on the eSEN architecture.</p>
-<p>Training, eval and inference are all defined in the <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py">mlip unit</a>.</p>
-<p>To train a model, we need to initialize a <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/train/train_runner.py">TrainRunner</a> with a <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py">MLIPTrainEvalUnit</a>.</p>
-<p>Due to the complexity of UMA and training a multi-architecture, multi-dataset, multi-task model, we leverage <a class="reference external" href="https://hydra.cc/docs/tutorials/basic/your_first_app/config_groups/">config groups</a> syntax in Hydra to organize UMA training into the <a class="reference external" href="https://github.com/facebookresearch/fairchem/tree/main/configs/uma/training_release">following sections</a>:</p>
+<section id="contact-us">
+<h2>Contact Us<a class="headerlink" href="#contact-us" title="Link to this heading">#</a></h2>
+<p><a class="reference external" href="https://github.com/facebookresearch/fairchem">General Issues</a></p>
+<p>Dataset questions?</p>
 <ul class="simple">
-<li><p>backbone - selects the specific backbone architecture, ie: uma-sm, uma-md, uma-large etc.</p></li>
-<li><p>cluster - quickly switch settings between different slurm clusters or local env</p></li>
-<li><p>dataset - select the dataset to train on</p></li>
-<li><p>element_refs - select the element references</p></li>
-<li><p>tasks - select the task set, ie: for direct or conservative training</p></li>
+<li><p><a class="reference internal" href="#mshuaibi&#64;meta.com"><span class="xref myst">Muhammed Shuaibi</span></a></p></li>
+<li><p><a class="reference internal" href="#levineds&#64;meta.com"><span class="xref myst">Daniel Levine</span></a></p></li>
 </ul>
-<p>We can switch between different combinations of configs easily this way, for example:</p>
-<p>Getting training started locally using local settings and the debug dataset</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">fairchem</span> <span class="o">-</span><span class="n">c</span> <span class="n">configs</span><span class="o">/</span><span class="n">uma</span><span class="o">/</span><span class="n">training_release</span><span class="o">/</span><span class="n">uma_sm_direct_pretrain</span><span class="o">.</span><span class="n">yaml</span>  <span class="n">cluster</span><span class="o">=</span><span class="n">h100_local</span> <span class="n">dataset</span><span class="o">=</span><span class="n">uma_debug</span>
-</pre></div>
-</div>
-<p>Training UMA conservative with 16 nodes on slurm</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">fairchem</span> <span class="o">-</span><span class="n">c</span> <span class="n">configs</span><span class="o">/</span><span class="n">uma</span><span class="o">/</span><span class="n">training_release</span><span class="o">/</span><span class="n">uma_sm_conserve_finetune</span><span class="o">.</span><span class="n">yaml</span>  <span class="n">cluster</span><span class="o">=</span><span class="n">h100</span> <span class="n">job</span><span class="o">.</span><span class="n">scheduler</span><span class="o">.</span><span class="n">num_nodes</span><span class="o">=</span><span class="mi">16</span> <span class="n">run_name</span><span class="o">=</span><span class="s2">&quot;uma_conserve_train&quot;</span>
-</pre></div>
-</div>
+<p>Cluster/Access questions?</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#blaiszik&#64;uchicago.edu"><span class="xref myst">Ben Blaiszik</span></a></p></li>
+</ul>
 </section>
 </section>
 
@@ -772,7 +740,7 @@ Runner Config describe the user code. This part of config is recursively instant
         },
         kernelOptions: {
             name: "python3",
-            path: "./core/common_tasks"
+            path: "./molecules/datasets"
         },
         predefinedOutput: true
     }
@@ -789,24 +757,6 @@ Runner Config describe the user code. This part of config is recursively instant
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
-    <a class="left-prev"
-       href="ase_dataset_creation.html"
-       title="previous page">
-      <i class="fa-solid fa-angle-left"></i>
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">FAIRChem &amp; custom datasets</p>
-      </div>
-    </a>
-    <a class="right-next"
-       href="evaluation.html"
-       title="next page">
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Evaluating pretrained models</p>
-      </div>
-      <i class="fa-solid fa-angle-right"></i>
-    </a>
 </div>
                 </footer>
               
@@ -823,15 +773,9 @@ Runner Config describe the user code. This part of config is recursively instant
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fairchem-training-framework-overview">Fairchem training framework overview</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fairchemv2">Fairchemv2</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fairchemv2-config-structure">Fairchemv2 config structure</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-configurations-for-a-local-run">Example configurations for a local run:</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#config-object-instantiation">Config Object Instantiation</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-instantiation-with-partial-functions">Runtime instantiation with partial functions</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#training-uma">Training UMA</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#data-description">Data Description</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-access-the-data">How to Access the Data</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#contact-us">Contact Us</a></li>
 </ul>
   </nav></div>
 
