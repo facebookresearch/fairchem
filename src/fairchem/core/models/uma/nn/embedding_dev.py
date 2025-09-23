@@ -72,7 +72,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
         edge_envelope,
@@ -82,16 +81,10 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x_edge_m_0 = x_edge_m_0.reshape(
             -1, self.m_0_num_coefficients, self.sphere_channels
         )
-        x_edge_m_pad = torch.zeros(
-            (
-                x_edge_m_0.shape[0],
-                (self.m_all_num_coefficents - self.m_0_num_coefficients),
-                self.sphere_channels,
-            ),
-            device=x_edge_m_0.device,
-            dtype=x_edge_m_0.dtype,
+        x_edge_embedding = torch.nn.functional.pad(
+            x_edge_m_0,
+            (0, 0, 0, (self.m_all_num_coefficents - self.m_0_num_coefficients)),
         )
-        x_edge_embedding = torch.cat((x_edge_m_0, x_edge_m_pad), dim=1)
         x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
         x_edge_embedding = x_edge_embedding * edge_envelope
@@ -107,7 +100,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
         edge_envelope,
@@ -117,7 +109,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             return self.forward_chunk(
                 x,
                 x_edge,
-                edge_distance,
                 edge_index,
                 wigner_and_M_mapping_inv,
                 edge_envelope,
@@ -130,9 +121,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_inv_partitions = wigner_and_M_mapping_inv.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
-        edge_distance_parititons = edge_distance.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
         edge_envelope_partitions = edge_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
@@ -143,7 +131,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 self.forward_chunk,
                 x,
                 x_edge_partitions[idx],
-                edge_distance_parititons[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
                 edge_envelope_partitions[idx],
