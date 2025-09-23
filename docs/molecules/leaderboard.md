@@ -1,6 +1,6 @@
 # OMol25 Leaderboard
 
-As part of the OMol25 release, we present a community leaderboard for researchers to submit their predictions for evaluation - https://huggingface.co/spaces/facebook/fairchem_leaderboard.
+As part of the OMol25 release, we present a community leaderboard for researchers to submit their predictions for evaluation - [fairchem_leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
 Below we outline the steps to generate predictions and submit them to the leaderboard.
 
 The leaderboard is broken into two different sections - "S2EF" and "Evaluations".

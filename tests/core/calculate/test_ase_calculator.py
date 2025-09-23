@@ -143,10 +143,8 @@ def test_calculator_setup(all_calculators):
         datasets = list(calc.predictor.dataset_to_tasks.keys())
 
         # all conservative UMA checkpoints should support E/F/S!
-        if (
-            not calc.predictor.direct_forces
-            and len(datasets) > 1
-            or calc.task_name != "omol"
+        if not calc.predictor.direct_forces and (
+            len(datasets) > 1 or calc.task_name != "omol"
         ):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
