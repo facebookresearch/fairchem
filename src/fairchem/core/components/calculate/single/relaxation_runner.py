@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from ase.calculators.calculator import Calculator
 
-    from fairchem.core.components.calculate.single import AtomsSequence
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 @requires(pmg_installed, message="Requires `pymatgen` to be installed")

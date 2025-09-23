@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
     from ase.optimize import Optimizer
 
-    from fairchem.core.components.calculate.single import AtomsSequence
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 class AdsorptionRunner(CalculateRunner):

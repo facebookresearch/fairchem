@@ -25,7 +25,7 @@ from fairchem.core.components.calculate.recipes.elastic import (
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
-    from fairchem.core.components.calculate.single import AtomsSequence
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 eVA3_to_GPa = 1 / ase.units.GPa

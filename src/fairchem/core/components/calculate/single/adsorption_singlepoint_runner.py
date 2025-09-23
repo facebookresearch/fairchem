@@ -19,7 +19,7 @@ from fairchem.core.components.calculate import CalculateRunner
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
-    from fairchem.core.components.calculate.single import AtomsSequence
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 class AdsorptionSinglePointRunner(CalculateRunner):
