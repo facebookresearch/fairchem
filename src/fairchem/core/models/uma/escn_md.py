@@ -669,7 +669,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         if gp_utils.initialized():
             # TODO optimize here for MD, we already have all embeddings can skip all_gather
-            # just run energy block
             total_energies = gp_utils.reduce_from_model_parallel_region(total_energies)
 
         outputs[energy_key] = (
@@ -751,10 +750,6 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
         )
 
         energy.index_add_(0, data_dict["batch_full"], node_energy.view(-1))
-        # if gp_utils.initialized():
-        #    energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        # else:
-        #    energy = energy_part
 
         if self.reduce == "sum":
             return {"energy": energy}
@@ -811,8 +806,6 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
-        # if gp_utils.initialized():
-        #     forces = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(forces, data_dict['atomic_numbers_full'].shape[0],True)
         return {"forces": forces}
 
 
