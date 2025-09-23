@@ -331,6 +331,7 @@
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/models/index.html">core.models</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/base/index.html">core.models.base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/escaip/index.html">core.models.escaip</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/uma/index.html">core.models.uma</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/utils/index.html">core.models.utils</a></li>
 </ul>
@@ -665,13 +666,28 @@ document.write(`
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>0it [00:00, ?it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+0it [00:00, ?it/s]
+
+
+
+0it [00:00, ?it/s]
+
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+0it [00:00, ?it/s]
+
   0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
-0it [00:00, ?it/s]
-
-
-  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
-
 
 
 
@@ -687,47 +703,33 @@ document.write(`
 
 
 
-
-0it [00:00, ?it/s]
-
-
-
-
 0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
-0it [00:00, ?it/s]
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 109.83it/s]
 
-
-
-
-
-
-0it [00:00, ?it/s]
-0it [00:00, ?it/s]
-
-0it [00:00, ?it/s]
-0it [00:00, ?it/s]
-
-100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 108.02it/s]
-
-100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 117.96it/s]
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 117.24it/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Computing normalizer values.:   0%|                       | 0/2 [00:00&lt;?, ?it/s]
-Computing normalizer values.: 100%|██████████████| 2/2 [00:00&lt;00:00, 916.59it/s]
+Computing normalizer values.: 100%|██████████████| 2/2 [00:00&lt;00:00, 780.19it/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
 
-
-
-0it [00:00, ?it/s]
-
   0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
 
 
 
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+0it [00:00, ?it/s]
+
+
+
 
 
 
@@ -741,17 +743,9 @@ Computing normalizer values.: 100%|██████████████| 2
 
 0it [00:00, ?it/s]
 
-
-
-
-
-
-
-
-0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
-0it [00:00, ?it/s]
+
 
 
 
@@ -763,12 +757,15 @@ Computing normalizer values.: 100%|██████████████| 2
 
 
 
+
+
+
 0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
-100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 109.22it/s]
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 112.55it/s]
 
-100%|█████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 83.20it/s]
+100%|█████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 84.81it/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Generated dataset and data config yaml in /tmp/bulk
@@ -807,7 +804,7 @@ INFO:root:To run finetuning, run fairchem -c /tmp/bulk/uma_sm_finetune_template.
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:saved canonical config to /tmp/finetune_dir/some_id/canonical_config.yaml
-INFO:root:Running fairchemv2 cli with {&#39;job&#39;: {&#39;run_name&#39;: &#39;uma_finetune&#39;, &#39;timestamp_id&#39;: &#39;some_id&#39;, &#39;run_dir&#39;: &#39;/tmp/finetune_dir&#39;, &#39;device_type&#39;: &lt;DeviceType.CUDA: &#39;cuda&#39;&gt;, &#39;debug&#39;: True, &#39;scheduler&#39;: {&#39;mode&#39;: &lt;SchedulerType.LOCAL: &#39;local&#39;&gt;, &#39;distributed_init_method&#39;: &lt;DistributedInitMethod.TCP: &#39;tcp&#39;&gt;, &#39;ranks_per_node&#39;: 1, &#39;num_nodes&#39;: 1, &#39;num_array_jobs&#39;: 1, &#39;slurm&#39;: {&#39;mem_gb&#39;: 80, &#39;timeout_hr&#39;: 168, &#39;cpus_per_task&#39;: 8, &#39;partition&#39;: None, &#39;qos&#39;: None, &#39;account&#39;: None, &#39;additional_parameters&#39;: None}}, &#39;logger&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.logger.WandBSingletonLogger.init_wandb&#39;, &#39;_partial_&#39;: True, &#39;entity&#39;: &#39;example&#39;, &#39;project&#39;: &#39;uma_finetune&#39;}, &#39;seed&#39;: 0, &#39;deterministic&#39;: False, &#39;runner_state_path&#39;: None, &#39;metadata&#39;: {&#39;commit&#39;: &#39;core:87969b25,experimental:NA&#39;, &#39;log_dir&#39;: &#39;/tmp/finetune_dir/some_id/logs&#39;, &#39;checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints&#39;, &#39;results_dir&#39;: &#39;/tmp/finetune_dir/some_id/results&#39;, &#39;config_path&#39;: &#39;/tmp/finetune_dir/some_id/canonical_config.yaml&#39;, &#39;preemption_checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints/preemption_state&#39;, &#39;cluster_name&#39;: &#39;local-node&#39;, &#39;array_job_num&#39;: 0, &#39;slurm_env&#39;: {&#39;job_id&#39;: None, &#39;raw_job_id&#39;: None, &#39;array_job_id&#39;: None, &#39;array_task_id&#39;: None, &#39;restart_count&#39;: None}}, &#39;graph_parallel_group_size&#39;: None}, &#39;runner&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.train.train_runner.TrainEvalRunner&#39;, &#39;train_dataloader&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.common.dataloader_builder.get_dataloader&#39;, &#39;dataset&#39;: {&#39;_target_&#39;: &#39;fairchem.core.datasets.mt_concat_dataset.create_concat_dataset&#39;, &#39;dataset_configs&#39;: {&#39;omat&#39;: {&#39;splits&#39;: {&#39;train&#39;: {&#39;src&#39;: &#39;/tmp/bulk/train&#39;}}, &#39;format&#39;: &#39;ase_db&#39;, &#39;transforms&#39;: {&#39;common_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}, &#39;stress_reshape_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}}}}, &#39;combined_dataset_config&#39;: {&#39;sampling&#39;: {&#39;type&#39;: &#39;temperature&#39;, &#39;temperature&#39;: 1.0}}}, &#39;batch_sampler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;, &#39;_partial_&#39;: True, &#39;batch_size&#39;: 2, &#39;shuffle&#39;: True, &#39;seed&#39;: 0}, &#39;num_workers&#39;: 0, &#39;collate_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter&#39;, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}]}}, &#39;eval_dataloader&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.common.dataloader_builder.get_dataloader&#39;, &#39;dataset&#39;: {&#39;_target_&#39;: &#39;fairchem.core.datasets.mt_concat_dataset.create_concat_dataset&#39;, &#39;dataset_configs&#39;: {&#39;omat&#39;: {&#39;splits&#39;: {&#39;val&#39;: {&#39;src&#39;: &#39;/tmp/bulk/val&#39;}}, &#39;format&#39;: &#39;ase_db&#39;, &#39;transforms&#39;: {&#39;common_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}, &#39;stress_reshape_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}}}}, &#39;combined_dataset_config&#39;: {&#39;sampling&#39;: {&#39;type&#39;: &#39;temperature&#39;, &#39;temperature&#39;: 1.0}}}, &#39;batch_sampler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;, &#39;_partial_&#39;: True, &#39;batch_size&#39;: 2, &#39;shuffle&#39;: False, &#39;seed&#39;: 0}, &#39;num_workers&#39;: 0, &#39;collate_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter&#39;, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}]}}, &#39;train_eval_unit&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit&#39;, &#39;job_config&#39;: {&#39;run_name&#39;: &#39;uma_finetune&#39;, &#39;timestamp_id&#39;: &#39;some_id&#39;, &#39;run_dir&#39;: &#39;/tmp/finetune_dir&#39;, &#39;device_type&#39;: &lt;DeviceType.CUDA: &#39;cuda&#39;&gt;, &#39;debug&#39;: True, &#39;scheduler&#39;: {&#39;mode&#39;: &lt;SchedulerType.LOCAL: &#39;local&#39;&gt;, &#39;distributed_init_method&#39;: &lt;DistributedInitMethod.TCP: &#39;tcp&#39;&gt;, &#39;ranks_per_node&#39;: 1, &#39;num_nodes&#39;: 1, &#39;num_array_jobs&#39;: 1, &#39;slurm&#39;: {&#39;mem_gb&#39;: 80, &#39;timeout_hr&#39;: 168, &#39;cpus_per_task&#39;: 8, &#39;partition&#39;: None, &#39;qos&#39;: None, &#39;account&#39;: None, &#39;additional_parameters&#39;: None}}, &#39;logger&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.logger.WandBSingletonLogger.init_wandb&#39;, &#39;_partial_&#39;: True, &#39;entity&#39;: &#39;example&#39;, &#39;project&#39;: &#39;uma_finetune&#39;}, &#39;seed&#39;: 0, &#39;deterministic&#39;: False, &#39;runner_state_path&#39;: None, &#39;metadata&#39;: {&#39;commit&#39;: &#39;core:87969b25,experimental:NA&#39;, &#39;log_dir&#39;: &#39;/tmp/finetune_dir/some_id/logs&#39;, &#39;checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints&#39;, &#39;results_dir&#39;: &#39;/tmp/finetune_dir/some_id/results&#39;, &#39;config_path&#39;: &#39;/tmp/finetune_dir/some_id/canonical_config.yaml&#39;, &#39;preemption_checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints/preemption_state&#39;, &#39;cluster_name&#39;: &#39;local-node&#39;, &#39;array_job_num&#39;: 0, &#39;slurm_env&#39;: {&#39;job_id&#39;: None, &#39;raw_job_id&#39;: None, &#39;array_job_id&#39;: None, &#39;array_task_id&#39;: None, &#39;restart_count&#39;: None}}, &#39;graph_parallel_group_size&#39;: None}, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}], &#39;model&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model&#39;, &#39;checkpoint_location&#39;: {&#39;_target_&#39;: &#39;fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name&#39;, &#39;model_name&#39;: &#39;uma-s-1&#39;}, &#39;overrides&#39;: {&#39;backbone&#39;: {&#39;otf_graph&#39;: True, &#39;max_neighbors&#39;: 300, &#39;regress_stress&#39;: True, &#39;always_use_pbc&#39;: False}, &#39;pass_through_head_outputs&#39;: True}, &#39;heads&#39;: {&#39;efs&#39;: {&#39;module&#39;: &#39;fairchem.core.models.uma.escn_md.MLP_EFS_Head&#39;}}}, &#39;optimizer_fn&#39;: {&#39;_target_&#39;: &#39;torch.optim.AdamW&#39;, &#39;_partial_&#39;: True, &#39;lr&#39;: 0.0002, &#39;weight_decay&#39;: 0.001}, &#39;cosine_lr_scheduler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler&#39;, &#39;_partial_&#39;: True, &#39;warmup_factor&#39;: 0.2, &#39;warmup_epochs&#39;: 0.01, &#39;lr_min_factor&#39;: 0.01, &#39;epochs&#39;: 2, &#39;steps&#39;: None}, &#39;print_every&#39;: 10, &#39;clip_grad_norm&#39;: 100}, &#39;max_epochs&#39;: 2, &#39;max_steps&#39;: None, &#39;evaluate_every_n_steps&#39;: 100, &#39;callbacks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.components.train.train_runner.TrainCheckpointCallback&#39;, &#39;checkpoint_every_n_steps&#39;: 1000, &#39;max_saved_checkpoints&#39;: 5}, {&#39;_target_&#39;: &#39;torchtnt.framework.callbacks.TQDMProgressBar&#39;}]}}
+INFO:root:Running fairchemv2 cli with {&#39;job&#39;: {&#39;run_name&#39;: &#39;uma_finetune&#39;, &#39;timestamp_id&#39;: &#39;some_id&#39;, &#39;run_dir&#39;: &#39;/tmp/finetune_dir&#39;, &#39;device_type&#39;: &lt;DeviceType.CUDA: &#39;cuda&#39;&gt;, &#39;debug&#39;: True, &#39;scheduler&#39;: {&#39;mode&#39;: &lt;SchedulerType.LOCAL: &#39;local&#39;&gt;, &#39;distributed_init_method&#39;: &lt;DistributedInitMethod.TCP: &#39;tcp&#39;&gt;, &#39;ranks_per_node&#39;: 1, &#39;num_nodes&#39;: 1, &#39;num_array_jobs&#39;: 1, &#39;slurm&#39;: {&#39;mem_gb&#39;: 80, &#39;timeout_hr&#39;: 168, &#39;cpus_per_task&#39;: 8, &#39;partition&#39;: None, &#39;qos&#39;: None, &#39;account&#39;: None, &#39;additional_parameters&#39;: None}}, &#39;logger&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.logger.WandBSingletonLogger.init_wandb&#39;, &#39;_partial_&#39;: True, &#39;entity&#39;: &#39;example&#39;, &#39;project&#39;: &#39;uma_finetune&#39;}, &#39;seed&#39;: 0, &#39;deterministic&#39;: False, &#39;runner_state_path&#39;: None, &#39;metadata&#39;: {&#39;commit&#39;: &#39;core:f1ed8a7d,experimental:NA&#39;, &#39;log_dir&#39;: &#39;/tmp/finetune_dir/some_id/logs&#39;, &#39;checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints&#39;, &#39;results_dir&#39;: &#39;/tmp/finetune_dir/some_id/results&#39;, &#39;config_path&#39;: &#39;/tmp/finetune_dir/some_id/canonical_config.yaml&#39;, &#39;preemption_checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints/preemption_state&#39;, &#39;cluster_name&#39;: &#39;local-node&#39;, &#39;array_job_num&#39;: 0, &#39;slurm_env&#39;: {&#39;job_id&#39;: None, &#39;raw_job_id&#39;: None, &#39;array_job_id&#39;: None, &#39;array_task_id&#39;: None, &#39;restart_count&#39;: None}}, &#39;graph_parallel_group_size&#39;: None}, &#39;runner&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.train.train_runner.TrainEvalRunner&#39;, &#39;train_dataloader&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.common.dataloader_builder.get_dataloader&#39;, &#39;dataset&#39;: {&#39;_target_&#39;: &#39;fairchem.core.datasets.mt_concat_dataset.create_concat_dataset&#39;, &#39;dataset_configs&#39;: {&#39;omat&#39;: {&#39;splits&#39;: {&#39;train&#39;: {&#39;src&#39;: &#39;/tmp/bulk/train&#39;}}, &#39;format&#39;: &#39;ase_db&#39;, &#39;transforms&#39;: {&#39;common_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}, &#39;stress_reshape_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}}}}, &#39;combined_dataset_config&#39;: {&#39;sampling&#39;: {&#39;type&#39;: &#39;temperature&#39;, &#39;temperature&#39;: 1.0}}}, &#39;batch_sampler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;, &#39;_partial_&#39;: True, &#39;batch_size&#39;: 2, &#39;shuffle&#39;: True, &#39;seed&#39;: 0}, &#39;num_workers&#39;: 0, &#39;collate_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter&#39;, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}]}}, &#39;eval_dataloader&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.common.dataloader_builder.get_dataloader&#39;, &#39;dataset&#39;: {&#39;_target_&#39;: &#39;fairchem.core.datasets.mt_concat_dataset.create_concat_dataset&#39;, &#39;dataset_configs&#39;: {&#39;omat&#39;: {&#39;splits&#39;: {&#39;val&#39;: {&#39;src&#39;: &#39;/tmp/bulk/val&#39;}}, &#39;format&#39;: &#39;ase_db&#39;, &#39;transforms&#39;: {&#39;common_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}, &#39;stress_reshape_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}}}}, &#39;combined_dataset_config&#39;: {&#39;sampling&#39;: {&#39;type&#39;: &#39;temperature&#39;, &#39;temperature&#39;: 1.0}}}, &#39;batch_sampler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;, &#39;_partial_&#39;: True, &#39;batch_size&#39;: 2, &#39;shuffle&#39;: False, &#39;seed&#39;: 0}, &#39;num_workers&#39;: 0, &#39;collate_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter&#39;, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}]}}, &#39;train_eval_unit&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit&#39;, &#39;job_config&#39;: {&#39;run_name&#39;: &#39;uma_finetune&#39;, &#39;timestamp_id&#39;: &#39;some_id&#39;, &#39;run_dir&#39;: &#39;/tmp/finetune_dir&#39;, &#39;device_type&#39;: &lt;DeviceType.CUDA: &#39;cuda&#39;&gt;, &#39;debug&#39;: True, &#39;scheduler&#39;: {&#39;mode&#39;: &lt;SchedulerType.LOCAL: &#39;local&#39;&gt;, &#39;distributed_init_method&#39;: &lt;DistributedInitMethod.TCP: &#39;tcp&#39;&gt;, &#39;ranks_per_node&#39;: 1, &#39;num_nodes&#39;: 1, &#39;num_array_jobs&#39;: 1, &#39;slurm&#39;: {&#39;mem_gb&#39;: 80, &#39;timeout_hr&#39;: 168, &#39;cpus_per_task&#39;: 8, &#39;partition&#39;: None, &#39;qos&#39;: None, &#39;account&#39;: None, &#39;additional_parameters&#39;: None}}, &#39;logger&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.logger.WandBSingletonLogger.init_wandb&#39;, &#39;_partial_&#39;: True, &#39;entity&#39;: &#39;example&#39;, &#39;project&#39;: &#39;uma_finetune&#39;}, &#39;seed&#39;: 0, &#39;deterministic&#39;: False, &#39;runner_state_path&#39;: None, &#39;metadata&#39;: {&#39;commit&#39;: &#39;core:f1ed8a7d,experimental:NA&#39;, &#39;log_dir&#39;: &#39;/tmp/finetune_dir/some_id/logs&#39;, &#39;checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints&#39;, &#39;results_dir&#39;: &#39;/tmp/finetune_dir/some_id/results&#39;, &#39;config_path&#39;: &#39;/tmp/finetune_dir/some_id/canonical_config.yaml&#39;, &#39;preemption_checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints/preemption_state&#39;, &#39;cluster_name&#39;: &#39;local-node&#39;, &#39;array_job_num&#39;: 0, &#39;slurm_env&#39;: {&#39;job_id&#39;: None, &#39;raw_job_id&#39;: None, &#39;array_job_id&#39;: None, &#39;array_task_id&#39;: None, &#39;restart_count&#39;: None}}, &#39;graph_parallel_group_size&#39;: None}, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}], &#39;model&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model&#39;, &#39;checkpoint_location&#39;: {&#39;_target_&#39;: &#39;fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name&#39;, &#39;model_name&#39;: &#39;uma-s-1&#39;}, &#39;overrides&#39;: {&#39;backbone&#39;: {&#39;otf_graph&#39;: True, &#39;max_neighbors&#39;: 300, &#39;regress_stress&#39;: True, &#39;always_use_pbc&#39;: False}, &#39;pass_through_head_outputs&#39;: True}, &#39;heads&#39;: {&#39;efs&#39;: {&#39;module&#39;: &#39;fairchem.core.models.uma.escn_md.MLP_EFS_Head&#39;}}}, &#39;optimizer_fn&#39;: {&#39;_target_&#39;: &#39;torch.optim.AdamW&#39;, &#39;_partial_&#39;: True, &#39;lr&#39;: 0.0002, &#39;weight_decay&#39;: 0.001}, &#39;cosine_lr_scheduler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler&#39;, &#39;_partial_&#39;: True, &#39;warmup_factor&#39;: 0.2, &#39;warmup_epochs&#39;: 0.01, &#39;lr_min_factor&#39;: 0.01, &#39;epochs&#39;: 2, &#39;steps&#39;: None}, &#39;print_every&#39;: 10, &#39;clip_grad_norm&#39;: 100}, &#39;max_epochs&#39;: 2, &#39;max_steps&#39;: None, &#39;evaluate_every_n_steps&#39;: 100, &#39;callbacks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.components.train.train_runner.TrainCheckpointCallback&#39;, &#39;checkpoint_every_n_steps&#39;: 1000, &#39;max_saved_checkpoints&#39;: 5}, {&#39;_target_&#39;: &#39;torchtnt.framework.callbacks.TQDMProgressBar&#39;}]}}
 INFO:root:Running in local mode without elastic launch
 INFO:root:Setting env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 INFO:root:Setting up distributed backend...
@@ -817,7 +814,7 @@ INFO:root:Calling runner.run() ...
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=True, seed=0)...
 WARNING:root:Disabled BalancedBatchSampler because num_replicas=1.
 INFO:root:rank: 0: Sampler created...
-INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x73f1886ddd60&gt;, batch_size=2, drop_last=False
+INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x70b988449c40&gt;, batch_size=2, drop_last=False
 INFO:root:get_dataloader::Calling Dataloader...
 INFO:root:get_dataloader::Done!
 </pre></div>
@@ -825,7 +822,7 @@ INFO:root:get_dataloader::Done!
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=False, seed=0)...
 WARNING:root:Disabled BalancedBatchSampler because num_replicas=1.
 INFO:root:rank: 0: Sampler created...
-INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x73f188836c90&gt;, batch_size=2, drop_last=False
+INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x70b987e44fb0&gt;, batch_size=2, drop_last=False
 INFO:root:get_dataloader::Calling Dataloader...
 INFO:root:get_dataloader::Done!
 </pre></div>
@@ -833,37 +830,38 @@ INFO:root:get_dataloader::Done!
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   0%|                       | 0.00/1.17G [00:00&lt;?, ?B/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   0%|                | 615k/1.17G [00:01&lt;32:06, 609kB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   0%|                | 615k/1.17G [00:01&lt;36:09, 541kB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   6%|▊             | 67.7M/1.17G [00:01&lt;00:22, 50.0MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   6%|▊             | 67.7M/1.17G [00:01&lt;00:22, 49.1MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  14%|██▎             | 168M/1.17G [00:01&lt;00:07, 141MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  11%|█▊              | 135M/1.17G [00:01&lt;00:10, 102MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  26%|████            | 302M/1.17G [00:01&lt;00:03, 261MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  23%|███▋            | 269M/1.17G [00:02&lt;00:03, 233MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  37%|█████▉          | 437M/1.17G [00:02&lt;00:01, 403MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  34%|█████▍          | 403M/1.17G [00:02&lt;00:02, 365MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  49%|███████▊        | 571M/1.17G [00:02&lt;00:01, 549MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  43%|██████▊         | 504M/1.17G [00:02&lt;00:01, 462MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  60%|█████████▌      | 705M/1.17G [00:02&lt;00:00, 681MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  54%|████████▋       | 638M/1.17G [00:02&lt;00:01, 525MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  71%|███████████▍    | 839M/1.17G [00:02&lt;00:00, 812MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  66%|██████████▌     | 772M/1.17G [00:02&lt;00:00, 648MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  83%|█████████████▎  | 973M/1.17G [00:02&lt;00:00, 918MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  77%|████████████▎   | 906M/1.17G [00:02&lt;00:00, 760MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  94%|█████████████▏| 1.11G/1.17G [00:02&lt;00:00, 1.01GB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  89%|█████████████▎ | 1.04G/1.17G [00:02&lt;00:00, 879MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt: 100%|███████████████| 1.17G/1.17G [00:02&lt;00:00, 448MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt: 100%|███████████████| 1.17G/1.17G [00:02&lt;00:00, 983MB/s]
+checkpoints/uma-s-1.pt: 100%|███████████████| 1.17G/1.17G [00:02&lt;00:00, 406MB/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:initialize_finetuning_model starting from checkpoint_location: /home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1.pt
@@ -891,29 +889,29 @@ INFO:root:0: Expert mean: 6.88e-03,1.02e-01,6.92e-03,6.72e-03,2.17e-02,6.83e-03,
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/torch/optim/lr_scheduler.py:384: UserWarning: To get the last learning rate computed by the scheduler, please use `get_last_lr()`.
   _warn_get_lr_called_within_step(self)
-INFO:root:{&#39;train/loss&#39;: 1.2937601246535735, &#39;train/lr&#39;: 4e-05, &#39;train/step&#39;: 0, &#39;train/epoch&#39;: 0.0, &#39;train/samples_per_second(approx)&#39;: 0.06270423932159469, &#39;train/atoms_per_second(approx)&#39;: 1.5049017437182726, &#39;train/num_atoms_on_rank&#39;: 48, &#39;train/num_samples_on_rank&#39;: 2}
+INFO:root:{&#39;train/loss&#39;: 1.2937600874006705, &#39;train/lr&#39;: 4e-05, &#39;train/step&#39;: 0, &#39;train/epoch&#39;: 0.0, &#39;train/samples_per_second(approx)&#39;: 0.06294520345603549, &#39;train/atoms_per_second(approx)&#39;: 1.5106848829448518, &#39;train/num_atoms_on_rank&#39;: 48, &#39;train/num_samples_on_rank&#39;: 2}
 
-Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:31&lt;00:00, 31.94s/it]
+Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:31&lt;00:00, 31.82s/it]
 INFO:torchtnt.framework.train:Reached end of train dataloader
 
-Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:31&lt;00:00, 31.94s/it]
+Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:31&lt;00:00, 31.82s/it]
 
 INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
 
 Eval Epoch 0:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.41it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.12it/s]
 INFO:root:Done eval epoch, aggregating metrics
 INFO:root:Finished aggregating metrics: 
-  val/atoms_per_second: 576.6097
+  val/atoms_per_second: 555.4082
   val/epoch: 0.0000
   val/loss: 61.0236
   val/omat.val,energy,mae: 97.6377
   val/omat.val,energy,per_atom_mae: 3.0512
 
 
-Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.36it/s]
+Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.08it/s]
 
 INFO:torchtnt.framework.train:Ended train epoch
 INFO:torchtnt.framework.train:After train epoch, train progress: num_epochs_completed = 1, num_steps_completed = 1
@@ -923,27 +921,27 @@ INFO:root:at beginning of epoch 1, setting sampler start step to 0
 Train Epoch 1:   0%|                                     | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.21it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  3.73it/s]
 INFO:torchtnt.framework.train:Reached end of train dataloader
 
-Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.21it/s]
+Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  3.72it/s]
 
 INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
 
 Eval Epoch 1:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.31it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.60it/s]
 INFO:root:Done eval epoch, aggregating metrics
 INFO:root:Finished aggregating metrics: 
-  val/atoms_per_second: 637.3581
+  val/atoms_per_second: 586.3341
   val/epoch: 0.0000
   val/loss: 61.0235
   val/omat.val,energy,mae: 97.6376
   val/omat.val,energy,per_atom_mae: 3.0512
 
 
-Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.25it/s]
+Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.55it/s]
 
 INFO:torchtnt.framework.train:Ended train epoch
 INFO:torchtnt.framework.train:After train epoch, train progress: num_epochs_completed = 2, num_steps_completed = 2

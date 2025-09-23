@@ -163,7 +163,7 @@ Module Contents
 
 .. py:function:: convert_train_checkpoint_to_inference_checkpoint(dcp_checkpoint_loc: str, checkpoint_loc: str) -> None
 
-.. py:function:: initialize_finetuning_model(checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None) -> torch.nn.Module
+.. py:function:: initialize_finetuning_model(checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None, strict: bool = True) -> torch.nn.Module
 
 .. py:function:: get_output_mask(batch: fairchem.core.datasets.atomic_data.AtomicData, task: Task) -> dict[str, torch.Tensor]
 

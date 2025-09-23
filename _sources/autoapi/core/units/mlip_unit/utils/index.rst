@@ -26,7 +26,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: load_inference_model(checkpoint_location: str, overrides: dict | None = None, use_ema: bool = False, return_checkpoint: bool = True) -> tuple[torch.nn.Module, fairchem.core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint] | torch.nn.Module
+.. py:function:: load_inference_model(checkpoint_location: str, overrides: dict | None = None, use_ema: bool = False, return_checkpoint: bool = True, strict: bool = True) -> tuple[torch.nn.Module, fairchem.core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint] | torch.nn.Module
 
 .. py:function:: load_tasks(checkpoint_location: str) -> list[fairchem.core.units.mlip_unit.mlip_unit.Task]
 

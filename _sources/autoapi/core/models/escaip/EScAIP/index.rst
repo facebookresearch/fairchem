@@ -1,0 +1,325 @@
+core.models.escaip.EScAIP
+=========================
+
+.. py:module:: core.models.escaip.EScAIP
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   core.models.escaip.EScAIP.EScAIPBackbone
+   core.models.escaip.EScAIP.EScAIPHeadBase
+   core.models.escaip.EScAIP.EScAIPDirectForceHead
+   core.models.escaip.EScAIP.EScAIPEnergyHead
+   core.models.escaip.EScAIP.EScAIPGradientEnergyForceStressHead
+
+
+Module Contents
+---------------
+
+.. py:class:: EScAIPBackbone(**kwargs)
+
+   Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.BackboneInterface`
+
+
+   Efficiently Scaled Attention Interactomic Potential (EScAIP) backbone model.
+
+
+   .. py:attribute:: global_cfg
+
+
+   .. py:attribute:: molecular_graph_cfg
+
+
+   .. py:attribute:: gnn_cfg
+
+
+   .. py:attribute:: reg_cfg
+
+
+   .. py:attribute:: regress_forces
+
+
+   .. py:attribute:: direct_forces
+
+
+   .. py:attribute:: regress_stress
+
+
+   .. py:attribute:: dataset_list
+
+
+   .. py:attribute:: max_num_elements
+
+
+   .. py:attribute:: max_neighbors
+
+
+   .. py:attribute:: cutoff
+
+
+   .. py:attribute:: data_preprocess
+
+
+   .. py:attribute:: input_block
+
+
+   .. py:attribute:: transformer_blocks
+
+
+   .. py:attribute:: readout_layers
+
+
+   .. py:attribute:: output_projection
+
+
+   .. py:method:: compiled_forward(data: fairchem.core.models.escaip.custom_types.GraphAttentionData)
+
+
+   .. py:method:: forward(data: fairchem.core.datasets.atomic_data.AtomicData)
+
+      Backbone forward.
+
+      :param data: Atomic systems as input
+      :type data: AtomicData
+
+      :returns: **embedding** -- Return backbone embeddings for the given input
+      :rtype: dict[str->torch.Tensor]
+
+
+
+   .. py:method:: no_weight_decay()
+
+
+   .. py:method:: init_weights()
+
+
+.. py:class:: EScAIPHeadBase(backbone: EScAIPBackbone)
+
+   Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.base.HeadInterface`
+
+
+   Base class for all neural network modules.
+
+   Your models should also subclass this class.
+
+   Modules can also contain other Modules, allowing them to be nested in
+   a tree structure. You can assign the submodules as regular attributes::
+
+       import torch.nn as nn
+       import torch.nn.functional as F
+
+       class Model(nn.Module):
+           def __init__(self) -> None:
+               super().__init__()
+               self.conv1 = nn.Conv2d(1, 20, 5)
+               self.conv2 = nn.Conv2d(20, 20, 5)
+
+           def forward(self, x):
+               x = F.relu(self.conv1(x))
+               return F.relu(self.conv2(x))
+
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
+
+   .. note::
+       As per the example above, an ``__init__()`` call to the parent class
+       must be made before assignment on the child.
+
+   :ivar training: Boolean represents whether this module is in training or
+                   evaluation mode.
+   :vartype training: bool
+
+
+   .. py:attribute:: global_cfg
+
+
+   .. py:attribute:: molecular_graph_cfg
+
+
+   .. py:attribute:: gnn_cfg
+
+
+   .. py:attribute:: reg_cfg
+
+
+   .. py:attribute:: regress_forces
+
+
+   .. py:attribute:: direct_forces
+
+
+   .. py:method:: post_init(gain=1.0)
+
+
+   .. py:method:: no_weight_decay()
+
+
+.. py:class:: EScAIPDirectForceHead(backbone: EScAIPBackbone)
+
+   Bases: :py:obj:`EScAIPHeadBase`
+
+
+   Base class for all neural network modules.
+
+   Your models should also subclass this class.
+
+   Modules can also contain other Modules, allowing them to be nested in
+   a tree structure. You can assign the submodules as regular attributes::
+
+       import torch.nn as nn
+       import torch.nn.functional as F
+
+       class Model(nn.Module):
+           def __init__(self) -> None:
+               super().__init__()
+               self.conv1 = nn.Conv2d(1, 20, 5)
+               self.conv2 = nn.Conv2d(20, 20, 5)
+
+           def forward(self, x):
+               x = F.relu(self.conv1(x))
+               return F.relu(self.conv2(x))
+
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
+
+   .. note::
+       As per the example above, an ``__init__()`` call to the parent class
+       must be made before assignment on the child.
+
+   :ivar training: Boolean represents whether this module is in training or
+                   evaluation mode.
+   :vartype training: bool
+
+
+   .. py:attribute:: force_direction_layer
+
+
+   .. py:attribute:: force_magnitude_layer
+
+
+   .. py:attribute:: node_norm
+
+
+   .. py:attribute:: edge_norm
+
+
+   .. py:method:: compiled_forward(edge_features, node_features, data: fairchem.core.models.escaip.custom_types.GraphAttentionData)
+
+
+   .. py:method:: forward(data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
+
+      Head forward.
+
+      :param data: Atomic systems as input
+      :type data: AtomicData
+      :param emb: Embeddings of the input as generated by the backbone
+      :type emb: dict[str->torch.Tensor]
+
+      :returns: **outputs** -- Return one or more targets generated by this head
+      :rtype: dict[str->torch.Tensor]
+
+
+
+.. py:class:: EScAIPEnergyHead(backbone: EScAIPBackbone)
+
+   Bases: :py:obj:`EScAIPHeadBase`
+
+
+   Base class for all neural network modules.
+
+   Your models should also subclass this class.
+
+   Modules can also contain other Modules, allowing them to be nested in
+   a tree structure. You can assign the submodules as regular attributes::
+
+       import torch.nn as nn
+       import torch.nn.functional as F
+
+       class Model(nn.Module):
+           def __init__(self) -> None:
+               super().__init__()
+               self.conv1 = nn.Conv2d(1, 20, 5)
+               self.conv2 = nn.Conv2d(20, 20, 5)
+
+           def forward(self, x):
+               x = F.relu(self.conv1(x))
+               return F.relu(self.conv2(x))
+
+   Submodules assigned in this way will be registered, and will also have their
+   parameters converted when you call :meth:`to`, etc.
+
+   .. note::
+       As per the example above, an ``__init__()`` call to the parent class
+       must be made before assignment on the child.
+
+   :ivar training: Boolean represents whether this module is in training or
+                   evaluation mode.
+   :vartype training: bool
+
+
+   .. py:attribute:: energy_layer
+
+
+   .. py:attribute:: energy_reduce
+
+
+   .. py:attribute:: use_global_readout
+
+
+   .. py:attribute:: node_norm
+
+
+   .. py:method:: compiled_forward(emb)
+
+
+   .. py:method:: forward(data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
+
+      Head forward.
+
+      :param data: Atomic systems as input
+      :type data: AtomicData
+      :param emb: Embeddings of the input as generated by the backbone
+      :type emb: dict[str->torch.Tensor]
+
+      :returns: **outputs** -- Return one or more targets generated by this head
+      :rtype: dict[str->torch.Tensor]
+
+
+
+.. py:class:: EScAIPGradientEnergyForceStressHead(backbone: EScAIPBackbone, prefix: str | None = None, wrap_property: bool = True)
+
+   Bases: :py:obj:`EScAIPEnergyHead`
+
+
+   Do not support torch.compile
+
+
+   .. py:attribute:: regress_stress
+
+
+   .. py:attribute:: regress_forces
+
+
+   .. py:attribute:: prefix
+
+
+   .. py:attribute:: wrap_property
+
+
+   .. py:method:: forward(data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
+
+      Head forward.
+
+      :param data: Atomic systems as input
+      :type data: AtomicData
+      :param emb: Embeddings of the input as generated by the backbone
+      :type emb: dict[str->torch.Tensor]
+
+      :returns: **outputs** -- Return one or more targets generated by this head
+      :rtype: dict[str->torch.Tensor]
+
+
+

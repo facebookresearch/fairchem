@@ -19,6 +19,7 @@ Submodules
    :maxdepth: 1
 
    /autoapi/core/models/base/index
+   /autoapi/core/models/escaip/index
    /autoapi/core/models/uma/index
    /autoapi/core/models/utils/index
 
