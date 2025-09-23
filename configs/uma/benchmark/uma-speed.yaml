@@ -15,7 +15,7 @@ runner:
     tf32: True
     activation_checkpointing: True
     merge_mole: True
-    compile: False
-    wigner_cuda: True
+    compile: True
+    wigner_cuda: False
     external_graph_gen: True
     internal_graph_gen_version: 2

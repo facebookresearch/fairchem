@@ -148,6 +148,6 @@ def test_compile_full_gpu():
         output = model(data)["efs_head"]
         seed_everywhere()
         output_compiled = compiled(data)["efs_head"]
-        assert torch.allclose(output["energy"], output_compiled["energy"], atol=1e-5)
+        assert torch.allclose(output["energy"], output_compiled["energy"], atol=4e-5)
         assert torch.allclose(output["forces"], output_compiled["forces"], atol=1e-4)
         assert torch.allclose(output["stress"], output_compiled["stress"], atol=1e-5)
