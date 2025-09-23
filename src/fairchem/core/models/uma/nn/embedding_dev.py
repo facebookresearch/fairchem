@@ -164,7 +164,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 )
 
         if gp_utils.initialized():
-            x = gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+            x = gp_utils.gather_from_model_parallel_region_sum_grad(
                 x, natoms, gloo_backend=gloo_backend
             )
 
