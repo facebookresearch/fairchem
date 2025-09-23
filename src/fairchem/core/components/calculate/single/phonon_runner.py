@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import traceback
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 import numpy as np
 import pandas as pd
@@ -21,6 +21,9 @@ from fairchem.core.components.calculate import CalculateRunner
 from fairchem.core.components.calculate.recipes.phonons import (
     run_mdr_phonon_benchmark,
 )
+
+if TYPE_CHECKING:
+    from ase.calculators.calculator import Calculator
 
 
 def get_mdr_phonon_data_list(index_df_path, phonon_file_path, debug=False):
@@ -39,8 +42,8 @@ class MDRPhononRunner(CalculateRunner):
 
     def __init__(
         self,
-        calculator,
-        input_data,
+        calculator: Calculator,
+        input_data: Sequence[dict],
         displacement: float = 0.01,
     ):
         """Initialize the CalculateRunner with a calculator and input data.

@@ -10,6 +10,7 @@ from __future__ import annotations
 from .adsorbml_runner import AdsorbMLRunner
 from .adsorption_runner import AdsorptionRunner
 from .adsorption_singlepoint_runner import AdsorptionSinglePointRunner
+from .atoms_sequence import AtomsSequence
 from .elasticity_runner import ElasticityRunner
 from .kappa_runner import KappaRunner
 from .nve_md_runner import NVEMDRunner
@@ -20,6 +21,7 @@ from .relaxation_runner import RelaxationRunner
 from .singlepoint_runner import SinglePointRunner
 
 __all__ = [
+    "AtomsSequence",
     "AdsorptionRunner",
     "AdsorbMLRunner",
     "AdsorptionSinglePointRunner",
