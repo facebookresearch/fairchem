@@ -14,9 +14,8 @@ from torch import distributed as dist
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
-    gather_from_model_parallel_region,
     scatter_to_model_parallel_region,
-    gather_from_model_parallel_region_sum_grad_noasync
+    gather_from_model_parallel_region_sum_grad
 )
 from fairchem.core.common.test_utils import (
     PGConfig,
@@ -85,9 +84,9 @@ def test_scatter_tensors(
         assert torch.equal(out, expected_out)
 
 
-def scatter_gather_fn(input: torch.Tensor, dim: int = 0):
+def scatter_gather_fn(input: torch.Tensor):
     x = scatter_to_model_parallel_region(input)
-    return gather_from_model_parallel_region_sum_grad_noasync(x, input.shape[0], True)
+    return gather_from_model_parallel_region_sum_grad(x, input.shape[0], True)
 
 
 @pytest.mark.parametrize(
@@ -209,7 +208,7 @@ def gather_sum_bwd_test(rank=-1):
     if rank < 0:
         rank = dist.get_rank()
         x = torch.tensor([rank + 2], requires_grad=True, dtype=torch.float)
-        x_full = gather_from_model_parallel_region_sum_grad_noasync(x, gp_utils.get_gp_world_size(),True)
+        x_full = gather_from_model_parallel_region_sum_grad(x, gp_utils.get_gp_world_size(),True)
         energy = (x_full.prod() + rank + 1) ** 2
         # sum
         energy = gp_utils.reduce_from_model_parallel_region(energy)
@@ -329,21 +328,6 @@ def test_scatter_prod_reduce():
                 output_tensor[key], expected_output[key]
             ).all(), f"Failed closeness check for {key}"
 
-
-def layer(x, target_rank):
-    rank = dist.get_rank()
-
-    x_full = gather_from_model_parallel_region(x, 0)
-    x_prod = x_full.prod()
-    # backward graphs need to be same operation wise
-    # otherwise might miss a dist sync
-    if rank == target_rank:
-        x = x * 0 + x_prod
-    else:
-        x = x * 0 + x_prod * 0.0 + (rank + 1)
-    return x
-
-
 def embeddings_and_graph_init(atomic_numbers, edge_index):
     if gp_utils.initialized():
         node_partition = torch.split(
@@ -403,7 +387,7 @@ def simple_layer(x, edge_index, node_offset, natoms, n=3):
     new_node_embedding.index_add_(0, edge_index[1] - node_offset, edge_embeddings)
 
     if gp_utils.initialized():
-        return gp_utils.gather_from_model_parallel_region_sum_grad_noasync(
+        return gp_utils.gather_from_model_parallel_region_sum_grad(
             new_node_embedding, natoms, gloo_backend=True
         )
     else: 
