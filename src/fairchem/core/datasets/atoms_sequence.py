@@ -24,7 +24,7 @@ class AtomsSequence(Protocol):
     @overload
     def __getitem__(self, index: slice) -> AtomsSequence: ...
 
-    def __getitem__(self, index): ...
+    def __getitem__(self, index) -> Atoms | AtomsSequence: ...
 
     def __len__(self) -> int: ...
 
@@ -37,7 +37,7 @@ class AtomsDatasetSequence:
     def __init__(self, dataset: AseAtomsDataset):
         self.dataset = dataset
 
-    def __getitem__(self, index) -> Atoms:
+    def __getitem__(self, index: int | slice) -> Atoms | AtomsSequence:
         if isinstance(index, Number):
             return self.dataset.get_atoms(index)
         else:
