@@ -118,6 +118,7 @@ def test_multiple_dataset_predict(uma_predict_unit):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
+@pytest.mark.xdist_group(name="serial_params")
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "workers, device", [(1, "cpu"), (2, "cpu"), (4, "cpu"), (1, "cuda")]
