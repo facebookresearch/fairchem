@@ -5,7 +5,7 @@ The OMat24 dataset is available for download from [this](https://huggingface.co/
 Pretrained eqV2 and eSEN models can be downloaded from HuggingFace [here](https://huggingface.co/facebook/OMAT24) and
 UMA models [here](https://huggingface.co/facebook/UMA).
 
-The VASP sets used to generate OMat24 data are implemented as `pymatgen` `VaspInputSets` in the package. You can
+The VASP sets used to generate OMat24 data are implemented as `pymatgen` `VaspInputSets`. You can
 generate OMat24 VASP inputs as follows,
 
 ```python
