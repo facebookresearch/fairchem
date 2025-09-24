@@ -13,6 +13,7 @@ Submodules
    /autoapi/core/datasets/_utils/index
    /autoapi/core/datasets/ase_datasets/index
    /autoapi/core/datasets/atomic_data/index
+   /autoapi/core/datasets/atoms_sequence/index
    /autoapi/core/datasets/base_dataset/index
    /autoapi/core/datasets/common_structures/index
    /autoapi/core/datasets/embeddings/index

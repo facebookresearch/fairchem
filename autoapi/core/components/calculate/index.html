@@ -323,6 +323,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/_utils/index.html">core.datasets._utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../datasets/atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/common_structures/index.html">core.datasets.common_structures</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../datasets/embeddings/index.html">core.datasets.embeddings</a></li>
@@ -640,25 +641,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.run"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.run()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.calculate"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.calculate()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.write_results"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.write_results()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.save_state"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.save_state()</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._calculate_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._calculate_properties</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_relaxed_atoms</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._normalize_properties_by"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._normalize_properties_by</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_target_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_target_properties</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._relax_kwargs"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._relax_kwargs</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.calculate"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.calculate()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.write_results"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.write_results()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.save_state"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.save_state()</span></code></a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
@@ -681,19 +663,9 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="adsorbml_runner/index.html">core.components.calculate.adsorbml_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adsorption_runner/index.html">core.components.calculate.adsorption_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="adsorption_singlepoint_runner/index.html">core.components.calculate.adsorption_singlepoint_runner</a></li>
 <li class="toctree-l1"><a class="reference internal" href="calculate_runner/index.html">core.components.calculate.calculate_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="elasticity_runner/index.html">core.components.calculate.elasticity_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="kappa_runner/index.html">core.components.calculate.kappa_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="nve_md_runner/index.html">core.components.calculate.nve_md_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="omol_runner/index.html">core.components.calculate.omol_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="pairwise_ct_runner/index.html">core.components.calculate.pairwise_ct_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="phonon_runner/index.html">core.components.calculate.phonon_runner</a></li>
 <li class="toctree-l1"><a class="reference internal" href="recipes/index.html">core.components.calculate.recipes</a></li>
-<li class="toctree-l1"><a class="reference internal" href="relaxation_runner/index.html">core.components.calculate.relaxation_runner</a></li>
-<li class="toctree-l1"><a class="reference internal" href="singlepoint_runner/index.html">core.components.calculate.singlepoint_runner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="single/index.html">core.components.calculate.single</a></li>
 </ul>
 </div>
 </section>
@@ -703,12 +675,6 @@ LICENSE file in the root directory of this source tree.</p>
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.CalculateRunner" title="core.components.calculate.CalculateRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CalculateRunner</span></code></a></p></td>
 <td><p>Runner to run calculations/predictions using an ASE-like calculator and save results to file.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.components.calculate.ElasticityRunner" title="core.components.calculate.ElasticityRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ElasticityRunner</span></code></a></p></td>
-<td><p>Calculate elastic tensor for a set of structures.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.RelaxationRunner" title="core.components.calculate.RelaxationRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RelaxationRunner</span></code></a></p></td>
-<td><p>Relax a sequence of several structures/molecules.</p></td>
 </tr>
 </tbody>
 </table>
@@ -878,164 +844,6 @@ and writes the results to the specified directory.</p>
 
 </dd></dl>
 
-<dl class="py class">
-<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">ElasticityRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.AseDBDataset</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.ElasticityRunner" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate.CalculateRunner</span></code></p>
-<p>Calculate elastic tensor for a set of structures.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.result_glob_pattern">
-<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'elasticity_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.ElasticityRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.calculate">
-<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.ElasticityRunner.calculate" title="Link to this definition">#</a></dt>
-<dd><p>Calculate elastic properties for a batch of structures.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
-<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>List of dictionaries containing elastic properties for each structure</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.write_results">
-<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.ElasticityRunner.write_results" title="Link to this definition">#</a></dt>
-<dd><p>Write calculation results to a compressed JSON file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
-<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
-<li><p><strong>job_num</strong> – Index of the current job</p></li>
-<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.save_state">
-<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.ElasticityRunner.save_state" title="Link to this definition">#</a></dt>
-<dd><p>Save the current state of the calculation to a checkpoint.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
-<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">RelaxationRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.AseDBDataset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calculate_properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_relaxed_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_properties_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_target_properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">relax_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.RelaxationRunner" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate.CalculateRunner</span></code></p>
-<p>Relax a sequence of several structures/molecules.</p>
-<p>This class handles the relaxation of atomic structures using a specified calculator,
-processes the input data in chunks, and saves the results.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.result_glob_pattern">
-<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'relaxation_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.RelaxationRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._calculate_properties">
-<span class="sig-name descname"><span class="pre">_calculate_properties</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._calculate_properties" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._save_relaxed_atoms">
-<span class="sig-name descname"><span class="pre">_save_relaxed_atoms</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._save_relaxed_atoms" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._normalize_properties_by">
-<span class="sig-name descname"><span class="pre">_normalize_properties_by</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._normalize_properties_by" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._save_target_properties">
-<span class="sig-name descname"><span class="pre">_save_target_properties</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._save_target_properties" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._relax_kwargs">
-<span class="sig-name descname"><span class="pre">_relax_kwargs</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._relax_kwargs" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.calculate">
-<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner.calculate" title="Link to this definition">#</a></dt>
-<dd><p>Perform relaxation calculations on a subset of structures.</p>
-<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
-<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.write_results">
-<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner.write_results" title="Link to this definition">#</a></dt>
-<dd><p>Write calculation results to a compressed JSON file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
-<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
-<li><p><strong>job_num</strong> – Index of the current job</p></li>
-<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.save_state">
-<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner.save_state" title="Link to this definition">#</a></dt>
-<dd><p>Save the current state of the calculation to a checkpoint.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
-<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
 </section>
 </section>
 
@@ -1102,25 +910,6 @@ processes the input data in chunks, and saves the results.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.save_state"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.save_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.load_state"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.load_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.run"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.run()</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.calculate"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.calculate()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.write_results"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.write_results()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.save_state"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.save_state()</span></code></a></li>
-</ul>
-</li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._calculate_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._calculate_properties</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_relaxed_atoms</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._normalize_properties_by"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._normalize_properties_by</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_target_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_target_properties</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._relax_kwargs"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._relax_kwargs</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.calculate"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.calculate()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.write_results"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.write_results()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.save_state"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.save_state()</span></code></a></li>
 </ul>
 </li>
 </ul>

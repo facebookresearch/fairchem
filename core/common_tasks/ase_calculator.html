@@ -323,6 +323,7 @@
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/_utils/index.html">core.datasets._utils</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/common_structures/index.html">core.datasets.common_structures</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/embeddings/index.html">core.datasets.embeddings</a></li>
@@ -776,19 +777,19 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Starting inference server with config {&#39;workers&#39;: 8}
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2025-09-24 22:56:26,532	INFO worker.py:1951 -- Started a local Ray instance.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2025-09-24 23:48:34,404	INFO worker.py:1951 -- Started a local Ray instance.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Initialized Local MLIPInferenceServerWebSocket with config: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.predict.MLIPPredictUnit&#39;, &#39;inference_model_path&#39;: &#39;/home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1p1.pt&#39;, &#39;device&#39;: &#39;cuda&#39;, &#39;overrides&#39;: None, &#39;inference_settings&#39;: InferenceSettings(tf32=True, activation_checkpointing=False, merge_mole=True, compile=False, wigner_cuda=False, external_graph_gen=False, internal_graph_gen_version=2), &#39;seed&#39;: 41, &#39;atom_refs&#39;: None, &#39;assert_on_nans&#39;: False}, port: 34833, workers: 8
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Initialized Local MLIPInferenceServerWebSocket with config: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.predict.MLIPPredictUnit&#39;, &#39;inference_model_path&#39;: &#39;/home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1p1.pt&#39;, &#39;device&#39;: &#39;cuda&#39;, &#39;overrides&#39;: None, &#39;inference_settings&#39;: InferenceSettings(tf32=True, activation_checkpointing=False, merge_mole=True, compile=False, wigner_cuda=False, external_graph_gen=False, internal_graph_gen_version=2, torch_num_threads=None), &#39;seed&#39;: 41, &#39;atom_refs&#39;: None, &#39;assert_on_nans&#39;: False}, port: 39639, workers: 8
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Server is ready
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:websockets.server:server listening on 127.0.0.1:34833
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:websockets.server:server listening on 127.0.0.1:39639
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WebSocket server started on port 34833
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WebSocket server started on port 39639
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>

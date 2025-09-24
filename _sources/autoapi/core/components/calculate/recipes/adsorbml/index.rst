@@ -12,6 +12,14 @@ core.components.calculate.recipes.adsorbml
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.components.calculate.recipes.adsorbml.data_oc_installed
+
+
 Functions
 ---------
 
@@ -28,6 +36,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: data_oc_installed
+   :value: True
+
 
 .. py:function:: relax_job(initial_atoms, calc, optimizer_cls, fmax, steps)
 
