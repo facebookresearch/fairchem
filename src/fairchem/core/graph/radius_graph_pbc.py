@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
 import math
 
 import numpy as np
@@ -74,10 +73,7 @@ def get_max_neighbors_mask(
     num_neighbors = get_counts(index, num_atoms)
 
     max_num_neighbors = num_neighbors.max()
-    if max_num_neighbors_threshold > 0:
-        num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
-    else:
-        num_neighbors_thresholded = num_neighbors
+    num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
 
     # Get number of (thresholded) neighbors per image
     image_indptr = torch.zeros(natoms.shape[0] + 1, device=device, dtype=torch.long)
@@ -171,7 +167,6 @@ def radius_graph_pbc(
     pbc: torch.Tensor | None = None,
 ):
     pbc = canonical_pbc(data, pbc)
-
     device = data.pos.device
     batch_size = len(data.natoms)
 
@@ -312,6 +307,7 @@ def radius_graph_pbc(
         unit_cell = unit_cell.view(-1, 3)
 
     edge_index = torch.stack((index2, index1))
+    # print("Memory: {}".format(torch.cuda.max_memory_allocated() / 1000000))
 
     return edge_index, unit_cell, num_neighbors_image
 
@@ -320,7 +316,6 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
     if pbc is None and hasattr(data, "pbc"):
         data.pbc = torch.atleast_2d(data.pbc)
-        pbc = torch.BoolTensor([True, True, True])
         for i in range(3):
             if not torch.any(data.pbc[:, i]).item():
                 pbc[i] = False
@@ -343,19 +338,6 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     return list(pbc)
 
 
-def box_size_warning(cell, pos, pbc):
-    if hasattr(box_size_warning, "already_printed"):
-        return
-    box_size_warning.already_printed = True
-    logging.warning(
-        f"PBCv2: graph generation encountered a very large box. The size of the cell is {cell} and min/max positions are {pos.min(),pos.max()}. Performance will be slower than optimal."
-    )
-    if any(pbc):
-        logging.warning(
-            "PBCv2: Does this system require PBC=True or will PBC=False work?"
-        )
-
-
 @torch.no_grad()
 def radius_graph_pbc_v2(
     data,
@@ -373,8 +355,13 @@ def radius_graph_pbc_v2(
         if data.batch is not None
         else data.pos.new_zeros(data.natoms[0], dtype=torch.int)
     )
-    # Resolution of the grid cells, should be less than the radius
+
+    # Resolution of the grid cells, ideally should be less than the radius
     grid_resolution = radius / 1.99
+    # If the grid resolution is too coarse for the cell size, increase it to not exceed memory
+    grid_resolution = max(
+        grid_resolution, torch.max(torch.linalg.vector_norm(data.cell, dim=2)) / 100.0
+    )
 
     # This function assumes that all atoms are within the unti cell. If atoms
     # are outside of the unit cell, it will not work correctly.
@@ -483,15 +470,6 @@ def radius_graph_pbc_v2(
     # is grid_resolution.
 
     # Compute the grid index for each dimension for each atom
-    max_internal_cell = (
-        max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / grid_resolution
-    )
-    if max_internal_cell > 200:
-        box_size_warning(data.cell, data.pos, pbc)
-        grid_resolution = max(
-            grid_resolution,
-            max(source_atom_pos.abs().max(), target_atom_pos.abs().max()) / 200,
-        )
     source_atom_grid = torch.floor(source_atom_pos / grid_resolution).long()
     target_atom_grid = torch.floor(target_atom_pos / grid_resolution).long()
 
@@ -584,6 +562,20 @@ def radius_graph_pbc_v2(
         0, source_atom_grid_id, torch.ones_like(source_atom_grid_id)
     )
 
+    # Many of the grid cells may be empty. Identify which ones are empty
+    # and create a sparse grid cell list only containing those that are non-empty.
+    empty_cells = grid_cell_atom_count.eq(0)
+    grid_sparse_idx = torch.masked_fill(
+        grid_cell_atom_count, torch.logical_not(empty_cells), 1
+    )
+    num_occupied_grid_cells = torch.sum(grid_sparse_idx)
+    grid_sparse_idx = torch.cumsum(grid_sparse_idx, dim=0) - 1
+
+    # Index to use for grid cell if it doesn't exist in the sparse array,
+    # will point to an empty cell.
+    null_grid_index = num_occupied_grid_cells
+    grid_sparse_idx.masked_fill_(empty_cells, null_grid_index)
+
     # Maximum number of atoms in a grid cell used to pad the array of atoms in each
     max_atoms_per_grid_cell = torch.max(grid_cell_atom_count)
 
@@ -594,37 +586,50 @@ def radius_graph_pbc_v2(
     cum_sum_grid_cell_offset = torch.repeat_interleave(
         cum_sum_grid_cell_atom_count, grid_cell_atom_count, dim=0
     )
-    grid_cell_offset = (  # If this OOMs it could be because boxsize is large and PBC is on
-        torch.arange(num_grid_cells, device=device) * max_atoms_per_grid_cell
+
+    # Compute the offsets for each grid cell in the sparse array
+    grid_cell_offset = (
+        grid_sparse_idx[torch.arange(num_grid_cells, device=device)]
+        * max_atoms_per_grid_cell
     )
+
     grid_cell_offset = torch.repeat_interleave(
         grid_cell_offset, grid_cell_atom_count, dim=0
     )
+
     grid_atom_map = (
         torch.arange(len(grid_cell_offset), device=device)
         + grid_cell_offset
         - cum_sum_grid_cell_offset
     )
 
-    # If an entry doesn't have an atom, set to a value of -1
+    # If an entry doesn't have an atom, set to a value of NO_ATOM = -1
+    NO_ATOM = -1
     grid_atom_index = (
         torch.zeros(
-            num_grid_cells * max_atoms_per_grid_cell, dtype=torch.long, device=device
+            num_occupied_grid_cells * max_atoms_per_grid_cell,
+            dtype=torch.long,
+            device=device,
         )
-        - 1
+        + NO_ATOM
     )
+
     # Populate the 2D array with the atom indices
     grid_atom_index[grid_atom_map] = sort_indices
-    grid_atom_index = grid_atom_index.view(num_grid_cells, max_atoms_per_grid_cell)
-    # Add a Null grid cell to the end
+    grid_atom_index = grid_atom_index.view(
+        num_occupied_grid_cells, max_atoms_per_grid_cell
+    )
+
+    # Add a Null grid cell to the end to use as an "empty" cell
+
     grid_atom_index = torch.cat(
         [
             grid_atom_index,
-            torch.zeros(max_atoms_per_grid_cell, device=device).view(1, -1).long() - 1,
+            torch.zeros(max_atoms_per_grid_cell, device=device).view(1, -1).long()
+            + NO_ATOM,
         ],
         dim=0,
     )
-    null_grid_index = num_grid_cells
 
     # How many grid cells do we need to include in each direction given the search radius?
     padding_size = math.floor(radius / grid_resolution) + 1
@@ -648,7 +653,6 @@ def radius_graph_pbc_v2(
     )
     out_of_bounds = torch.logical_and(grid_index.ge(0), grid_index.lt(max_index))
     out_of_bounds = torch.all(out_of_bounds, dim=2).ne(True)
-
     padding_offsets[:, :, 1] = padding_offsets[:, :, 1] * grid_size.unsqueeze(-1)[:, 0]
     padding_offsets[:, :, 2] = (
         padding_offsets[:, :, 2]
@@ -662,6 +666,8 @@ def radius_graph_pbc_v2(
         1, num_padding_grid_cells
     )
     neighboring_grid_cells = neighboring_grid_cells + padding_offsets[target_atom_image]
+    # Map indices to sparse grid cells array
+    neighboring_grid_cells = grid_sparse_idx[neighboring_grid_cells]
 
     # Filter neighboring cells that are out of bounds
     neighboring_grid_cells.masked_fill_(out_of_bounds, null_grid_index)
@@ -672,9 +678,8 @@ def radius_graph_pbc_v2(
         .repeat(1, num_padding_grid_cells, max_atoms_per_grid_cell)
     )
     source_atom_edge_index = grid_atom_index[neighboring_grid_cells]
-
     # Remove padded atoms
-    atom_pad_mask = source_atom_edge_index.ne(-1)
+    atom_pad_mask = source_atom_edge_index.ne(NO_ATOM)
     source_atom_edge_index = torch.masked_select(source_atom_edge_index, atom_pad_mask)
     target_atom_edge_index = torch.masked_select(target_atom_edge_index, atom_pad_mask)
 
