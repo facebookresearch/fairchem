@@ -34,7 +34,6 @@ def main():
         inference_settings=InferenceSettings(
             tf32=True,
             merge_mole=True,
-            wigner_cuda=False,
             compile=False,
             activation_checkpointing=False,
             internal_graph_gen_version=2,

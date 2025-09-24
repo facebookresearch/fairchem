@@ -120,10 +120,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
             )
-        if inference_settings.wigner_cuda is not None:
-            overrides["backbone"]["use_cuda_graph_wigner"] = (
-                inference_settings.wigner_cuda
-            )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
