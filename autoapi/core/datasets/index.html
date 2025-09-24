@@ -224,6 +224,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../molecules/datasets/omol25_elec.html">OMol25 Electronic Structures</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../molecules/datasets/omc25.html">OMC25</a></li>
 </ul>
 </details></li>
@@ -629,7 +630,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.get_atoms"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.get_atoms()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.connect_db"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.connect_db()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.__del__"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.__del__()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.sample_property_metadata"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.sample_property_metadata()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadDataset"><code class="docutils literal notranslate"><span class="pre">AseReadDataset</span></code></a><ul class="nav section-nav flex-column">
@@ -641,7 +641,6 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset._load_dataset_get_ids"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset._load_dataset_get_ids()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset.get_atoms"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset.get_atoms()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset.sample_property_metadata"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset.sample_property_metadata()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset.get_relaxed_energy"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset.get_relaxed_energy()</span></code></a></li>
 </ul>
 </li>
@@ -775,15 +774,20 @@ object. Useful for applying tags, for example.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="core.datasets.AseDBDataset.get_atoms">
 <span class="sig-name descname"><span class="pre">get_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.AseDBDataset.get_atoms" title="Link to this definition">#</a></dt>
-<dd><p>Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
-:param idx: index in dataset
-:type idx: int</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>ASE atoms corresponding to datapoint idx</p>
+<dd><p>Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.</p>
+<dl class="simple">
+<dt>NOTE: if the row data in the database does not include a entry “sid” for the system id,</dt><dd><p>The integer idx will be used.</p>
 </dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>atoms</p>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>idx</strong> (<em>int</em>) – index in dataset</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>ASE atoms corresponding to datapoint idx</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>atoms</p>
 </dd>
 </dl>
 </dd></dl>
@@ -796,11 +800,6 @@ object. Useful for applying tags, for example.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="core.datasets.AseDBDataset.__del__">
 <span class="sig-name descname"><span class="pre">__del__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.AseDBDataset.__del__" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.datasets.AseDBDataset.sample_property_metadata">
-<span class="sig-name descname"><span class="pre">sample_property_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#core.datasets.AseDBDataset.sample_property_metadata" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -934,11 +933,6 @@ object. Useful for applying tags, for example.</p></li>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.datasets.AseReadMultiStructureDataset.sample_property_metadata">
-<span class="sig-name descname"><span class="pre">sample_property_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#core.datasets.AseReadMultiStructureDataset.sample_property_metadata" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
 <dt class="sig sig-object py" id="core.datasets.AseReadMultiStructureDataset.get_relaxed_energy">
 <span class="sig-name descname"><span class="pre">get_relaxed_energy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">identifier</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="headerlink" href="#core.datasets.AseReadMultiStructureDataset.get_relaxed_energy" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -1046,7 +1040,6 @@ object. Useful for applying tags, for example.</p></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.get_atoms"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.get_atoms()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.connect_db"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.connect_db()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.__del__"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.__del__()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseDBDataset.sample_property_metadata"><code class="docutils literal notranslate"><span class="pre">AseDBDataset.sample_property_metadata()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadDataset"><code class="docutils literal notranslate"><span class="pre">AseReadDataset</span></code></a><ul class="nav section-nav flex-column">
@@ -1058,7 +1051,6 @@ object. Useful for applying tags, for example.</p></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset._load_dataset_get_ids"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset._load_dataset_get_ids()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset.get_atoms"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset.get_atoms()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset.sample_property_metadata"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset.sample_property_metadata()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.AseReadMultiStructureDataset.get_relaxed_energy"><code class="docutils literal notranslate"><span class="pre">AseReadMultiStructureDataset.get_relaxed_energy()</span></code></a></li>
 </ul>
 </li>

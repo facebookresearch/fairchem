@@ -105,9 +105,6 @@ Module Contents
 
 
 
-   .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict
-
-
    .. py:method:: get_metadata(attr, idx)
 
 
@@ -239,9 +236,6 @@ Module Contents
    .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
 
-   .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict
-
-
    .. py:method:: get_relaxed_energy(identifier) -> float
 
 
@@ -311,6 +305,10 @@ Module Contents
    .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
       Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
+
+      NOTE: if the row data in the database does not include a entry "sid" for the system id,
+          The integer idx will be used.
+
       :param idx: index in dataset
       :type idx: int
 
@@ -325,8 +323,5 @@ Module Contents
 
 
    .. py:method:: __del__()
-
-
-   .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict
 
 

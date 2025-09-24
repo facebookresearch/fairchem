@@ -108,6 +108,10 @@ Package Contents
    .. py:method:: get_atoms(idx: int) -> ase.Atoms
 
       Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
+
+      NOTE: if the row data in the database does not include a entry "sid" for the system id,
+          The integer idx will be used.
+
       :param idx: index in dataset
       :type idx: int
 
@@ -122,9 +126,6 @@ Package Contents
 
 
    .. py:method:: __del__()
-
-
-   .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict
 
 
 .. py:class:: AseReadDataset(config: dict, atoms_transform: Callable[[ase.Atoms, Any, Ellipsis], ase.Atoms] = apply_one_tags)
@@ -253,9 +254,6 @@ Package Contents
 
 
    .. py:method:: get_atoms(idx: int) -> ase.Atoms
-
-
-   .. py:method:: sample_property_metadata(num_samples: int = 100) -> dict
 
 
    .. py:method:: get_relaxed_energy(identifier) -> float
