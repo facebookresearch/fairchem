@@ -37,7 +37,7 @@ def compute_neighbors(data, edge_index):
 
     # Get number of neighbors per image
     image_indptr = torch.zeros(
-        data.natoms.shape[0] + 1, device=data.pos.device, dtype=torch.long
+        data.natoms.shape[0] + 1, device=data.pos.device, dtype=torch.int
     )
     image_indptr[1:] = torch.cumsum(data.natoms, dim=0)
     return sum_partitions(num_neighbors, image_indptr)
@@ -76,7 +76,7 @@ def get_max_neighbors_mask(
     num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
 
     # Get number of (thresholded) neighbors per image
-    image_indptr = torch.zeros(natoms.shape[0] + 1, device=device, dtype=torch.long)
+    image_indptr = torch.zeros(natoms.shape[0] + 1, device=device, dtype=torch.int)
     image_indptr[1:] = torch.cumsum(natoms, dim=0)
     num_neighbors_image = sum_partitions(num_neighbors_thresholded, image_indptr)
 
@@ -175,7 +175,7 @@ def radius_graph_pbc(
 
     # Before computing the pairwise distances between atoms, first create a list of atom indices to compare for the entire batch
     num_atoms_per_image = data.natoms
-    num_atoms_per_image_sqr = (num_atoms_per_image**2).long()
+    num_atoms_per_image_sqr = (num_atoms_per_image**2).int()
 
     # index offset between images
     index_offset = torch.cumsum(num_atoms_per_image, dim=0) - num_atoms_per_image
@@ -403,7 +403,7 @@ def radius_graph_pbc_v2(
     rep = torch.cat([rep_a1.view(-1, 1), rep_a2.view(-1, 1), rep_a3.view(-1, 1)], dim=1)
     cells_per_image = (
         (rep[:, 0] * 2 + 1.0) * (rep[:, 1] * 2 + 1.0) * (rep[:, 2] * 2 + 1.0)
-    ).long()
+    ).int()
 
     # Create a tensor of unit cells for each image
     unit_cell = torch.zeros(
@@ -426,6 +426,7 @@ def radius_graph_pbc_v2(
         offset = offset + cells_per_image[i]
 
     # Compute the x, y, z positional offsets for each cell in each image
+    # TODO can optimize for single system generation
     cell_matrix = torch.transpose(data.cell, 1, 2)
     cell_matrix = torch.repeat_interleave(cell_matrix, cells_per_image, dim=0)
     pbc_cell_offsets = torch.bmm(cell_matrix, unit_cell.view(-1, 3, 1)).squeeze(-1)
@@ -439,19 +440,19 @@ def radius_graph_pbc_v2(
     # tiled by the PBC cells.
     num_cells_per_atom = torch.repeat_interleave(cells_per_image, num_atoms_per_image)
     source_atom_index = torch.repeat_interleave(
-        torch.arange(num_atoms, device=device).long(), num_cells_per_atom
+        torch.arange(num_atoms, device=device).int(), num_cells_per_atom
     )
     source_atom_image = data_batch_idxs[source_atom_index]
     source_atom_pos = atom_pos[source_atom_index]
 
     # For each atom the index of the PBC cell
-    pbc_cell_index = torch.tensor([], device=device).long()
+    pbc_cell_index = torch.tensor([], device=device).int()
     offset = 0
     for i in range(batch_size):
         cell_indices = (
             torch.arange(offset, offset + cells_per_image[i], device=device)
             .repeat(num_atoms_per_image[i])
-            .long()
+            .int()
         )
         pbc_cell_index = torch.cat([pbc_cell_index, cell_indices], dim=0)
         offset = offset + cells_per_image[i]
@@ -470,8 +471,8 @@ def radius_graph_pbc_v2(
     # is grid_resolution.
 
     # Compute the grid index for each dimension for each atom
-    source_atom_grid = torch.floor(source_atom_pos / grid_resolution).long()
-    target_atom_grid = torch.floor(target_atom_pos / grid_resolution).long()
+    source_atom_grid = torch.floor(source_atom_pos / grid_resolution).int()
+    target_atom_grid = torch.floor(target_atom_pos / grid_resolution).int()
 
     # Find the min and max grid index for each image
     unique_atom_image, num_source_atoms_per_image = torch.unique(
@@ -490,7 +491,7 @@ def radius_graph_pbc_v2(
         source_atom_offset_per_image, num_source_atoms_per_image, 0
     )
     source_atom_mapping = (
-        torch.arange(len(source_atom_offset_per_image), device=device, dtype=torch.long)
+        torch.arange(len(source_atom_offset_per_image), device=device, dtype=torch.int)
         - source_atom_offset_per_image
     )
     source_atom_mapping = (
@@ -501,7 +502,7 @@ def radius_graph_pbc_v2(
 
     # Create 2D array
     source_atom_grid_per_image = torch.zeros(
-        batch_size * max_num_source_atoms, 3, device=device, dtype=torch.long
+        batch_size * max_num_source_atoms, 3, device=device, dtype=torch.int
     )
     # Populate with the grid values
     source_atom_grid_per_image[source_atom_mapping] = source_atom_grid
@@ -517,7 +518,11 @@ def radius_graph_pbc_v2(
     grid_length = grid_size[:, 0] * grid_size[:, 1] * grid_size[:, 2]
     # Offset between grids for each image
     grid_offset = torch.cat(
-        [torch.tensor([0], device=device), torch.cumsum(grid_length, dim=0)], dim=0
+        [
+            torch.tensor([0], device=device, dtype=torch.int),
+            torch.cumsum(grid_length, dim=0).to(torch.int),
+        ],
+        dim=0,
     )
 
     num_grid_cells = torch.sum(grid_length)
@@ -608,14 +613,14 @@ def radius_graph_pbc_v2(
     grid_atom_index = (
         torch.zeros(
             num_occupied_grid_cells * max_atoms_per_grid_cell,
-            dtype=torch.long,
+            dtype=torch.int,
             device=device,
         )
         + NO_ATOM
     )
 
     # Populate the 2D array with the atom indices
-    grid_atom_index[grid_atom_map] = sort_indices
+    grid_atom_index[grid_atom_map] = sort_indices.to(torch.int)
     grid_atom_index = grid_atom_index.view(
         num_occupied_grid_cells, max_atoms_per_grid_cell
     )
@@ -625,7 +630,7 @@ def radius_graph_pbc_v2(
     grid_atom_index = torch.cat(
         [
             grid_atom_index,
-            torch.zeros(max_atoms_per_grid_cell, device=device).view(1, -1).long()
+            torch.zeros(max_atoms_per_grid_cell, device=device).view(1, -1).int()
             + NO_ATOM,
         ],
         dim=0,
@@ -638,7 +643,7 @@ def radius_graph_pbc_v2(
     )
 
     padding_offsets = torch.arange(
-        -padding_size, padding_size + 1, device=device, dtype=torch.long
+        -padding_size, padding_size + 1, device=device, dtype=torch.int
     )
     padding_offsets = padding_offsets.view(1, -1).repeat(3, 1)
     padding_offsets = torch.cartesian_prod(
