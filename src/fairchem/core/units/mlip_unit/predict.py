@@ -130,6 +130,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 inference_settings.internal_graph_gen_version
             )
 
+        if inference_settings.wigner_cuda:
+            logging.warning(
+                "The wigner_cuda flag is deprecated and will be removed in future versions."
+            )
+
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
