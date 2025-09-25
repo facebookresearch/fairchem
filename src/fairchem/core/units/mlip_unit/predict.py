@@ -476,6 +476,16 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
         num_workers: int = 1,
     ):
         super().__init__()
+        _mlip_pred_unit = MLIPPredictUnit(
+            inference_model_path=inference_model_path,
+            device="cpu",
+            overrides=overrides,
+            inference_settings=inference_settings,
+            seed=seed,
+            atom_refs=atom_refs,
+        )
+        self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
+
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
             "inference_model_path": inference_model_path,
@@ -519,3 +529,7 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
         # the rest of the futures should go out of scope and memory garbage collected
         ready_ids, _ = ray.wait(futures, num_returns=1)
         return ray.get(ready_ids[0])
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        return self._dataset_to_tasks
