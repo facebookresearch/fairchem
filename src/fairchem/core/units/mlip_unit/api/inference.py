@@ -69,6 +69,10 @@ class InferenceSettings:
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
+    # Flag to enable or disable the use of CUDA Graphs for compute
+    # This flag is no longer used and will be removed in future versions
+    wigner_cuda: bool | None = None
+
     # Flag to enable or disable the generation of external graphs during
     # inference. If set to None, the setting from the model checkpoint
     # will be used.
