@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Protocol, Sequence
 import hydra
 import numpy as np
 import torch
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
@@ -35,6 +36,7 @@ from fairchem.core.units.mlip_unit.inference.client_websocket import (
 )
 from fairchem.core.units.mlip_unit.inference.inference_server_ray import (
     MLIPInferenceServerWebSocket,
+    MLIPWorker,
 )
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
@@ -43,6 +45,20 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+try:
+    import ray
+    from ray import remote
+
+    ray_installed = True
+except ImportError:
+    ray = None
+
+    def remote(cls):
+        # dummy
+        return cls
+
+    ray_installed = False
 
 
 def collate_predictions(predict_fn):
@@ -444,3 +460,62 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
         return self._dataset_to_tasks
+
+
+@requires(ray_installed, message="Requires `ray` to be installed")
+class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
+    def __init__(
+        self,
+        inference_model_path: str,
+        device: str = "cpu",
+        overrides: dict | None = None,
+        inference_settings: InferenceSettings | None = None,
+        seed: int = 41,
+        atom_refs: dict | None = None,
+        assert_on_nans: bool = False,
+        num_workers: int = 1,
+    ):
+        super().__init__()
+        predict_unit_config = {
+            "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
+            "inference_model_path": inference_model_path,
+            "device": device,
+            "overrides": overrides,
+            "inference_settings": inference_settings,
+            "seed": seed,
+            "atom_refs": atom_refs,
+            "assert_on_nans": assert_on_nans,
+        }
+        ray.init(
+            logging_level=logging.INFO,
+            runtime_env={
+                "env_vars": {"RAY_DEBUG": "1"},
+            },
+        )
+        options = {"num_gpus": 1} if device == "cuda" else {}
+        # first create rank 0
+        rank0_worker = MLIPWorker.options(**options).remote(
+            0, num_workers, predict_unit_config
+        )
+        master_addr, master_port = ray.get(
+            rank0_worker.get_master_address_and_port.remote()
+        )
+        logging.info(f"Started rank0 on {master_addr}:{master_port}")
+        self.workers = [rank0_worker]
+        self.workers.extend(
+            [
+                MLIPWorker.options(**options).remote(
+                    i, num_workers, predict_unit_config, master_port, master_addr
+                )
+                for i in range(1, num_workers)
+            ]
+        )
+
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
+        futures = [w.predict.remote(data) for w in self.workers]
+        # just get the first result that is ready since they are identical
+        # the rest of the futures should go out of scope and memory garbage collected
+        ready_ids, _ = ray.wait(futures, num_returns=1)
+        return ray.get(ready_ids[0])
