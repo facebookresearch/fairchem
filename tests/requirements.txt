@@ -9,4 +9,4 @@ numpy==2.2.5
 scikit-learn==1.6.1
 lmdb==1.7.3
 pymatgen==v2025.6.14
-ray==2.49.1
+ray==2.49.2
