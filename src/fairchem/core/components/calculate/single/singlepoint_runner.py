@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.recipes.utils import (
     get_property_dict_from_atoms,
 )

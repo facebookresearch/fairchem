@@ -18,7 +18,7 @@ from ase.md.verlet import VelocityVerlet
 from ase.optimize.lbfgs import LBFGS
 from tqdm import tqdm
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator

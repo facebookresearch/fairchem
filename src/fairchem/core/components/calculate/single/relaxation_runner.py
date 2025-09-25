@@ -16,7 +16,7 @@ import pandas as pd
 from monty.dev import requires
 from tqdm import tqdm
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.recipes.relax import (
     relax_atoms,
 )
