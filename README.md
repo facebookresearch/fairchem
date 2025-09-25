@@ -1,10 +1,14 @@
-<h1 align="center">
+[//]: # (<h1 align="center">)
 
-<p align="center">
-  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?
-</p>
+[//]: # ()
+[//]: # (<p align="center">)
 
-</h1>
+[//]: # (  <img width="559" height="200" src="https://github.com/user-attachments/assets/25cd752c-3c56-469d-8524-4e493646f6b2"?)
+
+[//]: # (</p>)
+
+[//]: # ()
+[//]: # (</h1>)
 
 <h4 align="center">
 
@@ -28,6 +32,15 @@ demos, and application efforts for materials science and quantum chemistry.
 > as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
 > :warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!
+
+> [!CAUTION]
+> UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
+> These are not compatible with Materials Project calculations. If you are using UMA or models trained on OMat24 only
+> for such calculations, you can find a OMat24 specific calculations of reference unary compounds and MP2020-style
+> anion and GGA/GGA+U mixing corrections in the [OMat24 Hugging Face repo](https://huggingface.co/datasets/facebook/OMAT24).
+> Do not use MP2020 corrections or use the MP references compounds when using OMat24 trained models. Additional care
+> must be taken when computing energy differences, such as formation and energy above hull and comparing with calculations
+> in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
 
 ## Read our latest release post!
 Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
