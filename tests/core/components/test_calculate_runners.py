@@ -8,24 +8,28 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+from random import choice
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from fairchem.core.components.calculate.single import (
-    ElasticityRunner,
-)
+from fairchem.core import FAIRChemCalculator, pretrained_mlip
+from fairchem.core.components.calculate import ElasticityRunner
 
 
-@pytest.mark.skip(reason="Pending OCPCalculator fix")
-def test_calculate_runner(dummy_binary_dataset, tmp_path):
-    # TODO for now we will use an old OCPCalculator, update this with a new checkpoint
-    calc = None
-    # OCPCalculator(
-    #     model_name="eSCN-L4-M2-Lay12-S2EF-OC20-2M", local_cache=tmp_path
-    # )
-    elastic_runner = ElasticityRunner(calc, input_data=dummy_binary_dataset)
+@pytest.fixture(scope="module")
+def calculator() -> FAIRChemCalculator:
+    uma_sm_models = [
+        model for model in pretrained_mlip.available_models if "_sm" in model
+    ]
+    return FAIRChemCalculator.from_model_checkpoint(
+        choice(uma_sm_models), task_name="omat"
+    )
+
+
+def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):
+    elastic_runner = ElasticityRunner(calculator, input_data=dummy_binary_dataset)
 
     # check running a calculation of all the dataset
     results = elastic_runner.calculate()
@@ -37,7 +41,8 @@ def test_calculate_runner(dummy_binary_dataset, tmp_path):
         assert "errors" in result
         assert "traceback" in result
         if result["elastic_tensor"] is not np.nan:
-            assert np.array(result["elastic_tensor"])
+            etensor = np.array(result["elastic_tensor"])
+            assert np.allclose(etensor, etensor.transpose())
         if result["shear_modulus_vrh"] is not np.nan:
             assert result["shear_modulus_vrh"] > 0
         if result["bulk_modulus_vrh"] is not np.nan:
