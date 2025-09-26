@@ -21,9 +21,10 @@ from tqdm import tqdm
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 
 if TYPE_CHECKING:
-    from ase.calculators.calculator import Calculator
+    from collections.abc import Sequence
 
     from ase import Atoms
+    from ase.calculators.calculator import Calculator
 
 
 from ase.md import MDLogger
