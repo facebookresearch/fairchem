@@ -502,7 +502,7 @@ def compute_structure_matches(
 
     if not target_structures:
         logger.error("No reference structures loaded - skipping evaluation")
-        return
+        return None
 
     if eval_method == "csd":
         # CSD: Local CPU execution
@@ -520,7 +520,7 @@ def compute_structure_matches(
                 )
             )
 
-        p_map(
+        return p_map(
             lambda args: evaluate_structures_file(*args),
             args_list,
             num_cpus=eval_config["num_cpus"],
@@ -551,12 +551,14 @@ def compute_structure_matches(
                 )
             )
 
-        submit_slurm_jobs(
+        return submit_slurm_jobs(
             job_args,
-            output_dir=output_dir / "slurm",
-            job_name="eval_pymatgen",
+            output_dir=output_dir.parent / "slurm",
             **slurm_params,
         )
+    else:
+        logger.error(f"Invalid evaluation method '{eval_method}' specified.")
+        raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
 
 
 if __name__ == "__main__":
