@@ -711,10 +711,7 @@ document.write(`
 <tr class="row-odd"><td><p>compile</p></td>
 <td><p>This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems.</p></td>
 </tr>
-<tr class="row-even"><td><p>wigner_cuda</p></td>
-<td><p>This is a special mode that turns on cuda graphs for the internal Wigner matrix calculations and will lead to significant speed ups for smaller systems</p></td>
-</tr>
-<tr class="row-odd"><td><p>external_graph_gen</p></td>
+<tr class="row-even"><td><p>external_graph_gen</p></td>
 <td><p>Only use this if you want to use an external graph generator. This should be rarely used except for development</p></td>
 </tr>
 </tbody>
@@ -730,7 +727,6 @@ document.write(`
     <span class="n">activation_checkpointing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">merge_mole</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="nb">compile</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">wigner_cuda</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">external_graph_gen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">internal_graph_gen_version</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
 <span class="p">)</span>
@@ -757,7 +753,6 @@ document.write(`
 <span class="n">inference_settings</span> <span class="o">=</span> <span class="n">InferenceSettings</span><span class="p">(</span>
     <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="n">merge_mole</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">wigner_cuda</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="nb">compile</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">activation_checkpointing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">internal_graph_gen_version</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
@@ -777,19 +772,19 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Starting inference server with config {&#39;workers&#39;: 8}
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2025-09-24 23:48:34,404	INFO worker.py:1951 -- Started a local Ray instance.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2025-09-26 22:47:07,217	INFO worker.py:1951 -- Started a local Ray instance.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Initialized Local MLIPInferenceServerWebSocket with config: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.predict.MLIPPredictUnit&#39;, &#39;inference_model_path&#39;: &#39;/home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1p1.pt&#39;, &#39;device&#39;: &#39;cuda&#39;, &#39;overrides&#39;: None, &#39;inference_settings&#39;: InferenceSettings(tf32=True, activation_checkpointing=False, merge_mole=True, compile=False, wigner_cuda=False, external_graph_gen=False, internal_graph_gen_version=2, torch_num_threads=None), &#39;seed&#39;: 41, &#39;atom_refs&#39;: None, &#39;assert_on_nans&#39;: False}, port: 39639, workers: 8
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Initialized Local MLIPInferenceServerWebSocket with config: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.predict.MLIPPredictUnit&#39;, &#39;inference_model_path&#39;: &#39;/home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1p1.pt&#39;, &#39;device&#39;: &#39;cuda&#39;, &#39;overrides&#39;: None, &#39;inference_settings&#39;: InferenceSettings(tf32=True, activation_checkpointing=False, merge_mole=True, compile=False, wigner_cuda=None, external_graph_gen=False, internal_graph_gen_version=2, torch_num_threads=None), &#39;seed&#39;: 41, &#39;atom_refs&#39;: None, &#39;assert_on_nans&#39;: False}, port: 58175, workers: 8
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Server is ready
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:websockets.server:server listening on 127.0.0.1:39639
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:websockets.server:server listening on 127.0.0.1:58175
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WebSocket server started on port 39639
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WebSocket server started on port 58175
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>

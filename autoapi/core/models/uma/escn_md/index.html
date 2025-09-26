@@ -647,7 +647,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.dataset_emb_grad"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.dataset_emb_grad</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.dataset_list"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.dataset_list</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.use_dataset_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.use_dataset_embedding</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.use_cuda_graph_wigner"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.use_cuda_graph_wigner</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.sph_feature_size"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.sph_feature_size</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.mappingReduced"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.mappingReduced</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.SO3_grid"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.SO3_grid</span></code></a></li>
@@ -669,7 +668,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.ff_type"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.ff_type</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.blocks"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.blocks</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.norm"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.norm</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.rot_mat_wigner_cuda"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.rot_mat_wigner_cuda</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone._get_rotmat_and_wigner"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone._get_rotmat_and_wigner()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone._get_displacement_and_cell"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone._get_displacement_and_cell()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.csd_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.csd_embedding()</span></code></a></li>
@@ -924,11 +922,6 @@ evaluation mode.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.models.uma.escn_md.eSCNMDBackbone.use_cuda_graph_wigner">
-<span class="sig-name descname"><span class="pre">use_cuda_graph_wigner</span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone.use_cuda_graph_wigner" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="core.models.uma.escn_md.eSCNMDBackbone.sph_feature_size">
 <span class="sig-name descname"><span class="pre">sph_feature_size</span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone.sph_feature_size" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -1033,14 +1026,9 @@ evaluation mode.</p>
 <span class="sig-name descname"><span class="pre">norm</span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone.norm" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.models.uma.escn_md.eSCNMDBackbone.rot_mat_wigner_cuda">
-<span class="sig-name descname"><span class="pre">rot_mat_wigner_cuda</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone.rot_mat_wigner_cuda" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="core.models.uma.escn_md.eSCNMDBackbone._get_rotmat_and_wigner">
-<span class="sig-name descname"><span class="pre">_get_rotmat_and_wigner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_distance_vecs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cuda_graph</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone._get_rotmat_and_wigner" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">_get_rotmat_and_wigner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_distance_vecs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.Tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone._get_rotmat_and_wigner" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -1575,7 +1563,6 @@ evaluation mode.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.dataset_emb_grad"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.dataset_emb_grad</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.dataset_list"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.dataset_list</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.use_dataset_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.use_dataset_embedding</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.use_cuda_graph_wigner"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.use_cuda_graph_wigner</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.sph_feature_size"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.sph_feature_size</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.mappingReduced"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.mappingReduced</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.SO3_grid"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.SO3_grid</span></code></a></li>
@@ -1597,7 +1584,6 @@ evaluation mode.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.ff_type"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.ff_type</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.blocks"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.blocks</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.norm"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.norm</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.rot_mat_wigner_cuda"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.rot_mat_wigner_cuda</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone._get_rotmat_and_wigner"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone._get_rotmat_and_wigner()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone._get_displacement_and_cell"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone._get_displacement_and_cell()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.csd_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.csd_embedding()</span></code></a></li>

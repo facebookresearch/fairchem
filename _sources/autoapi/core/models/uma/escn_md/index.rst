@@ -142,9 +142,6 @@ Module Contents
    .. py:attribute:: use_dataset_embedding
 
 
-   .. py:attribute:: use_cuda_graph_wigner
-
-
    .. py:attribute:: sph_feature_size
 
 
@@ -208,12 +205,7 @@ Module Contents
    .. py:attribute:: norm
 
 
-   .. py:attribute:: rot_mat_wigner_cuda
-      :value: None
-
-
-
-   .. py:method:: _get_rotmat_and_wigner(edge_distance_vecs: torch.Tensor, use_cuda_graph: bool) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+   .. py:method:: _get_rotmat_and_wigner(edge_distance_vecs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
    .. py:method:: _get_displacement_and_cell(data_dict: fairchem.core.datasets.atomic_data.AtomicData) -> tuple[torch.Tensor | None, torch.Tensor | None]
