@@ -41,7 +41,7 @@ class SinglePointRunner(CalculateRunner):
         self,
         calculator: Calculator,
         input_data: AtomsSequence,
-        calculate_properties: Sequence[str],
+        calculate_properties: Sequence[str] = ["energy"],
         normalize_properties_by: dict[str, str] | None = None,
         save_target_properties: Sequence[str] | None = None,
     ):

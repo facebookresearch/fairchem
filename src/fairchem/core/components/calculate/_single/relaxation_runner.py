@@ -54,7 +54,7 @@ class RelaxationRunner(CalculateRunner):
         self,
         calculator: Calculator,
         input_data: AtomsSequence,
-        calculate_properties: Sequence[str],
+        calculate_properties: Sequence[str] = ["energy"],
         save_relaxed_atoms: bool = True,
         normalize_properties_by: dict[str, str] | None = None,
         save_target_properties: Sequence[str] | None = None,
