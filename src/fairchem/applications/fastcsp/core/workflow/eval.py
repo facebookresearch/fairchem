@@ -168,7 +168,9 @@ def _match_pymatgen(row, target_xtals, logger, ltol=0.2, stol=0.3, angle_tol=5):
         logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None
 
-    matcher = StructureMatcher(ltol=ltol, stol=stol, angle_tol=angle_tol)
+    matcher = StructureMatcher(
+        ltol=ltol, stol=stol, angle_tol=angle_tol, ignored_species=["H"]
+    )
     best_match_refcode = None
     best_rmsd = float("inf")
 
