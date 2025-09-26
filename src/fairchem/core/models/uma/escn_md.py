@@ -400,24 +400,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_index": data_dict["edge_index"],
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
-                "node_offset": 0,
             }
+        graph_dict["node_offset"] = 0  # default value
 
         if gp_utils.initialized():
             graph_dict = self._init_gp_partitions(
                 graph_dict, data_dict["atomic_numbers_full"]
             )
             # create partial atomic numbers and batch tensors for GP
-            node_partition = graph_dict["node_partition"]
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
-                node_partition
+                graph_dict["node_partition"]
             ]
-            data_dict["batch"] = data_dict["batch_full"][node_partition]
-        else:
-            graph_dict["node_offset"] = 0
-            graph_dict["edge_distance_vec_full"] = graph_dict["edge_distance_vec"]
-            graph_dict["edge_distance_full"] = graph_dict["edge_distance"]
-            graph_dict["edge_index_full"] = graph_dict["edge_index"]
+            data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
         return graph_dict
 
@@ -451,24 +445,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping_full, wigner_and_M_mapping_inv_full) = (
+            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
                 self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec_full"],
+                    graph_dict["edge_distance_vec"],
                     use_cuda_graph=self.use_cuda_graph_wigner
                     and "cuda" in get_device_for_local_rank()
                     and not self.training,
                 )
             )
-            if gp_utils.initialized():
-                wigner_and_M_mapping = wigner_and_M_mapping_full[
-                    graph_dict["edge_partition"]
-                ]
-                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full[
-                    graph_dict["edge_partition"]
-                ]
-            else:
-                wigner_and_M_mapping = wigner_and_M_mapping_full
-                wigner_and_M_mapping_inv = wigner_and_M_mapping_inv_full
 
         ###############################################################
         # Initialize node embeddings
@@ -553,8 +537,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         The tensors are split on the dimension along the node index using node_partition.
         """
         edge_index = graph_dict["edge_index"]
-        edge_distance = graph_dict["edge_distance"]
-        edge_distance_vec_full = graph_dict["edge_distance_vec"]
 
         node_partition = torch.tensor_split(
             torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
@@ -570,19 +552,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 edge_index[1] <= node_partition.max(),  # TODO: 0 or 1?
             )
         )[0]
-
-        # full versions of data
-        graph_dict["edge_distance_vec_full"] = edge_distance_vec_full
-        graph_dict["edge_distance_full"] = edge_distance
-        graph_dict["edge_index_full"] = edge_index
-        graph_dict["edge_partition"] = edge_partition
+        graph_dict["node_offset"] = node_partition.min().item()
         graph_dict["node_partition"] = node_partition
-
         # gp versions of data
         graph_dict["edge_index"] = edge_index[:, edge_partition]
-        graph_dict["edge_distance"] = edge_distance[edge_partition]
-        graph_dict["edge_distance_vec"] = edge_distance_vec_full[edge_partition]
-        graph_dict["node_offset"] = node_partition.min().item()
+        graph_dict["edge_distance"] = graph_dict["edge_distance"][edge_partition]
+        graph_dict["edge_distance_vec"] = graph_dict["edge_distance_vec"][
+            edge_partition
+        ]
 
         return graph_dict
 

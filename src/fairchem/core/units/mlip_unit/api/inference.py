@@ -17,6 +17,7 @@ class UMATask(StrEnum):
     OMAT = "omat"
     ODAC = "odac"
     OC20 = "oc20"
+    OC25 = "oc25"
     OMC = "omc"
 
 
@@ -86,6 +87,9 @@ class InferenceSettings:
     # code if external_graph_gen is false, if set of None, will default
     # to whatever is in the checkpoint
     internal_graph_gen_version: int | None = None
+
+    # Number of internal torch threads to use for inference
+    torch_num_threads: int | None = None
 
 
 # this is most general setting that works for most systems and models,

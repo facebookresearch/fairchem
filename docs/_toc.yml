@@ -16,6 +16,7 @@ parts:
   - file: core/common_tasks/summary
     sections:
     - file: core/common_tasks/ase_calculator
+    - file: core/common_tasks/lammps
     - file: core/common_tasks/batch_inference
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
@@ -36,6 +37,7 @@ parts:
   - file: molecules/datasets/summary
     sections:
     - file: molecules/datasets/omol25
+    - file: molecules/datasets/omol25_elec
     - file: molecules/datasets/omc25
   - file: molecules/models
   - file: molecules/leaderboard
