@@ -58,17 +58,24 @@ post_relaxation_filter:       # After ML relaxation
 evaluate:
   method: csd               # Either "csd" or "pymatgen"
   target_xtals_dir: /path/to/experimental/crystal/structures # Directory with experimental structures (CIF format)
+  # NOTE: Optional if molecules CSV file contains "cif_path" column
+  # Alternative: Use molecules CSV file with cif_path column instead of target_xtals_dir
+  # If molecules file contains "cif_path" column:
+  #   - Single refcode: cif_path should point to a .cif file or directory containing {refcode}.cif
+  #   - Multiple refcodes (comma-separated): cif_path should point to directory containing {refcode}.cif files
   csd:
     python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
     num_cpus: 60                # Number of CPUs for parallel CSD evaluation
-    match_params:           # CSD matching tolerances if csd method is used
-      cluster: 20               # Cluster size for RMSD
-      rmsd_cutoff: 0.5          # RMSD cutoff in Angstrom
   pymatgen:
     match_params:           # Pymatgen matching tolerances if pymatgen method is used
       ltol: 0.2
       stol: 0.3
       angle_tol: 5
+    slurm:                  # SLURM settings for pymatgen evaluation (distributed)
+      job-name: eval_pymatgen
+      cpus_per_task: 1
+      mem_gb: 10
+      time: 1000            # minutes
 
 # (Optional) Logging configuration
 logging:

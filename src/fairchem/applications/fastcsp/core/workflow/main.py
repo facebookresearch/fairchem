@@ -232,20 +232,21 @@ def main(args: argparse.Namespace) -> None:
         )
         from fairchem.applications.fastcsp.core.workflow.eval import (
             compute_structure_matches,
-            get_eval_config,
+            get_eval_config_and_method,
         )
         from fairchem.applications.fastcsp.core.workflow.relax import (
             get_relax_config_and_dir,
         )
 
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
-        eval_config = get_eval_config(config)
+        eval_config, eval_method = get_eval_config_and_method(config)
+
         compute_structure_matches(
             input_dir=relax_output_dir / "filtered_structures",
             output_dir=relax_output_dir / "matched_structures",
+            eval_method=eval_method,
             eval_config=eval_config,
             molecules_file=config["molecules"],
-            target_xtals_dir=config["evaluate"]["target_xtals_dir"],
         )
         logging.log_stage_complete(logger, "evaluation against experimental structures")
 

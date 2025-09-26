@@ -160,6 +160,12 @@ def get_slurm_config(
             "mem_gb": 400,
             "time": 1000,
         },
+        "evaluate": {
+            "job-name": "eval",
+            "cpus_per_task": 1,
+            "mem_gb": 10,
+            "time": 1000,
+        },
     }
 
     if module_name not in module_defaults:
@@ -351,3 +357,24 @@ def get_filter_slurm_config(config: dict[str, Any]) -> dict[str, Any]:
         dict: SLURM parameters for submit_slurm_jobs function
     """
     return get_slurm_config(config, "filter", "submit_slurm_jobs")
+
+
+def get_eval_slurm_config(eval_config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """
+    Get eval SLURM configuration from eval_config section.
+
+    Args:
+        eval_config: Evaluation configuration dictionary (the 'evaluate' section).
+                    If None, returns default parameters.
+
+    Returns:
+        dict: SLURM parameters for submit_slurm_jobs function
+    """
+    if eval_config is None:
+        eval_config = {}
+
+    # Create a config structure that get_slurm_config expects
+    # by wrapping eval_config in an "evaluate" key
+    full_config = {"evaluate": eval_config}
+
+    return get_slurm_config(full_config, "evaluate", "submit_slurm_jobs")
