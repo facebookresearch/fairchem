@@ -16,6 +16,7 @@ from torch.profiler import record_function
 from typing_extensions import Literal
 
 from fairchem.core.common import gp_utils
+from fairchem.core.models.uma.common.so3 import CoefficientMapping
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,
@@ -52,17 +53,22 @@ class Edgewise(torch.nn.Module):
         # Enables activation checkpointing of edges in
         # activation_checkpoint_chunk_size size edge blocks
         activation_checkpoint_chunk_size: int | None,
+        last_layer: bool = False,
         act_type: Literal["gate", "s2"] = "gate",
     ):
         super().__init__()
-
         self.sphere_channels = sphere_channels
         self.hidden_channels = hidden_channels
         self.lmax = lmax
-        self.mmax = mmax
+        self.mmax = mmax if not last_layer else 0
+        self.mappingReduced = (
+            mappingReduced
+            if not last_layer
+            else CoefficientMapping(mappingReduced.lmax, self.mmax)
+        )
+
         self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
 
-        self.mappingReduced = mappingReduced
         self.SO3_grid = SO3_grid
         self.edge_channels_list = copy.deepcopy(edge_channels_list)
         self.act_type = act_type
@@ -329,6 +335,7 @@ class eSCNMD_Block(torch.nn.Module):
         act_type: Literal["gate", "s2"],
         ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
+        last_layer: bool = False,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -351,6 +358,7 @@ class eSCNMD_Block(torch.nn.Module):
             cutoff=cutoff,
             act_type=act_type,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            last_layer=last_layer,
         )
 
         self.norm_2 = get_normalization_layer(
