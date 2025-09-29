@@ -2,7 +2,7 @@
 ase==3.26
 ase-db-backends==0.10.0
 e3nn==0.5.7
-huggingface-hub==0.34.4
+huggingface-hub==0.35.0
 torch==2.6.0
 torchtnt==0.2.4
 numpy==2.2.5

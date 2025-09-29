@@ -127,7 +127,6 @@ def test_parallel_predict_unit(workers, device):
     ifsets = InferenceSettings(
         tf32=False,
         merge_mole=True,
-        wigner_cuda=False,
         activation_checkpointing=True,
         internal_graph_gen_version=2,
         external_graph_gen=False,

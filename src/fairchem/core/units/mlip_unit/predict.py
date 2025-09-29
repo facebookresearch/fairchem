@@ -120,10 +120,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
             )
-        if inference_settings.wigner_cuda is not None:
-            overrides["backbone"]["use_cuda_graph_wigner"] = (
-                inference_settings.wigner_cuda
-            )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
@@ -132,6 +128,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if inference_settings.internal_graph_gen_version is not None:
             overrides["backbone"]["radius_pbc_version"] = (
                 inference_settings.internal_graph_gen_version
+            )
+
+        if inference_settings.wigner_cuda:
+            logging.warning(
+                "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
         self.model, checkpoint = load_inference_model(
