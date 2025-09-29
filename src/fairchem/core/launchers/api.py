@@ -77,9 +77,10 @@ class SchedulerConfig:
     ranks_per_node: int = 1
     num_nodes: int = 1
     num_array_jobs: int = 1
-    slurm: SlurmConfig = field(default_factory=lambda: SlurmConfig)
+    slurm: SlurmConfig = field(default_factory=lambda: SlurmConfig())
     # if not None, will launch a ray cluster on slurm instead of using submitit directly to launch the job
-    ray_cluster: RayClusterConfig | None = None
+    use_ray: bool = False
+    ray_cluster: RayClusterConfig = field(default_factory=lambda: RayClusterConfig())
 
 
 @dataclass

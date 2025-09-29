@@ -15,6 +15,7 @@ from submitit.helpers import Checkpointable, DelayedSubmission
 from submitit.slurm.slurm import SlurmJobEnvironment
 
 from fairchem.core.common import distutils
+from fairchem.core.common.gp_utils import setup_graph_parallel_groups
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.utils import (
     setup_env_vars,
@@ -134,7 +135,7 @@ class Submitit(Checkpointable):
 
         if self.config.job.graph_parallel_group_size is not None:
             logging.info("Setting up graph parallel...")
-            _utils.setup_graph_parallel_groups(
+            setup_graph_parallel_groups(
                 self.config.job.graph_parallel_group_size,
                 dist_config["distributed_backend"],
             )

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import hydra
-from fairray.raycluster import RayCluster
+from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
@@ -29,7 +30,8 @@ def ray_on_slurm_launch(
         cluster.start_head(
             requirements=cluster_reqs | {"cpus_per_task": slurm_config.cpus_per_task},
             executor="slurm",
-        )  # start the head with 1 cpu
+        )
+        logging.info("Ray head started")
 
         # allocate the a ray cluster that is the same size and resources as the slurm job
         cluster.start_workers(
@@ -43,7 +45,7 @@ def ray_on_slurm_launch(
                 "tasks_per_node": 1,
             },
         )
-        print("gpu worker started")
+        logging.info("Ray workers started")
 
         # launch a payload on ray, move this to run on the head node
         cluster.submit_driver(
@@ -58,6 +60,6 @@ def ray_on_slurm_launch(
             block=True,
         )
     finally:
-        print("finished, shutdown")
+        logging.info("Ray job finished, shutting down cluster ...")
         # TODO find way to shutdown without the `block` above? (maybe have some socket and signal between head/worker/driver)
         cluster.shutdown()

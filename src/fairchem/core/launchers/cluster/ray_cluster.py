@@ -1,0 +1,479 @@
+from __future__ import annotations
+
+import dataclasses
+import json
+import os
+import select
+import socket
+import subprocess
+import tempfile
+import time
+import typing as tp
+import uuid
+from contextlib import closing
+from pathlib import Path
+
+import submitit
+
+# utils:
+
+
+def find_free_port():
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(("", 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
+
+def stdout_lines(process):
+    """
+    Generator that yields lines from the stdout of a subprocess.
+
+    This function continuously reads lines from the stdout of a given subprocess
+    and yields them one by one. It uses the `select` module to wait for output
+    to become available, ensuring that the read operation does not block indefinitely.
+
+    Args:
+        process (subprocess.Popen): The subprocess whose stdout will be read.
+
+    Yields:
+        str: A line of output from the subprocess's stdout, stripped of leading/trailing whitespace.
+
+    Raises:
+        AssertionError: If the stdout of the subprocess is not set to a pipe.
+    """
+    assert (
+        process.stdout is not None
+    ), "you probably forgot  stdout=subprocess.PIPE, text=True for Popen"
+    while True:
+        # Use select to wait for output to become available
+        readable, _, _ = select.select([process.stdout], [], [], 0)
+        if readable:
+            line = process.stdout.readline()
+            if not line:
+                break
+            yield line.strip()
+
+
+def rmdir(directory_path: Path):
+    """
+    Remove a directory and its contents with a best-effort approach.
+    """
+    try:
+        for item in directory_path.iterdir():
+            if item.is_file():
+                try:
+                    item.unlink()
+                except:
+                    pass
+            elif item.is_dir():
+                try:
+                    rmdir(item)
+                except:
+                    pass
+        # Remove the now-empty directory
+        directory_path.rmdir()
+    except:
+        pass
+
+
+def scancel(job_ids: tp.List[str]):
+    """
+    Cancel the SLURM jobs with the given job IDs.
+
+    This function takes a list of job IDs.
+
+    Args:
+        job_ids (List[str]): A list of job IDs to cancel.
+    """
+    root_ids = list(set([i.split("_", maxsplit=2)[0] for i in job_ids]))
+    subprocess.check_call(["scancel"] + root_ids)
+
+
+start_ip_pattern = r"ray start --address='([0-9\.]+):([0-9]+)'"
+
+PlayloadReturnT = tp.TypeVar("PlayloadReturnT")
+
+
+def mk_symlinks(target_dir: Path, job_type: str, paths: submitit.core.utils.JobPaths):
+    """Create symlinks for the job's stdout and stderr in the target directory with a nicer name."""
+    (target_dir / f"{job_type}.err").symlink_to(paths.stderr)
+    (target_dir / f"{job_type}.out").symlink_to(paths.stdout)
+
+
+@dataclasses.dataclass
+class HeadInfo:
+    """
+    information about the head node that we can share to workers
+    """
+
+    hostname: tp.Optional[str] = None
+    port: tp.Optional[int] = None
+    temp_dir: tp.Optional[str] = None
+
+
+class RayClusterState:
+    """
+    This class is responsible for managing the state of the Ray cluster. It is useful to keep track
+    of the head node and the workers, and to make sure they are all ready before starting the payload.
+
+    It relies on storing info in a rendezvous directory so they can be shared async between jobs.
+
+    Args:
+        rdv_dir (Path): The directory where the rendezvous information will be stored. Defaults to ~/.fairray.
+        cluster_id (str): A unique identifier for the cluster. Defaults to a random UUID. You only want to set this if you want to connect to an existing cluster.
+    """
+
+    def __init__(
+        self, rdv_dir: tp.Optional[Path] = None, cluster_id: tp.Optional[str] = None
+    ):
+        self.rendezvous_rootdir = (
+            rdv_dir if rdv_dir is not None else (Path.home() / ".fairray")
+        )
+        self._cluster_id = (
+            uuid.uuid4().hex if cluster_id is None else cluster_id
+        )  # maybe use something more readable
+
+        self.jobs_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def cluster_id(self) -> str:
+        """Returns the unique identifier for the cluster."""
+        return self._cluster_id
+
+    @property
+    def rendezvous_dir(self) -> Path:
+        """Returns the path to the directory where the rendezvous information is stored."""
+        return self.rendezvous_rootdir / self.cluster_id
+
+    @property
+    def jobs_dir(self) -> Path:
+        """Returns the path to the directory where job information is stored."""
+        return self.rendezvous_dir / "jobs"
+
+    @property
+    def _head_json(self) -> Path:
+        """Returns the path to the JSON file containing head node information."""
+        return self.rendezvous_dir / "head.json"
+
+    def is_head_ready(self) -> bool:
+        """Checks if the head node information is available and ready."""
+        return self._head_json.exists()
+
+    def head_info(self) -> tp.Optional[HeadInfo]:
+        """
+        Retrieves the head node information from the stored JSON file.
+
+        Returns:
+            Optional[HeadInfo]: The head node information if available, otherwise None.
+        """
+        try:
+            with self._head_json.open("r") as f:
+                return HeadInfo(**json.load(f))
+        except Exception as ex:
+            print(f"failed to load head info: {ex}. Maybe it's not ready yet?")
+            return None
+
+    def save_head_info(self, head_info: HeadInfo):
+        """
+        Saves the head node information to a JSON file.
+
+        Args:
+            head_info (HeadInfo): The head node information to save.
+        """
+        with self._head_json.open("w") as f:
+            json.dump(dataclasses.asdict(head_info), f)
+
+    def clean(self):
+        """Removes the rendezvous directory and all its contents."""
+        rmdir(self.rendezvous_dir)
+
+    def add_job(self, job: submitit.Job):
+        """
+        Adds a job to the jobs directory by creating a JSON file with the job's information.
+
+        Args:
+            job (submitit.Job): The job to add.
+        """
+        with (self.jobs_dir / f"{job.job_id}.json").open("w") as f:
+            json.dump(
+                {
+                    "job_id": job.job_id,
+                },
+                fp=f,
+            )
+
+    def list_job_ids(self) -> tp.List[str]:
+        """Lists all job IDs stored in the jobs directory."""
+        return [f.stem for f in self.jobs_dir.iterdir()]
+
+
+def _ray_head_script(cluster_state: RayClusterState):
+    """Start the head node of the Ray cluster on slurm."""
+    hostname = socket.gethostname()
+    head_env = os.environ.copy()
+    num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", 1)
+    num_gpus = os.environ.get("SLURM_GPUS_PER_TASK", 0)
+    # using 0 as the port for the head will make ray search for an open port instead of
+    # always using the same one.
+    port = find_free_port()
+    head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
+    print(f"host {hostname}:{port}")
+    with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
+        # ray workers have the same tempdir name (even on a different host)
+        # as the head. This is a problem when we use  /scratch/slurm_tmpdir/JOBID as
+        # the tempdir of the head job will not be accessible/visible from other workers if they
+        # are scheduled on the same host. We are forced to use a different tempdir than /scratch
+        # TODO ideally, we would still have a /scratch dir that everyone can share.
+        process = subprocess.Popen(
+            [
+                "ray",
+                "start",
+                "--head",
+                f"--port={port}",
+                f"--temp-dir={temp_dir}",
+                "--num-cpus",
+                f"{num_cpus}",
+                "--num-gpus",
+                f"{num_gpus}",
+            ],
+            env=head_env,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        started = False
+        for line in stdout_lines(process):
+            if "ray start --address=" in line:
+                # this is a bit flaky, we search the stdout of the head job to
+                # find this specific message and extract the address, it might be
+                # better to not rely on ray printing this as it might change outside of our control.
+                # Search for the pattern
+                started = True
+        assert (
+            started
+        ), "couldn't find head address in stdout. Check head.err for details"
+        print(f"Head started, ip: {hostname}:{port} ({cluster_state.cluster_id})")
+        info = HeadInfo(hostname=hostname, port=int(port), temp_dir=temp_dir)
+        cluster_state.save_head_info(info)
+        while True:
+            # practically, we should wait from driver signal to die here
+            time.sleep(60)
+
+
+def _ray_worker_script(worker_id: int, cluster_state: RayClusterState):
+    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
+    print(f"Waiting for head node. {cluster_state.cluster_id}")
+    while not cluster_state.is_head_ready():
+        # wait for head to have started
+        time.sleep(5)
+    print("Head node found.")
+    head_info = cluster_state.head_info()
+    assert head_info is not None, "something went wrong getting head information."
+    worker_env = os.environ.copy()
+    worker_env["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
+    num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", 1)
+    num_gpus = os.environ.get("SLURM_GPUS_PER_TASK", 0)
+
+    try:
+        subprocess.run(
+            [
+                "ray",
+                "start",
+                "--address",
+                "auto",
+                "--block",
+                "--num-cpus",
+                f"{num_cpus}",
+                "--num-gpus",
+                f"{num_gpus}",
+            ],
+            env=worker_env,
+            check=False,
+        )
+    finally:
+        if head_info.temp_dir:
+            rmdir(Path(head_info.temp_dir))
+
+
+def _payload_with_env(
+    payload: tp.Callable[..., PlayloadReturnT],
+    cluster_state: RayClusterState,
+    **kwargs,
+):
+    """Start the payload/driver on slurm. on its own node, waiting on the head node first."""
+    rez = None
+    head_info = None
+    try:
+        print(f"Waiting for head node. {cluster_state.cluster_id}")
+        while not cluster_state.is_head_ready():
+            # wait for head to have started
+            time.sleep(5)
+        print("Head node found.")
+        head_info = cluster_state.head_info()
+        assert head_info is not None, "something went wrong getting head information."
+        # this is for the ray.init in the python payload
+        os.environ["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
+        # The driver host also needs to be running ray, so we start it the same as a worker
+        worker_env = os.environ.copy()
+        num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", 1)
+        num_gpus = os.environ.get("SLURM_GPUS_PER_TASK", 0)
+
+        subprocess.run(
+            [
+                "ray",
+                "start",
+                "--address",
+                "auto",
+                "--num-cpus",
+                f"{num_cpus}",
+                "--num-gpus",
+                f"{num_gpus}",
+            ],
+            env=worker_env,
+            check=False,
+        )  # we do not block here as we want to run the payload
+        rez = payload(**kwargs)
+    finally:
+        if head_info and head_info.temp_dir:
+            rmdir(Path(head_info.temp_dir))
+    return rez
+
+
+# TODO deal with ports better: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#slurm-networking-caveats
+# TODO: we need to make `log_dir` configurable
+# TODO: reqs are just dicts, maybe we want to be more specific (in particular for qos/partition)
+# TODO: need better naming too
+# TODO: better log messages
+# some workers die quickly with `The node registration may not be complete yet before the timeout. Try increase the RAY_raylet_start_wait_time_s config.'`
+class RayCluster:
+    """
+    A RayCluster offers tools to start a Ray cluster (head and wokers) on slurm with the correct settings.
+
+    args:
+
+    log_dir: Path to the directory where logs will be stored. Defaults to "raycluster_logs" in the working directory. All slurm logs will go there,
+    and it also creates symlinks to the stdout/stderr of each jobs with nicer name (head, worker_0, worker_1, ..., driver_0, etc). There interesting
+    logs will be in the driver_N.err file, you should tail that.
+    rdv_dir: Path to the directory where the rendezvous information will be stored. Defaults to ~/.fairray. Useful if you are trying to recover an existing cluster.
+    cluster_id: A unique identifier for the cluster. Defaults to a random UUID. You only want to set this if you want to connect to an existing cluster.
+    """
+
+    log_dir: Path
+    state: RayClusterState
+
+    jobs: tp.List[submitit.Job] = []
+    is_shutdown = False
+    num_worker_groups = 0
+    num_drivers = 0
+    head_started = False
+
+    # keeping this in a separate object so it's easy to serialize and pass to jobs
+
+    def __init__(
+        self,
+        log_dir: Path = Path("raycluster_logs"),
+        rdv_dir: tp.Optional[Path] = None,
+        cluster_id: tp.Optional[str] = None,
+    ):
+        self.state = RayClusterState(rdv_dir, cluster_id)
+        print(f"cluster {self.state.cluster_id}")
+        self.log_dir = Path(log_dir) / self.state.cluster_id
+        self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
+        print(f"logs will be in {self.log_dir.resolve()}")
+
+    def start_head(
+        self,
+        requirements: tp.Dict[str, tp.Union[str, int]],
+        executor: str = "slurm",
+    ):
+        """
+        Start the head node of the Ray cluster on slurm. You should do this first. Interesting requirements: qos, partition, time, gpus, cpus-per-task, mem-per-gpu, etc.
+        """
+        assert not self.head_started, "head already started"
+        # start the head node
+        self.head_started = True
+        s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
+        s_executor.update_parameters(
+            name="ray_head",  # TODO name should probably include more details (cluster_id)
+            **requirements,
+        )
+        head_job = s_executor.submit(_ray_head_script, self.state)
+        self.state.add_job(head_job)
+        mk_symlinks(self.log_dir, "head", head_job.paths)
+        print("head slurm job id:", head_job.job_id)
+
+    def start_workers(
+        self,
+        num_workers: int,
+        requirements: tp.Dict[str, tp.Union[str, int]],
+        executor: str = "slurm",
+    ):
+        """
+        Start an array of worker nodes of the Ray cluster on slurm. You should do this after starting a head.
+        Interesting requirements: qos, partition, time, gpus, cpus-per-task, mem-per-gpu, etc.
+        You can call this multiple times to start an heterogeneous cluster.
+        """
+        # start the workers
+        s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
+        s_executor.update_parameters(
+            name=f"ray_worker_{self.num_worker_groups}",  # TODO name should probably include more details (cluster_id)
+            **requirements,
+        )
+
+        def work_closure(worker_id: int):
+            _ray_worker_script(worker_id, self.state)
+
+        jobs = []
+        with s_executor.batch():  # TODO set slurm array max parallelism here, because we really want all jobs to be scheduled at the same time
+            for i in range(num_workers):
+                jobs.append(s_executor.submit(_ray_worker_script, i, self.state))
+
+        for idx, j in enumerate(jobs):
+            mk_symlinks(self.log_dir, f"worker_{self.num_worker_groups}_{idx}", j.paths)
+        print("workers slurm job ids:", [job.job_id for job in jobs])
+        for j in jobs:
+            self.state.add_job(j)
+        self.num_worker_groups += 1
+
+    # TODO not convinced about the naming here
+    def submit_driver(
+        self,
+        payload: tp.Callable[..., PlayloadReturnT],
+        requirements: tp.Dict[str, tp.Union[str, int]],
+        block: bool = False,
+        executor: str = "slurm",
+        **kwargs,
+    ) -> tp.Optional[PlayloadReturnT]:
+        """
+        Start the payload/driver on slurm, this will run the "user" script that submits work to ray.
+
+        kwargs will be sent to the payload.
+        """
+        # submit the driver
+        s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
+        s_executor.update_parameters(
+            name=f"ray_driver_{self.num_drivers}",  # TODO name should probably include more details (cluster_id)
+            **requirements,
+        )
+
+        job = s_executor.submit(_payload_with_env, payload, self.state, **kwargs)
+        print(f"payload submitted:{job.job_id}")
+        self.state.add_job(job)
+        mk_symlinks(self.log_dir, f"driver_{self.num_drivers}", job.paths)
+        self.num_drivers += 1
+        if block:
+            return job.result()
+            # practically we could wait for results here, or maybe fail logs, or just return `job`
+        else:
+            # do not wait for payload to finish, just come back (jobs will run in slurm, you need to cancel them when you are done TODO)
+            # TODO if no more num_driver is running and not blocking, scancel the head and workers (in the job)
+            return None
+
+    def shutdown(self):
+        """
+        Cancel all slurms jobs and get rid of rdv directory.
+        """
+        self.is_shutdown = True
+        scancel(self.state.list_job_ids())
+        self.state.clean()
+        print(f"cluster {self.state.cluster_id} shutdown")
