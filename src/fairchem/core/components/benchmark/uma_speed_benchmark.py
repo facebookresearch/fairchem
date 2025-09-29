@@ -171,7 +171,7 @@ class InferenceBenchRunner(Runner):
             logging.info(f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}")
 
             # Bind loop-scoped variables as defaults to avoid late-binding (B023)
-            def yield_inputs(_max_neighbors=max_neighbors, _cutoff=cutoff):  # noqa: B023
+            def yield_inputs(_max_neighbors=max_neighbors, _cutoff=cutoff):
                 if self.natoms_list is not None:
                     for natoms in self.natoms_list:
                         data = get_fcc_carbon_xtal(
