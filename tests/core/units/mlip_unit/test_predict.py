@@ -155,3 +155,44 @@ def test_parallel_predict_unit(workers, device):
         normal_results["forces"].detach().cpu(),
         atol=ATOL,
     )
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, device", [(1, "cpu"), (4, "cpu")]
+)
+def test_parallel_predict_unit_with_mole(workers, device):
+    model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    ifsets = InferenceSettings(
+        tf32=False,
+        merge_mole=True,
+        activation_checkpointing=True,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    ppunit = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device=device,
+        inference_settings=ifsets,
+        server_config={"workers": workers},
+    )
+
+    for _ in range(3):
+        atoms = get_fcc_carbon_xtal(100)
+        atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+        pp_results = ppunit.predict(atomic_data)
+        
+    normal_predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device=device, inference_settings=ifsets
+    )
+    normal_results = normal_predict_unit.predict(atomic_data)
+
+    assert torch.allclose(
+        pp_results["energy"].detach().cpu(),
+        normal_results["energy"].detach().cpu(),
+        atol=ATOL,
+    )
+    assert torch.allclose(
+        pp_results["forces"].detach().cpu(),
+        normal_results["forces"].detach().cpu(),
+        atol=ATOL,
+    )
