@@ -52,8 +52,6 @@ post_relaxation_filter:       # After ML relaxation
   stol: 0.3
   angle_tol: 5
 
-# TODO: add (optional) free energy config
-
 # (Optional) Experimental structure evaluation settings
 evaluate:
   method: csd               # Either "csd" or "pymatgen"
@@ -64,8 +62,9 @@ evaluate:
   #   - Single refcode: cif_path should point to a .cif file or directory containing {refcode}.cif
   #   - Multiple refcodes (comma-separated): cif_path should point to directory containing {refcode}.cif files
   csd:
-    python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
     num_cpus: 60                # Number of CPUs for parallel CSD evaluation
+    # TODO: Use CSD_PYTHON_CMD executable with subprocess in eval.py
+    # python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
   pymatgen:
     match_params:           # Pymatgen matching tolerances if pymatgen method is used
       ltol: 0.2
@@ -76,6 +75,8 @@ evaluate:
       cpus_per_task: 1
       mem_gb: 10
       time: 1000            # minutes
+
+# TODO: add (optional) free energy config
 
 # (Optional) Logging configuration
 logging:

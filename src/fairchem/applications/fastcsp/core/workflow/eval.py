@@ -43,6 +43,7 @@ def get_eval_config_and_method(
 
     if eval_method == "csd":
         csd_config = eval_config.get("csd", {})
+        # TODO: Use CSD_PYTHON_CMD executable with subprocess
         eval_config["csd_python_cmd"] = csd_config.get("python_cmd", "python")
         eval_config["num_cpus"] = csd_config.get("num_cpus", 1)
     elif eval_method == "pymatgen":
