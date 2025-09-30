@@ -1,3 +1,4 @@
+# ruff: noqa
 from __future__ import annotations
 
 import dataclasses
@@ -10,10 +11,22 @@ import tempfile
 import time
 import typing as tp
 import uuid
-from contextlib import closing, suppress
+from contextlib import closing
 from pathlib import Path
 
+import psutil
 import submitit
+
+
+def kill_proc_tree(pid, including_parent=True):
+    parent = psutil.Process(pid)
+    children = parent.children(recursive=True)
+    for child in children:
+        child.kill()
+    gone, still_alive = psutil.wait_procs(children, timeout=5)
+    if including_parent:
+        parent.kill()
+        parent.wait(5)
 
 
 def find_free_port():
@@ -57,17 +70,25 @@ def rmdir(directory_path: Path):
     """
     Remove a directory and its contents with a best-effort approach.
     """
-    with suppress(Exception):
+    try:
         for item in directory_path.iterdir():
             if item.is_file():
-                item.unlink()
+                try:
+                    item.unlink()
+                except:
+                    pass
             elif item.is_dir():
-                rmdir(item)
+                try:
+                    rmdir(item)
+                except:
+                    pass
         # Remove the now-empty directory
         directory_path.rmdir()
+    except:
+        pass
 
 
-def scancel(job_ids: list[str]):
+def scancel(job_ids: tp.List[str]):
     """
     Cancel the SLURM jobs with the given job IDs.
 
@@ -76,7 +97,7 @@ def scancel(job_ids: list[str]):
     Args:
         job_ids (List[str]): A list of job IDs to cancel.
     """
-    root_ids = list({i.split("_", maxsplit=2)[0] for i in job_ids})
+    root_ids = list(set([i.split("_", maxsplit=2)[0] for i in job_ids]))
     subprocess.check_call(["scancel"] + root_ids)
 
 
@@ -115,7 +136,9 @@ class RayClusterState:
     """
 
     def __init__(
-        self, rdv_dir: tp.Optional[Path] = None, cluster_id: tp.Optional[str] = None
+        self,
+        rdv_dir: tp.Optional[Path] = None,
+        cluster_id: tp.Optional[str] = None,
     ):
         self.rendezvous_rootdir = (
             rdv_dir if rdv_dir is not None else (Path.home() / ".fairray")
@@ -123,7 +146,6 @@ class RayClusterState:
         self._cluster_id = (
             uuid.uuid4().hex if cluster_id is None else cluster_id
         )  # maybe use something more readable
-
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -193,21 +215,24 @@ class RayClusterState:
                 fp=f,
             )
 
-    def list_job_ids(self) -> list[str]:
+    def list_job_ids(self) -> tp.List[str]:
         """Lists all job IDs stored in the jobs directory."""
         return [f.stem for f in self.jobs_dir.iterdir()]
 
 
-def _ray_head_script(cluster_state: RayClusterState):
+def _ray_head_script(cluster_state: RayClusterState, worker_wait_timeout_seconds: int):
     """Start the head node of the Ray cluster on slurm."""
     hostname = socket.gethostname()
     head_env = os.environ.copy()
-    num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", 1)
-    num_gpus = os.environ.get("SLURM_GPUS_PER_TASK", 0)
+    num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
+    num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
     # using 0 as the port for the head will make ray search for an open port instead of
     # always using the same one.
     port = find_free_port()
     head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
+    head_env["RAY_gcs_server_request_timeout_seconds"] = str(
+        worker_wait_timeout_seconds
+    )
     print(f"host {hostname}:{port}")
     with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
         # ray workers have the same tempdir name (even on a different host)
@@ -226,6 +251,7 @@ def _ray_head_script(cluster_state: RayClusterState):
                 f"{num_cpus}",
                 "--num-gpus",
                 f"{num_gpus}",
+                "--dashboard-host=0.0.0.0",
             ],
             env=head_env,
             stdout=subprocess.PIPE,
@@ -250,44 +276,69 @@ def _ray_head_script(cluster_state: RayClusterState):
             time.sleep(60)
 
 
-def _ray_worker_script(worker_id: int, cluster_state: RayClusterState):
-    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
-    print(f"Waiting for head node. {cluster_state.cluster_id}")
-    while not cluster_state.is_head_ready():
-        # wait for head to have started
-        time.sleep(5)
-    print("Head node found.")
-    head_info = cluster_state.head_info()
-    assert head_info is not None, "something went wrong getting head information."
-    worker_env = os.environ.copy()
-    worker_env["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
-    num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", 1)
-    num_gpus = os.environ.get("SLURM_GPUS_PER_TASK", 0)
-
-    try:
-        subprocess.run(
-            [
-                "ray",
-                "start",
-                "--address",
-                "auto",
-                "--block",
-                "--num-cpus",
-                f"{num_cpus}",
-                "--num-gpus",
-                f"{num_gpus}",
-            ],
-            env=worker_env,
-            check=False,
+class _RayWorkerScript:
+    def __call__(
+        self,
+        worker_id: int,
+        cluster_state: RayClusterState,
+        worker_wait_timeout_seconds: int,
+        start_wait_time_seconds: int = 60,  # TODO pass this around properly
+    ):
+        """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
+        print(f"Waiting for head node. {cluster_state.cluster_id}")
+        while not cluster_state.is_head_ready():
+            # wait for head to have started
+            time.sleep(5)
+        print("Head node found.")
+        head_info = cluster_state.head_info()
+        assert head_info is not None, "something went wrong getting head information."
+        worker_env = os.environ.copy()
+        worker_env["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
+        worker_env["RAY_gcs_server_request_timeout_seconds"] = str(
+            worker_wait_timeout_seconds
         )
-    finally:
-        if head_info.temp_dir:
-            rmdir(Path(head_info.temp_dir))
+        worker_env["RAY_raylet_start_wait_time_s"] = str(start_wait_time_seconds)
+        num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
+        num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
+
+        try:
+            subprocess.run(
+                [
+                    "ray",
+                    "start",
+                    "--address",
+                    "auto",
+                    "--block",
+                    "--num-cpus",
+                    f"{num_cpus}",
+                    "--num-gpus",
+                    f"{num_gpus}",
+                ],
+                env=worker_env,
+                check=False,
+            )
+        finally:
+            if head_info.temp_dir:
+                rmdir(Path(head_info.temp_dir))
+
+    def checkpoint(
+        self,
+        worker_id: int,
+        cluster_state: RayClusterState,
+        worker_wait_timeout_seconds: int,
+    ) -> submitit.helpers.DelayedSubmission:
+        return submitit.helpers.DelayedSubmission(
+            _RayWorkerScript(),
+            worker_id,
+            cluster_state,
+            worker_wait_timeout_seconds,
+        )
 
 
 def _payload_with_env(
     payload: tp.Callable[..., PlayloadReturnT],
     cluster_state: RayClusterState,
+    worker_wait_timeout_seconds: int,
     **kwargs,
 ):
     """Start the payload/driver on slurm. on its own node, waiting on the head node first."""
@@ -305,8 +356,11 @@ def _payload_with_env(
         os.environ["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
         # The driver host also needs to be running ray, so we start it the same as a worker
         worker_env = os.environ.copy()
-        num_cpus = os.environ.get("SLURM_CPUS_PER_TASK", 1)
-        num_gpus = os.environ.get("SLURM_GPUS_PER_TASK", 0)
+        worker_env["RAY_gcs_server_request_timeout_seconds"] = str(
+            worker_wait_timeout_seconds
+        )
+        num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
+        num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
         subprocess.run(
             [
@@ -330,11 +384,11 @@ def _payload_with_env(
 
 
 # TODO deal with ports better: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#slurm-networking-caveats
-# TODO: we need to make `log_dir` configurable
 # TODO: reqs are just dicts, maybe we want to be more specific (in particular for qos/partition)
 # TODO: need better naming too
 # TODO: better log messages
-# some workers die quickly with `The node registration may not be complete yet before the timeout. Try increase the RAY_raylet_start_wait_time_s config.'`
+# TODO checkpointing to recover worker nodes after timeout/preemption https://github.com/facebookincubator/submitit/blob/main/docs/checkpointing.md
+# TODO have a ray autoscaler nodeprovider based on this, e.g. https://github.com/TingkaiLiu/Ray-SLURM-autoscaler/blob/main/slurm/node_provider.py
 class RayCluster:
     """
     A RayCluster offers tools to start a Ray cluster (head and wokers) on slurm with the correct settings.
@@ -346,12 +400,15 @@ class RayCluster:
     logs will be in the driver_N.err file, you should tail that.
     rdv_dir: Path to the directory where the rendezvous information will be stored. Defaults to ~/.fairray. Useful if you are trying to recover an existing cluster.
     cluster_id: A unique identifier for the cluster. Defaults to a random UUID. You only want to set this if you want to connect to an existing cluster.
+    worker_wait_timeout_seconds (int): The number of seconds ray will wait for a worker to be ready before giving up. Defaults to 60 seconds. If you are scheduling
+        workers in a queue that takes time for allocation, you might want to increase this otherwise your ray payload will fail, not finding resources.
+
     """
 
     log_dir: Path
     state: RayClusterState
 
-    jobs: tp.ClassVar[list[submitit.Job]] = []
+    jobs: tp.List[submitit.Job] = []
     is_shutdown = False
     num_worker_groups = 0
     num_drivers = 0
@@ -364,16 +421,18 @@ class RayCluster:
         log_dir: Path = Path("raycluster_logs"),
         rdv_dir: tp.Optional[Path] = None,
         cluster_id: tp.Optional[str] = None,
+        worker_wait_timeout_seconds: int = 60,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
         print(f"cluster {self.state.cluster_id}")
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
+        self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         print(f"logs will be in {self.log_dir.resolve()}")
 
     def start_head(
         self,
-        requirements: dict[str, tp.Union[str, int]],
+        requirements: tp.Dict[str, tp.Union[str, int]],
         executor: str = "slurm",
     ):
         """
@@ -382,12 +441,17 @@ class RayCluster:
         assert not self.head_started, "head already started"
         # start the head node
         self.head_started = True
-        s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
+        s_executor = submitit.AutoExecutor(
+            folder=str(self.log_dir),
+            cluster=executor,
+        )
         s_executor.update_parameters(
-            name="ray_head",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_head_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
             **requirements,
         )
-        head_job = s_executor.submit(_ray_head_script, self.state)
+        head_job = s_executor.submit(
+            _ray_head_script, self.state, self.worker_wait_timeout_seconds
+        )
         self.state.add_job(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         print("head slurm job id:", head_job.job_id)
@@ -395,7 +459,7 @@ class RayCluster:
     def start_workers(
         self,
         num_workers: int,
-        requirements: dict[str, tp.Union[str, int]],
+        requirements: tp.Dict[str, tp.Union[str, int]],
         executor: str = "slurm",
     ):
         """
@@ -406,18 +470,21 @@ class RayCluster:
         # start the workers
         s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
         s_executor.update_parameters(
-            name=f"ray_worker_{self.num_worker_groups}",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_worker_{self.num_worker_groups}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
             **requirements,
         )
 
-        def work_closure(worker_id: int):
-            _ray_worker_script(worker_id, self.state)
-
+        jobs = []
         with s_executor.batch():  # TODO set slurm array max parallelism here, because we really want all jobs to be scheduled at the same time
-            jobs = [
-                s_executor.submit(_ray_worker_script, i, self.state)
-                for i in range(num_workers)
-            ]
+            for i in range(num_workers):
+                jobs.append(
+                    s_executor.submit(
+                        _RayWorkerScript(),
+                        i,
+                        self.state,
+                        self.worker_wait_timeout_seconds,
+                    )
+                )
 
         for idx, j in enumerate(jobs):
             mk_symlinks(self.log_dir, f"worker_{self.num_worker_groups}_{idx}", j.paths)
@@ -430,7 +497,7 @@ class RayCluster:
     def submit_driver(
         self,
         payload: tp.Callable[..., PlayloadReturnT],
-        requirements: dict[str, tp.Union[str, int]],
+        requirements: tp.Dict[str, tp.Union[str, int]],
         block: bool = False,
         executor: str = "slurm",
         **kwargs,
@@ -443,11 +510,17 @@ class RayCluster:
         # submit the driver
         s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
         s_executor.update_parameters(
-            name=f"ray_driver_{self.num_drivers}",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_driver_{self.num_drivers}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
             **requirements,
         )
 
-        job = s_executor.submit(_payload_with_env, payload, self.state, **kwargs)
+        job = s_executor.submit(
+            _payload_with_env,
+            payload,
+            self.state,
+            self.worker_wait_timeout_seconds,
+            **kwargs,
+        )
         print(f"payload submitted:{job.job_id}")
         self.state.add_job(job)
         mk_symlinks(self.log_dir, f"driver_{self.num_drivers}", job.paths)
@@ -466,5 +539,15 @@ class RayCluster:
         """
         self.is_shutdown = True
         scancel(self.state.list_job_ids())
+        kill_proc_tree(
+            os.getpid(), including_parent=False
+        )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
         self.state.clean()
         print(f"cluster {self.state.cluster_id} shutdown")
+
+    def __enter__(self):
+        # only use as a context if you have something blocking waiting on the driver
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.shutdown()
