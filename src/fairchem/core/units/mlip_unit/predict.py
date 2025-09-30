@@ -527,7 +527,8 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
-        futures = [w.predict.remote(data) for w in self.workers]
+        data_ref = ray.put(data)
+        futures = [w.predict.remote(data_ref) for w in self.workers]
         # just get the first result that is ready since they are identical
         # the rest of the futures should go out of scope and memory garbage collected
         ready_ids, _ = ray.wait(futures, num_returns=1)
