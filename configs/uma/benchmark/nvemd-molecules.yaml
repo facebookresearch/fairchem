@@ -27,13 +27,13 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.nve_md_runner.NVEMDRunner
+  _target_: fairchem.core.components.calculate.single.nve_md_runner.NVEMDRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
     task_name: omol
   input_data:
-    _target_: fairchem.core.components.calculate.nve_md_runner.get_nve_md_data
+    _target_: fairchem.core.components.calculate.single.nve_md_runner.get_nve_md_data
     dataset_root: ${cluster.data_root_dir}/md
     dataset_name: md22
   time_step: 1.

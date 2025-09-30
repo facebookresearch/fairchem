@@ -1,0 +1,156 @@
+defaults:
+  - cluster: fair_cluster
+  # - backbone: H512L10
+  - dataset: fair_cluster_mptrj
+  - element_refs: mptrj_lin_refs
+  - tasks: mptrj_grad
+  - _self_
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 16
+    slurm:
+      mem_gb: ${cluster.mem_gb}
+      partition: ${cluster.partition}
+      timeout_hr: ${cluster.timeout_hr}
+      cpus_per_task: ${cluster.cpus_per_task}
+      additional_parameters: ${cluster.additional_parameters}
+  debug: ${cluster.debug}
+  run_dir: ${cluster.run_dir}
+  run_name: escaip_mptrj_finetune
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: ericqu
+    project: mptrj_v2
+
+starting_checkpoint: /checkpoint/ericqu/ESCAIPRUNDIR/202506-1623-4946-2248/checkpoints/final/inference_ckpt.pt
+
+dataset_list: ["mptrj"]
+
+epochs: 50
+steps: null # 80B atoms, 128 ranks, max atoms 350 (mean atoms 300)
+max_atoms: 250
+forces_coef: 10
+stress_coef: 100
+mptrj_energy_coef: 10
+
+regress_stress: True
+direct_forces: False
+
+mptrj_forces_key: mptrj_forces
+mptrj_stress_key: mptrj_stress
+
+train_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    # omc: ${dataset.omc_train}
+    # omol: ${dataset.omol_train}
+    # odac: ${dataset.odac_train}
+    # omat: ${dataset.omat_train}
+    mptrj: ${dataset.mptrj_train}
+  combined_dataset_config:
+    sampling:
+      type: explicit
+      ratios:
+        # omol.train: 4.0
+        mptrj.train: 1.0
+        # omc.train: 2.0
+        # odac.train: 1.0
+        # omat.train: 2.0
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    # omc: ${dataset.omc_val}
+    # omol: ${dataset.omol_val}
+    # odac: ${dataset.odac_val}
+    # omat: ${dataset.omat_val}
+    mptrj: ${dataset.mptrj_val}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+
+heads:
+  energyandforcehead:
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
+    head_cls: fairchem.core.models.escaip.EScAIP.EScAIPGradientEnergyForceStressHead
+    head_kwargs:
+      wrap_property: False
+    dataset_names:
+      - mptrj
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    model:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model
+      checkpoint_location: ${starting_checkpoint}
+      strict: false
+      overrides:
+        backbone:
+          max_atoms: ${max_atoms}
+          direct_forces: ${direct_forces}
+          regress_stress: ${regress_stress}
+          use_compile: False
+          use_padding: False
+        pass_through_head_outputs: True
+      heads: ${heads}
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 4e-4
+      weight_decay: 1e-3
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 2
+      lr_min_factor: 0.01
+      epochs: ${epochs}
+      steps: ${steps}
+    print_every: 10
+    clip_grad_norm: 100
+  max_epochs: ${epochs}
+  max_steps: ${steps}
+  evaluate_every_n_steps: 5000
+  callbacks:
+    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
+      job_config: ${job}
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 2000
+      max_saved_checkpoints: 5

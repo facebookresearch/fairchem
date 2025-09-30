@@ -270,3 +270,10 @@ def setup_env_local():
     os.environ["LOCAL_RANK"] = "0"
     os.environ["RANK"] = "0"
     os.environ["MASTER_PORT"] = str(get_free_port())
+
+
+def setup_env_local_multi_gpu(rank: int, port: int):
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["LOCAL_RANK"] = str(rank)
+    os.environ["RANK"] = str(rank)
+    os.environ["MASTER_PORT"] = str(port)

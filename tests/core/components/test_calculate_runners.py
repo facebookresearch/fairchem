@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fairchem.core.components.calculate import (
+from fairchem.core.components.calculate.single import (
     ElasticityRunner,
 )
 
