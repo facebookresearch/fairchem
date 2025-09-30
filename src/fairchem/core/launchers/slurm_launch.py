@@ -21,7 +21,6 @@ from fairchem.core.common.utils import (
     setup_env_vars,
     setup_logging,
 )
-from fairchem.core.datasets import _utils
 from fairchem.core.launchers.api import (
     DeviceType,
     JobConfig,
