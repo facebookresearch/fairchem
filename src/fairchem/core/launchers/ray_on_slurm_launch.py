@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import hydra
+
 from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
 if TYPE_CHECKING:
