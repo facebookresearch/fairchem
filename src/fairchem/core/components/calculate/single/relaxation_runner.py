@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from ase.calculators.calculator import Calculator
 
-    from fairchem.core.datasets import AseDBDataset
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 @requires(pmg_installed, message="Requires `pymatgen` to be installed")
@@ -53,7 +53,7 @@ class RelaxationRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        input_data: AseDBDataset,
+        input_data: AtomsSequence,
         calculate_properties: Sequence[str],
         save_relaxed_atoms: bool = True,
         normalize_properties_by: dict[str, str] | None = None,
@@ -98,7 +98,7 @@ class RelaxationRunner(CalculateRunner):
         all_results = []
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running relaxations"):
-            atoms = self.input_data.get_atoms(i)
+            atoms = self.input_data[i]
             results = {
                 "sid": atoms.info.get("sid", i),
                 "natoms": len(atoms),

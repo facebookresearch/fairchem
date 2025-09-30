@@ -19,7 +19,7 @@ from fairchem.core.components.calculate import CalculateRunner
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
-    from fairchem.core.datasets import AseDBDataset
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 class AdsorptionSinglePointRunner(CalculateRunner):
@@ -37,7 +37,7 @@ class AdsorptionSinglePointRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        input_data: AseDBDataset,
+        input_data: AtomsSequence,
         evaluate_total_energy: bool = False,
         adsorption_energy_model: bool = False,
     ):
@@ -70,7 +70,7 @@ class AdsorptionSinglePointRunner(CalculateRunner):
         all_results = []
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running singlepoints"):
-            atoms = self.input_data.get_atoms(i)
+            atoms = self.input_data[i]
             identifier = atoms.info["identifier"]
             # extract targets
             dft_energy = atoms.get_potential_energy()
