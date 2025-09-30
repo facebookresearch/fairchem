@@ -1,0 +1,30 @@
+model: fairchem.core.models.escaip.EScAIP.EScAIPBackbone
+
+# Global Configs
+num_layers: 8
+hidden_size: 1024
+direct_forces: ${direct_forces}
+regress_forces: True
+regress_stress: ${regress_stress}
+use_compile: ${direct_forces}
+use_padding: ${direct_forces}
+dataset_list: ${dataset_list}
+
+
+# Molecular Graph Configs
+max_num_elements: 110
+max_batch_size: 64 # this is set to be the max number of batch that could be sampled by the sampler
+max_atoms: ${max_atoms}
+max_radius: ${cutoff_radius}
+use_pbc: ${use_pbc}
+knn_k: ${max_neighbors}
+knn_soft: true
+knn_sigmoid_scale: 0.2
+knn_lse_scale: 0.1
+knn_use_low_mem: true
+knn_pad_size: ${max_neighbors_pad_size}
+
+
+# Graph Neural Networks Configs
+atten_name: memory_efficient
+atten_num_heads: 16
