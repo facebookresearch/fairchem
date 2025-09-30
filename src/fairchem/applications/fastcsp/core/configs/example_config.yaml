@@ -1,0 +1,84 @@
+# FastCSP Configuration Example with Logging
+
+root: /path/to/project/directory
+
+molecules: configs/example_systems.csv # File containing list of target molecules
+
+# Genarris configuration for structure generation
+genarris:
+  # Execution environment
+  python_cmd: /path/to/python/with/genarris/installed # Python interpreter with Genarris installed
+  genarris_script: /path/to/genarris_master.py        # Path to Genarris master script
+  mpi_launcher: /path/to/mpirun                       # MPI launcher: mpirun, srun, or custom path
+  base_config: configs/gnrs_base.conf                 # Base Genarris configuration template
+  # Structure generation parameters
+  vars:
+    Z: [1, 2, 3, 4, 6, 8] # [1] by default
+    spg_info: standard # all compatible ("standard") by default
+    num_structures_per_spg: 500 # 500 by default
+    read_z_from_file: false # read z from "molecules" file
+    read_spg_from_file: false # read spg from "molecules" file
+  # Genarris SLURM job settings
+  slurm:
+    job-name: genarris
+    nodes: 1
+    ntasks-per-node: 40
+    time: 10800 # minutes
+
+# Structure comparison tolerances for Pymatgen's StructureMatcher
+# Deduplication parameters after structure generation with Genarris
+pre_relaxation_filter:        # Before ML relaxation
+  ltol: 0.3                    # Lattice parameter tolerance
+  stol: 0.4                    # Site tolerance (Angstrom)
+  angle_tol: 5                 # Angle tolerance (degrees)
+  npartitions: 1000            # Size of slurm array
+
+# ML relaxation parameters
+relax:
+  calculator: uma_sm_1p1_omc # UMA model type (or uma_sm_1p1_omol)
+  optimizer: BFGS            # Optimization algorithm
+  fmax: 0.01                 # Force convergence criterion (eV/Å)
+  max-steps: 1000            # Maximum optimization steps
+  fix-symmetry: false        # Do not preserve crystal symmetry
+  relax-cell: true           # Allow unit cell relaxation
+  slurm:
+    num_ranks: 1000
+
+# Filtering criteria and deduplication parameters after relaxation
+post_relaxation_filter:       # After ML relaxation
+  energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum
+  density_cutoff: 10           # Density cutoff in g/cm³
+  ltol: 0.2
+  stol: 0.3
+  angle_tol: 5
+
+# (Optional) Experimental structure evaluation settings
+evaluate:
+  method: csd               # Either "csd" or "pymatgen"
+  target_xtals_dir: /path/to/experimental/crystal/structures # Directory with experimental structures (CIF format)
+  # NOTE: Optional if molecules CSV file contains "cif_path" column
+  # Alternative: Use molecules CSV file with cif_path column instead of target_xtals_dir
+  # If molecules file contains "cif_path" column:
+  #   - Single refcode: cif_path should point to a .cif file or directory containing {refcode}.cif
+  #   - Multiple refcodes (comma-separated): cif_path should point to directory containing {refcode}.cif files
+  csd:
+    num_cpus: 60                # Number of CPUs for parallel CSD evaluation
+    # TODO: Use CSD_PYTHON_CMD executable with subprocess in eval.py
+    # python_cmd: /path/to/python/with/csd/api/installed # Python interpreter with CSD API installed
+  pymatgen:
+    match_params:           # Pymatgen matching tolerances if pymatgen method is used
+      ltol: 0.2
+      stol: 0.3
+      angle_tol: 5
+    slurm:                  # SLURM settings for pymatgen evaluation (distributed)
+      job-name: eval_pymatgen
+      cpus_per_task: 1
+      mem_gb: 10
+      time: 1000            # minutes
+
+# TODO: add (optional) free energy config
+
+# (Optional) Logging configuration
+logging:
+  level: "INFO"            # Logging level: DEBUG, INFO, WARNING, ERROR
+  console: true            # Enable console output
