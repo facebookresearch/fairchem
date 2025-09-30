@@ -17,15 +17,14 @@ from collections import defaultdict
 
 import numpy as np
 import torch
-from ase import build
 from ase.build import make_supercell
 from ase.io import read
 from torch.profiler import ProfilerActivity, profile
 
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
-from fairchem.core.datasets import data_list_collater
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -48,38 +47,13 @@ def ase_to_graph(
         max_neigh=neighbors,
         radius=cutoff,
         r_edges=external_graph,
+        task_name=dataset_name,
     )
     data_object.natoms = torch.tensor(len(atoms))
     data_object.charge = torch.LongTensor([0])
     data_object.spin = torch.LongTensor([0])
-    data_object.dataset = dataset_name
     data_object.pos.requires_grad = True
-    data_loader = torch.utils.data.DataLoader(
-        [data_object],
-        collate_fn=data_list_collater,
-        batch_size=1,
-        shuffle=False,
-    )
-    return next(iter(data_loader))
-
-
-def get_fcc_carbon_xtal(
-    neighbors: int,
-    radius: float,
-    num_atoms: int,
-    dataset_name: str,
-    lattice_constant: float = 3.8,
-    external_graph: bool = True,
-):
-    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
-    atoms = build.bulk("C", "fcc", a=lattice_constant)
-    n_cells = int(np.ceil(np.cbrt(num_atoms)))
-    atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
-    sampled_atoms = atoms[indices]
-    return ase_to_graph(
-        sampled_atoms, neighbors, radius, external_graph, dataset_name=dataset_name
-    )
+    return atomicdata_list_to_batch([data_object])
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
@@ -156,7 +130,7 @@ class InferenceBenchRunner(Runner):
 
         model_to_qps_data = defaultdict(list)
 
-        for moel_name, model_checkpoint in self.model_checkpoints.items():
+        for model_name, model_checkpoint in self.model_checkpoints.items():
             logging.info(
                 f"Loading model: {model_checkpoint}, inference_settings: {self.inference_settings}"
             )
@@ -174,10 +148,10 @@ class InferenceBenchRunner(Runner):
             def yield_inputs(_max_neighbors=max_neighbors, _cutoff=cutoff):
                 if self.natoms_list is not None:
                     for natoms in self.natoms_list:
-                        data = get_fcc_carbon_xtal(
+                        data = ase_to_graph(
+                            get_fcc_carbon_xtal(natoms),
                             _max_neighbors,
                             _cutoff,
-                            natoms,
                             external_graph=self.inference_settings.external_graph_gen,
                             dataset_name=self.dataset_name,
                         )
@@ -210,7 +184,7 @@ class InferenceBenchRunner(Runner):
                 if self.generate_traces:
                     make_profile(data, predictor, name=name, save_loc=self.run_dir)
                 qps, ns_per_day = get_qps(data, predictor, timeiters=self.timeiters)
-                model_to_qps_data[moel_name].append([num_atoms, ns_per_day])
+                model_to_qps_data[model_name].append([num_atoms, ns_per_day])
                 logging.info(
                     f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
                 )
