@@ -81,7 +81,6 @@ The advanced user might quickly see that **default** mode and **turbo** mode are
 | activation_checkpointing | this uses a custom chunked activation checkpointing algorithm and allows significant savings in memory for a small inference speed penalty. If you are predicting on systems >1000 atoms, we recommend keeping this on. However, if you want the absolute fastest inference possible for small systems, you can turn this off |
 | merge_mole | This is useful in long rollout applications where the system composition stays constant. By pre-merge the MoLE weights, we can save both memory and compute. |
 | compile | This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems. |
-| wigner_cuda | This is a special mode that turns on cuda graphs for the internal Wigner matrix calculations and will lead to significant speed ups for smaller systems |
 | external_graph_gen | Only use this if you want to use an external graph generator. This should be rarely used except for development |
 
 For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
@@ -94,7 +93,6 @@ settings = InferenceSettings(
     activation_checkpointing=False,
     merge_mole=True,
     compile=True,
-    wigner_cuda=True,
     external_graph_gen=False,
     internal_graph_gen_version=2,
 )
@@ -120,7 +118,6 @@ from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 inference_settings = InferenceSettings(
     tf32=True,
     merge_mole=True,
-    wigner_cuda=False,
     compile=False,
     activation_checkpointing=False,
     internal_graph_gen_version=2,

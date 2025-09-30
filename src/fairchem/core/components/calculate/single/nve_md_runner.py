@@ -21,9 +21,9 @@ from tqdm import tqdm
 from fairchem.core.components.calculate import CalculateRunner
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from ase.calculators.calculator import Calculator
+
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 from ase.md import MDLogger
@@ -117,7 +117,7 @@ class NVEMDRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        input_data: Sequence,
+        input_data: AtomsSequence,
         time_step: float,
         steps: float,
         save_frequency: int = 10,

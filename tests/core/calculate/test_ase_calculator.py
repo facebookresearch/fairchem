@@ -399,7 +399,6 @@ def test_simple_md():
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
-        wigner_cuda=False,
         compile=False,
         activation_checkpointing=False,
         internal_graph_gen_version=2,
@@ -417,7 +416,6 @@ def test_parallel_md(checkpointing):
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
-        wigner_cuda=False,
         compile=False,
         activation_checkpointing=checkpointing,
         internal_graph_gen_version=2,

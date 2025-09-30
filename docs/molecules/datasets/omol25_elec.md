@@ -1,18 +1,18 @@
-# Open Molecule 2025 Electronic Structures Dataset
+# OMol25 Electronic Structures
 
 The Open Molecules 2025 (OMol25) dataset represents the largest dataset of its kind, with more than 100 million density functional theory (DFT) calculations at the ωB97M-V/def2-TZVPD level of theory, spanning several chemical domains including small molecules, biomolecules, metal complexes, and electrolytes.
 
 At release, the OMol25 dataset provided structure energies, per-atom forces, and Lowdin/Mulliken charges and spins, where available. These properties were sufficient to train state-of-the-art machine learning interatomic potentials (MLIPs) and are already demonstrating incredible performance across a wide range of applications. However, to maximize the community benefit of these calculations, we have partnered with the [Department of Energy’s Argonne National Laboratory](https://www.anl.gov/) to provide access to the raw DFT outputs and additional files for the OMol25 dataset.
 
-By releasing the ORCA output files, users will be able to parse NBO orbital/bonding information, reduced orbital populations, Fock matrices, and more. By releasing the ORCA GBW files, users will be able to run electronic structure post-processing in order to obtain higher quality partial charges and partial spins and a variety of more advanced electronic features that could be extremely valuable for physics-informed ML models. Finally, the release will provide critical high quality data for nascent ML models that train directly on electron densities. 
+By releasing the [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) output files, users will be able to parse NBO orbital/bonding information, reduced orbital populations, Fock matrices, and more. By releasing the ORCA GBW files, users will be able to run electronic structure post-processing in order to obtain higher quality partial charges and partial spins and a variety of more advanced electronic features that could be extremely valuable for physics-informed ML models. Finally, the release will provide critical high quality data for nascent ML models that train directly on electron densities.
 
 ## Data Description
 
-The OMol25 dataset is broken into several training splits - All and 4M. The 4M split corresponds to a randomly sampled 4M subset of the full OMol25 dataset. Given the size of the full dataset, O(petabytes), we are first releasing all electronic structure and ORCA output data for the 4M split. Based on community interest, we will work to provide the full dataset. 
+The OMol25 dataset is broken into several training splits - All and 4M. The 4M split corresponds to a randomly sampled 4M subset of the full OMol25 dataset. Given the size of the full dataset, O(petabytes), we are first releasing all electronic structure and ORCA output data for the 4M split. Based on community interest, we will work to provide the full dataset.
 
 For each calculation, the following data is available:
 
-* **orca.tar.zst**: Bundle of the raw ORCA outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:
+* **orca.tar.zst**: Bundle of the raw [ORCA](https://www.faccts.de/docs/orca/6.0/manual/) outputs - including (orca.out, orca.inp orca.engrad, orca_property.txt, orca.xyz). To open:
 
 ```
 >> tar --zstd -xvf orca.tar.zst
@@ -61,7 +61,7 @@ argonne_paths = []
 for idx in indices:
     # ASE Atoms object that can be visualized/examined
     atoms = dataset.get_atoms(idx)
-    # Check if this is a system you care about. 
+    # Check if this is a system you care about.
     is_relevant = is_atoms_object_relevant(atoms)
     if is_relevant:
 	# Extract the relative path that matches the Argonne cluster
