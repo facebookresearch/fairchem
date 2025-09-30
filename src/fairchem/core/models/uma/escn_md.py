@@ -132,7 +132,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
-        use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
     ) -> None:

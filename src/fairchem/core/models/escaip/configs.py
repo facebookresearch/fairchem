@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 
 @dataclass
@@ -18,6 +18,10 @@ class GlobalConfigs:
     use_padding: bool = True
     use_fp16_backbone: bool = False
     dataset_list: list = field(default_factory=list)
+    # SV - lr 
+    j_coupling_hidden_dim: int = 128
+    use_dipole: bool = False
+    dipole_key: Optional[str] = "dipole_moment"
 
 
 @dataclass
@@ -37,6 +41,13 @@ class MolecularGraphConfigs:
         "gaussian"
     )
     use_envelope: bool = True
+    # SV - lr 
+    max_radius_lr: float = 8.0 # can we do away w/ this b/c allcsaip?
+    max_neighbors_lr: int = 30 # can we do away w/ this b/c allcsaip?
+    allowed_charges: list = field(default_factory=list)
+    allowed_spins: list = field(default_factory=list)
+    use_partial_charge: bool = False
+    use_partial_spin: bool = False
 
 
 @dataclass
@@ -64,7 +75,11 @@ class GraphNeuralNetworksConfigs:
     use_frequency_embedding: bool = True
     freequency_list: list = field(default_factory=lambda: [20, 10, 4, 10, 20])
     energy_reduce: Literal["sum", "mean"] = "sum"
-
+    # SV - lr 
+    constrain_charge: bool = False
+    constrain_spin: bool = False
+    two_component_latent_charge: bool = False
+    heisenberg_tf: bool = False
 
 @dataclass
 class RegularizationConfigs:

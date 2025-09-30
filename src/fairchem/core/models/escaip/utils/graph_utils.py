@@ -412,3 +412,10 @@ def get_displacement_and_cell(data, regress_stress, regress_forces, direct_force
     ):
         data["pos"].requires_grad = True
     return displacement, orig_cell
+
+
+# TODO bring in LR machinery in batched format
+# heisenberg_potential_full_from_edge_inds
+# potential_full_from_edge_inds
+# get_potential
+# one_hot_encode --> can now do away w/ bc of embedding in uma (i think)

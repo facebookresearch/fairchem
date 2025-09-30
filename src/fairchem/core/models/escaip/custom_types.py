@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 
 import torch
-
+from typing import Optional
 
 @dataclasses.dataclass
 class GraphAttentionData:
@@ -35,6 +35,52 @@ class GraphAttentionData:
     node_batch: torch.Tensor
     node_padding_mask: torch.Tensor
     graph_padding_mask: torch.Tensor
+
+@dataclasses.dataclass
+class GeneralGraphAttentionData:
+    """
+    Custom dataclass for storing graph data for Graph Attention Networks
+    atomic_numbers: (N)
+    edge_distance_expansion: (N, max_nei, edge_distance_expansion_size)
+    edge_direction: (N, max_nei, 3)
+    node_direction_expansion: (N, node_direction_expansion_size + len(allowed_charges) + len(allowed_spins))
+    attn_mask: (N * num_head, max_nei, max_nei) Attention mask with angle embeddings
+    angle_embedding: (N * num_head, max_nei, max_nei) Angle embeddings (cosine)
+    neighbor_list: (N, max_nei)
+    neighbor_mask: (N, max_nei)
+    node_batch: (N)
+    node_padding_mask: (N)
+    graph_padding_mask: (num_graphs)
+    spin: (num_graphs)
+    charge: (num_graphs)
+    partial_charge: (N)
+    partial_spin: (N)
+    pos: (N, 3)
+    #batch_ind: (N)
+    edge_index_lr: (E, 2) Edge index for long range interactions
+    dipole: (Optional[torch.Tensor]) (num_graphs, 3) Dipole moment for each graph, none if not used
+    """
+
+    atomic_numbers: torch.Tensor
+    edge_distance_expansion: torch.Tensor
+    edge_direction: torch.Tensor
+    node_direction_expansion: torch.Tensor
+    attn_mask: torch.Tensor
+    angle_embedding: torch.Tensor
+    neighbor_list: torch.Tensor
+    neighbor_mask: torch.Tensor
+    node_batch: torch.Tensor
+    node_padding_mask: torch.Tensor
+    graph_padding_mask: torch.Tensor 
+    # SV - lr 
+    spin: torch.Tensor
+    charge: torch.Tensor
+    pos: torch.Tensor
+    # batch_ind: torch.Tensor
+    edge_index_lr: torch.Tensor
+    partial_charge: torch.Tensor = None
+    partial_spin: torch.Tensor = None
+    dipole: Optional[torch.Tensor] = None
 
 
 def map_graph_attention_data_to_device(
