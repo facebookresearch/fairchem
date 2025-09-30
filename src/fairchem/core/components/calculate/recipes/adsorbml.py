@@ -12,12 +12,20 @@ from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from ase.atoms import Atoms
-from fairchem.data.oc.core.adsorbate import Adsorbate
-from fairchem.data.oc.core.multi_adsorbate_slab_config import (
-    MultipleAdsorbateSlabConfig,
-)
-from fairchem.data.oc.core.slab import Slab
-from fairchem.data.oc.utils import DetectTrajAnomaly
+from monty.dev import requires
+
+try:
+    from fairchem.data.oc.core.adsorbate import Adsorbate
+    from fairchem.data.oc.core.multi_adsorbate_slab_config import (
+        MultipleAdsorbateSlabConfig,
+    )
+    from fairchem.data.oc.core.slab import Slab
+    from fairchem.data.oc.utils import DetectTrajAnomaly
+
+    data_oc_installed = True
+except ImportError:
+    data_oc_installed = False
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,6 +52,7 @@ def relax_job(initial_atoms, calc, optimizer_cls, fmax, steps):
     return result
 
 
+@requires(data_oc_installed, message="Requires `fairchem-data-oc` to be installed")
 def adsorb_ml_pipeline(
     slab: Slab,
     adsorbates_kwargs: dict[str, Any],
@@ -138,6 +147,7 @@ def adsorb_ml_pipeline(
     }
 
 
+@requires(data_oc_installed, message="Requires `fairchem-data-oc` to be installed")
 def ocp_adslab_generator(
     slab: Slab | Atoms,
     adsorbates_kwargs: list[dict[str, Any]] | None = None,
@@ -313,6 +323,7 @@ def detect_anomaly(
 
 
 # Run the AdsorbML workflow for a given slab and adsorbate
+@requires(data_oc_installed, message="Requires `fairchem-data-oc` to be installed")
 def run_adsorbml(
     slab,
     adsorbate,

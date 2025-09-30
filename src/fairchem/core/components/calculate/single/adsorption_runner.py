@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
     from ase.optimize import Optimizer
 
-    from fairchem.core.datasets import AseDBDataset
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 class AdsorptionRunner(CalculateRunner):
@@ -51,7 +51,7 @@ class AdsorptionRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        input_data: AseDBDataset,
+        input_data: AtomsSequence,
         save_relaxed_atoms: bool = True,
         relax_surface: bool = False,
         optimizer_cls: type[Optimizer] = LBFGS,
@@ -92,7 +92,7 @@ class AdsorptionRunner(CalculateRunner):
         all_results = []
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running relaxations"):
-            atoms = self.input_data.get_atoms(i)
+            atoms = self.input_data[i]
             results = adsorb_atoms(
                 atoms,
                 self.calculator,
