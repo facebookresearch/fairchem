@@ -14,12 +14,11 @@ if TYPE_CHECKING:
     from fairchem.core.launchers.api import SchedulerConfig, SlurmConfig
 
 
-def ray_on_slurm_launch(
-    run_dir: str, scheduler_config: SchedulerConfig, runner_config: DictConfig
-):
+def ray_on_slurm_launch(config: DictConfig):
+    scheduler_config: SchedulerConfig = config.job.scheduler
     slurm_config: SlurmConfig = scheduler_config.slurm
-    runner: Runner = hydra.utils.instantiate(runner_config)
-    cluster = RayCluster(log_dir=Path(run_dir))
+    runner: Runner = hydra.utils.instantiate(config.runner)
+    cluster = RayCluster(log_dir=Path(config.job.run_dir))
     cluster_reqs = {
         "slurm_account": slurm_config.account,
         "slurm_qos": slurm_config.qos,
@@ -34,6 +33,7 @@ def ray_on_slurm_launch(
         logging.info("Ray head started")
 
         # allocate the a ray cluster that is the same size and resources as the slurm job
+        # todo, if multiple, launch multiple jobs instead of 1?
         cluster.start_workers(
             1,
             requirements=cluster_reqs
@@ -48,6 +48,7 @@ def ray_on_slurm_launch(
         logging.info("Ray workers started")
 
         # launch a payload on ray, move this to run on the head node
+        # add a gpu for now
         cluster.submit_driver(
             runner.run,
             requirements=cluster_reqs

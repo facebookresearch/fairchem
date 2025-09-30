@@ -104,14 +104,16 @@ def main(
             os.getenv("SLURM_SUBMIT_HOST") is None
         ), "SLURM DID NOT SUBMIT JOB!! Please do not submit jobs from an active slurm job (srun or otherwise)"
 
-        if scheduler_cfg.ray_cluster is None:
+        if scheduler_cfg.use_ray:
+            logging.info("Lauching job on Ray + Slurm cluster")
+            from fairchem.core.launchers import ray_on_slurm_launch
+
+            ray_on_slurm_launch.ray_on_slurm_launch(cfg)
+        else:
+            logging.info("Lauching job on directly on Slurm cluster")
             from fairchem.core.launchers import slurm_launch
 
             slurm_launch.slurm_launch(cfg, log_dir)
-        else:
-            from fairchem.core.launchers import ray_on_slurm_launch
-
-            ray_on_slurm_launch.ray_on_slurm_launch(cfg, log_dir, cfg.runner)
     elif scheduler_cfg.mode == SchedulerType.LOCAL:  # Run locally
         if scheduler_cfg.num_nodes > 1:
             cfg.job.scheduler.num_nodes = 1
