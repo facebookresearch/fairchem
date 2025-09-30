@@ -25,7 +25,7 @@ from fairchem.core.components.calculate.recipes.elastic import (
 if TYPE_CHECKING:
     from ase.calculators.calculator import Calculator
 
-    from fairchem.core.datasets import AseDBDataset
+    from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
 eVA3_to_GPa = 1 / ase.units.GPa
@@ -39,7 +39,7 @@ class ElasticityRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        input_data: AseDBDataset,
+        input_data: AtomsSequence,
     ):
         """
         Initialize the ElasticityRunner.
@@ -65,7 +65,7 @@ class ElasticityRunner(CalculateRunner):
 
         chunk_indices = np.array_split(range(len(self.input_data)), num_jobs)[job_num]
         for i in tqdm(chunk_indices, desc="Running elasticity calculations."):
-            atoms = self.input_data.get_atoms(i)
+            atoms = self.input_data[i]
             try:
                 results = calculate_elasticity(
                     atoms,

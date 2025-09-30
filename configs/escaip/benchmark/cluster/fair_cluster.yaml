@@ -1,0 +1,13 @@
+run_dir: /checkpoint/ericqu/ESCAIPRUNDIR
+data_root_dir: /large_experiments/opencatalyst/foundation_models/benchmark
+mode: SLURM
+device: CUDA
+ranks_per_node: 8
+dataloader_workers: 2
+timeout_hr: 72
+debug: False
+mem_gb: 128
+cpus_per_task: 9
+partition: "learnaccel"
+additional_parameters:
+  constraint: "volta32gb"

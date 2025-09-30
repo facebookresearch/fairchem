@@ -156,10 +156,8 @@ def test_calculator_setup(all_calculators):
         datasets = list(calc.predictor.dataset_to_tasks.keys())
 
         # all conservative UMA checkpoints should support E/F/S!
-        if (
-            not calc.predictor.direct_forces
-            and len(datasets) > 1
-            or calc.task_name != "omol"
+        if not calc.predictor.direct_forces and (
+            len(datasets) > 1 or calc.task_name != "omol"
         ):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
@@ -415,7 +413,6 @@ def test_simple_md():
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
-        wigner_cuda=False,
         compile=False,
         activation_checkpointing=False,
         internal_graph_gen_version=2,
@@ -428,13 +425,13 @@ def test_simple_md():
     run_md_simulation(calc, steps=10)
 
 
-def test_parallel_md():
+@pytest.mark.parametrize("checkpointing", [True, False])
+def test_parallel_md(checkpointing):
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
-        wigner_cuda=False,
         compile=False,
-        activation_checkpointing=False,
+        activation_checkpointing=checkpointing,
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )

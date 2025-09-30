@@ -1,0 +1,2 @@
+model_name: escaip_tot_sm
+ckpt_path: /private/home/ericqu/escaip_sm_tot.pt
