@@ -1,0 +1,3 @@
+_target_: mace.calculators.mace_omol
+model: extra_large
+device: cuda

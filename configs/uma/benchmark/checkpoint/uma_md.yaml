@@ -1,2 +1,2 @@
-model_name: uma_md
-ckpt_path: ${cluster.checkpoint_root_dir}/uma_md.pt
+model_name: uma_md_1p1
+ckpt_path: /large_experiments/opencatalyst/foundation_models/checkpoints/puma/uma_md_1p1_wstress.pt

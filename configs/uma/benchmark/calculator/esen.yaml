@@ -1,0 +1,2 @@
+  _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
+  name_or_path: ${checkpoint.ckpt_path}

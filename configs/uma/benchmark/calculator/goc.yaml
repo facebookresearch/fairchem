@@ -1,0 +1,8 @@
+  _target_: fairchem.experimental.foundation_models.ocp_calculator.OCPCalculator
+  checkpoint_path: ${checkpoint.ckpt_path}
+  trainer: "equiformerv2_forces"
+  linref: "/large_experiments/opencatalyst/foundation_models/data/omol/processed/lmdbs/250430-release/splits/data/stats/joint_hof_lin_coeffs.npz"
+  cpu: False
+  a2g_kwargs:
+    molecule_cell_size: 120
+    r_data_keys: ["charge", "spin"]
