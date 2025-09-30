@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from functools import partial
+from collections import Counter
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -314,6 +315,67 @@ class FAIRChemCalculator(Calculator):
             raise ValueError(
                 f"Invalid value for spin: {spin}. Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
             )
+
+
+class FormationEnergyCalculator(FAIRChemCalculator):
+    def __init__(
+        self,
+        predict_unit: MLIPPredictUnit,
+        task_name: UMATask | str | None = None,
+        seed: int | None = None,  # deprecated
+        element_references: dict | None = None
+    ):
+        """
+        Initialize the FormationEnergyCalculator.
+
+        Args:
+            predict_unit (MLIPPredictUnit): A pretrained MLIPPredictUnit.
+            task_name (UMATask or str, optional): Name of the task to use if using a UMA checkpoint.
+            seed (int, optional): Deprecated. Random seed for reproducibility.
+            element_references (dict): Dictionary mapping element symbols to their reference bulk phase energies.
+                Using the default will take the appropriate values for the dataset corresponding to the task given, this
+                is likely what you want to use, always.
+        """
+        super().__init__(predict_unit=predict_unit, task_name=task_name, seed=seed)
+
+        if element_references is None:
+            # get them from HF
+            element_references = {}
+
+        self._element_refs = element_references
+
+    def calculate(
+        self, atoms: Atoms, properties: list[str], system_changes: list[str]
+    ) -> None:
+        """
+        Perform the calculation for the given atomic structure and convert total energy to formation energy.
+
+        Args:
+            atoms (Atoms): The atomic structure to calculate properties for.
+            properties (list[str]): The list of properties to calculate.
+            system_changes (list[str]): The list of changes in the system.
+        """
+        # First get the total energy from the parent calculator
+        super().calculate(atoms, properties, system_changes)
+        
+        # If energy was calculated, convert it to formation energy
+        total_energy = self.results["energy"]
+        
+        atomic_numbers = atoms.get_atomic_numbers()
+        element_symbols = atoms.get_chemical_symbols()
+        element_counts = Counter(element_symbols)
+        
+        missing_elements = set(element_symbols) - set(self._element_refs.keys())
+        if missing_elements:
+            raise ValueError(f"Missing reference energies for elements: {missing_elements}")
+        
+        total_ref_energy = sum(
+            self._element_refs[element] * count 
+            for element, count in element_counts.items()
+        )
+        
+        formation_energy = (total_energy - total_ref_energy)
+        self.results["energy"] = formation_energy
 
 
 class MixedPBCError(ValueError):

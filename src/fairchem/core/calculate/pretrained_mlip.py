@@ -116,7 +116,7 @@ def get_predict_unit(
 
 def get_reference_energies(
     model_name: str,
-    reference_type: Literal["atom_refs", "bulk_refs"],
+    reference_type: Literal["atom_refs"] = "atom_refs",
     cache_dir: str = CACHE_DIR,
 ) -> dict:
     """
