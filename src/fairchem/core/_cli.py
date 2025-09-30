@@ -121,7 +121,7 @@ def main(
                 f"You cannot use more than one node (scheduler_cfg.num_nodes={scheduler_cfg.num_nodes}) in LOCAL mode, over-riding to 1 node"
             )
         # if using ray, then launch ray cluster locally
-        if scheduler_cfg.ray_cluster is not None:
+        if scheduler_cfg.use_ray:
             logging.info("Running in local mode with local ray cluster")
             runner: Runner = hydra.utils.instantiate(cfg.runner)
             runner.run()
