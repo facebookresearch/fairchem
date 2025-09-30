@@ -30,6 +30,7 @@ class HuggingFaceCheckpoint:
     subfolder: str | None = None  # specify a hf repo subfolder
     revision: str | None = None  # specify a version tag, branch, commit hash
     atom_refs: dict | None = None  # specify an isolated atomic reference
+    mp_elemental_refs: dict | None = None  # mp unary compount elemental reference
 
 
 @dataclass
@@ -107,31 +108,37 @@ def get_predict_unit(
         revision=model_checkpoint.revision,
         cache_dir=cache_dir,
     )
-    atom_refs = get_isolated_atomic_energies(model_name, cache_dir)
+    atom_refs = get_reference_energies(model_name, "atom_refs", cache_dir)
     return load_predict_unit(
         checkpoint_path, inference_settings, overrides, device, atom_refs
     )
 
 
-def get_isolated_atomic_energies(model_name: str, cache_dir: str = CACHE_DIR) -> dict:
+def get_reference_energies(
+    model_name: str,
+    reference_type: Literal["atom_refs", "bulk_refs"],
+    cache_dir: str = CACHE_DIR,
+) -> dict:
     """
     Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
 
     Args:
         model_name: Name of the model to load from available pretrained models.
+        reference_type: Type of references file to download: atom_refs or bulk_refs.
         cache_dir: Path to folder where files will be stored. Default is "~/.cache/fairchem"
     Returns:
-        Atomic element reference data
+        Atomic or bulk phase element reference data
 
     Raises:
         KeyError: If the specified model_name is not found in available models.
     """
     model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
-    atomic_refs_path = hf_hub_download(
-        filename=model_checkpoint.atom_refs["filename"],
+    file_data = getattr(model_checkpoint, reference_type)
+    refs_path = hf_hub_download(
+        filename=file_data["filename"],
         repo_id=model_checkpoint.repo_id,
-        subfolder=model_checkpoint.atom_refs["subfolder"],
+        subfolder=file_data["subfolder"],
         revision=model_checkpoint.revision,
         cache_dir=cache_dir,
     )
-    return OmegaConf.load(atomic_refs_path)
+    return OmegaConf.load(refs_path)
