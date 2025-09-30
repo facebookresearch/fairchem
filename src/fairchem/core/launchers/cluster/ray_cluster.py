@@ -10,12 +10,10 @@ import tempfile
 import time
 import typing as tp
 import uuid
-from contextlib import closing
+from contextlib import closing, suppress
 from pathlib import Path
 
 import submitit
-
-# utils:
 
 
 def find_free_port():
@@ -59,25 +57,17 @@ def rmdir(directory_path: Path):
     """
     Remove a directory and its contents with a best-effort approach.
     """
-    try:
+    with suppress(Exception):
         for item in directory_path.iterdir():
             if item.is_file():
-                try:
-                    item.unlink()
-                except:
-                    pass
+                item.unlink()
             elif item.is_dir():
-                try:
-                    rmdir(item)
-                except:
-                    pass
+                rmdir(item)
         # Remove the now-empty directory
         directory_path.rmdir()
-    except:
-        pass
 
 
-def scancel(job_ids: tp.List[str]):
+def scancel(job_ids: list[str]):
     """
     Cancel the SLURM jobs with the given job IDs.
 
@@ -86,7 +76,7 @@ def scancel(job_ids: tp.List[str]):
     Args:
         job_ids (List[str]): A list of job IDs to cancel.
     """
-    root_ids = list(set([i.split("_", maxsplit=2)[0] for i in job_ids]))
+    root_ids = list({i.split("_", maxsplit=2)[0] for i in job_ids})
     subprocess.check_call(["scancel"] + root_ids)
 
 
@@ -203,7 +193,7 @@ class RayClusterState:
                 fp=f,
             )
 
-    def list_job_ids(self) -> tp.List[str]:
+    def list_job_ids(self) -> list[str]:
         """Lists all job IDs stored in the jobs directory."""
         return [f.stem for f in self.jobs_dir.iterdir()]
 
@@ -361,7 +351,7 @@ class RayCluster:
     log_dir: Path
     state: RayClusterState
 
-    jobs: tp.List[submitit.Job] = []
+    jobs: tp.ClassVar[list[submitit.Job]] = []
     is_shutdown = False
     num_worker_groups = 0
     num_drivers = 0
@@ -383,7 +373,7 @@ class RayCluster:
 
     def start_head(
         self,
-        requirements: tp.Dict[str, tp.Union[str, int]],
+        requirements: dict[str, tp.Union[str, int]],
         executor: str = "slurm",
     ):
         """
@@ -405,7 +395,7 @@ class RayCluster:
     def start_workers(
         self,
         num_workers: int,
-        requirements: tp.Dict[str, tp.Union[str, int]],
+        requirements: dict[str, tp.Union[str, int]],
         executor: str = "slurm",
     ):
         """
@@ -423,10 +413,11 @@ class RayCluster:
         def work_closure(worker_id: int):
             _ray_worker_script(worker_id, self.state)
 
-        jobs = []
         with s_executor.batch():  # TODO set slurm array max parallelism here, because we really want all jobs to be scheduled at the same time
-            for i in range(num_workers):
-                jobs.append(s_executor.submit(_ray_worker_script, i, self.state))
+            jobs = [
+                s_executor.submit(_ray_worker_script, i, self.state)
+                for i in range(num_workers)
+            ]
 
         for idx, j in enumerate(jobs):
             mk_symlinks(self.log_dir, f"worker_{self.num_worker_groups}_{idx}", j.paths)
@@ -439,7 +430,7 @@ class RayCluster:
     def submit_driver(
         self,
         payload: tp.Callable[..., PlayloadReturnT],
-        requirements: tp.Dict[str, tp.Union[str, int]],
+        requirements: dict[str, tp.Union[str, int]],
         block: bool = False,
         executor: str = "slurm",
         **kwargs,
