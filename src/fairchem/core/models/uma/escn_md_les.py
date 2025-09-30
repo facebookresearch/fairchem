@@ -20,9 +20,13 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
+#from fairchem.core.models.uma.common.rotation import (
+#    init_edge_rot_mat,
+#    rotation_to_wigner,
+#)
 from fairchem.core.models.uma.common.rotation import (
-    init_edge_rot_mat,
-    rotation_to_wigner,
+    eulers_to_wigner,
+    init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
@@ -296,10 +300,10 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
                 )
         else:
             with record_function("obtain rotmat wigner original"):
-                edge_rot_mat = init_edge_rot_mat(
+                edge_rot_mat = init_edge_rot_euler_angles(
                     edge_distance_vecs, rot_clip=(not self.direct_forces)
                 )
-                wigner = rotation_to_wigner(
+                wigner = eulers_to_wigner(
                     edge_rot_mat,
                     0,
                     self.lmax,

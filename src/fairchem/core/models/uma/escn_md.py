@@ -1307,7 +1307,12 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
 @registry.register_model("esen_efs_head_lr")
 class MLP_EFS_Head_LR(nn.Module, HeadInterface):
-    def __init__(self, backbone, prefix=None, wrap_property=True):
+    def __init__(
+            self, 
+            backbone: eSCNMDBackboneLR, 
+            prefix: str | None = None, 
+            wrap_property: bool = True,
+    ) -> None:
         super().__init__()
         backbone.energy_block = None
         backbone.force_block = None
@@ -1383,7 +1388,11 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             "EFS head is only used for gradient-based forces/stress."
         )
 
-    def get_charges(self, node_features, data):
+    def get_charges(
+        self, 
+        node_features: torch.Tensor,
+        data: AtomicData, 
+    ):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
             charges_raw = self.q_output_lr(node_features)
@@ -1429,29 +1438,15 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             
             global_charges_batchwise = data["charge"]
             global_spin_batchwise = data["spin"]
-            #print("global_charges_batchwise: ", global_charges_batchwise, " global_spin_batchwise: ", global_spin_batchwise)
 
-            #print("charges pre renorm: ", results["charges_raw"].shape)
             charges_renorm = batch_spin_charge_renormalization(
                 charges_raw=results["charges_raw"],
                 batch=data["batch"],
                 s_total=global_spin_batchwise,
                 q_total=global_charges_batchwise
             ) # return [N_atoms, 2]
-            #print("charges_renorm: ", charges_renorm.shape)
 
             
-            #num_batches = global_charges_batchwise.shape[0]   
-            #device = charges_raw.device
-            #alpha = charges_renorm[:, 0]
-            #beta = charges_renorm[:, 1]
-            #alpha_sum = torch.zeros(num_batches, device=device).scatter_add_(0, data["batch"], alpha)
-            #beta_sum  = torch.zeros(num_batches, device=device).scatter_add_(0, data["batch"], beta)
-            #q_sum = alpha_sum + beta_sum        # total charge
-            #s_sum = alpha_sum - beta_sum        # total spin
-            #print("renormalized charge: ", q_sum, " renormalized spin: ", s_sum)
-            #print(charges_renorm)
-            #print("----"*10)
             results["charges_raw"] = charges_renorm#.abs()
             results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
             results["net_partial_spin"] = (
@@ -1461,8 +1456,12 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         return results
 
 
-    def get_lr_energies(self, emb, data, return_charges: bool = False):
-        
+    def get_lr_energies(
+        self, 
+        emb: dict[str, torch.Tensor], 
+        data: AtomicData, 
+        return_charges: bool = False
+    ):        
         results = {}
 
         charge_dict = self.get_charges(
@@ -1698,7 +1697,11 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
 
 @registry.register_model("esen_mlp_energy_head_lr")
 class MLP_Energy_Head_LR(nn.Module, HeadInterface):
-    def __init__(self, backbone, reduce: str = "sum"):
+    def __init__(
+        self, 
+        backbone: eSCNMDBackboneLR, 
+        reduce: str = "sum"
+    ) -> None:
         super().__init__()
         self.reduce = reduce
 
@@ -1763,7 +1766,11 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             )
             #self.coupling_nn.apply(self._initialize_weights)
 
-    def get_charges(self, node_features, data):
+    def get_charges(
+        self, 
+        node_features: torch.Tensor,
+        data: AtomicData, 
+    ):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
             charges_raw = self.q_output_lr(node_features)
@@ -1825,7 +1832,12 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         
         return results
 
-    def get_lr_energies(self, emb, data, return_charges: bool = False):
+    def get_lr_energies(
+        self, 
+        emb: dict[str, torch.Tensor], 
+        data: AtomicData, 
+        return_charges: bool = False
+    ):
         results = {}
 
         charge_dict = self.get_charges(
@@ -1902,7 +1914,9 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         return results
 
     def forward(
-        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
+        self, 
+        data_dict: AtomicData, 
+        emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         
         node_energy = self.energy_block(
@@ -2003,7 +2017,11 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
             )
             #self.coupling_nn.apply(self._initialize_weights)
 
-    def get_charges(self, node_features, data):
+    def get_charges(
+        self, 
+        node_features: torch.Tensor,
+        data: AtomicData, 
+    ):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
             charges_raw = self.q_output_lr(node_features)
@@ -2065,7 +2083,12 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         
         return results
 
-    def get_lr_energies(self, emb, data, return_charges: bool = False):
+    def get_lr_energies(
+        self, 
+        emb: dict[str, torch.Tensor], 
+        data: AtomicData, 
+        return_charges: bool = False
+    ):
         results = {}
 
         charge_dict = self.get_charges(
