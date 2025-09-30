@@ -45,6 +45,7 @@ from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 from fairchem.core.models.utils.lr import (
     heisenberg_potential_full_from_edge_inds,
+    potential_full_ewald_batched,
     potential_full_from_edge_inds,
     batch_spin_charge_renormalization
 )
@@ -1880,16 +1881,39 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         else:
             edges_lr = emb["edge_index"]
 
-        energy_output_lr_dict = potential_full_from_edge_inds(
-            edge_index=edges_lr,
-            pos=data["pos"],
-            q=charge_dict["charges"],
-            sigma=1.0,
-            epsilon=1e-6,
-            return_bec=self.return_bec,
-            batch=data["batch"],
-            conv_function_tf=self.conv_function_tf,
-        )
+        #print("cell: ",  data["cell"].shape)
+        #print("pos: ",  data["pos"].shape)
+        #print("batch: ",  data["batch"].shape)
+        #print("batch unique: ",  data["batch"].unique().shape)
+        
+        # check that all members of the batch have a valid cell, shape is (n_molecules, 3, 3), yields (n_molecules,)
+        if data["cell"] is not None:
+            det_cells = torch.linalg.det(data["cell"])
+        
+        if torch.any(det_cells < 1e-6) or data["cell"] is None:
+            # use direct sums
+            energy_output_lr_dict = potential_full_from_edge_inds(
+                edge_index=edges_lr,
+                pos=data["pos"],
+                q=charge_dict["charges"],
+                sigma=1.0,
+                epsilon=1e-6,
+                return_bec=self.return_bec,
+                batch=data["batch"],
+                conv_function_tf=self.conv_function_tf,
+            )
+        else:
+            energy_output_lr_dict = potential_full_ewald_batched(
+                pos=data["pos"],
+                q=charge_dict["charges"],
+                cell=data["cell"],
+                sigma=1.0,
+                dl=2.0,
+                epsilon=1e-6,
+                return_bec=self.return_bec,
+                batch=data["batch"],
+                #conv_function_tf=self.conv_function_tf,
+            )
         
         results["energy"] = energy_output_lr_dict["potential"]
 
@@ -1900,6 +1924,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
          
 
         if self.heisenberg_tf:
+            #if torch.any(det_cells < 1e-6) or data["cell"] is None:
             energy_spin = heisenberg_potential_full_from_edge_inds(
                 edge_index=data["edge_index"],
                 q=charge_dict["charges_raw"],
@@ -1907,6 +1932,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
                 nn=self.coupling_nn,
                 sigma=1.0,
             )
+            #else: 
             results["energy_spin"] = energy_spin
 
         if return_charges:

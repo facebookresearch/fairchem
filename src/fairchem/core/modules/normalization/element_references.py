@@ -38,12 +38,22 @@ class ElementReferences(nn.Module):
     def compute_references(batch, tensor, elem_refs, operation):
         assert tensor.shape[0] == len(batch)
         with torch.autocast(elem_refs.device.type, enabled=False):
+            try:
+                batch_batch = batch.batch_full
+            except: 
+                batch_batch = batch.batch
+
+            try: 
+                atom_nums = batch.atomic_numbers_full
+            except: 
+                atom_nums = batch.atomic_numbers
+
             refs = torch.zeros(
                 tensor.shape, dtype=elem_refs.dtype, device=tensor.device
             ).scatter_reduce(
                 0,
-                batch.batch_full,
-                elem_refs[batch.atomic_numbers_full],
+                batch_batch,
+                elem_refs[atom_nums],
                 reduce="sum",
             )
             if operation == "subtract":

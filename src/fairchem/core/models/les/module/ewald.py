@@ -49,6 +49,7 @@ class Ewald(nn.Module):
             mask = batch == i  # Create a mask for the i-th configuration
             # Calculate the potential energy for the i-th configuration
             r_raw_now, q_now = r[mask], q[mask]
+            
             if cell is not None:
                 box_now = cell[i]  # Get the box for the i-th configuration
             
@@ -115,6 +116,7 @@ class Ewald(nn.Module):
         # Create nvec grid and compute k vectors
         nvec = torch.stack(torch.meshgrid(n1, n2, n3, indexing="ij"), dim=-1).reshape(-1, 3).to(G.dtype)
         kvec = nvec @ G  # [N_total, 3]
+        #-print("kvec: ", kvec.shape)
 
         # Apply k-space cutoff and filter
         k_sq = torch.sum(kvec ** 2, dim=1)
@@ -141,6 +143,10 @@ class Ewald(nn.Module):
          #for torchscript compatibility, to avoid dtype mismatch, only use real part
         cos_k_dot_r = torch.cos(k_dot_r)
         sin_k_dot_r = torch.sin(k_dot_r)
+        #print("qshape: ", q.shape)
+        #print("cos_k_dot_r: ", cos_k_dot_r.shape)
+        #print("sin_k_dot_r: ", sin_k_dot_r.shape)
+        #print("q.shape: ", q.shape)
         S_k_real = torch.sum(q * cos_k_dot_r, dim=0)  # [M]
         S_k_imag = torch.sum(q * sin_k_dot_r, dim=0)  # [M]
         S_k_sq = S_k_real**2 + S_k_imag**2  # [M]

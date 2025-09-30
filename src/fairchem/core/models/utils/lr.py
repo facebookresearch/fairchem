@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-from torch_scatter import scatter, scatter_add
+from torch_scatter import scatter
 from fairchem.core.models.les.util import grad
 
 
@@ -111,6 +111,176 @@ def potential_full_from_edge_inds(
     return results
 
 
+            
+def potential_full_ewald_batched(
+    pos: torch.Tensor,
+    q: torch.Tensor,
+    cell: torch.Tensor,
+    dl: float = 2.0,
+    sigma: float = 1.0,
+    epsilon: float = 1e-6,
+    return_bec: bool = False,
+    batch: torch.Tensor | None = None,
+):
+    """
+    Get the potential energy for each atom in the batch using Ewald summation.
+    Takes:
+        pos: position matrix of shape (n_atoms, 3)
+        q: charge vector of shape (n_atoms, 1)
+        cell: cell matrix of shape (batch_size, 3, 3)
+        sigma: sigma parameter for the error function
+        epsilon: epsilon parameter for the error function
+        dl: grid resolution
+        k_sq_max: maximum k^2 value
+        twopi: 2 * pi
+        max_num_neighbors: maximum number of neighbors for each atom
+        batch: batch vector of shape (n_atoms,)
+    Returns:
+        potential_dict: dictionary of potential energy for each atom
+    """
+    
+    device = pos.device
+    sigma_sq_half = sigma ** 2 / 2.0
+    k_sq_max = (np.pi / dl) ** 2
+    norm_factor = 90.0474
+    
+    if batch is None:
+        batch = torch.zeros(pos.shape[0], dtype=torch.int64, device=device)
+    
+    # Compute reciprocal lattice vectors for each batch
+    cell_inv = torch.linalg.inv(cell)  # [B, 3, 3]
+    G = 2 * torch.pi * cell_inv.transpose(-2, -1)  # [B, 3, 3]
+
+    # Determine maximum Nk for each axis in each batch
+    norms = torch.norm(cell, dim=2)  # [B, 3]
+    Nk = torch.clamp(torch.floor(norms / dl).int(), min=1)  # [B, 3]
+    
+    # Pre-allocate maximum grid size to reuse memory
+    max_Nk = Nk.max()
+    max_grid_size = (2 * max_Nk + 1) ** 3
+    
+    # Pre-allocate reusable tensors
+    nvec_buffer = torch.empty((max_grid_size, 3), device=device, dtype=G.dtype)
+    kvec_buffer = torch.empty((max_grid_size, 3), device=device, dtype=G.dtype)
+    k_sq_buffer = torch.empty(max_grid_size, device=device, dtype=G.dtype)
+    
+    # Process each batch separately to minimize memory usage
+    unique_batches = torch.unique(batch)
+    result_potentials = torch.zeros(pos.shape[0], device=device)
+    
+    for b_idx in unique_batches:
+        # Get atoms and cell for this batch
+        atom_mask = batch == b_idx
+        pos_b = pos[atom_mask]  # [n_atoms_b, 3]
+        q_b = q[atom_mask]  # [n_atoms_b, 1] or [n_atoms_b]
+        
+        if q_b.dim() == 3:
+            q_b = q_b.squeeze(-1)
+        
+        # Generate k-vectors only for this batch
+        G_b = G[b_idx]  # [3, 3]
+        Nk_b = Nk[b_idx]  # [3]
+        
+        # Calculate actual grid size for this batch
+        grid_size = (2 * Nk_b[0] + 1) * (2 * Nk_b[1] + 1) * (2 * Nk_b[2] + 1)
+        
+        # Use views of pre-allocated buffers instead of creating new tensors
+        nvec = nvec_buffer[:grid_size]
+        kvec = kvec_buffer[:grid_size]
+        k_sq = k_sq_buffer[:grid_size]
+        
+        # Generate grid indices efficiently using broadcasting
+        n1_range = torch.arange(-Nk_b[0], Nk_b[0] + 1, device=device, dtype=G_b.dtype)
+        n2_range = torch.arange(-Nk_b[1], Nk_b[1] + 1, device=device, dtype=G_b.dtype)
+        n3_range = torch.arange(-Nk_b[2], Nk_b[2] + 1, device=device, dtype=G_b.dtype)
+        
+        # Use meshgrid but reshape directly into nvec buffer
+        n1_grid, n2_grid, n3_grid = torch.meshgrid(n1_range, n2_range, n3_range, indexing="ij")
+        nvec[:, 0] = n1_grid.flatten()
+        nvec[:, 1] = n2_grid.flatten()
+        nvec[:, 2] = n3_grid.flatten()
+        
+        # Compute k vectors in-place using matrix multiplication
+        torch.mm(nvec, G_b, out=kvec)
+        
+        # Compute k_sq in-place
+        torch.sum(kvec ** 2, dim=1, out=k_sq)
+        
+        # Apply filters using boolean indexing (creates views, not copies)
+        valid_mask = (k_sq > 0) & (k_sq <= k_sq_max)
+        valid_indices = torch.nonzero(valid_mask, as_tuple=True)[0]
+        
+        if valid_indices.numel() == 0:
+            continue
+            
+        # Use advanced indexing to get valid vectors (still creates copies, but smaller)
+        nvec_valid = nvec[valid_indices]
+        kvec_valid = kvec[valid_indices]
+        k_sq_valid = k_sq[valid_indices]
+        
+        # Hemisphere masking - use existing logic but optimize
+        non_zero_mask = nvec_valid != 0
+        has_non_zero = non_zero_mask.any(dim=1)
+        first_non_zero_idx = torch.argmax(non_zero_mask.float(), dim=1)
+        
+        # Use gather efficiently
+        sign = torch.gather(nvec_valid, 1, first_non_zero_idx.unsqueeze(1)).squeeze()
+        hemisphere_mask = (sign > 0) | ~has_non_zero
+        
+        # Final filtering
+        final_indices = torch.nonzero(hemisphere_mask, as_tuple=True)[0]
+        if final_indices.numel() == 0:
+            continue
+            
+        kvec_final = kvec_valid[final_indices]
+        k_sq_final = k_sq_valid[final_indices]
+        nvec_final = nvec_valid[final_indices]
+        
+        # Symmetry factors - compute in-place
+        is_origin = (nvec_final == 0).all(dim=1)
+        factors = torch.where(is_origin, 1.0, 2.0)
+        
+        # Compute kfac in-place
+        kfac = torch.exp(-sigma_sq_half * k_sq_final)
+        kfac.div_(k_sq_final + epsilon)
+        
+        # Structure factor computation - reuse intermediate results
+        k_dot_r = torch.mm(pos_b, kvec_final.T)
+        
+        # Compute S_k components without creating intermediate tensors
+        cos_k_dot_r = torch.cos(k_dot_r)
+        sin_k_dot_r = torch.sin(k_dot_r)
+        
+        # Multiply q_b in-place and sum
+        cos_k_dot_r *= q_b#.unsqueeze(1)
+        sin_k_dot_r *= q_b#.unsqueeze(1)
+        
+        S_k_real = torch.sum(cos_k_dot_r, dim=0)
+        S_k_imag = torch.sum(sin_k_dot_r, dim=0)
+        
+        # Compute S_k_sq in-place
+        S_k_real.pow_(2)
+        S_k_imag.pow_(2)
+        S_k_sq = S_k_real + S_k_imag
+        
+        # Compute potential for this batch
+        volume = torch.det(cell[b_idx])
+        
+        # Combine factors, kfac, and S_k_sq efficiently
+        factors *= kfac
+        factors *= S_k_sq
+        pot_b = torch.sum(factors) / volume
+        
+        # Remove self-interaction
+        pot_b -= torch.sum(q_b**2) / (sigma * (2 * torch.pi)**1.5)
+        
+        # Assign to result
+        result_potentials[atom_mask] = pot_b * norm_factor
+    
+    results = {"potential": result_potentials}
+    return results
+
+
 def heisenberg_potential_full_from_edge_inds(
     pos: torch.Tensor,
     edge_index: torch.Tensor, 
@@ -146,6 +316,8 @@ def heisenberg_potential_full_from_edge_inds(
 
     return results
 
+# TODO
+#def heisenberg_potential_ewald
 
 def batch_spin_charge_renormalization(
     charges_raw: torch.Tensor, # [n_atoms, 2],
@@ -207,329 +379,3 @@ def batch_spin_charge_renormalization(
 
     return torch.stack([alpha_corr, beta_corr], dim=-1)
 
-
-def fmm_coulomb_potentials_batched(
-    pos: torch.Tensor,
-    q: torch.Tensor,
-    batch: torch.Tensor,
-    max_particles_per_cell: int = 8,
-    min_width: float = 1e-6,
-    theta: float = 0.5,
-    norm_factor: float = 90.0474,
-    kernel_fn=None,
-):
-    """
-    Batched version of FMM for multiple molecular systems.
-    
-    Args:
-        pos: [n_atoms, 3] atom positions
-        q: [n_atoms,] or [n_atoms, k] charges/properties
-        batch: [n_atoms] batch assignments for atoms
-        max_particles_per_cell: max particles before splitting cell
-        min_width: minimum cell width
-        theta: opening angle for multipole acceptance
-        norm_factor: normalization factor for energy
-        kernel_fn: optional custom interaction kernel function(x, y, q_y) -> float
-                   where x is target position, y is source positions, q_y is source charges
-                   
-    Returns:
-        potentials: [n_atoms] potential at each atom
-    """
-    device = pos.device
-    dtype = pos.dtype
-    potentials = torch.zeros(pos.shape[0], dtype=dtype, device=device)
-    
-    # Process each batch separately
-    unique_batches = torch.unique(batch)
-    for b in unique_batches:
-        mask = batch == b
-        if mask.sum() > 0:  # Skip empty batches
-            pos_b = pos[mask]
-            q_b = q[mask] if q.dim() == 1 else q[mask, :]
-            
-            # Build octree for this batch
-            tree = build_octree_ts(
-                pos_b, 
-                max_particles_per_cell=max_particles_per_cell, 
-                min_width=min_width
-            )
-            
-            # Compute multipoles
-            multipoles = compute_multipoles_ts(tree, q_b)
-            
-            # Compute potentials using either custom kernel or default coulomb
-            if kernel_fn is not None:
-                pot_b = traverse_and_accumulate_kernel_ts(
-                    tree, multipoles, pos_b, q_b, kernel_fn, theta=theta
-                )
-            else:
-                pot_b = traverse_and_accumulate_coulomb_ts(
-                    tree, multipoles, pos_b, q_b, theta=theta
-                )
-                
-            potentials[mask] = pot_b * norm_factor
-    
-    return potentials
-
-
-def traverse_and_accumulate_kernel_ts(
-    tree, 
-    multipoles, 
-    pos, 
-    q, 
-    kernel_fn,
-    theta: float = 0.5, 
-    eps: float = 1e-8
-):
-    """
-    Generic traversal function that uses a custom kernel for interactions.
-    
-    Args:
-        tree: output of build_octree_ts
-        multipoles: multipole expansions from compute_multipoles_ts
-        pos: [n_atoms, 3] positions
-        q: [n_atoms] or [n_atoms, k] charges/properties
-        kernel_fn: function(x, y, q_y) -> float that computes interaction
-                   between target x and sources y with properties q_y
-        theta: acceptance parameter for multipole approximation
-        eps: small value to avoid division by zero
-        
-    Returns:
-        potentials: [n_atoms] potential at each atom
-    """
-    centers = tree["centers"]
-    half_widths = tree["half_widths"]
-    children = tree["children"]
-    node_particles = tree["node_particles"]
-
-    num_nodes = len(centers)
-    n = pos.size(0)
-    device = pos.device
-    potentials = torch.zeros((n,), dtype=pos.dtype, device=device)
-
-    # Pre-stack centers and half_widths for efficiency
-    centers_stack = torch.stack(centers) if num_nodes > 0 else torch.empty((0, 3), device=device)
-    half_stack = torch.stack([hw.view(()) for hw in half_widths]) if num_nodes > 0 else torch.empty((0,), device=device)
-
-    for ti in range(n):
-        x = pos[ti]
-        pot = 0.0
-        stack = [0]  # Start at root
-        
-        while len(stack) > 0:
-            node_idx = stack.pop()
-            if node_idx < 0:
-                continue
-                
-            center = centers_stack[node_idx]
-            hw = half_stack[node_idx]
-            dx = center - x
-            d = torch.norm(dx)
-            s = hw * 2.0
-            
-            if (d <= 0.0) or (node_particles[node_idx].numel() == 0 and (children[node_idx] == -1).all()):
-                continue
-                
-            if (node_particles[node_idx].numel() > 0) and ((node_particles[node_idx] == ti).any()):
-                # Same leaf or contains target: direct interactions with other particles
-                idxs = node_particles[node_idx]
-                mask = idxs != ti
-                sel = idxs[mask]
-                if sel.numel() > 0:
-                    # Use provided kernel for particle-particle interactions
-                    pot = pot + kernel_fn(x, pos.index_select(0, sel), q.index_select(0, sel))
-            else:
-                # Decide acceptance using MAC criterion
-                if (d > 0.0) and (s / d < theta):
-                    # Accept multipole approximation
-                    # Use kernel for particle-multipole interaction
-                    pot = pot + kernel_fn(x, center.unsqueeze(0), multipoles[node_idx].unsqueeze(0))
-                else:
-                    # Recurse to children
-                    child_ids = children[node_idx]
-                    for k in range(8):
-                        cid = int(child_ids[k].item()) if isinstance(child_ids[k], torch.Tensor) else int(child_ids[k])
-                        if cid >= 0:
-                            stack.append(cid)
-                            
-        potentials[ti] = pot
-        
-    return potentials
-
-
-def heisenberg_kernel(x, y, q_y, nn):
-    """
-    Kernel function for Heisenberg interactions.
-    
-    Args:
-        x: [3] target position
-        y: [n, 3] source positions
-        q_y: [n, 2] source properties (alpha, beta)
-        nn: neural network for coupling term
-        
-    Returns:
-        potential: scalar potential at position x
-    """
-    distance_vec = y - x.unsqueeze(0)
-    distances = torch.norm(distance_vec, dim=1).reshape(-1, 1)
-    distances.requires_grad_(True)
-    
-    coupling = nn(distances)
-    potential = (q_y * coupling).sum()
-    
-    return potential
-
-
-def coulomb_kernel(x, y, q_y, eps=1e-8):
-    """
-    Standard Coulomb interaction kernel.
-    
-    Args:
-        x: [3] target position
-        y: [n, 3] source positions
-        q_y: [n] source charges
-        eps: small value to avoid division by zero
-        
-    Returns:
-        potential: scalar potential at position x
-    """
-    r = torch.norm(x.unsqueeze(0) - y, dim=1) + eps
-    return (q_y.view(-1) / r).sum()
-
-
-def potential_full_from_edge_inds_fmm(
-    pos: torch.Tensor,
-    q: torch.Tensor,
-    batch: torch.Tensor = None,
-    sigma: float = 1.0,
-    epsilon: float = 1e-6,
-    epsilon_factor_les: float = 1.0,
-    twopi: float = 2.0 * np.pi,
-    norm_factor: float = 90.0474,
-    max_particles_per_cell: int = 8,
-    theta: float = 0.5,
-    conv_function_tf: bool = False,
-    return_bec: bool = False,
-):
-    """
-    FMM-based implementation of electrostatic potential energy.
-    
-    Args:
-        pos: [n_atoms, 3] positions
-        q: [n_atoms, 1] charges
-        batch: [n_atoms] batch assignments
-        sigma, epsilon: parameters for convergence function
-        norm_factor: energy scaling factor
-        max_particles_per_cell: FMM parameter
-        theta: FMM acceptance parameter
-        conv_function_tf: whether to use convergence function
-        return_bec: whether to compute Born effective charges
-        
-    Returns:
-        results: dictionary with "potential" [n_atoms]
-    """
-    results = {}
-    
-    if batch is None:
-        batch = torch.zeros(pos.shape[0], dtype=torch.int64, device=pos.device)
-        
-    # Define kernel with convergence function if requested
-    def kernel_fn(x, y, q_y):
-        r = torch.norm(x.unsqueeze(0) - y, dim=1) + epsilon
-        pot = q_y.view(-1) / r
-        
-        if conv_function_tf:
-            conv = torch.special.erf(r / sigma / (2.0**0.5))
-            pot = pot * conv
-            
-        return pot.sum()
-    
-    # Compute potential using FMM
-    potentials = fmm_coulomb_potentials_batched(
-        pos=pos,
-        q=q.view(-1),
-        batch=batch,
-        max_particles_per_cell=max_particles_per_cell,
-        theta=theta,
-        norm_factor=1.0,  # Apply normalization later
-        kernel_fn=kernel_fn
-    )
-    
-    # Store in results
-    results["potential"] = potentials * norm_factor
-    
-    # Handle Born effective charges if requested
-    if return_bec:
-        if not pos.requires_grad:
-            pos.requires_grad_(True)
-        
-        if not q.requires_grad:
-            q.requires_grad_(True)
-            
-        normalization_factor = epsilon_factor_les ** 0.5
-        all_P = []
-        all_phases = []
-        
-        unique_batches = torch.unique(batch)
-        for i in unique_batches:
-            mask = batch == i
-            r_now, q_now = pos[mask], q[mask].reshape(-1, 1)
-            q_now = q_now - torch.mean(q_now, dim=0, keepdim=True)
-            polarization = torch.sum(q_now * r_now, dim=0)
-            phase = torch.ones_like(r_now, dtype=torch.complex64)
-            
-            all_P.append(polarization * normalization_factor)
-            all_phases.append(phase)
-            
-        P = torch.stack(all_P, dim=0)
-        phases = torch.cat(all_phases, dim=0)
-        
-        bec_complex = grad(y=P, x=pos)
-        result = bec_complex * phases.unsqueeze(1).conj()
-        results["bec"] = result.real
-        
-    return results
-
-
-def heisenberg_potential_full_from_edge_inds_fmm(
-    pos: torch.Tensor,
-    q: torch.Tensor,
-    nn: torch.nn.Module,
-    batch: torch.Tensor = None,
-    sigma: float = 1.0,
-    max_particles_per_cell: int = 8,
-    theta: float = 0.5,
-):
-    """
-    FMM-based implementation of Heisenberg interactions.
-    
-    Args:
-        pos: [n_atoms, 3] positions
-        q: [n_atoms, 2] alpha/beta properties
-        nn: neural network for coupling term
-        batch: [n_atoms] batch assignments
-        sigma: parameter for convergence function
-        max_particles_per_cell: FMM parameter
-        theta: FMM acceptance parameter
-        
-    Returns:
-        results: [n_atoms] potential energy per atom
-    """
-    if batch is None:
-        batch = torch.zeros(pos.shape[0], dtype=torch.int64, device=pos.device)
-        
-    # Define Heisenberg kernel with the neural network
-    def kernel_fn(x, y, q_y):
-        return heisenberg_kernel(x, y, q_y, nn)
-        
-    # Compute potential using FMM
-    potentials = fmm_coulomb_potentials_batched(
-        pos=pos,
-        q=q,  # Pass full q tensor with shape [n_atoms, 2]
-        batch=batch,
-        max_particles_per_cell=max_particles_per_cell,
-        theta=theta,
-        kernel_fn=kernel_fn
-    )
-    
-    return potentials

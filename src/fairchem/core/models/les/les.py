@@ -153,7 +153,7 @@ class Les(nn.Module):
 
 
         ######### HACK FOR EVAL REMOVE LATER
-        
+        '''
         bec = self.bec(q=latent_charges,
                         r=positions,
                         cell=cell,
@@ -165,7 +165,6 @@ class Les(nn.Module):
 
         # save becs to numpy array
         #print('Saving BECs to numpy array...')
-        '''
         import numpy as np
         import os
         bec = bec.detach().cpu().numpy() if bec is not None else None
