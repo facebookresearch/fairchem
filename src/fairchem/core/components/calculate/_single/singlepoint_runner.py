@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 import pandas as pd
+from ase.io.jsonio import encode
 from tqdm import tqdm
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
@@ -44,6 +45,7 @@ class SinglePointRunner(CalculateRunner):
         calculate_properties: Sequence[str] = ["energy"],
         normalize_properties_by: dict[str, str] | None = None,
         save_target_properties: Sequence[str] | None = None,
+        save_atoms: bool = True,
     ):
         """Initialize the SinglePointRunner.
 
@@ -55,12 +57,14 @@ class SinglePointRunner(CalculateRunner):
                 atoms.info to normalize by
             save_target_properties (Sequence[str] | None): Sequence of target property names to save in the results file
                 These properties need to be available using atoms.get_properties or present in the atoms.info dictionary
+            save_atoms (bool): Whether to save json serialized Atoms in the results file.
         """
         self._calculate_properties = calculate_properties
         self._normalize_properties_by = normalize_properties_by or {}
         self._save_target_properties = (
             save_target_properties if save_target_properties is not None else []
         )
+        self._save_atoms = save_atoms
 
         super().__init__(calculator=calculator, input_data=input_data)
 
@@ -84,6 +88,10 @@ class SinglePointRunner(CalculateRunner):
                 "sid": atoms.info.get("sid", i),
                 "natoms": len(atoms),
             }
+
+            if self._save_atoms:
+                results["atoms"] = encode(atoms)
+
             # add target properties if requested
             target_properties = get_property_dict_from_atoms(
                 self._save_target_properties, atoms, self._normalize_properties_by

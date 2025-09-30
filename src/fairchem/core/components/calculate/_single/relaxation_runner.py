@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 import pandas as pd
-from monty.dev import requires
+from ase.io.jsonio import encode
 from tqdm import tqdm
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
@@ -24,14 +24,6 @@ from fairchem.core.components.calculate.recipes.utils import (
     get_property_dict_from_atoms,
 )
 
-try:
-    from pymatgen.io.ase import MSONAtoms
-
-    pmg_installed = True
-except ImportError:
-    pmg_installed = False
-
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -40,7 +32,6 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atoms_sequence import AtomsSequence
 
 
-@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 class RelaxationRunner(CalculateRunner):
     """Relax a sequence of several structures/molecules.
 
@@ -112,7 +103,9 @@ class RelaxationRunner(CalculateRunner):
                 {f"{key}_target": target_properties[key] for key in target_properties}
             )
             if self._save_relaxed_atoms:
-                results["atoms_initial"] = MSONAtoms(atoms).as_dict()
+                results["atoms_initial"] = encode(
+                    atoms
+                )  # Note this does not save atoms.info!
 
             try:
                 atoms.calc = self.calculator
@@ -143,7 +136,7 @@ class RelaxationRunner(CalculateRunner):
                 )
 
             if self._save_relaxed_atoms:
-                results["atoms"] = MSONAtoms(atoms).as_dict()
+                results["atoms"] = encode(atoms)
 
             all_results.append(results)
 
