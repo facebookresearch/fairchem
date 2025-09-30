@@ -11,8 +11,7 @@ predict_unit:
   inference_settings:
     _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
     tf32: True
-    merge_mole: True,
-    wigner_cuda: False
+    merge_mole: True
     compile: False
     activation_checkpointing: False
     internal_graph_gen_version: 2

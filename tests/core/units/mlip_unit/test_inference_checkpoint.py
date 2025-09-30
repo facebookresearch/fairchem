@@ -69,16 +69,16 @@ def test_inference_checkpoint_direct(
 @pytest.mark.inference_dataset()
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "tf32, activation_checkpointing, merge_mole, compile, wigner_cuda, external_graph_gen",
+    "tf32, activation_checkpointing, merge_mole, compile, external_graph_gen",
     [
-        (False, False, False, False, False, True),  # test external graph gen
-        (False, False, False, False, False, False),  # test internal graph gen
-        (True, False, False, False, True, True),  # test wigner cuda
-        (True, False, True, True, False, True),  # test compile and merge
+        (False, False, False, False, True),  # test external graph gen
+        (False, False, False, False, False),  # test internal graph gen
+        (True, False, False, False, True),  # test wigner cuda
+        (True, False, True, True, True),  # test compile and merge
         # with acvitation checkpointing
-        (True, True, True, True, True, True),  # test external model graph gen + compile
-        (True, True, True, False, True, True),  # test merge but no compile
-        (True, True, False, False, True, True),  # test no merge or compile
+        (True, True, True, True, True),  # test external model graph gen + compile
+        (True, True, True, False,  True),  # test merge but no compile
+        (True, True, False, False,  True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes_gpu(
@@ -86,7 +86,6 @@ def test_conserving_mole_inference_modes_gpu(
     activation_checkpointing,
     merge_mole,
     compile,
-    wigner_cuda,
     external_graph_gen,
     command_line_inference_checkpoint,
     command_line_inference_dataset,
@@ -109,7 +108,6 @@ def test_conserving_mole_inference_modes_gpu(
             activation_checkpointing=activation_checkpointing,
             merge_mole=merge_mole,
             compile=compile,
-            wigner_cuda=wigner_cuda,
             external_graph_gen=external_graph_gen,
         ),
     )

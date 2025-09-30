@@ -23,7 +23,6 @@ import torch
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
-from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
     get_device_for_local_rank,
@@ -52,8 +51,6 @@ def collate_predictions(predict_fn):
     ):
         # Get the full prediction dictionary from the original predict method
         preds = predict_fn(predict_unit, data, undo_element_references)
-        if gp_utils.initialized():
-            data.batch = data.batch_full
         collated_preds = defaultdict(list)
         for i, dataset in enumerate(data.dataset):
             for task in predict_unit.dataset_to_tasks[dataset]:
@@ -120,10 +117,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
             )
-        if inference_settings.wigner_cuda is not None:
-            overrides["backbone"]["use_cuda_graph_wigner"] = (
-                inference_settings.wigner_cuda
-            )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
@@ -132,6 +125,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if inference_settings.internal_graph_gen_version is not None:
             overrides["backbone"]["radius_pbc_version"] = (
                 inference_settings.internal_graph_gen_version
+            )
+
+        if inference_settings.wigner_cuda:
+            logging.warning(
+                "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
         self.model, checkpoint = load_inference_model(
@@ -239,7 +237,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "Please ensure the input data has valid edges."
             )
 
-        data_device = data.to(self.device)
+        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
+        data_device = data.to(self.device).clone()
 
         if self.inference_mode.merge_mole:
             if self.merged_on is None:
