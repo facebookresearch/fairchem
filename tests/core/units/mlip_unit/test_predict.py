@@ -120,7 +120,7 @@ def test_multiple_dataset_predict(uma_predict_unit):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, device", [(1, "cpu"), (2, "cpu"), (4, "cpu"), (1, "cuda")]
+    "workers, device", [(1, "cpu", ), (2, "cpu"), (4, "cpu"), (1, "cuda")]
 )
 def test_parallel_predict_unit(workers, device):
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -137,6 +137,12 @@ def test_parallel_predict_unit(workers, device):
         inference_settings=ifsets,
         server_config={"workers": workers},
     )
+
+    for _ in range(2):
+        atoms = get_fcc_carbon_xtal(100)
+        atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+        pp_results = ppunit.predict(atomic_data)
+
     atoms = get_fcc_carbon_xtal(100)
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
     pp_results = ppunit.predict(atomic_data)
