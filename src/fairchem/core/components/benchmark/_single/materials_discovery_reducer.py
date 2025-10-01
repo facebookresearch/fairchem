@@ -34,15 +34,15 @@ try:
     from pymatviz.enums import Key
 
     mbd_installed = True
+    MP2020Compatibility = MaterialsProject2020Compatibility()
+
 except ImportError:
     mbd_installed = False
+    MP2020Compatibility = None
 
 if TYPE_CHECKING:
     from pymatgen.core import Structure
     from pymatgen.entries.compatibility import Compatibility
-
-
-MP2020Compatibility = MaterialsProject2020Compatibility()
 
 
 def as_dict_handler(obj: Any) -> dict[str, Any] | None:

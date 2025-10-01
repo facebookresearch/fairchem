@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 from monty.dev import requires
-from pymatviz.enums import Key
 
 from fairchem.core.components.benchmark import JsonDFReducer
 from fairchem.core.components.calculate import KappaRunner
@@ -21,6 +20,7 @@ if TYPE_CHECKING:
 
 try:
     from matbench_discovery.metrics import phonons
+    from pymatviz.enums import Key
 
     mbd_installed = True
 except ImportError:
