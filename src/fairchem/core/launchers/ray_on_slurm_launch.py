@@ -15,11 +15,11 @@ if TYPE_CHECKING:
     from fairchem.core.launchers.api import SchedulerConfig, SlurmConfig
 
 
-def ray_on_slurm_launch(config: DictConfig):
+def ray_on_slurm_launch(config: DictConfig, log_dir: str):
     scheduler_config: SchedulerConfig = config.job.scheduler
     slurm_config: SlurmConfig = scheduler_config.slurm
     runner: Runner = hydra.utils.instantiate(config.runner)
-    cluster = RayCluster(log_dir=Path(config.job.run_dir))
+    cluster = RayCluster(log_dir=Path(log_dir))
     cluster_reqs = {
         "slurm_account": slurm_config.account,
         "slurm_qos": slurm_config.qos,

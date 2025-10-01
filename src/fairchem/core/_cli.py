@@ -108,7 +108,7 @@ def main(
             logging.info("Lauching job on Ray + Slurm cluster")
             from fairchem.core.launchers import ray_on_slurm_launch
 
-            ray_on_slurm_launch.ray_on_slurm_launch(cfg)
+            ray_on_slurm_launch.ray_on_slurm_launch(cfg, log_dir)
         else:
             logging.info("Lauching job on directly on Slurm cluster")
             from fairchem.core.launchers import slurm_launch
