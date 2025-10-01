@@ -5,7 +5,6 @@ e3nn==0.5.7
 huggingface-hub==0.35.0
 torch==2.6.0
 torchtnt==0.2.4
-numpy==2.3.3
 scikit-learn==1.6.1
 lmdb==1.7.3
 pymatgen==v2025.6.14
