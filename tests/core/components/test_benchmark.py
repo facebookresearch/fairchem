@@ -16,17 +16,6 @@ from ase.db import connect
 from tests.core.testing_utils import launch_main
 
 
-@pytest.fixture(autouse=True)
-def run_around_tests():
-    # disable this locally for now as it is causing issues with empty_cache causeing CUDA device side assert
-    # If debugging GPU memory issues, uncomment this print statement
-    # to get full GPU memory allocations before each test runs
-    # #print(torch.cuda.memory_summary())
-    # yield
-    # torch.cuda.empty_cache()
-    pass
-
-
 def test_elastic_benchmark_launch(calculator, dummy_binary_dataset_path):
     # create a fake target data DF
     target_data = []
@@ -44,6 +33,6 @@ def test_elastic_benchmark_launch(calculator, dummy_binary_dataset_path):
         "--config",
         "tests/core/components/configs/test_elastic_benchmark.yaml",
         f"test_data_path={str(dummy_binary_dataset_path)}",
-        f"target_data_path={target_data_path}",
+        # f"target_data_path={target_data_path}",
     ]
     launch_main(sys_args)

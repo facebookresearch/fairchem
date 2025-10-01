@@ -22,17 +22,6 @@ from fairchem.core.components.calculate import RelaxationRunner
 from fairchem.core.components.calculate import SinglePointRunner
 
 
-@pytest.fixture(autouse=True)
-def run_around_tests():
-    # disable this locally for now as it is causing issues with empty_cache causeing CUDA device side assert
-    # If debugging GPU memory issues, uncomment this print statement
-    # to get full GPU memory allocations before each test runs
-    # #print(torch.cuda.memory_summary())
-    # yield
-    # torch.cuda.empty_cache()
-    pass
-
-
 def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):
     elastic_runner = ElasticityRunner(calculator, input_data=AtomsDatasetSequence(dummy_binary_dataset))
 

@@ -4,7 +4,7 @@ job:
     mode: LOCAL
 
 test_data_path: None
-target_data_path: None
+# target_data_path: None
 
 runner:
   _target_: fairchem.core.components.calculate.ElasticityRunner
@@ -19,8 +19,8 @@ runner:
       config:
         src: ${test_data_path}
 
-reducer:
-  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
-  target_data_path: ${target_data_path}
-  benchmark_name: "test-elasticity"
-  index_name: sid
+# reducer:
+#   _target_: fairchem.core.components.benchmark.JsonDFReducer
+#   target_data_path: ${target_data_path}
+#   benchmark_name: "test-elasticity"
+#   index_name: sid

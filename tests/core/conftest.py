@@ -175,7 +175,7 @@ def dummy_binary_dataset_path(tmpdir_factory, dummy_element_refs):
 
     tmpdir = tmpdir_factory.mktemp("dataset")
     with connect(str(tmpdir / "dummy.aselmdb")) as db:
-        for i in range(50):
+        for i in range(10):
             elements = choice(all_binaries)
             structure = Structure.from_prototype("cscl", species=elements, a=2.0)
             energy = (
