@@ -15,7 +15,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.datasets.atoms_sequence import AtomsDatasetSequence
 from fairchem.core.components.calculate import ElasticityRunner
 from fairchem.core.components.calculate import NVEMDRunner
@@ -32,16 +31,6 @@ def run_around_tests():
     # yield
     # torch.cuda.empty_cache()
     pass
-
-
-@pytest.fixture(scope="module")
-def calculator() -> FAIRChemCalculator:
-    uma_sm_models = [
-        model for model in pretrained_mlip.available_models if "uma-s" in model
-    ]
-    return FAIRChemCalculator.from_model_checkpoint(
-        choice(uma_sm_models), task_name="omat"
-    )
 
 
 def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):

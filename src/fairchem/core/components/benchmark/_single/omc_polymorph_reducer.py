@@ -16,10 +16,10 @@ from ase.io.jsonio import decode
 from monty.dev import requires
 from tqdm import tqdm
 
-from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
+from fairchem.core.components.benchmark import JsonDFReducer
 from fairchem.core.components.calculate.recipes.local_env import construct_bond_matrix
-from fairchem.core.components.calculate.relaxation_runner import RelaxationRunner
-from fairchem.core.components.calculate.singlepoint_runner import SinglePointRunner
+from fairchem.core.components.calculate import RelaxationRunner
+from fairchem.core.components.calculate import SinglePointRunner
 
 try:
     from scipy.stats import kendalltau, spearmanr

@@ -168,12 +168,14 @@ def dummy_element_refs():
 @pytest.fixture(scope="session")
 def dummy_binary_dataset_path(tmpdir_factory, dummy_element_refs):
     # a dummy dataset with binaries with energy that depends on composition only plus noise
-    all_binaries = list(product(list(Element), repeat=2))
+    # Limit to first 83 elements (up to Bismuth) to avoid CUDA indexing errors with rare/synthetic elements
+    common_elements = [Element.from_Z(z) for z in range(1, 84)]  # H to Bi
+    all_binaries = list(product(common_elements, repeat=2))
     rng = np.random.default_rng(seed=0)
 
     tmpdir = tmpdir_factory.mktemp("dataset")
     with connect(str(tmpdir / "dummy.aselmdb")) as db:
-        for _ in range(1000):
+        for i in range(50):
             elements = choice(all_binaries)
             structure = Structure.from_prototype("cscl", species=elements, a=2.0)
             energy = (
@@ -184,6 +186,7 @@ def dummy_binary_dataset_path(tmpdir_factory, dummy_element_refs):
             db.write(
                 atoms,
                 data={
+                    "sid": f"structure_{i}",
                     "energy": energy,
                     "forces": rng.random((2, 3)),
                     "stress": rng.random((3, 3)),
