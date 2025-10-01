@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import math
 import multiprocessing as mp
 import os
 import random
@@ -20,6 +21,7 @@ from typing import TYPE_CHECKING, Protocol, Sequence
 import hydra
 import numpy as np
 import torch
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
@@ -34,6 +36,7 @@ from fairchem.core.units.mlip_unit.inference.client_websocket import (
 )
 from fairchem.core.units.mlip_unit.inference.inference_server_ray import (
     MLIPInferenceServerWebSocket,
+    MLIPWorker,
 )
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
@@ -42,6 +45,21 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+try:
+    import ray
+    from ray import remote
+    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
+    ray_installed = True
+except ImportError:
+    ray = None
+
+    def remote(cls):
+        # dummy
+        return cls
+
+    ray_installed = False
 
 
 def collate_predictions(predict_fn):
@@ -443,6 +461,124 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 "Client is not initialized. Ensure server_config or client_config is provided."
             )
         return self.client.call(data)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        return self._dataset_to_tasks
+
+
+@requires(ray_installed, message="Requires `ray` to be installed")
+class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
+    def __init__(
+        self,
+        inference_model_path: str,
+        device: str = "cpu",
+        overrides: dict | None = None,
+        inference_settings: InferenceSettings | None = None,
+        seed: int = 41,
+        atom_refs: dict | None = None,
+        assert_on_nans: bool = False,
+        num_workers: int = 1,
+    ):
+        super().__init__()
+        _mlip_pred_unit = MLIPPredictUnit(
+            inference_model_path=inference_model_path,
+            device="cpu",
+            overrides=overrides,
+            inference_settings=inference_settings,
+            seed=seed,
+            atom_refs=atom_refs,
+        )
+        self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
+
+        predict_unit_config = {
+            "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
+            "inference_model_path": inference_model_path,
+            "device": device,
+            "overrides": overrides,
+            "inference_settings": inference_settings,
+            "seed": seed,
+            "atom_refs": atom_refs,
+            "assert_on_nans": assert_on_nans,
+        }
+        ray.init(
+            logging_level=logging.INFO,
+            # runtime_env={
+            #     "env_vars": {"RAY_DEBUG": "1"},
+            # },
+        )
+
+        # HACK This will not work for CPUs and need to generalize to the config
+        cpus_per_node = 192
+        num_gpus_per_node = 8
+        bundle_gpus = {"GPU": num_gpus_per_node, "CPU": cpus_per_node}
+        placement_groups = []
+        num_nodes = math.ceil(num_workers / num_gpus_per_node)
+        # first create one placement group for each node
+        for _ in range(num_nodes):
+            pg = ray.util.placement_group([bundle_gpus], strategy="STRICT_PACK")
+            placement_groups.append(pg)
+        ray.get(pg.ready())  # Wait for each placement group to be scheduled
+
+        # options = {"num_gpus": 1} if device == "cuda" else {}
+        # place rank 0 on placement group 0
+        rank0_worker = MLIPWorker.options(
+            num_gpus=1,
+            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                placement_group=placement_groups[0],
+                placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
+                placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+            ),
+        ).remote(0, num_workers, predict_unit_config)
+        master_addr, master_port = ray.get(
+            rank0_worker.get_master_address_and_port.remote()
+        )
+        logging.info(f"Started rank0 on {master_addr}:{master_port}")
+        self.workers = [rank0_worker]
+
+        # next place all ranks in order and pack them on placement groups
+        # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
+        for pg_idx, pg in enumerate(placement_groups):
+            print(f"Launching workers for placement group {pg_idx} (Node {pg_idx})")
+
+            for gpu_rank_on_node in range(num_gpus_per_node):
+                if pg_idx == 0 and gpu_rank_on_node == 0:
+                    continue
+                # Each actor requests 1 GPU and uses the specific placement group
+                actor = MLIPWorker.options(
+                    num_gpus=1,
+                    scheduling_strategy=PlacementGroupSchedulingStrategy(
+                        placement_group=pg,
+                        placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
+                        placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+                    ),
+                ).remote(
+                    pg_idx * num_gpus_per_node + gpu_rank_on_node,
+                    num_workers,
+                    predict_unit_config,
+                    master_port,
+                    master_addr,
+                )
+                self.workers.append(actor)
+
+        # self.workers.extend(
+        #     [
+        #         MLIPWorker.options(**options).remote(
+        #             i, num_workers, predict_unit_config, master_port, master_addr
+        #         )
+        #         for i in range(1, num_workers)
+        #     ]
+        # )
+
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
+        data_ref = ray.put(data)
+        futures = [w.predict.remote(data_ref) for w in self.workers]
+        # just get the first result that is ready since they are identical
+        # the rest of the futures should go out of scope and memory garbage collected
+        ready_ids, _ = ray.wait(futures, num_returns=1)
+        return ray.get(ready_ids[0])
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:

@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import pickle
 import signal
 from typing import TYPE_CHECKING
 
@@ -49,28 +48,41 @@ logging.basicConfig(level=logging.INFO)
 @remote
 class MLIPWorker:
     def __init__(
-        self, worker_id: int, world_size: int, master_port: int, predictor_config: dict
+        self,
+        worker_id: int,
+        world_size: int,
+        predictor_config: dict,
+        master_port: int | None = None,
+        master_address: str | None = None,
     ):
         if ray_installed is False:
             raise RuntimeError("Requires `ray` to be installed")
 
         self.worker_id = worker_id
-        self._distributed_setup(
-            worker_id, master_port, world_size, predictor_config.get("device", "cpu")
+        self.world_size = world_size
+        self.predictor_config = predictor_config
+        self.master_address = (
+            ray.util.get_node_ip_address() if master_address is None else master_address
         )
-        self.predict_unit = hydra.utils.instantiate(predictor_config)
-        logging.info(
-            f"Worker {worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
-            f"on port {master_port}, with device: {get_device_for_local_rank()}, config: {predictor_config}"
-        )
+        self.master_port = get_free_port() if master_port is None else master_port
+        self.is_setup = False
+
+    def get_master_address_and_port(self):
+        return (self.master_address, self.master_port)
 
     def _distributed_setup(
-        self, worker_id: int, master_port: int, world_size: int, device: str
+        self,
+        worker_id: int,
+        master_port: int,
+        world_size: int,
+        predictor_config: dict,
+        master_address: str,
     ):
         # initialize distributed environment
         # TODO, this wont work for multi-node, need to fix master addr
-        setup_env_local_multi_gpu(worker_id, master_port)
+        setup_env_local_multi_gpu(worker_id, master_port, master_address)
         # local_rank = int(os.environ["LOCAL_RANK"])
+        device = predictor_config.get("device", "cpu")
         assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
         dist.init_process_group(
@@ -79,11 +91,26 @@ class MLIPWorker:
             world_size=world_size,
         )
         gp_utils.setup_graph_parallel_groups(world_size, backend)
+        self.predict_unit = hydra.utils.instantiate(predictor_config)
+        logging.info(
+            f"Worker {worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
+            f"on port {self.master_port}, with device: {get_device_for_local_rank()}, config: {self.predictor_config}"
+        )
 
-    def predict(self, data: bytes):
-        atomic_data = pickle.loads(data)
-        result = self.predict_unit.predict(atomic_data)
-        return pickle.dumps(result)
+    def predict(self, data):
+        if not self.is_setup:
+            self._distributed_setup(
+                self.worker_id,
+                self.master_port,
+                self.world_size,
+                self.predictor_config,
+                self.master_address,
+            )
+            self.is_setup = True
+        return self.predict_unit.predict(data)
+        # atomic_data = pickle.loads(data)
+        # result = self.predict_unit.predict(atomic_data)
+        # return pickle.dumps(result)
 
 
 @requires(ray_installed, message="Requires `ray` to be installed")
@@ -100,7 +127,11 @@ class MLIPInferenceServerWebSocket:
         options = {"num_gpus": 1} if predictor_config.get("device") == "cuda" else {}
         self.workers = [
             MLIPWorker.options(**options).remote(
-                i, self.num_workers, self.master_pg_port, self.predictor_config
+                i,
+                self.num_workers,
+                self.predictor_config,
+                self.master_pg_port,
+                "localhost",
             )
             for i in range(self.num_workers)
         ]
