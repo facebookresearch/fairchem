@@ -17,7 +17,6 @@ import pandas as pd
 
 from fairchem.core.components.benchmark import JsonDFReducer
 
-
 R = TypeVar("R")
 M = TypeVar("M")
 

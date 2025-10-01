@@ -17,9 +17,8 @@ from monty.dev import requires
 from tqdm import tqdm
 
 from fairchem.core.components.benchmark import JsonDFReducer
+from fairchem.core.components.calculate import RelaxationRunner, SinglePointRunner
 from fairchem.core.components.calculate.recipes.local_env import construct_bond_matrix
-from fairchem.core.components.calculate import RelaxationRunner
-from fairchem.core.components.calculate import SinglePointRunner
 
 try:
     from scipy.stats import kendalltau, spearmanr
