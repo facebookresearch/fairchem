@@ -29,7 +29,7 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
+  _target_: fairchem.core.components.calculate.single.adsorption_singlepoint_runner.AdsorptionSinglePointRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
@@ -37,9 +37,11 @@ runner:
   evaluate_total_energy: False
   adsorption_energy_model: False
   input_data:
-    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
-    config:
-      src: ${cluster.data_root_dir}/odac/s2ef/ood_linker_topology
+    _target_: fairchem.core.datasets.atoms_sequence.AtomsDatasetSequence
+    dataset:
+      _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+      config:
+        src: ${cluster.data_root_dir}/odac/s2ef/ood_linker_topology
 
 reducer:
   _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer

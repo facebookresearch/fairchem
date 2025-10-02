@@ -16,6 +16,5 @@ runner:
     activation_checkpointing: True
     merge_mole: True
     compile: False
-    wigner_cuda: True
     external_graph_gen: True
     internal_graph_gen_version: 2

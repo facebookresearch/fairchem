@@ -12,7 +12,6 @@ import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import numpy as np
@@ -45,6 +44,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
+from fairchem.core.common.utils import StrEnum
 from fairchem.core.components.train.train_runner import Checkpointable
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
@@ -75,7 +75,7 @@ class OutputSpec:
     dtype: str
 
 
-class TrainStrategy(str, Enum):
+class TrainStrategy(StrEnum):
     DDP = "ddp"
     FSDP = "fsdp"
 
@@ -137,9 +137,14 @@ def convert_train_checkpoint_to_inference_checkpoint(
 
 
 def initialize_finetuning_model(
-    checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None
+    checkpoint_location: str,
+    overrides: dict | None = None,
+    heads: dict | None = None,
+    strict: bool = True,
 ) -> torch.nn.Module:
-    model, checkpoint = load_inference_model(checkpoint_location, overrides)
+    model, checkpoint = load_inference_model(
+        checkpoint_location, overrides, strict=strict
+    )
 
     logging.warning(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"

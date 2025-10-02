@@ -29,13 +29,13 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.phonon_runner.MDRPhononRunner
+  _target_: fairchem.core.components.calculate.single.phonon_runner.MDRPhononRunner
   calculator:
    _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
    name_or_path: ${checkpoint.ckpt_path}
    task_name: omat
   input_data:
-    _target_: fairchem.core.components.calculate.phonon_runner.get_mdr_phonon_data_list
+    _target_: fairchem.core.components.calculate.single.phonon_runner.get_mdr_phonon_data_list
     index_df_path: ${cluster.data_root_dir}/materials/mdr-phonon/pbe.json
     phonon_file_path: ${cluster.data_root_dir}/materials/mdr-phonon
     debug: ${cluster.debug}
