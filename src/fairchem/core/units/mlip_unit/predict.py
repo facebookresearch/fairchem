@@ -143,9 +143,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         assert set(self._dataset_to_tasks.keys()).issubset(
             set(self.model.module.backbone.dataset_list)
         ), "Datasets in tasks is not a strict subset of datasets in backbone."
-        assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
+        assert device in [
+            "cpu",
+            "cuda",
+            "mps",
+        ], "device must be either 'cpu', 'cuda' or 'mps'"
 
-        self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
+        self.device = get_device_for_local_rank() if device == "cuda" else device
 
         self.model.eval()
 
@@ -180,6 +184,14 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         torch.cuda.manual_seed_all(seed)
 
     def move_to_device(self):
+        if self.device == "mps":
+            logging.warning(
+                "Using MPS device, converting wigner to 32bit, because MPS does not support float64. This may decrease accuracy."
+            )
+            self.model.to(torch.float32)
+            for task in self.tasks.values():
+                if task.element_references is not None:
+                    task.element_references.to(torch.float32)
         self.model.to(self.device)
         for task in self.tasks.values():
             task.normalizer.to(self.device)

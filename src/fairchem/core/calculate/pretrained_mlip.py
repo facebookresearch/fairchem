@@ -69,7 +69,7 @@ def get_predict_unit(
     model_name: str,
     inference_settings: InferenceSettings | str = "default",
     overrides: dict | None = None,
-    device: Literal["cuda", "cpu"] | None = None,
+    device: Literal["cuda", "cpu", "mps"] | None = None,
     cache_dir: str = CACHE_DIR,
 ) -> MLIPPredictUnit:
     """
