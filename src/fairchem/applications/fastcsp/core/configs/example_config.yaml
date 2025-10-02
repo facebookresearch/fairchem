@@ -28,6 +28,7 @@ genarris:
 # Structure comparison tolerances for Pymatgen's StructureMatcher
 # Deduplication parameters after structure generation with Genarris
 pre_relaxation_filter:        # Before ML relaxation
+  remove_duplicates: true      # Enable deduplication
   ltol: 0.3                    # Lattice parameter tolerance
   stol: 0.4                    # Site tolerance (Angstrom)
   angle_tol: 5                 # Angle tolerance (degrees)
@@ -48,6 +49,7 @@ relax:
 post_relaxation_filter:       # After ML relaxation
   energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum
   density_cutoff: 10           # Density cutoff in g/cm³
+  remove_duplicates: true      # Enable deduplication
   ltol: 0.2
   stol: 0.3
   angle_tol: 5

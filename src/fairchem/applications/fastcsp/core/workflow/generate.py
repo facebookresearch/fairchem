@@ -273,7 +273,7 @@ def run_genarris_jobs(
             )
 
     logger.info(
-        f"Submitted {len(jobs)} Genarris jobs: {jobs[0].job_id.split('_')[0] if jobs else ''}"
+        f"Submitted {len(jobs)} Genarris array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
     )
     return jobs
 

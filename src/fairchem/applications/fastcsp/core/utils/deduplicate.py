@@ -85,17 +85,15 @@ def process_structure_group(group_data, ltol=0.2, stol=0.3, angle_tol=5):
 
 def deduplicate_structures(
     df: pd.DataFrame,
+    remove_duplicates: bool = False,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
-    n_jobs: int = 120,
-    remove_duplicates: bool = False,
+    n_jobs: int = 70,
     hash_density: bool = True,
     hash_volume: bool = True,
 ):
     """
-    Perform efficient deduplication of crystals.
-
     Implements a two-stage deduplication algorithm that combines hash-based pre-filtering
     with detailed crystal comparison for optimal performance on large scale.
     """
