@@ -123,7 +123,8 @@ def main(
         # if using ray, then launch ray cluster locally
         if scheduler_cfg.use_ray:
             logging.info("Running in local mode with local ray cluster")
-            runner: Runner = hydra.utils.instantiate(cfg.runner)
+            # don't recursively instantiate the runner here because they will need to be the progress to be setup
+            runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
             runner.run()
         elif scheduler_cfg.ranks_per_node > 1:
             # else launch locally using torch elastic or local mode
