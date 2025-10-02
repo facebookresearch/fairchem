@@ -54,47 +54,44 @@ your_project_root/
 ├── molecules.csv                   # Input: Molecule definitions and conformer paths
 ├── config.yaml                     # Workflow configuration file
 │
-├── genarris/                       # Stage 1: Raw Genarris structure generation
+├── generated_structures/           # Stage 1: Raw Genarris structure generation
 │   ├── MOLECULE1/
-│   │   ├── MOLECULE1_mol_Z1/
-│   │   │   ├── ui.conf
-│   │   │   ├── slurm.sh
-│   │   │   ├── Genarris.out
-│   │   │   └── structures.json
-│   │   └── MOLECULE1_mol_Z2/
+│   │   ├── CONFORMER1/
+│   │   │   ├── Z1/
+│   │   │   │    ├──ui.conf
+│   │   │   │    ├── slurm.sh
+│   │   │   │    ├── Genarris.out
+│   │   │   │    └── structures.json
+│   │   │   └── Z2/
+│   │   └── CONFORMER2/
 │   └── MOLECULE2/
 │
 ├── raw_structures/                 # Stage 2: Processed and deduplicated structures
 │   ├── MOLECULE1/
-│   │   ├── MOLECULE1_mol/
+│   │   ├── CONFORMER1/
 │   │   │   └── partition_id=*/
-│   │   │       └── *.parquet      # Structures in Parquet format
-│   │   └── MOLECULE1_conf2/
+│   │   │       └── *.parquet      # Processed structures in Parquet format
+│   │   └── CONFORMER2/
 │   └── MOLECULE2/
 │
 └── relaxed/                        # Stage 3+: ML relaxation and analysis results
     └── uma_sm_1p1_omc_bfgs_0.01_1000_relaxcell/  # Named by ML model + optimizer settings
-        ├── slurm/                  # SLURM job management files
-        │   ├── *.out
-        │   ├── *.err
-        │   └── submitit_logs/
-        │
         ├── raw_structures/         # Stage 3: ML-relaxed crystal structures
         │   ├── MOLECULE1/
-        │   │   └── MOLECULE1_mol/
+        │   │   └── CONFORMER1/
         │   │       └── partition_id=*/
         │   │           └── *.parquet  # Relaxed structures with energies
         │   └── MOLECULE2/
         │
         ├── filtered_structures/    # Stage 4: Energy-filtered and deduplicated structures
         │   ├── MOLECULE1/
-        │   │   └── MOLECULE1_mol/
+        │   │   └── CONFORMER1/
         │   │       └── *.parquet      # Best structures ranked by energy
         │   └── MOLECULE2/
         │
         ├── matched_structures/     # Stage 5: Structures compared to experimental data
         │   ├── MOLECULE1/
-        │   │   └── MOLECULE1_mol/
+        │   │   └── CONFORMER1/
         │   │       └── *.parquet      # Structures with experimental similarity scores
         │   └── MOLECULE2/
 ```
@@ -109,7 +106,6 @@ your_project_root/
 ## Getting Started
 
 ### Prerequisites
-- Python 3.9+
 - SLURM cluster environment for parallel processing
 - GPU resources for efficient ML relaxations
 

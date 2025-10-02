@@ -81,7 +81,9 @@ def create_calculator(relax_config):
     return calc
 
 
-def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[dict[str, Any], Path]:
+def get_relax_config_and_dir(
+    config: dict[str, Any], verbose=False
+) -> tuple[dict[str, Any], Path]:
     """
     Generate relaxation parameters and determine output directory from workflow configuration.
 
@@ -129,10 +131,11 @@ def get_relax_config_and_dir(config: dict[str, Any]) -> tuple[dict[str, Any], Pa
 
     relax_output_dir = root / "relaxed" / relax_output_dir
 
-    logger = get_central_logger()
-    logger.info("Relaxation configuration:")
-    logger.info(f"Relaxation config: {relax_config}")
-    logger.info(f"Relaxation output directory: {relax_output_dir}")
+    if verbose:
+        logger = get_central_logger()
+        logger.info("Relaxation configuration:")
+        logger.info(f"Relaxation config: {relax_config}")
+        logger.info(f"Relaxation output directory: {relax_output_dir}")
     return relax_params, relax_output_dir
 
 
@@ -179,10 +182,10 @@ def relax_atoms_batch(atoms_list, relax_config, calc):
     else:
         ecf = OptimizableBatch(atoms_batch, predictor)
     optimizer = FairchemLBFGS(ecf)
-    potential_energies = ecf.get_potential_energies()
     converged_batch = optimizer.run(
         fmax=relax_config["fmax"], steps=relax_config["max_steps"]
     )
+    potential_energies = ecf.get_potential_energies()
     atoms_relaxed = ecf.get_atoms_list()
     for atoms, converged, potential_energy in zip(
         atoms_relaxed, converged_batch, potential_energies
@@ -257,6 +260,9 @@ def relax_atoms(atoms, relax_config, calc):
     # Store relaxation metadata
     atoms.info["converged"] = converged  # Store convergence status
     atoms.info["energy"] = atoms.get_potential_energy()  # Store relaxed energy
+    atoms.info["optimizer_steps"] = (
+        optimizer.nsteps
+    )  # Store number of optimization steps
     return atoms
 
 
@@ -341,6 +347,8 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
 def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     """Submit parallel structure relaxation jobs to SLURM."""
 
+    logger = get_central_logger()
+
     # Configure SLURM parameters
     relax_slurm_config, executor_params = get_relax_slurm_config(relax_config)
 
@@ -348,11 +356,9 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     executor = submitit.AutoExecutor(folder=output_dir.parent / "slurm")
     executor.update_parameters(**executor_params)
 
-    logger = get_central_logger()
-
     # Discover all input files to process
     input_files = list(input_dir.glob("**/*.parquet"))
-    logger.info(f"Total number of input files: {len(input_files)}")
+    logger.info(f"Total number of input files found: {len(input_files)}")
 
     # Filter out files that have already been relaxed to avoid recomputation
     input_files = [
@@ -380,7 +386,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
 
     logger = get_central_logger()
     logger.info(
-        f"Submitted {len(jobs)} relaxation jobs: {jobs[0].job_id.split('_')[0] if jobs else 'none'}"
+        f"Submitted {len(jobs)} relaxation array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else 'none'}"
     )
     return jobs
 

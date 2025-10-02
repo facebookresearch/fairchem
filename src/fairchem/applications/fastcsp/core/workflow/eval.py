@@ -125,6 +125,8 @@ def match_structures(row, target_structures, eval_method="csd", **kwargs):
 
 def _match_csd(row, target_xtals, logger, shell_size=30):
     """CSD-specific matching logic."""
+    logger = get_central_logger()
+
     try:
         from ccdc.crystal import Crystal
     except ImportError as e:
@@ -161,17 +163,24 @@ def _match_csd(row, target_xtals, logger, shell_size=30):
     return None, None
 
 
-def _match_pymatgen(row, target_xtals, logger, ltol=0.2, stol=0.3, angle_tol=5):
+def _match_pymatgen(
+    row, target_xtals, logger, ltol=0.2, stol=0.3, angle_tol=5, ignore_H=True
+):
     """Pymatgen-specific matching logic."""
+    logger = get_central_logger()
+
     try:
         pred_structure = Structure.from_str(row.relaxed_cif, fmt="cif")
     except Exception as e:
         logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None
 
-    matcher = StructureMatcher(
-        ltol=ltol, stol=stol, angle_tol=angle_tol, ignored_species=["H"]
-    )
+    if ignore_H:
+        matcher = StructureMatcher(
+            ltol=ltol, stol=stol, angle_tol=angle_tol, ignored_species=["H"]
+        )
+    else:
+        matcher = StructureMatcher(ltol=ltol, stol=stol, angle_tol=angle_tol)
     best_match_refcode = None
     best_rmsd = float("inf")
 

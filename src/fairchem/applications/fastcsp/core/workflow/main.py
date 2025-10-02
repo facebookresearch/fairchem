@@ -26,6 +26,7 @@ The workflow stages are:
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -110,6 +111,12 @@ def main(args: argparse.Namespace) -> None:
     root = Path(config["root"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
 
+    # Config and molecules info into root
+    if not root / "config.yaml".exists():
+        shutil.copy2(args.config, root / "config.yaml")
+    if not root / "molecules.csv".exists():
+        shutil.copy2(args.molecules, root / "molecules.csv")
+
     # Reorder stages based on dependencies
     args.stages = reorder_stages_by_dependencies(args.stages)
 
@@ -167,6 +174,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=root / "genarris",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
+            remove_duplicates=pre_relax_config["remove_duplicates"],
             ltol=pre_relax_config["ltol"],
             stol=pre_relax_config["stol"],
             angle_tol=pre_relax_config["angle_tol"],
@@ -185,7 +193,7 @@ def main(args: argparse.Namespace) -> None:
             run_relax_jobs,
         )
 
-        relax_config, relax_output_dir = get_relax_config_and_dir(config)
+        relax_config, relax_output_dir = get_relax_config_and_dir(config, verbose=True)
         jobs = run_relax_jobs(
             input_dir=root / "raw_structures",
             output_dir=relax_output_dir / "raw_structures",
@@ -215,6 +223,7 @@ def main(args: argparse.Namespace) -> None:
             post_relax_config=post_relax_config,
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
             density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
+            remove_duplicates=post_relax_config["remove_duplicates"],
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
