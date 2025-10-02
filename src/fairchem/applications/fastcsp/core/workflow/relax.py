@@ -327,6 +327,9 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
         structures_df["energy_relaxed_per_molecule"] = (
             structures_df["energy_relaxed"] / structures_df["z"]
         )
+        structures_df["optimizer_steps"] = [
+            atoms.info["optimizer_steps"] for atoms in atoms_relaxed
+        ]
         structures_df["converged"] = [
             atoms.info["converged"] for atoms in atoms_relaxed
         ]
@@ -386,7 +389,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
 
     logger = get_central_logger()
     logger.info(
-        f"Submitted {len(jobs)} relaxation array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else 'none'}"
+        f"Submitted {len(jobs)} relaxation array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
     )
     return jobs
 

@@ -112,10 +112,10 @@ def main(args: argparse.Namespace) -> None:
     root.mkdir(parents=True, exist_ok=True)
 
     # Config and molecules info into root
-    if not root / "config.yaml".exists():
+    if not (root / "config.yaml").exists():
         shutil.copy2(args.config, root / "config.yaml")
-    if not root / "molecules.csv".exists():
-        shutil.copy2(args.molecules, root / "molecules.csv")
+    if not (root / "molecules.csv").exists():
+        shutil.copy2(config["molecules"], root / "molecules.csv")
 
     # Reorder stages based on dependencies
     args.stages = reorder_stages_by_dependencies(args.stages)
@@ -154,7 +154,7 @@ def main(args: argparse.Namespace) -> None:
 
         genarris_config = get_genarris_config(config)
         jobs = run_genarris_jobs(
-            output_dir=root / "genarris",
+            output_dir=root / "generated_structures",
             genarris_config=genarris_config,
             molecules_file=config["molecules"],
         )
@@ -171,7 +171,7 @@ def main(args: argparse.Namespace) -> None:
 
         pre_relax_config = get_pre_relax_filter_config(config)
         jobs = process_genarris_outputs(
-            input_dir=root / "genarris",
+            input_dir=root / "generated_structures",
             output_dir=root / "raw_structures",
             pre_relax_config=pre_relax_config,
             remove_duplicates=pre_relax_config["remove_duplicates"],

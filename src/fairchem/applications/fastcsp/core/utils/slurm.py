@@ -94,7 +94,9 @@ def submit_slurm_jobs(
             jobs.append(job)
 
     if jobs:
-        logger.info(f"Submitted {len(jobs)} jobs with job ID: {jobs[0].job_id}")
+        logger.info(
+            f"Submitted {len(jobs)} array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
+        )
 
     return jobs
 
