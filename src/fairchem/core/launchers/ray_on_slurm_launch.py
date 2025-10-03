@@ -4,25 +4,25 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import hydra
+import ray
+import torch.distributed as dist
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+from torch.distributed.elastic.utils.distributed import get_free_port
+
 from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     assign_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
 from fairchem.core.common.utils import setup_env_vars
-from fairchem.core.launchers.api import DeviceType
-from torch.distributed.elastic.utils.distributed import get_free_port
-import hydra
-import ray
-from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
-import torch.distributed as dist
-
-from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 from fairchem.core.components.runner import Runner
-
+from fairchem.core.launchers.api import DeviceType
+from fairchem.core.launchers.cluster.ray_cluster import RayCluster
 
 if TYPE_CHECKING:
     from omegaconf import DictConfig
+
     from fairchem.core.launchers.api import SchedulerConfig, SlurmConfig
 
 
