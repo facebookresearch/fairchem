@@ -90,3 +90,16 @@ def get_cfg_from_yaml():
     assert cfg.job.run_name is not None
     assert cfg.job.seed is not None
     assert cfg.keys() == ALLOWED_TOP_LEVEL_KEYS
+
+
+@pytest.mark.parametrize("num_ranks", [1, 4])
+def test_cli_ray(num_ranks):
+    distutils.cleanup()
+    hydra.core.global_hydra.GlobalHydra.instance().clear()
+    sys_args = [
+        "--config",
+        "tests/core/test_ray_runner.yml",
+        f"job.scheduler.ranks_per_node={num_ranks}",
+    ]
+    sys.argv[1:] = sys_args
+    main()
