@@ -123,7 +123,7 @@ def main(
         # if using ray, then launch ray cluster locally
         if scheduler_cfg.use_ray:
             logging.info("Running in local mode with local ray cluster")
-            # don't recursively instantiate the runner here because they will need to be the progress to be setup
+            # don't recursively instantiate the runner here to allow lazy instantiations in the runner
             runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
             runner.run()
         elif scheduler_cfg.ranks_per_node > 1:

@@ -10,6 +10,7 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 from fairchem.core.common.utils import setup_env_vars
+from fairchem.core.launchers.api import DeviceType
 from torch.distributed.elastic.utils.distributed import get_free_port
 import hydra
 import ray
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 
 
 @ray.remote
-class RaySPMDWorker:
+class SPMDWorker:
     def __init__(
         self,
         job_config: DictConfig,
@@ -104,8 +105,13 @@ class SPMDController(Runner):
         self.gp_group_size = job_config.graph_parallel_group_size
         self.ranks_per_node = job_config.scheduler.ranks_per_node
         self.num_nodes = job_config.scheduler.num_nodes
-
-        bundle_gpus = {"GPU": self.ranks_per_node, "CPU": self.ranks_per_node * 8}
+        num_gpus_per_group = (
+            self.ranks_per_node if job_config.device_type == DeviceType.CUDA else 0
+        )
+        bundle_gpus = {
+            "GPU": num_gpus_per_group,
+            "CPU": self.ranks_per_node,
+        }
         placement_groups = []
         # first create one placement group for each node
         for _ in range(self.num_nodes):
@@ -114,8 +120,8 @@ class SPMDController(Runner):
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
         logging.info(f"{len(placement_groups)} placement groups are ready")
-        rank0_worker = RaySPMDWorker.options(
-            num_gpus=1,
+        rank0_worker = SPMDWorker.options(
+            num_gpus=1 if num_gpus_per_group > 0 else 0,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
                 placement_group=placement_groups[0],
                 placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
@@ -146,8 +152,8 @@ class SPMDController(Runner):
                 if pg_idx == 0 and gpu_rank_on_node == 0:
                     continue
                 # Each actor requests 1 GPU and uses the specific placement group
-                actor = RaySPMDWorker.options(
-                    num_gpus=1,
+                actor = SPMDWorker.options(
+                    num_gpus=1 if num_gpus_per_group > 0 else 0,
                     scheduling_strategy=PlacementGroupSchedulingStrategy(
                         placement_group=pg,
                         placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
@@ -166,7 +172,7 @@ class SPMDController(Runner):
                 self.workers.append(actor)
 
     def run(self):
-        logging.info("Running RaySPMDWrapper payload ...")
+        logging.info("Running SPMDWrapper payload ...")
         futures = [w.run.remote() for w in self.workers]
         ray.get(futures)
 
