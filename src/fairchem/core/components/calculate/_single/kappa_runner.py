@@ -36,7 +36,7 @@ try:
 except ImportError:
     mbd_installed = False
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 
 
 def get_kappa103_data_list(reference_data_path: str, debug=False):

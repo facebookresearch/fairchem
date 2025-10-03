@@ -29,7 +29,7 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.single.elasticity_runner.ElasticityRunner
+  _target_: fairchem.core.components.calculate.ElasticityRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
@@ -42,7 +42,7 @@ runner:
         src: ${cluster.data_root_dir}/materials/mp-elasticity/mp-binary-pbe-elasticity-2025.1.aselmdb
 
 reducer:
-  _target_: fairchem.core.components.benchmark.benchmark_reducer.JsonDFReducer
+  _target_: fairchem.core.components.calculate.JsonDFReducer
   target_data_path: ${cluster.data_root_dir}/materials/mp-elasticity/mp-binary-pbe-elasticity-2025.1.json.gz
   benchmark_name: ${benchmark_name}
   index_name: mp_id

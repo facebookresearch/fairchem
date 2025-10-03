@@ -15,9 +15,7 @@ from typing import Callable, TypeVar
 
 import pandas as pd
 
-from fairchem.core.components.benchmark.benchmark_reducer import (
-    JsonDFReducer,
-)
+from fairchem.core.components.benchmark import JsonDFReducer
 
 R = TypeVar("R")
 M = TypeVar("M")

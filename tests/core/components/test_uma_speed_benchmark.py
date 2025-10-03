@@ -16,8 +16,6 @@ without error and that a run directory is created.
 
 from __future__ import annotations
 
-import os
-import sys
 import tempfile
 from pathlib import Path
 
@@ -76,7 +74,7 @@ def test_uma_speed_benchmark_input_system(conserving_mole_checkpoint, water_xyz_
             input_system_override,
             model_override,
             "+runner.dataset_name=omol",
-            "runner.natoms_list=[]"
+            "runner.natoms_list=[]",
         ]
         launch_main(sys_args)
         entries = list(Path(run_root).glob("*/"))

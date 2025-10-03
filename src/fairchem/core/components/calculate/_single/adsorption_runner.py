@@ -15,7 +15,7 @@ import pandas as pd
 from ase.optimize import LBFGS
 from tqdm import tqdm
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.recipes.adsorption import (
     adsorb_atoms,
 )

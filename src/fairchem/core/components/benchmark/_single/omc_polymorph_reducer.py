@@ -12,13 +12,13 @@ import logging
 import ase.units
 import numpy as np
 import pandas as pd
+from ase.io.jsonio import decode
 from monty.dev import requires
 from tqdm import tqdm
 
-from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
+from fairchem.core.components.benchmark import JsonDFReducer
+from fairchem.core.components.calculate import RelaxationRunner, SinglePointRunner
 from fairchem.core.components.calculate.recipes.local_env import construct_bond_matrix
-from fairchem.core.components.calculate.relaxation_runner import RelaxationRunner
-from fairchem.core.components.calculate.singlepoint_runner import SinglePointRunner
 
 try:
     from scipy.stats import kendalltau, spearmanr
@@ -31,7 +31,7 @@ except ImportError:
 try:
     from pymatgen.analysis.local_env import JmolNN
     from pymatgen.analysis.structure_matcher import StructureMatcher
-    from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
+    from pymatgen.io.ase import AseAtomsAdaptor
 
     pmg_installed = True
 except ImportError:
@@ -142,10 +142,10 @@ class OMCPolymorphReducer(JsonDFReducer):
                 ):
                     entry = polymorph_results.loc[index]
                     relaxed_structure = AseAtomsAdaptor.get_structure(
-                        MSONAtoms.from_dict(entry["atoms"])
+                        decode(entry["atoms"])
                     )
                     reference_structure = AseAtomsAdaptor.get_structure(
-                        MSONAtoms.from_dict(entry["atoms_relaxed_target"])
+                        decode(entry["atoms_relaxed_target"])
                     )
 
                     # not clean but call this directly to avoid rematching (rms, max_dist, mask, cost, mapping)

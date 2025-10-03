@@ -13,6 +13,7 @@ from glob import glob
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+from ase.io.jsonio import decode
 from monty.dev import requires
 from tqdm import tqdm
 
@@ -29,19 +30,19 @@ try:
     from matbench_discovery.structure import symmetry
     from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
     from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEntry
-    from pymatgen.io.ase import AseAtomsAdaptor, MSONAtoms
+    from pymatgen.io.ase import AseAtomsAdaptor
     from pymatviz.enums import Key
 
     mbd_installed = True
+    MP2020Compatibility = MaterialsProject2020Compatibility()
+
 except ImportError:
     mbd_installed = False
+    MP2020Compatibility = None
 
 if TYPE_CHECKING:
     from pymatgen.core import Structure
     from pymatgen.entries.compatibility import Compatibility
-
-
-MP2020Compatibility = MaterialsProject2020Compatibility()
 
 
 def as_dict_handler(obj: Any) -> dict[str, Any] | None:
@@ -161,7 +162,7 @@ class MaterialsDiscoveryReducer(JsonDFReducer):
             desc="Converting predicted structures and energies to computed structure entries",
         ):
             cse = df_wbm_cse.loc[mat_id, Key.computed_structure_entry].copy()
-            atoms = MSONAtoms.from_dict(results.loc[mat_id, "atoms"])
+            atoms = decode(results.loc[mat_id, "atoms"])
             structure = AseAtomsAdaptor.get_structure(atoms)
             energy = results.loc[mat_id, "energy"]
             cse._energy = energy
