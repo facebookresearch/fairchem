@@ -116,7 +116,7 @@ def lookup_atomic_number_by_mass(mass_arr: np.ndarray | float) -> np.ndarray | i
     return atomic_numbers
 
 
-def separate_run_commands(input_script: str) -> str:
+def separate_run_commands(input_script: str) -> tuple[list[str], list[str]]:
     lines = input_script.splitlines()
     run_cmds = []
     script = []
@@ -221,7 +221,7 @@ def run_lammps_with_fairchem(
     lmp = lammps(name=machine, cmdargs=["-nocite", "-log", "none", "-echo", "screen"])
     lmp._predictor = predictor
     lmp._task_name = task_name
-    run_cmds = []
+    # run_cmds = []
     with open(lammps_input_path) as f:
         input_script = f.read()
         check_input_script(input_script)
