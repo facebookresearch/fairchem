@@ -168,6 +168,7 @@ def wrap_to_unit_cell(
     fractional_coords = torch.linalg.solve(unit_cell_matrix, pos_rel.T).T
     fractional_coords = torch.remainder(fractional_coords, 1.0)
 
+    # FIXME: I'm not sure if we need to add boxlo back here.
     # wrapped_positions = fractional_coords @ unit_cell_matrix + boxlo_tensor
     wrapped_positions = fractional_coords @ unit_cell_matrix
     return wrapped_positions
@@ -206,7 +207,7 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
         # stress is defined as virial/volume in lammps
         assert "stress" in results, "stress must be in results to compute virial"
         volume = torch.det(cell).abs().item()
-        v = (results["stress"].cpu() * volume)[0]
+        v = (-results["stress"].detach().cpu() * volume)[0].tolist()
         # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
         virial_arr = [v[0], v[4], v[8], v[1], v[2], v[5]]
         lmp.fix_external_set_virial_global(FIX_EXT_ID, virial_arr)
