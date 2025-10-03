@@ -32,16 +32,16 @@ def check_input_script(input_script: str):
 
 def check_atom_id_match_masses(types_arr, masses):
     for atom_id in types_arr:
-        assert np.allclose(
-            masses[atom_id], atomic_masses[atom_id], atol=1e-1
-        ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        assert np.allclose(masses[atom_id], atomic_masses[atom_id], atol=1e-1), (
+            f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        )
 
 
 def atomic_data_from_lammps_data(
-    x, atomic_numbers, nlocal, cell, periodicity, task_name
+    x: np.ndarray | torch.Tensor, atomic_numbers, nlocal, cell, periodicity, task_name
 ):
     # TODO: do we need to take of care of wrapping atoms that are outside the cell?
-    pos = torch.tensor(x, dtype=torch.float32)
+    pos = torch.as_tensor(x, dtype=torch.float32)
     pbc = torch.tensor(periodicity, dtype=torch.bool).unsqueeze(0)
     edge_index = torch.empty((2, 0), dtype=torch.long)
     cell_offsets = torch.empty((0, 3), dtype=torch.float32)
@@ -145,6 +145,34 @@ def cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
     return unit_cell_matrix.unsqueeze(0)
 
 
+def wrap_to_unit_cell(
+    positions: torch.Tensor,
+    boxlo,
+    boxhi,
+    xy: float,
+    yz: float,
+    xz: float,
+) -> torch.Tensor:
+    if positions.ndim != 2 or positions.size(1) != 3:
+        raise ValueError("positions must be a 2D tensor with shape (N, 3)")
+
+    device = positions.device
+    dtype = positions.dtype
+
+    unit_cell_matrix = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz).to(
+        device=device, dtype=dtype
+    )[0]
+    boxlo_tensor = torch.as_tensor(boxlo, device=device, dtype=dtype)
+    pos_rel = positions - boxlo_tensor
+
+    fractional_coords = torch.linalg.solve(unit_cell_matrix, pos_rel.T).T
+    fractional_coords = torch.remainder(fractional_coords, 1.0)
+
+    # wrapped_positions = fractional_coords @ unit_cell_matrix + boxlo_tensor
+    wrapped_positions = fractional_coords @ unit_cell_matrix
+    return wrapped_positions
+
+
 def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
     # force copy here, otherwise we can accident modify the original array in lammps
     # TODO: only need to get atomic numbers once and cache it?
@@ -155,8 +183,18 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
     atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
     boxlo, boxhi, xy, yz, xz, periodicity, box_change = lmp.extract_box()
     cell = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
+
+    x_wrapped = wrap_to_unit_cell(
+        torch.from_numpy(x, dtype=torch.float32),
+        boxlo,
+        boxhi,
+        xy,
+        yz,
+        xz,
+    )
+
     atomic_data = atomic_data_from_lammps_data(
-        x, atomic_numbers, nlocal, cell, periodicity, lmp._task_name
+        x_wrapped, atomic_numbers, nlocal, cell, periodicity, lmp._task_name
     )
     results = lmp._predictor.predict(atomic_data)
     assert "forces" in results, "forces must be in results"
