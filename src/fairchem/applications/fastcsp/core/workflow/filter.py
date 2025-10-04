@@ -64,8 +64,8 @@ def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def filter_and_deduplicate_structures_single(
-    input_dir: Path,
-    output_dir: Path,
+    input_filename: Path,
+    output_filename: Path,
     energy_cutoff: float = 20,
     density_cutoff: float = 2.5,
     remove_duplicates: bool = False,
@@ -84,10 +84,11 @@ def filter_and_deduplicate_structures_single(
     - Structure deduplication using pymatgen
 
     Args:
-        root: Path to input parquet file with structure data
-        output_path: Directory where filtered results will be saved
+        input_filename: Path to input parquet file with structure data
+        output_filename: Path to output parquet file for filtered results
         energy_cutoff: Maximum energy above minimum (kJ/mol)
         density_cutoff: Maximum allowed density (g/cm³) for filtering
+        remove_duplicates: Whether to enable structure deduplication
         ltol: Lattice parameter tolerance for structure matching
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
@@ -103,7 +104,7 @@ def filter_and_deduplicate_structures_single(
     logger = get_central_logger()
 
     # Load structure dataset from parquet format
-    structures_df = pd.read_parquet(input_dir, engine="pyarrow")
+    structures_df = pd.read_parquet(input_filename, engine="pyarrow")
 
     # 1. Validate connectivity preservation during ML relaxation
     if root_unrelaxed is not None:
@@ -132,13 +133,13 @@ def filter_and_deduplicate_structures_single(
 
         # Save intermediate results with connectivity validation flags
         structures_df.to_parquet(
-            input_dir.parent.with_suffix(".updated") / input_dir.name,
+            input_filename.parent.with_suffix(".updated") / input_filename.name,
             engine="pyarrow",
             compression="zstd",
             partition_cols=["partition_id"],
         )
         logger.info(
-            f"Saved updated dataframe to {input_dir.parent.with_suffix('.updated')}"
+            f"Saved updated dataframe to {input_filename.parent.with_suffix('.updated')}"
         )
 
     # 2. Apply multi-stage filtering workflow
@@ -182,9 +183,8 @@ def filter_and_deduplicate_structures_single(
     structures_df_deduped = structures_df_deduped.drop(columns=["structure"])
 
     # Save filtered and deduplicated results
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
     structures_df_deduped.to_parquet(
-        output_dir,
+        output_filename,
         engine="pyarrow",
         compression="zstd",
     )
@@ -225,27 +225,30 @@ def filter_and_deduplicate_structures(
     # Get SLURM configuration
     slurm_params = get_filter_slurm_config(post_relax_config)
 
-    # Collect all paruqet directories for processing
-    direcs = list(input_dir.iterdir())
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Prepare job arguments
     job_args = []
-    for dir_path in direcs:
-        output_file = output_dir / f"{dir_path.name}.parquet"
+    for molecule_parquet in list(input_dir.iterdir()):
+        output_filename = output_dir / f"{molecule_parquet.name}.parquet"
 
         # Skip datasets that have already been processed
-        if output_file.exists():
-            logger.info(f"Skipping {dir_path} because {output_file} already exists")
+        if output_filename.exists():
+            logger.info(
+                f"Skipping {molecule_parquet} because {output_filename} already exists"
+            )
             continue
 
-        unrelaxed_path = root_unrelaxed / dir_path.name if root_unrelaxed else None
+        unrelaxed_path = (
+            root_unrelaxed / molecule_parquet.name if root_unrelaxed else None
+        )
 
         job_args.append(
             (
                 filter_and_deduplicate_structures_single,
                 (
-                    dir_path,
-                    output_file,
+                    molecule_parquet,
+                    output_filename,
                     energy_cutoff,
                     density_cutoff,
                     remove_duplicates,
