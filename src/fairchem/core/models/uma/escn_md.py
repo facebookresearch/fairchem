@@ -8,6 +8,9 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+
+from torch import distributed as dist
+import time
 import os
 from typing import TYPE_CHECKING, Literal
 
@@ -405,6 +408,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
+        rank=-1
+        st=time.time()
+        if gp_utils.initialized():
+            rank=gp_utils.get_gp_rank()
+            dist.barrier()
+            print(f"{time.time():0.4f} RANK {rank}, BARRIER",time.time()-st)
+            st=time.time()
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -517,6 +527,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
+        torch.cuda.synchronize()
+        print(f"{time.time():0.4f} RANK {rank}, full fwd",i,time.time()-st)
         return out
 
     def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
@@ -622,6 +634,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
+        st=time.time()
         if self.prefix:
             energy_key = f"{self.prefix}_energy"
             forces_key = f"{self.prefix}_forces"
@@ -688,6 +701,8 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             if gp_utils.initialized():
                 forces = gp_utils.reduce_from_model_parallel_region(forces)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+        torch.cuda.synchronize()
+        print(f"{time.time():0.4f} RANK {gp_utils.get_gp_rank()}","HEAD FWD",time.time()-st)
         return outputs
 
 

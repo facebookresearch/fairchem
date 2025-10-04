@@ -11,11 +11,11 @@ import logging
 import os
 from functools import partial
 from typing import TYPE_CHECKING, Literal
-
+import torch
 import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
-
+import time
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
@@ -197,7 +197,7 @@ class FAIRChemCalculator(Calculator):
 
         # Standard call to check system_changes etc
         Calculator.calculate(self, atoms, properties, system_changes)
-
+        st=time.time()
         if len(atoms) == 1 and sum(atoms.pbc) == 0:
             self.results = self._get_single_atom_energies(atoms)
         else:
@@ -207,7 +207,8 @@ class FAIRChemCalculator(Calculator):
             # Batch and predict
             batch = data_list_collater([data_object], otf_graph=True)
             pred = self.predictor.predict(batch)
-
+            torch.cuda.synchronize()
+            print("NON CONVERTED CALC TIME SYNC 2",time.time()-st)
             # Collect the results into self.results
             self.results = {}
             for calc_key in self.implemented_properties:
@@ -224,6 +225,7 @@ class FAIRChemCalculator(Calculator):
                     stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
+        print("CALC TIME",time.time()-st)
 
     def _get_single_atom_energies(self, atoms) -> dict:
         """

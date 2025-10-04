@@ -6,18 +6,21 @@ LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
-
+from concurrent.futures import thread
+import time
+import torch
 import copy
 import logging
 import math
-import multiprocessing as mp
+import torch.multiprocessing as mp
 import os
 import random
+import traceback
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
 from typing import TYPE_CHECKING, Protocol, Sequence
-
+import threading
 import hydra
 import numpy as np
 import torch
@@ -36,7 +39,7 @@ from fairchem.core.units.mlip_unit.inference.client_websocket import (
 )
 from fairchem.core.units.mlip_unit.inference.inference_server_ray import (
     MLIPInferenceServerWebSocket,
-    MLIPWorker,
+    MLIPWorker, MLIPWorkerLocal,
 )
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
@@ -481,6 +484,7 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
         num_workers: int = 1,
     ):
         super().__init__()
+        mp.set_start_method('spawn', force=True)
         _mlip_pred_unit = MLIPPredictUnit(
             inference_model_path=inference_model_path,
             device="cpu",
@@ -522,23 +526,38 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
 
         # options = {"num_gpus": 1} if device == "cuda" else {}
         # place rank 0 on placement group 0
-        rank0_worker = MLIPWorker.options(
-            num_gpus=1,
-            scheduling_strategy=PlacementGroupSchedulingStrategy(
-                placement_group=placement_groups[0],
-                placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
-                placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
-            ),
-        ).remote(0, num_workers, predict_unit_config)
-        master_addr, master_port = ray.get(
-            rank0_worker.get_master_address_and_port.remote()
-        )
-        logging.info(f"Started rank0 on {master_addr}:{master_port}")
-        self.workers = [rank0_worker]
+        # rank0_worker = MLIPWorker.options(
+        #     num_gpus=1,
+        #     scheduling_strategy=PlacementGroupSchedulingStrategy(
+        #         placement_group=placement_groups[0],
+        #         placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
+        #         placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+        #     ),
+        # ).remote(0, num_workers, predict_unit_config)
+        #ray.init(logging_level=logging.INFO)
+        # --- Launch rank0 locally (not as a Ray actor) ---
+        self.local_qs_out= [ mp.Queue() for _ in range(8) ]
+        self.local_qs_in = [ mp.Queue() for _ in range(8) ]
+
+        
+        master_port=None
+        master_addr=None
+        self.processes=[]
+        for i in range(8):
+            print("Start worker", i,master_port, master_addr)
+            actor = MLIPWorkerLocal(i, num_workers, predict_unit_config, self.local_qs_in[i], self.local_qs_out[i],master_port=master_port, master_address=master_addr)
+            p = mp.Process(target=actor.run)
+            p.start()
+            self.processes.append(p)
+            if i==0:
+                master_addr, master_port = self.local_qs_out[0].get() 
+        self.workers = [] #[rank0_worker]
 
         # next place all ranks in order and pack them on placement groups
         # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
         for pg_idx, pg in enumerate(placement_groups):
+            if pg_idx == 0:
+                continue # already launched locally
             print(f"Launching workers for placement group {pg_idx} (Node {pg_idx})")
 
             for gpu_rank_on_node in range(num_gpus_per_node):
@@ -573,12 +592,36 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
+        st=time.time()
         data_ref = ray.put(data)
-        futures = [w.predict.remote(data_ref) for w in self.workers]
+
+        futures = [ w.predict.remote(data_ref) for w in self.workers]
+        logging.info(f'sent data to {len(self.workers)} ray workers')
+        for q in self.local_qs_in:
+            q.put(data)
+        logging.info(f'sent data to {len(self.workers)+len(self.local_qs_in)} workers')
         # just get the first result that is ready since they are identical
         # the rest of the futures should go out of scope and memory garbage collected
-        ready_ids, _ = ray.wait(futures, num_returns=1)
-        return ray.get(ready_ids[0])
+        # 0.175seconds , 25ms 
+        #logging.info("Wait for ray workers to be ready..")
+        # ready_ids, _ = ray.wait(futures, num_returns=1)
+        # ret=ray.get(ready_ids[0])
+        #print(f"ray full fwd time {time.time()-st:.3f}s") # 0.2s
+        #print("RET",ret)
+        #stack_trace_string = ''.join(traceback.format_stack())
+        #print("RET ST2",stack_trace_string)
+        # for f in futures:
+        #     if f!=ready_ids[0]:
+        #         ray.get(f)
+        #         #ray.cancel(f, force=True
+        #torch.cuda.synchronize()
+        #print(f"ray full fwd time with ray {time.time()-st:.3f}s") # 0.2s
+        #torch.cuda.synchronize()
+        #print(f"ray full fwd time with ray sync {time.time()-st:.3f}s") # 0.2s
+        logging.info("Wait for local workers to be ready..")
+        ret=self.local_qs_out[0].get() #ray.get(ready_ids[0])
+        print(f"ray full fwd time with local {time.time()-st:.3f}s") # 0.2s
+        return ret
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:

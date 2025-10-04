@@ -6,7 +6,7 @@ LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
-
+import time
 import copy
 import logging
 from abc import ABCMeta, abstractmethod
@@ -165,6 +165,7 @@ class HydraModel(nn.Module):
             )
 
     def forward(self, data: AtomicData):
+        start_time=time.time()
         # lazily get device from input to use with amp, at least one input must be a tensor to figure out it's device
         if not self.device:
             device_from_tensors = {
@@ -186,7 +187,7 @@ class HydraModel(nn.Module):
                     out.update(self.output_heads[k](data, emb))
                 else:
                     out[k] = self.output_heads[k](data, emb)
-
+        print(f"Model forward pass time: {time.time()-start_time:.3f}s")
         return out
 
 

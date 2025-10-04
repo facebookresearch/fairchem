@@ -1,13 +1,30 @@
 #fairchem -c puma_speed.yaml +run_dir_root=/path/to/run_dir
 
+job:
+  device_type: CUDA
+  run_dir: ${run_dir_root}
+  run_name: test_speed
+  scheduler:
+    mode: SLURM
+    num_nodes: 4
+    ranks_per_node: 8
+    slurm:
+      account: ocp
+      qos: h200_ocp_high
+      mem_gb: 0
+      cpus_per_task: 24
+  graph_parallel_group_size: 32
+
+
 runner:
   _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 10
-  natoms_list: [1000]
+  #natoms_list: [1000]
   model_checkpoints: {
     "uma_sm_cons": "/home/misko/checkpoints/uma_sm_130525.pt"
   }
   run_dir_root: ${run_dir_root}
+  input_system: { 'atp':'/home/misko/dE_250_explore/init.pdb'}
   # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
   # for profiling, we substract the graph generation time by using external_graph_gen=True
   inference_settings:
