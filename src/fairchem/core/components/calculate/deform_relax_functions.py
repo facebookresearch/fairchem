@@ -22,24 +22,24 @@ def relax_atoms_w_maxstep(
     atoms: Atoms,
     steps: int = 500,
     fmax: float = 0.02,
-    maxstep: float = None,
+    maxstep: float | None = None,
     optimizer_cls: type[Optimizer] | None = None,
     fix_symmetry: bool = False,
     cell_filter_cls: type[Filter] | None = None,
 ) -> Atoms:
-    """Simple helper function to run relaxations and return the relaxed Atoms
+    """Run a relaxation on ASE atoms and return the relaxed structure.
 
     Args:
-        atoms: ASE atoms with a calculator
-        steps: max number of relaxation steps
-        fmax: force convergence threshold
-        maxstep: max atomic displacement per iteration
-        optimizer_cls: ASE optimizer. Default FIRE
-        fix_symmetry: fix structure symmetry in relaxation: Default False
-        cell_filter_cls: An instance of an ASE filter.
+        atoms: ASE Atoms object with a calculator
+        steps: Maximum number of relaxation steps
+        fmax: Force convergence threshold
+        maxstep: Maximum atomic displacement per iteration
+        optimizer_cls: ASE optimizer class. Defaults to FIRE
+        fix_symmetry: Whether to fix structure symmetry during relaxation
+        cell_filter_cls: Optional ASE filter to modify the atoms before optimization
 
     Returns:
-        Atoms: relaxed atoms
+        Atoms: Relaxed ASE atoms object
     """
 
     if fix_symmetry:
@@ -54,5 +54,6 @@ def relax_atoms_w_maxstep(
     opt = optimizer_cls(_atoms, maxstep=maxstep, logfile=None)
     opt.run(fmax=fmax, steps=steps)
 
+    # Update atoms.info with optimization metadata
     atoms.info |= {"opt_nsteps": opt.nsteps, "opt_converged": opt.converged()}
     return atoms
