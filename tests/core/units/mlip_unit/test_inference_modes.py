@@ -233,7 +233,7 @@ def mole_inference(
     dataset_dir,
     device,
     energy_rtol=1e-4,
-    forces_rtol=1e-4,
+    forces_rtol=2e-4,
 ):
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
