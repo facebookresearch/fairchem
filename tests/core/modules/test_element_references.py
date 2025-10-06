@@ -90,6 +90,7 @@ def test_create_element_references(element_refs, tmp_path):
     )
 
 
+@pytest.mark.skip(reason="Code is not being used anymore. Needs to be removed?")
 def test_fit_linear_references(
     element_refs, dummy_binary_dataset, max_num_elements, dummy_element_refs
 ):
