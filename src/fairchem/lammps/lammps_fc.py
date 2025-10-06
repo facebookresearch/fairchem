@@ -186,7 +186,7 @@ def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
     cell = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
 
     x_wrapped = wrap_to_unit_cell(
-        torch.from_numpy(x, dtype=torch.float32),
+        torch.as_tensor(x, dtype=torch.float32),
         boxlo,
         boxhi,
         xy,
