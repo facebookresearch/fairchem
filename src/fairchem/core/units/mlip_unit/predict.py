@@ -13,6 +13,7 @@ import math
 import multiprocessing as mp
 import os
 import random
+import time
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
@@ -509,7 +510,7 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
         )
 
         # HACK This will not work for CPUs and need to generalize to the config
-        cpus_per_node = 192
+        cpus_per_node = 8
         num_gpus_per_node = 8
         bundle_gpus = {"GPU": num_gpus_per_node, "CPU": cpus_per_node}
         placement_groups = []
@@ -574,11 +575,17 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         data_ref = ray.put(data)
+        t0 = time.time()
         futures = [w.predict.remote(data_ref) for w in self.workers]
         # just get the first result that is ready since they are identical
         # the rest of the futures should go out of scope and memory garbage collected
-        ready_ids, _ = ray.wait(futures, num_returns=1)
-        return ray.get(ready_ids[0])
+        # ready_ids, _ = ray.wait(futures, num_returns=1)
+        # result = ray.get(ready_ids[0])
+        result = ray.get(futures)
+        logging.info(
+            f"ParallelMLIPPredictUnitRay Prediction time: {time.time() - t0} s"
+        )
+        return result[0]
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:

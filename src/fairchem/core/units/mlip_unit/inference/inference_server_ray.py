@@ -9,9 +9,11 @@ import asyncio
 import contextlib
 import logging
 import signal
+import time
 from typing import TYPE_CHECKING
 
 import hydra
+import torch
 import torch.distributed as dist
 import websockets
 from monty.dev import requires
@@ -43,6 +45,29 @@ except ImportError:
     ray_installed = False
 
 logging.basicConfig(level=logging.INFO)
+
+
+def move_tensors_to_cpu(data):
+    """
+    Recursively move all PyTorch tensors in a nested data structure to CPU.
+
+    Args:
+        data: Input data structure (dict, list, tuple, tensor, or other)
+
+    Returns:
+        Data structure with all tensors moved to CPU
+    """
+    if isinstance(data, torch.Tensor):
+        return data.cpu()
+    elif isinstance(data, dict):
+        return {key: move_tensors_to_cpu(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [move_tensors_to_cpu(item) for item in data]
+    elif isinstance(data, tuple):
+        return tuple(move_tensors_to_cpu(item) for item in data)
+    else:
+        # Return as-is for non-tensor types (str, int, float, etc.)
+        return data
 
 
 @remote
@@ -107,7 +132,17 @@ class MLIPWorker:
                 self.master_address,
             )
             self.is_setup = True
-        return self.predict_unit.predict(data)
+            self.data = data.clone()
+        t0 = time.time()
+        if self.data is not None:
+            out = self.predict_unit.predict(self.data)
+        else:
+            out = self.predict_unit.predict(data)
+        logging.info(f"Worker {self.worker_id} prediction time: {time.time() - t0} s")
+        out = move_tensors_to_cpu(out)
+        logging.info(f"Worker {self.worker_id} after cpu time: {time.time() - t0} s")
+        if self.worker_id == 0:
+            return out
         # atomic_data = pickle.loads(data)
         # result = self.predict_unit.predict(atomic_data)
         # return pickle.dumps(result)
