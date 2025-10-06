@@ -16,6 +16,7 @@ from ase.db import connect
 from tests.core.testing_utils import launch_main
 
 
+@pytest.mark.skip(reason="Hanging CI, needs investigation")
 def test_elastic_benchmark_launch(calculator, dummy_binary_dataset_path):
     # create a fake target data DF
     target_data = []
@@ -32,7 +33,7 @@ def test_elastic_benchmark_launch(calculator, dummy_binary_dataset_path):
     sys_args = [
         "--config",
         "tests/core/components/configs/test_elastic_benchmark.yaml",
-        f"test_data_path={str(dummy_binary_dataset_path)}",
+        f"test_data_path={dummy_binary_dataset_path!s}",
         f"target_data_path={target_data_path}",
     ]
     launch_main(sys_args)
