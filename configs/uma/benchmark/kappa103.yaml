@@ -42,6 +42,6 @@ runner:
   displacement: 0.03
 
 reducer:
-  _target_: fairchem.core.components.calculate.Kappa103Reducer
+  _target_: fairchem.core.components.benchmark.Kappa103Reducer
   benchmark_name: ${benchmark_name}
   target_data_path: ${cluster.data_root_dir}/materials/kappa103/2024-11-09-kappas-phononDB-PBE-noNAC.json.gz

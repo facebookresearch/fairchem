@@ -41,5 +41,5 @@ runner:
   steps: 20000
 
 reducer:
-  _target_: fairchem.core.components.calculate.NVEMDReducer
+  _target_: fairchem.core.components.benchmark.NVEMDReducer
   benchmark_name: ${benchmark_name}

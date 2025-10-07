@@ -55,7 +55,7 @@ runner:
         src: ${cluster.data_root_dir}/catalysis/is2re/is/data.aselmdb
 
 reducer:
-  _target_: fairchem.core.components.calculate.AdsorptionReducer
+  _target_: fairchem.core.components.benchmark.AdsorptionReducer
   target_data_key: target
   benchmark_name: ${benchmark_name}
   index_name: sid

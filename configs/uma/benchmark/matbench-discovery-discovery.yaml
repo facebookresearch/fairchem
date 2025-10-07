@@ -50,7 +50,7 @@ runner:
     _partial_: True
 
 reducer:
-  _target_: fairchem.core.components.calculate.MaterialsDiscoveryReducer
+  _target_: fairchem.core.components.benchmark.MaterialsDiscoveryReducer
   benchmark_name: ${benchmark_name}
   target_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2023-12-13-wbm-summary.csv.gz
   cse_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2022-10-19-wbm-computed-structure-entries.jsonl.gz
