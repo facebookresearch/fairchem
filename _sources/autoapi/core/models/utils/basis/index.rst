@@ -44,6 +44,7 @@ Module Contents
        import torch.nn as nn
        import torch.nn.functional as F
 
+
        class Model(nn.Module):
            def __init__(self) -> None:
                super().__init__()
@@ -86,6 +87,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:
@@ -132,6 +134,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:
@@ -186,6 +189,7 @@ Module Contents
        import torch.nn as nn
        import torch.nn.functional as F
 
+
        class Model(nn.Module):
            def __init__(self) -> None:
                super().__init__()
@@ -235,6 +239,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:
@@ -289,6 +294,7 @@ Module Contents
        import torch.nn as nn
        import torch.nn.functional as F
 
+
        class Model(nn.Module):
            def __init__(self) -> None:
                super().__init__()
@@ -338,6 +344,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:

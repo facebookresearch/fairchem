@@ -675,13 +675,19 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 </pre></div>
 </div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;repr&#39; attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. &#39;repr&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;frozen&#39; attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. &#39;frozen&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+</pre></div>
+</div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:The &#39;seed&#39; argument is deprecated and will be removed in future versions. Please set the seed in the MLIPPredictUnit configuration instead.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-09-26-22-50-15-162657-40240
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-10-07-22-11-11-237661-40240
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-09-26-22-50-15-162657-40240
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-10-07-22-11-11-237661-40240
 </pre></div>
 </div>
 </div>
@@ -695,12 +701,9 @@ document.write(`
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
  &#39;converged&#39;: np.True_,
- &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-09-26-22-50-15-162657-40240&#39;,
+ &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-10-07-22-11-11-237661-40240&#39;,
  &#39;input_atoms&#39;: {&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
-                 &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 9, 26, 22, 50, 15, 825047, tzinfo=datetime.timezone.utc),
-                                                         &#39;emmet_version&#39;: &#39;0.84.9&#39;,
-                                                         &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
-                                        &#39;chemsys&#39;: &#39;Cu&#39;,
+                 &#39;structure_metadata&#39;: {&#39;chemsys&#39;: &#39;Cu&#39;,
                                         &#39;composition&#39;: {Element Cu: 1.0},
                                         &#39;composition_reduced&#39;: {Element Cu: 1.0},
                                         &#39;density&#39;: 8.971719813140734,
@@ -712,6 +715,7 @@ document.write(`
                                         &#39;nsites&#39;: 1,
                                         &#39;symmetry&#39;: {&#39;angle_tolerance&#39;: 5.0,
                                                      &#39;crystal_system&#39;: &lt;CrystalSystem.cubic: &#39;Cubic&#39;&gt;,
+                                                     &#39;hall&#39;: &#39;-F 4 2 3&#39;,
                                                      &#39;number&#39;: 225,
                                                      &#39;point_group&#39;: &#39;m-3m&#39;,
                                                      &#39;symbol&#39;: &#39;Fm-3m&#39;,
@@ -719,23 +723,20 @@ document.write(`
                                                      &#39;version&#39;: &#39;2.6.0&#39;},
                                         &#39;volume&#39;: 11.761470249999999}},
  &#39;name&#39;: &#39;fairchem Relax&#39;,
- &#39;nid&#39;: &#39;runnervmdmv4e.04p4rmzsbequpadhmj22ussfqa.ex.internal.cloudapp.net&#39;,
- &#39;parameters&#39;: {&#39;version&#39;: &#39;2.7.2.dev3+g038d54f9&#39;},
+ &#39;nid&#39;: &#39;runnervm43tnw.04p4rmzsbequpadhmj22ussfqa.ex.internal.cloudapp.net&#39;,
+ &#39;parameters&#39;: {&#39;version&#39;: &#39;2.8.0&#39;},
  &#39;parameters_opt&#39;: {&#39;fmax&#39;: 0.001,
                     &#39;max_steps&#39;: 1000,
                     &#39;maxstep&#39;: 0.2,
                     &#39;optimizer&#39;: &#39;LBFGS&#39;,
                     &#39;type&#39;: &#39;optimization&#39;},
  &#39;quacc_version&#39;: &#39;1.0.4&#39;,
- &#39;results&#39;: {&#39;energy&#39;: -3.7501682869643735,
+ &#39;results&#39;: {&#39;energy&#39;: -3.750168406173663,
              &#39;forces&#39;: array([[0., 0., 0.]], dtype=float32),
-             &#39;free_energy&#39;: -3.7501682869643735,
-             &#39;stress&#39;: array([-4.3533524e-03, -4.3533752e-03, -4.3533500e-03, -1.8100260e-10,
-        2.0062518e-09,  7.6637069e-10], dtype=float32)},
- &#39;structure_metadata&#39;: {&#39;builder_meta&#39;: {&#39;build_date&#39;: datetime.datetime(2025, 9, 26, 22, 50, 15, 836081, tzinfo=datetime.timezone.utc),
-                                         &#39;emmet_version&#39;: &#39;0.84.9&#39;,
-                                         &#39;pymatgen_version&#39;: &#39;2025.6.14&#39;},
-                        &#39;chemsys&#39;: &#39;Cu&#39;,
+             &#39;free_energy&#39;: -3.750168406173663,
+             &#39;stress&#39;: array([-4.3533393e-03, -4.3533593e-03, -4.3533375e-03,  1.5472137e-09,
+        1.0360846e-09,  1.2368058e-09], dtype=float32)},
+ &#39;structure_metadata&#39;: {&#39;chemsys&#39;: &#39;Cu&#39;,
                         &#39;composition&#39;: {Element Cu: 1.0},
                         &#39;composition_reduced&#39;: {Element Cu: 1.0},
                         &#39;density&#39;: 8.971719813140734,
@@ -747,6 +748,7 @@ document.write(`
                         &#39;nsites&#39;: 1,
                         &#39;symmetry&#39;: {&#39;angle_tolerance&#39;: 5.0,
                                      &#39;crystal_system&#39;: &lt;CrystalSystem.cubic: &#39;Cubic&#39;&gt;,
+                                     &#39;hall&#39;: &#39;-F 4 2 3&#39;,
                                      &#39;number&#39;: 225,
                                      &#39;point_group&#39;: &#39;m-3m&#39;,
                                      &#39;symbol&#39;: &#39;Fm-3m&#39;,
@@ -754,11 +756,11 @@ document.write(`
                                      &#39;version&#39;: &#39;2.6.0&#39;},
                         &#39;volume&#39;: 11.761470249999999},
  &#39;trajectory&#39;: [Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]], calculator=SinglePointCalculator(...))],
- &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.7501682869643735,
+ &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.750168406173663,
                          &#39;forces&#39;: array([[0., 0., 0.]]),
-                         &#39;free_energy&#39;: -3.7501682869643735,
-                         &#39;stress&#39;: array([-4.35335236e-03, -4.35337517e-03, -4.35335003e-03, -1.81002602e-10,
-        2.00625183e-09,  7.66370689e-10])}]}
+                         &#39;free_energy&#39;: -3.750168406173663,
+                         &#39;stress&#39;: array([-4.35333932e-03, -4.35335934e-03, -4.35333746e-03,  1.54721369e-09,
+        1.03608455e-09,  1.23680577e-09])}]}
 </pre></div>
 </div>
 </div>

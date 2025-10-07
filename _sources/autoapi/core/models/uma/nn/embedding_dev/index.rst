@@ -25,7 +25,7 @@ Classes
 Module Contents
 ---------------
 
-.. py:class:: EdgeDegreeEmbedding(sphere_channels: int, lmax: int, mmax: int, max_num_elements: int, edge_channels_list, rescale_factor, cutoff, mappingReduced, activation_checkpoint_chunk_size: int | None)
+.. py:class:: EdgeDegreeEmbedding(sphere_channels: int, lmax: int, mmax: int, edge_channels_list, rescale_factor, mappingReduced, activation_checkpoint_chunk_size: int | None)
 
    Bases: :py:obj:`torch.nn.Module`
 
@@ -73,28 +73,16 @@ Module Contents
       :type:  int
 
 
-   .. py:attribute:: max_num_elements
-
-
-   .. py:attribute:: edge_channels_list
-
-
    .. py:attribute:: rad_func
 
 
    .. py:attribute:: rescale_factor
 
 
-   .. py:attribute:: cutoff
+   .. py:method:: forward_chunk(x, x_edge, edge_index, wigner_and_M_mapping_inv, edge_envelope, node_offset=0)
 
 
-   .. py:attribute:: envelope
-
-
-   .. py:method:: forward_chunk(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping_inv, node_offset=0)
-
-
-   .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping_inv, node_offset=0)
+   .. py:method:: forward(x, x_edge, edge_index, wigner_and_M_mapping_inv, edge_envelope, node_offset=0)
 
 
 .. py:class:: ChgSpinEmbedding(embedding_type: Literal['pos_emb', 'lin_emb', 'rand_emb'], embedding_target: Literal['charge', 'spin'], embedding_size: int, grad: bool, scale: float = 1.0)
@@ -111,6 +99,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:
@@ -157,6 +146,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:

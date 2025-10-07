@@ -625,20 +625,114 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#package-contents">Package Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner"><code class="docutils literal notranslate"><span class="pre">CalculateRunner</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.job_config"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.job_config</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id0"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner._calculator"><code class="docutils literal notranslate"><span class="pre">CalculateRunner._calculator</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner._input_data"><code class="docutils literal notranslate"><span class="pre">CalculateRunner._input_data</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner._already_calculated"><code class="docutils literal notranslate"><span class="pre">CalculateRunner._already_calculated</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.calculator"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.calculator</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.input_data"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.input_data</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.calculate"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.calculate()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.write_results"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.write_results()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.save_state"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.save_state()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.load_state"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.load_state()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.run"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.run()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner._save_relaxed_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.place_on_relaxed_slab"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.place_on_relaxed_slab</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.adsorption_energy_model"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.adsorption_energy_model</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.num_placements"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.num_placements</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.fmax"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.fmax</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.steps"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.steps</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.optimizer_cls"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.optimizer_cls</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.calculate"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.write_results"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.save_state"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner._save_relaxed_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.fmax"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.fmax</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.steps"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.steps</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.relax_surface"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.relax_surface</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.optimizer_cls"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.optimizer_cls</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.calculate"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.write_results"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.save_state"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.evaluate_total_energy"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.evaluate_total_energy</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.adsorption_energy_model"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.adsorption_energy_model</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.calculate"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.write_results"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.save_state"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.calculate"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.write_results"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.save_state"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner"><code class="docutils literal notranslate"><span class="pre">KappaRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">KappaRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.displacement"><code class="docutils literal notranslate"><span class="pre">KappaRunner.displacement</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.calculate"><code class="docutils literal notranslate"><span class="pre">KappaRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.write_results"><code class="docutils literal notranslate"><span class="pre">KappaRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.save_state"><code class="docutils literal notranslate"><span class="pre">KappaRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.time_step"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.time_step</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.steps"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.steps</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.save_frequency"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.save_frequency</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.calculate"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.write_results"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.save_state"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner"><code class="docutils literal notranslate"><span class="pre">OMolRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">OMolRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.benchmark_name"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.benchmark"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.input_keys"><code class="docutils literal notranslate"><span class="pre">OMolRunner.input_keys</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.calculate"><code class="docutils literal notranslate"><span class="pre">OMolRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.write_results"><code class="docutils literal notranslate"><span class="pre">OMolRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.save_state"><code class="docutils literal notranslate"><span class="pre">OMolRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.dataset_cfg"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.dataset_cfg</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.ds_name"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.ds_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.radius"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.radius</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.portion"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.portion</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.run"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.run()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.save_state"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.displacement"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.displacement</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.calculate"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.write_results"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.save_state"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._calculate_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._calculate_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_relaxed_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._normalize_properties_by"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._normalize_properties_by</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_target_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_target_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._relax_kwargs"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._relax_kwargs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.calculate"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.write_results"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.save_state"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._calculate_properties"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._calculate_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._normalize_properties_by"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._normalize_properties_by</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._save_target_properties"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._save_target_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._save_atoms"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._save_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.calculate"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.write_results"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.save_state"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.save_state()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -663,9 +757,9 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="calculate_runner/index.html">core.components.calculate.calculate_runner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_calculate_runner/index.html">core.components.calculate._calculate_runner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="_single/index.html">core.components.calculate._single</a></li>
 <li class="toctree-l1"><a class="reference internal" href="recipes/index.html">core.components.calculate.recipes</a></li>
-<li class="toctree-l1"><a class="reference internal" href="single/index.html">core.components.calculate.single</a></li>
 </ul>
 </div>
 </section>
@@ -673,8 +767,38 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.CalculateRunner" title="core.components.calculate.CalculateRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CalculateRunner</span></code></a></p></td>
-<td><p>Runner to run calculations/predictions using an ASE-like calculator and save results to file.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.AdsorbMLRunner" title="core.components.calculate.AdsorbMLRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AdsorbMLRunner</span></code></a></p></td>
+<td><p>Run the AdsorbML pipeline to identify the global minima adsorption energy.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.components.calculate.AdsorptionRunner" title="core.components.calculate.AdsorptionRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AdsorptionRunner</span></code></a></p></td>
+<td><p>Relax an adsorbate+surface configuration to compute the adsorption energy.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.AdsorptionSinglePointRunner" title="core.components.calculate.AdsorptionSinglePointRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner</span></code></a></p></td>
+<td><p>Singlepoint evaluator for OC20 Adsorption systems</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.components.calculate.ElasticityRunner" title="core.components.calculate.ElasticityRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ElasticityRunner</span></code></a></p></td>
+<td><p>Calculate elastic tensor for a set of structures.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.KappaRunner" title="core.components.calculate.KappaRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">KappaRunner</span></code></a></p></td>
+<td><p>Calculate elastic tensor for a set of structures.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.components.calculate.NVEMDRunner" title="core.components.calculate.NVEMDRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">NVEMDRunner</span></code></a></p></td>
+<td><p>Perform a single point calculation of several structures/molecules.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.OMolRunner" title="core.components.calculate.OMolRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">OMolRunner</span></code></a></p></td>
+<td><p>Runner for OMol's evaluation tasks.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.components.calculate.PairwiseCountRunner" title="core.components.calculate.PairwiseCountRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PairwiseCountRunner</span></code></a></p></td>
+<td><p>Perform a single point calculation of several structures/molecules.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.MDRPhononRunner" title="core.components.calculate.MDRPhononRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MDRPhononRunner</span></code></a></p></td>
+<td><p>Calculate elastic tensor for a set of structures.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.components.calculate.RelaxationRunner" title="core.components.calculate.RelaxationRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RelaxationRunner</span></code></a></p></td>
+<td><p>Relax a sequence of several structures/molecules.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.components.calculate.SinglePointRunner" title="core.components.calculate.SinglePointRunner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SinglePointRunner</span></code></a></p></td>
+<td><p>Perform a single point calculation of several structures/molecules.</p></td>
 </tr>
 </tbody>
 </table>
@@ -683,89 +807,377 @@ LICENSE file in the root directory of this source tree.</p>
 <section id="package-contents">
 <h2>Package Contents<a class="headerlink" href="#package-contents" title="Link to this heading">#</a></h2>
 <dl class="py class">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">CalculateRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.CalculateRunner" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.runner.Runner</span></code></p>
-<p>Runner to run calculations/predictions using an ASE-like calculator and save results to file.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>When running with the <cite>fairchemv2</cite> cli, the <cite>job_config</cite> and attribute is set at
-runtime to those given in the config file.</p>
-</div>
-<p>See the Runner interface class for implementation details.</p>
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">AdsorbMLRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">place_on_relaxed_slab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_relaxed_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adsorption_energy_model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_placements</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">type</span><span class="p"><span class="pre">[</span></span><span class="pre">ase.optimize.Optimizer</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">LBFGS</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Run the AdsorbML pipeline to identify the global minima adsorption energy.
+The option to also relax a clean surface is also provided.</p>
+<p>This class handles the relaxation of atomic structures using a specified calculator,
+processes the input data in chunks, and saves the results.</p>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.job_config">
-<span class="sig-name descname"><span class="pre">job_config</span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner.job_config" title="Link to this definition">#</a></dt>
-<dd><p>a managed attribute that gives access to the job config</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>DictConfig</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.result_glob_pattern">
-<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
-<dd><p>glob pattern of results written to file</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'*'</span></em><a class="headerlink" href="#id0" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'adsorbml_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner._calculator">
-<span class="sig-name descname"><span class="pre">_calculator</span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner._calculator" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner._save_relaxed_atoms">
+<span class="sig-name descname"><span class="pre">_save_relaxed_atoms</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner._save_relaxed_atoms" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner._input_data">
-<span class="sig-name descname"><span class="pre">_input_data</span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner._input_data" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.place_on_relaxed_slab">
+<span class="sig-name descname"><span class="pre">place_on_relaxed_slab</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.place_on_relaxed_slab" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner._already_calculated">
-<span class="sig-name descname"><span class="pre">_already_calculated</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#core.components.calculate.CalculateRunner._already_calculated" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.adsorption_energy_model">
+<span class="sig-name descname"><span class="pre">adsorption_energy_model</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.adsorption_energy_model" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
-<dl class="py property">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.calculator">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">calculator</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ase.calculators.Calculator</span></em><a class="headerlink" href="#core.components.calculate.CalculateRunner.calculator" title="Link to this definition">#</a></dt>
-<dd><p>Get the calculator instance.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The ASE-like calculator used for calculations</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>Calculator</p>
-</dd>
-</dl>
-</dd></dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.num_placements">
+<span class="sig-name descname"><span class="pre">num_placements</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.num_placements" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
 
-<dl class="py property">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.input_data">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">input_data</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">collections.abc.Sequence</span></em><a class="headerlink" href="#core.components.calculate.CalculateRunner.input_data" title="Link to this definition">#</a></dt>
-<dd><p>Get the input data.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.fmax">
+<span class="sig-name descname"><span class="pre">fmax</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.fmax" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.steps">
+<span class="sig-name descname"><span class="pre">steps</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.steps" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.optimizer_cls">
+<span class="sig-name descname"><span class="pre">optimizer_cls</span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.optimizer_cls" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform relaxation calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The input data to be processed</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
 </dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>Sequence</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.calculate">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">R</span></span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner.calculate" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorbMLRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.AdsorbMLRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">AdsorptionRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atoms_sequence.AtomsSequence</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_relaxed_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">relax_surface</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimizer_cls</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">type</span><span class="p"><span class="pre">[</span></span><span class="pre">ase.optimize.Optimizer</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">LBFGS</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Relax an adsorbate+surface configuration to compute the adsorption energy.
+The option to also relax a clean surface is also provided.</p>
+<p>This class handles the relaxation of atomic structures using a specified calculator,
+processes the input data in chunks, and saves the results.</p>
+<p>Input data is an AseDBDataset where each atoms object is organized as
+follows:</p>
+<blockquote>
+<div><p>atoms: adsorbate+surface configuration
+atoms.info = {</p>
+<blockquote>
+<div><p>gas_ref: float,
+dft_relaxed_adslab_energy: float,
+dft_relaxed_slab_energy: float,
+initial_slab_atoms: ase.Atoms, # Required if relax_surface=True</p>
+</div></blockquote>
+<p>}</p>
+</div></blockquote>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'adsorption_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner._save_relaxed_atoms">
+<span class="sig-name descname"><span class="pre">_save_relaxed_atoms</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner._save_relaxed_atoms" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.fmax">
+<span class="sig-name descname"><span class="pre">fmax</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.fmax" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.steps">
+<span class="sig-name descname"><span class="pre">steps</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.steps" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.relax_surface">
+<span class="sig-name descname"><span class="pre">relax_surface</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.relax_surface" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.optimizer_cls">
+<span class="sig-name descname"><span class="pre">optimizer_cls</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.optimizer_cls" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform relaxation calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.AdsorptionRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">AdsorptionSinglePointRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atoms_sequence.AtomsSequence</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">evaluate_total_energy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adsorption_energy_model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Singlepoint evaluator for OC20 Adsorption systems</p>
+<p>OC20 originally reported adsorption energies. This runner provides the
+ability to compute adsorption energy S2EF numbers by referencing to the
+provided slab atoms object. Total energy S2EF evaluations are also
+possible.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'adsorption-singlepoint_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner.evaluate_total_energy">
+<span class="sig-name descname"><span class="pre">evaluate_total_energy</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner.evaluate_total_energy" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner.adsorption_energy_model">
+<span class="sig-name descname"><span class="pre">adsorption_energy_model</span></span><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner.adsorption_energy_model" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.AdsorptionSinglePointRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.AdsorptionSinglePointRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">ElasticityRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atoms_sequence.AtomsSequence</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.ElasticityRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Calculate elastic tensor for a set of structures.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'elasticity_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.ElasticityRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.ElasticityRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Calculate elastic properties for a batch of structures.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of dictionaries containing elastic properties for each structure</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.ElasticityRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.ElasticityRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.ElasticityRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.KappaRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">KappaRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">displacement</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.03</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.KappaRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Calculate elastic tensor for a set of structures.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.KappaRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'kappa103_dist*_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.KappaRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.KappaRunner.displacement">
+<span class="sig-name descname"><span class="pre">displacement</span></span><a class="headerlink" href="#core.components.calculate.KappaRunner.displacement" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.KappaRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.KappaRunner.calculate" title="Link to this definition">#</a></dt>
 <dd><p>Run any calculation using an ASE like Calculator.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -784,8 +1196,8 @@ runtime to those given in the config file.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.write_results">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">R</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner.write_results" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.KappaRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.KappaRunner.write_results" title="Link to this definition">#</a></dt>
 <dd><p>Write results to file in results_dir.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -800,8 +1212,8 @@ runtime to those given in the config file.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.save_state">
-<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner.save_state" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.components.calculate.KappaRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.KappaRunner.save_state" title="Link to this definition">#</a></dt>
 <dd><p>Save the current state of the calculation to a checkpoint.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -819,27 +1231,461 @@ runtime to those given in the config file.</p>
 </dl>
 </dd></dl>
 
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">NVEMDRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">tuple</span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="../../../ocpapi/client/index.html#ocpapi.client.Atoms" title="ocpapi.client.Atoms"><span class="pre">Atoms</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_frequency</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.NVEMDRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Perform a single point calculation of several structures/molecules.</p>
+<p>This class handles the single point calculation of atomic structures using a specified calculator,
+processes the input data in chunks, and saves the results.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'thermo_*-*.log'</span></em><a class="headerlink" href="#core.components.calculate.NVEMDRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.time_step">
+<span class="sig-name descname"><span class="pre">time_step</span></span><a class="headerlink" href="#core.components.calculate.NVEMDRunner.time_step" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.steps">
+<span class="sig-name descname"><span class="pre">steps</span></span><a class="headerlink" href="#core.components.calculate.NVEMDRunner.steps" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.save_frequency">
+<span class="sig-name descname"><span class="pre">save_frequency</span></span><a class="headerlink" href="#core.components.calculate.NVEMDRunner.save_frequency" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.load_state">
-<span class="sig-name descname"><span class="pre">load_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.CalculateRunner.load_state" title="Link to this definition">#</a></dt>
-<dd><p>Load a previously saved state from a checkpoint.</p>
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.NVEMDRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform singlepoint calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>checkpoint_location</strong> (<em>str</em><em> | </em><em>None</em>) – Location of the checkpoint to load, or None if no checkpoint</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.components.calculate.CalculateRunner.run">
-<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.CalculateRunner.run" title="Link to this definition">#</a></dt>
-<dd><p>Run the actual calculation and save results.</p>
-<p>Creates the results directory if it doesn’t exist, runs the calculation,
-and writes the results to the specified directory.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Re-implementing this method in derived classes is discouraged.</p>
-</div>
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.NVEMDRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing energy and forces results</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.NVEMDRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.NVEMDRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">OMolRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">benchmark_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">benchmark</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.OMolRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Runner for OMol’s evaluation tasks.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.benchmark_name">
+<span class="sig-name descname"><span class="pre">benchmark_name</span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.benchmark_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.benchmark">
+<span class="sig-name descname"><span class="pre">benchmark</span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.benchmark" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.input_keys">
+<span class="sig-name descname"><span class="pre">input_keys</span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.input_keys" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.OMolRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.OMolRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">PairwiseCountRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset_cfg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/checkpoint/ocp/shared/pairwise_data/preview_config.yaml'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ds_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'omat'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radius</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">portion</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.runner.Runner</span></code></p>
+<p>Perform a single point calculation of several structures/molecules.</p>
+<p>This class handles the single point calculation of atomic structures using a specified calculator,
+processes the input data in chunks, and saves the results.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner.dataset_cfg">
+<span class="sig-name descname"><span class="pre">dataset_cfg</span></span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner.dataset_cfg" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner.ds_name">
+<span class="sig-name descname"><span class="pre">ds_name</span></span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner.ds_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner.radius">
+<span class="sig-name descname"><span class="pre">radius</span></span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner.radius" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner.portion">
+<span class="sig-name descname"><span class="pre">portion</span></span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner.portion" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner.run" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.PairwiseCountRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.PairwiseCountRunner.save_state" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.MDRPhononRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">MDRPhononRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">displacement</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.01</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.MDRPhononRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Calculate elastic tensor for a set of structures.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.MDRPhononRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'mdr_phonon_dist*_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.MDRPhononRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.MDRPhononRunner.displacement">
+<span class="sig-name descname"><span class="pre">displacement</span></span><a class="headerlink" href="#core.components.calculate.MDRPhononRunner.displacement" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.MDRPhononRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.MDRPhononRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Run any calculation using an ASE like Calculator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Results of the calculation</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>R</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.MDRPhononRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.MDRPhononRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write results to file in results_dir.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> (<em>R</em>) – Results from the calculation</p></li>
+<li><p><strong>results_dir</strong> (<em>str</em>) – Directory to write results to</p></li>
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.MDRPhononRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.MDRPhononRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">RelaxationRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atoms_sequence.AtomsSequence</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calculate_properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['energy']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_relaxed_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_properties_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_target_properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">relax_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.RelaxationRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Relax a sequence of several structures/molecules.</p>
+<p>This class handles the relaxation of atomic structures using a specified calculator,
+processes the input data in chunks, and saves the results.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'relaxation_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.RelaxationRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._calculate_properties">
+<span class="sig-name descname"><span class="pre">_calculate_properties</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._calculate_properties" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._save_relaxed_atoms">
+<span class="sig-name descname"><span class="pre">_save_relaxed_atoms</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._save_relaxed_atoms" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._normalize_properties_by">
+<span class="sig-name descname"><span class="pre">_normalize_properties_by</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._normalize_properties_by" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._save_target_properties">
+<span class="sig-name descname"><span class="pre">_save_target_properties</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._save_target_properties" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner._relax_kwargs">
+<span class="sig-name descname"><span class="pre">_relax_kwargs</span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner._relax_kwargs" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform relaxation calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing elastic properties</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.RelaxationRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.RelaxationRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.components.calculate.</span></span><span class="sig-name descname"><span class="pre">SinglePointRunner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atoms_sequence.AtomsSequence</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calculate_properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['energy']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_properties_by</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_target_properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">collections.abc.Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.components.calculate.SinglePointRunner" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">fairchem.core.components.calculate._calculate_runner.CalculateRunner</span></code></p>
+<p>Perform a single point calculation of several structures/molecules.</p>
+<p>This class handles the single point calculation of atomic structures using a specified calculator,
+processes the input data in chunks, and saves the results.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner.result_glob_pattern">
+<span class="sig-name descname"><span class="pre">result_glob_pattern</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'singlepoint_*-*.json.gz'</span></em><a class="headerlink" href="#core.components.calculate.SinglePointRunner.result_glob_pattern" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner._calculate_properties">
+<span class="sig-name descname"><span class="pre">_calculate_properties</span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner._calculate_properties" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner._normalize_properties_by">
+<span class="sig-name descname"><span class="pre">_normalize_properties_by</span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner._normalize_properties_by" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner._save_target_properties">
+<span class="sig-name descname"><span class="pre">_save_target_properties</span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner._save_target_properties" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner._save_atoms">
+<span class="sig-name descname"><span class="pre">_save_atoms</span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner._save_atoms" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Perform singlepoint calculations on a subset of structures.</p>
+<p>Splits the input data into chunks and processes the chunk corresponding to job_num.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>job_num</strong> (<em>int</em><em>, </em><em>optional</em>) – Current job number in array job. Defaults to 0.</p></li>
+<li><p><strong>num_jobs</strong> (<em>int</em><em>, </em><em>optional</em>) – Total number of jobs in array. Defaults to 1.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[dict[str, Any]] - List of dictionaries containing calculation results</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner.write_results">
+<span class="sig-name descname"><span class="pre">write_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">results_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner.write_results" title="Link to this definition">#</a></dt>
+<dd><p>Write calculation results to a compressed JSON file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>results</strong> – List of dictionaries containing energy and forces results</p></li>
+<li><p><strong>results_dir</strong> – Directory path where results will be saved</p></li>
+<li><p><strong>job_num</strong> – Index of the current job</p></li>
+<li><p><strong>num_jobs</strong> – Total number of jobs</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.components.calculate.SinglePointRunner.save_state">
+<span class="sig-name descname"><span class="pre">save_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_location</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_preemption</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#core.components.calculate.SinglePointRunner.save_state" title="Link to this definition">#</a></dt>
+<dd><p>Save the current state of the calculation to a checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>checkpoint_location</strong> (<em>str</em>) – Location to save the checkpoint</p></li>
+<li><p><strong>is_preemption</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether this save is due to preemption. Defaults to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True if state was successfully saved, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>
@@ -896,20 +1742,114 @@ and writes the results to the specified directory.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#package-contents">Package Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner"><code class="docutils literal notranslate"><span class="pre">CalculateRunner</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.job_config"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.job_config</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id0"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.result_glob_pattern</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner._calculator"><code class="docutils literal notranslate"><span class="pre">CalculateRunner._calculator</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner._input_data"><code class="docutils literal notranslate"><span class="pre">CalculateRunner._input_data</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner._already_calculated"><code class="docutils literal notranslate"><span class="pre">CalculateRunner._already_calculated</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.calculator"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.calculator</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.input_data"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.input_data</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.calculate"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.calculate()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.write_results"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.write_results()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.save_state"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.save_state()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.load_state"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.load_state()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.CalculateRunner.run"><code class="docutils literal notranslate"><span class="pre">CalculateRunner.run()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner._save_relaxed_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.place_on_relaxed_slab"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.place_on_relaxed_slab</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.adsorption_energy_model"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.adsorption_energy_model</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.num_placements"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.num_placements</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.fmax"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.fmax</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.steps"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.steps</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.optimizer_cls"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.optimizer_cls</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.calculate"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.write_results"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorbMLRunner.save_state"><code class="docutils literal notranslate"><span class="pre">AdsorbMLRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner._save_relaxed_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.fmax"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.fmax</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.steps"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.steps</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.relax_surface"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.relax_surface</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.optimizer_cls"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.optimizer_cls</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.calculate"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.write_results"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionRunner.save_state"><code class="docutils literal notranslate"><span class="pre">AdsorptionRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.evaluate_total_energy"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.evaluate_total_energy</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.adsorption_energy_model"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.adsorption_energy_model</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.calculate"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.write_results"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.AdsorptionSinglePointRunner.save_state"><code class="docutils literal notranslate"><span class="pre">AdsorptionSinglePointRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.calculate"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.write_results"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.ElasticityRunner.save_state"><code class="docutils literal notranslate"><span class="pre">ElasticityRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner"><code class="docutils literal notranslate"><span class="pre">KappaRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">KappaRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.displacement"><code class="docutils literal notranslate"><span class="pre">KappaRunner.displacement</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.calculate"><code class="docutils literal notranslate"><span class="pre">KappaRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.write_results"><code class="docutils literal notranslate"><span class="pre">KappaRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.KappaRunner.save_state"><code class="docutils literal notranslate"><span class="pre">KappaRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.time_step"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.time_step</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.steps"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.steps</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.save_frequency"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.save_frequency</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.calculate"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.write_results"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.NVEMDRunner.save_state"><code class="docutils literal notranslate"><span class="pre">NVEMDRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner"><code class="docutils literal notranslate"><span class="pre">OMolRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">OMolRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.benchmark_name"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.benchmark"><code class="docutils literal notranslate"><span class="pre">OMolRunner.benchmark</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.input_keys"><code class="docutils literal notranslate"><span class="pre">OMolRunner.input_keys</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.calculate"><code class="docutils literal notranslate"><span class="pre">OMolRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.write_results"><code class="docutils literal notranslate"><span class="pre">OMolRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.OMolRunner.save_state"><code class="docutils literal notranslate"><span class="pre">OMolRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.dataset_cfg"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.dataset_cfg</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.ds_name"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.ds_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.radius"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.radius</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.portion"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.portion</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.run"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.run()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.PairwiseCountRunner.save_state"><code class="docutils literal notranslate"><span class="pre">PairwiseCountRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.displacement"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.displacement</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.calculate"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.write_results"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.MDRPhononRunner.save_state"><code class="docutils literal notranslate"><span class="pre">MDRPhononRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._calculate_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._calculate_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_relaxed_atoms"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_relaxed_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._normalize_properties_by"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._normalize_properties_by</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._save_target_properties"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._save_target_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner._relax_kwargs"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner._relax_kwargs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.calculate"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.write_results"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.RelaxationRunner.save_state"><code class="docutils literal notranslate"><span class="pre">RelaxationRunner.save_state()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.result_glob_pattern"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.result_glob_pattern</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._calculate_properties"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._calculate_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._normalize_properties_by"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._normalize_properties_by</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._save_target_properties"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._save_target_properties</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner._save_atoms"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner._save_atoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.calculate"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.calculate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.write_results"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.write_results()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.components.calculate.SinglePointRunner.save_state"><code class="docutils literal notranslate"><span class="pre">SinglePointRunner.save_state()</span></code></a></li>
 </ul>
 </li>
 </ul>

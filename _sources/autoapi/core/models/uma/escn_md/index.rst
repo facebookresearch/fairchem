@@ -61,6 +61,7 @@ Module Contents
        import torch.nn as nn
        import torch.nn.functional as F
 
+
        class Model(nn.Module):
            def __init__(self) -> None:
                super().__init__()
@@ -184,6 +185,9 @@ Module Contents
    .. py:attribute:: edge_degree_embedding
 
 
+   .. py:attribute:: envelope
+
+
    .. py:attribute:: num_layers
 
 
@@ -250,6 +254,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:
@@ -323,6 +328,7 @@ Module Contents
        import torch.nn as nn
        import torch.nn.functional as F
 
+
        class Model(nn.Module):
            def __init__(self) -> None:
                super().__init__()
@@ -386,6 +392,7 @@ Module Contents
        import torch.nn as nn
        import torch.nn.functional as F
 
+
        class Model(nn.Module):
            def __init__(self) -> None:
                super().__init__()
@@ -442,6 +449,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:
@@ -507,6 +515,7 @@ Module Contents
 
        import torch.nn as nn
        import torch.nn.functional as F
+
 
        class Model(nn.Module):
            def __init__(self) -> None:

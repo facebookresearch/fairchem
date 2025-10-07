@@ -654,6 +654,14 @@ document.write(`
 </pre></div>
 </div>
 </div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;repr&#39; attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. &#39;repr&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;frozen&#39; attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. &#39;frozen&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+  warnings.warn(
+</pre></div>
+</div>
+</div>
 </div>
 <div class="dropdown admonition">
 <p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
@@ -772,19 +780,19 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Starting inference server with config {&#39;workers&#39;: 8}
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2025-09-26 22:47:07,217	INFO worker.py:1951 -- Started a local Ray instance.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2025-10-07 22:08:01,360	INFO worker.py:1951 -- Started a local Ray instance.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Initialized Local MLIPInferenceServerWebSocket with config: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.predict.MLIPPredictUnit&#39;, &#39;inference_model_path&#39;: &#39;/home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1p1.pt&#39;, &#39;device&#39;: &#39;cuda&#39;, &#39;overrides&#39;: None, &#39;inference_settings&#39;: InferenceSettings(tf32=True, activation_checkpointing=False, merge_mole=True, compile=False, wigner_cuda=None, external_graph_gen=False, internal_graph_gen_version=2, torch_num_threads=None), &#39;seed&#39;: 41, &#39;atom_refs&#39;: None, &#39;assert_on_nans&#39;: False}, port: 58175, workers: 8
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Initialized Local MLIPInferenceServerWebSocket with config: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.predict.MLIPPredictUnit&#39;, &#39;inference_model_path&#39;: &#39;/home/runner/.cache/fairchem/models--facebook--UMA/snapshots/abaa274e3612b2cfcc5be2d900ffa2a03cb42ee7/checkpoints/uma-s-1p1.pt&#39;, &#39;device&#39;: &#39;cuda&#39;, &#39;overrides&#39;: None, &#39;inference_settings&#39;: InferenceSettings(tf32=True, activation_checkpointing=False, merge_mole=True, compile=False, wigner_cuda=None, external_graph_gen=False, internal_graph_gen_version=2, torch_num_threads=None), &#39;seed&#39;: 41, &#39;atom_refs&#39;: None, &#39;assert_on_nans&#39;: False}, port: 53149, workers: 8
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Server is ready
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:websockets.server:server listening on 127.0.0.1:58175
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:websockets.server:server listening on 127.0.0.1:53149
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WebSocket server started on port 58175
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WebSocket server started on port 53149
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>

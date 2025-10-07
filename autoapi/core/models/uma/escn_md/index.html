@@ -661,6 +661,7 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.target_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.target_embedding</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.edge_channels_list"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.edge_channels_list</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.edge_degree_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.edge_degree_embedding</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.envelope"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.envelope</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.num_layers"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.num_layers</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.hidden_channels"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.hidden_channels</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.norm_type"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.norm_type</span></code></a></li>
@@ -801,6 +802,7 @@ LICENSE file in the root directory of this source tree.</p>
 a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -992,6 +994,11 @@ evaluation mode.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
+<dt class="sig sig-object py" id="core.models.uma.escn_md.eSCNMDBackbone.envelope">
+<span class="sig-name descname"><span class="pre">envelope</span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone.envelope" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
 <dt class="sig sig-object py" id="core.models.uma.escn_md.eSCNMDBackbone.num_layers">
 <span class="sig-name descname"><span class="pre">num_layers</span></span><a class="headerlink" href="#core.models.uma.escn_md.eSCNMDBackbone.num_layers" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -1081,6 +1088,7 @@ The tensors are split on the dimension along the node index using node_partition
 a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1174,6 +1182,7 @@ a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
 
+
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
@@ -1251,6 +1260,7 @@ a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
 
+
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
@@ -1317,6 +1327,7 @@ evaluation mode.</p>
 a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1399,6 +1410,7 @@ evaluation mode.</p>
 a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1577,6 +1589,7 @@ evaluation mode.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.target_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.target_embedding</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.edge_channels_list"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.edge_channels_list</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.edge_degree_embedding"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.edge_degree_embedding</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.envelope"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.envelope</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.num_layers"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.num_layers</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.hidden_channels"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.hidden_channels</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.escn_md.eSCNMDBackbone.norm_type"><code class="docutils literal notranslate"><span class="pre">eSCNMDBackbone.norm_type</span></code></a></li>

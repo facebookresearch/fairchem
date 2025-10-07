@@ -632,12 +632,8 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.activation_checkpoint_chunk_size"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.activation_checkpoint_chunk_size</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.m_0_num_coefficients"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.m_0_num_coefficients</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.m_all_num_coefficents"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.m_all_num_coefficents</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.max_num_elements"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.max_num_elements</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.edge_channels_list"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.edge_channels_list</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rad_func"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.rad_func</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rescale_factor"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.rescale_factor</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.cutoff"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.cutoff</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.envelope"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.envelope</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward_chunk"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.forward_chunk()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.forward()</span></code></a></li>
 </ul>
@@ -693,7 +689,7 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py class">
 <dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.models.uma.nn.embedding_dev.</span></span><span class="sig-name descname"><span class="pre">EdgeDegreeEmbedding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sphere_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_num_elements</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_channels_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rescale_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mappingReduced</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation_checkpoint_chunk_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.models.uma.nn.embedding_dev.</span></span><span class="sig-name descname"><span class="pre">EdgeDegreeEmbedding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sphere_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mmax</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_channels_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rescale_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mappingReduced</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">activation_checkpoint_chunk_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.nn.Module</span></code></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -747,16 +743,6 @@ The last one will be used as hidden size when <cite>use_atom_edge_embedding</cit
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.max_num_elements">
-<span class="sig-name descname"><span class="pre">max_num_elements</span></span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.max_num_elements" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.edge_channels_list">
-<span class="sig-name descname"><span class="pre">edge_channels_list</span></span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.edge_channels_list" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rad_func">
 <span class="sig-name descname"><span class="pre">rad_func</span></span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rad_func" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
@@ -766,24 +752,14 @@ The last one will be used as hidden size when <cite>use_atom_edge_embedding</cit
 <span class="sig-name descname"><span class="pre">rescale_factor</span></span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rescale_factor" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.cutoff">
-<span class="sig-name descname"><span class="pre">cutoff</span></span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.cutoff" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.envelope">
-<span class="sig-name descname"><span class="pre">envelope</span></span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.envelope" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward_chunk">
-<span class="sig-name descname"><span class="pre">forward_chunk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward_chunk" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">forward_chunk</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_envelope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward_chunk" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_envelope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -798,6 +774,7 @@ The last one will be used as hidden size when <cite>use_atom_edge_embedding</cit
 a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -850,6 +827,7 @@ evaluation mode.</p>
 a tree structure. You can assign the submodules as regular attributes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
 
 <span class="k">class</span><span class="w"> </span><span class="nc">Model</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -969,12 +947,8 @@ evaluation mode.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.activation_checkpoint_chunk_size"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.activation_checkpoint_chunk_size</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.m_0_num_coefficients"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.m_0_num_coefficients</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.m_all_num_coefficents"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.m_all_num_coefficents</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.max_num_elements"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.max_num_elements</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.edge_channels_list"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.edge_channels_list</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rad_func"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.rad_func</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.rescale_factor"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.rescale_factor</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.cutoff"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.cutoff</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.envelope"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.envelope</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward_chunk"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.forward_chunk()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.models.uma.nn.embedding_dev.EdgeDegreeEmbedding.forward"><code class="docutils literal notranslate"><span class="pre">EdgeDegreeEmbedding.forward()</span></code></a></li>
 </ul>
