@@ -4,12 +4,12 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
-import select
+import shutil
 import socket
 import subprocess
 import tempfile
 import time
-import typing as tp
+from typing import Callable, Optional, TypeVar
 import uuid
 from contextlib import closing
 from pathlib import Path
@@ -23,7 +23,7 @@ def kill_proc_tree(pid, including_parent=True):
     children = parent.children(recursive=True)
     for child in children:
         child.kill()
-    gone, still_alive = psutil.wait_procs(children, timeout=5)
+    psutil.wait_procs(children, timeout=5)
     if including_parent:
         parent.kill()
         parent.wait(5)
@@ -36,59 +36,7 @@ def find_free_port():
         return s.getsockname()[1]
 
 
-def stdout_lines(process):
-    """
-    Generator that yields lines from the stdout of a subprocess.
-
-    This function continuously reads lines from the stdout of a given subprocess
-    and yields them one by one. It uses the `select` module to wait for output
-    to become available, ensuring that the read operation does not block indefinitely.
-
-    Args:
-        process (subprocess.Popen): The subprocess whose stdout will be read.
-
-    Yields:
-        str: A line of output from the subprocess's stdout, stripped of leading/trailing whitespace.
-
-    Raises:
-        AssertionError: If the stdout of the subprocess is not set to a pipe.
-    """
-    assert (
-        process.stdout is not None
-    ), "you probably forgot  stdout=subprocess.PIPE, text=True for Popen"
-    while True:
-        # Use select to wait for output to become available
-        readable, _, _ = select.select([process.stdout], [], [], 0)
-        if readable:
-            line = process.stdout.readline()
-            if not line:
-                break
-            yield line.strip()
-
-
-def rmdir(directory_path: Path):
-    """
-    Remove a directory and its contents with a best-effort approach.
-    """
-    try:
-        for item in directory_path.iterdir():
-            if item.is_file():
-                try:
-                    item.unlink()
-                except:
-                    pass
-            elif item.is_dir():
-                try:
-                    rmdir(item)
-                except:
-                    pass
-        # Remove the now-empty directory
-        directory_path.rmdir()
-    except:
-        pass
-
-
-def scancel(job_ids: tp.List[str]):
+def scancel(job_ids: list[str]):
     """
     Cancel the SLURM jobs with the given job IDs.
 
@@ -103,7 +51,7 @@ def scancel(job_ids: tp.List[str]):
 
 start_ip_pattern = r"ray start --address='([0-9\.]+):([0-9]+)'"
 
-PlayloadReturnT = tp.TypeVar("PlayloadReturnT")
+PayloadReturnT = TypeVar("PayloadReturnT")
 
 
 def mk_symlinks(target_dir: Path, job_type: str, paths: submitit.core.utils.JobPaths):
@@ -118,9 +66,9 @@ class HeadInfo:
     information about the head node that we can share to workers
     """
 
-    hostname: tp.Optional[str] = None
-    port: tp.Optional[int] = None
-    temp_dir: tp.Optional[str] = None
+    hostname: Optional[str] = None
+    port: Optional[int] = None
+    temp_dir: Optional[str] = None
 
 
 class RayClusterState:
@@ -137,8 +85,8 @@ class RayClusterState:
 
     def __init__(
         self,
-        rdv_dir: tp.Optional[Path] = None,
-        cluster_id: tp.Optional[str] = None,
+        rdv_dir: Optional[Path] = None,
+        cluster_id: Optional[str] = None,
     ):
         self.rendezvous_rootdir = (
             rdv_dir if rdv_dir is not None else (Path.home() / ".fairray")
@@ -172,7 +120,7 @@ class RayClusterState:
         """Checks if the head node information is available and ready."""
         return self._head_json.exists()
 
-    def head_info(self) -> tp.Optional[HeadInfo]:
+    def head_info(self) -> Optional[HeadInfo]:
         """
         Retrieves the head node information from the stored JSON file.
 
@@ -198,7 +146,7 @@ class RayClusterState:
 
     def clean(self):
         """Removes the rendezvous directory and all its contents."""
-        rmdir(self.rendezvous_dir)
+        shutil.rmtree(self.rendezvous_dir)
 
     def add_job(self, job: submitit.Job):
         """
@@ -215,12 +163,17 @@ class RayClusterState:
                 fp=f,
             )
 
-    def list_job_ids(self) -> tp.List[str]:
+    def list_job_ids(self) -> list[str]:
         """Lists all job IDs stored in the jobs directory."""
         return [f.stem for f in self.jobs_dir.iterdir()]
 
 
-def _ray_head_script(cluster_state: RayClusterState, worker_wait_timeout_seconds: int):
+def _ray_head_script(
+    cluster_state: RayClusterState,
+    worker_wait_timeout_seconds: int,
+    payload: Optional[Callable[..., PayloadReturnT]] = None,
+    **kwargs,
+):
     """Start the head node of the Ray cluster on slurm."""
     hostname = socket.gethostname()
     head_env = os.environ.copy()
@@ -258,7 +211,7 @@ def _ray_head_script(cluster_state: RayClusterState, worker_wait_timeout_seconds
             text=True,
         )
         started = False
-        for line in stdout_lines(process):
+        for line in process.stdout:
             if "ray start --address=" in line:
                 # this is a bit flaky, we search the stdout of the head job to
                 # find this specific message and extract the address, it might be
@@ -271,103 +224,45 @@ def _ray_head_script(cluster_state: RayClusterState, worker_wait_timeout_seconds
         print(f"Head started, ip: {hostname}:{port} ({cluster_state.cluster_id})")
         info = HeadInfo(hostname=hostname, port=int(port), temp_dir=temp_dir)
         cluster_state.save_head_info(info)
-        while True:
-            # practically, we should wait from driver signal to die here
-            time.sleep(60)
+        os.environ.update(head_env)
+        if payload is not None:
+            payload(**kwargs)
+        else:
+            while True:
+                # practically, we should wait from driver signal to die here
+                time.sleep(60)
 
 
-class _RayWorkerScript:
-    def __call__(
-        self,
-        worker_id: int,
-        cluster_state: RayClusterState,
-        worker_wait_timeout_seconds: int,
-        start_wait_time_seconds: int = 60,  # TODO pass this around properly
-    ):
-        """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
-        print(f"Waiting for head node. {cluster_state.cluster_id}")
-        while not cluster_state.is_head_ready():
-            # wait for head to have started
-            time.sleep(5)
-        print("Head node found.")
-        head_info = cluster_state.head_info()
-        assert head_info is not None, "something went wrong getting head information."
-        worker_env = os.environ.copy()
-        worker_env["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
-        worker_env["RAY_gcs_server_request_timeout_seconds"] = str(
-            worker_wait_timeout_seconds
-        )
-        worker_env["RAY_raylet_start_wait_time_s"] = str(start_wait_time_seconds)
-        num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
-        num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
-
-        try:
-            subprocess.run(
-                [
-                    "ray",
-                    "start",
-                    "--address",
-                    "auto",
-                    "--block",
-                    "--num-cpus",
-                    f"{num_cpus}",
-                    "--num-gpus",
-                    f"{num_gpus}",
-                ],
-                env=worker_env,
-                check=False,
-            )
-        finally:
-            if head_info.temp_dir:
-                rmdir(Path(head_info.temp_dir))
-
-    def checkpoint(
-        self,
-        worker_id: int,
-        cluster_state: RayClusterState,
-        worker_wait_timeout_seconds: int,
-    ) -> submitit.helpers.DelayedSubmission:
-        return submitit.helpers.DelayedSubmission(
-            _RayWorkerScript(),
-            worker_id,
-            cluster_state,
-            worker_wait_timeout_seconds,
-        )
-
-
-def _payload_with_env(
-    payload: tp.Callable[..., PlayloadReturnT],
+def worker_script(
     cluster_state: RayClusterState,
     worker_wait_timeout_seconds: int,
-    **kwargs,
+    start_wait_time_seconds: int = 60,  # TODO pass this around properly
 ):
-    """Start the payload/driver on slurm. on its own node, waiting on the head node first."""
-    rez = None
-    head_info = None
-    try:
-        print(f"Waiting for head node. {cluster_state.cluster_id}")
-        while not cluster_state.is_head_ready():
-            # wait for head to have started
-            time.sleep(5)
-        print("Head node found.")
-        head_info = cluster_state.head_info()
-        assert head_info is not None, "something went wrong getting head information."
-        # this is for the ray.init in the python payload
-        os.environ["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
-        # The driver host also needs to be running ray, so we start it the same as a worker
-        worker_env = os.environ.copy()
-        worker_env["RAY_gcs_server_request_timeout_seconds"] = str(
-            worker_wait_timeout_seconds
-        )
-        num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
-        num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
+    """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
+    print(f"Waiting for head node. {cluster_state.cluster_id}")
+    while not cluster_state.is_head_ready():
+        # wait for head to have started
+        time.sleep(5)
+    print("Head node found.")
+    head_info = cluster_state.head_info()
+    assert head_info is not None, "something went wrong getting head information."
+    worker_env = os.environ.copy()
+    worker_env["RAY_ADDRESS"] = f"{head_info.hostname}:{head_info.port}"
+    worker_env["RAY_gcs_server_request_timeout_seconds"] = str(
+        worker_wait_timeout_seconds
+    )
+    worker_env["RAY_raylet_start_wait_time_s"] = str(start_wait_time_seconds)
+    num_cpus = os.environ.get("SLURM_CPUS_ON_NODE", 1)
+    num_gpus = os.environ.get("SLURM_GPUS_ON_NODE", 0)
 
+    try:
         subprocess.run(
             [
                 "ray",
                 "start",
                 "--address",
                 "auto",
+                "--block",
                 "--num-cpus",
                 f"{num_cpus}",
                 "--num-gpus",
@@ -375,12 +270,10 @@ def _payload_with_env(
             ],
             env=worker_env,
             check=False,
-        )  # we do not block here as we want to run the payload
-        rez = payload(**kwargs)
+        )
     finally:
-        if head_info and head_info.temp_dir:
-            rmdir(Path(head_info.temp_dir))
-    return rez
+        if head_info.temp_dir:
+            shutil.rmtree(Path(head_info.temp_dir))
 
 
 # TODO deal with ports better: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#slurm-networking-caveats
@@ -408,7 +301,7 @@ class RayCluster:
     log_dir: Path
     state: RayClusterState
 
-    jobs: tp.List[submitit.Job] = []
+    jobs: list[submitit.Job] = []
     is_shutdown = False
     num_worker_groups = 0
     num_drivers = 0
@@ -419,8 +312,8 @@ class RayCluster:
     def __init__(
         self,
         log_dir: Path = Path("raycluster_logs"),
-        rdv_dir: tp.Optional[Path] = None,
-        cluster_id: tp.Optional[str] = None,
+        rdv_dir: Optional[Path] = None,
+        cluster_id: Optional[str] = None,
         worker_wait_timeout_seconds: int = 60,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
@@ -432,9 +325,11 @@ class RayCluster:
 
     def start_head(
         self,
-        requirements: tp.Dict[str, tp.Union[str, int]],
+        requirements: dict[str, int | str],
         executor: str = "slurm",
-    ):
+        payload: Optional[Callable[..., PayloadReturnT]] = None,
+        **kwargs,
+    ) -> str:
         """
         Start the head node of the Ray cluster on slurm. You should do this first. Interesting requirements: qos, partition, time, gpus, cpus-per-task, mem-per-gpu, etc.
         """
@@ -450,18 +345,23 @@ class RayCluster:
             **requirements,
         )
         head_job = s_executor.submit(
-            _ray_head_script, self.state, self.worker_wait_timeout_seconds
+            _ray_head_script,
+            self.state,
+            self.worker_wait_timeout_seconds,
+            payload,
+            **kwargs,
         )
         self.state.add_job(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         print("head slurm job id:", head_job.job_id)
+        return head_job.job_id
 
     def start_workers(
         self,
         num_workers: int,
-        requirements: tp.Dict[str, tp.Union[str, int]],
+        requirements: dict[str, int | str],
         executor: str = "slurm",
-    ):
+    ) -> list[str]:
         """
         Start an array of worker nodes of the Ray cluster on slurm. You should do this after starting a head.
         Interesting requirements: qos, partition, time, gpus, cpus-per-task, mem-per-gpu, etc.
@@ -479,8 +379,7 @@ class RayCluster:
             for i in range(num_workers):
                 jobs.append(
                     s_executor.submit(
-                        _RayWorkerScript(),
-                        i,
+                        worker_script,
                         self.state,
                         self.worker_wait_timeout_seconds,
                     )
@@ -492,46 +391,7 @@ class RayCluster:
         for j in jobs:
             self.state.add_job(j)
         self.num_worker_groups += 1
-
-    # TODO not convinced about the naming here
-    def submit_driver(
-        self,
-        payload: tp.Callable[..., PlayloadReturnT],
-        requirements: tp.Dict[str, tp.Union[str, int]],
-        block: bool = False,
-        executor: str = "slurm",
-        **kwargs,
-    ) -> tp.Optional[PlayloadReturnT]:
-        """
-        Start the payload/driver on slurm, this will run the "user" script that submits work to ray.
-
-        kwargs will be sent to the payload.
-        """
-        # submit the driver
-        s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
-        s_executor.update_parameters(
-            name=f"ray_driver_{self.num_drivers}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
-            **requirements,
-        )
-
-        job = s_executor.submit(
-            _payload_with_env,
-            payload,
-            self.state,
-            self.worker_wait_timeout_seconds,
-            **kwargs,
-        )
-        print(f"payload submitted:{job.job_id}")
-        self.state.add_job(job)
-        mk_symlinks(self.log_dir, f"driver_{self.num_drivers}", job.paths)
-        self.num_drivers += 1
-        if block:
-            return job.result()
-            # practically we could wait for results here, or maybe fail logs, or just return `job`
-        else:
-            # do not wait for payload to finish, just come back (jobs will run in slurm, you need to cancel them when you are done TODO)
-            # TODO if no more num_driver is running and not blocking, scancel the head and workers (in the job)
-            return None
+        return [job.job_id for job in jobs]
 
     def shutdown(self):
         """

@@ -198,43 +198,38 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         "timeout_min": slurm_config.timeout_hr * 60,
         "mem_gb": slurm_config.mem_gb,
     }
-    try:
-        cluster.start_head(
-            requirements=cluster_reqs | {"cpus_per_task": slurm_config.cpus_per_task},
-            executor="slurm",
-        )
-        logging.info("Ray head started")
+    worker_nodes = scheduler_config.num_nodes - 1
 
-        # allocate the a ray cluster that is the same size and resources as the slurm job
-        # todo, if multiple, launch multiple jobs instead of 1?
-        cluster.start_workers(
+    all_job_ids = []
+    head_job_id = cluster.start_head(
+        requirements=cluster_reqs
+        | {
+            "nodes": 1,
+            "cpus_per_task": slurm_config.cpus_per_task
+            * scheduler_config.ranks_per_node,
+            "gpus_per_task": scheduler_config.ranks_per_node,
+            "tasks_per_node": 1,
+        },
+        executor="slurm",
+        payload=ray_entrypoint,
+        runner_config=config.runner,
+    )
+    all_job_ids.append(head_job_id)
+    logging.info("Ray head started")
+
+    if worker_nodes > 0:
+        worker_ids = cluster.start_workers(
             1,
             requirements=cluster_reqs
             | {
-                "nodes": scheduler_config.num_nodes,
+                "nodes": worker_nodes,
                 "gpus_per_task": scheduler_config.ranks_per_node,
                 "cpus_per_task": slurm_config.cpus_per_task
                 * scheduler_config.ranks_per_node,
                 "tasks_per_node": 1,
             },
         )
+        all_job_ids.extend(worker_ids)
         logging.info("Ray workers started")
 
-        # launch a payload on ray, move this to run on the head node
-        # add a gpu for now
-        cluster.submit_driver(
-            ray_entrypoint,
-            requirements=cluster_reqs
-            | {
-                "cpus_per_task": slurm_config.cpus_per_task,
-                "gpus_per_task": 1,
-                "tasks_per_node": 1,
-            },
-            executor="slurm",
-            block=True,
-            runner_config=config.runner,
-        )
-    finally:
-        logging.info("Ray job finished, shutting down cluster ...")
-        # TODO find way to shutdown without the `block` above? (maybe have some socket and signal between head/worker/driver)
-        cluster.shutdown()
+    logging.info(f"To cancel: scancel {' '.join(all_job_ids)}")
