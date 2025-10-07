@@ -53,7 +53,7 @@ runner:
     _partial_: True
 
 reducer:
-  _target_: fairchem.core.components.calculate.OMCPolymorphReducer
+  _target_: fairchem.core.components.benchmark.OMCPolymorphReducer
   benchmark_name: ${benchmark_name}
   target_data_key: "energy_per_nmolecules"
   molecule_id_key: "molecule_id_target"

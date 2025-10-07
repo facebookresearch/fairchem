@@ -42,7 +42,7 @@ runner:
   displacement: 0.01
 
 reducer:
-  _target_: fairchem.core.components.calculate.JsonDFReducer
+  _target_: fairchem.core.components.benchmark.JsonDFReducer
   target_data_path: ${cluster.data_root_dir}/materials/mdr-phonon/pbe.json
   benchmark_name: ${benchmark_name}
   index_name: mp_id

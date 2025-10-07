@@ -53,7 +53,7 @@ runner:
     energy: natoms
 
 reducer:
-  _target_: fairchem.core.components.calculate.JsonDFReducer
+  _target_: fairchem.core.components.benchmark.JsonDFReducer
   target_data_keys: ["energy_per_atom"]
   benchmark_name: ${benchmark_name}
   index_name: sid

@@ -49,7 +49,7 @@ runner:
     alpha: 80
 
 reducer:
-  _target_: fairchem.core.components.calculate.AdsorbMLReducer
+  _target_: fairchem.core.components.benchmark.AdsorbMLReducer
   target_data_key: energy
   benchmark_name: ${benchmark_name}
   index_name: sid

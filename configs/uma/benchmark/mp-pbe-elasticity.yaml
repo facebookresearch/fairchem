@@ -42,7 +42,7 @@ runner:
         src: ${cluster.data_root_dir}/materials/mp-elasticity/mp-pbe-elasticity-2025.3.aselmdb
 
 reducer:
-  _target_: fairchem.core.components.calculate.JsonDFReducer
+  _target_: fairchem.core.components.benchmark.JsonDFReducer
   target_data_path: ${cluster.data_root_dir}/materials/mp-elasticity/mp-pbe-elasticity-2025.3-no-elastic-tensor.json.gz
   benchmark_name: ${benchmark_name}
   index_name: mp_id

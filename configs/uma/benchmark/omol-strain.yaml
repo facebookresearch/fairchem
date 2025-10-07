@@ -39,5 +39,5 @@ runner:
     _partial_: True
 
 reducer:
-  _target_: fairchem.core.components.calculate.OMolReducer
+  _target_: fairchem.core.components.benchmark.OMolReducer
   benchmark_name: ${benchmark_name}
