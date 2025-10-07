@@ -22,6 +22,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
+from torch.utils.collect_env import get_env_info
 
 from fairchem.core.common import gp_utils
 
@@ -280,6 +281,10 @@ class Submitit(Checkpointable):
             _set_deterministic_mode()
 
         if run_type == RunType.RUN:
+            logging.info(
+                "Local environment details: %s",
+                str(get_env_info()).replace("\\n", "\n"),
+            )
             logging.info("Calling runner.run() ...")
             self.runner: Runner = hydra.utils.instantiate(self.config.runner)
             self.runner.job_config = self.config.job
