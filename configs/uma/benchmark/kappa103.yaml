@@ -30,18 +30,18 @@ job:
   deterministic: False
 
 runner:
-  _target_: fairchem.core.components.calculate.single.kappa_runner.KappaRunner
+  _target_: fairchem.core.components.calculate.KappaRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
     task_name: omat
   input_data:
-    _target_: fairchem.core.components.calculate.single.kappa_runner.get_kappa103_data_list
+    _target_: fairchem.core.components.calculate.get_kappa103_data_list
     reference_data_path: ${cluster.data_root_dir}/materials/kappa103/2024-11-09-phononDB-PBE-103-structures.extxyz
     debug: ${cluster.debug}
   displacement: 0.03
 
 reducer:
-  _target_: fairchem.core.components.benchmark.kappa_reducer.Kappa103Reducer
+  _target_: fairchem.core.components.calculate.Kappa103Reducer
   benchmark_name: ${benchmark_name}
   target_data_path: ${cluster.data_root_dir}/materials/kappa103/2024-11-09-kappas-phononDB-PBE-noNAC.json.gz

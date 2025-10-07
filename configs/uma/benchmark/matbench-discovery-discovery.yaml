@@ -27,7 +27,7 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.single.relaxation_runner.RelaxationRunner
+  _target_: fairchem.core.components.calculate.RelaxationRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
@@ -50,7 +50,7 @@ runner:
     _partial_: True
 
 reducer:
-  _target_: fairchem.core.components.benchmark.materials_discovery_reducer.MaterialsDiscoveryReducer
+  _target_: fairchem.core.components.calculate.MaterialsDiscoveryReducer
   benchmark_name: ${benchmark_name}
   target_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2023-12-13-wbm-summary.csv.gz
   cse_data_path: ${cluster.data_root_dir}/materials/matbench-discovery/2022-10-19-wbm-computed-structure-entries.jsonl.gz

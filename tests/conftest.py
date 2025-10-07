@@ -114,3 +114,23 @@ def compile_reset_state():
     torch.compiler.reset()
     yield
     torch.compiler.reset()
+
+
+@pytest.fixture(scope="session")
+def water_xyz_file(tmp_path_factory):
+    """Provide a reusable minimal water molecule XYZ file path.
+
+    Returns the filesystem path to a temporary XYZ file containing a 3-atom
+    water cluster suitable for quick inference / graph generation tests.
+    """
+    contents = (
+        "3\n"
+        "water\n"
+        "O 0.000000 0.000000 0.000000\n"
+        "H 0.758602 0.000000 0.504284\n"
+        "H -0.758602 0.000000 0.504284\n"
+    )
+    d = tmp_path_factory.mktemp("xyz_inputs")
+    fpath = d / "water.xyz"
+    fpath.write_text(contents)
+    return str(fpath)

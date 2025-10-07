@@ -13,8 +13,9 @@ from glob import glob
 import numpy as np
 import pandas as pd
 
-from fairchem.core.components.benchmark.benchmark_reducer import BenchmarkReducer
-from fairchem.core.components.calculate.nve_md_runner import NVEMDRunner, get_thermo
+from fairchem.core.components.benchmark._benchmark_reducer import BenchmarkReducer
+from fairchem.core.components.calculate import NVEMDRunner
+from fairchem.core.components.calculate._single.nve_md_runner import get_thermo
 
 
 def moving_avg(x, window=20):

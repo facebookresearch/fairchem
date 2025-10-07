@@ -29,7 +29,7 @@ job:
     job_type: ${benchmark_name}
 
 runner:
-  _target_: fairchem.core.components.calculate.single.adsorbml_runner.AdsorbMLRunner
+  _target_: fairchem.core.components.calculate.AdsorbMLRunner
   calculator:
     _target_: fairchem.core.FAIRChemCalculator.from_model_checkpoint
     name_or_path: ${checkpoint.ckpt_path}
@@ -49,7 +49,7 @@ runner:
     alpha: 80
 
 reducer:
-  _target_: fairchem.core.components.benchmark.adsorbml_reducer.AdsorbMLReducer
+  _target_: fairchem.core.components.calculate.AdsorbMLReducer
   target_data_key: energy
   benchmark_name: ${benchmark_name}
   index_name: sid
