@@ -10,7 +10,7 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
 
 ATOL = 5e-6
 
@@ -120,7 +120,13 @@ def test_multiple_dataset_predict(uma_predict_unit):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, device", [(1, "cpu", ), (2, "cpu"), (4, "cpu"), (1, "cuda")]
+    "workers, device",
+    [
+        (1, "cpu"),
+        (2, "cpu"),
+        (4, "cpu"),
+        (1, "cuda"),
+    ],
 )
 def test_parallel_predict_unit(workers, device):
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -131,11 +137,11 @@ def test_parallel_predict_unit(workers, device):
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    ppunit = ParallelMLIPPredictUnit(
+    ppunit = ParallelMLIPPredictUnitRay(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
-        server_config={"workers": workers},
+        num_workers=workers,
     )
 
     for _ in range(2):
