@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 from fairchem.core.components.calculate import (
     ElasticityRunner,
     RelaxationRunner,
@@ -17,6 +19,7 @@ from fairchem.core.components.calculate import (
 from fairchem.core.datasets.atoms_sequence import AtomsDatasetSequence
 
 
+@pytest.mark.gpu()
 def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):
     elastic_runner = ElasticityRunner(
         calculator, input_data=AtomsDatasetSequence(dummy_binary_dataset)
@@ -55,6 +58,7 @@ def test_elasticity_runner(calculator, dummy_binary_dataset, tmp_path):
     assert len(results) == len(dummy_binary_dataset) // 2
 
 
+@pytest.mark.gpu()
 def test_singlepoint_runner(calculator, dummy_binary_dataset, tmp_path):
     # Test basic instantiation
     singlepoint_runner = SinglePointRunner(
@@ -94,6 +98,7 @@ def test_singlepoint_runner(calculator, dummy_binary_dataset, tmp_path):
     assert singlepoint_runner.save_state("dummy_checkpoint") is True
 
 
+@pytest.mark.gpu()
 def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
     # Test basic instantiation
     relaxation_runner = RelaxationRunner(
