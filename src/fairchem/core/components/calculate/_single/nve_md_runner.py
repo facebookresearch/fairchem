@@ -18,12 +18,13 @@ from ase.md.verlet import VelocityVerlet
 from ase.optimize.lbfgs import LBFGS
 from tqdm import tqdm
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 
 if TYPE_CHECKING:
-    from ase.calculators.calculator import Calculator
+    from collections.abc import Sequence
 
-    from fairchem.core.datasets.atoms_sequence import AtomsSequence
+    from ase import Atoms
+    from ase.calculators.calculator import Calculator
 
 
 from ase.md import MDLogger
@@ -117,9 +118,9 @@ class NVEMDRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        input_data: AtomsSequence,
-        time_step: float,
-        steps: float,
+        input_data: Sequence[tuple(Atoms, float)],
+        time_step: float = 5,
+        steps: float = 2000,
         save_frequency: int = 10,
     ):
         """Initialize the SinglePointRunner.

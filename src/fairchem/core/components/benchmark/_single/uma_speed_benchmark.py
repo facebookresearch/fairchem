@@ -17,13 +17,14 @@ from collections import defaultdict
 
 import numpy as np
 import torch
-from ase import build
+from ase.build import make_supercell
+from ase.io import read
 from torch.profiler import ProfilerActivity, profile
 
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
-from fairchem.core.datasets import data_list_collater
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -38,41 +39,21 @@ def seed_everywhere(seed):
     torch.cuda.manual_seed_all(seed)
 
 
-def ase_to_graph(atoms, neighbors: int, cutoff: float, external_graph=True):
+def ase_to_graph(
+    atoms, neighbors: int, cutoff: float, external_graph=True, dataset_name="omat"
+):
     data_object = AtomicData.from_ase(
         atoms,
         max_neigh=neighbors,
         radius=cutoff,
         r_edges=external_graph,
+        task_name=dataset_name,
     )
     data_object.natoms = torch.tensor(len(atoms))
     data_object.charge = torch.LongTensor([0])
     data_object.spin = torch.LongTensor([0])
-    data_object.dataset = "omat"
     data_object.pos.requires_grad = True
-    data_loader = torch.utils.data.DataLoader(
-        [data_object],
-        collate_fn=data_list_collater,
-        batch_size=1,
-        shuffle=False,
-    )
-    return next(iter(data_loader))
-
-
-def get_fcc_carbon_xtal(
-    neighbors: int,
-    radius: float,
-    num_atoms: int,
-    lattice_constant: float = 3.8,
-    external_graph: bool = True,
-):
-    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
-    atoms = build.bulk("C", "fcc", a=lattice_constant)
-    n_cells = int(np.ceil(np.cbrt(num_atoms)))
-    atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
-    sampled_atoms = atoms[indices]
-    return ase_to_graph(sampled_atoms, neighbors, radius, external_graph)
+    return atomicdata_list_to_batch([data_object])
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
@@ -117,16 +98,22 @@ class InferenceBenchRunner(Runner):
     def __init__(
         self,
         run_dir_root,
-        natoms_list: list[int],
         model_checkpoints: dict[str, str],
+        natoms_list: list[int] | None = None,
+        input_system: dict | None = None,
         timeiters: int = 10,
         seed: int = 1,
         device="cuda",
         overrides: dict | None = None,
         inference_settings: InferenceSettings = inference_settings_default(),  # noqa B008
         generate_traces: bool = False,  # takes additional memory and time
+        dataset_name: str = "omat",
     ):
         self.natoms_list = natoms_list
+        self.input_system = input_system
+        assert (natoms_list is None or len(natoms_list) == 0) ^ (
+            input_system is None
+        ), "input must be either list of natoms or dict names: input system files"
         self.device = device
         self.seed = seed
         self.timeiters = timeiters
@@ -135,6 +122,7 @@ class InferenceBenchRunner(Runner):
         self.overrides = overrides
         self.inference_settings = inference_settings
         self.generate_traces = generate_traces
+        self.dataset_name = dataset_name
         os.makedirs(self.run_dir, exist_ok=True)
 
     def run(self) -> None:
@@ -142,7 +130,7 @@ class InferenceBenchRunner(Runner):
 
         model_to_qps_data = defaultdict(list)
 
-        for name, model_checkpoint in self.model_checkpoints.items():
+        for model_name, model_checkpoint in self.model_checkpoints.items():
             logging.info(
                 f"Loading model: {model_checkpoint}, inference_settings: {self.inference_settings}"
             )
@@ -156,17 +144,39 @@ class InferenceBenchRunner(Runner):
             cutoff = predictor.model.module.backbone.cutoff
             logging.info(f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}")
 
-            # benchmark all cell sizes
-            for natoms in self.natoms_list:
-                data = get_fcc_carbon_xtal(
-                    max_neighbors,
-                    cutoff,
-                    natoms,
-                    external_graph=self.inference_settings.external_graph_gen,
-                )
-                num_atoms = data.natoms.item()
+            # Bind loop-scoped variables as defaults to avoid late-binding (B023)
+            def yield_inputs(_max_neighbors=max_neighbors, _cutoff=cutoff):
+                if self.natoms_list is not None:
+                    for natoms in self.natoms_list:
+                        data = ase_to_graph(
+                            get_fcc_carbon_xtal(natoms),
+                            _max_neighbors,
+                            _cutoff,
+                            external_graph=self.inference_settings.external_graph_gen,
+                            dataset_name=self.dataset_name,
+                        )
+                        yield data.natoms.item(), data
+                else:
+                    for k, v in self.input_system.items():
+                        atoms = read(v)
+                        if getattr(self, "expand_supercells", None) is not None:
+                            size = self.expand_supercells
+                            supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
+                            atoms = make_supercell(atoms, supercell_size)
 
-                print_info = f"Starting profile: model: {model_checkpoint}, num_atoms: {num_atoms}"
+                        data = ase_to_graph(
+                            atoms,
+                            _max_neighbors,
+                            _cutoff,
+                            external_graph=self.inference_settings.external_graph_gen,
+                            dataset_name=self.dataset_name,
+                        )
+                        yield k, data
+
+            # benchmark all models or number of atoms
+            for name, data in yield_inputs():
+                num_atoms = data.natoms.item()
+                print_info = f"Starting profile: model: {model_checkpoint}, input: {name}, num_atoms: {num_atoms}"
                 if self.inference_settings.external_graph_gen:
                     num_edges = data.edge_index.shape[1]
                     print_info += f" num edges compute on: {num_edges}"
@@ -174,7 +184,7 @@ class InferenceBenchRunner(Runner):
                 if self.generate_traces:
                     make_profile(data, predictor, name=name, save_loc=self.run_dir)
                 qps, ns_per_day = get_qps(data, predictor, timeiters=self.timeiters)
-                model_to_qps_data[name].append([num_atoms, ns_per_day])
+                model_to_qps_data[model_name].append([num_atoms, ns_per_day])
                 logging.info(
                     f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
                 )

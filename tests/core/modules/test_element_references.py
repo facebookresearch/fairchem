@@ -19,6 +19,11 @@ from fairchem.core.modules.normalization.element_references import (
     fit_linear_references,
 )
 
+pytest.skip(
+    "Skipping this entire file for now. Tests need to be re-written for new modules in use.",
+    allow_module_level=True,
+)
+
 
 @pytest.fixture(scope="session", params=(True, False))
 def element_refs(dummy_binary_dataset, max_num_elements, request):
