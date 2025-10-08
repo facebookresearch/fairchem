@@ -82,7 +82,7 @@ def remove_runner_state_from_submission(log_folder: str, job_id: str) -> None:
 def runner_wrapper(config: DictConfig, run_type: RunType = RunType.RUN):
     # This is needed when using elastic_launch for local runs since it looks for
     # the __name__ attribute of the function, Submitit.__call__ does not have one
-    Submitit()(config, run_type)
+    SlurmSPMDProgram()(config, run_type)
 
 
 def _set_seeds(seed: int) -> None:
@@ -101,7 +101,12 @@ def _set_deterministic_mode() -> None:
     torch.use_deterministic_algorithms(True)
 
 
-class Submitit(Checkpointable):
+class SlurmSPMDProgram(Checkpointable):
+    """
+    Entrypoint for a SPMD program launched via submitit on slurm.
+    This assumes all ranks run the identical copy of this code
+    """
+
     def __init__(self) -> None:
         self.config = None
         self.runner = None
@@ -206,7 +211,7 @@ class Submitit(Checkpointable):
         logging.info(
             f"Submitit checkpointing callback is completed, resuming with use the following state: {save_path}"
         )
-        return DelayedSubmission(Submitit(), cfg_copy)
+        return DelayedSubmission(SlurmSPMDProgram(), cfg_copy)
 
 
 def slurm_launch(cfg: DictConfig, log_dir: str) -> None:
@@ -226,7 +231,7 @@ def slurm_launch(cfg: DictConfig, log_dir: str) -> None:
         slurm_additional_parameters=scheduler_cfg.slurm.additional_parameters,
     )
     if scheduler_cfg.num_array_jobs == 1:
-        job = executor.submit(Submitit(), cfg)
+        job = executor.submit(SlurmSPMDProgram(), cfg)
         logging.info(
             f"Submitted job id: {cfg.job.timestamp_id}, slurm id: {job.job_id}, logs: {cfg.job.metadata.log_dir}"
         )
@@ -241,7 +246,7 @@ def slurm_launch(cfg: DictConfig, log_dir: str) -> None:
             for job_number in range(scheduler_cfg.num_array_jobs):
                 _cfg = cfg.copy()
                 _cfg.job.metadata.array_job_num = job_number
-                job = executor.submit(Submitit(), _cfg)
+                job = executor.submit(SlurmSPMDProgram(), _cfg)
                 jobs.append(job)
         logging.info(f"Submitted {len(jobs)} jobs: {jobs[0].job_id.split('_')[0]}")
 
@@ -256,4 +261,33 @@ def slurm_launch(cfg: DictConfig, log_dir: str) -> None:
                 "kill-on-invalid-dep": "yes"
             },  # kill the reducer if run fails
         )
-        executor.submit(Submitit(), cfg, RunType.REDUCE)
+        executor.submit(SlurmSPMDProgram(), cfg, RunType.REDUCE)
+
+
+def local_launch(cfg: DictConfig, log_dir: str):
+    """
+    Launch locally with torch elastic (for >1 workers) or just single process
+    """
+    scheduler_cfg = cfg.job.scheduler
+    from torch.distributed.launcher.api import LaunchConfig, elastic_launch
+
+    from fairchem.core.launchers import slurm_launch
+
+    launch_config = LaunchConfig(
+        min_nodes=1,
+        max_nodes=1,
+        nproc_per_node=scheduler_cfg.ranks_per_node,
+        rdzv_backend="c10d",
+        max_restarts=0,
+    )
+    elastic_launch(launch_config, slurm_launch.runner_wrapper)(cfg)
+    if "reducer" in cfg:
+        elastic_launch(launch_config, slurm_launch.runner_wrapper)(cfg, RunType.REDUCE)
+    else:
+        logging.info("Running in local mode without elastic launch")
+        from fairchem.core.launchers import slurm_launch
+
+        distutils.setup_env_local()
+        slurm_launch.runner_wrapper(cfg)
+        if "reducer" in cfg:
+            slurm_launch.runner_wrapper(cfg, RunType.REDUCE)

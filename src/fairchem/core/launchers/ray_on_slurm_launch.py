@@ -94,7 +94,7 @@ class SPMDWorker:
 
 
 class SPMDController(Runner):
-    # this is equivalent to the fairchem Submitit routine that runs the runner on every worker
+    # this is equivalent to the fairchem SlurmSPMDProgram routine that runs the runner on every worker
     def __init__(self, job_config: DictConfig, runner_config: DictConfig):
         self.job_config = job_config
         self.runner_config = runner_config

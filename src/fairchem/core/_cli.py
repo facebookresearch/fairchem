@@ -19,7 +19,6 @@ from omegaconf.errors import InterpolationKeyError
 from fairchem.core.launchers.api import (
     ALLOWED_TOP_LEVEL_KEYS,
     JobConfig,
-    RunType,
     SchedulerType,
 )
 
@@ -28,8 +27,6 @@ if TYPE_CHECKING:
 
     from fairchem.core.components.runner import Runner
 
-
-from fairchem.core.common import distutils
 
 # this effects the cli only since the actual job will be run in subprocesses or remoe
 logging.basicConfig(level=logging.INFO)
@@ -124,36 +121,16 @@ def main(
         if scheduler_cfg.use_ray:
             logging.info("Running in local mode with local ray cluster")
             # don't recursively instantiate the runner here to allow lazy instantiations in the runner
+            # the hands all responsibility the user, ie they must initialize ray
             runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
             runner.run()
         elif scheduler_cfg.ranks_per_node > 1:
+            from fairchem.core.launchers.slurm_launch import local_launch
+
             # else launch locally using torch elastic or local mode
             logging.info(
                 f"Running in local mode with {scheduler_cfg.ranks_per_node} ranks using device_type:{cfg.job.device_type}"
             )
-            from torch.distributed.launcher.api import LaunchConfig, elastic_launch
-
-            from fairchem.core.launchers import slurm_launch
-
-            launch_config = LaunchConfig(
-                min_nodes=1,
-                max_nodes=1,
-                nproc_per_node=scheduler_cfg.ranks_per_node,
-                rdzv_backend="c10d",
-                max_restarts=0,
-            )
-            elastic_launch(launch_config, slurm_launch.runner_wrapper)(cfg)
-            if "reducer" in cfg:
-                elastic_launch(launch_config, slurm_launch.runner_wrapper)(
-                    cfg, RunType.REDUCE
-                )
-        else:
-            logging.info("Running in local mode without elastic launch")
-            from fairchem.core.launchers import slurm_launch
-
-            distutils.setup_env_local()
-            slurm_launch.runner_wrapper(cfg)
-            if "reducer" in cfg:
-                slurm_launch.runner_wrapper(cfg, RunType.REDUCE)
+            local_launch(cfg, log_dir)
     else:
         raise ValueError(f"Unknown scheduler mode {scheduler_cfg.mode}")
