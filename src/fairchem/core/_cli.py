@@ -124,7 +124,7 @@ def main(
             # the hands all responsibility the user, ie they must initialize ray
             runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
             runner.run()
-        elif scheduler_cfg.ranks_per_node > 1:
+        else:
             from fairchem.core.launchers.slurm_launch import local_launch
 
             # else launch locally using torch elastic or local mode

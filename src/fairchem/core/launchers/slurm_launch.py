@@ -269,25 +269,22 @@ def local_launch(cfg: DictConfig, log_dir: str):
     Launch locally with torch elastic (for >1 workers) or just single process
     """
     scheduler_cfg = cfg.job.scheduler
-    from torch.distributed.launcher.api import LaunchConfig, elastic_launch
+    if scheduler_cfg.ranks_per_node > 1:
+        from torch.distributed.launcher.api import LaunchConfig, elastic_launch
 
-    from fairchem.core.launchers import slurm_launch
-
-    launch_config = LaunchConfig(
-        min_nodes=1,
-        max_nodes=1,
-        nproc_per_node=scheduler_cfg.ranks_per_node,
-        rdzv_backend="c10d",
-        max_restarts=0,
-    )
-    elastic_launch(launch_config, slurm_launch.runner_wrapper)(cfg)
-    if "reducer" in cfg:
-        elastic_launch(launch_config, slurm_launch.runner_wrapper)(cfg, RunType.REDUCE)
+        launch_config = LaunchConfig(
+            min_nodes=1,
+            max_nodes=1,
+            nproc_per_node=scheduler_cfg.ranks_per_node,
+            rdzv_backend="c10d",
+            max_restarts=0,
+        )
+        elastic_launch(launch_config, runner_wrapper)(cfg)
+        if "reducer" in cfg:
+            elastic_launch(launch_config, runner_wrapper)(cfg, RunType.REDUCE)
     else:
         logging.info("Running in local mode without elastic launch")
-        from fairchem.core.launchers import slurm_launch
-
         distutils.setup_env_local()
-        slurm_launch.runner_wrapper(cfg)
+        runner_wrapper(cfg)
         if "reducer" in cfg:
-            slurm_launch.runner_wrapper(cfg, RunType.REDUCE)
+            runner_wrapper(cfg, RunType.REDUCE)

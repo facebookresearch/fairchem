@@ -6,21 +6,10 @@ LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    UNIT_INFERENCE_CHECKPOINT,
-    UNIT_RESUME_CONFIG,
-)
 
-
-from tests.core.units.mlip_unit.create_fake_dataset import (
-    create_fake_uma_dataset,
-)
 import os
 import tempfile
-
-from tests.core.testing_utils import launch_main
 from itertools import product
-import logging
 from random import choice
 from typing import TYPE_CHECKING
 
@@ -33,6 +22,14 @@ from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
 
 from fairchem.core.datasets import AseDBDataset
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    UNIT_INFERENCE_CHECKPOINT,
+    UNIT_RESUME_CONFIG,
+)
+from tests.core.testing_utils import launch_main
+from tests.core.units.mlip_unit.create_fake_dataset import (
+    create_fake_uma_dataset,
+)
 
 if TYPE_CHECKING:
     from syrupy.types import SerializableData
@@ -222,7 +219,7 @@ def dummy_binary_dataset(dummy_binary_dataset_path):
 def run_around_tests():
     # If debugging GPU memory issues, uncomment this print statement
     # to get full GPU memory allocations before each test runs
-    #print(torch.cuda.memory_summary())
+    # print(torch.cuda.memory_summary())
     yield
     torch.cuda.empty_cache()
 
@@ -341,7 +338,6 @@ def conserving_mole_checkpoint(fake_uma_dataset):
     assert os.path.isfile(inference_checkpoint_pt)
 
     return inference_checkpoint_pt, checkpoint_state_yaml
-
 
 
 @pytest.fixture(scope="session")
