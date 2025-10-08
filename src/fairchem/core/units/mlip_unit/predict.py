@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
 try:
     import ray
+    from ray import remote
     from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
     ray_installed = True
@@ -339,8 +340,7 @@ def move_tensors_to_cpu(data):
         return data
 
 
-# @requires(ray_installed, message="Requires `ray` to be installed")
-@ray.remote
+@remote
 class MLIPWorker:
     def __init__(
         self,
