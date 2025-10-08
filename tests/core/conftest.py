@@ -6,33 +6,32 @@ LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
-from fairchem.core.units.mlip_unit.mlip_unit import (
-    UNIT_INFERENCE_CHECKPOINT,
-    UNIT_RESUME_CONFIG,
-)
 
-
-from tests.core.units.mlip_unit.create_fake_dataset import (
-    create_fake_uma_dataset,
-)
 import os
 import tempfile
-
-from tests.core.testing_utils import launch_main
 from itertools import product
-import logging
 from random import choice
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 import torch
+from ase.calculators.singlepoint import SinglePointCalculator
 from ase.db import connect
+from ase.io import write
 from pymatgen.core import Structure
 from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
 
-from fairchem.core.datasets import AseDBDataset
+from fairchem.core.datasets.ase_datasets import AseDBDataset, AseReadDataset
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    UNIT_INFERENCE_CHECKPOINT,
+    UNIT_RESUME_CONFIG,
+)
+from tests.core.testing_utils import launch_main
+from tests.core.units.mlip_unit.create_fake_dataset import (
+    create_fake_uma_dataset,
+)
 
 if TYPE_CHECKING:
     from syrupy.types import SerializableData
@@ -195,34 +194,37 @@ def dummy_binary_dataset_path(tmpdir_factory, dummy_element_refs):
                 + 0.05 * rng.random() * dummy_element_refs.mean()
             )
             atoms = structure.to_ase_atoms()
-            db.write(
+            atoms.calc = SinglePointCalculator(
                 atoms,
-                data={
-                    "sid": f"structure_{i}",
-                    "energy": energy,
-                    "forces": rng.random((2, 3)),
-                    "stress": rng.random((3, 3)),
-                },
+                energy=energy,
+                forces=rng.random((2, 3)),
+                stress=rng.random((3, 3)),
             )
+            # write to the lmdb file
+            db.write(atoms, data={"sid": f"structure_{i}"})
 
-    return tmpdir / "dummy.aselmdb"
+            # write it as a cif file as well
+            write(str(tmpdir / f"structure_{i}.cif"), atoms)
+
+    return tmpdir
 
 
-@pytest.fixture(scope="session")
-def dummy_binary_dataset(dummy_binary_dataset_path):
-    return AseDBDataset(
-        config={
-            "src": str(dummy_binary_dataset_path),
-            "a2g_args": {"r_data_keys": ["energy", "forces", "stress"]},
-        }
-    )
+@pytest.fixture(scope="session", params=["asedb", "cif"])
+def dummy_binary_dataset(dummy_binary_dataset_path, request):
+    config = dict(src=str(dummy_binary_dataset_path))
+
+    if request.param == "cif":
+        config["pattern"] = "*.cif"
+        return AseReadDataset(config=config)
+    else:
+        return AseDBDataset(config=config)
 
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
     # If debugging GPU memory issues, uncomment this print statement
     # to get full GPU memory allocations before each test runs
-    #print(torch.cuda.memory_summary())
+    # print(torch.cuda.memory_summary())
     yield
     torch.cuda.empty_cache()
 
@@ -341,7 +343,6 @@ def conserving_mole_checkpoint(fake_uma_dataset):
     assert os.path.isfile(inference_checkpoint_pt)
 
     return inference_checkpoint_pt, checkpoint_state_yaml
-
 
 
 @pytest.fixture(scope="session")

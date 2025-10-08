@@ -75,7 +75,6 @@ def test_singlepoint_runner(calculator, dummy_binary_dataset, tmp_path):
         input_data=AtomsDatasetSequence(dummy_binary_dataset),
         calculate_properties=["energy", "forces"],
         normalize_properties_by={"energy": "natoms"},
-        save_target_properties=["energy"],
     )
     results_custom = singlepoint_runner_custom.calculate()
     assert len(results_custom) == len(dummy_binary_dataset)
@@ -121,7 +120,6 @@ def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
         calculate_properties=["energy", "forces"],
         save_relaxed_atoms=False,
         normalize_properties_by={"energy": "natoms"},
-        save_target_properties=["energy"],
         fmax=0.1,  # relax_kwargs
         steps=50,  # relax_kwargs
     )
