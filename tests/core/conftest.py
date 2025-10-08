@@ -220,6 +220,12 @@ def dummy_binary_dataset(dummy_binary_dataset_path, request):
         return AseDBDataset(config=config)
 
 
+@pytest.fixture(scope="session")
+def dummy_binary_db_dataset(dummy_binary_dataset_path):
+    config = dict(src=str(dummy_binary_dataset_path))
+    return AseDBDataset(config=config)
+
+
 @pytest.fixture(autouse=True)
 def run_around_tests():
     # If debugging GPU memory issues, uncomment this print statement
