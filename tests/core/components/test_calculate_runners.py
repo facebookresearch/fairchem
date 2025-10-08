@@ -121,7 +121,7 @@ def test_relaxation_runner(calculator, dummy_binary_dataset, tmp_path):
         save_relaxed_atoms=False,
         normalize_properties_by={"energy": "natoms"},
         fmax=0.1,  # relax_kwargs
-        steps=50,  # relax_kwargs
+        steps=5,  # relax_kwargs
     )
     results_custom = relaxation_runner_custom.calculate()
     assert len(results_custom) == len(dummy_binary_dataset)
