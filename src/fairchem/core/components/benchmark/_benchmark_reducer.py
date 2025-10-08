@@ -18,7 +18,7 @@ import pandas as pd
 
 from fairchem.core.common import distutils
 from fairchem.core.common.logger import WandBSingletonLogger
-from fairchem.core.components.calculate.calculate_runner import (
+from fairchem.core.components.calculate._calculate_runner import (
     CalculateRunner,
 )
 from fairchem.core.components.reducer import Reducer

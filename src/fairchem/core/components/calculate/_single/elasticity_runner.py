@@ -17,7 +17,7 @@ import pandas as pd
 from ase.filters import FrechetCellFilter
 from tqdm import tqdm
 
-from fairchem.core.components.calculate import CalculateRunner
+from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.recipes.elastic import (
     calculate_elasticity,
 )

@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+import tempfile
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,6 +16,7 @@ import pytest
 import torch
 from ase import Atoms, units
 from ase.build import add_adsorbate, bulk, fcc111, molecule
+from ase.io import read, write
 from ase.md.langevin import Langevin
 from ase.optimize import BFGS
 
@@ -90,6 +92,17 @@ def periodic_h2o_atoms() -> Atoms:
 
 
 @pytest.fixture()
+def periodic_h2o_from_extxyz(periodic_h2o_atoms) -> Atoms:
+    """Read from extxyz file to test type casting"""
+    periodic_h2o_atoms.info["charge"] = 0  # set as int here
+    periodic_h2o_atoms.info["spin"] = 0
+    with tempfile.NamedTemporaryFile(suffix=".xyz") as f:
+        write(f.name, periodic_h2o_atoms, format="extxyz")
+        atoms = read(f.name, format="extxyz")  # type: ignore
+    return atoms  # will be read as np.int64
+
+
+@pytest.fixture()
 def large_bulk_atoms() -> Atoms:
     """Create a bulk system with approximately 1000 atoms."""
     return bulk("Fe", "bcc", a=2.87).repeat((10, 10, 10))  # 10x10x10 unit cell
@@ -162,6 +175,7 @@ def test_calculator_setup(all_calculators):
         "bulk_atoms",
         "aperiodic_atoms",
         "periodic_h2o_atoms",
+        "periodic_h2o_from_extxyz",
     ],
 )
 def test_energy_calculation(request, atoms_fixture, all_calculators):

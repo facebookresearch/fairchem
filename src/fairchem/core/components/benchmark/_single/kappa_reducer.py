@@ -11,16 +11,16 @@ from typing import TYPE_CHECKING, Optional
 
 import pandas as pd
 from monty.dev import requires
-from pymatviz.enums import Key
 
-from fairchem.core.components.benchmark.benchmark_reducer import JsonDFReducer
-from fairchem.core.components.calculate.kappa_runner import KappaRunner
+from fairchem.core.components.benchmark import JsonDFReducer
+from fairchem.core.components.calculate import KappaRunner
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 try:
     from matbench_discovery.metrics import phonons
+    from pymatviz.enums import Key
 
     mbd_installed = True
 except ImportError:
