@@ -130,6 +130,7 @@ def test_multiple_dataset_predict(uma_predict_unit):
 )
 def test_parallel_predict_unit(workers, device):
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    num_atoms = 10
     ifsets = InferenceSettings(
         tf32=False,
         merge_mole=True,
@@ -144,13 +145,12 @@ def test_parallel_predict_unit(workers, device):
         num_workers=workers,
     )
 
+    atoms = get_fcc_carbon_xtal(num_atoms)
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+
     for _ in range(2):
-        atoms = get_fcc_carbon_xtal(100)
-        atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
         pp_results = ppunit.predict(atomic_data)
 
-    atoms = get_fcc_carbon_xtal(100)
-    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
     pp_results = ppunit.predict(atomic_data)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device=device, inference_settings=ifsets
