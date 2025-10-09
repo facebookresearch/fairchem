@@ -110,5 +110,5 @@ Module Contents
 
 .. py:function:: setup_env_local()
 
-.. py:function:: setup_env_local_multi_gpu(rank: int, port: int)
+.. py:function:: setup_env_local_multi_gpu(rank: int, port: int, address: str = 'localhost')
 
