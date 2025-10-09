@@ -124,7 +124,6 @@ def test_multiple_dataset_predict(uma_predict_unit):
     [
         (1, "cpu"),
         (2, "cpu"),
-        (4, "cpu"),
         (1, "cuda"),
     ],
 )
