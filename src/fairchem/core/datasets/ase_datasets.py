@@ -26,7 +26,6 @@ from fairchem.core.common.registry import registry
 from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.base_dataset import BaseDataset
-from fairchem.core.datasets.target_metadata_guesser import guess_property_metadata
 from fairchem.core.modules.transforms import DataTransforms
 
 
@@ -61,14 +60,13 @@ class AseAtomsDataset(BaseDataset, ABC):
     """
     This is an abstract Dataset that includes helpful utilities for turning
     ASE atoms objects into OCP-usable data objects. This should not be instantiated directly
-    as get_atoms_object and load_dataset_get_ids are not implemented in this base class.
+    as get_atoms and _load_dataset_get_ids are not implemented in this base class.
 
     Derived classes must add at least two things:
-        self.get_atoms_object(id): a function that takes an identifier and returns a corresponding atoms object
+        self.get_atoms(id): a function that takes an identifier and returns a corresponding atoms object
 
-        self.load_dataset_get_ids(config: dict): This function is responsible for any initialization/loads
-            of the dataset and importantly must return a list of all possible identifiers that can be passed into
-            self.get_atoms_object(id)
+        self._load_dataset_get_ids(config: dict): This function is responsible for any initialization/loads
+            of the dataset. The values it returns will be accessed by index using self.get_atoms(idx).
 
     Identifiers need not be any particular type.
     """
@@ -106,7 +104,7 @@ class AseAtomsDataset(BaseDataset, ABC):
             return [self[i] for i in range(*idx.indices(len(self)))]
 
         # Get atoms object via derived class method
-        atoms = self.get_atoms(self.ids[idx])
+        atoms = self.get_atoms(idx)
 
         # Transform atoms object
         if self.atoms_transform is not None:
@@ -134,7 +132,7 @@ class AseAtomsDataset(BaseDataset, ABC):
         return data_object
 
     @abstractmethod
-    def get_atoms(self, idx: str | int) -> ase.Atoms:
+    def get_atoms(self, idx: int) -> ase.Atoms:
         # This function should return an ASE atoms object.
         raise NotImplementedError(
             "Returns an ASE atoms object. Derived classes should implement this function."
@@ -153,25 +151,6 @@ class AseAtomsDataset(BaseDataset, ABC):
             "If relaxed energies are saved with the atoms info dictionary, they can be used by passing the keys in "
             "the r_data_keys argument under a2g_args."
         )
-
-    def sample_property_metadata(self, num_samples: int = 100) -> dict:
-        metadata = {}
-
-        if num_samples < len(self):
-            metadata["targets"] = guess_property_metadata(
-                [
-                    self.get_atoms(self.ids[idx])
-                    for idx in np.random.choice(
-                        len(self), size=(num_samples,), replace=False
-                    )
-                ]
-            )
-        else:
-            metadata["targets"] = guess_property_metadata(
-                [self.get_atoms(self.ids[idx]) for idx in range(len(self))]
-            )
-
-        return metadata
 
     def get_metadata(self, attr, idx):
         # try the parent method
@@ -254,12 +233,16 @@ class AseReadDataset(AseAtomsDataset):
 
         return list(self.path.glob(f'{config.get("pattern", "*")}'))
 
-    def get_atoms(self, idx: str | int) -> ase.Atoms:
+    def get_atoms(self, idx: int) -> ase.Atoms:
         try:
-            atoms = ase.io.read(idx, **self.ase_read_args)
+            file_path = self.ids[idx]
+            atoms = ase.io.read(file_path, **self.ase_read_args)
         except Exception as err:
             warnings.warn(f"{err} occured for: {idx}", stacklevel=2)
             raise err
+
+        if "sid" not in atoms.info:
+            atoms.info["sid"] = str(file_path)
 
         return atoms
 
@@ -370,9 +353,10 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
 
         return ids
 
-    def get_atoms(self, idx: str) -> ase.Atoms:
+    def get_atoms(self, idx: int) -> ase.Atoms:
         try:
-            identifiers = idx.split(" ")
+            std_id = self.ids[idx]
+            identifiers = std_id.split(" ")
             atoms = ase.io.read("".join(identifiers[:-1]), **self.ase_read_args)[
                 int(identifiers[-1])
             ]
@@ -386,9 +370,6 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
             atoms.info["fid"] = int(identifiers[-1])
 
         return atoms
-
-    def sample_property_metadata(self, num_samples: int = 100) -> dict:
-        return {}
 
     def get_relaxed_energy(self, identifier) -> float:
         relaxed_atoms = ase.io.read(
@@ -511,6 +492,10 @@ class AseDBDataset(AseAtomsDataset):
 
     def get_atoms(self, idx: int) -> ase.Atoms:
         """Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
+
+        NOTE: if the row data in the database does not include a entry "sid" for the system id,
+            The integer idx will be used.
+
         Args:
             idx (int): index in dataset
 
@@ -533,6 +518,9 @@ class AseDBDataset(AseAtomsDataset):
         if isinstance(atoms_row.data, dict):
             atoms.info.update(atoms_row.data)
 
+        if "sid" not in atoms.info:
+            atoms.info["sid"] = idx
+
         return atoms
 
     @staticmethod
@@ -553,12 +541,3 @@ class AseDBDataset(AseAtomsDataset):
         for db in self.dbs:
             if hasattr(db, "close"):
                 db.close()
-
-    def sample_property_metadata(self, num_samples: int = 100) -> dict:
-        logging.warning(
-            "You specific a folder of ASE dbs, so it's impossible to know which metadata to use. Using the first!"
-        )
-        if self.dbs[0].metadata == {}:
-            return super().sample_property_metadata(num_samples)
-
-        return copy.deepcopy(self.dbs[0].metadata)

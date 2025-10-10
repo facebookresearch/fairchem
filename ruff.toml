@@ -33,6 +33,7 @@ select = [
   "YTT",    # flake8-2020
 ]
 ignore = [
+  "C408",    # Unnecessary `dict` call (rewrite as a literal)
   "PLR",    # Design related pylint codes
   "E501",   # Line too long
   "B028",   # No explicit stacklevel
@@ -55,7 +56,7 @@ ignore = [
   "RUF005", # concat lists
   "SIM108", # Use ternary operator
   "PT006", # Wrong type passed to first argument
-  "PYI024", # Use `typing.NamedTuple` instead of `collections.namedtuple`
+  "PYI024", # Use `typing.NamedTuple` instead of `collections.namedtuple`,
 ]
 unfixable = [
   "T20",  # Removes print statements
