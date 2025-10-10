@@ -110,7 +110,7 @@ To make things simple for the user that wants to run multi-gpu inference locally
 
 For example, we can create a predictor with 8 GPU workers in a very similiar way to MLIPPredictUnit:
 
-```{code-cell} python3
+```
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
