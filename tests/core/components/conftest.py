@@ -7,20 +7,14 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from itertools import product
 from random import choice
 
-import numpy as np
 import pytest
-from ase.db import connect
-from pymatgen.core import Structure
-from pymatgen.core.periodic_table import Element
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
-from fairchem.core.datasets import AseDBDataset
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def calculator() -> FAIRChemCalculator:
     uma_sm_models = [
         model for model in pretrained_mlip.available_models if "uma-s" in model

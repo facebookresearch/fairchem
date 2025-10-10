@@ -26,10 +26,10 @@ pytest.skip(
 
 
 @pytest.fixture(scope="session", params=(True, False))
-def element_refs(dummy_binary_dataset, max_num_elements, request):
+def element_refs(dummy_binary_db_dataset, max_num_elements, request):
     return fit_linear_references(
         ["energy"],
-        dataset=dummy_binary_dataset,
+        dataset=dummy_binary_db_dataset,
         batch_size=16,
         shuffle=False,
         max_num_elements=max_num_elements,
@@ -39,12 +39,12 @@ def element_refs(dummy_binary_dataset, max_num_elements, request):
 
 
 def test_apply_linear_references(
-    element_refs, dummy_binary_dataset, dummy_element_refs
+    element_refs, dummy_binary_db_dataset, dummy_element_refs
 ):
     max_noise = 0.05 * dummy_element_refs.mean()
 
     # check that removing element refs keeps only values within max noise
-    batch = data_list_collater(list(dummy_binary_dataset), otf_graph=True)
+    batch = data_list_collater(list(dummy_binary_db_dataset), otf_graph=True)
     energy = batch.energy.clone().view(len(batch), -1)
     deref_energy = element_refs["energy"].dereference(energy, batch)
     assert all(deref_energy <= max_noise)
@@ -96,14 +96,14 @@ def test_create_element_references(element_refs, tmp_path):
 
 
 def test_fit_linear_references(
-    element_refs, dummy_binary_dataset, max_num_elements, dummy_element_refs
+    element_refs, dummy_binary_db_dataset, max_num_elements, dummy_element_refs
 ):
     # create the composition matrix
-    energy = np.array([d.energy for d in dummy_binary_dataset]).reshape(-1)
+    energy = np.array([d.energy for d in dummy_binary_db_dataset]).reshape(-1)
     cmatrix = np.vstack(
         [
             np.bincount(d.atomic_numbers.int().numpy(), minlength=max_num_elements + 1)
-            for d in dummy_binary_dataset
+            for d in dummy_binary_db_dataset
         ]
     )
     mask = cmatrix.sum(axis=0) != 0.0
@@ -130,30 +130,30 @@ def test_fit_linear_references(
     )
 
 
-def test_fit_seed_no_seed(dummy_binary_dataset, max_num_elements):
+def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
     refs_seed = fit_linear_references(
         ["energy"],
-        dataset=dummy_binary_dataset,
+        dataset=dummy_binary_db_dataset,
         batch_size=16,
-        num_batches=len(dummy_binary_dataset) // 16 - 2,
+        num_batches=len(dummy_binary_db_dataset) // 16 - 2,
         shuffle=True,
         max_num_elements=max_num_elements,
         seed=0,
     )
     refs_seed1 = fit_linear_references(
         ["energy"],
-        dataset=dummy_binary_dataset,
+        dataset=dummy_binary_db_dataset,
         batch_size=16,
-        num_batches=len(dummy_binary_dataset) // 16 - 2,
+        num_batches=len(dummy_binary_db_dataset) // 16 - 2,
         shuffle=True,
         max_num_elements=max_num_elements,
         seed=0,
     )
     refs_noseed = fit_linear_references(
         ["energy"],
-        dataset=dummy_binary_dataset,
+        dataset=dummy_binary_db_dataset,
         batch_size=16,
-        num_batches=len(dummy_binary_dataset) // 16 - 2,
+        num_batches=len(dummy_binary_db_dataset) // 16 - 2,
         shuffle=True,
         max_num_elements=max_num_elements,
         seed=1,
