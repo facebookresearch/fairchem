@@ -12,6 +12,7 @@ Submodules
 
    /autoapi/data/oc/index
    /autoapi/data/odac/index
+   /autoapi/data/omat/index
    /autoapi/data/omc/index
    /autoapi/data/omol/index
 

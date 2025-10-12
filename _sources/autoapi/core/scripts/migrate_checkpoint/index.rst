@@ -86,7 +86,7 @@ Module Contents
 
 
 
-.. py:function:: generate_stress_task_config(dataset_name, rmsd)
+.. py:function:: generate_stress_task_config(dataset_name, task_name, rmsd)
 
 .. py:function:: migrate_checkpoint(checkpoint_path: torch.nn.Module, rm_static_keys: bool = True, map_undefined_stress_to: str | None = None, add_stress: bool = False, task_add_stress: str | None = None, model_version: float = 1.0) -> dict
 

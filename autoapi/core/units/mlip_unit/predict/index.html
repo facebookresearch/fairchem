@@ -387,6 +387,10 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../../data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../../data/omc/index.html">data.omc</a></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../../data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../../../data/omol/orca/index.html">data.omol.orca</a></li>
@@ -622,9 +626,11 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ray_installed"><code class="docutils literal notranslate"><span class="pre">ray_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.collate_predictions"><code class="docutils literal notranslate"><span class="pre">collate_predictions()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPPredictUnitProtocol"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnitProtocol</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPPredictUnitProtocol.predict"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnitProtocol.predict()</span></code></a></li>
@@ -650,15 +656,24 @@ document.write(`
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.get_dataset_to_tasks_map"><code class="docutils literal notranslate"><span class="pre">get_dataset_to_tasks_map()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict._run_server_process"><code class="docutils literal notranslate"><span class="pre">_run_server_process()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.server_process"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.server_process</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit._dataset_to_tasks</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._start_server_process"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit._start_server_process()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.cleanup"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.cleanup()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.__del__"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.__del__()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.predict"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.predict()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.dataset_to_tasks</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.move_tensors_to_cpu"><code class="docutils literal notranslate"><span class="pre">move_tensors_to_cpu()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker"><code class="docutils literal notranslate"><span class="pre">MLIPWorker</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.worker_id"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.worker_id</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.world_size"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.world_size</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.predictor_config"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.predictor_config</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.master_address"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.master_address</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.master_port"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.master_port</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.is_setup"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.is_setup</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.get_master_address_and_port"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.get_master_address_and_port()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker._distributed_setup"><code class="docutils literal notranslate"><span class="pre">MLIPWorker._distributed_setup()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.predict"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.predict()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay._dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay._dataset_to_tasks</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.workers"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay.workers</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.predict"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay.predict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay.dataset_to_tasks</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -679,6 +694,17 @@ document.write(`
 <p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
 <p>This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.ray_installed" title="core.units.mlip_unit.predict.ray_installed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ray_installed</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -689,7 +715,10 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.MLIPPredictUnit" title="core.units.mlip_unit.predict.MLIPPredictUnit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPPredictUnit</span></code></a></p></td>
 <td><p>The PredictUnit is an interface that can be used to organize your prediction logic. The core of it is the <code class="docutils literal notranslate"><span class="pre">predict_step</span></code> which</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit" title="core.units.mlip_unit.predict.ParallelMLIPPredictUnit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.MLIPWorker" title="core.units.mlip_unit.predict.MLIPWorker"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPWorker</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay" title="core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay</span></code></a></p></td>
 <td><p>Base class for protocol classes.</p></td>
 </tr>
 </tbody>
@@ -706,8 +735,8 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.get_dataset_to_tasks_map" title="core.units.mlip_unit.predict.get_dataset_to_tasks_map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dataset_to_tasks_map</span></code></a>(→ dict[str, ...)</p></td>
 <td><p>Create a mapping from dataset names to their associated tasks.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict._run_server_process" title="core.units.mlip_unit.predict._run_server_process"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_run_server_process</span></code></a>(predictor_config, port, ...)</p></td>
-<td><p>Function to run server in separate process</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.units.mlip_unit.predict.move_tensors_to_cpu" title="core.units.mlip_unit.predict.move_tensors_to_cpu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">move_tensors_to_cpu</span></code></a>(data)</p></td>
+<td><p>Recursively move all PyTorch tensors in a nested data structure to CPU.</p></td>
 </tr>
 </tbody>
 </table>
@@ -715,6 +744,11 @@ LICENSE file in the root directory of this source tree.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ray_installed">
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">ray_installed</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#core.units.mlip_unit.predict.ray_installed" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="core.units.mlip_unit.predict.collate_predictions">
 <span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">collate_predictions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predict_fn</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.collate_predictions" title="Link to this definition">#</a></dt>
@@ -900,14 +934,72 @@ that are associated with that dataset</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict._run_server_process">
-<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">_run_server_process</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predictor_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_workers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ready_queue</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict._run_server_process" title="Link to this definition">#</a></dt>
-<dd><p>Function to run server in separate process</p>
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.move_tensors_to_cpu">
+<span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">move_tensors_to_cpu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.move_tensors_to_cpu" title="Link to this definition">#</a></dt>
+<dd><p>Recursively move all PyTorch tensors in a nested data structure to CPU.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> – Input data structure (dict, list, tuple, tensor, or other)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Data structure with all tensors moved to CPU</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">ParallelMLIPPredictUnit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inference_model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overrides</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference_settings</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.InferenceSettings</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">41</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_refs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">assert_on_nans</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">server_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">client_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">MLIPWorker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">worker_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">world_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictor_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_port</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_address</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker" title="Link to this definition">#</a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.worker_id">
+<span class="sig-name descname"><span class="pre">worker_id</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.worker_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.world_size">
+<span class="sig-name descname"><span class="pre">world_size</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.world_size" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.predictor_config">
+<span class="sig-name descname"><span class="pre">predictor_config</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.predictor_config" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.master_address">
+<span class="sig-name descname"><span class="pre">master_address</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.master_address" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.master_port">
+<span class="sig-name descname"><span class="pre">master_port</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.master_port" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.is_setup">
+<span class="sig-name descname"><span class="pre">is_setup</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.is_setup" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.get_master_address_and_port">
+<span class="sig-name descname"><span class="pre">get_master_address_and_port</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.get_master_address_and_port" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker._distributed_setup">
+<span class="sig-name descname"><span class="pre">_distributed_setup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">worker_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_port</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">world_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">predictor_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_address</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker._distributed_setup" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.MLIPWorker.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.tensor</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#core.units.mlip_unit.predict.MLIPWorker.predict" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.units.mlip_unit.predict.</span></span><span class="sig-name descname"><span class="pre">ParallelMLIPPredictUnitRay</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inference_model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overrides</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inference_settings</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.units.mlip_unit.InferenceSettings</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">41</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_refs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">assert_on_nans</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_workers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_workers_per_node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#core.units.mlip_unit.predict.MLIPPredictUnitProtocol" title="core.units.mlip_unit.predict.MLIPPredictUnitProtocol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MLIPPredictUnitProtocol</span></code></a></p>
 <p>Base class for protocol classes.</p>
 <p>Protocol classes are defined as:</p>
@@ -939,40 +1031,23 @@ Protocol classes can be generic, they are defined as:</p>
 </pre></div>
 </div>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit.server_process">
-<span class="sig-name descname"><span class="pre">server_process</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.server_process" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay._dataset_to_tasks">
+<span class="sig-name descname"><span class="pre">_dataset_to_tasks</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay._dataset_to_tasks" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit._dataset_to_tasks">
-<span class="sig-name descname"><span class="pre">_dataset_to_tasks</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._dataset_to_tasks" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.workers">
+<span class="sig-name descname"><span class="pre">workers</span></span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.workers" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit._start_server_process">
-<span class="sig-name descname"><span class="pre">_start_server_process</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predict_unit_config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">workers</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._start_server_process" title="Link to this definition">#</a></dt>
-<dd><p>Start server process and wait for it to be ready</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit.cleanup">
-<span class="sig-name descname"><span class="pre">cleanup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.cleanup" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.predict">
+<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undo_element_references</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.predict" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit.__del__">
-<span class="sig-name descname"><span class="pre">__del__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.__del__" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit.predict">
-<span class="sig-name descname"><span class="pre">predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">fairchem.core.datasets.atomic_data.AtomicData</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">undo_element_references</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">torch.tensor</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.predict" title="Link to this definition">#</a></dt>
-<dd><p>Predict method that sends data to the remote server and returns predictions.</p>
-</dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnit.dataset_to_tasks">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dataset_to_tasks</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.dataset_to_tasks" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.dataset_to_tasks">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dataset_to_tasks</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.dataset_to_tasks" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -1044,9 +1119,11 @@ Protocol classes can be generic, they are defined as:</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ray_installed"><code class="docutils literal notranslate"><span class="pre">ray_installed</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.collate_predictions"><code class="docutils literal notranslate"><span class="pre">collate_predictions()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPPredictUnitProtocol"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnitProtocol</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPPredictUnitProtocol.predict"><code class="docutils literal notranslate"><span class="pre">MLIPPredictUnitProtocol.predict()</span></code></a></li>
@@ -1072,15 +1149,24 @@ Protocol classes can be generic, they are defined as:</p>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.get_dataset_to_tasks_map"><code class="docutils literal notranslate"><span class="pre">get_dataset_to_tasks_map()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict._run_server_process"><code class="docutils literal notranslate"><span class="pre">_run_server_process()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.server_process"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.server_process</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit._dataset_to_tasks</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._start_server_process"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit._start_server_process()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.cleanup"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.cleanup()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.__del__"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.__del__()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.predict"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.predict()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnit.dataset_to_tasks</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.move_tensors_to_cpu"><code class="docutils literal notranslate"><span class="pre">move_tensors_to_cpu()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker"><code class="docutils literal notranslate"><span class="pre">MLIPWorker</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.worker_id"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.worker_id</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.world_size"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.world_size</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.predictor_config"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.predictor_config</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.master_address"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.master_address</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.master_port"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.master_port</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.is_setup"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.is_setup</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.get_master_address_and_port"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.get_master_address_and_port()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker._distributed_setup"><code class="docutils literal notranslate"><span class="pre">MLIPWorker._distributed_setup()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.MLIPWorker.predict"><code class="docutils literal notranslate"><span class="pre">MLIPWorker.predict()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay._dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay._dataset_to_tasks</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.workers"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay.workers</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.predict"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay.predict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.dataset_to_tasks"><code class="docutils literal notranslate"><span class="pre">ParallelMLIPPredictUnitRay.dataset_to_tasks</span></code></a></li>
 </ul>
 </li>
 </ul>

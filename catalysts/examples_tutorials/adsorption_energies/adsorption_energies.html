@@ -387,6 +387,10 @@
 <li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../autoapi/data/omc/index.html">data.omc</a></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
@@ -809,9 +813,9 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;repr&#39; attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. &#39;repr&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;repr&#39; attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. &#39;repr&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
   warnings.warn(
-/home/runner/work/_tool/Python/3.12.11/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;frozen&#39; attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. &#39;frozen&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
+/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;frozen&#39; attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. &#39;frozen&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
   warnings.warn(
 </pre></div>
 </div>
@@ -834,25 +838,28 @@ document.write(`
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>                Step[ FC]     Time          Energy          fmax
-BFGSLineSearch:    0[  0] 05:38:26     -130.560600  647400.7500
+BFGSLineSearch:    0[  0] 17:37:33     -130.560600  461978.1875
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  9] 05:38:26     -130.561381       0.7403
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  9] 17:37:33     -130.564068       0.7292
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[ 11] 05:38:27     -130.703409       0.3746
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[ 11] 17:37:34     -130.703520       0.2711
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[ 12] 05:38:27     -130.718857       0.1262
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[ 13] 17:37:34     -130.723473       0.1607
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[ 13] 05:38:27     -130.726736       0.1058
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[ 14] 17:37:34     -130.726827       0.0934
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[ 15] 05:38:27     -130.730373       0.0597
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[ 15] 17:37:34     -130.729948       0.0781
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    6[ 17] 05:38:27     -130.733371       0.0488
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    6[ 16] 17:37:34     -130.732009       0.0614
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    7[ 17] 17:37:34     -130.732880       0.0461
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 2.1 seconds
@@ -1042,56 +1049,56 @@ BFGSLineSearch:    0[  0] 05:38:26     -130.560600  647400.7500
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|          | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 12.0 seconds for data/slabs/oqmd-349496 slab relaxation
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 13.7 seconds for data/slabs/oqmd-349496 slab relaxation
 5 H slabs to compute for oqmd-349496
 5 NNH slabs to compute for oqmd-349496
 Running data/adslabs/oqmd-349496_H/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 67.2 seconds for data/adslabs/oqmd-349496_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 52.8 seconds for data/adslabs/oqmd-349496_H/0
 Running data/adslabs/oqmd-349496_H/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.4 seconds for data/adslabs/oqmd-349496_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 23.0 seconds for data/adslabs/oqmd-349496_H/1
 Running data/adslabs/oqmd-349496_H/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 45.7 seconds for data/adslabs/oqmd-349496_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 99.9 seconds for data/adslabs/oqmd-349496_H/2
 Running data/adslabs/oqmd-349496_H/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 71.5 seconds for data/adslabs/oqmd-349496_H/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 44.7 seconds for data/adslabs/oqmd-349496_H/3
 Running data/adslabs/oqmd-349496_H/4
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 58.9 seconds for data/adslabs/oqmd-349496_H/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 51.8 seconds for data/adslabs/oqmd-349496_H/4
 Running data/adslabs/oqmd-349496_NNH/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.0 seconds for data/adslabs/oqmd-349496_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.4 seconds for data/adslabs/oqmd-349496_NNH/0
 Running data/adslabs/oqmd-349496_NNH/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.3 seconds for data/adslabs/oqmd-349496_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.5 seconds for data/adslabs/oqmd-349496_NNH/1
 Running data/adslabs/oqmd-349496_NNH/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.5 seconds for data/adslabs/oqmd-349496_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.7 seconds for data/adslabs/oqmd-349496_NNH/2
 Running data/adslabs/oqmd-349496_NNH/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.7 seconds for data/adslabs/oqmd-349496_NNH/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.0 seconds for data/adslabs/oqmd-349496_NNH/3
 Running data/adslabs/oqmd-349496_NNH/4
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [04:56&lt;00:00, 296.27s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [05:16&lt;00:00, 316.91s/it]
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [04:56&lt;00:00, 296.27s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [05:16&lt;00:00, 316.92s/it]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 8.2 seconds for data/adslabs/oqmd-349496_NNH/4
-Elapsed time: 296.3 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.7 seconds for data/adslabs/oqmd-349496_NNH/4
+Elapsed time: 316.9 seconds
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>
@@ -1261,13 +1268,13 @@ Elapsed time: 296.3 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_3531/1759892815.py:7: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_3283/1759892815.py:7: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
   slope, intercept, r, p, se = linregress(x, y)
-/tmp/ipykernel_3531/1759892815.py:37: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
+/tmp/ipykernel_3283/1759892815.py:37: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
   slope, intercept, r, p, se = linregress(x, y)
 </pre></div>
 </div>
-<img alt="../../../_images/00ec59ccdd0746a0cffcb684bac2ced9481c310badca53d14d98b623cfd51a2e.png" src="../../../_images/00ec59ccdd0746a0cffcb684bac2ced9481c310badca53d14d98b623cfd51a2e.png" />
+<img alt="../../../_images/b9e31279cd6dfc15ae3cf185a4aeafb4387fce765b84cc7bf0a8f12bc1ed7e13.png" src="../../../_images/b9e31279cd6dfc15ae3cf185a4aeafb4387fce765b84cc7bf0a8f12bc1ed7e13.png" />
 </div>
 </div>
 </section>
@@ -1321,7 +1328,7 @@ Elapsed time: 296.3 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/dd545302dbdd7d8155661a02537407f5f48f3d81c8f43463c92bbe1ce82c5416.png" src="../../../_images/dd545302dbdd7d8155661a02537407f5f48f3d81c8f43463c92bbe1ce82c5416.png" />
+<img alt="../../../_images/62af7892c2d48924207db7d949828a1e411e5c91a5925aabded81c519e9af1d3.png" src="../../../_images/62af7892c2d48924207db7d949828a1e411e5c91a5925aabded81c519e9af1d3.png" />
 </div>
 </div>
 </section>

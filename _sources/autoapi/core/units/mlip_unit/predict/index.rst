@@ -12,6 +12,14 @@ core.units.mlip_unit.predict
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.units.mlip_unit.predict.ray_installed
+
+
 Classes
 -------
 
@@ -19,7 +27,8 @@ Classes
 
    core.units.mlip_unit.predict.MLIPPredictUnitProtocol
    core.units.mlip_unit.predict.MLIPPredictUnit
-   core.units.mlip_unit.predict.ParallelMLIPPredictUnit
+   core.units.mlip_unit.predict.MLIPWorker
+   core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay
 
 
 Functions
@@ -29,11 +38,15 @@ Functions
 
    core.units.mlip_unit.predict.collate_predictions
    core.units.mlip_unit.predict.get_dataset_to_tasks_map
-   core.units.mlip_unit.predict._run_server_process
+   core.units.mlip_unit.predict.move_tensors_to_cpu
 
 
 Module Contents
 ---------------
+
+.. py:data:: ray_installed
+   :value: True
+
 
 .. py:function:: collate_predictions(predict_fn)
 
@@ -189,12 +202,47 @@ Module Contents
              that are associated with that dataset
 
 
-.. py:function:: _run_server_process(predictor_config, port, num_workers, ready_queue)
+.. py:function:: move_tensors_to_cpu(data)
 
-   Function to run server in separate process
+   Recursively move all PyTorch tensors in a nested data structure to CPU.
+
+   :param data: Input data structure (dict, list, tuple, tensor, or other)
+
+   :returns: Data structure with all tensors moved to CPU
 
 
-.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, server_config: dict | None = None, client_config: dict | None = None)
+.. py:class:: MLIPWorker(worker_id: int, world_size: int, predictor_config: dict, master_port: int | None = None, master_address: str | None = None)
+
+   .. py:attribute:: worker_id
+
+
+   .. py:attribute:: world_size
+
+
+   .. py:attribute:: predictor_config
+
+
+   .. py:attribute:: master_address
+
+
+   .. py:attribute:: master_port
+
+
+   .. py:attribute:: is_setup
+      :value: False
+
+
+
+   .. py:method:: get_master_address_and_port()
+
+
+   .. py:method:: _distributed_setup(worker_id: int, master_port: int, world_size: int, predictor_config: dict, master_address: str)
+
+
+   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, torch.tensor] | None
+
+
+.. py:class:: ParallelMLIPPredictUnitRay(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, num_workers: int = 1, num_workers_per_node: int = 8)
 
    Bases: :py:obj:`MLIPPredictUnitProtocol`
 
@@ -231,30 +279,13 @@ Module Contents
                ...
 
 
-   .. py:attribute:: server_process
-      :value: None
-
-
-
    .. py:attribute:: _dataset_to_tasks
 
 
-   .. py:method:: _start_server_process(predict_unit_config, port, workers)
-
-      Start server process and wait for it to be ready
-
-
-
-   .. py:method:: cleanup()
-
-
-   .. py:method:: __del__()
+   .. py:attribute:: workers
 
 
    .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData, undo_element_references: bool = True) -> dict[str, torch.tensor]
-
-      Predict method that sends data to the remote server and returns predictions.
-
 
 
    .. py:property:: dataset_to_tasks

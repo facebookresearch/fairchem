@@ -386,6 +386,10 @@
 <li class="toctree-l4"><a class="reference internal" href="autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
 </ul>
 </details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
 <li class="toctree-l3"><a class="reference internal" href="autoapi/data/omc/index.html">data.omc</a></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
@@ -664,10 +668,6 @@ document.write(`
       <ul>
         <li><a href="autoapi/core/datasets/index.html#core.datasets.AseDBDataset.__del__">(core.datasets.AseDBDataset method)</a>
 </li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.__del__">(core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient method)</a>
-</li>
-        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.__del__">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit method)</a>
-</li>
       </ul></li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.__delitem__">__delitem__() (core.datasets.atomic_data.AtomicData method)</a>
 </li>
@@ -938,7 +938,7 @@ document.write(`
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit._dataset_to_tasks">_dataset_to_tasks (core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
 
       <ul>
-        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._dataset_to_tasks">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit attribute)</a>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay._dataset_to_tasks">(core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay attribute)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/modules/loss/index.html#core.modules.loss.DDPLoss._ddp_mean">_ddp_mean() (core.modules.loss.DDPLoss method)</a>
@@ -958,17 +958,17 @@ document.write(`
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker._distributed_setup">_distributed_setup() (core.launchers.ray_on_slurm_launch.SPMDWorker method)</a>
 
       <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker._distributed_setup">(core.units.mlip_unit.inference.inference_server_ray.MLIPWorker method)</a>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker._distributed_setup">(core.units.mlip_unit.predict.MLIPWorker method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/components/benchmark/_single/materials_discovery_reducer/index.html#core.components.benchmark._single.materials_discovery_reducer.MaterialsDiscoveryReducer._elemental_references_path">_elemental_references_path (core.components.benchmark._single.materials_discovery_reducer.MaterialsDiscoveryReducer attribute)</a>
 
       <ul>
         <li><a href="autoapi/core/components/benchmark/index.html#core.components.benchmark.MaterialsDiscoveryReducer._elemental_references_path">(core.components.benchmark.MaterialsDiscoveryReducer attribute)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor.ScaleFactor._enforce_consistency">_enforce_consistency() (core.modules.scaling.scale_factor.ScaleFactor method)</a>
 
       <ul>
@@ -1237,8 +1237,6 @@ document.write(`
         <li><a href="autoapi/ocpapi/client/client/index.html#ocpapi.client.client.Client._run_request">(ocpapi.client.client.Client method)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict._run_server_process">_run_server_process() (in module core.units.mlip_unit.predict)</a>
-</li>
       <li><a href="autoapi/core/components/calculate/_single/singlepoint_runner/index.html#core.components.calculate._single.singlepoint_runner.SinglePointRunner._save_atoms">_save_atoms (core.components.calculate._single.singlepoint_runner.SinglePointRunner attribute)</a>
 
       <ul>
@@ -1287,8 +1285,6 @@ document.write(`
 </li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._setup_log_record_factory">_setup_log_record_factory() (in module ocpapi.workflows.adsorbates)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket._setup_signal_handlers">_setup_signal_handlers() (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket method)</a>
-</li>
       <li><a href="autoapi/core/models/uma/nn/mole/index.html#core.models.uma.nn.mole._softmax">_softmax() (in module core.models.uma.nn.mole)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.prompt_for_slabs_to_keep._sort_key">_sort_key() (ocpapi.prompt_for_slabs_to_keep static method)</a>
@@ -1302,8 +1298,6 @@ document.write(`
       <li><a href="autoapi/core/common/gp_utils/index.html#core.common.gp_utils._split">_split() (in module core.common.gp_utils)</a>
 </li>
       <li><a href="autoapi/core/common/gp_utils/index.html#core.common.gp_utils._split_tensor">_split_tensor() (in module core.common.gp_utils)</a>
-</li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit._start_server_process">_start_server_process() (core.units.mlip_unit.predict.ParallelMLIPPredictUnit method)</a>
 </li>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor._Stats">_Stats (class in core.modules.scaling.scale_factor)</a>
 </li>
@@ -1750,8 +1744,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.assign_device_for_local_rank">assign_device_for_local_rank() (in module core.common.distutils)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient">AsyncMLIPInferenceWebSocketClient (class in core.units.mlip_unit.inference.client_websocket)</a>
-</li>
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.GraphNeuralNetworksConfigs.atom_embedding_size">atom_embedding_size (core.models.escaip.configs.GraphNeuralNetworksConfigs attribute)</a>
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs">atom_refs (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
@@ -2170,12 +2162,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner.calculator">calculator (core.components.calculate._calculate_runner.CalculateRunner property)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient.call">call() (core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient method)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.call">(core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient method)</a>
-</li>
-      </ul></li>
       <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.callbacks">callbacks (core.components.evaluate.eval_runner.EvalRunner attribute)</a>
 
       <ul>
@@ -2292,11 +2278,9 @@ document.write(`
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState.clean">clean() (core.launchers.cluster.ray_cluster.RayClusterState method)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.cleanup">cleanup() (core.units.mlip_unit.predict.ParallelMLIPPredictUnit method)</a>
+      <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.cleanup">cleanup() (in module core.common.distutils)</a>
 
       <ul>
-        <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.cleanup">(in module core.common.distutils)</a>
-</li>
         <li><a href="autoapi/core/scripts/download_data/index.html#core.scripts.download_data.cleanup">(in module core.scripts.download_data)</a>
 </li>
       </ul></li>
@@ -2316,12 +2300,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.clone">clone() (core.datasets.atomic_data.AtomicData method)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient.close">close() (core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient method)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.close">(core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient method)</a>
-</li>
-      </ul></li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState.cluster_id">cluster_id (core.launchers.cluster.ray_cluster.RayClusterState property)</a>
 </li>
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.Metadata.cluster_name">cluster_name (core.launchers.api.Metadata attribute)</a>
@@ -2474,6 +2452,8 @@ document.write(`
         <li><a href="autoapi/core/modules/transforms/index.html#core.modules.transforms.DataTransforms.config">(core.modules.transforms.DataTransforms attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24StaticSet.CONFIG">CONFIG (data.omat.vasp.sets.OMat24StaticSet attribute)</a>
+</li>
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.CONFIG_FILE_NAME">CONFIG_FILE_NAME (in module core.launchers.api)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.AdsorbateSlabRelaxationResult.config_id">config_id (ocpapi.AdsorbateSlabRelaxationResult attribute)</a>
@@ -2510,12 +2490,6 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/components/calculate/recipes/omol/index.html#core.components.calculate.recipes.omol.conformers">conformers() (in module core.components.calculate.recipes.omol)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient.connect">connect() (core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient method)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.connect">(core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient method)</a>
-</li>
-      </ul></li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseDBDataset.connect_db">connect_db() (core.datasets.ase_datasets.AseDBDataset static method)</a>
 
       <ul>
@@ -3692,27 +3666,6 @@ document.write(`
 </li>
       </ul></li>
       <li>
-    core.units.mlip_unit.inference.client_server_example
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_server_example/index.html#module-core.units.mlip_unit.inference.client_server_example">module</a>
-</li>
-      </ul></li>
-      <li>
-    core.units.mlip_unit.inference.client_websocket
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#module-core.units.mlip_unit.inference.client_websocket">module</a>
-</li>
-      </ul></li>
-      <li>
-    core.units.mlip_unit.inference.inference_server_ray
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#module-core.units.mlip_unit.inference.inference_server_ray">module</a>
-</li>
-      </ul></li>
-      <li>
     core.units.mlip_unit.mlip_unit
 
       <ul>
@@ -4026,6 +3979,27 @@ document.write(`
 </li>
       </ul></li>
       <li>
+    data.omat
+
+      <ul>
+        <li><a href="autoapi/data/omat/index.html#module-data.omat">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.omat.vasp
+
+      <ul>
+        <li><a href="autoapi/data/omat/vasp/index.html#module-data.omat.vasp">module</a>
+</li>
+      </ul></li>
+      <li>
+    data.omat.vasp.sets
+
+      <ul>
+        <li><a href="autoapi/data/omat/vasp/sets/index.html#module-data.omat.vasp.sets">module</a>
+</li>
+      </ul></li>
+      <li>
     data.omc
 
       <ul>
@@ -4126,6 +4100,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/models/uma/escn_moe/index.html#core.models.uma.escn_moe.DatasetSpecificMoEWrapper.dataset_name_to_exp">dataset_name_to_exp (core.models.uma.escn_moe.DatasetSpecificMoEWrapper attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/datasets/mt_concat_dataset/index.html#core.datasets.mt_concat_dataset.ConcatDataset.dataset_names">dataset_names (core.datasets.mt_concat_dataset.ConcatDataset attribute)</a>
 
       <ul>
@@ -4134,8 +4110,6 @@ document.write(`
         <li><a href="autoapi/core/models/uma/escn_moe/index.html#core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper.dataset_names">(core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper attribute)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/datasets/collaters/mt_collater/index.html#core.datasets.collaters.mt_collater.MTCollater.dataset_task_map">dataset_task_map (core.datasets.collaters.mt_collater.MTCollater attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.dataset_to_tasks">dataset_to_tasks (core.units.mlip_unit.predict.MLIPPredictUnit property)</a>
@@ -4143,7 +4117,7 @@ document.write(`
       <ul>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnitProtocol.dataset_to_tasks">(core.units.mlip_unit.predict.MLIPPredictUnitProtocol property)</a>
 </li>
-        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.dataset_to_tasks">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit property)</a>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.dataset_to_tasks">(core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay property)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/models/uma/nn/embedding_dev/index.html#core.models.uma.nn.embedding_dev.DatasetEmbedding">DatasetEmbedding (class in core.models.uma.nn.embedding_dev)</a>
@@ -4462,6 +4436,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/uma/nn/embedding_dev/index.html#core.models.uma.nn.embedding_dev.ChgSpinEmbedding.embedding_type">embedding_type (core.models.uma.nn.embedding_dev.ChgSpinEmbedding attribute)</a>
 </li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.end_temperature">end_temperature (data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
+</li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.AdsorbateSlabRelaxationResult.energy">energy (ocpapi.AdsorbateSlabRelaxationResult attribute)</a>
 
       <ul>
@@ -4510,6 +4486,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.enforce_max_neighbors_strictly">enforce_max_neighbors_strictly (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 </li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.ensemble">ensemble (data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
+</li>
       <li><a href="autoapi/core/common/gp_utils/index.html#core.common.gp_utils.ensure_div">ensure_div() (in module core.common.gp_utils)</a>
 </li>
       <li><a href="autoapi/core/modules/scaling/util/index.html#core.modules.scaling.util.ensure_fitted">ensure_fitted() (in module core.modules.scaling.util)</a>
@@ -4518,14 +4496,14 @@ document.write(`
 </li>
       <li><a href="autoapi/data/oc/scripts/precompute_sample_structures/index.html#data.oc.scripts.precompute_sample_structures.enumerate_surfaces_for_saving">enumerate_surfaces_for_saving() (in module data.oc.scripts.precompute_sample_structures)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.envelope">envelope (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 
       <ul>
         <li><a href="autoapi/core/models/uma/escn_md_block/index.html#core.models.uma.escn_md_block.Edgewise.envelope">(core.models.uma.escn_md_block.Edgewise attribute)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/models/escaip/utils/radius_graph/index.html#core.models.escaip.utils.radius_graph.envelope_fn">envelope_fn() (in module core.models.escaip.utils.radius_graph)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.AdsorbateSlabRelaxationsRequest.ephemeral">ephemeral (ocpapi.AdsorbateSlabRelaxationsRequest attribute)</a>
@@ -5387,7 +5365,11 @@ document.write(`
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.get_master_address_and_port">get_master_address_and_port() (core.launchers.ray_on_slurm_launch.SPMDWorker method)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.get_master_address_and_port">(core.units.mlip_unit.predict.MLIPWorker method)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/graph/radius_graph_pbc/index.html#core.graph.radius_graph_pbc.get_max_neighbors_mask">get_max_neighbors_mask() (in module core.graph.radius_graph_pbc)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/_single/phonon_runner/index.html#core.components.calculate._single.phonon_runner.get_mdr_phonon_data_list">get_mdr_phonon_data_list() (in module core.components.calculate._single.phonon_runner)</a>
@@ -5491,11 +5473,7 @@ document.write(`
       <li><a href="autoapi/core/components/calculate/recipes/utils/index.html#core.components.calculate.recipes.utils.get_property_from_atoms">get_property_from_atoms() (in module core.components.calculate.recipes.utils)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/_single/uma_speed_benchmark/index.html#core.components.benchmark._single.uma_speed_benchmark.get_qps">get_qps() (in module core.components.benchmark._single.uma_speed_benchmark)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_server_example/index.html#core.units.mlip_unit.inference.client_server_example.get_qps">(in module core.units.mlip_unit.inference.client_server_example)</a>
 </li>
-      </ul></li>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.get_random_sites_on_triangle">get_random_sites_on_triangle() (in module data.oc.core.adsorbate_slab_config)</a>
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.get_rank">get_rank() (in module core.common.distutils)</a>
@@ -5642,8 +5620,6 @@ document.write(`
 <h2 id="H">H</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.handler">handler() (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket method)</a>
-</li>
       <li><a href="autoapi/core/models/escaip/utils/radius_graph/index.html#core.models.escaip.utils.radius_graph.hard_rank">hard_rank() (in module core.models.escaip.utils.radius_graph)</a>
 </li>
       <li><a href="autoapi/data/oc/utils/index.html#data.oc.utils.DetectTrajAnomaly.has_surface_changed">has_surface_changed() (data.oc.utils.DetectTrajAnomaly method)</a>
@@ -5696,11 +5672,9 @@ document.write(`
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.GlobalConfigs.hidden_size">hidden_size (core.models.escaip.configs.GlobalConfigs attribute)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.host">host (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket attribute)</a>
+      <li><a href="autoapi/ocpapi/index.html#ocpapi.Client.host">host (ocpapi.Client property)</a>
 
       <ul>
-        <li><a href="autoapi/ocpapi/index.html#ocpapi.Client.host">(ocpapi.Client property)</a>
-</li>
         <li><a href="autoapi/ocpapi/client/index.html#ocpapi.client.Client.host">(ocpapi.client.Client property)</a>
 </li>
         <li><a href="autoapi/ocpapi/client/client/index.html#ocpapi.client.client.Client.host">(ocpapi.client.client.Client property)</a>
@@ -5750,6 +5724,12 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/data/omc/scripts/create_vasp_inputs/index.html#data.omc.scripts.create_vasp_inputs.INCAR_DIR">INCAR_DIR (in module data.omc.scripts.create_vasp_inputs)</a>
 </li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.incar_updates">incar_updates (data.omat.vasp.sets.OMat24AIMDSet property)</a>
+
+      <ul>
+        <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24RelaxSet.incar_updates">(data.omat.vasp.sets.OMat24RelaxSet property)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.index_drop_ddec_defective">index_drop_ddec_defective (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
 </li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.index_drop_ddec_pristine">index_drop_ddec_pristine (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
@@ -5980,6 +5960,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.is_master">is_master() (in module core.common.distutils)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.is_setup">is_setup (core.units.mlip_unit.predict.MLIPWorker attribute)</a>
+</li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.is_shutdown">is_shutdown (core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
 </li>
       <li><a href="autoapi/data/oc/core/slab/index.html#data.oc.core.slab.is_structure_invertible">is_structure_invertible() (in module data.oc.core.slab)</a>
@@ -6127,6 +6109,8 @@ document.write(`
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.MolecularGraphConfigs.knn_soft">knn_soft (core.models.escaip.configs.MolecularGraphConfigs attribute)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.MolecularGraphConfigs.knn_use_low_mem">knn_use_low_mem (core.models.escaip.configs.MolecularGraphConfigs attribute)</a>
+</li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.kpoints_updates">kpoints_updates (data.omat.vasp.sets.OMat24AIMDSet property)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -6551,10 +6535,6 @@ document.write(`
 </li>
         <li><a href="autoapi/core/scripts/uncompress/index.html#core.scripts.uncompress.main">(in module core.scripts.uncompress)</a>
 </li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_server_example/index.html#core.units.mlip_unit.inference.client_server_example.main">(in module core.units.mlip_unit.inference.client_server_example)</a>
-</li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.main">(in module core.units.mlip_unit.inference.inference_server_ray)</a>
-</li>
         <li><a href="autoapi/data/oc/experimental/merge_traj/index.html#data.oc.experimental.merge_traj.main">(in module data.oc.experimental.merge_traj)</a>
 </li>
         <li><a href="autoapi/data/oc/experimental/perturb_systems/index.html#data.oc.experimental.perturb_systems.main">(in module data.oc.experimental.perturb_systems)</a>
@@ -6613,11 +6593,17 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.master_address">master_address (core.launchers.ray_on_slurm_launch.SPMDWorker attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.master_address">(core.units.mlip_unit.predict.MLIPWorker attribute)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.master_pg_port">master_pg_port (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket attribute)</a>
-</li>
+      </ul></li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.master_port">master_port (core.launchers.ray_on_slurm_launch.SPMDWorker attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.master_port">(core.units.mlip_unit.predict.MLIPWorker attribute)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.mat_dict">mat_dict (in module core.scripts.diatomic_tests)</a>
 </li>
       <li><a href="autoapi/core/common/utils/index.html#core.common.utils.match_state_dict">match_state_dict() (in module core.common.utils)</a>
@@ -6668,12 +6654,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.max_saved_checkpoints">max_saved_checkpoints (core.components.train.train_runner.TrainCheckpointCallback attribute)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient.max_size">max_size (core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient attribute)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.max_size">(core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient attribute)</a>
-</li>
-      </ul></li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainEvalRunner.max_steps">max_steps (core.components.train.train_runner.TrainEvalRunner attribute)</a>
 </li>
       <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.max_steps_per_epoch">max_steps_per_epoch (core.components.evaluate.eval_runner.EvalRunner attribute)</a>
@@ -6802,15 +6782,13 @@ document.write(`
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint">MLIPInferenceCheckpoint (class in core.units.mlip_unit.api.inference)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket">MLIPInferenceServerWebSocket (class in core.units.mlip_unit.inference.inference_server_ray)</a>
-</li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit">MLIPPredictUnit (class in core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnitProtocol">MLIPPredictUnitProtocol (class in core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit">MLIPTrainEvalUnit (class in core.units.mlip_unit.mlip_unit)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker">MLIPWorker (class in core.units.mlip_unit.inference.inference_server_ray)</a>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker">MLIPWorker (class in core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.RegularizationConfigs.mlp_dropout">mlp_dropout (core.models.escaip.configs.RegularizationConfigs attribute)</a>
 </li>
@@ -7278,12 +7256,6 @@ document.write(`
 </li>
         <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#module-core.units.mlip_unit.api.inference">core.units.mlip_unit.api.inference</a>
 </li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_server_example/index.html#module-core.units.mlip_unit.inference.client_server_example">core.units.mlip_unit.inference.client_server_example</a>
-</li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#module-core.units.mlip_unit.inference.client_websocket">core.units.mlip_unit.inference.client_websocket</a>
-</li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#module-core.units.mlip_unit.inference.inference_server_ray">core.units.mlip_unit.inference.inference_server_ray</a>
-</li>
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#module-core.units.mlip_unit.mlip_unit">core.units.mlip_unit.mlip_unit</a>
 </li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#module-core.units.mlip_unit.predict">core.units.mlip_unit.predict</a>
@@ -7349,6 +7321,12 @@ document.write(`
         <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#module-data.odac.promising_mof.promising_mof_energies.energy">data.odac.promising_mof.promising_mof_energies.energy</a>
 </li>
         <li><a href="autoapi/data/odac/setup_vasp/index.html#module-data.odac.setup_vasp">data.odac.setup_vasp</a>
+</li>
+        <li><a href="autoapi/data/omat/index.html#module-data.omat">data.omat</a>
+</li>
+        <li><a href="autoapi/data/omat/vasp/index.html#module-data.omat.vasp">data.omat.vasp</a>
+</li>
+        <li><a href="autoapi/data/omat/vasp/sets/index.html#module-data.omat.vasp.sets">data.omat.vasp.sets</a>
 </li>
         <li><a href="autoapi/data/omc/index.html#module-data.omc">data.omc</a>
 </li>
@@ -7428,6 +7406,8 @@ document.write(`
       <li><a href="autoapi/core/models/uma/nn/mole/index.html#core.models.uma.nn.mole.MOLEGlobals">MOLEGlobals (class in core.models.uma.nn.mole)</a>
 </li>
       <li><a href="autoapi/core/models/uma/nn/mole_utils/index.html#core.models.uma.nn.mole_utils.MOLEInterface">MOLEInterface (class in core.models.uma.nn.mole_utils)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.move_tensors_to_cpu">move_tensors_to_cpu() (in module core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.move_to_device">move_to_device() (core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
 </li>
@@ -7603,10 +7583,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/recipes/utils/index.html#core.components.calculate.recipes.utils.normalize_property">normalize_property() (in module core.components.calculate.recipes.utils)</a>
 </li>
-      <li><a href="autoapi/core/modules/normalization/normalizer/index.html#core.modules.normalization.normalizer.Normalizer">Normalizer (class in core.modules.normalization.normalizer)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/core/modules/normalization/normalizer/index.html#core.modules.normalization.normalizer.Normalizer">Normalizer (class in core.modules.normalization.normalizer)</a>
+</li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.normalizer">normalizer (core.units.mlip_unit.mlip_unit.Task attribute)</a>
 </li>
       <li><a href="autoapi/ocpapi/client/models/index.html#ocpapi.client.models.Status.NOT_AVAILABLE">NOT_AVAILABLE (ocpapi.client.models.Status attribute)</a>
@@ -7730,8 +7710,6 @@ document.write(`
       <li><a href="autoapi/core/modules/exponential_moving_average/index.html#core.modules.exponential_moving_average.ExponentialMovingAverage.num_updates">num_updates (core.modules.exponential_moving_average.ExponentialMovingAverage attribute)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.num_worker_groups">num_worker_groups (core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
-</li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.num_workers">num_workers (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket attribute)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.AdsorbateSlabRelaxationResult.numbers">numbers (ocpapi.AdsorbateSlabRelaxationResult attribute)</a>
 
@@ -7867,6 +7845,12 @@ document.write(`
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.UMATask.OMAT">OMAT (core.units.mlip_unit.api.inference.UMATask attribute)</a>
 </li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet">OMat24AIMDSet (class in data.omat.vasp.sets)</a>
+</li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24RelaxSet">OMat24RelaxSet (class in data.omat.vasp.sets)</a>
+</li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24StaticSet">OMat24StaticSet (class in data.omat.vasp.sets)</a>
+</li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.UMATask.OMC">OMC (core.units.mlip_unit.api.inference.UMATask attribute)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/index.html#core.components.benchmark.OMCPolymorphReducer">OMCPolymorphReducer (class in core.components.benchmark)</a>
@@ -7915,14 +7899,14 @@ document.write(`
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_start">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.on_train_end">on_train_end() (core.components.train.train_runner.TrainCheckpointCallback method)</a>
 
       <ul>
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_train_end">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_train_epoch_start">on_train_epoch_start() (core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       <li><a href="autoapi/core/common/profiler_utils/index.html#core.common.profiler_utils.ProfilerCallback.on_train_start">on_train_start() (core.common.profiler_utils.ProfilerCallback method)</a>
@@ -8079,7 +8063,7 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/scripts/gif_maker_parallelized/index.html#core.scripts.gif_maker_parallelized.parallelize_generation">parallelize_generation() (in module core.scripts.gif_maker_parallelized)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit">ParallelMLIPPredictUnit (class in core.units.mlip_unit.predict)</a>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay">ParallelMLIPPredictUnitRay (class in core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/data/oc/utils/geometry/index.html#data.oc.utils.geometry.BoxGeometry.params">params (data.oc.utils.geometry.BoxGeometry attribute)</a>
 </li>
@@ -8254,8 +8238,6 @@ document.write(`
       <ul>
         <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.HeadInfo.port">(core.launchers.cluster.ray_cluster.HeadInfo attribute)</a>
 </li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.port">(core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket attribute)</a>
-</li>
       </ul></li>
       <li><a href="autoapi/core/components/calculate/_single/pairwise_ct_runner/index.html#core.components.calculate._single.pairwise_ct_runner.PairwiseCountRunner.portion">portion (core.components.calculate._single.pairwise_ct_runner.PairwiseCountRunner attribute)</a>
 
@@ -8295,23 +8277,21 @@ document.write(`
 </li>
       <li><a href="autoapi/data/oc/structure_generator/index.html#data.oc.structure_generator.precompute_slabs">precompute_slabs() (in module data.oc.structure_generator)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.predict">predict() (core.units.mlip_unit.inference.inference_server_ray.MLIPWorker method)</a>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.predict">predict() (core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
 
       <ul>
-        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.predict">(core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
-</li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnitProtocol.predict">(core.units.mlip_unit.predict.MLIPPredictUnitProtocol method)</a>
 </li>
-        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.predict">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit method)</a>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.predict">(core.units.mlip_unit.predict.MLIPWorker method)</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.predict">(core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay method)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.predict_step">predict_step() (core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.predict_unit">predict_unit (core.units.mlip_unit.inference.inference_server_ray.MLIPWorker attribute)</a>
-</li>
       <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FAIRChemCalculator.predictor">predictor (core.calculate.ase_calculator.FAIRChemCalculator attribute)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.predictor_config">predictor_config (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket attribute)</a>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.predictor_config">predictor_config (core.units.mlip_unit.predict.MLIPWorker attribute)</a>
 </li>
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.Metadata.preemption_checkpoint_dir">preemption_checkpoint_dir (core.launchers.api.Metadata attribute)</a>
 </li>
@@ -8326,6 +8306,8 @@ document.write(`
       <li><a href="autoapi/core/models/uma/common/so3/index.html#core.models.uma.common.so3.CoefficientMapping.prepare_coefficient_idx">prepare_coefficient_idx() (core.models.uma.common.so3.CoefficientMapping method)</a>
 </li>
       <li><a href="autoapi/core/scripts/download_data/index.html#core.scripts.download_data.preprocess_data">preprocess_data() (in module core.scripts.download_data)</a>
+</li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.pressure">pressure (data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name">pretrained_checkpoint_path_from_name() (in module core.calculate.pretrained_mlip)</a>
 </li>
@@ -8469,7 +8451,7 @@ document.write(`
 </li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.ray_entrypoint">ray_entrypoint() (in module core.launchers.ray_on_slurm_launch)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.ray_installed">ray_installed (in module core.units.mlip_unit.inference.inference_server_ray)</a>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ray_installed">ray_installed (in module core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.ray_on_slurm_launch">ray_on_slurm_launch() (in module core.launchers.ray_on_slurm_launch)</a>
 </li>
@@ -8657,10 +8639,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/_utils/index.html#core.datasets._utils.rename_data_object_keys">rename_data_object_keys() (in module core.datasets._utils)</a>
 </li>
-      <li><a href="autoapi/core/scripts/migrate_checkpoint/index.html#core.scripts.migrate_checkpoint.RenameUnpickler">RenameUnpickler (class in core.scripts.migrate_checkpoint)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/core/scripts/migrate_checkpoint/index.html#core.scripts.migrate_checkpoint.RenameUnpickler">RenameUnpickler (class in core.scripts.migrate_checkpoint)</a>
+</li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState.rendezvous_dir">rendezvous_dir (core.launchers.cluster.ray_cluster.RayClusterState property)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState.rendezvous_rootdir">rendezvous_rootdir (core.launchers.cluster.ray_cluster.RayClusterState attribute)</a>
@@ -8833,8 +8815,6 @@ document.write(`
         <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController.run">(core.launchers.ray_on_slurm_launch.SPMDController method)</a>
 </li>
         <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.run">(core.launchers.ray_on_slurm_launch.SPMDWorker method)</a>
-</li>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.run">(core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket method)</a>
 </li>
         <li><a href="autoapi/data/oc/structure_generator/index.html#data.oc.structure_generator.StructureGenerator.run">(data.oc.structure_generator.StructureGenerator method)</a>
 </li>
@@ -9193,8 +9173,6 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/uma/nn/activation/index.html#core.models.uma.nn.activation.SeparableS2Activation_M">SeparableS2Activation_M (class in core.models.uma.nn.activation)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.server_process">server_process (core.units.mlip_unit.predict.ParallelMLIPPredictUnit attribute)</a>
-</li>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor.ScaleFactor.set_">set_() (core.modules.scaling.scale_factor.ScaleFactor method)</a>
 
       <ul>
@@ -9296,11 +9274,7 @@ document.write(`
       <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler.shuffle">shuffle (core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler attribute)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.shutdown">shutdown() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.shutdown">(core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket method)</a>
 </li>
-      </ul></li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.sid">sid (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/utils/smearing/index.html#core.models.escaip.utils.smearing.SigmoidSmearing">SigmoidSmearing (class in core.models.escaip.utils.smearing)</a>
@@ -9621,8 +9595,6 @@ document.write(`
         <li><a href="autoapi/core/models/escaip/utils/nn_utils/index.html#core.models.escaip.utils.nn_utils.Activation.StarReLU">(core.models.escaip.utils.nn_utils.Activation attribute)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.start">start() (core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket method)</a>
-</li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.start_head">start_head() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.start_ip_pattern">start_ip_pattern (in module core.launchers.cluster.ray_cluster)</a>
@@ -9633,6 +9605,8 @@ document.write(`
         <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler.start_iter">(core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.start_temperature">start_temperature (data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
+</li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.start_workers">start_workers() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.state">state (core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
@@ -9693,6 +9667,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.AdsorptionRunner.steps">(core.components.calculate.AdsorptionRunner attribute)</a>
 </li>
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.NVEMDRunner.steps">(core.components.calculate.NVEMDRunner attribute)</a>
+</li>
+        <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.steps">(data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/models/escaip/utils/stochastic_depth/index.html#core.models.escaip.utils.stochastic_depth.stochastic_depth_2d">stochastic_depth_2d() (in module core.models.escaip.utils.stochastic_depth)</a>
@@ -9758,8 +9734,6 @@ document.write(`
       <li><a href="autoapi/core/models/uma/nn/activation/index.html#core.models.uma.nn.activation.SwiGLU">SwiGLU (class in core.models.uma.nn.activation)</a>
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.synchronize">synchronize() (in module core.common.distutils)</a>
-</li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient">SyncMLIPInferenceWebSocketClient (class in core.units.mlip_unit.inference.client_websocket)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.AdsorbateSlabRelaxationResult.system_id">system_id (ocpapi.AdsorbateSlabRelaxationResult attribute)</a>
 
@@ -9897,6 +9871,8 @@ document.write(`
 </li>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.there_is_overlap">there_is_overlap() (in module data.oc.core.adsorbate_slab_config)</a>
 </li>
+      <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.thermostat">thermostat (data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
+</li>
       <li><a href="autoapi/core/components/benchmark/_single/adsorbml_reducer/index.html#core.components.benchmark._single.adsorbml_reducer.AdsorbMLReducer.threshold">threshold (core.components.benchmark._single.adsorbml_reducer.AdsorbMLReducer attribute)</a>
 
       <ul>
@@ -9919,6 +9895,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/index.html#core.components.calculate._single.NVEMDRunner.time_step">(core.components.calculate._single.NVEMDRunner attribute)</a>
 </li>
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.NVEMDRunner.time_step">(core.components.calculate.NVEMDRunner attribute)</a>
+</li>
+        <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.time_step">(data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/components/benchmark/_single/uma_speed_benchmark/index.html#core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner.timeiters">timeiters (core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner attribute)</a>
@@ -10083,20 +10061,14 @@ document.write(`
 </li>
       <li><a href="autoapi/data/oc/core/multi_adsorbate_slab_config/index.html#data.oc.core.multi_adsorbate_slab_config.update_distance_map">update_distance_map() (in module data.oc.core.multi_adsorbate_slab_config)</a>
 </li>
-      <li><a href="autoapi/data/oc/databases/update/index.html#data.oc.databases.update.update_pkls">update_pkls() (in module data.oc.databases.update)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/data/oc/databases/update/index.html#data.oc.databases.update.update_pkls">update_pkls() (in module data.oc.databases.update)</a>
+</li>
       <li><a href="autoapi/core/datasets/mt_concat_dataset/index.html#core.datasets.mt_concat_dataset.ConcatDataset.updated_dataset_sizes">updated_dataset_sizes (core.datasets.mt_concat_dataset.ConcatDataset property)</a>
 </li>
       <li><a href="autoapi/data/oc/utils/geometry/index.html#data.oc.utils.geometry.PlaneBoundTriclinicGeometry.ur_corner">ur_corner (data.oc.utils.geometry.PlaneBoundTriclinicGeometry attribute)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient.uri">uri (core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient attribute)</a>
-
-      <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.uri">(core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient attribute)</a>
-</li>
-      </ul></li>
       <li><a href="autoapi/core/models/base/index.html#core.models.base.HeadInterface.use_amp">use_amp (core.models.base.HeadInterface property)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.GraphNeuralNetworksConfigs.use_angle_embedding">use_angle_embedding (core.models.escaip.configs.GraphNeuralNetworksConfigs attribute)</a>
@@ -10241,8 +10213,6 @@ document.write(`
         <li><a href="autoapi/core/common/logger/index.html#core.common.logger.WandBSingletonLogger.watch">(core.common.logger.WandBSingletonLogger method)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient.websocket">websocket (core.units.mlip_unit.inference.client_websocket.AsyncMLIPInferenceWebSocketClient attribute)</a>
-</li>
       <li><a href="autoapi/core/models/uma/nn/so3_layers/index.html#core.models.uma.nn.so3_layers.SO3_Linear.weight">weight (core.models.uma.nn.so3_layers.SO3_Linear attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.InferenceSettings.wigner_cuda">wigner_cuda (core.units.mlip_unit.api.inference.InferenceSettings attribute)</a>
@@ -10252,7 +10222,7 @@ document.write(`
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.worker_id">worker_id (core.launchers.ray_on_slurm_launch.SPMDWorker attribute)</a>
 
       <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPWorker.worker_id">(core.units.mlip_unit.inference.inference_server_ray.MLIPWorker attribute)</a>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.worker_id">(core.units.mlip_unit.predict.MLIPWorker attribute)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.worker_script">worker_script() (in module core.launchers.cluster.ray_cluster)</a>
@@ -10262,7 +10232,7 @@ document.write(`
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController.workers">workers (core.launchers.ray_on_slurm_launch.SPMDController attribute)</a>
 
       <ul>
-        <li><a href="autoapi/core/units/mlip_unit/inference/inference_server_ray/index.html#core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket.workers">(core.units.mlip_unit.inference.inference_server_ray.MLIPInferenceServerWebSocket attribute)</a>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay.workers">(core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay attribute)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/common/test_utils/index.html#core.common.test_utils.PGConfig.world_size">world_size (core.common.test_utils.PGConfig attribute)</a>
@@ -10271,6 +10241,8 @@ document.write(`
         <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController.world_size">(core.launchers.ray_on_slurm_launch.SPMDController attribute)</a>
 </li>
         <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.world_size">(core.launchers.ray_on_slurm_launch.SPMDWorker attribute)</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorker.world_size">(core.units.mlip_unit.predict.MLIPWorker attribute)</a>
 </li>
       </ul></li>
       <li><a href="autoapi/core/models/escaip/EScAIP/index.html#core.models.escaip.EScAIP.EScAIPGradientEnergyForceStressHead.wrap_property">wrap_property (core.models.escaip.EScAIP.EScAIPGradientEnergyForceStressHead attribute)</a>
@@ -10297,10 +10269,10 @@ document.write(`
         <li><a href="autoapi/core/scripts/make_submission_file/index.html#core.scripts.make_submission_file.write_is2re_relaxations">(in module core.scripts.make_submission_file)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.write_orca_inputs">write_orca_inputs() (in module data.omol.orca.calc)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/data/omol/orca/calc/index.html#data.omol.orca.calc.write_orca_inputs">write_orca_inputs() (in module data.omol.orca.calc)</a>
+</li>
       <li><a href="autoapi/core/scripts/make_challenge_submission_file/index.html#core.scripts.make_challenge_submission_file.write_predictions">write_predictions() (in module core.scripts.make_challenge_submission_file)</a>
 
       <ul>
@@ -10376,8 +10348,6 @@ document.write(`
       <li><a href="autoapi/data/oc/utils/vasp/index.html#data.oc.utils.vasp.write_vasp_input_files">write_vasp_input_files() (in module data.oc.utils.vasp)</a>
 </li>
       <li><a href="autoapi/core/common/logger/index.html#core.common.logger.TensorboardLogger.writer">writer (core.common.logger.TensorboardLogger attribute)</a>
-</li>
-      <li><a href="autoapi/core/units/mlip_unit/inference/client_websocket/index.html#core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient.ws">ws (core.units.mlip_unit.inference.client_websocket.SyncMLIPInferenceWebSocketClient attribute)</a>
 </li>
   </ul></td>
 </tr></table>
