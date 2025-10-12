@@ -1134,8 +1134,8 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         The tensors are split on the dimension along the node index using node_partition.
         """
         edge_index = graph_dict["edge_index"]
-        edge_distance = graph_dict["edge_distance"]
-        edge_distance_vec_full = graph_dict["edge_distance_vec"]
+        #edge_distance = graph_dict["edge_distance"]
+        #edge_distance_vec_full = graph_dict["edge_distance_vec"]
 
         node_partition = torch.tensor_split(
             torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
@@ -1397,7 +1397,9 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             charges_raw = self.q_output_lr(node_features)
 
         if self.lr_comp_size == 1:
+            #charges_raw = charges_raw.abs()
             results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
+            
             if self.equil_charges_tf:
                 hardness = self.hardness_output_lr(node_features)
                 electroneg = self.electroneg_output_lr(node_features)
@@ -1428,30 +1430,32 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         if self.lr_comp_size == 2:
 
             # sum across components
+            charges_raw = charges_raw.abs()  # make sure charges are positive
             results["charges"] = charges_raw.sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
             results["charges_raw"] = charges_raw  * self.lr_output_scaling_factor
             alpha = results["charges_raw"][:, 0]
             beta = results["charges_raw"][:, 1]
             spin = alpha - beta
             results["net_partial_spin"] = spin.view(-1, 1, 1)
-            
-            global_charges_batchwise = data["charge"]
-            global_spin_batchwise = data["spin"]
 
-            charges_renorm = batch_spin_charge_renormalization(
-                charges_raw=results["charges_raw"],
-                batch=data["batch"],
-                s_total=global_spin_batchwise,
-                q_total=global_charges_batchwise
-            ) # return [N_atoms, 2]
+            if self.normalize_charges_tf:            
+                global_charges_batchwise = data["charge"]
+                global_spin_batchwise = data["spin"]
 
-            
-            results["charges_raw"] = charges_renorm#.abs()
-            results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
-            results["net_partial_spin"] = (
-                charges_renorm[:, 0] - charges_renorm[:, 1]
-            ).view(-1, 1, 1) 
-            
+                charges_renorm = batch_spin_charge_renormalization(
+                    charges_raw=results["charges_raw"],
+                    batch=data["batch"],
+                    s_total=global_spin_batchwise,
+                    q_total=global_charges_batchwise
+                ) # return [N_atoms, 2]
+
+                
+                results["charges_raw"] = charges_renorm
+                results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
+                results["net_partial_spin"] = (
+                    charges_renorm[:, 0] - charges_renorm[:, 1]
+                ).view(-1, 1, 1) 
+                
         return results
 
 
@@ -1578,22 +1582,9 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
 
         if self.latent_charge_tf:
             lr_energy = self.get_lr_energies(emb, data)
-            #print("energy_part: ", energy_part, " E_lr: ", lr_energy["energy"].abs().sum())
-            #e_lr_diagnose = scatter_add(
-            #    lr_energy["energy"], 
-            #    data["batch"],
-            #    dim=0,
-            #)
             energy_part.index_add_(0, data["batch"], lr_energy["energy"])
         
         if self.heisenberg_tf:
-            # print energy spin sum along batch
-            e_diagnose = scatter_add(
-                lr_energy["energy_spin"], 
-                data["batch"], 
-                dim=0,
-            )
-            #print("e_sr: {} e_esp: {} e_spin: {}".format(energy_part, e_lr_diagnose, e_diagnose))
             energy_part.index_add_(0, data["batch"], lr_energy["energy_spin"])
 
         if gp_utils.initialized():
@@ -1773,6 +1764,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
             charges_raw = self.q_output_lr(node_features)
+            
             if self.equil_charges_tf:
                 hardness = self.hardness_output_lr(node_features)
                 electroneg = self.electroneg_output_lr(node_features)
@@ -1803,30 +1795,29 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
 
             # sum across components
             results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
-            results["charges_raw"] = charges_raw.abs()  * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw.abs() * self.lr_output_scaling_factor
             alpha = results["charges_raw"][:, 0]
             beta = results["charges_raw"][:, 1]
             spin = alpha - beta
             results["net_partial_spin"] = spin.view(-1, 1, 1)
+        
             
-            global_charges_batchwise = data["charge"]
-            global_spin_batchwise = data["spin"]
+            if self.normalize_charges_tf:
+                global_charges_batchwise = data["charge"]
+                global_spin_batchwise = data["spin"]
+                
+                charges_renorm = batch_spin_charge_renormalization(
+                    charges_raw=results["charges_raw"],
+                    batch=data["batch"],
+                    s_total=global_spin_batchwise,
+                    q_total=global_charges_batchwise
+                ) # return [N_atoms, 2]
 
-
-            charges_renorm = batch_spin_charge_renormalization(
-                charges_raw=results["charges_raw"],
-                batch=data["batch"],
-                s_total=global_spin_batchwise,
-                q_total=global_charges_batchwise
-            ) # return [N_atoms, 2]
-            
-            #print("charges_renorm: ", charges_renorm.shape)
-
-            results["charges_raw"] = charges_renorm.abs()
-            results["charges"] = charges_renorm.abs().sum(dim=1).view(-1, 1, 1) 
-            results["net_partial_spin"] = (
-                charges_renorm[:, 0] - charges_renorm[:, 1]
-            ).view(-1, 1, 1) 
+                results["charges_raw"] = charges_renorm
+                results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
+                results["net_partial_spin"] = (
+                    charges_renorm[:, 0] - charges_renorm[:, 1]
+                ).view(-1, 1, 1) 
             
         
         return results
