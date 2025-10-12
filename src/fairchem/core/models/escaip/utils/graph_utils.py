@@ -1,246 +1,28 @@
 from __future__ import annotations
 
 import math
-
+import numpy as np 
 import torch
 import torch.nn.functional as F
-from e3nn.o3._spherical_harmonics import _spherical_harmonics
 
-
-def get_node_direction_expansion_neighbor(
-    direction_vec: torch.Tensor, neighbor_mask: torch.Tensor, lmax: int
-):
-    """
-    Calculate Bond-Orientational Order (BOO) for each node in the graph.
-    Ref: Steinhardt, et al. "Bond-orientational order in liquids and glasses." Physical Review B 28.2 (1983): 784.
-    Input:
-        direction_vec: (num_nodes, num_neighbors, 3)
-        neighbor_mask: (num_nodes, num_neighbors)
-    Return:
-        node_boo: (num_nodes, num_neighbors, lmax + 1)
-    """
-    # Convert mask to float and expand dimensions
-    neighbor_mask = neighbor_mask.float().unsqueeze(-1)
-
-    # Compute spherical harmonics with proper normalization
-    edge_sh = _spherical_harmonics(
-        lmax=lmax,
-        x=direction_vec[:, :, 0],
-        y=direction_vec[:, :, 1],
-        z=direction_vec[:, :, 2],
-    )
-
-    # Normalize spherical harmonics by sqrt(2l+1) to improve numerical stability
-    sh_index = torch.arange(lmax + 1, device=edge_sh.device)
-    sh_index = torch.repeat_interleave(sh_index, 2 * sh_index + 1)
-    edge_sh = edge_sh / torch.clamp(torch.sqrt(2 * sh_index + 1), min=1e-6).unsqueeze(
-        0
-    ).unsqueeze(0)
-
-    # Compute masked spherical harmonics
-    masked_sh = edge_sh * neighbor_mask
-
-    # Compute mean over neighbors with proper normalization
-    neighbor_count = neighbor_mask.sum(dim=1)
-    neighbor_count = torch.clamp(neighbor_count, min=1)
-    node_boo = masked_sh.sum(dim=1) / neighbor_count
-
-    # Compute final BOO with proper normalization
-    node_boo_squared = node_boo**2
-    # node_boo = scatter(node_boo_squared, sh_index, dim=-1, reduce="sum").sqrt()
-    node_boo = compilable_scatter(
-        node_boo_squared, sh_index, dim_size=lmax + 1, dim=-1, reduce="sum"
-    )
-    node_boo = torch.clamp(node_boo, min=1e-6).sqrt()
-
-    return node_boo
-
-
-def map_sender_receiver_feature(sender_feature, receiver_feature, neighbor_list):
-    """
-    Map from node features to edge features.
-    sender_feature, receiver_feature: (num_nodes, h)
-    neighbor_list: (num_nodes, max_neighbors)
-    return: sender_features, receiver_features (num_nodes, max_neighbors, h)
-    """
-    # sender feature
-    sender_feature = sender_feature[neighbor_list.flatten()].view(
-        neighbor_list.shape[0], neighbor_list.shape[1], -1
-    )
-
-    # receiver features
-    receiver_feature = receiver_feature.unsqueeze(1).expand(
-        -1, neighbor_list.shape[1], -1
-    )
-
-    return (sender_feature, receiver_feature)
-
-
-def legendre_polynomials(x: torch.Tensor, lmax: int) -> torch.Tensor:
-    """
-    Compute Legendre polynomials P_0..P_{lmax} for each element in x,
-    using the standard recursion:
-      P_0(x) = 1
-      P_1(x) = x
-      (n+1)*P_{n+1}(x) = (2n+1)*x*P_n(x) - n*P_{n-1}(x)
-    x can have any shape; output will have an extra dimension (lmax+1).
-    """
-    # x shape could be (N, max_neighbors, max_neighbors) in your case
-    shape = x.shape  # e.g. (N, M, M)
-    P = x.new_zeros(*shape, lmax + 1)  # => (N, M, M, lmax+1)
-
-    # P_0
-    P[..., 0] = 1.0
-
-    if lmax >= 1:
-        # P_1
-        P[..., 1] = x
-
-        for n in range(1, lmax):
-            P[..., n + 1] = ((2 * n + 1) * x * P[..., n] - n * P[..., n - 1]) / (n + 1)
-
-    return P
-
-
-def get_compact_frequency_vectors(
-    edge_direction: torch.Tensor, lmax: int, repeating_dimensions: torch.Tensor | list
-):
-    """
-    Calculate a compact representation of frequency vectors.
-    Args:
-        edge_direction: (N, k, 3) normalized direction vectors
-        lmax: maximum l value for spherical harmonics
-        repeating_dimensions: (lmax+1,) tensor or list with repeat counts for each l value
-    Returns:
-        frequency_vectors: (N, k, sum_{l=0..lmax} rep_l * (2l+1))
-        flat tensor containing the spherical harmonics matched to repeating dimensions
-    """
-    # Convert to Python list if tensor to ensure it's treated as a compile-time constant
-    if isinstance(repeating_dimensions, torch.Tensor):
-        repeat_dims = repeating_dimensions.tolist()
-    else:
-        repeat_dims = repeating_dimensions
-
-    edge_direction = edge_direction.to(torch.float32)
-    # (edge_direction: N, k, 3)
-    harmonics = _spherical_harmonics(
-        lmax, edge_direction[..., 0], edge_direction[..., 1], edge_direction[..., 2]
-    )  # (N, k, (lmax + 1)**2)
-
-    # Create list to hold components
-    components = []
-    curr_idx = 0
-
-    # Process each l value based on repeating dimensions
-    for _l in range(lmax + 1):
-        # Get the (2l+1) components for this l value
-        sh_dim = 2 * _l + 1
-        curr_irrep = harmonics[:, :, curr_idx : curr_idx + sh_dim] / math.sqrt(sh_dim)
-
-        # Get repeat count - use Python list instead of tensor access
-        rep_count = repeat_dims[_l]
-
-        # Only add component if rep_count > 0
-        if rep_count > 0:
-            # Create a component that will match with the expanded q and k
-            # (N, k, 2l+1) -> (N, k, rep_count * (2l+1))
-            component = curr_irrep.unsqueeze(2).expand(-1, -1, rep_count, -1)
-            component = component.reshape(component.shape[0], component.shape[1], -1)
-
-            # Add component to list
-            components.append(component)
-
-        # Update index
-        curr_idx += sh_dim
-
-    # Concatenate components if we have any, otherwise return empty tensor
-    if components:
-        return torch.cat(components, dim=-1)
-    else:
-        # Return empty tensor with proper shape if no components
-        return torch.zeros(
-            (edge_direction.shape[0], edge_direction.shape[1], 0),
-            device=edge_direction.device,
-        )
-
-
-def get_attn_mask(
-    edge_direction: torch.Tensor,
-    neighbor_mask: torch.Tensor,
-    num_heads: int,
-    lmax: int,
-    use_angle_embedding: str,
-):
-    """
-    Args:
-        edge_direction: (num_nodes, max_neighbors, 3)
-        neighbor_mask: (num_nodes, max_neighbors)
-        num_heads: number of attention heads
-    """
-    # create a mask for empty neighbors
-    batch_size, max_neighbors = neighbor_mask.shape
-    attn_mask = torch.zeros(
-        batch_size, max_neighbors, max_neighbors, device=neighbor_mask.device
-    )
-    attn_mask = attn_mask.masked_fill(~neighbor_mask.unsqueeze(1), float("-inf"))
-
-    # repeat the mask for each head
-    attn_mask = (
-        attn_mask.unsqueeze(1)
-        .expand(batch_size, num_heads, max_neighbors, max_neighbors)
-        .reshape(batch_size * num_heads, max_neighbors, max_neighbors)
-    )
-
-    # get the angle embeddings
-    dot_product = torch.matmul(edge_direction, edge_direction.transpose(1, 2))
-    dot_product = dot_product.clamp(-1.0, 1.0)
-    if use_angle_embedding == "bias":
-        angle_embedding = legendre_polynomials(dot_product, lmax)
-    else:
-        angle_embedding = (
-            dot_product.unsqueeze(1)
-            .expand(-1, num_heads, -1, -1)
-            .reshape(batch_size * num_heads, max_neighbors, max_neighbors)
-        )
-    return attn_mask, angle_embedding
-
-
-def get_attn_mask_env(
-    src_mask: torch.Tensor,
-    num_heads: int,
-):
-    """
-    Args:
-        src_mask: (num_nodes, num_neighbors)
-        num_heads: number of attention heads
-    Output:
-        attn_mask: (num_nodes * num_heads, num_neighbors, num_neighbors)
-    """
-    batch_size, num_neighbors = src_mask.shape
-    # broadcast src_mask to attention mask shape
-    attn_mask = (
-        src_mask.unsqueeze(1)
-        .unsqueeze(2)  # (num_nodes, 1, 1, num_neighbors)
-        .expand(
-            -1, num_heads, num_neighbors, -1
-        )  # (num_nodes, num_heads, num_neighbors, num_neighbors)
-        .reshape(batch_size * num_heads, num_neighbors, num_neighbors)
-    )
-    return attn_mask
-
+from ..custom_types import GraphAttentionData
 
 def pad_batch(
     max_atoms,
     max_batch_size,
     atomic_numbers,
-    node_direction_expansion,
-    edge_distance_expansion,
+    charge,
+    spin,
     edge_direction,
-    neighbor_list,
-    neighbor_mask,
+    edge_distance,
+    neighbor_index,
     node_batch,
     num_graphs,
-    src_mask=None,
+    src_mask,
+    dst_mask,
+    src_index,
+    dst_index,
+    dist_pairwise,
 ):
     """
     Pad the batch to have the same number of nodes in total.
@@ -253,90 +35,76 @@ def pad_batch(
     TODO: look into a better way to handle this.
     """
     device = atomic_numbers.device
-    num_nodes, _ = neighbor_list.shape
+    _, num_nodes, _ = neighbor_index.shape
     pad_size = max_atoms - num_nodes
     assert (
         pad_size >= 0
     ), "Number of nodes exceeds the maximum number of nodes per batch"
+    assert (
+        max_batch_size >= num_graphs
+    ), "Number of graphs exceeds the maximum batch size"
 
     # pad the features
     atomic_numbers = F.pad(atomic_numbers, (0, pad_size), value=0)
-    node_direction_expansion = F.pad(
-        node_direction_expansion, (0, 0, 0, pad_size), value=0
-    )
-    edge_distance_expansion = F.pad(
-        edge_distance_expansion, (0, 0, 0, 0, 0, pad_size), value=0
-    )
     edge_direction = F.pad(edge_direction, (0, 0, 0, 0, 0, pad_size), value=0)
-    neighbor_list = F.pad(neighbor_list, (0, 0, 0, pad_size), value=-1)
-    neighbor_mask = F.pad(neighbor_mask, (0, 0, 0, pad_size), value=0)
-    node_batch = F.pad(node_batch, (0, pad_size), value=num_graphs)
-    if src_mask is not None:
-        src_mask = F.pad(src_mask, (0, 0, 0, pad_size), value=0)
-
-    # create the padding mask
-    node_padding_mask = torch.ones(max_atoms, dtype=torch.bool, device=device)
-    node_padding_mask[num_nodes:] = False
-
-    # TODO look into a better way to handle this
-    graph_padding_mask = torch.ones(max_batch_size, dtype=torch.bool, device=device)
-    graph_padding_mask[num_graphs:] = False
+    edge_distance = F.pad(edge_distance, (0, 0, 0, pad_size), value=0)
+    neighbor_index = F.pad(neighbor_index, (0, 0, 0, pad_size), value=-1) 
+    node_batch = F.pad(node_batch, (0, pad_size), value=-1)
+    src_mask = F.pad(src_mask, (0, 0, 0, pad_size), value=-torch.inf) # (num_nodes, num_nodes + pad_size)
+    dst_mask = F.pad(dst_mask, (0, 0, 0, pad_size), value=-torch.inf) # (num_nodes, num_nodes + pad_size)
+    src_index = F.pad(src_index, (0, 0, 0, pad_size), value=-1) # (num_edges,)
+    dst_index = F.pad(dst_index, (0, 0, 0, pad_size), value=-1) # (num_edges,)
+    dist_pairwise = F.pad(dist_pairwise, (0, pad_size, 0, pad_size), value=0)
+    if charge is not None:
+        charge = F.pad(charge, (0, max_batch_size - num_graphs), value=0)
+    else:
+        charge = torch.zeros(max_batch_size, dtype=torch.float, device=device)
+    if spin is not None:
+        spin = F.pad(spin, (0, max_batch_size - num_graphs), value=0)
+    else:
+        spin = torch.zeros(max_batch_size, dtype=torch.float, device=device)
 
     return (
         atomic_numbers,
-        node_direction_expansion,
-        edge_distance_expansion,
+        charge,
+        spin,
         edge_direction,
-        neighbor_list,
-        neighbor_mask,
+        edge_distance,
+        neighbor_index,
         src_mask,
+        dst_mask,
+        src_index,
+        dst_index,
+        dist_pairwise,
         node_batch,
-        node_padding_mask,
-        graph_padding_mask,
     )
 
 
-def unpad_results(results, node_padding_mask, graph_padding_mask):
+def unpad_result(results: dict, data: GraphAttentionData):
     """
     Unpad the results to remove the padding.
     """
     unpad_results = {}
     for key in results:
-        if results[key].shape[0] == node_padding_mask.shape[0]:
-            unpad_results[key] = results[key][node_padding_mask]
-        elif results[key].shape[0] == graph_padding_mask.shape[0]:
-            unpad_results[key] = results[key][graph_padding_mask]
+        if results[key].shape[0] == data.max_num_nodes:
+            # Node-level results
+            unpad_results[key] = results[key][: data.num_nodes]
+        elif results[key].shape[0] == data.max_batch_size:
+            # Graph-level results 
+            unpad_results[key] = results[key][: data.num_graphs]
         elif (
-            results[key].shape[0] == node_padding_mask.sum()
-            or results[key].shape[0] == graph_padding_mask.sum()
+            results[key].shape[0] == data.num_nodes
+            or results[key].shape[0] == data.num_graphs
         ):
+            # Results already unpadded
             unpad_results[key] = results[key]
         else:
-            raise ValueError("Unknown padding mask shape")
+            raise ValueError(
+                f"Unknown padding mask shape for key '{key}': "
+                f"result shape {results[key].shape}, "
+                f"data shape {data.num_nodes}, {data.num_graphs}"
+            )
     return unpad_results
-
-
-def patch_singleton_atom(edge_direction, neighbor_list, neighbor_mask):
-    """
-    Patch the singleton atoms in the neighbor_list and neighbor_mask.
-    Add a self-loop to the singleton atom
-    """
-
-    # Find the singleton atoms
-    idx = torch.where(neighbor_mask.sum(dim=-1) == 0)[0]
-
-    # patch edge_direction to unit vector
-    edge_direction[idx, 0] = torch.tensor(
-        [1.0, 0.0, 0.0], device=edge_direction.device, dtype=edge_direction.dtype
-    )
-
-    # patch neighbor_list to itself
-    neighbor_list[idx, 0] = idx
-
-    # patch neighbor_mask to itself
-    neighbor_mask[idx, 0] = 1
-
-    return edge_direction, neighbor_list, neighbor_mask
 
 
 def compilable_scatter(
@@ -414,8 +182,151 @@ def get_displacement_and_cell(data, regress_stress, regress_forces, direct_force
     return displacement, orig_cell
 
 
-# TODO bring in LR machinery in batched format
-# heisenberg_potential_full_from_edge_inds
-# potential_full_from_edge_inds
-# get_potential
-# one_hot_encode --> can now do away w/ bc of embedding in uma (i think)
+def coulomb_energy_from_src_index(
+    q: torch.Tensor,  # shape: (N,)
+    src_index: torch.Tensor,  # shape: (2, N, max_neighbors)
+    dist_pairwise: torch.Tensor,  # shape: (N, N)
+    eps: float = 1e-8,
+    sigma: float = 1.0,
+    epsilon: float = 1e-6,
+    twopi: float = 2.0 * np.pi,
+    use_convergence: bool = False,
+) -> torch.Tensor:
+    """
+    Compute Coulomb energy efficiently using src_index and dist_pairwise,
+    with optional convergence function for smooth SR/LR transition.
+    Args:
+        q: charges, shape (N,)
+        src_index: (2, N, max_neighbors), src_index[0] is source, src_index[1] is neighbor index
+        dist_pairwise: (N, N) pairwise distance matrix
+        eps: small value to avoid division by zero
+        sigma: width parameter for the convergence function
+        epsilon: shift for denominator to avoid singularity
+        twopi: scaling factor for correct Coulomb prefactor
+        use_convergence: whether to apply the convergence function (default: True)
+    Returns:
+        scalar Coulomb energy
+    """
+    # Get source and neighbor indices
+    src, nbr = src_index  # (N, max_neighbors)
+    # Get pairwise distances for each edge
+    rij = dist_pairwise[src, nbr]  # (N, max_neighbors)
+    # Get charges for each pair
+    qi = q[src]  # (N, max_neighbors)
+    qj = q[nbr]  # (N, max_neighbors)
+    # remove last axis of qi and qj if needed
+    if qi.dim() == 3:
+        qi = qi.squeeze(-1)
+    if qj.dim() == 3:
+        qj = qj.squeeze(-1)
+
+    # Mask out self-interactions (where src == nbr or rij == 0)
+    mask = (src != nbr) & (rij > eps)
+    
+    # Convergence function (error function, as in Ewald)
+    if use_convergence:
+        convergence_func = torch.special.erf(rij / (sigma * (2.0 ** 0.5)))
+    else:
+        convergence_func = torch.ones_like(rij)
+
+    # Compute pairwise Coulomb energy with epsilon shift and correct prefactor
+    e_ij = torch.zeros_like(rij)
+    # (qi * qj) / (rij + epsilon) / twopi / 2.0 * convergence_func
+    e_ij[mask] = (
+        qi[mask] * qj[mask] / (rij[mask] + epsilon) / twopi / 2.0 * convergence_func[mask]
+    )
+
+    # To avoid double-counting, sum only upper triangle or divide by 2
+    energy = e_ij.sum(axis=1) * 90.0474
+    return energy
+
+
+def heisenberg_energy_from_src_index(
+    q: torch.Tensor,  # shape: (N, 2) 
+    src_index: torch.Tensor,  # shape: (2, N, max_neighbors)
+    j_coupling_nn: torch.Tensor,  # shape: (N, )
+    dist_pairwise: torch.Tensor,  # shape: (N, N)
+    eps: float = 1e-8, 
+) -> torch.Tensor:
+    """
+    Compute Heisenberg exchange energy efficiently using src_index.
+    Args:
+        s: spins, shape (N, 1) for Ising or (N, 3) for Heisenberg model
+        src_index: (2, N, max_neighbors), src_index[0] is source, src_index[1] is neighbor index
+        j_coupling_tensor: (N, ) coupling constant for each atom
+    """
+    # Get source and neighbor indices
+    src, nbr = src_index  # (N, max_neighbors)
+    # Get pairwise distances for each edge
+    rij = dist_pairwise[src, nbr]  # (N, max_neighbors)
+    
+    # for batching NN on all rij pairs
+    dims_rij = rij.shape
+    rij_flatten = rij.view(-1).unsqueeze(1)
+    j_coupling_vals = j_coupling_nn(rij_flatten)
+    j_coupling_vals = j_coupling_vals.reshape(dims_rij)
+    
+    # Get charges for each pair
+    qi = q[src]  # (N, max_neighbors, 2)
+    qj = q[nbr]  # (N, max_neighbors, 2)
+    qi_alpha = qi[:, :, 0]  # (N, max_neighbors)
+    qi_beta = qi[:, :, 1]   # (N, max_neighbors)
+    qj_alpha = qj[:, :, 0]  # (N, max_neighbors)
+    qj_beta = qj[:, :, 1]   # (N, max_neighbors)
+    # Mask out self-interactions (where src == nbr or rij == 0)
+    mask = (src != nbr) & (rij > eps)
+
+    # compute pairwise Heisenberg energy
+    e_ij = torch.zeros_like(rij)
+
+    # J_ij * (S_i . S_j = S_i^alpha * S_j^beta + S_j^alpha * S_i^beta)
+    # e_ij[mask] = j_coupling * (qi_alpha[mask] * qj_beta[mask])
+    e_ij[mask] = (qi_alpha[mask] * qj_beta[mask] + qj_alpha[mask] * qi_beta[mask]) * j_coupling_vals[mask]
+    energy = e_ij.sum(axis=1)
+    #print("Heisenberg energy shape: ", energy.shape)
+
+    return energy
+
+
+def charge_spin_renormalization(): 
+    """
+    Placeholder for future charge and spin renormalization functions.
+    """
+    pass
+
+def charge_renormalization(q: torch.Tensor, emb: dict[str, torch.Tensor], eps: float = 1e-8,) -> torch.Tensor: 
+    """
+    Placeholder for future charge renormalization functions.
+    """
+    # Extract necessary data from emb
+    num_nodes = emb["data"].num_nodes
+    num_graphs = emb["data"].num_graphs
+    node_batch = emb["data"].node_batch
+    
+    # Rescale charges to match target total charge per graph
+    flattened_charges_raw = q.squeeze(-1) 
+    valid_charges = flattened_charges_raw[:num_nodes]
+    valid_node_batch = node_batch[:num_nodes]
+    target_charges = emb["data"].charge[:num_graphs]
+
+    global_charges = compilable_scatter(
+        valid_charges, 
+        index=valid_node_batch,
+        dim_size=emb["data"].num_graphs,
+        dim=0,
+        reduce="sum"
+    )
+    # Ensure proper device placement and indexing
+    target_charges = emb["data"].charge[:num_graphs]
+
+    # Add small epsilon only where needed to avoid division by zero
+    rescale_factor = torch.where(
+        torch.abs(global_charges) < eps,
+        torch.ones_like(global_charges),
+        target_charges / global_charges
+    )
+
+    flattened_charges_raw[:num_nodes] *= rescale_factor[valid_node_batch]
+
+    return flattened_charges_raw
+

@@ -108,6 +108,7 @@ def potential_full_from_edge_inds(
     results["potential"] = scatter(
         pairwise_potential, i, dim=0, dim_size=q.size(0), reduce="sum"
     ) * norm_factor
+    
     return results
 
 
@@ -305,10 +306,18 @@ def heisenberg_potential_full_from_edge_inds(
     edge_dist.requires_grad_(True)
 
     coupling = nn(edge_dist)
+    q_source_alpha = q[i][:, 0]
+    q_source_beta  = q[i][:, 1]
+    q_target_alpha = q[j][:, 0]
+    q_target_beta  = q[j][:, 1]
 
-    q_source = q[i]
-    q_target = q[j]
-    pairwise_potential = q_source * q_target * coupling
+    #q_source = q[i]
+    #q_target = q[j]
+    pairwise_potential = (
+        q_source_beta * q_target_alpha + q_source_alpha * q_target_beta
+    ) * coupling
+    
+    #pairwise_potential = q_source * q_target * coupling
 
     results = scatter(
         pairwise_potential, i, dim=0, dim_size=q.size(0), reduce="sum"
@@ -316,8 +325,6 @@ def heisenberg_potential_full_from_edge_inds(
 
     return results
 
-# TODO
-#def heisenberg_potential_ewald
 
 def batch_spin_charge_renormalization(
     charges_raw: torch.Tensor, # [n_atoms, 2],

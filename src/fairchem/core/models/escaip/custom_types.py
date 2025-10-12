@@ -10,78 +10,56 @@ class GraphAttentionData:
     """
     Custom dataclass for storing graph data for Graph Attention Networks
     atomic_numbers: (N)
+    charge: (N)
+    spin: (N)
     edge_distance_expansion: (N, max_nei, edge_distance_expansion_size)
     edge_direction: (N, max_nei, 3)
     node_direction_expansion: (N, node_direction_expansion_size)
-    attn_mask: (N * num_head, max_nei, max_nei) Attention mask with angle embeddings
-    angle_embedding: (N * num_head, max_nei, max_nei) Angle embeddings (cosine)
-    frequency_vectors: (N, max_nei, head_dim, 2l+1) Frequency embeddings
-    neighbor_list: (N, max_nei)
-    neighbor_mask: (N, max_nei)
+    # check sizes below 
+    src_index: (E)
+    dst_index: (E)
+    frequency_vectors: (N, freq_vec_size)
+    src_neighbor_attn_mask: (N, max_nei)
+    dst_neighbor_attn_mask: (N, max_nei)
+    node_base_attn_mask: (N, N)
+    node_sincx_matrix: (N, N)
+    node_valid_mask: (N)
+    global_node_mask: (num_global_tokens, N)
+    node_global_mask: (N, num_global_tokens)
+    neighbor_index: (2, total_num_edges)
     node_batch: (N)
-    node_padding_mask: (N)
-    graph_padding_mask: (num_graphs)
+    max_batch_size: int
+    num_graphs: int
+    max_num_nodes: int
+    num_nodes: int  (N)
+    # SV 
+    pairwise_distances: (E)
     """
 
     atomic_numbers: torch.Tensor
-    edge_distance_expansion: torch.Tensor
-    edge_direction: torch.Tensor
-    node_direction_expansion: torch.Tensor
-    attn_mask: torch.Tensor
-    angle_embedding: torch.Tensor | None
-    frequency_vectors: torch.Tensor | None
-    neighbor_list: torch.Tensor
-    neighbor_mask: torch.Tensor
-    node_batch: torch.Tensor
-    node_padding_mask: torch.Tensor
-    graph_padding_mask: torch.Tensor
-
-@dataclasses.dataclass
-class GeneralGraphAttentionData:
-    """
-    Custom dataclass for storing graph data for Graph Attention Networks
-    atomic_numbers: (N)
-    edge_distance_expansion: (N, max_nei, edge_distance_expansion_size)
-    edge_direction: (N, max_nei, 3)
-    node_direction_expansion: (N, node_direction_expansion_size + len(allowed_charges) + len(allowed_spins))
-    attn_mask: (N * num_head, max_nei, max_nei) Attention mask with angle embeddings
-    angle_embedding: (N * num_head, max_nei, max_nei) Angle embeddings (cosine)
-    neighbor_list: (N, max_nei)
-    neighbor_mask: (N, max_nei)
-    node_batch: (N)
-    node_padding_mask: (N)
-    graph_padding_mask: (num_graphs)
-    spin: (num_graphs)
-    charge: (num_graphs)
-    partial_charge: (N)
-    partial_spin: (N)
-    pos: (N, 3)
-    #batch_ind: (N)
-    edge_index_lr: (E, 2) Edge index for long range interactions
-    dipole: (Optional[torch.Tensor]) (num_graphs, 3) Dipole moment for each graph, none if not used
-    """
-
-    atomic_numbers: torch.Tensor
-    edge_distance_expansion: torch.Tensor
-    edge_direction: torch.Tensor
-    node_direction_expansion: torch.Tensor
-    attn_mask: torch.Tensor
-    angle_embedding: torch.Tensor
-    neighbor_list: torch.Tensor
-    neighbor_mask: torch.Tensor
-    node_batch: torch.Tensor
-    node_padding_mask: torch.Tensor
-    graph_padding_mask: torch.Tensor 
-    # SV - lr 
-    spin: torch.Tensor
     charge: torch.Tensor
-    pos: torch.Tensor
-    # batch_ind: torch.Tensor
-    edge_index_lr: torch.Tensor
-    partial_charge: torch.Tensor = None
-    partial_spin: torch.Tensor = None
-    dipole: Optional[torch.Tensor] = None
-
+    spin: torch.Tensor
+    edge_direction: torch.Tensor
+    edge_distance_expansion: torch.Tensor
+    node_direction_expansion: torch.Tensor
+    edge_direction_expansion: torch.Tensor
+    src_neighbor_attn_mask: torch.Tensor
+    dst_neighbor_attn_mask: torch.Tensor
+    src_index: torch.Tensor
+    dst_index: torch.Tensor
+    frequency_vectors: torch.Tensor
+    node_base_attn_mask: torch.Tensor
+    node_sincx_matrix: torch.Tensor
+    node_valid_mask: torch.Tensor
+    global_node_mask: torch.Tensor
+    node_global_mask: torch.Tensor
+    neighbor_index: torch.Tensor
+    node_batch: torch.Tensor
+    max_batch_size: int
+    num_graphs: int
+    max_num_nodes: int
+    num_nodes: int
+    pairwise_distances: Optional[torch.Tensor] = None
 
 def map_graph_attention_data_to_device(
     data: GraphAttentionData, device: torch.device | str

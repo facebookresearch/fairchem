@@ -6,25 +6,27 @@ import torch
 import torch.nn as nn
 
 if TYPE_CHECKING:
-    from fairchem.core.models.escaip.configs import (
+    from ..configs import (
         GlobalConfigs,
         GraphNeuralNetworksConfigs,
         MolecularGraphConfigs,
         RegularizationConfigs,
     )
-    from fairchem.core.models.escaip.custom_types import GraphAttentionData
-from fairchem.core.models.escaip.modules.base_block import BaseGraphNeuralNetworkLayer
-from fairchem.core.models.escaip.utils.nn_utils import (
+    from ..custom_types import GraphAttentionData
+
+from ..utils.nn_utils import (
     Activation,
     NormalizationType,
-    get_feedforward,
+    get_linear,
     get_normalization_layer,
 )
+
+from fairchem.core.models.uma.nn.embedding_dev import ChgSpinEmbedding
 
 
 class InputBlock(nn.Module):
     """
-    Wrapper of InputLayer for adding normalization
+    Featurize the input data into edge and global embeddings.
     """
 
     def __init__(
@@ -36,69 +38,109 @@ class InputBlock(nn.Module):
     ):
         super().__init__()
 
-        self.backbone_dtype = (
-            torch.float16 if global_cfg.use_fp16_backbone else torch.float32
+        # Atomic number embeddings
+        # ref: escn https://github.com/Open-Catalyst-Project/ocp/blob/main/ocpmodels/models/escn/escn.py#L823
+        self.atomic_embedding = nn.Embedding(
+            molecular_graph_cfg.max_num_elements, global_cfg.hidden_size
         )
+        nn.init.uniform_(self.atomic_embedding.weight.data, -0.001, 0.001)
 
-        self.input_layer = InputLayer(global_cfg, molecular_graph_cfg, gnn_cfg, reg_cfg)
-
-        self.norm_node = get_normalization_layer(
-            NormalizationType(reg_cfg.normalization)
-        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
-        self.norm_edge = get_normalization_layer(
-            NormalizationType(reg_cfg.normalization)
-        )(global_cfg.hidden_size, dtype=self.backbone_dtype)
-
-    def forward(self, inputs: GraphAttentionData):
-        node_features, edge_features = self.input_layer(inputs)
-        node_features, edge_features = (
-            self.norm_node(node_features),
-            self.norm_edge(edge_features),
-        )
-        return node_features, edge_features
-
-
-class InputLayer(BaseGraphNeuralNetworkLayer):
-    def __init__(
-        self,
-        global_cfg: GlobalConfigs,
-        molecular_graph_cfg: MolecularGraphConfigs,
-        gnn_cfg: GraphNeuralNetworksConfigs,
-        reg_cfg: RegularizationConfigs,
-    ):
-        super().__init__(global_cfg, molecular_graph_cfg, gnn_cfg, reg_cfg)
-
-        self.backbone_dtype = (
-            torch.float16 if global_cfg.use_fp16_backbone else torch.float32
-        )
-
-        # Edge linear layer
-        self.edge_attr_linear = self.get_edge_linear(gnn_cfg, global_cfg, reg_cfg)
-        self.edge_attr_norm = get_normalization_layer(
-            NormalizationType(reg_cfg.normalization)
-        )(global_cfg.hidden_size)
-
-        # ffn for edge features
-        self.edge_ffn = get_feedforward(
-            hidden_dim=global_cfg.hidden_size,
+        # Node direction embedding
+        self.node_direction_embedding = get_linear(
+            in_features=gnn_cfg.node_direction_expansion_size,
+            out_features=global_cfg.hidden_size,
             activation=Activation(global_cfg.activation),
-            hidden_layer_multiplier=1,
-            dropout=reg_cfg.edge_ffn_dropout,
             bias=True,
-        ).to(self.backbone_dtype)
+        )
+        self.node_linear = get_linear(
+            in_features=global_cfg.hidden_size * 2,
+            out_features=global_cfg.hidden_size,
+            activation=Activation(global_cfg.activation),
+            bias=True,
+        )
+        self.node_norm = get_normalization_layer(
+            NormalizationType(reg_cfg.normalization)
+        )(global_cfg.hidden_size * 2)
 
-    def forward(self, inputs: GraphAttentionData):
-        # Get edge features
-        edge_features = self.get_edge_features(inputs)
+        # Edge attribute linear
+        self.edge_attr_linear = get_linear(
+            in_features=gnn_cfg.edge_distance_expansion_size
+            + (gnn_cfg.edge_direction_expansion_size) ** 2,
+            out_features=global_cfg.hidden_size,
+            activation=Activation(global_cfg.activation),
+            bias=True,
+        )
+        self.edge_feature_linear = get_linear(
+            in_features=global_cfg.hidden_size * 2,
+            out_features=global_cfg.hidden_size,
+            activation=Activation(global_cfg.activation),
+            bias=True,
+        )
+        
+        # charge / spin embedding
+        self.charge_embedding = ChgSpinEmbedding(
+            "rand_emb",
+            "charge",
+            global_cfg.hidden_size,
+            grad=True,
+        )
+        self.spin_embedding = ChgSpinEmbedding(
+            "rand_emb",
+            "spin",
+            global_cfg.hidden_size,
+            grad=True,
+        )
+        self.charge_spin_linear = get_linear(
+            in_features=global_cfg.hidden_size * 2,
+            out_features=global_cfg.hidden_size,
+            activation=Activation(global_cfg.activation),
+            bias=True,
+        )
 
-        # Edge processing
-        edge_hidden = self.edge_attr_linear(edge_features)
-        edge_hidden = self.edge_attr_norm(edge_hidden)
-        edge_hidden = edge_hidden.to(self.backbone_dtype)
-        edge_output = edge_hidden + self.edge_ffn(edge_hidden)
+        self.use_global_path = global_cfg.use_global_path
+        if self.use_global_path:
+            self.global_token_weight = nn.Parameter(
+                torch.randn(gnn_cfg.num_global_tokens, global_cfg.hidden_size) * 0.02,
+                requires_grad=True,
+            )
 
-        # Aggregation
-        node_output = self.aggregate(edge_output, inputs.neighbor_mask)
+    def forward(self, data: GraphAttentionData):
+        # neighbor embeddings
+        atomic_embedding = self.atomic_embedding(data.atomic_numbers)
+        node_direction_embedding = self.node_direction_embedding(
+            data.node_direction_expansion
+        )
+        node_embeddings = torch.cat(
+            [atomic_embedding, node_direction_embedding], dim=-1
+        )
+        node_embeddings = self.node_linear(self.node_norm(node_embeddings))
+        # node_embeddings: (num_nodes, hidden_dim)
 
-        # Update inputs
-        return node_output, edge_output
+        # charge / spin embedding
+        charge_embedding = self.charge_embedding(data.charge)
+        spin_embedding = self.spin_embedding(data.spin)
+        charge_spin_embeddings = self.charge_spin_linear(
+            torch.cat([charge_embedding, spin_embedding], dim=-1)
+        )
+        # charge_spin_embeddings: (num_graphs, hidden_dim)
+        node_embeddings = node_embeddings + charge_spin_embeddings[data.node_batch]
+
+        # neighbor embedding
+        edge_attr = self.edge_attr_linear(
+            torch.cat(
+                [data.edge_distance_expansion, data.edge_direction_expansion], dim=-1
+            )
+        )
+        neighbor_embeddings = self.edge_feature_linear(
+            torch.cat([node_embeddings[data.neighbor_index[0]], edge_attr], dim=-1)
+        )
+
+        # global embeddings
+        if self.use_global_path:
+            global_embeddings = charge_spin_embeddings.unsqueeze(
+                1
+            ) + self.global_token_weight.unsqueeze(0)
+        else:
+            global_embeddings = torch.zeros_like(node_embeddings[0, 0])
+
+        return neighbor_embeddings, global_embeddings
