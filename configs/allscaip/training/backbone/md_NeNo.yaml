@@ -1,0 +1,43 @@
+model: fairchem.core.models.allscaip.AllScAIP.AllScAIPBackbone
+
+# Global Configs
+num_layers: 10
+hidden_size: 640
+direct_forces: ${direct_forces}
+regress_forces: True
+regress_stress: ${regress_stress}
+use_compile: ${use_compile}
+use_padding: ${direct_forces}
+dataset_list: ${dataset_list}
+use_global_path: False
+use_node_path: True
+use_freq_mask: False
+use_sincx_mask: False
+use_residual_scale: False
+
+# Molecular Graph Configs
+max_num_elements: 110
+max_batch_size: 96 # this is set to be the max number of batch that could be sampled by the sampler
+max_atoms: ${max_atoms}
+max_radius: ${cutoff_radius}
+use_pbc: ${use_pbc}
+knn_k: ${max_neighbors}
+knn_soft: true
+knn_sigmoid_scale: 0.2
+knn_lse_scale: 0.1
+knn_use_low_mem: true
+knn_pad_size: ${max_neighbors_pad_size}
+
+
+# Graph Neural Networks Configs
+atten_name: memory_efficient
+atten_num_heads: 10
+
+
+# Regularization Configs
+# atten_dropout: 0.1
+# mlp_dropout: 0.05
+# node_ffn_dropout: 0.05
+# edge_ffn_dropout: 0.05
+# scalar_output_dropout: 0.05
+# vector_output_dropout: 0.05

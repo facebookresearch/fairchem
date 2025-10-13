@@ -1,0 +1,70 @@
+defaults:
+  - cluster: v100
+  - checkpoint: omol_all_md_NeNo
+  - element_refs: uma_v1_hof_lin_refs
+  - _self_
+
+# benchmark_name: omol_s2ef_val
+
+job:
+  run_name: ${checkpoint.model_name}_omol_s2ef_val
+  run_dir: ${cluster.run_dir}
+  device_type: ${cluster.device}
+  debug: ${cluster.debug}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 32
+    slurm:
+      partition: ${cluster.partition}
+      mem_gb: ${cluster.mem_gb}
+      timeout_hr: 72
+      additional_parameters: ${cluster.additional_parameters}
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: ericqu
+    project: omol-benchmarks
+    group: ${checkpoint.model_name}
+
+max_atoms: 750
+
+# dataset to evaluate
+eval_dataset:
+  _target_: fairchem.experimental.ericqu.src.utils.predict_runner.IndexedDataset
+  dataset:
+    _target_: fairchem.core.datasets.ase_datasets.AseDBDataset
+    config:
+      src: ${cluster.omol_s2ef_data_dir}/val
+      a2g_args:
+        task_name: omol
+        r_edges: False
+        r_data_keys: ["spin", "charge"]
+
+# dataloader builder (follows omol_conserving style)
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${eval_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.experimental.ericqu.src.utils.predict_runner.FixedDatasetCollater
+    dataset_name: omol
+    otf_graph: True
+
+runner:
+  _target_: fairchem.experimental.ericqu.src.utils.predict_runner.PredictRunner
+  dataloader: ${eval_dataloader}
+  predict_unit:
+    _target_: fairchem.core.units.mlip_unit.predict.MLIPPredictUnit
+    inference_model_path: ${checkpoint.ckpt_path}
+    device: ${job.device_type}
+    atom_refs: ${element_refs}
+  callbacks:
+    - _target_: torchtnt.framework.callbacks.TQDMProgressBar
+  results_filename: ${job.run_name}_predictions.npz

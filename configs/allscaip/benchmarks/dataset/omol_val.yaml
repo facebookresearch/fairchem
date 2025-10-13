@@ -1,0 +1,18 @@
+omol_data_dir: /checkpoint/ericqu/omol
+
+omol:
+  splits:
+    val:
+      src: ${dataset.omol_data_dir}/val
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_data_keys: ['spin', 'charge']
+  key_mapping:
+    energy: omol_energy
+    forces: forces
+  transforms:
+    common_transform:
+      dataset_name: omol
