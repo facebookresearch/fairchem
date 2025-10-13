@@ -345,7 +345,6 @@ def batch_spin_charge_renormalization(
         charges_renormalized: renormalized charges of shape (n_atoms, 2)
     """
     B, N = charges_raw.shape
-
     device = charges_raw.device
     num_batches = q_total.shape[0]    
 

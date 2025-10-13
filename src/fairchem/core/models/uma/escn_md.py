@@ -1430,7 +1430,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         if self.lr_comp_size == 2:
 
             # sum across components
-            charges_raw = charges_raw.abs()  # make sure charges are positive
+            charges_raw = charges_raw
             results["charges"] = charges_raw.sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
             results["charges_raw"] = charges_raw  * self.lr_output_scaling_factor
             alpha = results["charges_raw"][:, 0]
@@ -1794,8 +1794,8 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         if self.lr_comp_size == 2:
 
             # sum across components
-            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
-            results["charges_raw"] = charges_raw.abs() * self.lr_output_scaling_factor
+            results["charges"] = charges_raw.sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw * self.lr_output_scaling_factor
             alpha = results["charges_raw"][:, 0]
             beta = results["charges_raw"][:, 1]
             spin = alpha - beta
@@ -2044,8 +2044,8 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         if self.lr_comp_size == 2:
 
             # sum across components
-            results["charges"] = charges_raw.abs().sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
-            results["charges_raw"] = charges_raw.abs()  * self.lr_output_scaling_factor
+            results["charges"] = charges_raw.sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw  * self.lr_output_scaling_factor
             alpha = results["charges_raw"][:, 0]
             beta = results["charges_raw"][:, 1]
             spin = alpha - beta
@@ -2064,8 +2064,8 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
             
             #print("charges_renorm: ", charges_renorm.shape)
 
-            results["charges_raw"] = charges_renorm.abs()
-            results["charges"] = charges_renorm.abs().sum(dim=1).view(-1, 1, 1) 
+            results["charges_raw"] = charges_renorm
+            results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
             results["net_partial_spin"] = (
                 charges_renorm[:, 0] - charges_renorm[:, 1]
             ).view(-1, 1, 1) 
