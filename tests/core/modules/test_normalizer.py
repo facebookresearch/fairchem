@@ -20,18 +20,18 @@ from fairchem.core.modules.normalization.normalizer import (
 
 
 @pytest.fixture(scope="session")
-def normalizers(dummy_binary_dataset):
+def normalizers(dummy_binary_db_dataset):
     return fit_normalizers(
         ["energy", "forces"],
         override_values={"forces": {"mean": 0.0}},
-        dataset=dummy_binary_dataset,
+        dataset=dummy_binary_db_dataset,
         batch_size=16,
         shuffle=False,
     )
 
 
-def test_norm_denorm(normalizers, dummy_binary_dataset, dummy_element_refs):
-    batch = data_list_collater(list(dummy_binary_dataset), otf_graph=True)
+def test_norm_denorm(normalizers, dummy_binary_db_dataset, dummy_element_refs):
+    batch = data_list_collater(list(dummy_binary_db_dataset), otf_graph=True)
     # test norm and denorm
     for target, normalizer in normalizers.items():
         normed = normalizer.norm(batch[target])
@@ -43,7 +43,7 @@ def test_norm_denorm(normalizers, dummy_binary_dataset, dummy_element_refs):
         )
 
 
-def test_create_normalizers(normalizers, dummy_binary_dataset, tmp_path):
+def test_create_normalizers(normalizers, dummy_binary_db_dataset, tmp_path):
     # test that forces mean was overriden
     assert normalizers["forces"].mean.item() == 0.0
 
@@ -81,7 +81,7 @@ def test_create_normalizers(normalizers, dummy_binary_dataset, tmp_path):
     assert norm.state_dict() == sdict
 
     # from tensor directly
-    batch = data_list_collater(list(dummy_binary_dataset), otf_graph=True)
+    batch = data_list_collater(list(dummy_binary_db_dataset), otf_graph=True)
     norm = create_normalizer(tensor=batch.energy)
     assert isinstance(norm, Normalizer)
     # assert norm.state_dict() == sdict
