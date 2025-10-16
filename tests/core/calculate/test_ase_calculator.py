@@ -26,7 +26,7 @@ from fairchem.core.calculate.ase_calculator import (
     MixedPBCError,
 )
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATask
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
@@ -436,13 +436,12 @@ def test_parallel_md(checkpointing):
         external_graph_gen=False,
     )
     model_path = pretrained_mlip.pretrained_checkpoint_path_from_name("uma-s-1p1")
-    predictor = ParallelMLIPPredictUnit(
+    predictor = ParallelMLIPPredictUnitRay(
         inference_model_path=model_path,
         device="cpu",
         inference_settings=inference_settings,
-        server_config={"workers": 2},
+        num_workers=2,
     )
 
     calc = FAIRChemCalculator(predictor, task_name="omol")
     run_md_simulation(calc, steps=10)
-    predictor.cleanup()

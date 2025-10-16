@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import copy
 import logging
-import multiprocessing as mp
+import math
 import os
 import random
 from collections import defaultdict
@@ -20,21 +20,20 @@ from typing import TYPE_CHECKING, Protocol, Sequence
 import hydra
 import numpy as np
 import torch
+import torch.distributed as dist
+from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
+from fairchem.core.common import gp_utils
 from fairchem.core.common.distutils import (
     CURRENT_DEVICE_TYPE_STR,
+    assign_device_for_local_rank,
     get_device_for_local_rank,
+    setup_env_local_multi_gpu,
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
-from fairchem.core.units.mlip_unit.inference.client_websocket import (
-    SyncMLIPInferenceWebSocketClient,
-)
-from fairchem.core.units.mlip_unit.inference.inference_server_ray import (
-    MLIPInferenceServerWebSocket,
-)
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
@@ -42,6 +41,21 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+try:
+    import ray
+    from ray import remote
+    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
+    ray_installed = True
+except ImportError:
+    ray = None
+
+    def remote(cls):
+        # dummy
+        return cls
+
+    ray_installed = False
 
 
 def collate_predictions(predict_fn):
@@ -303,22 +317,102 @@ def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     return dict(dset_to_tasks_map)
 
 
-def _run_server_process(predictor_config, port, num_workers, ready_queue):
-    """Function to run server in separate process"""
-    try:
-        server = MLIPInferenceServerWebSocket(
-            predictor_config=predictor_config,
-            port=port,
-            num_workers=num_workers,
+def move_tensors_to_cpu(data):
+    """
+    Recursively move all PyTorch tensors in a nested data structure to CPU.
+
+    Args:
+        data: Input data structure (dict, list, tuple, tensor, or other)
+
+    Returns:
+        Data structure with all tensors moved to CPU
+    """
+    if isinstance(data, torch.Tensor):
+        return data.cpu()
+    elif isinstance(data, dict):
+        return {key: move_tensors_to_cpu(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [move_tensors_to_cpu(item) for item in data]
+    elif isinstance(data, tuple):
+        return tuple(move_tensors_to_cpu(item) for item in data)
+    else:
+        # Return as-is for non-tensor types (str, int, float, etc.)
+        return data
+
+
+@remote
+class MLIPWorker:
+    def __init__(
+        self,
+        worker_id: int,
+        world_size: int,
+        predictor_config: dict,
+        master_port: int | None = None,
+        master_address: str | None = None,
+    ):
+        if ray_installed is False:
+            raise RuntimeError("Requires `ray` to be installed")
+
+        self.worker_id = worker_id
+        self.world_size = world_size
+        self.predictor_config = predictor_config
+        self.master_address = (
+            ray.util.get_node_ip_address() if master_address is None else master_address
         )
-        # Signal that server is ready
-        ready_queue.put("ready")
-        server.run()
-    except Exception as e:
-        ready_queue.put(f"error: {e}")
+        self.master_port = get_free_port() if master_port is None else master_port
+        self.is_setup = False
+
+    def get_master_address_and_port(self):
+        return (self.master_address, self.master_port)
+
+    def _distributed_setup(
+        self,
+        worker_id: int,
+        master_port: int,
+        world_size: int,
+        predictor_config: dict,
+        master_address: str,
+    ):
+        # initialize distributed environment
+        # TODO, this wont work for multi-node, need to fix master addr
+        logging.info(f"Initializing worker {worker_id}...")
+        setup_env_local_multi_gpu(worker_id, master_port, master_address)
+        # local_rank = int(os.environ["LOCAL_RANK"])
+        device = predictor_config.get("device", "cpu")
+        assign_device_for_local_rank(device == "cpu", 0)
+        backend = "gloo" if device == "cpu" else "nccl"
+        dist.init_process_group(
+            backend=backend,
+            rank=worker_id,
+            world_size=world_size,
+        )
+        gp_utils.setup_graph_parallel_groups(world_size, backend)
+        self.predict_unit = hydra.utils.instantiate(predictor_config)
+        logging.info(
+            f"Worker {worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
+            f"on port {self.master_port}, with device: {get_device_for_local_rank()}, config: {self.predictor_config}"
+        )
+
+    def predict(self, data: AtomicData) -> dict[str, torch.tensor] | None:
+        if not self.is_setup:
+            self._distributed_setup(
+                self.worker_id,
+                self.master_port,
+                self.world_size,
+                self.predictor_config,
+                self.master_address,
+            )
+            self.is_setup = True
+        out = self.predict_unit.predict(data)
+        out = move_tensors_to_cpu(out)
+        if self.worker_id == 0:
+            return out
+        else:
+            return None
 
 
-class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
+@requires(ray_installed, message="Requires `ray` to be installed")
+class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
     def __init__(
         self,
         inference_model_path: str,
@@ -328,28 +422,10 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         seed: int = 41,
         atom_refs: dict | None = None,
         assert_on_nans: bool = False,
-        server_config: dict | None = None,
-        client_config: dict | None = None,
+        num_workers: int = 1,
+        num_workers_per_node: int = 8,
     ):
-        """
-        This PredictUnit can be used to run inference on a remote server.
-
-        It can be used in several modes:
-        1) If server_config is provided then it will start a local server in a thread and create a client to connect to it.
-        A separate client cannot be provided in this case.
-        2) If server_config is NOT provided and client_config is provided, we assume the remote server is already running
-        and we will create a client to connect to it.
-        """
         super().__init__()
-        assert (server_config is not None) ^ (
-            client_config is not None
-        ), "Exactly one of server_config or client_config must be provided."
-
-        config = {}
-        self.server_process = None
-
-        # TODO, we need this just to get the datasets for the FAIRChemCalculator, this is not great, think about if
-        # we can remove this dependency
         _mlip_pred_unit = MLIPPredictUnit(
             inference_model_path=inference_model_path,
             device="cpu",
@@ -360,89 +436,104 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         )
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
-        if server_config is not None:
-            logging.info(f"Starting inference server with config {server_config}")
-            if "port" not in server_config:
-                server_config["port"] = get_free_port()
-            config["server"] = server_config
-            self.server_address = "localhost"
-            self.server_port = server_config.get("port")
-            self.workers = server_config.get("workers", 1)
-            predict_unit_config = {
-                "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
-                "inference_model_path": inference_model_path,
-                "device": device,
-                "overrides": overrides,
-                "inference_settings": inference_settings,
-                "seed": seed,
-                "atom_refs": atom_refs,
-                "assert_on_nans": assert_on_nans,
-            }
-
-            self._start_server_process(
-                predict_unit_config, self.server_port, self.workers
+        predict_unit_config = {
+            "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
+            "inference_model_path": inference_model_path,
+            "device": device,
+            "overrides": overrides,
+            "inference_settings": inference_settings,
+            "seed": seed,
+            "atom_refs": atom_refs,
+            "assert_on_nans": assert_on_nans,
+        }
+        if not ray.is_initialized():
+            ray.init(
+                logging_level=logging.INFO,
+                # runtime_env={
+                #     "env_vars": {"RAY_DEBUG": "1"},
+                # },
             )
 
-        if client_config is not None:
-            logging.info(f"Connecting to inference server with config {client_config}")
-            self.client = hydra.utils.instantiate(client_config)
-        else:
-            self.client = SyncMLIPInferenceWebSocketClient(
-                host=self.server_address,
-                port=self.server_port,
-            )
-
-    def _start_server_process(self, predict_unit_config, port, workers):
-        """Start server process and wait for it to be ready"""
-        # Create a queue to check server readiness
-        self.ready_queue = mp.Queue()
-
-        # Start server in separate process instead of thread
-        self.server_process = mp.Process(
-            target=_run_server_process,
-            args=(
-                predict_unit_config,
-                port,
-                workers,
-                self.ready_queue,
-            ),
+        num_nodes = math.ceil(num_workers / num_workers_per_node)
+        num_workers_on_node_array = [num_workers_per_node] * num_nodes
+        if num_workers % num_workers_per_node > 0:
+            num_workers_on_node_array[-1] = num_workers % num_workers_per_node
+        logging.info(
+            f"Creating placement groups with {num_workers_on_node_array} workers on {device}"
         )
-        self.server_process.start()
 
-        # Wait for server to be ready (with timeout)
-        try:
-            result = self.ready_queue.get(timeout=30)  # 30 second timeout
-            if result != "ready":
-                raise RuntimeError(f"Server failed to start: {result}")
-            logging.info("Server is ready")
-        except Exception as e:
-            if self.server_process.is_alive():
-                self.server_process.terminate()
-            raise e
+        # first create one placement group for each node
+        num_gpu_per_worker = 1 if device == "cuda" else 0
+        placement_groups = []
+        for workers in num_workers_on_node_array:
+            bundle = {"CPU": workers}
+            if device == "cuda":
+                bundle["GPU"] = workers
+            pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
+            placement_groups.append(pg)
+        ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
-    def cleanup(self):
-        logging.info("Shutting down ParallelMLIPPredictUnit")
-        # Clean up server process if it was started locally
-        if hasattr(self, "server_process") and self.server_process.is_alive():
-            self.server_process.terminate()
-            self.server_process.join(timeout=10)
-            if self.server_process.is_alive():
-                self.server_process.kill()
+        # place rank 0 on placement group 0
+        rank0_worker = MLIPWorker.options(
+            num_gpus=num_gpu_per_worker,
+            scheduling_strategy=PlacementGroupSchedulingStrategy(
+                placement_group=placement_groups[0],
+                placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
+                placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+            ),
+        ).remote(0, num_workers, predict_unit_config)
+        master_addr, master_port = ray.get(
+            rank0_worker.get_master_address_and_port.remote()
+        )
+        logging.info(f"Started rank0 on {master_addr}:{master_port}")
+        self.workers = [rank0_worker]
 
-    def __del__(self):
-        self.cleanup()
+        # next place all ranks in order and pack them on placement groups
+        # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
+        worker_id = 0
+        for pg_idx, pg in enumerate(placement_groups):
+            workers = num_workers_on_node_array[pg_idx]
+            logging.info(
+                f"Launching workers for placement group {pg_idx} (Node {pg_idx}), workers={workers}"
+            )
+
+            for i in range(workers):
+                # skip the first one because it's already been initialized above
+                if pg_idx == 0 and i == 0:
+                    worker_id += 1
+                    continue
+                # Each actor requests 1 worker worth of resources and uses the specific placement group
+                actor = MLIPWorker.options(
+                    num_gpus=num_gpu_per_worker,
+                    scheduling_strategy=PlacementGroupSchedulingStrategy(
+                        placement_group=pg,
+                        placement_group_bundle_index=0,  # Use the first (and only) bundle in the PG
+                        placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
+                    ),
+                ).remote(
+                    worker_id,
+                    num_workers,
+                    predict_unit_config,
+                    master_port,
+                    master_addr,
+                )
+                self.workers.append(actor)
+                worker_id += 1
 
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
-        """
-        Predict method that sends data to the remote server and returns predictions.
-        """
-        if not hasattr(self, "client"):
-            raise RuntimeError(
-                "Client is not initialized. Ensure server_config or client_config is provided."
-            )
-        return self.client.call(data)
+        # put the reference in the object store only once
+        # this data transfer should be made more efficienct by using a shared memory transfer + nccl broadcast
+        data_ref = ray.put(data)
+        futures = [w.predict.remote(data_ref) for w in self.workers]
+        # just get the first result that is ready since they are identical
+        # the rest of the futures should go out of scope and memory garbage collected
+        # ready_ids, _ = ray.wait(futures, num_returns=1)
+        # result = ray.get(ready_ids[0])
+        # result = ray.get(futures)
+        # return result[0]
+        return ray.get(futures[0])
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
