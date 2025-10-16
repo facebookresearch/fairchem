@@ -17,6 +17,8 @@ The VASP sets used to generate OMat24 data are implemented as `pymatgen` `VaspIn
 generate OMat24 VASP inputs as follows,
 
 ```bash
+:tags: [skip-execution]
+
 pip install fairchem-data-omat
 ```
 
