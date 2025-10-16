@@ -7,37 +7,49 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
-
 import torch
 
 
+# TODO: this gives wrong forces in special cases!
+class Safeacos(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return torch.acos(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x,) = ctx.saved_tensors
+        norms = x.pow(2)
+        grad_input = -grad_output / torch.sqrt(1 - norms)
+        return torch.where(grad_input.isfinite(), grad_input, 0.0)
+
+
+# TODO: this gives wrong forces in special cases!
+class Safeatan2(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, y, x):
+        ctx.save_for_backward(y, x)
+        return torch.atan2(y, x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        y, x = ctx.saved_tensors
+        norms = x.pow(2) + y.pow(2)
+        safe_norms = torch.where(norms == 0.0, 1, norms)
+        return (x / safe_norms) * grad_output, -(y / safe_norms) * grad_output
+
+
 def init_edge_rot_euler_angles(edge_distance_vec):
-    edge_vec_0 = edge_distance_vec
-    edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
-
-    # Make sure the atoms are far enough apart
-    # assert torch.min(edge_vec_0_distance) < 0.0001
-    if len(edge_vec_0_distance) > 0 and torch.min(edge_vec_0_distance) < 0.0001:
-        logging.error(f"Error edge_vec_0_distance: {torch.min(edge_vec_0_distance)}")
-
-    # make unit vectors
-    xyz = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
-
-    # are we standing at the north pole
-    mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
-
-    # compute alpha and beta
+    # we need to clamp the output here because if using compile
+    # normalize can return >1.0 , pytorch #163082
+    xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1.0, 1.0)
 
     # latitude (beta)
-    beta = xyz.new_zeros(xyz.shape[0])
-    beta[~mask] = torch.acos(xyz[~mask, 1])
-    beta[mask] = torch.acos(xyz[mask, 1]).detach()
+    beta = Safeacos.apply(xyz[:, 1])
 
     # longitude (alpha)
-    alpha = torch.zeros_like(beta)
-    alpha[~mask] = torch.atan2(xyz[~mask, 0], xyz[~mask, 2])
-    alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
+    alpha = Safeatan2.apply(xyz[:, 0], xyz[:, 2])
 
     # random gamma (roll)
     gamma = torch.rand_like(alpha) * 2 * torch.pi

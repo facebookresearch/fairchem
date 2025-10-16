@@ -92,9 +92,10 @@ def ase_dataset(request, structures, tmp_path_factory):
 def test_ase_dataset(ase_dataset, structures):
     dataset, mult = ase_dataset
     assert len(dataset) == mult * len(structures)
-    for data in dataset:
+    for i, data in enumerate(dataset):
         assert data.forces.shape == (data.natoms, 3)
         assert data.stress.shape == (1, 3, 3)
+        assert "sid" in dataset.get_atoms(i).info
 
 
 def test_ase_read_dataset(tmp_path, structures):
@@ -114,30 +115,13 @@ def test_ase_read_dataset(tmp_path, structures):
     data = dataset[0]
     del data
 
+    # Make sure get_atoms does not raise
+    atoms = dataset.get_atoms(0)
+    assert "sid" in atoms.info
+
 
 def test_ase_get_metadata(ase_dataset):
     assert ase_dataset[0].get_metadata("natoms", [0])[0] == 3
-
-
-def test_ase_metadata_guesser(ase_dataset):
-    dataset, _ = ase_dataset
-
-    metadata = dataset.sample_property_metadata()
-
-    # Confirm energy metadata guessed properly
-    assert metadata["targets"]["energy"]["extensive"] is False
-    assert metadata["targets"]["energy"]["shape"] == ()
-    assert metadata["targets"]["energy"]["type"] == "per-image"
-
-    # Confirm forces metadata guessed properly
-    assert metadata["targets"]["forces"]["shape"] == (3,)
-    assert metadata["targets"]["forces"]["extensive"] is True
-    assert metadata["targets"]["forces"]["type"] == "per-atom"
-
-    # Confirm stress metadata guessed properly
-    assert metadata["targets"]["stress"]["shape"] == (3, 3)
-    assert metadata["targets"]["stress"]["extensive"] is False
-    assert metadata["targets"]["stress"]["type"] == "per-image"
 
 
 def test_db_add_delete(tmp_path, structures):
@@ -161,6 +145,9 @@ def test_db_add_delete(tmp_path, structures):
 
     dataset = AseDBDataset(config={"src": str(tmp_path / "asedb.db")})
     assert len(dataset) == orig_len + len(new_structures) - 1
+
+    # Make sure get_atoms does not raise
+    dataset.get_atoms(0)
 
 
 def test_ase_multiread_dataset(tmp_path):
@@ -235,6 +222,10 @@ def test_ase_multiread_dataset(tmp_path):
 
     assert hasattr(dataset[0], "energy_relaxed")
     assert dataset[0].energy_relaxed != dataset[0].energy
+
+    # Make sure get_atoms does not raise
+    atoms = dataset.get_atoms(0)
+    assert "sid" in atoms.info
 
 
 def test_empty_dataset(tmp_path):

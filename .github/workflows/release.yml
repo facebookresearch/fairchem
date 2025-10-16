@@ -153,3 +153,28 @@ jobs:
           verbose: true
           packages-dir: dist-data-omol/
           skip-existing: true
+
+  release-lammps:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    if: |
+      ( github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_lammps-') ) || startsWith(github.event.release.tag_name, 'fairchem_lammps-')
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fairchem-lammps/
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: dist-lammps
+          path: dist-lammps
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-lammps/
+          skip-existing: true
+          verbose: true
