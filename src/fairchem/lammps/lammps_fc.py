@@ -190,7 +190,7 @@ class FixExternalCallback:
 
         # during NPT for example, box_change should be set to 1 by lammps to allow the cell to change
         if box_change:
-            # stress is defined as virial/volume in lammps
+            # stress is defined as -virial/volume in lammps
             assert "stress" in results, "stress must be in results to compute virial"
             volume = torch.det(cell).abs().item()
             v = (-results["stress"].detach().cpu() * volume)[0].tolist()
