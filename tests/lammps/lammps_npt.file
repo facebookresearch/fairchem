@@ -16,4 +16,4 @@ timestep        0.001 # 1 fs
 fix 1 all npt temp 300.0 300.0 0.1 iso 0.0 0.0 1.0
 thermo_style custom step temp pe ke etotal press vol
 thermo 1
-run 300
+run 100

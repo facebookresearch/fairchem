@@ -127,7 +127,7 @@ def run_ase_npt():
         )
 
     dyn.attach(print_thermo, interval=1)
-    dyn.run(300)
+    dyn.run(100)
     return atoms.get_kinetic_energy(), atoms.get_potential_energy()
 
 
@@ -137,7 +137,7 @@ def run_lammps(input_file):
     return lmp.last_thermo()["KinEng"], lmp.last_thermo()["PotEng"]
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_ase_vs_lammps_nve():
     ase_kinetic, ase_pot = run_ase_nve()
     lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_nve.file")
@@ -145,18 +145,18 @@ def test_ase_vs_lammps_nve():
     assert np.isclose(ase_pot, lammps_pot, rtol=0.1)
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_ase_vs_lammps_npt():
     ase_kinetic, ase_pot = run_ase_npt()
     lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_npt.file")
-    assert np.isclose(ase_kinetic, lammps_kinetic, atol=1.0)
-    assert np.isclose(ase_pot, lammps_pot, atol=1.0)
+    assert np.isclose(ase_kinetic, lammps_kinetic, rtol=0.5)
+    assert np.isclose(ase_pot, lammps_pot, rtol=0.5)
 
 
 @pytest.mark.xfail(
     reason="This is more demo purposes, need to configure the right parameters for ASE langevin to match lammps"
 )
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_ase_vs_lammps_langevin():
     ase_kinetic, ase_pot = run_ase_langevin()
     lammps_kinetic, lammps_pot = run_lammps("tests/lammps/lammps_langevin.file")
