@@ -8,6 +8,7 @@ import hydra
 import numpy as np
 import torch
 from ase.data import atomic_masses, chemical_symbols
+from ase.geometry import wrap_positions
 
 from fairchem.core.datasets.atomic_data import AtomicData
 from lammps import lammps
@@ -152,35 +153,6 @@ def cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
     return unit_cell_matrix.unsqueeze(0)
 
 
-def wrap_to_unit_cell(
-    positions: torch.Tensor,
-    boxlo,
-    boxhi,
-    xy: float,
-    yz: float,
-    xz: float,
-) -> torch.Tensor:
-    if positions.ndim != 2 or positions.size(1) != 3:
-        raise ValueError("positions must be a 2D tensor with shape (N, 3)")
-
-    device = positions.device
-    dtype = positions.dtype
-
-    unit_cell_matrix = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz).to(
-        device=device, dtype=dtype
-    )[0]
-    boxlo_tensor = torch.as_tensor(boxlo, device=device, dtype=dtype)
-    pos_rel = positions - boxlo_tensor
-
-    fractional_coords = torch.linalg.solve(unit_cell_matrix, pos_rel.T).T
-    fractional_coords = torch.remainder(fractional_coords, 1.0)
-
-    # FIXME: I'm not sure if we need to add boxlo back here.
-    # wrapped_positions = fractional_coords @ unit_cell_matrix + boxlo_tensor
-    wrapped_positions = fractional_coords @ unit_cell_matrix
-    return wrapped_positions
-
-
 class FixExternalCallback:
     def __init__(self, charge: int = 0, spin: int = 0):
         self.charge = charge
@@ -197,13 +169,8 @@ class FixExternalCallback:
         boxlo, boxhi, xy, yz, xz, periodicity, box_change = lmp.extract_box()
         cell = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
 
-        x_wrapped = wrap_to_unit_cell(
-            torch.as_tensor(x, dtype=torch.float32),
-            boxlo,
-            boxhi,
-            xy,
-            yz,
-            xz,
+        x_wrapped = wrap_positions(
+            x, cell=cell.squeeze().numpy(), pbc=periodicity, eps=0
         )
 
         atomic_data = atomic_data_from_lammps_data(
