@@ -43,7 +43,7 @@ class Safeatan2(torch.autograd.Function):
 def init_edge_rot_euler_angles(edge_distance_vec):
     # we need to clamp the output here because if using compile
     # normalize can return >1.0 , pytorch #163082
-    xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1.0, 1.0)
+    xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1.0 + 1e-6, 1.0 - 1e-6)
 
     # latitude (beta)
     beta = Safeacos.apply(xyz[:, 1])

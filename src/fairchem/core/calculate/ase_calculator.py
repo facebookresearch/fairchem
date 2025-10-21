@@ -13,6 +13,8 @@ from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
+import torch
+from torch.autograd import grad
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
 
@@ -247,7 +249,7 @@ class FAIRChemCalculator(Calculator):
         pred = self.predictor.predict(batch)
 
         # Get the forces and positions
-        positions = batch.pos
+        positions = batch["pos"]
         forces = pred["forces"].flatten()
 
         # Calculate the Hessian using autograd
@@ -271,6 +273,52 @@ class FAIRChemCalculator(Calculator):
 
         # Turn off create_graph for the first derivative
         self.predictor.model.module.output_heads['energyandforcehead'].head.training = False
+
+        return hessian
+
+    def get_numerical_hessian(self, atoms: Atoms, eps: float = 1e-4) -> np.ndarray:
+        """
+        Get the Hessian matrix for the given atomic structure.
+
+        Args:
+            atoms (Atoms): The atomic structure to calculate the Hessian for.
+            eps (float): The finite difference step size. Defaults to 1e-4.
+
+        Returns:
+            np.ndarray: The Hessian matrix.
+        """
+        
+        data_list = []
+
+        for i in range(len(atoms)):
+            for j in range(3):
+                displaced_plus = atoms.copy()
+                displaced_minus = atoms.copy()
+
+                displaced_plus.positions[i, j] += eps
+                displaced_minus.positions[i, j] -= eps
+
+                data_plus = self.a2g(displaced_plus)
+                data_minus = self.a2g(displaced_minus)
+
+                data_list.append(data_plus)
+                data_list.append(data_minus)
+
+        # Batch and predict
+        batch = data_list_collater(data_list, otf_graph=True)
+        pred = self.predictor.predict(batch)
+
+        # Get the forces
+        forces = pred["forces"].reshape(-1, len(atoms), 3)
+
+        # Calculate the Hessian using finite differences
+        hessian = np.zeros((len(atoms) * 3, len(atoms) * 3))
+        for i in range(len(atoms)):
+            for j in range(3):
+                idx = i * 3 + j
+                force_plus = forces[2 * idx].flatten().detach().cpu().numpy()
+                force_minus = forces[2 * idx + 1].flatten().detach().cpu().numpy()
+                hessian[:, idx] = (force_minus - force_plus) / (2 * eps)
 
         return hessian
 
