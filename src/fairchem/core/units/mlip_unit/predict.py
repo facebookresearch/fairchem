@@ -58,6 +58,16 @@ except ImportError:
     ray_installed = False
 
 
+try:
+    from ray import serve
+    from ._batch_serve import BatchPredictServer
+
+    ray_serve_installed = True
+except ImportError:
+    serve = None
+    ray_serve_installed = False
+
+
 def collate_predictions(predict_fn):
     @wraps(predict_fn)
     def collated_predict(
@@ -538,3 +548,107 @@ class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
         return self._dataset_to_tasks
+
+
+@requires(ray_serve_installed, message="Requires `ray[serve]` to be installed")
+class BatchServerPredictUnit(MLIPPredictUnitProtocol):
+    """
+    PredictUnit wrapper that uses Ray Serve for batched inference.
+    
+    This provides a clean interface compatible with MLIPPredictUnitProtocol
+    while leveraging Ray Serve's batching capabilities under the hood.
+    """
+
+    def __init__(
+        self,
+        predict_unit: MLIPPredictUnit,
+        max_batch_size: int = 32,
+        batch_wait_timeout_s: float = 0.05,
+        num_replicas: int = 1,
+        ray_actor_options: dict | None = None,
+    ):
+        """Initialize BatchServerPredictUnit.
+        
+        Args:
+            predict_unit: An MLIPPredictUnit instance to use for batched inference
+            max_batch_size: Maximum number of systems per batch
+            batch_wait_timeout_s: Maximum wait time before processing partial batch
+            num_replicas: Number of deployment replicas (for scaling)
+            ray_actor_options: Additional Ray actor options (e.g., num_gpus, num_cpus)
+        """   
+        self._dataset_to_tasks = copy.deepcopy(predict_unit.dataset_to_tasks)
+        self._atom_refs = getattr(predict_unit, 'atom_refs', None)
+        
+        if not ray.is_initialized():
+            ray.init()
+            logging.info("Ray initialized by BatchServerPredictUnit")
+        
+        try:
+            serve.start()
+            logging.info("Ray Serve started by BatchServerPredictUnit")
+        except Exception:
+            # Server might already be running
+            pass
+        
+        # Put the predict unit in Ray's object store
+        predict_unit_ref = ray.put(predict_unit)
+        logging.info("Predict unit stored in Ray object store")
+        
+        # Configure deployment options
+        if ray_actor_options is None:
+            ray_actor_options = {}
+        
+        # Create the deployment with custom batching parameters
+        deployment = BatchPredictServer.options(
+            num_replicas=num_replicas,
+            ray_actor_options=ray_actor_options,
+        ).bind(
+            predict_unit_ref,
+            max_batch_size=max_batch_size,
+            batch_wait_timeout_s=batch_wait_timeout_s
+        )
+        
+        # Deploy and get handle
+        self.handle = serve.run(deployment, name="predict-server", route_prefix="/predict")
+        
+        logging.info(
+            f"BatchServerPredictUnit initialized with max_batch_size={max_batch_size}, "
+            f"batch_wait_timeout_s={batch_wait_timeout_s}, num_replicas={num_replicas}"
+        )
+
+    def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
+        """
+        Run inference on a single or batched AtomicData.
+        
+        Args:
+            data: AtomicData object (single system or pre-batched)
+            undo_element_references: Whether to undo element references (unused, for compatibility)
+            
+        Returns:
+            Prediction dictionary
+        """
+        # Ray Serve handle.remote() returns a DeploymentResponse, not an ObjectRef
+        # Use .result() to get the result synchronously
+        return self.handle.remote(data)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        """Get the dataset to tasks mapping from the wrapped predict unit."""
+        return self._dataset_to_tasks
+
+    @property
+    def atom_refs(self):
+        """Get atom references from the wrapped predict unit."""
+        return self._atom_refs
+
+    def cleanup(self):
+        """Clean up Ray Serve resources."""
+        try:
+            serve.delete("predict-server")
+            logging.info("BatchServerPredictUnit deployment deleted")
+        except Exception as e:
+            logging.warning(f"Failed to delete deployment: {e}")
+
+    def __del__(self):
+        """Clean up on deletion."""
+        self.cleanup()
