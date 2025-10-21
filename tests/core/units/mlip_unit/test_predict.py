@@ -10,7 +10,7 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
 ATOL = 5e-6
 
@@ -137,7 +137,7 @@ def test_parallel_predict_unit(workers, device):
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    ppunit = ParallelMLIPPredictUnitRay(
+    ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
