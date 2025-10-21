@@ -29,3 +29,5 @@ parallel_predict_unit:
 predict_unit: ${local_predict_unit}
 lmp_in: "lammps_in_example.file"
 task_name: "omol"
+charge: 0
+spin: 0
