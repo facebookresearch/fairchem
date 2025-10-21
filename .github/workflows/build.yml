@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: |
           # add packages that are supposed to be built to this list
-          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol fairchem-lammps
+          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol fairchem-data-omat fairchem-lammps
           do
             pushd packages/$package
             hatch build
@@ -59,11 +59,17 @@ jobs:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami/*
 
-      - name: Upload data-omol artifact
+      - name: Upload lammps artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dist-data-omol
-          path: dist-data-omol/*
+          name: dist-lammps
+          path: dist-lammps/*
+
+      - name: Upload lammps artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-omat
+          path: dist-omat/*
 
       - name: Upload lammps artifact
         uses: actions/upload-artifact@v4
