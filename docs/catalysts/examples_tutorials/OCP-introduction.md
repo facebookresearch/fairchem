@@ -96,7 +96,8 @@ from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+# if you don't have a gpu, use device="cpu", but it will take alot longer!
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 

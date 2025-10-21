@@ -159,8 +159,8 @@ Running the model with QuasiNewton prints at each relaxation step which is a lot
 ```{code-cell} ipython3
 os.makedirs(f"data/{bulk_src_id}_{adsorbate_smiles_h}", exist_ok=True)
 
-# Define the
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+# if you don't have a gpu, use device="cpu", but it will take alot longer!
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
