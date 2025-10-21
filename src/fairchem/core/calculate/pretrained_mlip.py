@@ -71,6 +71,7 @@ def get_predict_unit(
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
     cache_dir: str = CACHE_DIR,
+    workers: int = 1,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
@@ -83,6 +84,8 @@ def get_predict_unit(
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
+        workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
+            we will instantiate a ParallelMLIPPredictUnitRay instead of the normal predict unit.
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
@@ -90,26 +93,10 @@ def get_predict_unit(
     Raises:
         KeyError: If the specified model_name is not found in available models.
     """
-    if model_name == "uma-sm":
-        raise NotImplementedError(
-            "uma-sm has been renamed to 'uma-s-1', please update and try again."
-        )
-    try:
-        model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
-    except KeyError as err:
-        raise KeyError(
-            f"Model '{model_name}' not found. Available models: {available_models}"
-        ) from err
-    checkpoint_path = hf_hub_download(
-        filename=model_checkpoint.filename,
-        repo_id=model_checkpoint.repo_id,
-        subfolder=model_checkpoint.subfolder,
-        revision=model_checkpoint.revision,
-        cache_dir=cache_dir,
-    )
+    checkpoint_path = pretrained_checkpoint_path_from_name(model_name)
     atom_refs = get_isolated_atomic_energies(model_name, cache_dir)
     return load_predict_unit(
-        checkpoint_path, inference_settings, overrides, device, atom_refs
+        checkpoint_path, inference_settings, overrides, device, atom_refs, workers
     )
 
 
