@@ -187,7 +187,7 @@ If you have multiple gpus (or multiple nodes), we handle all the parallelism for
 pip install fairchem-core[extras]
 ```
 
-```
+```python
 from ase import units
 from ase.md.langevin import Langevin
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
