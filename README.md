@@ -31,8 +31,6 @@ demos, and application efforts for materials science and quantum chemistry.
 > If you want to use an older model or code from version 1 you will need to install [version 1](https://pypi.org/project/fairchem-core/1.10.0/),
 > as detailed [here](#looking-for-fairchem-v1-models-and-code).
 
-> :warning: Some of the docs and new features in FAIRChem version 2 are still being updated so you may see some changes over the next few weeks. Check back here for the latest instructions. Thank you for your patience!
-
 > [!CAUTION]
 > UMA models and legacy inorganic bulk models trained using OMat24 are trained with DFT and DFT+U total energy labels.
 > These are not compatible with Materials Project calculations. If you are using UMA or models trained on OMat24 only
@@ -41,6 +39,10 @@ demos, and application efforts for materials science and quantum chemistry.
 > Do not use MP2020 corrections or use the MP references compounds when using OMat24 trained models. Additional care
 > must be taken when computing energy differences, such as formation and energy above hull and comparing with calculations
 > in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
+
+
+## Latest news
+Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
 
 ## Read our latest release post!
 Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
@@ -130,7 +132,7 @@ calc = FAIRChemCalculator(predictor, task_name="omat")
 atoms = bulk("Fe")
 atoms.calc = calc
 
-opt = LBFGS(FrechetCellFilter(atoms))
+opt = FIRE(FrechetCellFilter(atoms))
 opt.run(0.05, 100)
 ```
 
@@ -177,6 +179,47 @@ triplet.info.update({"spin": 3, "charge": 0})
 triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 
 triplet.get_potential_energy() - singlet.get_potential_energy()
+```
+
+#### Multi-GPU Inference and LAMMPs
+If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). For example, you can run the following 8000 atom md simulation with ~10 qps (8x H100 GPU), ~10x faster than single-gpu inference! This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://fair-chem.github.io/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
+```
+pip install fairchem-core[extras]
+```
+
+```
+from ase import units
+from ase.md.langevin import Langevin
+from fairchem.core import pretrained_mlip, FAIRChemCalculator
+import time
+
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p1", inference_settings="turbo", device="cuda", workers=8
+)
+calc = FAIRChemCalculator(predictor, task_name="omat")
+
+atoms = get_fcc_carbon_xtal(8000)
+atoms.calc = calc
+
+dyn = Langevin(
+    atoms,
+    timestep=0.1 * units.fs,
+    temperature_K=400,
+    friction=0.001 / units.fs,
+)
+# warmup 10 steps
+dyn.run(steps=10)
+start_time = time.time()
+dyn.attach(
+    lambda: print(
+        f"Step: {dyn.get_number_of_steps()}, E: {atoms.get_potential_energy():.3f} eV, "
+        f"QPS: {dyn.get_number_of_steps()/(time.time()-start_time):.2f}"
+    ),
+    interval=1,
+)
+dyn.run(steps=1000)
 ```
 
 ### LICENSE

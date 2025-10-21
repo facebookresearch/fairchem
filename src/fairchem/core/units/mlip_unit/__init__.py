@@ -28,6 +28,7 @@ def load_predict_unit(
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
     atom_refs: dict | None = None,
+    workers: int = 1,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -39,6 +40,8 @@ def load_predict_unit(
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.
+        workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
+            we will instantiate a ParallelMLIPPredictUnitRay instead of the normal predict unit.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -50,11 +53,22 @@ def load_predict_unit(
 
     inference_settings = guess_inference_settings(inference_settings)
     overrides = overrides or {"backbone": {"always_use_pbc": False}}
+    if workers > 1:
+        from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
 
-    return MLIPPredictUnit(
-        path,
-        device=device,
-        inference_settings=inference_settings,
-        overrides=overrides,
-        atom_refs=atom_refs,
-    )
+        return ParallelMLIPPredictUnitRay(
+            path,
+            device=device,
+            inference_settings=inference_settings,
+            overrides=overrides,
+            atom_refs=atom_refs,
+            num_workers=workers,
+        )
+    else:
+        return MLIPPredictUnit(
+            path,
+            device=device,
+            inference_settings=inference_settings,
+            overrides=overrides,
+            atom_refs=atom_refs,
+        )

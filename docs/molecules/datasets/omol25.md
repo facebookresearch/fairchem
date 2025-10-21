@@ -11,7 +11,7 @@ The dataset is provided in ASE DB compatible lmdb files (*.aselmdb). The dataset
 
 ## Level of theory
 
-OMol25 was calculated at the wB97M-V/def2-TZVPD level, including non-local dispersion, as defined in ORCA6. To reproduce the calculations, please `fairchem.data.om.omdata.orca.calc` to write compatible ORCA inputs. 
+OMol25 was calculated at the wB97M-V/def2-TZVPD level, including non-local dispersion, as defined in ORCA6. To reproduce the calculations, please `fairchem.data.omol.orca.calc` to write compatible ORCA inputs. 
 
 ### Citing OMol25
 
