@@ -46,7 +46,10 @@ To run, use the python entrypoint `lmp_fc` (shortcut name for the [python lammps
 lmp_fc lmp_in="lammps_in_example.file"  task_name="omol"
 ```
 
-To try running with multiple gpus in parallel (this will only benefit large inputs/models, for small systems this might even run slower due to the communication bottleneck)
+## Multi-GPU parallelism
+Our LAMMPs integration is fully compatible out the box with our Multi-GPU inference API. The only change required is to pass it the ParallelMLIPPredictUnitRay [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/lammps/lammps_fc_config.yaml#L20) instead of the regular predict unit when initializing the lammps fairchem script. No need to install anything new such as Kokkos or add communication code.
+
+For example:
 ```
 lmp_fc lmp_in="lammps_in_example.file" task_name="omol" predict_unit='${parallel_predict_unit}'
 ```

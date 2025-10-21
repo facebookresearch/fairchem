@@ -40,6 +40,10 @@ demos, and application efforts for materials science and quantum chemistry.
 > must be taken when computing energy differences, such as formation and energy above hull and comparing with calculations
 > in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
 
+
+## Latest news
+Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
+
 ## Read our latest release post!
 Read about the [UMA model and OMol25 dataset](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/) release.
 
@@ -177,7 +181,7 @@ triplet.calc = FAIRChemCalculator(predictor, task_name="omol")
 triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
-#### Multi-GPU Inference
+#### Multi-GPU Inference and LAMMPs
 If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). For example, you can run the following 8000 atom md simulation with ~10 qps (8x H100 GPU), ~10x faster than single-gpu inference! This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://fair-chem.github.io/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
 ```
 pip install fairchem-core[extras]
