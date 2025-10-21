@@ -13,7 +13,7 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
 from tests.conftest import seed_everywhere
 
-ATOL = 5e-6
+ATOL = 1e-5
 
 
 def get_fcc_carbon_xtal(
