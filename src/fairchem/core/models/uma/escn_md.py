@@ -673,7 +673,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         lr_output_scaling_factor: float = 1.0,
         cutoff_lr: float = -1.0,  # extra for LR, -1 means the sr cutoff is used for electrostatics/magnetic terms
         normalize_charges_tf: bool = True,  # extra for LR
-        equil_charges_tf: bool = True,  # extra for LR
+        equil_charges_tf: bool = False,  # extra for LR
     ) -> None:
         super().__init__()
         
