@@ -108,7 +108,7 @@ def inference_settings_default():
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,
-        activation_checkpointing=True,
+        activation_checkpointing=False,
         merge_mole=True,
         compile=True,
         external_graph_gen=False,

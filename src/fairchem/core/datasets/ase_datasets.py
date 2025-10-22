@@ -235,14 +235,14 @@ class AseReadDataset(AseAtomsDataset):
 
     def get_atoms(self, idx: int) -> ase.Atoms:
         try:
-            str_file = self.ids[idx]
-            atoms = ase.io.read(str_file, **self.ase_read_args)
+            file_path = self.ids[idx]
+            atoms = ase.io.read(file_path, **self.ase_read_args)
         except Exception as err:
             warnings.warn(f"{err} occured for: {idx}", stacklevel=2)
             raise err
 
         if "sid" not in atoms.info:
-            atoms.info["sid"] = str_file
+            atoms.info["sid"] = str(file_path)
 
         return atoms
 

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-data-omat"
+dynamic = ["version", "readme"]
+description = "Code for generating omat24 input configurations and vasp input sets"
+license = {text = "MIT License"}
+dependencies = [
+    "pymatgen>=2023.10.3",  # this was pinned to 2023.5.10
+]
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/omat"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match  fairchem_data_omat-*'
+
+[tool.hatch.build]
+directory = "../../dist-data-omat"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/data/omat"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/data/omat"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/data/omat/README.md" }
+]
