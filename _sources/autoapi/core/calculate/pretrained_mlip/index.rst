@@ -83,7 +83,7 @@ Module Contents
 
 .. py:function:: pretrained_checkpoint_path_from_name(model_name: str)
 
-.. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, cache_dir: str = CACHE_DIR) -> fairchem.core.units.mlip_unit.MLIPPredictUnit
+.. py:function:: get_predict_unit(model_name: str, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, cache_dir: str = CACHE_DIR, workers: int = 1) -> fairchem.core.units.mlip_unit.MLIPPredictUnit
 
    Retrieves a prediction unit for a specified model.
 
@@ -94,6 +94,8 @@ Module Contents
    :param overrides: Optional dictionary of settings to override default inference settings.
    :param device: Optional torch device to load the model onto. If None, uses the default device.
    :param cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
+   :param workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
+                   we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
 
    :returns: An initialized MLIPPredictUnit ready for making predictions.
 

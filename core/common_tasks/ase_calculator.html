@@ -196,6 +196,7 @@
 <li class="toctree-l2"><a class="reference internal" href="lammps.html">LAMMPs Integration</a></li>
 
 
+
 <li class="toctree-l2"><a class="reference internal" href="batch_inference.html">Batch inference with UMA models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="training.html">Training models from scratch</a></li>
@@ -754,27 +755,44 @@ document.write(`
 <section id="multi-gpu-inference">
 <h1>Multi-GPU Inference<a class="headerlink" href="#multi-gpu-inference" title="Link to this heading">#</a></h1>
 <p>UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we leverage <a class="reference external" href="https://www.ray.io/">ray</a> to launch Ray Actors for each GPU-rank under the hood. This allows us to seemlessly scale to any infrastructure that can run Ray.</p>
-<p>To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/cb1b95fffe8a5bc0276203c13ecd222244b8e7b6/src/fairchem/core/units/mlip_unit/predict.py">ParallelMLIPPredictUnitRay</a></p>
-<p>For example, we can create a predictor with 8 GPU workers in a very similiar way to MLIPPredictUnit:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.calculate.pretrained_mlip</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_checkpoint_path_from_name</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.units.mlip_unit.api.inference</span><span class="w"> </span><span class="kn">import</span> <span class="n">InferenceSettings</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.units.mlip_unit.predict</span><span class="w"> </span><span class="kn">import</span> <span class="n">ParallelMLIPPredictUnitRay</span>
+<p>To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/85bd83535fedbc1d99eee4c12e175603ccc44ef7/src/fairchem/core/units/mlip_unit/predict.py#L415">ParallelMLIPPredictUnit</a></p>
+<p>To enable this you need to install Ray manually or through the fairchem extra dependencies option</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">fairchem</span><span class="o">-</span><span class="n">core</span><span class="p">[</span><span class="n">extras</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>For example, we can create a predictor with 8 GPU workers in a very similiar way to MLIPPredictUnit and perform a md calculation with the ase calculator. This mode of operation is also compatible with our LAMMPs integration.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase</span><span class="w"> </span><span class="kn">import</span> <span class="n">units</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.md.langevin</span><span class="w"> </span><span class="kn">import</span> <span class="n">Langevin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_mlip</span><span class="p">,</span> <span class="n">FAIRChemCalculator</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
-<span class="n">inference_settings</span> <span class="o">=</span> <span class="n">InferenceSettings</span><span class="p">(</span>
-    <span class="n">tf32</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">merge_mole</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="nb">compile</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">activation_checkpointing</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">internal_graph_gen_version</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-    <span class="n">external_graph_gen</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets.common_structures</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_fcc_carbon_xtal</span>
 
-<span class="n">predictor</span> <span class="o">=</span> <span class="n">ParallelMLIPPredictUnitRay</span><span class="p">(</span>
-    <span class="n">inference_model_path</span><span class="o">=</span><span class="n">pretrained_checkpoint_path_from_name</span><span class="p">(</span><span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">),</span>
-    <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span>
-    <span class="n">inference_settings</span><span class="o">=</span><span class="n">inference_settings</span><span class="p">,</span>
-    <span class="n">num_workers</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+<span class="n">predictor</span> <span class="o">=</span> <span class="n">pretrained_mlip</span><span class="o">.</span><span class="n">get_predict_unit</span><span class="p">(</span>
+    <span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">,</span> <span class="n">inference_settings</span><span class="o">=</span><span class="s2">&quot;turbo&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="n">workers</span><span class="o">=</span><span class="mi">1</span>
 <span class="p">)</span>
+<span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">)</span>
+
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">get_fcc_carbon_xtal</span><span class="p">(</span><span class="mi">8000</span><span class="p">)</span>
+<span class="n">atoms</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+
+<span class="n">dyn</span> <span class="o">=</span> <span class="n">Langevin</span><span class="p">(</span>
+    <span class="n">atoms</span><span class="p">,</span>
+    <span class="n">timestep</span><span class="o">=</span><span class="mf">0.1</span> <span class="o">*</span> <span class="n">units</span><span class="o">.</span><span class="n">fs</span><span class="p">,</span>
+    <span class="n">temperature_K</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span>
+    <span class="n">friction</span><span class="o">=</span><span class="mf">0.001</span> <span class="o">/</span> <span class="n">units</span><span class="o">.</span><span class="n">fs</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># warmup 10 steps</span>
+<span class="n">dyn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">steps</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+<span class="n">dyn</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span>
+    <span class="k">lambda</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Step: </span><span class="si">{</span><span class="n">dyn</span><span class="o">.</span><span class="n">get_number_of_steps</span><span class="p">()</span><span class="si">}</span><span class="s2">, E: </span><span class="si">{</span><span class="n">atoms</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV, &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;QPS: </span><span class="si">{</span><span class="n">dyn</span><span class="o">.</span><span class="n">get_number_of_steps</span><span class="p">()</span><span class="o">/</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span><span class="o">-</span><span class="n">start_time</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="p">),</span>
+    <span class="n">interval</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">dyn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">steps</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>This will automatically create a Ray server on your local machine and use a local client to connect to it. If you have setup a Ray cluster, you can leverage it to run parallel inference on as many nodes as you like. We are actively working on optimziations to scale inference to large systems.</p>

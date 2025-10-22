@@ -28,7 +28,7 @@ Classes
    core.units.mlip_unit.predict.MLIPPredictUnitProtocol
    core.units.mlip_unit.predict.MLIPPredictUnit
    core.units.mlip_unit.predict.MLIPWorker
-   core.units.mlip_unit.predict.ParallelMLIPPredictUnitRay
+   core.units.mlip_unit.predict.ParallelMLIPPredictUnit
 
 
 Functions
@@ -242,7 +242,7 @@ Module Contents
    .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, torch.tensor] | None
 
 
-.. py:class:: ParallelMLIPPredictUnitRay(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, num_workers: int = 1, num_workers_per_node: int = 8)
+.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, num_workers: int = 1, num_workers_per_node: int = 8)
 
    Bases: :py:obj:`MLIPPredictUnitProtocol`
 

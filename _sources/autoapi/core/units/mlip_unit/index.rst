@@ -36,7 +36,7 @@ Functions
 Package Contents
 ----------------
 
-.. py:function:: load_predict_unit(path: str | pathlib.Path, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, atom_refs: dict | None = None) -> fairchem.core.units.mlip_unit.predict.MLIPPredictUnit
+.. py:function:: load_predict_unit(path: str | pathlib.Path, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings | str = 'default', overrides: dict | None = None, device: Literal['cuda', 'cpu'] | None = None, atom_refs: dict | None = None, workers: int = 1) -> fairchem.core.units.mlip_unit.predict.MLIPPredictUnit
 
    Load a MLIPPredictUnit from a checkpoint file.
 
@@ -47,6 +47,8 @@ Package Contents
    :param overrides: Optional dictionary of settings to override default inference settings.
    :param device: Optional torch device to load the model onto.
    :param atom_refs: Optional dictionary of isolated atom reference energies.
+   :param workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
+                   we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
 
    :returns: A MLIPPredictUnit instance ready for inference
 

@@ -196,6 +196,7 @@
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">LAMMPs Integration</a></li>
 
 
+
 <li class="toctree-l2"><a class="reference internal" href="batch_inference.html">Batch inference with UMA models</a></li>
 <li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
 <li class="toctree-l2"><a class="reference internal" href="training.html">Training models from scratch</a></li>
@@ -629,6 +630,7 @@ document.write(`
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">LAMMPs Integration</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#usage-notes-that-differ-from-regular-lammps-workflows">Usage notes that differ from regular lammps workflows:</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#install-and-run">Install and run</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-gpu-parallelism">Multi-GPU parallelism</a></li>
 </ul>
 
             </nav>
@@ -676,7 +678,11 @@ document.write(`
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">lmp_fc</span> <span class="n">lmp_in</span><span class="o">=</span><span class="s2">&quot;lammps_in_example.file&quot;</span>  <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omol&quot;</span>
 </pre></div>
 </div>
-<p>To try running with multiple gpus in parallel (this will only benefit large inputs/models, for small systems this might even run slower due to the communication bottleneck)</p>
+</section>
+<section id="multi-gpu-parallelism">
+<h1>Multi-GPU parallelism<a class="headerlink" href="#multi-gpu-parallelism" title="Link to this heading">#</a></h1>
+<p>Our LAMMPs integration is fully compatible out the box with our Multi-GPU inference API. The only change required is to pass it the ParallelMLIPPredictUnit <a class="reference external" href="https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/lammps/lammps_fc_config.yaml#L20">here</a> instead of the regular predict unit when initializing the lammps fairchem script. No need to install anything new such as Kokkos or add communication code.</p>
+<p>For example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">lmp_fc</span> <span class="n">lmp_in</span><span class="o">=</span><span class="s2">&quot;lammps_in_example.file&quot;</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omol&quot;</span> <span class="n">predict_unit</span><span class="o">=</span><span class="s1">&#39;$</span><span class="si">{parallel_predict_unit}</span><span class="s1">&#39;</span>
 </pre></div>
 </div>
@@ -749,6 +755,7 @@ document.write(`
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">LAMMPs Integration</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#usage-notes-that-differ-from-regular-lammps-workflows">Usage notes that differ from regular lammps workflows:</a></li>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#install-and-run">Install and run</a></li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#multi-gpu-parallelism">Multi-GPU parallelism</a></li>
 </ul>
 
   </nav></div>
