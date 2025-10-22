@@ -1,0 +1,88 @@
+
+
+omol_train:
+  splits:
+    train:
+      src: ${cluster.omol_4M_train_path}
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_data_keys: ['spin', 'charge']
+  key_mapping:
+    energy: omol_energy
+    forces: ${omol_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: omol
+
+omol_val:
+  splits:
+    val:
+      sample_n: 20000
+      src: ${cluster.omol_all_path}/val
+    # metal_ligand_ood:
+    #   sample_n: 20000
+    #   src: ${cluster.omol_all_path}/metal_ligand_ood
+    # elytes_ood:
+    #   sample_n: 20000
+    #   src: ${cluster.omol_all_path}/elytes_ood
+    val_metal_complexes:
+      sample_n: 20000
+      src: ${cluster.omol_all_path}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - metal_complexes
+    val_electrolytes:
+      sample_n: 20000
+      src: ${cluster.omol_all_path}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - elytes
+    val_biomolecules:
+      sample_n: 20000
+      src: ${cluster.omol_all_path}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - biomolecules
+    val_spice:
+      src: ${cluster.omol_all_path}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - spice
+    val_neutralorganics:
+      sample_n: 20000
+      src: ${cluster.omol_all_path}/val
+      subset_to:
+        - op: in
+          metadata_key: data_ids
+          rhv:
+            - ani2x
+            - orbnet_denali
+            - geom_orca6
+            - trans1x
+            - rgd
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+    r_data_keys: ['spin', 'charge']
+    # r_edges: ${cpu_graph}
+    # radius: ${cutoff_radius}
+    # max_neigh: ${max_neighbors}
+  key_mapping:
+    energy: omol_energy
+    forces: ${omol_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: omol
