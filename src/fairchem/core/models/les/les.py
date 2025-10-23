@@ -113,7 +113,7 @@ class Les(nn.Module):
         # check the input shapes
         if batch is None:
             batch = torch.zeros(positions.shape[0], dtype=torch.int64, device=positions.device)
-        
+        #print("sid: ", sid)
 
         if latent_charges is not None:
             # check the shape of latent charges
@@ -153,7 +153,7 @@ class Les(nn.Module):
 
 
         ######### HACK FOR EVAL REMOVE LATER
-        '''
+        """
         bec = self.bec(q=latent_charges,
                         r=positions,
                         cell=cell,
@@ -161,16 +161,15 @@ class Les(nn.Module):
                         output_index=bec_output_index,
                 )
 
-
-
         # save becs to numpy array
         #print('Saving BECs to numpy array...')
         import numpy as np
         import os
+
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        tag = "au_3l3_bec"
+        tag = "water_bec_test_valid_11"
         file_name = '{}.npy'.format(tag)
         file_name_ids = '{}_ids.npy'.format(tag)
         file_name_charges = '{}_charges.npy'.format(tag)
@@ -185,7 +184,7 @@ class Les(nn.Module):
             bec = bec#.reshape(-1, 9)
         
         np.save(file_name, bec)
-
+        
 
         if os.path.exists(file_name_ids):
             # append to the file
@@ -205,14 +204,14 @@ class Les(nn.Module):
             latent_charges = latent_charges.detach().cpu().numpy() if latent_charges is not None else None
         
         np.save(file_name_charges, latent_charges)
-
         if sid is not None:
             np.save(file_name_ids, sid)
-        '''
-        
-        
+        print(E_lr)
+        """
         ######### HACK FOR EVAL REMOVE LATER
-
+        
+        
+        
         output = {
             'E_lr': E_lr,
             'latent_charges': latent_charges,

@@ -29,7 +29,7 @@ from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
-from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
+
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
@@ -44,7 +44,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 
 
@@ -74,7 +74,7 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
         use_pbc_single: bool = True,  # deprecated
         cutoff: float = 5.0,
         edge_channels: int = 128,
-        distance_function: str = "gaussian",
+        distance_function: Literal["gaussian"] = "gaussian",
         num_distance_basis: int = 512,
         direct_forces: bool = True,
         regress_forces: bool = True,
@@ -86,12 +86,11 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
         act_type: str = "gate",
         ff_type: str = "grid",
         activation_checkpointing: bool = False,
-        chg_spin_emb_type: str = "pos_emb",
+        chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
-        use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
         les_n_layers: int = 3,
@@ -103,7 +102,7 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
         les_remove_mean: bool = True,
         les_epsilon_factor: float = 1.0,
         les_use_atomwise: bool = True,
-    ):
+    ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
         self.lmax = lmax
@@ -150,10 +149,10 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
-        self.use_cuda_graph_wigner = use_cuda_graph_wigner
-        assert self.dataset_list, (
-            "the dataset list is empty, please add it to the model backbone config"
-        )
+        if self.use_dataset_embedding:
+            assert (
+                self.dataset_list
+            ), "the dataset list is empty, please add it to the model backbone config"
 
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
@@ -235,13 +234,13 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
             sphere_channels=self.sphere_channels,
             lmax=self.lmax,
             mmax=self.mmax,
-            max_num_elements=self.max_num_elements,
             edge_channels_list=self.edge_channels_list,
             rescale_factor=5.0,  # NOTE: sqrt avg degree
-            cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
+
+        self.envelope = PolynomialEnvelope(exponent=5)
 
         self.num_layers = num_layers
         self.hidden_channels = hidden_channels
@@ -391,7 +390,7 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
                 max_neighbors=self.max_neighbors,
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
-                pbc=pbc,
+                pbc=pbc
             )
         else:
             # this assume edge_index is provided
@@ -501,6 +500,8 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
 
         # edge degree embedding
         with record_function("edge embedding"):
+            dist_scaled = graph_dict["edge_distance"] / self.cutoff
+            edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
@@ -516,9 +517,9 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_distance"],
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 graph_dict["node_offset"],
             )
 
@@ -534,6 +535,7 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
+                    edge_envelope,
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -581,7 +583,7 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
         return graph_dict
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())
 
     @torch.jit.ignore
@@ -612,6 +614,7 @@ class eSCNMDBackboneLES(nn.Module, MOLEInterface):
                     no_wd_list.append(global_parameter_name)
 
         return set(no_wd_list)
+
 
 @registry.register_model("esen_efs_head_les")
 class MLP_EFS_Head_LES(nn.Module, HeadInterface):
