@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import partial
 from typing import TYPE_CHECKING
 
+from fairchem import data
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
@@ -568,7 +569,7 @@ class EScAIPGradientEFSHead(EScAIPEnergyHead):  # type: ignore
         if self.regress_stress:
             grads = torch.autograd.grad(
                 [energy_output.sum()],
-                [data["pos_original"], emb["displacement"]],
+                [data["pos"], emb["displacement"]],
                 create_graph=self.training,
             )
 
@@ -606,14 +607,14 @@ class EScAIPGradientEFSHead(EScAIPEnergyHead):  # type: ignore
 @registry.register_model("EScAIP_grad_efs_head_lr")
 class EScAIPGradientEFSHeadLR(EScAIPEnergyHead):  # type: ignore
     """
-    Do not support torch.compile
+    Does not support torch.compile
     """
 
     def __init__(
         self,
         backbone: EScAIPBackbone,  # type: ignore
         prefix: str | None = None,
-        wrap_property: bool = True,
+        wrap_property: bool = False,
     ):
         super().__init__(backbone)
         self.prefix = prefix
@@ -804,7 +805,7 @@ class EScAIPGradientEFSHeadLR(EScAIPEnergyHead):  # type: ignore
 
         outputs = {}
         
-        self.forward_fn_reps = (
+        """self.forward_fn_reps = (
             torch.compile(self.compiled_forward_reps) 
             if self.global_cfg.use_compile
             else self.compiled_forward_reps 
@@ -820,7 +821,11 @@ class EScAIPGradientEFSHeadLR(EScAIPEnergyHead):  # type: ignore
             torch.compile(self.compiled_forward_charges) 
             if self.global_cfg.use_compile
             else self.compiled_forward_charges
-        )
+        )"""
+
+        self.forward_fn_reps = self.compiled_forward_reps 
+        self.forward_fn = self.compiled_forward
+        self.forward_fn_coulomb = self.compiled_forward_charges
 
         node_reps = self.forward_fn_reps(emb)   
         energy_output_sr = self.forward_fn(emb, node_reps) 
@@ -852,7 +857,7 @@ class EScAIPGradientEFSHeadLR(EScAIPEnergyHead):  # type: ignore
         if self.regress_stress:
             grads = torch.autograd.grad(
                 [energy_output.sum()],
-                [data["pos_original"], emb["displacement"]],
+                [data["pos"], emb["displacement"]],
                 create_graph=self.training,
             )
 
@@ -869,9 +874,7 @@ class EScAIPGradientEFSHeadLR(EScAIPEnergyHead):  # type: ignore
             data["cell"] = emb["orig_cell"]
         
         elif self.regress_forces:
-            if data["pos"].requires_grad is False:
-                data["pos"].requires_grad = True
-        
+            
             forces = (
                 -1
                 * torch.autograd.grad(

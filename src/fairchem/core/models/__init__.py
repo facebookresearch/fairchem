@@ -19,12 +19,24 @@ from .uma.escn_md import (
     eSCNMDBackboneLR,
 )
 
+# REMOVE LATER
+from .allscaip import (
+    AllScAIPBackbone,
+    AllScAIPEnergyHead,
+    AllScAIPDirectForceHead,
+    AllScAIPGradientEnergyForceStressHead,
+    AllScAIPEnergyHeadLR,
+    AllScAIPGradientEnergyForceStressHeadLR
+)
+
+
 from .escaip import (
     EScAIPBackbone,
     EScAIPEnergyHead,
     EScAIPDirectForceHead,
     EScAIPGradientEFSHead
 )
+
 
 from .uma.escn_moe import eSCNMDMoeBackbone, eSCNMDMoeBackboneLR
 
@@ -48,4 +60,10 @@ __all__ = [
     "EScAIPGradientEFSHead",
     "eSCNMDBackboneLES",
     "MLP_EFS_Head_LES",
+    "AllScAIPBackbone",
+    "AllScAIPEnergyHead",
+    "AllScAIPDirectForceHead",
+    "AllScAIPGradientEnergyForceStressHead", 
+    "AllScAIPEnergyHeadLR",
+    "AllScAIPGradientEnergyForceStressHeadLR"
 ]

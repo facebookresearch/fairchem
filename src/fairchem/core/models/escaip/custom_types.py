@@ -35,24 +35,27 @@ class GraphAttentionData:
     # SV 
     pairwise_distances: (E)
     """
-
+    # attributes
     atomic_numbers: torch.Tensor
     charge: torch.Tensor
     spin: torch.Tensor
     edge_direction: torch.Tensor
     edge_distance_expansion: torch.Tensor
-    node_direction_expansion: torch.Tensor
     edge_direction_expansion: torch.Tensor
+    node_direction_expansion: torch.Tensor
+    # neighbor self attention
     src_neighbor_attn_mask: torch.Tensor
     dst_neighbor_attn_mask: torch.Tensor
     src_index: torch.Tensor
     dst_index: torch.Tensor
     frequency_vectors: torch.Tensor
+    # node self attention
     node_base_attn_mask: torch.Tensor
     node_sincx_matrix: torch.Tensor
     node_valid_mask: torch.Tensor
     global_node_mask: torch.Tensor
     node_global_mask: torch.Tensor
+    # graph structure
     neighbor_index: torch.Tensor
     node_batch: torch.Tensor
     max_batch_size: int

@@ -656,7 +656,6 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         # escnmd specific
         num_layers: int = 2,
         hidden_channels: int = 128,
-        hidden_channels_lr: int = 64,  # extra for LR
         norm_type: str = "rms_norm_sh",
         act_type: str = "gate",
         ff_type: str = "grid",
@@ -666,20 +665,19 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
-        use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
+        hidden_channels_lr: int = 64,  # extra for LR
         heisenberg_tf: bool = False,  # extra for LR
         latent_charge_tf: bool = True,  # extra for LR
-        return_bec: bool = True,  # TODO: change back
+        return_bec: bool = False,  # TODO: change back
         conv_function_tf: bool = True,  # extra for LR
-        lr_output_scaling_factor: float = 1.0,
+        lr_output_scaling_factor: float = 1.0, # extra for LR
         cutoff_lr: float = -1.0,  # extra for LR, -1 means the sr cutoff is used for electrostatics/magnetic terms
         normalize_charges_tf: bool = True,  # extra for LR
         equil_charges_tf: bool = False,  # extra for LR
     ) -> None:
         super().__init__()
-        
         self.max_num_elements = max_num_elements
         self.lmax = lmax
         self.mmax = mmax
@@ -714,14 +712,11 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
-        self.use_cuda_graph_wigner = use_cuda_graph_wigner
-        assert self.dataset_list, (
-            "the dataset list is empty, please add it to the model backbone config"
-        )
         if self.use_dataset_embedding:
             assert (
                 self.dataset_list
             ), "the dataset list is empty, please add it to the model backbone config"
+
 
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
@@ -803,20 +798,19 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
             sphere_channels=self.sphere_channels,
             lmax=self.lmax,
             mmax=self.mmax,
-            max_num_elements=self.max_num_elements,
             edge_channels_list=self.edge_channels_list,
             rescale_factor=5.0,  # NOTE: sqrt avg degree
-            cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
+
+        self.envelope = PolynomialEnvelope(exponent=5)
 
         self.num_layers = num_layers
         self.hidden_channels = hidden_channels
         self.norm_type = norm_type
         self.act_type = act_type
         self.ff_type = ff_type
-
         # LR
         self.hidden_channels_lr = hidden_channels_lr
         self.heisenberg_tf = heisenberg_tf
@@ -999,7 +993,6 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
                 "edge_index": data_dict["edge_index"],
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
-                "node_offset": 0,
             }
         graph_dict["node_offset"] = 0  # default value
 
@@ -1014,6 +1007,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
         return graph_dict
+
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
@@ -1081,6 +1075,8 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
 
         # edge degree embedding
         with record_function("edge embedding"):
+            dist_scaled = graph_dict["edge_distance"] / self.cutoff
+            edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
@@ -1096,12 +1092,11 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_distance"],
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 graph_dict["node_offset"],
             )
-
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
@@ -1114,6 +1109,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
+                    edge_envelope,
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -1126,6 +1122,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
             "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
+
         if self.cutoff_lr is not None:
             out["edge_index_lr"] = graph_dict["edge_index_lr"]
 
@@ -1137,8 +1134,6 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         The tensors are split on the dimension along the node index using node_partition.
         """
         edge_index = graph_dict["edge_index"]
-        #edge_distance = graph_dict["edge_distance"]
-        #edge_distance_vec_full = graph_dict["edge_distance_vec"]
 
         node_partition = torch.tensor_split(
             torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 
 @dataclass
@@ -19,7 +19,9 @@ class GlobalConfigs:
     use_residual_scaling: bool = True
     use_node_path: bool = True
     dataset_list: list = field(default_factory=list)
-
+    # SV - lr 
+    j_coupling_hidden_dim: int = 128
+    hidden_size_lr: Optional[int] = 128
 
 @dataclass
 class MolecularGraphConfigs:
@@ -57,7 +59,12 @@ class GraphNeuralNetworksConfigs:
     energy_reduce: Literal["sum", "mean"] = "sum"
     use_freq_mask: bool = True
     use_sincx_mask: bool = True
-
+    # SV - lr 
+    constrain_charge: bool = False
+    constrain_spin: bool = False
+    heisenberg_tf: bool = False
+    equil_charges_tf: bool = False
+    charge_scale: float = 1.0
 
 @dataclass
 class RegularizationConfigs:

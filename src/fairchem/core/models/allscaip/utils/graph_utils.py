@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
+import numpy as np 
 
 if TYPE_CHECKING:
     from fairchem.core.models.allscaip.custom_types import GraphAttentionData
@@ -182,3 +183,272 @@ def get_displacement_and_cell(data, regress_stress, regress_forces, direct_force
     ):
         data["pos"].requires_grad = True
     return displacement, orig_cell
+
+
+def compilable_scatter_on_dictionary(
+    src: dict[str, torch.Tensor],
+    index: torch.Tensor,
+    dim_size: int,
+    dim: int = 0,
+    reduce: str = "sum",
+) -> dict[str, torch.Tensor]:
+    """
+    Scatter function for dictionary of tensors with compile support.
+    """
+    out = {}
+    for key in src:
+        out[key] = compilable_scatter(
+            src[key], index, dim_size, dim=dim, reduce=reduce
+        )
+    return out
+
+
+
+def coulomb_energy_from_src_index(
+    q: torch.Tensor,  # shape: (N,)
+    src_index: torch.Tensor,  # shape: (2, N, max_neighbors)
+    dist_pairwise: torch.Tensor,  # shape: (N, N)
+    eps: float = 1e-8,
+    sigma: float = 1.0,
+    epsilon: float = 1e-6,
+    twopi: float = 2.0 * np.pi,
+    use_convergence: bool = False,
+) -> torch.Tensor:
+    """
+    Compute Coulomb energy efficiently using src_index and dist_pairwise,
+    with optional convergence function for smooth SR/LR transition.
+    Args:
+        q: charges, shape (N,)
+        src_index: (2, N, max_neighbors), src_index[0] is source, src_index[1] is neighbor index
+        dist_pairwise: (N, N) pairwise distance matrix
+        eps: small value to avoid division by zero
+        sigma: width parameter for the convergence function
+        epsilon: shift for denominator to avoid singularity
+        twopi: scaling factor for correct Coulomb prefactor
+        use_convergence: whether to apply the convergence function (default: True)
+    Returns:
+        scalar Coulomb energy
+    """
+
+    q = q.squeeze(-1) if q.dim() > 1 else q
+
+
+    # Get source and neighbor indices
+    src, nbr = src_index[0], src_index[1]  # Avoid tuple unpacking
+
+    # Get pairwise distances for each edge
+    rij = dist_pairwise[src, nbr]  # (N, max_neighbors)
+    # Get charges for each pair
+    qi = q[src]  # (N, max_neighbors)
+    qj = q[nbr]  # (N, max_neighbors)
+
+    # Create mask using element-wise operations (more compile-friendly)
+    mask = (src != nbr) & (rij > eps)
+    
+    # Pre-allocate output tensor
+    e_ij = torch.zeros_like(rij)
+    
+    
+    # Convergence function (error function, as in Ewald)
+    if use_convergence:
+        convergence_func = torch.special.erf(rij / (sigma * 1.4142135623730951))
+    else:
+        convergence_func = torch.ones_like(rij)
+
+    # Compute pairwise Coulomb energy with epsilon shift and correct prefactor
+    coulomb_term = (qi * qj) / (rij + epsilon) / twopi / 2.0 * convergence_func
+    e_ij = torch.where(mask, coulomb_term, torch.zeros_like(coulomb_term))
+
+    
+    # To avoid double-counting, sum only upper triangle or divide by 2
+    energy = e_ij.sum(dim=-1) * 90.0474  
+    return energy
+
+
+def heisenberg_energy_from_src_index(
+    q: torch.Tensor,  # shape: (N, 2) 
+    src_index: torch.Tensor,  # shape: (2, N, max_neighbors)
+    j_coupling_nn: torch.nn.Module,  
+    dist_pairwise: torch.Tensor,  # shape: (N, N)
+    eps: float = 1e-8, 
+) -> torch.Tensor:
+    """
+    Compute Heisenberg exchange energy efficiently using src_index.
+    Args:
+        s: spins, shape (N, 1) for Ising or (N, 3) for Heisenberg model
+        src_index: (2, N, max_neighbors), src_index[0] is source, src_index[1] is neighbor index
+        j_coupling_tensor: (N, ) coupling constant for each atom
+    """
+    # Get source and neighbor indices
+    src, nbr = src_index[0], src_index[1]  # Avoid tuple unpacking
+
+    # Get pairwise distances for each edge
+    rij = dist_pairwise[src, nbr]  # (N, max_neighbors)
+    
+    # for batching NN on all rij pairs
+    N, max_neighbors = rij.shape
+    rij_flat = rij.contiguous().view(N * max_neighbors, 1)
+    #rij_flatten = rij.view(-1).unsqueeze(1)
+    j_coupling_vals = j_coupling_nn(rij_flat)
+    j_coupling_vals = j_coupling_vals.reshape(N, max_neighbors)
+    
+    # Get charges for each pair
+    qi = q[src]  # (N, max_neighbors, 2)
+    qj = q[nbr]  # (N, max_neighbors, 2)
+    
+    # Extract alpha and beta components
+    qi_alpha = qi[:, :, 0]  # (N, max_neighbors)
+    qi_beta = qi[:, :, 1]   # (N, max_neighbors)
+    qj_alpha = qj[:, :, 0]  # (N, max_neighbors)
+    qj_beta = qj[:, :, 1]   # (N, max_neighbors)
+    
+    # Mask out self-interactions (where src == nbr or rij == 0)
+    mask = (src != nbr) & (rij > eps)
+
+    # compute pairwise Heisenberg energy
+    e_ij = torch.zeros_like(rij)
+
+    # J_ij * (S_i . S_j = S_i^alpha * S_j^beta + S_j^alpha * S_i^beta)
+    spin_interaction = (qi_alpha * qj_beta + qj_alpha * qi_beta) * j_coupling_vals
+    e_ij = torch.where(mask, spin_interaction, torch.zeros_like(spin_interaction))
+
+    #e_ij[mask] = (qi_alpha[mask] * qj_beta[mask] + qj_alpha[mask] * qi_beta[mask]) * j_coupling_vals[mask]
+    
+    energy = e_ij.sum(axis=1)
+    #print("Heisenberg energy shape: ", energy.shape)
+
+    return energy
+
+
+def charge_spin_renormalization(
+        q: torch.Tensor, 
+        emb: dict[str, torch.Tensor], 
+        weights: torch.Tensor | None = None,
+    ) -> torch.Tensor: 
+    """
+    Rescale the predicted charges to match the target total charge per graph.
+        Args:
+        q: predicted charges, shape (N, 2)
+        emb: dictionary containing graph data with keys:
+            - "data": a GraphAttentionData object with attributes:
+                - num_nodes: total number of nodes (N)
+                - num_graphs: total number of graphs in the batch
+                - node_batch: tensor of shape (N,) indicating graph membership of each node
+                - charge: tensor of shape (num_graphs,) indicating target total charge per graph
+        eps: small value to avoid division by zero
+        weights: tensor of shape (N, 2) indicating weights for alpha and beta components
+    Returns:
+        rescaled charges, shape (N, 2)
+    """
+    # Extract necessary data from emb
+    num_nodes = emb["data"].num_nodes
+    num_graphs = emb["data"].num_graphs
+    node_batch = emb["data"].node_batch
+    
+    # Rescale charges to match target total charge per graph
+    results_tensor = torch.zeros_like(q)
+
+    valid_charges = q[:num_nodes]
+    valid_node_batch = node_batch[:num_nodes]
+    target_charges = emb["data"].charge[:num_graphs]
+    target_spins = emb["data"].spin[:num_graphs]
+   
+    alpha = valid_charges[:, 0]
+    beta = valid_charges[:, 1]
+
+    
+    if weights is None:
+        weights = torch.ones_like(valid_charges)
+    
+    w_alpha = weights[:, 0]
+    w_beta  = weights[:, 1]
+    ones_arr = torch.ones_like(w_alpha)
+
+    
+    scatter_dict = compilable_scatter_on_dictionary(
+        {
+            "alpha": alpha, 
+            "beta": beta, 
+            "w_alpha": w_alpha, 
+            "w_beta": w_beta,
+            "ones": ones_arr
+        },
+        index=valid_node_batch,
+        dim_size=emb["data"].num_graphs,
+        dim=0,
+        reduce="sum"
+    )
+
+    q_sum = scatter_dict["alpha"] + scatter_dict["beta"]        # total charge
+    s_sum = scatter_dict["alpha"] - scatter_dict["beta"]        # total spin
+
+    dq = target_charges - q_sum
+    ds = target_spins - s_sum
+    
+    # residuals / batch for each constraint also normalized by weights
+    delta_alpha = (0.5 * (dq + ds))
+    delta_beta  = (0.5 * (dq - ds))
+    #print("delta_alpha: ", delta_alpha)
+    #print("delta_beta: ", delta_beta)
+
+    # expand out to nodes
+    delta_alpha_expanded = delta_alpha[valid_node_batch] 
+    delta_beta_expanded  = delta_beta[valid_node_batch]
+    # divide by items per graph and weights
+    delta_alpha_expanded = delta_alpha_expanded / (scatter_dict["w_alpha"][valid_node_batch] + 1e-8)
+    delta_beta_expanded  = delta_beta_expanded  / (scatter_dict["w_beta"][valid_node_batch] + 1e-8)
+    #print("shapes: ", delta_alpha.shape, delta_alpha_expanded.shape, valid_node_batch.shape)
+
+    alpha_corr = alpha + delta_alpha_expanded
+    beta_corr  = beta + delta_beta_expanded
+    
+    results_tensor[:num_nodes, 0] = alpha_corr.squeeze(-1)
+    results_tensor[:num_nodes, 1] = beta_corr.squeeze(-1)
+    
+    return results_tensor
+
+
+def charge_renormalization(q: torch.Tensor, emb: dict[str, torch.Tensor], eps: float = 1e-8,) -> torch.Tensor: 
+    """
+    Rescale the predicted charges to match the target total charge per graph.
+    Args:
+        q: predicted charges, shape (N, 1)
+        emb: dictionary containing graph data with keys:
+            - "data": a GraphAttentionData object with attributes:
+                - num_nodes: total number of nodes (N)
+                - num_graphs: total number of graphs in the batch
+                - node_batch: tensor of shape (N,) indicating graph membership of each node
+                - charge: tensor of shape (num_graphs,) indicating target total charge per graph
+        eps: small value to avoid division by zero
+    Returns:
+        rescaled charges, shape (N, 1)
+    """
+    # Extract necessary data from emb
+    num_nodes = emb["data"].num_nodes
+    num_graphs = emb["data"].num_graphs
+    node_batch = emb["data"].node_batch
+    
+    # Rescale charges to match target total charge per graph
+    flattened_charges_raw = q.squeeze(-1) 
+    valid_charges = flattened_charges_raw[:num_nodes]
+    valid_node_batch = node_batch[:num_nodes]
+    target_charges = emb["data"].charge[:num_graphs]
+
+    global_charges = compilable_scatter(
+        valid_charges, 
+        index=valid_node_batch,
+        dim_size=emb["data"].num_graphs,
+        dim=0,
+        reduce="sum"
+    )
+
+    # Add small epsilon only where needed to avoid division by zero
+    rescale_factor = torch.where(
+        torch.abs(global_charges) < eps,
+        torch.ones_like(global_charges),
+        target_charges / global_charges
+    )
+
+    flattened_charges_raw[:num_nodes] *= rescale_factor[valid_node_batch]
+
+    return flattened_charges_raw

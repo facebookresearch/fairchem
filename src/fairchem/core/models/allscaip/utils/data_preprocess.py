@@ -412,5 +412,7 @@ def data_preprocess_radius_graph(
         num_graphs=num_graphs,
         max_num_nodes=max_num_nodes,
         num_nodes=num_nodes,
+        pairwise_distances=dist_pairwise,
+
     )
     return x

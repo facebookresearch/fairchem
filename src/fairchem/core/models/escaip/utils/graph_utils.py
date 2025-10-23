@@ -4,7 +4,6 @@ import math
 import numpy as np 
 import torch
 import torch.nn.functional as F
-from fairchem.core.models.les.util import grad
 
 
 from ..custom_types import GraphAttentionData
@@ -87,6 +86,7 @@ def unpad_result(results: dict, data: GraphAttentionData):
     Unpad the results to remove the padding.
     """
     unpad_results = {}
+    #print("results dict: ", results)
     for key in results:
         if results[key].shape[0] == data.max_num_nodes:
             # Node-level results
