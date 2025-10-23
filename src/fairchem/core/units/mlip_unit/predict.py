@@ -416,7 +416,7 @@ class MLIPWorker(MLIPWorkerLocal):
 
 
 @requires(ray_installed, message="Requires `ray` to be installed")
-class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
+class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
         inference_model_path: str,

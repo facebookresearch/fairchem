@@ -85,7 +85,7 @@ def get_predict_unit(
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
         workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
-            we will instantiate a ParallelMLIPPredictUnitRay instead of the normal predict unit.
+            we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
