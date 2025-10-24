@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import random
+import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
@@ -340,8 +341,7 @@ def move_tensors_to_cpu(data):
         return data
 
 
-@remote
-class MLIPWorker:
+class MLIPWorkerLocal:
     def __init__(
         self,
         worker_id: int,
@@ -361,54 +361,58 @@ class MLIPWorker:
         )
         self.master_port = get_free_port() if master_port is None else master_port
         self.is_setup = False
+        self.last_received_atomic_data = None
 
     def get_master_address_and_port(self):
         return (self.master_address, self.master_port)
 
     def _distributed_setup(
         self,
-        worker_id: int,
-        master_port: int,
-        world_size: int,
-        predictor_config: dict,
-        master_address: str,
     ):
         # initialize distributed environment
         # TODO, this wont work for multi-node, need to fix master addr
-        logging.info(f"Initializing worker {worker_id}...")
-        setup_env_local_multi_gpu(worker_id, master_port, master_address)
-        # local_rank = int(os.environ["LOCAL_RANK"])
-        device = predictor_config.get("device", "cpu")
+        logging.info(f"Initializing worker {self.worker_id}...")
+        setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
+
+        device = self.predictor_config.get("device", "cpu")
         assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
         dist.init_process_group(
             backend=backend,
-            rank=worker_id,
-            world_size=world_size,
+            rank=self.worker_id,
+            world_size=self.world_size,
         )
-        gp_utils.setup_graph_parallel_groups(world_size, backend)
-        self.predict_unit = hydra.utils.instantiate(predictor_config)
+        gp_utils.setup_graph_parallel_groups(self.world_size, backend)
+        self.predict_unit = hydra.utils.instantiate(self.predictor_config)
+        self.device = get_device_for_local_rank()
         logging.info(
-            f"Worker {worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
-            f"on port {self.master_port}, with device: {get_device_for_local_rank()}, config: {self.predictor_config}"
+            f"Worker {self.worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
+            f"on port {self.master_port}, with device: {self.device}, config: {self.predictor_config}"
         )
+        self.is_setup = True
 
-    def predict(self, data: AtomicData) -> dict[str, torch.tensor] | None:
+    def predict(
+        self, data: AtomicData, use_nccl: bool = False
+    ) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
-            self._distributed_setup(
-                self.worker_id,
-                self.master_port,
-                self.world_size,
-                self.predictor_config,
-                self.master_address,
-            )
-            self.is_setup = True
+            self._distributed_setup()
+
         out = self.predict_unit.predict(data)
-        out = move_tensors_to_cpu(out)
         if self.worker_id == 0:
-            return out
-        else:
-            return None
+            return move_tensors_to_cpu(out)
+
+        if self.worker_id != 0 and use_nccl:
+            self.last_received_atomic_data = data.to(self.device)
+            while True:
+                torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
+                self.predict_unit.predict(self.last_received_atomic_data)
+
+        return None
+
+
+@remote
+class MLIPWorker(MLIPWorkerLocal):
+    pass
 
 
 @requires(ray_installed, message="Requires `ray` to be installed")
@@ -434,6 +438,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             seed=seed,
             atom_refs=atom_refs,
         )
+        self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
         predict_unit_config = {
@@ -446,6 +451,16 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "atom_refs": atom_refs,
             "assert_on_nans": assert_on_nans,
         }
+
+        logging.basicConfig(
+            level=logging.INFO,
+            force=True,
+            stream=sys.stdout,
+            format="%(asctime)s %(levelname)s [%(processName)s] %(name)s: %(message)s",
+        )
+        # Optional: keep Ray/uvicorn chatty logs in check
+        logging.getLogger("ray").setLevel(logging.INFO)
+        logging.getLogger("uvicorn").setLevel(logging.INFO)
         if not ray.is_initialized():
             ray.init(
                 logging_level=logging.INFO,
@@ -453,6 +468,21 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 #     "env_vars": {"RAY_DEBUG": "1"},
                 # },
             )
+
+        self.last_sent_atomic_data = None
+
+        # check if we have a GPU locally
+        head = next(
+            (
+                n
+                for n in ray.nodes()
+                if n["Alive"] and n["Resources"].get("head", 0) > 0
+            ),
+            None,
+        )
+        self.head_node_has_gpu = (
+            head["Resources"].get("GPU", 0) > 0 if head is not None else False
+        )
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -465,10 +495,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         # first create one placement group for each node
         num_gpu_per_worker = 1 if device == "cuda" else 0
         placement_groups = []
-        for workers in num_workers_on_node_array:
+        for node_idx, workers in enumerate(num_workers_on_node_array):
             bundle = {"CPU": workers}
             if device == "cuda":
                 bundle["GPU"] = workers
+            if self.head_node_has_gpu and node_idx == 0:
+                bundle["head"] = 0.1
             pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
             placement_groups.append(pg)
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
@@ -482,11 +514,21 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
             ),
         ).remote(0, num_workers, predict_unit_config)
-        master_addr, master_port = ray.get(
-            rank0_worker.get_master_address_and_port.remote()
-        )
+
+        self.workers = []
+        if self.head_node_has_gpu:
+            self.local_rank0 = MLIPWorkerLocal(
+                worker_id=0,
+                world_size=num_workers,
+                predictor_config=predict_unit_config,
+            )
+            master_addr, master_port = self.local_rank0.get_master_address_and_port()
+        else:
+            master_addr, master_port = ray.get(
+                rank0_worker.get_master_address_and_port.remote()
+            )
+            self.workers.append(rank0_worker)
         logging.info(f"Started rank0 on {master_addr}:{master_port}")
-        self.workers = [rank0_worker]
 
         # next place all ranks in order and pack them on placement groups
         # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
@@ -520,20 +562,29 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 self.workers.append(actor)
                 worker_id += 1
 
-    def predict(
-        self, data: AtomicData, undo_element_references: bool = True
-    ) -> dict[str, torch.tensor]:
+    def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
         # this data transfer should be made more efficienct by using a shared memory transfer + nccl broadcast
-        data_ref = ray.put(data)
-        futures = [w.predict.remote(data_ref) for w in self.workers]
-        # just get the first result that is ready since they are identical
-        # the rest of the futures should go out of scope and memory garbage collected
-        # ready_ids, _ = ray.wait(futures, num_returns=1)
-        # result = ray.get(ready_ids[0])
-        # result = ray.get(futures)
-        # return result[0]
-        return ray.get(futures[0])
+
+        if self.head_node_has_gpu and self.inference_settings.merge_mole:
+            if self.last_sent_atomic_data is None:
+                data_ref = ray.put(data)
+                # this will put the ray works into an infinite loop listening for broadcasts
+                futures = [
+                    w.predict.remote(data_ref, md=self.inference_settings.merge_mole)
+                    for w in self.workers
+                ]
+                self.last_sent_atomic_data = data
+            else:
+                data = data.to(self.local_rank0.device)
+                torch.distributed.broadcast(data.pos, src=0)
+            return self.local_rank0.predict(data)
+        else:
+            data_ref = ray.put(data)
+            futures = [w.predict.remote(data_ref) for w in self.workers]
+            if self.head_node_has_gpu:
+                return self.local_rank0.predict(data)
+            return ray.get(futures[0])
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
