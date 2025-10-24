@@ -438,6 +438,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             seed=seed,
             atom_refs=atom_refs,
         )
+        self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
         predict_unit_config = {
@@ -450,6 +451,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "atom_refs": atom_refs,
             "assert_on_nans": assert_on_nans,
         }
+
         logging.basicConfig(
             level=logging.INFO,
             force=True,
@@ -467,8 +469,13 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 # },
             )
 
-        self.local = True
         self.last_sent_atomic_data = None
+
+        # check if we have a GPU locally
+        head = next(
+            n for n in ray.nodes() if n["Alive"] and n["Resources"].get("head", 0) > 0
+        )
+        self.head_node_has_gpu = head["Resources"].get("GPU", 0) > 0
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -485,7 +492,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             bundle = {"CPU": workers}
             if device == "cuda":
                 bundle["GPU"] = workers
-            if self.local and node_idx == 0:
+            if self.head_node_has_gpu and node_idx == 0:
                 bundle["head"] = 0.1
             pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
             placement_groups.append(pg)
@@ -502,7 +509,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         ).remote(0, num_workers, predict_unit_config)
 
         self.workers = []
-        if self.local:
+        if self.head_node_has_gpu:
             self.local_rank0 = MLIPWorkerLocal(
                 worker_id=0,
                 world_size=num_workers,
@@ -548,27 +555,29 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 self.workers.append(actor)
                 worker_id += 1
 
-    def predict(self, data: AtomicData, md: bool = False) -> dict[str, torch.tensor]:
+    def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
         # this data transfer should be made more efficienct by using a shared memory transfer + nccl broadcast
 
-        if not md:
+        if self.head_node_has_gpu and self.inference_settings.merge_mole:
+            if self.last_sent_atomic_data is None:
+                data_ref = ray.put(data)
+                # this will put the ray works into an infinite loop listening for broadcasts
+                futures = [
+                    w.predict.remote(data_ref, md=self.inference_settings.merge_mole)
+                    for w in self.workers
+                ]
+                self.last_sent_atomic_data = data
+            else:
+                data = data.to(self.local_rank0.device)
+                torch.distributed.broadcast(data.pos, src=0)
+            return self.local_rank0.predict(data)
+        else:
             data_ref = ray.put(data)
             futures = [w.predict.remote(data_ref) for w in self.workers]
-            if self.local:
+            if self.head_node_has_gpu:
                 return self.local_rank0.predict(data)
             return ray.get(futures[0])
-
-        assert self.local, "MD only supported in local mode currently"
-        # MD is enabled
-        if self.last_sent_atomic_data is None:
-            data_ref = ray.put(data)
-            futures = [w.predict.remote(data_ref, md=md) for w in self.workers]
-            self.last_sent_atomic_data = data
-        else:
-            data = data.to(self.local_rank0.device)
-            torch.distributed.broadcast(data.pos, src=0)
-        return self.local_rank0.predict(data)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
