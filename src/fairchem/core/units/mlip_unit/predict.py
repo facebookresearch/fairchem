@@ -392,7 +392,7 @@ class MLIPWorkerLocal:
         self.is_setup = True
 
     def predict(
-        self, data: AtomicData, md: bool = False
+        self, data: AtomicData, use_nccl: bool = False
     ) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
             self._distributed_setup()
@@ -401,7 +401,7 @@ class MLIPWorkerLocal:
         if self.worker_id == 0:
             return move_tensors_to_cpu(out)
 
-        if self.worker_id != 0 and md:
+        if self.worker_id != 0 and use_nccl:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
