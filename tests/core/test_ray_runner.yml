@@ -1,0 +1,17 @@
+job:
+  device_type: CPU
+  scheduler:
+    use_ray: true
+    mode: LOCAL
+    ranks_per_node: 1
+    num_nodes: 1
+  run_name: test_ray_runner
+
+runner:
+  _target_: fairchem.core.launchers.ray_on_slurm_launch.SPMDController
+  job_config: ${job}
+  runner_config:
+    _target_: fairchem.core.components.runner.MockRunner
+    x: 10
+    y: 23
+    z: 1

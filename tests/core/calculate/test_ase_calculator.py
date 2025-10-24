@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+import tempfile
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -15,6 +16,7 @@ import pytest
 import torch
 from ase import Atoms, units
 from ase.build import add_adsorbate, bulk, fcc111, molecule
+from ase.io import read, write
 from ase.md.langevin import Langevin
 from ase.optimize import BFGS
 
@@ -24,7 +26,6 @@ from fairchem.core.calculate.ase_calculator import (
     MixedPBCError,
 )
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATask
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
@@ -87,6 +88,17 @@ def periodic_h2o_atoms() -> Atoms:
     atoms.set_pbc(True)  # Enable periodic boundary conditions
     atoms = atoms.repeat((2, 2, 2))  # Create a 2x2x2 periodic box
     return atoms
+
+
+@pytest.fixture()
+def periodic_h2o_from_extxyz(periodic_h2o_atoms) -> Atoms:
+    """Read from extxyz file to test type casting"""
+    periodic_h2o_atoms.info["charge"] = 0  # set as int here
+    periodic_h2o_atoms.info["spin"] = 0
+    with tempfile.NamedTemporaryFile(suffix=".xyz") as f:
+        write(f.name, periodic_h2o_atoms, format="extxyz")
+        atoms = read(f.name, format="extxyz")  # type: ignore
+    return atoms  # will be read as np.int64
 
 
 @pytest.fixture()
@@ -162,6 +174,7 @@ def test_calculator_setup(all_calculators):
         "bulk_atoms",
         "aperiodic_atoms",
         "periodic_h2o_atoms",
+        "periodic_h2o_from_extxyz",
     ],
 )
 def test_energy_calculation(request, atoms_fixture, all_calculators):
@@ -399,7 +412,6 @@ def test_simple_md():
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
-        wigner_cuda=False,
         compile=False,
         activation_checkpointing=False,
         internal_graph_gen_version=2,
@@ -417,20 +429,14 @@ def test_parallel_md(checkpointing):
     inference_settings = InferenceSettings(
         tf32=True,
         merge_mole=True,
-        wigner_cuda=False,
         compile=False,
         activation_checkpointing=checkpointing,
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    model_path = pretrained_mlip.pretrained_checkpoint_path_from_name("uma-s-1p1")
-    predictor = ParallelMLIPPredictUnit(
-        inference_model_path=model_path,
-        device="cpu",
-        inference_settings=inference_settings,
-        server_config={"workers": 2},
+    predictor = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cpu", inference_settings=inference_settings, workers=2
     )
 
     calc = FAIRChemCalculator(predictor, task_name="omol")
     run_md_simulation(calc, steps=10)
-    predictor.cleanup()
