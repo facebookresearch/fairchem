@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pymatgen.io.ase import MSONAtoms
+from ase.io.jsonio import encode
 
 from fairchem.core.components.calculate.recipes.relax import (
     relax_atoms,
@@ -94,8 +94,8 @@ def adsorb_atoms(
         results["full"] = pred_adsorption_energy
 
     if save_relaxed_atoms:
-        results["relaxed_adslab_atoms"] = MSONAtoms(relaxed_adslab_atoms).as_dict()
+        results["relaxed_adslab_atoms"] = encode(relaxed_adslab_atoms)
         if relax_surface:
-            results["relaxed_slab_atoms"] = MSONAtoms(relaxed_slab_atoms).as_dict()
+            results["relaxed_slab_atoms"] = encode(relaxed_slab_atoms)
 
     return results

@@ -295,7 +295,7 @@ class FAIRChemCalculator(Calculator):
 
         # Validate charge
         charge = atoms.info["charge"]
-        if not isinstance(charge, int):
+        if not isinstance(charge, (int, np.integer)):
             raise TypeError(
                 f"Invalid type for charge: {type(charge)}. Charge must be an integer representing the total charge on the system."
             )
@@ -306,7 +306,7 @@ class FAIRChemCalculator(Calculator):
 
         # Validate spin
         spin = atoms.info["spin"]
-        if not isinstance(spin, int):
+        if not isinstance(charge, (int, np.integer)):
             raise TypeError(
                 f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
             )
