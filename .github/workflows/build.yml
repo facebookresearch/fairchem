@@ -65,14 +65,8 @@ jobs:
           name: dist-lammps
           path: dist-lammps/*
 
-      - name: Upload lammps artifact
+      - name: Upload omat artifact
         uses: actions/upload-artifact@v4
         with:
           name: dist-omat
           path: dist-omat/*
-
-      - name: Upload lammps artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-lammps
-          path: dist-lammps/*

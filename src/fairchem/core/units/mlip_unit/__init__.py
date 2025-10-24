@@ -41,7 +41,7 @@ def load_predict_unit(
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.
         workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
-            we will instantiate a ParallelMLIPPredictUnitRay instead of the normal predict unit.
+            we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -54,9 +54,9 @@ def load_predict_unit(
     inference_settings = guess_inference_settings(inference_settings)
     overrides = overrides or {"backbone": {"always_use_pbc": False}}
     if workers > 1:
-        from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
+        from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
-        return ParallelMLIPPredictUnitRay(
+        return ParallelMLIPPredictUnit(
             path,
             device=device,
             inference_settings=inference_settings,

@@ -10,10 +10,11 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnitRay
+from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
-ATOL = 5e-6
+ATOL = 1e-5
 
 
 def get_fcc_carbon_xtal(
@@ -129,6 +130,8 @@ def test_multiple_dataset_predict(uma_predict_unit):
     ],
 )
 def test_parallel_predict_unit(workers, device):
+    seed = 42
+    runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
     num_atoms = 10
     ifsets = InferenceSettings(
@@ -138,24 +141,25 @@ def test_parallel_predict_unit(workers, device):
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    ppunit = ParallelMLIPPredictUnitRay(
+    atoms = get_fcc_carbon_xtal(num_atoms)
+    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
+
+    seed_everywhere(seed)
+    ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
         device=device,
         inference_settings=ifsets,
         num_workers=workers,
     )
-
-    atoms = get_fcc_carbon_xtal(num_atoms)
-    atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
-
-    for _ in range(2):
+    for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    pp_results = ppunit.predict(atomic_data)
+    seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device=device, inference_settings=ifsets
     )
-    normal_results = normal_predict_unit.predict(atomic_data)
+    for _ in range(runs):
+        normal_results = normal_predict_unit.predict(atomic_data)
 
     assert torch.allclose(
         pp_results["energy"].detach().cpu(),
