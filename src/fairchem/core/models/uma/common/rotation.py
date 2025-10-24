@@ -9,23 +9,23 @@ from __future__ import annotations
 
 import torch
 
+EPS = 1e-7
 
-# TODO: this gives wrong forces in special cases!
+
 class Safeacos(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x):
-        ctx.save_for_backward(x)
-        return torch.acos(x)
+        x_clamped = x.clamp(-1 + EPS, 1 - EPS)
+        ctx.save_for_backward(x_clamped)
+        return torch.acos(x_clamped)
 
     @staticmethod
     def backward(ctx, grad_output):
-        (x,) = ctx.saved_tensors
-        norms = x.pow(2)
-        grad_input = -grad_output / torch.sqrt(1 - norms)
-        return torch.where(grad_input.isfinite(), grad_input, 0.0)
+        (x_clamped,) = ctx.saved_tensors
+        denom = torch.sqrt(1 - x_clamped.pow(2)).clamp(min=EPS)
+        return -grad_output / denom
 
 
-# TODO: this gives wrong forces in special cases!
 class Safeatan2(torch.autograd.Function):
     @staticmethod
     def forward(ctx, y, x):
@@ -35,9 +35,8 @@ class Safeatan2(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         y, x = ctx.saved_tensors
-        norms = x.pow(2) + y.pow(2)
-        safe_norms = torch.where(norms == 0.0, 1, norms)
-        return (x / safe_norms) * grad_output, -(y / safe_norms) * grad_output
+        denom = x.pow(2) + y.pow(2).clamp(min=EPS)
+        return (x / denom) * grad_output, (-y / denom) * grad_output
 
 
 def init_edge_rot_euler_angles(edge_distance_vec):
@@ -52,8 +51,7 @@ def init_edge_rot_euler_angles(edge_distance_vec):
     alpha = Safeatan2.apply(xyz[:, 0], xyz[:, 2])
 
     # random gamma (roll)
-    gamma = torch.rand_like(alpha) * 2 * torch.pi
-    # gamma = torch.zeros_like(alpha)
+    gamma = torch.rand_like(alpha) * 2 * torch.pi - torch.pi
 
     # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha
