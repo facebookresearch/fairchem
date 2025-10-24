@@ -473,9 +473,16 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
 
         # check if we have a GPU locally
         head = next(
-            n for n in ray.nodes() if n["Alive"] and n["Resources"].get("head", 0) > 0
+            (
+                n
+                for n in ray.nodes()
+                if n["Alive"] and n["Resources"].get("head", 0) > 0
+            ),
+            None,
         )
-        self.head_node_has_gpu = head["Resources"].get("GPU", 0) > 0
+        self.head_node_has_gpu = (
+            head["Resources"].get("GPU", 0) > 0 if head is not None else False
+        )
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
