@@ -54,6 +54,7 @@ def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "energy_cutoff": match_config.get("energy-cutoff", 20.0),  # default 20 kJ/mol
         "density_cutoff": match_config.get("density-cutoff", 100),  # default 0.1 g/cm³
+        "remove_duplicates": match_config.get("remove-duplicates", False),
         "ltol": match_config.get("ltol", 0.2),  # default lattice tolerance
         "stol": match_config.get("stol", 0.3),  # default site tolerance
         "angle_tol": match_config.get(
@@ -67,6 +68,7 @@ def filter_and_deduplicate_structures_single(
     output_dir: Path,
     energy_cutoff: float = 20,
     density_cutoff: float = 2.5,
+    remove_duplicates: bool = False,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
@@ -168,12 +170,12 @@ def filter_and_deduplicate_structures_single(
     # (disable density/volume hashing for final deduplication)
     structures_df_deduped = deduplicate_structures(
         structures_df_filtered,
+        remove_duplicates=remove_duplicates,
         ltol=ltol,
         stol=stol,
         angle_tol=angle_tol,
         hash_density=False,  # Disable for final deduplication
         hash_volume=False,
-        remove_duplicates=False,  # Keep all structures with group assignments
     )
 
     # Clean up before saving - remove structure objects to reduce file size
@@ -194,6 +196,7 @@ def filter_and_deduplicate_structures(
     post_relax_config: dict[str, Any],
     energy_cutoff: float,
     density_cutoff: float,
+    remove_duplicates: bool,
     ltol: float,
     stol: float,
     angle_tol: float,
@@ -208,6 +211,7 @@ def filter_and_deduplicate_structures(
         post_relax_config: Configuration dictionary containing SLURM and filtering parameters
         energy_cutoff: Energy threshold above minimum (kJ/mol)
         density_cutoff: Maximum density threshold (g/cm³)
+        remove_duplicates: Whether to enable deduplication
         ltol: Lattice parameter tolerance for structure matching
         stol: Site tolerance for structure matching
         angle_tol: Angle tolerance for structure matching
@@ -244,6 +248,7 @@ def filter_and_deduplicate_structures(
                     output_file,
                     energy_cutoff,
                     density_cutoff,
+                    remove_duplicates,
                     ltol,
                     stol,
                     angle_tol,
