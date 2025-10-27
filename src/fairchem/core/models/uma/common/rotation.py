@@ -17,7 +17,7 @@ class Safeacos(torch.autograd.Function):
     def forward(ctx, x):
         x_clamped = x.clamp(-1 + EPS, 1 - EPS)
         ctx.save_for_backward(x_clamped)
-        return torch.acos(x_clamped)
+        return torch.acos(x)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -35,7 +35,7 @@ class Safeatan2(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         y, x = ctx.saved_tensors
-        denom = x.pow(2) + y.pow(2).clamp(min=EPS)
+        denom = (x.pow(2) + y.pow(2)).clamp(min=EPS)
         return (x / denom) * grad_output, (-y / denom) * grad_output
 
 
