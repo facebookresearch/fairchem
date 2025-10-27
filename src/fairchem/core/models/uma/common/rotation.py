@@ -33,6 +33,7 @@ class Safeatan2(torch.autograd.Function):
         return torch.atan2(y, x)
 
     @staticmethod
+    @torch.compiler.disable
     def backward(ctx, grad_output):
         y, x = ctx.saved_tensors
         denom = (x.pow(2) + y.pow(2)).clamp(min=EPS)
@@ -43,16 +44,16 @@ def init_edge_rot_euler_angles(edge_distance_vec):
     # we need to clamp the output here because if using compile
     # normalize can return >1.0 , pytorch #163082
     xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1.0, 1.0)
+    x,y,z = torch.split(xyz,1,dim=1)
 
     # latitude (beta)
-    beta = Safeacos.apply(xyz[:, 1])
+    beta = Safeacos.apply(y.squeeze(-1))
 
     # longitude (alpha)
-    alpha = Safeatan2.apply(xyz[:, 0], xyz[:, 2])
+    alpha = Safeatan2.apply(x.squeeze(-1), z.squeeze(-1))
 
     # random gamma (roll)
     gamma = torch.rand_like(alpha) * 2 * torch.pi - torch.pi
-
     # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha
 
