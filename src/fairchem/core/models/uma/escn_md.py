@@ -676,6 +676,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         cutoff_lr: float = -1.0,  # extra for LR, -1 means the sr cutoff is used for electrostatics/magnetic terms
         normalize_charges_tf: bool = True,  # extra for LR
         equil_charges_tf: bool = False,  # extra for LR
+        use_ewald_tf: bool = False,  # extra for LR
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -820,6 +821,7 @@ class eSCNMDBackboneLR(nn.Module, MOLEInterface):
         self.lr_output_scaling_factor = lr_output_scaling_factor
         self.normalize_charges_tf = normalize_charges_tf
         self.equil_charges_tf = equil_charges_tf
+        self.use_ewald_tf = use_ewald_tf
 
         if cutoff_lr < 0.0:
             self.cutoff_lr = cutoff
@@ -1330,6 +1332,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         self.latent_charge_tf = backbone.latent_charge_tf
         self.normalize_charges_tf = backbone.normalize_charges_tf
         self.equil_charges_tf = backbone.equil_charges_tf
+        self.use_ewald_tf = backbone.use_ewald_tf
 
         self.lr_comp_size = 1
         if self.heisenberg_tf:
@@ -1389,6 +1392,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         self, 
         node_features: torch.Tensor,
         data: AtomicData, 
+        epsilon: float = 1e-8
     ):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
@@ -1415,7 +1419,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
                 global_charges_broadcasted = global_charges[data["batch"]]
                 true_charge_broadcasted = data["charge"][data["batch"]].view(-1, 1)
                 # renormalizes via division
-                charges_raw = true_charge_broadcasted * charges_raw / global_charges_broadcasted
+                charges_raw = true_charge_broadcasted * charges_raw / ( global_charges_broadcasted + epsilon)
                 results["charges"] = charges_raw
                 
                 """global_charges = scatter_add(
@@ -1536,6 +1540,9 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
         if self.equil_charges_tf:
             en_electrostatic = (charge_dict["electroneg"] * charge_dict["charges"]).view(-1)
             en_hardness = 0.5 * (charge_dict["hardness"] * charge_dict["charges"]**2).view(-1)
+            #print("en_electrostatic: ", en_electrostatic.shape)
+            #print("en_hardness: ", en_hardness.shape)
+            #print("energy_output_lr_dict[potential]: ", results["energy"].shape)
             results["energy"] += en_electrostatic + en_hardness
 
         if self.heisenberg_tf:
@@ -1705,6 +1712,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         self.latent_charge_tf = backbone.latent_charge_tf
         self.normalize_charges_tf = backbone.normalize_charges_tf
         self.equil_charges_tf = backbone.equil_charges_tf
+        self.use_ewald_tf = backbone.use_ewald_tf
 
         self.lr_comp_size = 1
         if self.heisenberg_tf:
@@ -1766,8 +1774,8 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
             if self.equil_charges_tf:
                 hardness = self.hardness_output_lr(node_features)
                 electroneg = self.electroneg_output_lr(node_features)
-                results["hardness"] = hardness.view(-1, 1, 1)   
-                results["electroneg"] = electroneg.view(-1, 1, 1)
+                results["hardness"] = hardness.view(-1)   
+                results["electroneg"] = electroneg.view(-1)
 
         if self.lr_comp_size == 1:
             results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
@@ -1847,7 +1855,7 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         if data["cell"] is not None:
             det_cells = torch.linalg.det(data["cell"])
         
-        if torch.any(det_cells < 1e-6) or data["cell"] is None:
+        if torch.any(det_cells < 1e-6) or data["cell"] is None or self.use_ewald_tf == False:
             # use direct sums
             energy_output_lr_dict = potential_full_from_edge_inds(
                 edge_index=edges_lr,
@@ -1875,8 +1883,10 @@ class MLP_Energy_Head_LR(nn.Module, HeadInterface):
         results["energy"] = energy_output_lr_dict["potential"]
 
         if self.equil_charges_tf:
-            en_electrostatic = (charge_dict["electroneg"] * charge_dict["charges"]).view(-1)
-            en_hardness = 0.5 * (charge_dict["hardness"] * charge_dict["charges"]**2).view(-1)
+
+            en_electrostatic = (charge_dict["electroneg"].view(-1) * charge_dict["charges"].view(-1))
+            en_hardness = 0.5 * (charge_dict["hardness"].view(-1) * charge_dict["charges"].view(-1)**2)
+            
             results["energy"] += en_electrostatic + en_hardness
          
 
@@ -2009,6 +2019,7 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         self, 
         node_features: torch.Tensor,
         data: AtomicData, 
+        epsilon: float = 1e-8
     ):
         results = {}
         with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
@@ -2032,8 +2043,9 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
                 # renormalize charges
                 global_charges_broadcasted = global_charges[data["batch"]]
                 true_charge_broadcasted = data["charge"][data["batch"]].view(-1, 1)
+                
                 # renormalizes via division
-                charges_raw = true_charge_broadcasted * charges_raw / global_charges_broadcasted
+                charges_raw = true_charge_broadcasted * charges_raw / ( global_charges_broadcasted + epsilon)
                 results["charges"] = charges_raw
                 
 
@@ -2098,7 +2110,7 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         if data["cell"] is not None:
             det_cells = torch.linalg.det(data["cell"])
         
-        if torch.any(det_cells < 1e-6) or data["cell"] is None:
+        if torch.any(det_cells < 1e-6) or data["cell"] is None or self.use_ewald_tf == False:
             # use direct sums
             energy_output_lr_dict = potential_full_from_edge_inds(
                 edge_index=edges_lr,
@@ -2126,8 +2138,9 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
         results["energy"] = energy_output_lr_dict["potential"]
 
         if self.equil_charges_tf:
-            en_electrostatic = (charge_dict["electroneg"] * charge_dict["charges"]).view(-1)
-            en_hardness = 0.5 * (charge_dict["hardness"] * charge_dict["charges"]**2).view(-1)
+            en_electrostatic = (charge_dict["electroneg"].view(-1) * charge_dict["charges"].view(-1))
+            en_hardness = 0.5 * (charge_dict["hardness"].view(-1) * charge_dict["charges"].view(-1)**2)
+
             results["energy"] += en_electrostatic + en_hardness
          
 

@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 from torch.profiler import record_function
 import torch.nn.functional as F
-from torch_scatter import scatter_add
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad

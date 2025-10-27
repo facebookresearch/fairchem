@@ -111,7 +111,6 @@ def potential_full_from_edge_inds(
     
     return results
 
-
             
 def potential_full_ewald_batched(
     pos: torch.Tensor,
