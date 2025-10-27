@@ -13,6 +13,7 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
+FORCE_TOL = 1e-4
 ATOL = 1e-5
 
 
@@ -170,3 +171,68 @@ def test_parallel_predict_unit(workers, device):
         normal_results["forces"].detach().cpu(),
         atol=ATOL,
     )
+
+
+# ---------------------------------------------------------------------------
+# Rotation / out-of-plane force invariance tests (planar molecules)
+# For H2O and NH2 in ASE default coordinates, all atoms lie in the y–z plane (x=0).
+# Thus out-of-plane component is simply the x-component of the forces.
+# ---------------------------------------------------------------------------
+
+def _random_rotation_matrix(rng: np.random.Generator) -> np.ndarray:
+    """Generate a 3D rotation matrix from two angles in [0, 2π).
+
+    We sample two independent angles:
+      phi   ~ U(0, 2π)  (rotation about z)
+      theta ~ U(0, 2π)  (rotation about y)
+
+    The resulting rotation: R = Rz(phi) * Ry(theta)
+    Note: This is NOT a uniform (Haar) distribution over SO(3), but
+    satisfies the requested two-angle construction.
+    """
+    phi = rng.uniform(0.0, 2.0 * np.pi)
+    theta = rng.uniform(0.0, 2.0 * np.pi)
+    cphi, sphi = np.cos(phi), np.sin(phi)
+    cth, sth = np.cos(theta), np.sin(theta)
+    Rz = np.array([[cphi, -sphi, 0.0], [sphi, cphi, 0.0], [0.0, 0.0, 1.0]])
+    Ry = np.array([[cth, 0.0, sth], [0.0, 1.0, 0.0], [-sth, 0.0, cth]])
+    return Rz @ Ry
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
+def test_rotational_invariance_out_of_plane(mol_name):
+    rng = np.random.default_rng(seed=123)
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    atoms = molecule(mol_name)
+    atoms.info.update({"charge": 0, "spin": 1})
+    atoms.calc = calc
+
+    orig_positions = atoms.get_positions().copy()\
+
+    n_rot = 50  # fewer rotations for speed
+    for _ in range(n_rot):
+        R = _random_rotation_matrix(rng)
+        rotated_pos = orig_positions @ R.T
+        atoms.set_positions(rotated_pos)
+        rot_forces = atoms.get_forces()
+        # Unrotate forces back to original frame (covariant transformation)
+        unrot_forces = rot_forces @ R
+        assert (np.abs(unrot_forces[:,0])<FORCE_TOL).all()
+
+
+
+@pytest.mark.gpu()
+@pytest.mark.xfail(reason="Y-aligned edges cause problems in eSCN family", strict=False)
+@pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
+def test_original_out_of_plane_forces(mol_name):
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+    atoms = molecule(mol_name)
+    atoms.info.update({"charge": 0, "spin": 1})
+    atoms.calc = calc
+    forces = atoms.get_forces()
+    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
+    assert np.abs(forces[:,0]).max() < FORCE_TOL
