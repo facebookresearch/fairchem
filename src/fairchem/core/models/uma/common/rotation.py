@@ -44,7 +44,7 @@ def init_edge_rot_euler_angles(edge_distance_vec):
     # we need to clamp the output here because if using compile
     # normalize can return >1.0 , pytorch #163082
     xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1.0, 1.0)
-    x,y,z = torch.split(xyz,1,dim=1)
+    x, y, z = torch.split(xyz, 1, dim=1)
 
     # latitude (beta)
     beta = Safeacos.apply(y.squeeze(-1))
@@ -53,7 +53,7 @@ def init_edge_rot_euler_angles(edge_distance_vec):
     alpha = Safeatan2.apply(x.squeeze(-1), z.squeeze(-1))
 
     # random gamma (roll)
-    gamma = torch.rand_like(alpha) * 2 * torch.pi - torch.pi
+    gamma = torch.rand_like(alpha) * 2 * torch.pi
     # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha
 
