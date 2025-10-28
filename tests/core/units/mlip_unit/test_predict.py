@@ -14,7 +14,7 @@ from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
-ATOL = 2e-5
+ATOL = 1e-5
 
 
 def get_fcc_carbon_xtal(
@@ -169,7 +169,7 @@ def test_parallel_predict_unit(workers, device):
     assert torch.allclose(
         pp_results["forces"].detach().cpu(),
         normal_results["forces"].detach().cpu(),
-        atol=ATOL,
+        atol=FORCE_TOL,
     )
 
 
