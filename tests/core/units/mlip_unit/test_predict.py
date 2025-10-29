@@ -169,7 +169,7 @@ def test_parallel_predict_unit(workers, device):
     assert torch.allclose(
         pp_results["forces"].detach().cpu(),
         normal_results["forces"].detach().cpu(),
-        atol=ATOL,
+        atol=FORCE_TOL,
     )
 
 
