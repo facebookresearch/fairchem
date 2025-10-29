@@ -480,9 +480,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             ),
             None,
         )
-        self.head_node_has_gpu = (
-            head["Resources"].get("GPU", 0) > 0 if head is not None else False
-        )
+        assert head is not None, "Could not find head node in Ray cluster"
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -499,14 +497,14 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             bundle = {"CPU": workers}
             if device == "cuda":
                 bundle["GPU"] = workers
-            if self.head_node_has_gpu and node_idx == 0:
+            if node_idx == 0:
                 bundle["head"] = 0.1
             pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
             placement_groups.append(pg)
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
-        # place rank 0 on placement group 0
-        rank0_worker = MLIPWorker.options(
+        # Need to still place worker to occupy space, otherwise ray double books this GPU
+        _ = MLIPWorker.options(
             num_gpus=num_gpu_per_worker,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
                 placement_group=placement_groups[0],
@@ -516,18 +514,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         ).remote(0, num_workers, predict_unit_config)
 
         self.workers = []
-        if self.head_node_has_gpu:
-            self.local_rank0 = MLIPWorkerLocal(
-                worker_id=0,
-                world_size=num_workers,
-                predictor_config=predict_unit_config,
-            )
-            master_addr, master_port = self.local_rank0.get_master_address_and_port()
-        else:
-            master_addr, master_port = ray.get(
-                rank0_worker.get_master_address_and_port.remote()
-            )
-            self.workers.append(rank0_worker)
+        self.local_rank0 = MLIPWorkerLocal(
+            worker_id=0,
+            world_size=num_workers,
+            predictor_config=predict_unit_config,
+        )
+        master_addr, master_port = self.local_rank0.get_master_address_and_port()
         logging.info(f"Started rank0 on {master_addr}:{master_port}")
 
         # next place all ranks in order and pack them on placement groups
@@ -564,27 +556,19 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
 
     def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
-        # this data transfer should be made more efficienct by using a shared memory transfer + nccl broadcast
-
-        if self.head_node_has_gpu and self.inference_settings.merge_mole:
-            if self.last_sent_atomic_data is None:
-                data_ref = ray.put(data)
-                # this will put the ray works into an infinite loop listening for broadcasts
-                futures = [
-                    w.predict.remote(data_ref, md=self.inference_settings.merge_mole)
-                    for w in self.workers
-                ]
-                self.last_sent_atomic_data = data
-            else:
-                data = data.to(self.local_rank0.device)
-                torch.distributed.broadcast(data.pos, src=0)
-            return self.local_rank0.predict(data)
-        else:
+        if not self.inference_settings.merge_mole or self.last_sent_atomic_data is None:
             data_ref = ray.put(data)
-            futures = [w.predict.remote(data_ref) for w in self.workers]
-            if self.head_node_has_gpu:
-                return self.local_rank0.predict(data)
-            return ray.get(futures[0])
+            # this will put the ray works into an infinite loop listening for broadcasts
+            _futures = [
+                w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
+                for w in self.workers
+            ]
+            self.last_sent_atomic_data = data
+        else:
+            data = data.to(self.local_rank0.device)
+            torch.distributed.broadcast(data.pos, src=0)
+
+        return self.local_rank0.predict(data)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
