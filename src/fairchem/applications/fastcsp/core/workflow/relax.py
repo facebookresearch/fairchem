@@ -374,7 +374,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     logger.info(f"Number of input files to relax: {len(input_files)}")
 
     jobs = []
-    num_ranks = relax_slurm_config.get("num_ranks", 1000)
+    num_ranks = relax_slurm_config.get("num_ranks", 5000)
     with executor.batch():
         for rank in range(min(num_ranks, len(input_files))):
             input_files_rank = input_files[rank::num_ranks]

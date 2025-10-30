@@ -140,7 +140,7 @@ def structure_to_row(
 
 
 def process_genarris_outputs_single(
-    base_dir: Path,
+    input_dir: Path,
     output_dir: Path,
     remove_duplicates: bool = False,
     ltol: float = 0.2,
@@ -157,7 +157,7 @@ def process_genarris_outputs_single(
     a format suitable for downstream ML processing.
 
     Args:
-        base_dir: Root directory containing Genarris output structure
+        input_dir: Root directory containing Genarris output structure
                  Expected structure: mol_id/conf_id/z_val/symm_rigid_press/structures.json
         output_dir: Directory where processed parquet files will be saved
         npartitions: Number of partitions for distributed processing (default: 1000)
@@ -185,18 +185,34 @@ def process_genarris_outputs_single(
         - group_index: Deduplication group assignment
     """
     logger = get_central_logger()
-    logger.info(f"Processing {base_dir}")
-    json_files = list(base_dir.glob("**/symm_rigid_press/structures.json"))
-    logger.info(f"Found {len(json_files)} files / {base_dir}")
+    logger.info(f"Processing {input_dir}")
+    json_files = list(input_dir.glob("**/symm_rigid_press/structures.json"))
+    generation_method = "genarris"
+    # in case Genarris version is different
+    # or other structure generation method is used
+    if not json_files:
+        json_files = list(input_dir.rglob("structures.json"))
+        generation_method = "other"
+    logger.info(f"Found {len(json_files)} files / {input_dir}")
     all_rows = []
-
     for file_path in tqdm(json_files, desc="Processing files"):
         try:
-            mol_id = file_path.parents[4].name
-            conf_id = file_path.parents[3].name
-            z_val = int(file_path.parents[2].name)
+            json_file_parents = list(file_path.parents)
+            if generation_method == "genarris":
+                mol_id = json_file_parents[4].name
+                conf_id = json_file_parents[3].name
+                z_val = int(json_file_parents[2].name)
+            else:
+                # based on expected directory structure
+                # mol_id/conf_id/z_val/structures.json
+                # adjust indices accordingly
+                mol_id = json_file_parents[2].name
+                conf_id = json_file_parents[1].name
+                z_val = int(json_file_parents[0].name)
         except Exception as e:
-            logger.warning(f"Failed to extract mol_id or z from path {file_path}: {e}")
+            logger.warning(
+                f"Failed to extract mol_id, conf_id, or z from path {file_path}: {e}"
+            )
             continue
 
         with file_path.open("r") as f:
@@ -293,6 +309,6 @@ def process_genarris_outputs(
 
     return submit_slurm_jobs(
         job_args,
-        output_dir=output_dir / "slurm",
+        output_dir=output_dir.parent / "slurm",
         **slurm_params,
     )
