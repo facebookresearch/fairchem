@@ -366,6 +366,9 @@ class MLIPWorkerLocal:
     def get_master_address_and_port(self):
         return (self.master_address, self.master_port)
 
+    def get_device_for_local_rank(self):
+        return get_device_for_local_rank()
+
     def _distributed_setup(
         self,
     ):
@@ -471,17 +474,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
 
         self.last_sent_atomic_data = None
 
-        # check if we have a GPU locally
-        head = next(
-            (
-                n
-                for n in ray.nodes()
-                if n["Alive"] and n["Resources"].get("head", 0) > 0
-            ),
-            None,
-        )
-        assert head is not None, "Could not find head node in Ray cluster"
-
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
         if num_workers % num_workers_per_node > 0:
@@ -493,18 +485,16 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         # first create one placement group for each node
         num_gpu_per_worker = 1 if device == "cuda" else 0
         placement_groups = []
-        for node_idx, workers in enumerate(num_workers_on_node_array):
+        for workers in num_workers_on_node_array:
             bundle = {"CPU": workers}
             if device == "cuda":
                 bundle["GPU"] = workers
-            if node_idx == 0:
-                bundle["head"] = 0.1
             pg = ray.util.placement_group([bundle], strategy="STRICT_PACK")
             placement_groups.append(pg)
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
         # Need to still place worker to occupy space, otherwise ray double books this GPU
-        _ = MLIPWorker.options(
+        rank0_worker = MLIPWorker.options(
             num_gpus=num_gpu_per_worker,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
                 placement_group=placement_groups[0],
@@ -512,6 +502,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
             ),
         ).remote(0, num_workers, predict_unit_config)
+
+        local_gpu_or_cpu = ray.get(rank0_worker.get_device_for_local_rank.remote())
+        os.environ[CURRENT_DEVICE_TYPE_STR] = local_gpu_or_cpu
 
         self.workers = []
         self.local_rank0 = MLIPWorkerLocal(
