@@ -205,6 +205,7 @@ def main(args: argparse.Namespace) -> None:
             input_dir=relax_output_dir / "raw_structures",
             output_dir=relax_output_dir / "filtered_structures",
             post_relax_config=post_relax_config,
+            remove_problematic=post_relax_config["remove_problematic"],
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
             density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
             assign_groups=post_relax_config["assign_groups"],
