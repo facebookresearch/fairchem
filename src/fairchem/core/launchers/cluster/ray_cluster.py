@@ -205,8 +205,6 @@ def _ray_head_script(
                 "--num-gpus",
                 f"{num_gpus}",
                 "--dashboard-host=0.0.0.0",
-                "--resources",
-                '{"head": 1}',
             ],
             env=head_env,
             stdout=subprocess.PIPE,
