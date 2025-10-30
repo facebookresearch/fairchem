@@ -7,7 +7,7 @@ name = "fairchem-lammps"
 description = "Fairchem extension package to use LAMMPs with fairchem models"
 license = {text = "GnuV2 License"}
 dynamic = ["version", "readme"]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 dependencies = [
   "fairchem.core>=2.4.0",
 ]
