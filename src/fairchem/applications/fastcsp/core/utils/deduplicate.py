@@ -85,13 +85,13 @@ def process_structure_group(group_data, ltol=0.2, stol=0.3, angle_tol=5):
 
 def deduplicate_structures(
     xtals_df: pd.DataFrame,
-    remove_duplicates: bool = False,
+    hash_density: bool = True,
+    hash_volume: bool = True,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
+    remove_duplicates: bool = False,
     n_jobs: int = 70,
-    hash_density: bool = True,
-    hash_volume: bool = True,
 ):
     """
     Implements a two-stage deduplication algorithm that combines hash-based pre-filtering
