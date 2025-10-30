@@ -487,7 +487,7 @@ class AllScAIPEnergyHeadLR(AllScAIPHeadBase):
             "energy": energy_output_sr,
             "energy_coul": e_charge
         }
-        print("results to unpad: ", results_to_unpad["energy_coul"])
+        #print("results to unpad: ", results_to_unpad["energy_coul"])
 
         res_unpad = unpad_results(
             results=results_to_unpad,
