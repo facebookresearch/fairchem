@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import logging
 import os
-from functools import partial
 from collections import Counter
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
+from monty.dev import requires
 
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets import data_list_collater
@@ -29,6 +30,12 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     UMATask,
 )
+
+try:
+    from fairchem.data.omat import data_omat_installed
+except ImportError:
+    data_omat_installed = False
+
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -317,65 +324,80 @@ class FAIRChemCalculator(Calculator):
             )
 
 
-class FormationEnergyCalculator(FAIRChemCalculator):
-    def __init__(
-        self,
-        predict_unit: MLIPPredictUnit,
-        task_name: UMATask | str | None = None,
-        seed: int | None = None,  # deprecated
-        element_references: dict | None = None
-    ):
-        """
-        Initialize the FormationEnergyCalculator.
+@requires(
+    data_omat_installed,
+    message="Formation energy functionality requires fairchem.data.omat to be installed.",
+)
+def _apply_mp_style_corrections(formation_energy: float, atoms: Atoms) -> float:
+    pass
 
-        Args:
-            predict_unit (MLIPPredictUnit): A pretrained MLIPPredictUnit.
-            task_name (UMATask or str, optional): Name of the task to use if using a UMA checkpoint.
-            seed (int, optional): Deprecated. Random seed for reproducibility.
-            element_references (dict): Dictionary mapping element symbols to their reference bulk phase energies.
-                Using the default will take the appropriate values for the dataset corresponding to the task given, this
-                is likely what you want to use, always.
-        """
-        super().__init__(predict_unit=predict_unit, task_name=task_name, seed=seed)
 
-        if element_references is None:
-            # get them from HF
-            element_references = {}
+def enable_formation_energy(
+    calculator: FAIRChemCalculator,
+    element_references: dict | None = None,
+    apply_corrections: bool | None = None,
+) -> FAIRChemCalculator:
+    """
+    Helper function to easily enable formation energy calculation on a FAIRChemCalculator instance.
 
-        self._element_refs = element_references
+    Args:
+        calculator (FAIRChemCalculator): The calculator instance to modify.
+        element_references (dict, optional): Optional dictionary of formation reference energies for each element. You likely do not want
+            to provide these and instead use the defaults for each UMA task.
+        apply_corrections (bool, optional): Whether to apply MP style corrections to the formation energies.
+            This is only relevant for the OMat task. Default is True if task is OMat.
 
-    def calculate(
-        self, atoms: Atoms, properties: list[str], system_changes: list[str]
+    Returns:
+        FAIRChemCalculator: The same calculator instance but will return formation energies as the potential energy.
+    """
+    if element_references is None:
+        # get these
+        element_references = {}
+
+    if apply_corrections is True and calculator.task_name != UMATask.OMAT.value:
+        raise ValueError("MP style corrections can only be applied for the OMat task.")
+
+    if apply_corrections is None and calculator.task_name == UMATask.OMAT.value:
+        apply_corrections = True
+
+    original_calculate = calculator.calculate
+
+    def formation_energy_calculate(
+        atoms: Atoms, properties: list[str], system_changes: list[str]
     ) -> None:
-        """
-        Perform the calculation for the given atomic structure and convert total energy to formation energy.
+        original_calculate(atoms, properties, system_changes)
 
-        Args:
-            atoms (Atoms): The atomic structure to calculate properties for.
-            properties (list[str]): The list of properties to calculate.
-            system_changes (list[str]): The list of changes in the system.
-        """
-        # First get the total energy from the parent calculator
-        super().calculate(atoms, properties, system_changes)
-        
-        # If energy was calculated, convert it to formation energy
-        total_energy = self.results["energy"]
-        
-        atomic_numbers = atoms.get_atomic_numbers()
-        element_symbols = atoms.get_chemical_symbols()
-        element_counts = Counter(element_symbols)
-        
-        missing_elements = set(element_symbols) - set(self._element_refs.keys())
-        if missing_elements:
-            raise ValueError(f"Missing reference energies for elements: {missing_elements}")
-        
-        total_ref_energy = sum(
-            self._element_refs[element] * count 
-            for element, count in element_counts.items()
-        )
-        
-        formation_energy = (total_energy - total_ref_energy)
-        self.results["energy"] = formation_energy
+        if "energy" in calculator.results:
+            total_energy = calculator.results["energy"]
+
+            element_symbols = atoms.get_chemical_symbols()
+            element_counts = Counter(element_symbols)
+
+            missing_elements = set(element_symbols) - set(element_references.keys())
+            if missing_elements:
+                raise ValueError(
+                    f"Missing reference energies for elements: {missing_elements}"
+                )
+
+            total_ref_energy = sum(
+                element_references[element] * count
+                for element, count in element_counts.items()
+            )
+
+            formation_energy = total_energy - total_ref_energy
+
+            if apply_corrections:
+                formation_energy = _apply_mp_style_corrections(formation_energy, atoms)
+
+            calculator.results["energy"] = formation_energy
+
+            if "free_energy" in calculator.results:
+                calculator.results["free_energy"] = formation_energy
+
+    # Replace the calculate method
+    calculator.calculate = formation_energy_calculate
+
+    return calculator
 
 
 class MixedPBCError(ValueError):
