@@ -42,6 +42,30 @@ def setup_fastcsp_logger(
     return logger
 
 
+def ensure_all_modules_use_central_logger() -> None:
+    """Configure all FastCSP modules to use the central logger."""
+    central_logger = logging.getLogger("fastcsp")
+
+    # All module patterns to redirect
+    module_patterns = [
+        "fastcsp",
+        "fairchem.applications.fastcsp",
+        "genarris",
+        "submitit",
+    ]
+
+    # Find and configure all matching modules
+    for module_name in list(sys.modules.keys()):
+        if any(pattern in module_name for pattern in module_patterns):
+            try:
+                module_logger = logging.getLogger(module_name)
+                module_logger.handlers = central_logger.handlers[:]
+                module_logger.setLevel(central_logger.level)
+                module_logger.propagate = False
+            except Exception:
+                continue
+
+
 def print_fastcsp_header(
     logger: logging.Logger, is_restart: bool = False, stages: list[str] | None = None
 ) -> None:
@@ -93,30 +117,6 @@ def log_config_pretty(logger: logging.Logger, config: dict[str, Any]) -> None:
     except Exception:
         logger.info(f"   {config}")
     logger.info("=" * 80)
-
-
-def ensure_all_modules_use_central_logger() -> None:
-    """Configure all FastCSP modules to use the central logger."""
-    central_logger = logging.getLogger("fastcsp")
-
-    # All module patterns to redirect
-    module_patterns = [
-        "fastcsp",
-        "fairchem.applications.fastcsp",
-        "genarris",
-        "submitit",
-    ]
-
-    # Find and configure all matching modules
-    for module_name in list(sys.modules.keys()):
-        if any(pattern in module_name for pattern in module_patterns):
-            try:
-                module_logger = logging.getLogger(module_name)
-                module_logger.handlers = central_logger.handlers[:]
-                module_logger.setLevel(central_logger.level)
-                module_logger.propagate = False
-            except Exception:
-                continue
 
 
 def log_stage_start(
