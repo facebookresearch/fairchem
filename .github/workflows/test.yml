@@ -34,7 +34,7 @@ jobs:
     strategy:
       max-parallel: 10
       matrix:
-        python_version: ['3.10', '3.12', '3.13']
+        python_version: ['3.10', '3.13']
 
     steps:
       - name: Checkout code
@@ -120,7 +120,7 @@ jobs:
     strategy:
       max-parallel: 10
       matrix:
-        python_version: ['3.12']
+        python_version: ['3.13']
 
     steps:
       - name: Checkout code
@@ -167,7 +167,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        python_version: ['3.12']
+        python_version: ['3.13']
 
     steps:
       - uses: actions/checkout@v5
@@ -175,7 +175,7 @@ jobs:
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.12 # Specifies packages to install into the new environment
+          create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v5
