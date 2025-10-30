@@ -1,0 +1,80 @@
+Name: OMat24-
+Corrections:
+  # Energy corrections in eV/atom
+  GGAUMixingCorrections:
+    # Composition-based corrections applied to transition metal oxides
+    # and fluorides to make GGA and GGA+U energies compatible
+    # when compat_type = "Advanced" (default)
+    O:
+      V: -1.813
+      Cr: -2.037
+      Mn: -1.701
+      Fe: -2.428
+      Co: -2.151
+      Ni: -2.58
+      W: -4.445
+      Mo: -2.972
+    F:
+      V: -1.813
+      Cr: -2.037
+      Mn: -1.701
+      Fe: -2.428
+      Co: -2.151
+      Ni: -2.58
+      W: -4.445
+      Mo: -2.972
+  CompositionCorrections:
+    # Composition-based corrections applied to any compound containing
+    # these species as anions
+    oxide: -0.657
+    peroxide: -0.433
+    superoxide: -0.152
+    S: -0.487
+    F: -0.436
+    Cl: -0.6
+    Br: -0.317
+    I: -0.194
+    N: -0.303
+    Se: -0.474
+    Si: 0.028
+    Sb: -0.194
+    Te: -0.418
+    H: -0.173
+    ozonide: 0
+Uncertainties:
+  # Uncertainties corresponding to each energy correction (eV/atom)
+  GGAUMixingCorrections:
+    O:
+      V: 0.0064
+      Cr: 0.0108
+      Mn: 0.0053
+      Fe: 0.0101
+      Co: 0.006
+      Ni: 0.0107
+      W: 0.0253
+      Mo: 0.0089
+    F:
+      V: 0.0064
+      Cr: 0.0108
+      Mn: 0.0053
+      Fe: 0.0101
+      Co: 0.006
+      Ni: 0.0107
+      W: 0.0253
+      Mo: 0.0089
+  CompositionCorrections:
+    oxide: 0.002
+    peroxide: 0.0172
+    superoxide: 0.0075
+    S: 0.0093
+    F: 0.0026
+    Cl: 0.0018
+    Br: 0.0026
+    I: 0.0055
+    N: 0.0093
+    Se: 0.0341
+    Si: 0.0165
+    Sb: 0.0089
+    Te: 0.0262
+    H: 0.0013
+    ozonide: 0
