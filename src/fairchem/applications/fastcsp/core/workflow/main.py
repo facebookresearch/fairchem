@@ -207,10 +207,11 @@ def main(args: argparse.Namespace) -> None:
             post_relax_config=post_relax_config,
             energy_cutoff=post_relax_config["energy_cutoff"],  # kJ/mol
             density_cutoff=post_relax_config["density_cutoff"],  # g/cm³
-            remove_duplicates=post_relax_config["remove_duplicates"],
+            assign_groups=post_relax_config["assign_groups"],
             ltol=post_relax_config["ltol"],
             stol=post_relax_config["stol"],
             angle_tol=post_relax_config["angle_tol"],
+            remove_duplicates=post_relax_config["remove_duplicates"],
         )
         wait_for_jobs(jobs)
         logging.log_stage_complete(

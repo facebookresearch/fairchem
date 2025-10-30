@@ -48,6 +48,7 @@ relax:
 
 # Filtering criteria and deduplication parameters after relaxation
 post_relaxation_filter:       # After ML relaxation
+  remove_problematic: true     # Remove structures that failed to converge or connectivity check
   energy_cutoff: 20            # Energy cutoff in kJ/mol above minimum or None
   density_cutoff: 10           # Density cutoff in g/cm³ or None
   assign_groups: true          # Assign groups to structures
