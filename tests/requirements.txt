@@ -3,7 +3,7 @@ ase==3.26
 ase-db-backends==0.10.0
 e3nn==0.5.7
 huggingface-hub==0.35.3
-torch==2.8.0
+torch==2.9.0
 torchtnt==0.2.4
 numpy==2.2.5
 scikit-learn==1.7.2
