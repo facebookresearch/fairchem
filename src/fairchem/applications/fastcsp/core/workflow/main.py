@@ -63,22 +63,6 @@ def load_config(args: argparse.Namespace) -> dict[str, Any]:
     return config
 
 
-def detect_restart(root_dir: Path, log_file: str = "FastCSP.log") -> bool:
-    """
-    Detect if this is a workflow restart by checking for existing log file.
-
-    Args:
-        root_dir: Root directory where the log file would be located
-        log_file: Name of the log file to check (default: "FastCSP.log")
-
-    Returns:
-        bool: True if this appears to be a restart (log file exists with content),
-              False for a fresh start
-    """
-    log_path = root_dir / log_file
-    return log_path.exists() and log_path.stat().st_size > 0
-
-
 def main(args: argparse.Namespace) -> None:
     """
     Main orchestration function for the FastCSP crystal structure prediction workflow.
@@ -122,7 +106,7 @@ def main(args: argparse.Namespace) -> None:
 
     # Set up logging to FastCSP.log in root directory
     log_file = root / "FastCSP.log"
-    is_restart = detect_restart(root)
+    is_restart = logging.detect_restart(root)
     logging.setup_fastcsp_logger(log_file=log_file, append=True)
     logging.ensure_all_modules_use_central_logger()
     logger = logging.get_central_logger()
@@ -248,11 +232,10 @@ def main(args: argparse.Namespace) -> None:
         )
 
         relax_config, relax_output_dir = get_relax_config_and_dir(config)
-        eval_config, eval_method = get_eval_config_and_method(config)
-
+        eval_config, eval_method, eval_dir_name = get_eval_config_and_method(config)
         jobs = compute_structure_matches(
             input_dir=relax_output_dir / "filtered_structures",
-            output_dir=relax_output_dir / "matched_structures",
+            output_dir=relax_output_dir / eval_dir_name,
             eval_method=eval_method,
             eval_config=eval_config,
             molecules_file=config["molecules"],
@@ -275,5 +258,5 @@ def main(args: argparse.Namespace) -> None:
             "Please check future releases or contact the developers for updates."
         )
 
-    logger.info("🎉 FastCSP workflow completed successfully!")
+    logger.info("🎉 FastCSP workflow completed!")
     logger.info("=" * 80)

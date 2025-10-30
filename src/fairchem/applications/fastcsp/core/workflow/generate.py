@@ -225,7 +225,6 @@ def create_genarris_jobs(
             # Create submitit command function to execute the SLURM script
             shell = shutil.which("bash") or shutil.which("zsh") or "/bin/sh"
             gnrs_function = submitit.helpers.CommandFunction(
-                # f"zsh {single_gnrs_folder / 'slurm.sh'}".split(),
                 [shell, f"{single_gnrs_folder}/slurm.sh"],
                 cwd=single_gnrs_folder,
             )
