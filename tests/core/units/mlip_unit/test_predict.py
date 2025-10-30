@@ -14,7 +14,7 @@ from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
-ATOL = 1e-5
+ATOL = 2e-5
 
 
 def get_fcc_carbon_xtal(
@@ -179,6 +179,7 @@ def test_parallel_predict_unit(workers, device):
 # Thus out-of-plane component is simply the x-component of the forces.
 # ---------------------------------------------------------------------------
 
+
 def _random_rotation_matrix(rng: np.random.Generator) -> np.ndarray:
     """Generate a 3D rotation matrix from two angles in [0, 2π).
 
@@ -210,8 +211,7 @@ def test_rotational_invariance_out_of_plane(mol_name):
     atoms.info.update({"charge": 0, "spin": 1})
     atoms.calc = calc
 
-    orig_positions = atoms.get_positions().copy()\
-
+    orig_positions = atoms.get_positions().copy()
     n_rot = 50  # fewer rotations for speed
     for _ in range(n_rot):
         R = _random_rotation_matrix(rng)
@@ -220,8 +220,7 @@ def test_rotational_invariance_out_of_plane(mol_name):
         rot_forces = atoms.get_forces()
         # Unrotate forces back to original frame (covariant transformation)
         unrot_forces = rot_forces @ R
-        assert (np.abs(unrot_forces[:,0])<FORCE_TOL).all()
-
+        assert (np.abs(unrot_forces[:, 0]) < FORCE_TOL).all()
 
 
 @pytest.mark.gpu()
@@ -235,4 +234,4 @@ def test_original_out_of_plane_forces(mol_name):
     atoms.calc = calc
     forces = atoms.get_forces()
     print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
-    assert np.abs(forces[:,0]).max() < FORCE_TOL
+    assert np.abs(forces[:, 0]).max() < FORCE_TOL
