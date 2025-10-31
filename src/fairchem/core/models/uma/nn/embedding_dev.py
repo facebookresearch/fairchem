@@ -160,6 +160,7 @@ class ChgSpinEmbedding(nn.Module):
         if self.embedding_target == "charge":
             # 100 is a conservative upper bound
             self.target_dict = {str(x): x + 100 for x in range(-100, 101)}
+        
         elif self.embedding_target == "spin":
             # 100 is a conservative upper bound
             self.target_dict = {str(x): x for x in range(101)}
@@ -201,11 +202,16 @@ class ChgSpinEmbedding(nn.Module):
                 # this sets the null spin embedding to zero
                 emb[zero_idxs] = 0
                 return emb
+        
         elif self.embedding_type == "lin_emb":
             if self.embedding_target == "spin":
                 x[x == 0] = -100
             return self.lin_emb(x.unsqueeze(-1).float())
+        
         elif self.embedding_type == "rand_emb":
+            
+            # old
+            """
             return self.rand_emb(
                 torch.tensor(
                     [self.target_dict[str(i)] for i in x.tolist()],
@@ -213,6 +219,17 @@ class ChgSpinEmbedding(nn.Module):
                     dtype=torch.long,
                 )
             )
+            """
+            # new compilable
+            idx = x.long()
+            if self.embedding_target == "charge":
+                idx = idx + 100
+
+            # Clamp into valid embedding range and move to correct device/dtype
+            idx = idx.clamp(0, self.rand_emb.num_embeddings - 1).to(x.device)
+        
+            return self.rand_emb(idx)
+
         raise ValueError(f"embedding type {self.embedding_type} not implemented")
 
 
