@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
-from monty.dev import requires
 
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets import data_list_collater
@@ -30,12 +29,6 @@ from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
     UMATask,
 )
-
-try:
-    from fairchem.data.omat import data_omat_installed
-except ImportError:
-    data_omat_installed = False
-
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -324,14 +317,6 @@ class FAIRChemCalculator(Calculator):
             )
 
 
-@requires(
-    data_omat_installed,
-    message="Formation energy functionality requires fairchem.data.omat to be installed.",
-)
-def _apply_mp_style_corrections(formation_energy: float, atoms: Atoms) -> float:
-    pass
-
-
 def enable_formation_energy(
     calculator: FAIRChemCalculator,
     element_references: dict | None = None,
@@ -351,8 +336,7 @@ def enable_formation_energy(
         FAIRChemCalculator: The same calculator instance but will return formation energies as the potential energy.
     """
     if element_references is None:
-        # get these
-        element_references = {}
+        element_references = calculator.predictor.form_elem_refs[calculator.task_name]
 
     if apply_corrections is True and calculator.task_name != UMATask.OMAT.value:
         raise ValueError("MP style corrections can only be applied for the OMat task.")
@@ -387,7 +371,15 @@ def enable_formation_energy(
             formation_energy = total_energy - total_ref_energy
 
             if apply_corrections:
-                formation_energy = _apply_mp_style_corrections(formation_energy, atoms)
+                try:
+                    from fairchem.data.omat.entries.compatibility import (
+                        apply_mp_style_corrections,
+                    )
+                except ImportError as err:
+                    raise ImportError(
+                        "fairchem.data.omat is required to apply MP style corrections. Please install it."
+                    ) from err
+                formation_energy = apply_mp_style_corrections(formation_energy, atoms)
 
             calculator.results["energy"] = formation_energy
 
