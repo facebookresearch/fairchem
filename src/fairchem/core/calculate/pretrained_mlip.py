@@ -109,14 +109,23 @@ def get_predict_unit(
         cache_dir=cache_dir,
     )
     atom_refs = get_reference_energies(model_name, "atom_refs", cache_dir)
+    form_elem_refs = get_reference_energies(model_name, "form_elem_refs", cache_dir)[
+        "refs"
+    ]
+
     return load_predict_unit(
-        checkpoint_path, inference_settings, overrides, device, atom_refs
+        checkpoint_path,
+        inference_settings,
+        overrides,
+        device,
+        atom_refs,
+        form_elem_refs,
     )
 
 
 def get_reference_energies(
     model_name: str,
-    reference_type: Literal["atom_refs"] = "atom_refs",
+    reference_type: Literal["atom_refs", "form_elem_refs"] = "atom_refs",
     cache_dir: str = CACHE_DIR,
 ) -> dict:
     """

@@ -28,6 +28,7 @@ def load_predict_unit(
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
     atom_refs: dict | None = None,
+    form_elem_refs: dict | None = None,
 ) -> MLIPPredictUnit:
     """Load a MLIPPredictUnit from a checkpoint file.
 
@@ -39,6 +40,7 @@ def load_predict_unit(
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto.
         atom_refs: Optional dictionary of isolated atom reference energies.
+        form_elem_refs: Optional dictionary of element reference energies for formation energy calculations.
 
     Returns:
         A MLIPPredictUnit instance ready for inference
@@ -57,4 +59,5 @@ def load_predict_unit(
         inference_settings=inference_settings,
         overrides=overrides,
         atom_refs=atom_refs,
+        form_elem_refs=form_elem_refs,
     )
