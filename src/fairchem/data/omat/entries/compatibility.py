@@ -31,7 +31,7 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
         compat_type: str = "Advanced",
         correct_peroxide: bool = True,
         strict_anions: Literal["require_exact", "require_bound", "no_check"] = "require_bound",
-        check_potcar: bool = True,
+        check_potcar: bool = False,
         check_potcar_hash: bool = False,
         config_file: str | None = None,
     ) -> None:
@@ -78,14 +78,15 @@ def generate_computed_structure_entry(
     structure: Structure,
     total_energy: float,
     correction_type: Literal["MP2020", "OMat24"] = "OMat24",
+    check_potcar: bool = False,
 ) -> ComputedStructureEntry:
     # Make a ComputedStructureEntry without the correction
     if correction_type == "MP2020":
         input_set = MPRelaxSet(structure)
-        compatibility = MaterialsProject2020Compatibility()
+        compatibility = MaterialsProject2020Compatibility(check_potcar=check_potcar)
     elif correction_type == "OMat24":
         input_set = OMat24StaticSet(structure)
-        compatibility = OMat24Compatibility()
+        compatibility = OMat24Compatibility(check_potcar=check_potcar)
     else:
         raise ValueError(
             f"{correction_type} is not a valid correction type. Choose from OMat24 or MP2020"
@@ -107,21 +108,21 @@ def generate_computed_structure_entry(
 
 
 def apply_mp_style_corrections(
-    formation_energy: float, atoms: Atoms
+    energy: float, atoms: Atoms, correction_type: Literal["MP2020", "OMat24"] = "OMat24"
 ) -> float:
-    """Applies Materials Project style formation energy corrections to an ASE Atoms object
+    """Applies Materials Project style energy corrections to an ASE Atoms object
 
     Args:
-        formation_energy: The uncorrected formation energy to be corrected.
+        energy: The uncorrected energy to be corrected.
         atoms: ASE Atoms object for which to apply the corrections.
 
     Returns:
-        Corrected formation energy.
+        Corrected energy.
     """
 
     structure = AseAtomsAdaptor.get_structure(atoms)
     cse = generate_computed_structure_entry(
-        structure, formation_energy, correction_type="OMat24"
+        structure, energy, correction_type=correction_type
     )
     
     return cse.energy
