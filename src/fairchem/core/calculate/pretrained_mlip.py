@@ -30,7 +30,7 @@ class HuggingFaceCheckpoint:
     subfolder: str | None = None  # specify a hf repo subfolder
     revision: str | None = None  # specify a version tag, branch, commit hash
     atom_refs: dict | None = None  # specify an isolated atomic reference
-    mp_elemental_refs: dict | None = None  # mp unary compount elemental reference
+    form_elem_refs: dict | None = None  # specify a form elemental reference
 
 
 @dataclass
