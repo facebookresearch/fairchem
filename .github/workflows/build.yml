@@ -14,7 +14,7 @@ jobs:
           fetch-depth: 0 # Optional, use if you use setuptools_scm
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: |
           # add packages that are supposed to be built to this list
-          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol
+          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol fairchem-data-omat fairchem-lammps
           do
             pushd packages/$package
             hatch build
@@ -59,8 +59,14 @@ jobs:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami/*
 
-      - name: Upload data-omol artifact
+      - name: Upload lammps artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dist-data-omol
-          path: dist-data-omol/*
+          name: dist-lammps
+          path: dist-lammps/*
+
+      - name: Upload omat artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-omat
+          path: dist-omat/*

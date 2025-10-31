@@ -8,12 +8,12 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import torch
 import wandb
-from torch.utils.tensorboard import SummaryWriter
 
 from fairchem.core.common import distutils
 from fairchem.core.common.registry import registry
@@ -148,6 +148,13 @@ class WandBLogger(Logger):
 @registry.register_logger("tensorboard")
 class TensorboardLogger(Logger):
     def __init__(self, config) -> None:
+        try:
+            from torch.utils.tensorboard import SummaryWriter
+        except ImportError as err:
+            raise err
+        finally:
+            warnings.warn("Tensorboard logger is deprecated.", DeprecationWarning())
+
         super().__init__(config)
         self.writer = SummaryWriter(self.config["cmd"]["logs_dir"])
 

@@ -36,7 +36,7 @@ jobs:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: dist-core
           path: dist-core
@@ -62,7 +62,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: dist-data-oc
           path: dist-data-oc
@@ -88,7 +88,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: dist-demo-ocpapi
           path: dist-demo-ocpapi
@@ -114,7 +114,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami
@@ -140,7 +140,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with:
           name: dist-data-omol
           path: dist-data-omol
@@ -151,3 +151,29 @@ jobs:
           verbose: true
           packages-dir: dist-data-omol/
           skip-existing: true
+
+  release-lammps:
+    needs: [ build ]
+    runs-on: 32-core-ubuntu
+    if: |
+      github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_lammps-')
+
+    environment:
+      name: test-pypi
+      url: https://test.pypi.org/p/fairchem-lammps/
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist-lammps
+          path: dist-lammps
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist-lammps/
+          skip-existing: true
+          verbose: true

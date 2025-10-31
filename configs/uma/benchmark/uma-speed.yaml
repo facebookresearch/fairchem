@@ -1,7 +1,7 @@
 #fairchem -c puma_speed.yaml +run_dir_root=/path/to/run_dir
 
 runner:
-  _target_: fairchem.core.components.benchmark.uma_speed_benchmark.InferenceBenchRunner
+  _target_: fairchem.core.components.benchmark.InferenceBenchRunner
   timeiters: 10
   natoms_list: [1000]
   model_checkpoints: {
@@ -16,6 +16,5 @@ runner:
     activation_checkpointing: True
     merge_mole: True
     compile: False
-    wigner_cuda: True
     external_graph_gen: True
     internal_graph_gen_version: 2
