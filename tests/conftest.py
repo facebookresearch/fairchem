@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 import torch
 
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
 
 @pytest.fixture()
 def command_line_inference_checkpoint(request):
@@ -134,3 +136,10 @@ def water_xyz_file(tmp_path_factory):
     fpath = d / "water.xyz"
     fpath.write_text(contents)
     return str(fpath)
+
+
+@pytest.fixture(autouse=True)
+def setup_before_each_test():
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
