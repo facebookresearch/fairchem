@@ -68,6 +68,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras]
           pip install packages/fairchem-data-oc[dev]
+          pip install packages/fairchem-data-omat
           pip install packages/fairchem-data-omol[dev]
           pip install packages/fairchem-demo-ocpapi[dev]
           pip install -r tests/requirements.txt # pin test packages
