@@ -317,13 +317,13 @@ class FAIRChemCalculator(Calculator):
             )
 
 
-def enable_formation_energy(
+def set_predict_formation_energy(
     calculator: FAIRChemCalculator,
     element_references: dict | None = None,
     apply_corrections: bool | None = None,
 ) -> FAIRChemCalculator:
     """
-    Helper function to easily enable formation energy calculation on a FAIRChemCalculator instance.
+    Adapt a calculator to predict formation energy.
 
     Args:
         calculator (FAIRChemCalculator): The calculator instance to modify.
@@ -340,7 +340,6 @@ def enable_formation_energy(
 
     if apply_corrections is True and calculator.task_name != UMATask.OMAT.value:
         raise ValueError("MP style corrections can only be applied for the OMat task.")
-
     if apply_corrections is None and calculator.task_name == UMATask.OMAT.value:
         apply_corrections = True
 
