@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
+from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -405,6 +406,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
+        gloo_backend = (not gp_utils.initialized()) or dist.get_backend() == "gloo"
+
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -505,6 +508,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     edge_envelope,
+                    total_atoms=data_dict["atomic_numbers_full"].shape[0],
+                    gloo_backend=gloo_backend,
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -648,8 +653,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
         embeddings = emb["node_embedding"].detach()
+        # TODO we should remove this for MD runs
         if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+            embeddings = gp_utils.gather_from_model_parallel_region(
+                embeddings, data["atomic_numbers_full"].shape[0]
+            )
 
         outputs["embeddings"] = (
             {"embeddings": embeddings} if self.wrap_property else embeddings
@@ -781,7 +789,9 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+            forces = gp_utils.gather_from_model_parallel_region(
+                forces, data_dict["atomic_numbers_full"].shape[0]
+            )
         return {"forces": forces}
 
 
