@@ -41,8 +41,8 @@ from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
 from fairchem.core.models.uma.nn.radial import (
     EnvelopedBesselBasis,
     GaussianSmearing,
+    PolynomialEnvelope,
 )
-from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
@@ -360,6 +360,24 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
 
+    def _get_self_edges(self, data_dict):
+        cutoff_vec = torch.tensor(
+            [self.cutoff], device=data_dict["pos"].device, dtype=data_dict["pos"].dtype
+        ).repeat(3)
+        self_index = torch.arange(
+            len(data_dict["atomic_numbers_full"]),
+            dtype=data_dict["edge_index"].dtype,
+            device=data_dict["edge_index"].device,
+        )
+        self_edge_index = torch.stack((self_index, self_index))
+        self_edge_distance_vec = (
+            data_dict["pos"][self_edge_index[0]] - data_dict["pos"][self_edge_index[1]]
+        ) + cutoff_vec  # [n_edges, 3]
+        self_edge_distance = torch.linalg.norm(
+            self_edge_distance_vec, dim=-1, keepdim=False
+        )
+        return self_edge_index, self_edge_distance, self_edge_distance_vec
+
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
     ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
@@ -466,6 +484,20 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance_vec": edge_distance_vec,
             }
         graph_dict["node_offset"] = 0  # default value
+
+        # adds in self edges with an edge distance longer than the cutoff
+        self_edge_index, self_edge_distance, self_edge_distance_vec = (
+            self._get_self_edges(data_dict)
+        )
+        graph_dict["edge_index"] = torch.cat(
+            (graph_dict["edge_index"], self_edge_index), dim=1
+        )
+        graph_dict["edge_distance"] = torch.cat(
+            (graph_dict["edge_distance"], self_edge_distance), dim=0
+        )
+        graph_dict["edge_distance_vec"] = torch.cat(
+            (graph_dict["edge_distance_vec"], self_edge_distance_vec), dim=0
+        )
 
         if gp_utils.initialized():
             graph_dict = self._init_gp_partitions(
