@@ -360,23 +360,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
 
-    def _get_self_edges(self, data_dict):
-        cutoff_vec = torch.tensor(
-            [self.cutoff], device=data_dict["pos"].device, dtype=data_dict["pos"].dtype
-        ).repeat(3)
-        self_index = torch.arange(
-            len(data_dict["atomic_numbers_full"]),
-            dtype=data_dict["edge_index"].dtype,
-            device=data_dict["edge_index"].device,
-        )
-        self_edge_index = torch.stack((self_index, self_index))
+    def _safety_edge(self, data_dict, graph_dict):
+        graph_dict["edge_index"] = torch.cat((graph_dict["edge_index"], graph_dict["edge_index"].new_zeros(2, 1)), dim=1)
+
         self_edge_distance_vec = (
-            data_dict["pos"][self_edge_index[0]] - data_dict["pos"][self_edge_index[1]]
-        ) + cutoff_vec  # [n_edges, 3]
-        self_edge_distance = torch.linalg.norm(
+            data_dict["pos"][0] - data_dict["pos"][0]
+         + self.cutoff ).unsqueeze(0)  # [1, 3]
+        graph_dict["edge_distance_vec"] = torch.cat((graph_dict["edge_distance_vec"], self_edge_distance_vec), dim=0)
+
+        edge_distance = torch.linalg.norm(
             self_edge_distance_vec, dim=-1, keepdim=False
-        )
-        return self_edge_index, self_edge_distance, self_edge_distance_vec
+        ) 
+        graph_dict["edge_distance"] = torch.cat((graph_dict["edge_distance"], edge_distance), dim=0)
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -485,19 +480,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             }
         graph_dict["node_offset"] = 0  # default value
 
-        # adds in self edges with an edge distance longer than the cutoff
-        self_edge_index, self_edge_distance, self_edge_distance_vec = (
-            self._get_self_edges(data_dict)
-        )
-        graph_dict["edge_index"] = torch.cat(
-            (graph_dict["edge_index"], self_edge_index), dim=1
-        )
-        graph_dict["edge_distance"] = torch.cat(
-            (graph_dict["edge_distance"], self_edge_distance), dim=0
-        )
-        graph_dict["edge_distance_vec"] = torch.cat(
-            (graph_dict["edge_distance_vec"], self_edge_distance_vec), dim=0
-        )
+        if graph_dict["edge_index"].numel()==0:
+            self._safety_edge(data_dict, graph_dict)
 
         if gp_utils.initialized():
             graph_dict = self._init_gp_partitions(
@@ -599,7 +583,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 edge_envelope,
                 graph_dict["node_offset"],
             )
-
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
