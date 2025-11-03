@@ -38,7 +38,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
@@ -209,13 +209,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             sphere_channels=self.sphere_channels,
             lmax=self.lmax,
             mmax=self.mmax,
-            max_num_elements=self.max_num_elements,
             edge_channels_list=self.edge_channels_list,
             rescale_factor=5.0,  # NOTE: sqrt avg degree
-            cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
+
+        self.envelope = PolynomialEnvelope(exponent=5)
 
         self.num_layers = num_layers
         self.hidden_channels = hidden_channels
@@ -469,6 +469,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # edge degree embedding
         with record_function("edge embedding"):
+            dist_scaled = graph_dict["edge_distance"] / self.cutoff
+            edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
@@ -484,9 +486,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_distance"],
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 graph_dict["node_offset"],
             )
 
@@ -502,6 +504,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
+                    edge_envelope,
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
