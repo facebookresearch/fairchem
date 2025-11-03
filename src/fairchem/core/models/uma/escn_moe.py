@@ -50,6 +50,8 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         moe_dropout: float = 0.0,
         use_global_embedding: bool = False,  # obsolete
         use_composition_embedding: bool = False,
+        composition_dropout: float = 0.0,
+        composition_noise: float = 0.0,
         moe_expert_coefficient_norm: str = "softmax",
         act=torch.nn.SiLU,
         layers_moe=None,
@@ -72,6 +74,8 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 act=act,
                 layers_mole=layers_moe,
                 use_composition_embedding=use_composition_embedding,
+                composition_dropout=composition_dropout,
+                composition_noise=composition_noise,
                 mole_layer_type=moe_layer_type,
                 mole_single=moe_single,
                 mole_type=moe_type,
@@ -115,19 +119,38 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.autocast(device_type=atomic_numbers_full.device.type, enabled=False):
             embeddings = []
             if self.use_composition_embedding:
-                composition_by_atom = self.composition_embedding(atomic_numbers_full)
+                effective_atomic_numbers_full = atomic_numbers_full
+                effective_batch_full = batch_full
+
+                if self.training:
+                    if self.composition_dropout > 0.0:
+                        # if greater than keep
+                        mask = torch.rand_like(atomic_numbers_full, dtype=torch.float) > self.composition_dropout
+                        effective_atomic_numbers_full = atomic_numbers_full[mask]
+                        effective_batch_full = batch_full[mask]
+                    if self.composition_noise > 0.0:
+                        # if greater than keep
+                        composition_mask = torch.rand(*batch_full.shape) > self.composition_noise
+                        rand_batch_full=batch_full[composition_mask]
+                        rand_atomic_numbers_full = torch.randint(
+                            0, self.max_num_elements, rand_batch_full.shape, device=rand_batch_full.device
+                        )
+                        effective_atomic_numbers_full = torch.cat([effective_atomic_numbers_full, rand_atomic_numbers_full], dim=0)
+                        effective_batch_full = torch.cat([effective_batch_full, rand_batch_full], dim=0)
+
+                composition_by_atom = self.composition_embedding(effective_atomic_numbers_full)
                 composition = composition_by_atom.new_zeros(
                     csd_mixed_emb.shape[0],
                     self.sphere_channels,
                 ).index_reduce_(
                     0,
-                    batch_full,
+                    effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
                     include_self=np.isclose(self.model_version, 1.0).item(),
                 )
                 embeddings.append(composition.unsqueeze(0))
-            embeddings.append(csd_mixed_emb[None])
+            embeddings.append(csd_mixed_emb[None].to(torch.float32))
 
             expert_mixing_coefficients_before_norm = self.routing_mlp(
                 torch.vstack(embeddings)
