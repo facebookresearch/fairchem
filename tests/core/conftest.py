@@ -229,21 +229,21 @@ def dummy_binary_db_dataset(dummy_binary_dataset_path):
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
-    if torch.cuda.is_available():
-        print("mem before test",torch.cuda.memory_summary(device=None, abbreviated=False))
+    #if torch.cuda.is_available():
+    #    print("mem before test",torch.cuda.memory_summary(device=None, abbreviated=False))
     # If debugging GPU memory issues, uncomment this print statement
     # to get full GPU memory allocations before each test runs
     # print(torch.cuda.memory_summary())
     yield
     torch.cuda.empty_cache()
-    if torch.cuda.is_available():
-        print("mem after test",torch.cuda.memory_summary(device=None, abbreviated=False))
+    #if torch.cuda.is_available():
+    #    print("mem after test",torch.cuda.memory_summary(device=None, abbreviated=False))
     if ray.is_initialized():
         ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
-    print("CLEANUP DONE!")
+    #print("CLEANUP DONE!")
 
 
 @pytest.fixture(scope="session")
