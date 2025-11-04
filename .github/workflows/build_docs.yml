@@ -48,7 +48,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'  # or your desired version
+        node-version: '25'  # or your desired version
 
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
