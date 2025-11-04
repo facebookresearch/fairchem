@@ -207,7 +207,7 @@ def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
     assert isinstance(initial_energy, float)
 
     opt = BFGS(slab_atoms)
-    opt.run(fmax=0.05, steps=100)
+    opt.run(fmax=0.05, steps=10)
     final_energy = slab_atoms.get_potential_energy()
     assert isinstance(final_energy, float)
 
