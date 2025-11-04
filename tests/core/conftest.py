@@ -22,7 +22,8 @@ from ase.io import write
 from pymatgen.core import Structure
 from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
-
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
 from fairchem.core.datasets.ase_datasets import AseDBDataset, AseReadDataset
 from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
@@ -228,11 +229,21 @@ def dummy_binary_db_dataset(dummy_binary_dataset_path):
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
+    if torch.cuda.is_available():
+        print("mem before test",torch.cuda.memory_summary(device=None, abbreviated=False))
     # If debugging GPU memory issues, uncomment this print statement
     # to get full GPU memory allocations before each test runs
     # print(torch.cuda.memory_summary())
     yield
     torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        print("mem after test",torch.cuda.memory_summary(device=None, abbreviated=False))
+    if ray.is_initialized():
+        ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
+    print("CLEANUP DONE!")
 
 
 @pytest.fixture(scope="session")
@@ -352,13 +363,6 @@ def conserving_mole_checkpoint(fake_uma_dataset):
 
 
 import pytest
-
-@pytest.fixture(autouse=True, scope="session")
-def ray_off():
-    yield  # This is where the tests will run
-    if ray.is_initialized():
-        ray.shutdown()
-
 
 @pytest.fixture(scope="session")
 def fake_uma_dataset():
