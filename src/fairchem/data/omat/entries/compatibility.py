@@ -10,9 +10,11 @@ from __future__ import annotations
 import os
 
 from pymatgen.entries.compatibility import MaterialsProject2020Compatibility
-from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEntry
+from pymatgen.entries.computed_entries import ComputedStructureEntry
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.io.vasp.sets import MPRelaxSet, VaspInputSet
+
+from pymatgen.io.vasp.inputs import PmgVaspPspDirError
 
 from fairchem.data.omat.vasp.sets import OMat24StaticSet
 
@@ -31,7 +33,7 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
         compat_type: str = "Advanced",
         correct_peroxide: bool = True,
         strict_anions: Literal["require_exact", "require_bound", "no_check"] = "require_bound",
-        check_potcar: bool = False,
+        check_potcar: bool = True,
         check_potcar_hash: bool = False,
         config_file: str | None = None,
     ) -> None:
@@ -52,11 +54,17 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
 def generate_cse_parameters(input_set: VaspInputSet) -> dict:
     """Generate parameters for a ComputedStructureEntry from a VASP input set in order"""
 
-    parameters = {
-        "potcar_spec": input_set.potcar.spec,
-        "potcar_symbols": input_set.potcar.symbols,
-        "hubbards": {},
-    }
+    parameters = {"hubbards": {}}
+    try:
+        parameters.update(
+            {
+                "potcar_spec": input_set.potcar.spec,
+                "potcar_symbols": input_set.potcar.symbols,
+            }
+        )
+    except PmgVaspPspDirError:
+        pass
+
     if "LDAUU" in input_set.incar:
         parameters["hubbards"] = dict(
             zip(input_set.poscar.site_symbols, input_set.incar["LDAUU"], strict=False)
@@ -78,7 +86,7 @@ def generate_computed_structure_entry(
     structure: Structure,
     total_energy: float,
     correction_type: Literal["MP2020", "OMat24"] = "OMat24",
-    check_potcar: bool = False,
+    check_potcar: bool = True,
 ) -> ComputedStructureEntry:
     # Make a ComputedStructureEntry without the correction
     if correction_type == "MP2020":
@@ -108,13 +116,15 @@ def generate_computed_structure_entry(
 
 
 def apply_mp_style_corrections(
-    energy: float, atoms: Atoms, correction_type: Literal["MP2020", "OMat24"] = "OMat24"
+    energy: float, atoms: Atoms, correction_type: Literal["MP2020", "OMat24"] = "OMat24", check_potcar: bool = False
 ) -> float:
     """Applies Materials Project style energy corrections to an ASE Atoms object
 
     Args:
         energy: The uncorrected energy to be corrected.
         atoms: ASE Atoms object for which to apply the corrections.
+        correction_type: Type of corrections to apply: MP2020 or OMat24.
+        check_potcar: Whether to check POTCAR consistency when applying corrections.
 
     Returns:
         Corrected energy.
@@ -122,7 +132,7 @@ def apply_mp_style_corrections(
 
     structure = AseAtomsAdaptor.get_structure(atoms)
     cse = generate_computed_structure_entry(
-        structure, energy, correction_type=correction_type
+        structure, energy, correction_type=correction_type, check_potcar=check_potcar
     )
     
     return cse.energy
