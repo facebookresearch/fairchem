@@ -72,7 +72,7 @@ parts:
   - file: inorganic_materials/models
   - file: inorganic_materials/examples_tutorials/summary
     sections:
-    - file: inorganic_materials/examples_tutorials/bulk_stability
+    - file: inorganic_materials/examples_tutorials/formation_energy
     - file: inorganic_materials/examples_tutorials/phonons
     - file: inorganic_materials/examples_tutorials/elastic
   - file: inorganic_materials/FAQ
