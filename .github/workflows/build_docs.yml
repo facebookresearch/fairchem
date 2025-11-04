@@ -45,11 +45,6 @@ jobs:
       with:
           status-context: '${{ github.job }}'
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '25'  # or your desired version
-
     - name: Install pandoc
       run: sudo apt-get -y install pandoc
 
@@ -74,7 +69,7 @@ jobs:
         FAST_DOCS: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && 'true' || '' }}
       run: |
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
-        # jupytext --to ipynb ./docs/uma_tutorials/uma_tutorial.md
+        jupytext --to ipynb ./docs/uma_tutorials/uma_tutorial.md
         # find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
         jupyter-book build docs
 

@@ -11,3 +11,4 @@ lmdb==1.7.3
 pymatgen==v2025.10.7
 ray==2.50.1
 ipykernel==6.30.1
+jupyter_book==1.0.4
