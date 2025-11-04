@@ -12,7 +12,7 @@ import tempfile
 from itertools import product
 from random import choice
 from typing import TYPE_CHECKING
-
+import ray
 import numpy as np
 import pytest
 import torch
@@ -349,6 +349,15 @@ def conserving_mole_checkpoint(fake_uma_dataset):
     assert os.path.isfile(inference_checkpoint_pt)
 
     return inference_checkpoint_pt, checkpoint_state_yaml
+
+
+import pytest
+
+@pytest.fixture(autouse=True, scope="session")
+def ray_off():
+    yield  # This is where the tests will run
+    if ray.is_initialized():
+        ray.shutdown()
 
 
 @pytest.fixture(scope="session")
