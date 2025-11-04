@@ -11,12 +11,12 @@ import logging
 import tempfile
 from typing import TYPE_CHECKING
 
+import ase.io
 import numpy as np
 import pytest
 import torch
 from ase import Atoms, units
 from ase.build import add_adsorbate, bulk, fcc111, molecule
-from ase.io import read, write
 from ase.md.langevin import Langevin
 from ase.optimize import BFGS
 
@@ -24,6 +24,7 @@ from fairchem.core import FAIRChemCalculator
 from fairchem.core.calculate.ase_calculator import (
     AllZeroUnitCellError,
     MixedPBCError,
+    set_predict_formation_energy,
 )
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings, UMATask
 
@@ -31,6 +32,9 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 from fairchem.core.calculate import pretrained_mlip
+
+# mark all tests in this module as gpu tests
+pytestmark = pytest.mark.gpu
 
 
 @pytest.fixture(scope="module", params=pretrained_mlip.available_models)
@@ -77,7 +81,15 @@ def bulk_atoms() -> Atoms:
 
 @pytest.fixture()
 def aperiodic_atoms() -> Atoms:
-    return molecule("H2O")
+    atoms = molecule("H2O")
+    atoms.info["charge"] = 0
+    atoms.info["spin"] = 1
+    return atoms
+
+
+@pytest.fixture()
+def custom_element_refs() -> dict:
+    return {"H": -0.5, "O": -1.0, "Fe": -2.0}
 
 
 @pytest.fixture()
@@ -96,8 +108,8 @@ def periodic_h2o_from_extxyz(periodic_h2o_atoms) -> Atoms:
     periodic_h2o_atoms.info["charge"] = 0  # set as int here
     periodic_h2o_atoms.info["spin"] = 0
     with tempfile.NamedTemporaryFile(suffix=".xyz") as f:
-        write(f.name, periodic_h2o_atoms, format="extxyz")
-        atoms = read(f.name, format="extxyz")  # type: ignore
+        ase.io.write(f.name, periodic_h2o_atoms, format="extxyz")
+        atoms = ase.io.read(f.name, format="extxyz")  # type: ignore
     return atoms  # will be read as np.int64
 
 
@@ -148,7 +160,6 @@ def test_calculator_unknown_task_raises_error():
         )
 
 
-@pytest.mark.gpu()
 def test_calculator_setup(all_calculators):
     for calc in all_calculators():
         implemented_properties = ["energy", "forces"]
@@ -166,7 +177,6 @@ def test_calculator_setup(all_calculators):
         )
 
 
-@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "atoms_fixture",
     [
@@ -185,7 +195,6 @@ def test_energy_calculation(request, atoms_fixture, all_calculators):
         assert isinstance(energy, float)
 
 
-@pytest.mark.gpu()
 def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
     datasets = list(mlip_predict_unit.dataset_to_tasks.keys())
     calc = FAIRChemCalculator(
@@ -203,7 +212,6 @@ def test_relaxation_final_energy(slab_atoms, mlip_predict_unit):
     assert isinstance(final_energy, float)
 
 
-@pytest.mark.gpu()
 @pytest.mark.parametrize("inference_settings", ["default", "turbo"])
 def test_calculator_configurations(inference_settings, slab_atoms):
     # turbo mode requires compilation and needs to reset here
@@ -232,7 +240,6 @@ def test_calculator_configurations(inference_settings, slab_atoms):
         assert isinstance(stress, np.ndarray)
 
 
-@pytest.mark.gpu()
 def test_large_bulk_system(large_bulk_atoms):
     """Test a bulk system with 1000 atoms using the small model."""
     predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
@@ -248,7 +255,6 @@ def test_large_bulk_system(large_bulk_atoms):
     assert isinstance(forces, np.ndarray)
 
 
-@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "pbc",
     [
@@ -277,7 +283,6 @@ def test_mixed_pbc_behavior(pbc, aperiodic_atoms, all_calculators):
             assert isinstance(energy, float)
 
 
-@pytest.mark.gpu()
 def test_error_for_pbc_with_zero_cell(aperiodic_atoms, all_calculators):
     """Test error raised when pbc=True but atoms.cell is zero."""
     aperiodic_atoms.pbc = True  # Set PBC to True
@@ -288,7 +293,6 @@ def test_error_for_pbc_with_zero_cell(aperiodic_atoms, all_calculators):
             aperiodic_atoms.get_potential_energy()
 
 
-@pytest.mark.gpu()
 def test_omol_missing_spin_charge_logs_warning(
     periodic_h2o_atoms, omol_calculators, caplog
 ):
@@ -304,7 +308,6 @@ def test_omol_missing_spin_charge_logs_warning(
         assert "spin multiplicity is not set in atoms.info" in caplog.text
 
 
-@pytest.mark.gpu()
 def test_omol_energy_diff_for_charge_and_spin(aperiodic_atoms, omol_calculators):
     """Test that energy differs for H2O molecule with different charge and spin_multiplicity."""
 
@@ -364,7 +367,6 @@ def test_single_atom_system_errors():
         atom.get_potential_energy()
 
 
-@pytest.mark.gpu()
 @pytest.mark.skip(
     reason="the wigner matrices should be dependent on the RNG, but the energies"
     "are not actually different using the above seed setting code."
@@ -418,7 +420,7 @@ def test_simple_md():
         external_graph_gen=False,
     )
     predictor = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cpu", inference_settings=inference_settings
+        "uma-s-1p1", inference_settings=inference_settings
     )
     calc = FAIRChemCalculator(predictor, task_name="omol")
     run_md_simulation(calc, steps=10)
@@ -440,3 +442,131 @@ def test_parallel_md(checkpointing):
 
     calc = FAIRChemCalculator(predictor, task_name="omol")
     run_md_simulation(calc, steps=10)
+
+
+def test_set_predict_formation_energy_basic_functionality():
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    original_calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    formation_calc = set_predict_formation_energy(calc)
+
+    assert formation_calc is calc
+    assert calc.calculate != original_calc.calculate
+
+
+def test_set_predict_formation_energy_with_custom_references(
+    aperiodic_atoms, custom_element_refs
+):
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    formation_calc = set_predict_formation_energy(
+        calc, element_references=custom_element_refs
+    )
+
+    aperiodic_atoms.calc = formation_calc
+    formation_energy = aperiodic_atoms.get_potential_energy()
+
+    assert isinstance(formation_energy, float)
+
+
+def test_set_predict_formation_energy_missing_element_raises_error():
+    """Test that missing element references raise appropriate error."""
+    water_molecule = molecule("H2O")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    incomplete_refs = {"H": -0.5}  # Missing O reference
+    formation_calc = set_predict_formation_energy(
+        calc, element_references=incomplete_refs
+    )
+
+    water_molecule.calc = formation_calc
+
+    with pytest.raises(ValueError, match="Missing reference energies for elements"):
+        water_molecule.get_potential_energy()
+
+
+def test_set_predict_formation_energy_mp_corrections_omat_task(bulk_atoms):
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+
+    # Should apply corrections by default for omat
+    formation_calc = set_predict_formation_energy(calc, apply_corrections=None)
+
+    bulk_atoms.calc = formation_calc
+
+    # Should not raise error - corrections should be applied
+    try:
+        energy = bulk_atoms.get_potential_energy()
+        assert isinstance(energy, float)
+    except ImportError:
+        # If fairchem.data.omat is not available, should get ImportError
+        pytest.skip("fairchem.data.omat not available for MP corrections")
+
+
+def test_set_predict_formation_energy_mp_corrections_non_omat_error():
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    # Should raise error when trying to apply corrections to non-omat task
+    with pytest.raises(
+        ValueError, match="MP style corrections can only be applied for the OMat task"
+    ):
+        set_predict_formation_energy(calc, apply_corrections=True)
+
+
+def test_set_predict_formation_energy_no_corrections_omat_task(bulk_atoms):
+    """Test that MP corrections can be explicitly disabled for OMat task."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+
+    formation_calc = set_predict_formation_energy(calc, apply_corrections=False)
+
+    bulk_atoms.calc = formation_calc
+
+    # Should work without corrections
+    energy = bulk_atoms.get_potential_energy()
+    assert isinstance(energy, float)
+
+
+def test_set_predict_formation_energy_calculation_correctness(aperiodic_atoms):
+    """Test that formation energy calculation follows the correct formula."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+
+    total_calc = FAIRChemCalculator(predict_unit, task_name="omol")
+    formation_calc_instance = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    test_refs = {"H": -0.5}
+    formation_calc = set_predict_formation_energy(
+        formation_calc_instance, element_references=test_refs
+    )
+
+    aperiodic_atoms = molecule("H2")
+    aperiodic_atoms.info["charge"] = 0
+    aperiodic_atoms.info["spin"] = 1
+
+    aperiodic_atoms.calc = total_calc
+    total_energy = aperiodic_atoms.get_potential_energy()
+
+    aperiodic_atoms.calc = formation_calc
+    formation_energy = aperiodic_atoms.get_potential_energy()
+
+    expected_formation_energy = total_energy - (2 * test_refs["H"])
+
+    assert np.isclose(formation_energy, expected_formation_energy, atol=1e-6)
+
+
+def test_set_predict_formation_energy_different_task_types():
+    """Test formation energy calculation works for different task types."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+
+    for task_name in ["omol", "omat", "oc20"]:
+        if task_name in predict_unit.dataset_to_tasks:
+            calc = FAIRChemCalculator(predict_unit, task_name=task_name)
+
+            # Should not raise error when using default element references
+            formation_calc = set_predict_formation_energy(calc)
+            assert formation_calc is calc

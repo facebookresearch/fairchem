@@ -96,9 +96,14 @@ def get_predict_unit(
     """
     checkpoint_path = pretrained_checkpoint_path_from_name(model_name)
     atom_refs = get_reference_energies(model_name, "atom_refs", cache_dir)
-    form_elem_refs = get_reference_energies(model_name, "form_elem_refs", cache_dir)[
-        "refs"
-    ]
+
+    if _MODEL_CKPTS.checkpoints[model_name].form_elem_refs is not None:
+        form_elem_refs = get_reference_energies(
+            model_name, "form_elem_refs", cache_dir
+        )["refs"]
+    else:
+        form_elem_refs = None
+
     return load_predict_unit(
         checkpoint_path,
         inference_settings,
