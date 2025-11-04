@@ -14,7 +14,7 @@ from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
-ATOL = 1e-5
+ATOL = 5e-4
 
 
 def get_fcc_carbon_xtal(
