@@ -354,8 +354,6 @@ def conserving_mole_checkpoint(fake_uma_dataset):
     return inference_checkpoint_pt, checkpoint_state_yaml
 
 
-import pytest
-
 @pytest.fixture(scope="session")
 def fake_uma_dataset():
     with tempfile.TemporaryDirectory() as tempdirname:
