@@ -1,3 +1,7 @@
+# OMat24 Compatibility Corrections
+# Corrections are fitted using pymatgen.entries.correction_calculator.CorrectionCalculator
+# Corrections are fit using data for experimental formation enthalpies, and DFT formation energy calculations with the OMat24RelaxSet of 222 compounds
+# For more details and the experimental data used, refer to the original publication: https://www.nature.com/articles/s41598-021-94550-5
 Name: OMat24-
 Corrections:
   # Energy corrections in eV/atom
