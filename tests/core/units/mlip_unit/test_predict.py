@@ -11,6 +11,8 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
@@ -153,6 +155,10 @@ def test_parallel_predict_unit(workers, device):
     )
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
+
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
