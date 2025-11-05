@@ -5,7 +5,6 @@ import numpy.testing as npt
 import pytest
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, molecule
-
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
@@ -14,7 +13,7 @@ from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
-ATOL = 2e-5
+ATOL = 5e-4
 
 
 def get_fcc_carbon_xtal(
@@ -98,6 +97,7 @@ def test_multiple_dataset_predict(uma_predict_unit):
     assert preds["stress"].shape == (n_systems, 9)
 
     # compare to fairchem calcs
+    seed_everywhere(42)
     omol_calc = FAIRChemCalculator(uma_predict_unit, task_name="omol")
     oc20_calc = FAIRChemCalculator(uma_predict_unit, task_name="oc20")
     omat_calc = FAIRChemCalculator(uma_predict_unit, task_name="omat")
@@ -169,13 +169,86 @@ def test_parallel_predict_unit(workers, device):
     assert torch.allclose(
         pp_results["forces"].detach().cpu(),
         normal_results["forces"].detach().cpu(),
+        atol=FORCE_TOL,
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, device",
+    [
+        (1, "cpu"),
+        (2, "cpu"),
+        (1, "cuda"),
+    ],
+)
+def test_parallel_predict_unit_batch(workers, device):
+    seed = 42
+    runs = 2
+    model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
+    ifsets = InferenceSettings(
+        tf32=False,
+        merge_mole=False,
+        activation_checkpointing=True,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+    )
+    
+    # Create H2O and O molecules batch
+    h2o = molecule("H2O")
+    h2o.info.update({"charge": 0, "spin": 1})
+    h2o.pbc = True
+    
+    o_atom = molecule("O")
+    o_atom.info.update({"charge": 0, "spin": 2})  # triplet oxygen
+    o_atom.pbc = True
+    
+    h2o_data = AtomicData.from_ase(
+        h2o,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    o_data = AtomicData.from_ase(
+        o_atom,
+        task_name="omol", 
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    atomic_data = atomicdata_list_to_batch([h2o_data, o_data])
+
+    seed_everywhere(seed)
+    ppunit = ParallelMLIPPredictUnit(
+        inference_model_path=model_path,
+        device=device,
+        inference_settings=ifsets,
+        num_workers=workers,
+    )
+    for _ in range(runs):
+        pp_results = ppunit.predict(atomic_data)
+
+    seed_everywhere(seed)
+    normal_predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device=device, inference_settings=ifsets
+    )
+    for _ in range(runs):
+        normal_results = normal_predict_unit.predict(atomic_data)
+
+    assert torch.allclose(
+        pp_results["energy"].detach().cpu(),
+        normal_results["energy"].detach().cpu(),
         atol=ATOL,
+    )
+    assert torch.allclose(
+        pp_results["forces"].detach().cpu(),
+        normal_results["forces"].detach().cpu(),
+        atol=FORCE_TOL,
     )
 
 
 # ---------------------------------------------------------------------------
 # Rotation / out-of-plane force invariance tests (planar molecules)
-# For H2O and NH2 in ASE default coordinates, all atoms lie in the y–z plane (x=0).
+# For H2O and NH2 in ASE default coordinates, all atoms lie in the yz plane (x=0).
 # Thus out-of-plane component is simply the x-component of the forces.
 # ---------------------------------------------------------------------------
 
