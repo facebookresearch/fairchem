@@ -353,6 +353,17 @@ def set_predict_formation_energy(
         if "energy" in calculator.results:
             total_energy = calculator.results["energy"]
 
+            if apply_corrections:
+                try:
+                    from fairchem.data.omat.entries.compatibility import (
+                        apply_mp_style_corrections,
+                    )
+                except ImportError as err:
+                    raise ImportError(
+                        "fairchem.data.omat is required to apply MP style corrections. Please install it."
+                    ) from err
+                total_energy = apply_mp_style_corrections(total_energy, atoms)
+
             element_symbols = atoms.get_chemical_symbols()
             element_counts = Counter(element_symbols)
 
@@ -368,17 +379,6 @@ def set_predict_formation_energy(
             )
 
             formation_energy = total_energy - total_ref_energy
-
-            if apply_corrections:
-                try:
-                    from fairchem.data.omat.entries.compatibility import (
-                        apply_mp_style_corrections,
-                    )
-                except ImportError as err:
-                    raise ImportError(
-                        "fairchem.data.omat is required to apply MP style corrections. Please install it."
-                    ) from err
-                formation_energy = apply_mp_style_corrections(formation_energy, atoms)
 
             calculator.results["energy"] = formation_energy
 
