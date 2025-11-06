@@ -1486,7 +1486,7 @@ class MLP_EFS_Head_LR(nn.Module, HeadInterface):
             q=charge_dict["charges"],
             sigma=1.0,
             epsilon=1e-6,
-            return_bec=True,
+            return_bec=False,
             batch=data["batch"],
             conv_function_tf=self.conv_function_tf,
         )

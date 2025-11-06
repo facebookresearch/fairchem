@@ -747,3 +747,235 @@ class MLP_EFS_Head_LES(nn.Module, HeadInterface):
                 forces = gp_utils.reduce_from_model_parallel_region(forces)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
         return outputs
+
+
+
+
+
+@registry.register_model("esen_efs_head_les")
+class MLP_EFS_Head_LES(nn.Module, HeadInterface):
+    def __init__(self, backbone, prefix=None, wrap_property=True):
+        super().__init__()
+        backbone.energy_block = None
+        backbone.force_block = None
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+        self.prefix = prefix
+        self.wrap_property = wrap_property
+
+        self.sphere_channels = backbone.sphere_channels
+        self.hidden_channels = backbone.hidden_channels
+
+        self.les = Les(
+            n_in=backbone.sphere_channels,
+            n_layers=backbone.les_n_layers,
+            n_hidden=backbone.les_n_hidden,
+            add_linear_nn=backbone.les_add_linear_nn,
+            output_scaling_factor=backbone.les_output_scaling_factor,
+            sigma=backbone.les_sigma,
+            dl=backbone.les_dl,
+            remove_mean=backbone.les_remove_mean,
+            epsilon_factor=backbone.les_epsilon_factor,
+            use_atomwise=backbone.les_use_atomwise
+        )
+
+        self.energy_block = nn.Sequential(
+            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, 1, bias=True),
+        )
+
+        # TODO: this is not very clean, bug-prone.
+        # but is currently necessary for finetuning pretrained models that did not have
+        # the direct_forces flag set to False
+        backbone.direct_forces = False
+        assert not backbone.direct_forces, (
+            "EFS head is only used for gradient-based forces/stress."
+        )
+
+    @conditional_grad(torch.enable_grad())
+    def forward(
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        if self.prefix:
+            energy_key = f"{self.prefix}_energy"
+            forces_key = f"{self.prefix}_forces"
+            stress_key = f"{self.prefix}_stress"
+        else:
+            energy_key = "energy"
+            forces_key = "forces"
+            stress_key = "stress"
+
+        outputs = {}
+        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
+        _output = self.energy_block(_input)
+        node_energy = _output.view(-1, 1, 1)
+        energy_part = torch.zeros(
+            len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
+        )
+        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
+
+        if gp_utils.initialized():
+            energy_part = gp_utils.reduce_from_model_parallel_region(energy_part)
+        else:
+            energy_part = energy_part
+        #print(data.keys())
+        #print("data sid", data["sid"])
+        
+        # add lr energy
+        lr_energy = self.les(
+            positions=data["pos"], 
+            cell=data["cell"], 
+            desc=emb["node_embedding"].narrow(1, 0, 1).squeeze(),
+            batch=data["batch"],
+            compute_energy=True,
+            compute_bec=False,  # not used in eSCNMD
+            bec_output_index=None,  # not used in eSCNMD
+            sid=data.get("sid", None)  # optional sid for the atoms
+        )
+        
+
+        energy_part = energy_part + lr_energy["E_lr"]
+        outputs[energy_key] = {"energy": energy_part} if self.wrap_property else energy_part
+        
+        embeddings = emb["node_embedding"].detach()
+        if gp_utils.initialized():
+            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+
+        outputs["embeddings"] = (
+            {"embeddings": embeddings} if self.wrap_property else embeddings
+        )
+
+        if self.regress_stress:
+            grads = torch.autograd.grad(
+                [energy_part.sum()],
+                [data["pos_original"], emb["displacement"]],
+                create_graph=self.training,
+            )
+            if gp_utils.initialized():
+                grads = (
+                    gp_utils.reduce_from_model_parallel_region(grads[0]),
+                    gp_utils.reduce_from_model_parallel_region(grads[1]),
+                )
+
+            forces = torch.neg(grads[0])
+            virial = grads[1].view(-1, 3, 3)
+            volume = torch.det(data["cell"]).abs().unsqueeze(-1)
+            stress = virial / volume.view(-1, 1, 1)
+            virial = torch.neg(virial)
+            stress = stress.view(
+                -1, 9
+            )  # NOTE to work better with current Multi-task trainer
+            outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+            outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
+            data["cell"] = emb["orig_cell"]
+        
+        elif self.regress_forces:
+            forces = (
+                -1
+                * torch.autograd.grad(
+                    energy_part.sum(), data["pos"], create_graph=self.training
+                )[0]
+            )
+            if gp_utils.initialized():
+                forces = gp_utils.reduce_from_model_parallel_region(forces)
+            outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+        return outputs
+
+
+
+@registry.register_model("esen_energy_head_les")
+class MLP_Energy_Head_LES(nn.Module, HeadInterface):
+    def __init__(self, backbone, prefix=None, wrap_property=True):
+        super().__init__()
+        backbone.energy_block = None
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+        self.prefix = prefix
+        self.wrap_property = wrap_property
+
+        self.sphere_channels = backbone.sphere_channels
+        self.hidden_channels = backbone.hidden_channels
+
+        self.les = Les(
+            n_in=backbone.sphere_channels,
+            n_layers=backbone.les_n_layers,
+            n_hidden=backbone.les_n_hidden,
+            add_linear_nn=backbone.les_add_linear_nn,
+            output_scaling_factor=backbone.les_output_scaling_factor,
+            sigma=backbone.les_sigma,
+            dl=backbone.les_dl,
+            remove_mean=backbone.les_remove_mean,
+            epsilon_factor=backbone.les_epsilon_factor,
+            use_atomwise=backbone.les_use_atomwise
+        )
+
+        self.energy_block = nn.Sequential(
+            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, 1, bias=True),
+        )
+
+        # TODO: this is not very clean, bug-prone.
+        # but is currently necessary for finetuning pretrained models that did not have
+        # the direct_forces flag set to False
+        backbone.direct_forces = False
+        assert not backbone.direct_forces, (
+            "EFS head is only used for gradient-based forces/stress."
+        )
+
+    @conditional_grad(torch.enable_grad())
+    def forward(
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        if self.prefix:
+            energy_key = f"{self.prefix}_energy"
+            
+        else:
+            energy_key = "energy"
+        
+        outputs = {}
+        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
+        _output = self.energy_block(_input)
+        node_energy = _output.view(-1, 1, 1)
+        energy_part = torch.zeros(
+            len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
+        )
+        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
+
+        if gp_utils.initialized():
+            energy_part = gp_utils.reduce_from_model_parallel_region(energy_part)
+        else:
+            energy_part = energy_part
+        #print(data.keys())
+        #print("data sid", data["sid"])
+        
+        # add lr energy
+        lr_energy = self.les(
+            positions=data["pos"], 
+            cell=data["cell"], 
+            desc=emb["node_embedding"].narrow(1, 0, 1).squeeze(),
+            batch=data["batch"],
+            compute_energy=True,
+            compute_bec=False,  # not used in eSCNMD
+            bec_output_index=None,  # not used in eSCNMD
+            sid=data.get("sid", None)  # optional sid for the atoms
+        )
+        
+
+        energy_part = energy_part + lr_energy["E_lr"]
+        outputs[energy_key] = {"energy": energy_part} if self.wrap_property else energy_part
+        
+        embeddings = emb["node_embedding"].detach()
+        if gp_utils.initialized():
+            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+
+        outputs["embeddings"] = (
+            {"embeddings": embeddings} if self.wrap_property else embeddings
+        )
+
+        return outputs

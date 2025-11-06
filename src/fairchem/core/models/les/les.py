@@ -169,7 +169,18 @@ class Les(nn.Module):
         bec = bec.detach().cpu().numpy() if bec is not None else None
         # save to numpy array
         #print("bec_shape", bec.shape)
-        tag = "water_bec_test_valid_11"
+        
+        tag = "deez"
+        
+        #tag = "water_8a84_bec"
+        #tag = "water_902f_bec"
+        #tag = "water_966e_bec"
+        #tag = "water_a2e7_bec"
+        #tag = "water_ace5_bec"
+        #tag = "water_b115_bec"
+        tag = "water_9d5d_bec"
+        
+
         file_name = '{}.npy'.format(tag)
         file_name_ids = '{}_ids.npy'.format(tag)
         file_name_charges = '{}_charges.npy'.format(tag)
