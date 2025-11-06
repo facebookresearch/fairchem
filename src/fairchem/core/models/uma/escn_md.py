@@ -652,16 +652,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        # TODO we should remove this for MD runs
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(
-                embeddings, data["atomic_numbers_full"].shape[0]
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
             )
-
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
-        )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
