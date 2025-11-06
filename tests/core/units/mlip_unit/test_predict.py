@@ -233,6 +233,10 @@ def test_parallel_predict_unit_batch(workers, device):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
+
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device=device, inference_settings=ifsets
