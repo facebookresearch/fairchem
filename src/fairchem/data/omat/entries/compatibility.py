@@ -38,7 +38,7 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
         check_potcar_hash: bool = False,
         config_file: str | None = None,
     ) -> None:
-                """
+        """
         Args:
             compat_type: Two options, GGA or Advanced. GGA means all GGA+U
                 entries are excluded. Advanced means the GGA/GGA+U mixing scheme
@@ -76,7 +76,7 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
                 consistent with MPRelaxSet. If False, only the POTCAR symbols will
                 be used. Default: False
             config_file (Path): Path to the selected compatibility.yaml config file.
-                If None, defaults to `MP2020Compatibility.yaml` distributed with
+                If None, defaults to `OMat24Compatibility.yaml` distributed with
                 pymatgen.
 
         References:
@@ -88,9 +88,6 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
             Jain, A. et al. Formation enthalpies by mixing GGA and GGA + U calculations.
                 Phys. Rev. B - Condens. Matter Mater. Phys. 84, 1-10 (2011).
         """
-        if config_file is None:
-            config_file = OMAT24_CONFIG_FILE
-    
         super().__init__(
             compat_type=compat_type,
             correct_peroxide=correct_peroxide,
@@ -99,6 +96,12 @@ class OMat24Compatibility(MaterialsProject2020Compatibility):
             check_potcar_hash=check_potcar_hash,
             config_file=config_file,
         )
+
+    def __new__(cls, *args, **kwargs):
+        #  We need to set the OMAT24_CONFIG_FILE as the default config file here, otherwise the
+        # cached_class decorator of the MaterialsProject2020Compatibility class will force it MP defaults.
+        kwargs.update({"config_file": kwargs.get("config_file", OMAT24_CONFIG_FILE)})
+        return super().__new__(cls, *args, **kwargs)
 
 
 def generate_cse_parameters(input_set: VaspInputSet) -> dict:
@@ -112,7 +115,7 @@ def generate_cse_parameters(input_set: VaspInputSet) -> dict:
                 "potcar_symbols": input_set.potcar.symbols,
             }
         )
-    except PmgVaspPspDirError:
+    except (PmgVaspPspDirError, FileNotFoundError):
         pass
 
     if "LDAUU" in input_set.incar:
