@@ -472,7 +472,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 # },
             )
 
-        self.last_sent_atomic_data = None
+        self.atomic_data_on_device = None
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -549,19 +549,19 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
 
     def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
-        if not self.inference_settings.merge_mole or self.last_sent_atomic_data is None:
+        if not self.inference_settings.merge_mole or self.atomic_data_on_device is None:
             data_ref = ray.put(data)
             # this will put the ray works into an infinite loop listening for broadcasts
             _futures = [
                 w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
                 for w in self.workers
             ]
-            self.last_sent_atomic_data = data
+            self.atomic_data_on_device = data.clone()
         else:
-            data = data.to(self.local_rank0.device)
-            torch.distributed.broadcast(data.pos, src=0)
+            self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+            torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
 
-        return self.local_rank0.predict(data)
+        return self.local_rank0.predict(self.atomic_data_on_device)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
