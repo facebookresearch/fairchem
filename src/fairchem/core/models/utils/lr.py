@@ -5,6 +5,7 @@ import torch
 from torch_scatter import scatter
 from fairchem.core.models.les.util import grad
 
+twopi = 2.0 * np.pi
 
 def potential_full_from_edge_inds(
     pos: torch.Tensor,
@@ -119,6 +120,7 @@ def potential_full_ewald_batched(
     dl: float = 2.0,
     sigma: float = 1.0,
     epsilon: float = 1e-6,
+    twopi: float = 2.0 * np.pi,
     return_bec: bool = False,
     batch: torch.Tensor | None = None,
 ):
@@ -141,7 +143,7 @@ def potential_full_ewald_batched(
     
     device = pos.device
     sigma_sq_half = sigma ** 2 / 2.0
-    k_sq_max = (np.pi / dl) ** 2
+    k_sq_max = (twopi / dl) ** 2
     norm_factor = 90.0474
     
     if batch is None:
