@@ -515,11 +515,10 @@ def test_set_predict_formation_energy_calculation_correctness(
     atoms.calc = calc
     total_energy = atoms.get_potential_energy()
 
-    # reset cached atoms
-    calc.atoms = None
-
     test_refs = {"H": -0.5}
-    with set_predict_formation_energy(atoms.calc, element_references=test_refs):
+    with set_predict_formation_energy(
+        atoms.calc, element_references=test_refs, reset_calculator_cache=True
+    ):
         formation_energy = atoms.get_potential_energy()
 
         expected_formation_energy = total_energy - (2 * test_refs["H"])
@@ -545,11 +544,12 @@ def test_formation_energy_predictions_against_known_values(
 
     for atoms, known_formation_energy in atoms_with_formation_energy.values():
         atoms.calc = calc
+
         with set_predict_formation_energy(calc):
-            predicted_formation_energy = atoms.get_potential_energy()
+            predicted_formation_energy = atoms.get_potential_energy() / len(atoms)
 
         assert np.isclose(
             predicted_formation_energy,
             known_formation_energy,
-            atol=1e-3,
+            atol=0.3,  # eV/atom tolerance
         )

@@ -323,6 +323,7 @@ def set_predict_formation_energy(
     calculator: FAIRChemCalculator,
     element_references: dict | None = None,
     apply_corrections: bool | None = None,
+    clear_calculator_cache: bool = True,
 ) -> FAIRChemCalculator:
     """
     Adapt a calculator to predict formation energy.
@@ -333,6 +334,7 @@ def set_predict_formation_energy(
             to provide these and instead use the defaults for each UMA task.
         apply_corrections (bool, optional): Whether to apply MP style corrections to the formation energies.
             This is only relevant for the OMat task. Default is True if task is OMat.
+        clear_calculator_cache (bool): Whether to clear the calculator cache before modifying the calculate method.
 
     Returns:
         FAIRChemCalculator: The same calculator instance but will return formation energies as the potential energy.
@@ -346,6 +348,9 @@ def set_predict_formation_energy(
         apply_corrections = True
 
     original_calculate = calculator.calculate
+
+    if clear_calculator_cache is True:
+        calculator.atoms = None
 
     def formation_energy_calculate(
         atoms: Atoms, properties: list[str], system_changes: list[str]
