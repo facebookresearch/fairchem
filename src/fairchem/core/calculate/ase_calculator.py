@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from collections import Counter
+from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Literal
 
@@ -317,6 +318,7 @@ class FAIRChemCalculator(Calculator):
             )
 
 
+@contextmanager
 def set_predict_formation_energy(
     calculator: FAIRChemCalculator,
     element_references: dict | None = None,
@@ -385,10 +387,11 @@ def set_predict_formation_energy(
             if "free_energy" in calculator.results:
                 calculator.results["free_energy"] = formation_energy
 
-    # Replace the calculate method
-    calculator.calculate = formation_energy_calculate
-
-    return calculator
+    try:
+        calculator.calculate = formation_energy_calculate
+        yield
+    finally:
+        calculator.calculate = original_calculate
 
 
 class MixedPBCError(ValueError):
