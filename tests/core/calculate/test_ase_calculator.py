@@ -504,7 +504,9 @@ def test_set_predict_formation_energy_mp_corrections_omat_task(
 def test_set_predict_formation_energy_calculation_correctness(
     aperiodic_atoms, single_mlip_predict_unit
 ):
-    calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omol")
+    calc = FAIRChemCalculator.from_model_checkpoint(
+        "uma-s-1p1", task_name="omol"
+    )  # (single_mlip_predict_unit, task_name="omol")
 
     atoms = molecule("H2")
     atoms.info["charge"] = 0
@@ -513,13 +515,15 @@ def test_set_predict_formation_energy_calculation_correctness(
     atoms.calc = calc
     total_energy = atoms.get_potential_energy()
 
+    # reset cached atoms
+    calc.atoms = None
+
     test_refs = {"H": -0.5}
-    with set_predict_formation_energy(calc, element_references=test_refs):
-        atoms.calc = calc
+    with set_predict_formation_energy(atoms.calc, element_references=test_refs):
         formation_energy = atoms.get_potential_energy()
 
-    expected_formation_energy = total_energy - (2 * test_refs["H"])
-    assert np.isclose(formation_energy, expected_formation_energy, atol=1e-6)
+        expected_formation_energy = total_energy - (2 * test_refs["H"])
+        assert np.isclose(formation_energy, expected_formation_energy, atol=1e-6)
 
 
 def test_set_predict_formation_energy_different_task_types(single_mlip_predict_unit):
@@ -539,7 +543,7 @@ def test_formation_energy_predictions_against_known_values(
     predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
 
-    for known_formation_energy, atoms in atoms_with_formation_energy.values():
+    for atoms, known_formation_energy in atoms_with_formation_energy.values():
         atoms.calc = calc
         with set_predict_formation_energy(calc):
             predicted_formation_energy = atoms.get_potential_energy()
