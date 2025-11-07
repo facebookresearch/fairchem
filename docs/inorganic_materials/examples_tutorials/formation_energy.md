@@ -67,7 +67,8 @@ result = relax_job(
     method="fairchem",
     name_or_path="uma-s-1p1",
     task_name="omat",
-    opt_params={"fmax": 1e-3, "optimizer": LBFGS},
+    relax_cell=True,
+    opt_params={"fmax": 1e-3, "optimizer": FIRE},
 )
 
 # Get the realxed atoms!
@@ -75,18 +76,19 @@ atoms = result["atoms"]
 
 # Create an calculator using uma-s-1p1
 calculator = FAIRChemCalculator.from_model_checkpoint("uma-s-1p1", task_name="omat")
-
-# Adapt the calculator to automatically return MP-style corrected formation energies
-# For the omat task, this defaults to apply MP2020 style corrections with OMat24 compatibility
-calculator = set_predict_formation_energy(calculator, apply_corrections=True)
-
-# Predict the formation energy
 atoms.calc = calculator
-form_energy = atoms.get_potential_energy()
+
+# Adapt the calculation to automatically return MP-style corrected formation energies
+# For the omat task, this defaults to apply MP2020 style corrections with OMat24 compatibility
+with set_predict_formation_energy(atoms.calc, apply_corrections=True):
+    form_energy = atoms.get_potential_energy()
 ```
 
 ```{code-cell} ipython3
 pprint.pprint(f"Total energy: {result["results"]["energy"] eV\n Formation energy {form_energy} eV})
 ```
+
+Compare the results to the value of [-3.038 eV/atom reported](https://next-gen.materialsproject.org/materials/mp-1265?chemsys=Mg-O#thermodynamic_stability) in the the Materials Project!
+*Note that we expect differences due to the different DFT settings used to calculate the OMat24 training data.*
 
 Congratulations; you ran your first relaxation and predicted the formation energy of MgO using UMA and `quacc`!
