@@ -118,7 +118,7 @@ jobs:
       # Needed to manually set commit status
       statuses: write
     strategy:
-      max-parallel: 10
+      max-parallel: 1
       matrix:
         python_version: ['3.12']
 
@@ -208,7 +208,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu 
 
       - name: Cleanup
         if: always()

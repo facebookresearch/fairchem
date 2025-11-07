@@ -47,7 +47,7 @@ lmp_fc lmp_in="lammps_in_example.file"  task_name="omol"
 ```
 
 ## Multi-GPU parallelism
-Our LAMMPs integration is fully compatible out the box with our Multi-GPU inference API. The only change required is to pass it the ParallelMLIPPredictUnitRay [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/lammps/lammps_fc_config.yaml#L20) instead of the regular predict unit when initializing the lammps fairchem script. No need to install anything new such as Kokkos or add communication code.
+Our LAMMPs integration is fully compatible out the box with our Multi-GPU inference API. The only change required is to pass it the ParallelMLIPPredictUnit [here](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/lammps/lammps_fc_config.yaml#L20) instead of the regular predict unit when initializing the lammps fairchem script. No need to install anything new such as Kokkos or add communication code.
 
 For example:
 ```
