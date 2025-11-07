@@ -397,6 +397,8 @@ def set_predict_formation_energy(
         yield
     finally:
         calculator.calculate = original_calculate
+        if clear_calculator_cache is True:
+            calculator.atoms = None
 
 
 class MixedPBCError(ValueError):
