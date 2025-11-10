@@ -5,14 +5,15 @@ import numpy.testing as npt
 import pytest
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
+
+import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
-import fairchem.core.common.gp_utils as gp_utils
-from fairchem.core.common import distutils
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
@@ -199,16 +200,16 @@ def test_parallel_predict_unit_batch(workers, device):
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    
+
     # Create H2O and O molecules batch
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
     h2o.pbc = True
-    
+
     o_atom = molecule("O")
     o_atom.info.update({"charge": 0, "spin": 2})  # triplet oxygen
     o_atom.pbc = True
-    
+
     h2o_data = AtomicData.from_ase(
         h2o,
         task_name="omol",
@@ -217,7 +218,7 @@ def test_parallel_predict_unit_batch(workers, device):
     )
     o_data = AtomicData.from_ase(
         o_atom,
-        task_name="omol", 
+        task_name="omol",
         r_data_keys=["spin", "charge"],
         molecule_cell_size=120,
     )
@@ -331,25 +332,25 @@ def test_original_out_of_plane_forces(mol_name):
 )
 def test_merge_mole_with_supercell(supercell_matrix):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
-    
+
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device="cuda", inference_settings=settings
     )
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
-    
+
     atoms_orig.calc = calc
     energy_orig = atoms_orig.get_potential_energy()
     forces_orig = atoms_orig.get_forces()
-    
+
     atoms_super = make_supercell(atoms_orig, supercell_matrix)
     num_atoms_ratio = len(atoms_super) / len(atoms_orig)
-    
+
     atoms_super.calc = calc
-    
+
     energy_super = atoms_super.get_potential_energy()
     forces_super = atoms_super.get_forces()
-    
+
     energy_ratio = energy_super / energy_orig
     npt.assert_allclose(
         energy_ratio,
@@ -358,7 +359,7 @@ def test_merge_mole_with_supercell(supercell_matrix):
         err_msg=f"Energy scaling is incorrect for supercell. "
         f"Expected ratio: {num_atoms_ratio}, got: {energy_ratio}",
     )
-    
+
     mean_force_mag_orig = np.linalg.norm(forces_orig, axis=1).mean()
     mean_force_mag_super = np.linalg.norm(forces_super, axis=1).mean()
     npt.assert_allclose(
@@ -374,19 +375,19 @@ def test_merge_mole_with_supercell(supercell_matrix):
 @pytest.mark.gpu()
 def test_merge_mole_composition_check():
     atoms_cu = bulk("Cu", "fcc", a=3.6)
-    
+
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device="cuda", inference_settings=settings
     )
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
-    
+
     atoms_cu.calc = calc
     _ = atoms_cu.get_potential_energy()
-    
+
     atoms_al = bulk("Al", "fcc", a=4.05)
     atoms_al.calc = calc
-    
+
     with pytest.raises(
         AssertionError,
         match="Cannot run on merged model on system. Relative compositions seem different",
@@ -397,26 +398,26 @@ def test_merge_mole_composition_check():
 @pytest.mark.gpu()
 def test_merge_mole_supercell_energy_forces_consistency():
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
-    
+
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device="cuda", inference_settings=settings
     )
     calc = FAIRChemCalculator(predict_unit, task_name="omat")
-    
+
     atoms_orig.calc = calc
     energy1 = atoms_orig.get_potential_energy()
-    
+
     atoms_2x = make_supercell(atoms_orig, 2 * np.eye(3))
     atoms_2x.calc = calc
     energy_2x = atoms_2x.get_potential_energy()
-    
+
     atoms_3x = make_supercell(atoms_orig, 3 * np.eye(3))
     atoms_3x.calc = calc
     energy_3x = atoms_3x.get_potential_energy()
-    
+
     energy1_again = atoms_orig.get_potential_energy()
-    
+
     npt.assert_allclose(energy1, energy1_again, rtol=1e-6)
     npt.assert_allclose(energy_2x / energy1, 8.0, rtol=0.01)
     npt.assert_allclose(energy_3x / energy1, 27.0, rtol=0.01)

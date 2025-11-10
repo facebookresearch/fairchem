@@ -264,16 +264,16 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 assert (
                     data_device.natoms.numel() == 1
                 ), f"Cannot run merged model on batch with multiple systems. Must be exactly 1 system, found {data_device.natoms.numel()}"
-                  
+
                 # Normalize compositions by total number of atoms to allow same reduced composition
                 merged_comp = self.merged_on[0][0].float()
                 this_comp = this_sys[0][0].float()
                 merged_comp_norm = merged_comp / merged_comp.sum()
                 this_comp_norm = this_comp / this_comp.sum()
-                  
-                assert (
-                    merged_comp_norm.isclose(this_comp_norm, rtol=1e-5).all()
-                ), "Cannot run on merged model on system. Relative compositions seem different..."
+
+                assert merged_comp_norm.isclose(
+                    this_comp_norm, rtol=1e-5
+                ).all(), "Cannot run on merged model on system. Relative compositions seem different..."
                 assert (
                     self.merged_on[0][1] == this_sys[0][1]
                 ), f"Cannot run on merged model on system. Charge is different {self.merged_on[0][1]} vs {this_sys[0][1]}"
