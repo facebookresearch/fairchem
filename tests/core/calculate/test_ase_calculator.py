@@ -517,7 +517,7 @@ def test_set_predict_formation_energy_calculation_correctness(
 
     test_refs = {"H": -0.5}
     with set_predict_formation_energy(
-        atoms.calc, element_references=test_refs, reset_calculator_cache=True
+        atoms.calc, element_references=test_refs, clear_calculator_cache=True
     ):
         formation_energy = atoms.get_potential_energy()
 
