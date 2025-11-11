@@ -607,12 +607,11 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         self._atom_refs = atom_refs
 
         self.actors = [
-            PredictServerActor.options(num_gpus=0.1).remote(
-                server_handle, dataset_to_tasks, atom_refs
-            )
+            PredictServerActor.options(num_gpus=0.1).remote(server_handle)
             for _ in range(pool_size)
         ]
         self.pool = ray.util.ActorPool(self.actors)
+        self.server_handle = server_handle
 
         logging.info(f"ActorPoolPredictUnit initialized with {pool_size} actors")
 

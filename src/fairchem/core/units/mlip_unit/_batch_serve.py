@@ -20,16 +20,16 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
+logger = logging.getLogger("ray")
+
+
 @ray.remote(num_gpus=0.1)
 class PredictServerActor:
     """
     Ray Actor that provides synchronous interface to batch server.
-    Each actor maintains its own event loop and handles async/sync conversion.
     """
 
-    def __init__(
-        self, server_handle, dataset_to_tasks: dict, atom_refs: dict | None = None
-    ):
+    def __init__(self, server_handle):
         """
         Args:
             server_handle: Ray Serve deployment handle for BatchPredictServer
@@ -37,10 +37,7 @@ class PredictServerActor:
             atom_refs: Optional atom references dictionary
         """
         self.server_handle = server_handle
-        self.dataset_to_tasks = dataset_to_tasks
-        self.atom_refs = atom_refs
         self.actor_id = ray.get_runtime_context().get_actor_id()
-
         logging.info(f"PredictActor {self.actor_id} initialized")
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
@@ -53,7 +50,7 @@ class PredictServerActor:
         Returns:
             Prediction dictionary
         """
-        return self.server_handle.predict.remote(data).result()
+        return self.server_handle.predict.remote(data, undo_element_references).result()
 
 
 @serve.deployment(max_ongoing_requests=100)
@@ -86,7 +83,9 @@ class BatchPredictServer:
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
 
     @serve.batch
-    async def predict(self, data_list: list[AtomicData]) -> list[dict]:
+    async def predict(
+        self, data_list: list[AtomicData], undo_element_references: bool = True
+    ) -> list[dict]:
         """
         Process a batch of AtomicData objects.
 
@@ -97,12 +96,14 @@ class BatchPredictServer:
             List of prediction dictionaries, one per input
         """
         batch = atomicdata_list_to_batch(data_list)
-        predictions = self.predict_unit.predict(batch)
+        predictions = self.predict_unit.predict(batch, undo_element_references)
         prediction_list = self._split_predictions(predictions, batch)
 
         return prediction_list
 
-    async def __call__(self, data: AtomicData) -> dict:
+    async def __call__(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict:
         """
         Main entry point for inference requests.
 
@@ -112,7 +113,7 @@ class BatchPredictServer:
         Returns:
             Prediction dictionary for this system
         """
-        predictions = await self.predict(data)
+        predictions = await self.predict(data, undo_element_references)
         return predictions
 
     def _split_predictions(
