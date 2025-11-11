@@ -255,6 +255,97 @@ def test_parallel_predict_unit_batch(workers, device):
         atol=FORCE_TOL,
     )
 
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "device, num_workers, padding",
+    [   
+        ("cpu",  2, 0),
+        ("cpu",  2, 1),
+        ("cpu",  2, 32),
+        ("cuda",  2, 32),
+    ],
+)
+def test_batching_consistency(device, num_workers, padding):
+    """Test that batched and unbatched predictions are consistent."""
+    assert num_workers <= 2 , "Oxygen system alone only supports up to two workers (num atoms)"
+    # Get the appropriate predict unit
+    if num_workers > 1:
+        model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
+        ifsets = InferenceSettings(
+            tf32=False,
+            merge_mole=False,
+            activation_checkpointing=True,
+            internal_graph_gen_version=2,
+            external_graph_gen=False,
+            edge_chunk_size=padding,
+        )
+        predict_unit = ParallelMLIPPredictUnit(
+            inference_model_path=model_path,
+            device=device,
+            inference_settings=ifsets,
+            num_workers=num_workers,
+        )
+    else:
+        predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device=device)
+
+    # Create H2O molecule
+    h2o = molecule("H2O")
+    h2o.info.update({"charge": 0, "spin": 1})
+    h2o.pbc = True
+
+    # Create system of two oxygen atoms 100 A apart
+    from ase import Atoms
+    o_atom = Atoms('O2', positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
+    o_atom.info.update({"charge": 0, "spin": 4})  # two triplet oxygens -> quintet
+    o_atom.pbc = True
+
+    # Convert to AtomicData
+    h2o_data = AtomicData.from_ase(
+        h2o,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    o_data = AtomicData.from_ase(
+        o_atom,
+        task_name="omol", 
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+
+    # Batch 1: [H2O, O]
+    batch1 = atomicdata_list_to_batch([h2o_data, o_data])
+    seed_everywhere(42)
+    preds1 = predict_unit.predict(batch1)
+
+    # Batch 2: [H2O]
+    batch2 = atomicdata_list_to_batch([h2o_data])
+    seed_everywhere(42)
+    preds2 = predict_unit.predict(batch2)
+
+    # Batch 3: [O]
+    batch3 = atomicdata_list_to_batch([o_data])
+    seed_everywhere(42)
+    preds3 = predict_unit.predict(batch3)
+
+    # Assert energies match
+    assert torch.allclose(preds1["energy"][0], preds2["energy"][0], atol=ATOL)
+    assert torch.allclose(preds1["energy"][1], preds3["energy"][0], atol=ATOL)
+
+    # Assert forces match
+    batch1_batch = batch1.batch
+    h2o_forces_batch1 = preds1["forces"][batch1_batch == 0]
+    o_forces_batch1 = preds1["forces"][batch1_batch == 1]
+
+    h2o_forces_batch2 = preds2["forces"]
+    o_forces_batch3 = preds3["forces"]
+
+    assert torch.allclose(h2o_forces_batch1, h2o_forces_batch2, atol=ATOL)
+    assert torch.allclose(o_forces_batch1, o_forces_batch3, atol=ATOL)
+
+    # Assert stress matches
+    assert torch.allclose(preds1["stress"][0], preds2["stress"][0], atol=ATOL)
+    assert torch.allclose(preds1["stress"][1], preds3["stress"][0], atol=ATOL)
 
 # ---------------------------------------------------------------------------
 # Rotation / out-of-plane force invariance tests (planar molecules)

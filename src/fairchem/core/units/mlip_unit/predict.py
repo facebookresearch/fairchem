@@ -132,6 +132,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
             )
+        if inference_settings.edge_chunk_size is not None:
+            overrides["backbone"]["edge_chunk_size"] = (
+                inference_settings.edge_chunk_size
+            )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
