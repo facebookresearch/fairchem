@@ -23,36 +23,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("ray")
 
 
-@ray.remote(num_gpus=0.1)
-class PredictServerActor:
-    """
-    Ray Actor that provides synchronous interface to batch server.
-    """
-
-    def __init__(self, server_handle):
-        """
-        Args:
-            server_handle: Ray Serve deployment handle for BatchPredictServer
-            dataset_to_tasks: Mapping from dataset names to their associated tasks
-            atom_refs: Optional atom references dictionary
-        """
-        self.server_handle = server_handle
-        self.actor_id = ray.get_runtime_context().get_actor_id()
-        logging.info(f"PredictActor {self.actor_id} initialized")
-
-    def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
-        """Synchronous predict.
-
-        Args:
-            data: AtomicData object (single system)
-            undo_element_references: Whether to undo element references
-
-        Returns:
-            Prediction dictionary
-        """
-        return self.server_handle.predict.remote(data, undo_element_references).result()
-
-
 @serve.deployment(max_ongoing_requests=100)
 class BatchPredictServer:
     """

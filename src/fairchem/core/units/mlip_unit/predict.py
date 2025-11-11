@@ -13,11 +13,10 @@ import math
 import os
 import random
 import sys
-import time
 from collections import defaultdict
-from contextlib import nullcontext, suppress
+from contextlib import nullcontext
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Protocol, Sequence
+from typing import TYPE_CHECKING, Protocol, Sequence
 
 import hydra
 import numpy as np
@@ -62,8 +61,6 @@ except ImportError:
 
 try:
     from ray import serve
-
-    from ._batch_serve import PredictServerActor
 
     ray_serve_installed = True
 except ImportError:
@@ -594,26 +591,16 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         server_handle,
         dataset_to_tasks: dict,
         atom_refs: dict | None = None,
-        pool_size: int = 4,
     ):
         """
         Args:
             server_handle: Ray Serve deployment handle for BatchPredictServer
             dataset_to_tasks: Mapping from dataset names to their associated tasks
             atom_refs: Optional atom references dictionary
-            pool_size: Number of actors in the pool
         """
         self._dataset_to_tasks = dataset_to_tasks
         self._atom_refs = atom_refs
-
-        self.actors = [
-            PredictServerActor.options(num_gpus=0.1).remote(server_handle)
-            for _ in range(pool_size)
-        ]
-        self.pool = ray.util.ActorPool(self.actors)
         self.server_handle = server_handle
-
-        logging.info(f"ActorPoolPredictUnit initialized with {pool_size} actors")
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
@@ -624,24 +611,10 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         Returns:
             Prediction dictionary
         """
-
-        try:
-            actor = self.pop_idle_actor()
-            result = ray.get(actor.predict.remote(data, undo_element_references))
-        except Exception as e:
-            logging.error(f"Failed to get idle actor from pool: {e}")
-            raise Exception from e
-        finally:
-            self.pool.push(actor)
-
+        result = self.server_handle.predict.remote(
+            data, undo_element_references
+        ).result()
         return result
-
-    def pop_idle_actor(self) -> Any:
-        """Pop an idle actor from the pool."""
-        while (actor := self.pool.pop_idle()) is None:
-            time.sleep(0.001)
-
-        return actor
 
     @property
     def dataset_to_tasks(self) -> dict:
@@ -650,15 +623,3 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     @property
     def atom_refs(self) -> dict | None:
         return self._atom_refs
-
-    def shutdown(self):
-        try:
-            for actor in self.actors:
-                ray.kill(actor)
-            logging.info("Actor pool shutdown complete")
-        except Exception as e:
-            logging.warning(f"Error during actor pool shutdown: {e}")
-
-    def __del__(self):
-        with suppress(Exception):  # Ignore errors during cleanup
-            self.shutdown()
