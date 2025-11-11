@@ -85,7 +85,7 @@ def test_scatter_tensors(
 
 def scatter_gather_fn(input: torch.Tensor):
     x = scatter_to_model_parallel_region(input)
-    return gather_from_model_parallel_region_sum_grad(x, input.shape[0], True)
+    return gather_from_model_parallel_region_sum_grad(x, input.shape[0])
 
 
 @pytest.mark.parametrize(
@@ -207,7 +207,7 @@ def gather_sum_bwd_test(rank=-1):
         rank = dist.get_rank()
         x = torch.tensor([rank + 2], requires_grad=True, dtype=torch.float)
         x_full = gather_from_model_parallel_region_sum_grad(
-            x, gp_utils.get_gp_world_size(), True
+            x, gp_utils.get_gp_world_size()
         )
         energy = (x_full.prod() + rank + 1) ** 2
         # sum
@@ -391,7 +391,7 @@ def simple_layer(x, edge_index, node_offset, natoms, n=3):
 
     if gp_utils.initialized():
         return gp_utils.gather_from_model_parallel_region_sum_grad(
-            new_node_embedding, natoms, gloo_backend=True
+            new_node_embedding, natoms
         )
     else:
         return new_node_embedding
