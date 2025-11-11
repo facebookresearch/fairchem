@@ -213,7 +213,7 @@ class ScatterToModelParallelRegion(torch.autograd.Function):
     @torch.compiler.disable
     def backward(ctx, grad_output: torch.Tensor):
         return gather_from_model_parallel_region_sum_grad(
-            grad_output, sum(ctx.split_sizes), False
+            grad_output, sum(ctx.split_sizes)
         )
 
 
