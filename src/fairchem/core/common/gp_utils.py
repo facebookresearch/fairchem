@@ -229,7 +229,7 @@ def gather_from_model_parallel_region(
         input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
     )
 
-    tensor_list_w_padding = GatherFromModelParallelRegionGradPadded.apply(input, False)
+    tensor_list_w_padding = GatherFromModelParallelRegionGradPadded.apply(input)
 
     return torch.cat(
         [
