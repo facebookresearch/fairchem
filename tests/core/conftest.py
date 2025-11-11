@@ -12,7 +12,7 @@ import tempfile
 from itertools import product
 from random import choice
 from typing import TYPE_CHECKING
-
+import ray
 import numpy as np
 import pytest
 import torch
@@ -22,7 +22,8 @@ from ase.io import write
 from pymatgen.core import Structure
 from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
-
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
 from fairchem.core.datasets.ase_datasets import AseDBDataset, AseReadDataset
 from fairchem.core.units.mlip_unit.mlip_unit import (
     UNIT_INFERENCE_CHECKPOINT,
@@ -228,11 +229,13 @@ def dummy_binary_db_dataset(dummy_binary_dataset_path):
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
-    # If debugging GPU memory issues, uncomment this print statement
-    # to get full GPU memory allocations before each test runs
-    # print(torch.cuda.memory_summary())
     yield
     torch.cuda.empty_cache()
+    if ray.is_initialized():
+        ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
 
 
 @pytest.fixture(scope="session")
