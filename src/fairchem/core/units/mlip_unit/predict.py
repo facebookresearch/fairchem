@@ -12,11 +12,11 @@ import logging
 import math
 import os
 import random
-import sys
+import time
 from collections import defaultdict
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from functools import wraps
-from typing import TYPE_CHECKING, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Protocol, Sequence
 
 import hydra
 import numpy as np
@@ -61,7 +61,8 @@ except ImportError:
 
 try:
     from ray import serve
-    from ._batch_serve import BatchPredictServer
+
+    from ._batch_serve import PredictServerActor
 
     ray_serve_installed = True
 except ImportError:
@@ -351,7 +352,8 @@ def move_tensors_to_cpu(data):
         return data
 
 
-class MLIPWorkerLocal:
+@remote
+class MLIPWorker:
     def __init__(
         self,
         worker_id: int,
@@ -371,65 +373,58 @@ class MLIPWorkerLocal:
         )
         self.master_port = get_free_port() if master_port is None else master_port
         self.is_setup = False
-        self.last_received_atomic_data = None
 
     def get_master_address_and_port(self):
         return (self.master_address, self.master_port)
 
-    def get_device_for_local_rank(self):
-        return get_device_for_local_rank()
-
     def _distributed_setup(
         self,
+        worker_id: int,
+        master_port: int,
+        world_size: int,
+        predictor_config: dict,
+        master_address: str,
     ):
         # initialize distributed environment
         # TODO, this wont work for multi-node, need to fix master addr
-        logging.info(f"Initializing worker {self.worker_id}...")
-        setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
-
-        device = self.predictor_config.get("device", "cpu")
+        logging.info(f"Initializing worker {worker_id}...")
+        setup_env_local_multi_gpu(worker_id, master_port, master_address)
+        # local_rank = int(os.environ["LOCAL_RANK"])
+        device = predictor_config.get("device", "cpu")
         assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
         dist.init_process_group(
             backend=backend,
-            rank=self.worker_id,
-            world_size=self.world_size,
+            rank=worker_id,
+            world_size=world_size,
         )
-        gp_utils.setup_graph_parallel_groups(self.world_size, backend)
-        self.predict_unit = hydra.utils.instantiate(self.predictor_config)
-        self.device = get_device_for_local_rank()
+        gp_utils.setup_graph_parallel_groups(world_size, backend)
+        self.predict_unit = hydra.utils.instantiate(predictor_config)
         logging.info(
-            f"Worker {self.worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
-            f"on port {self.master_port}, with device: {self.device}, config: {self.predictor_config}"
+            f"Worker {worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
+            f"on port {self.master_port}, with device: {get_device_for_local_rank()}, config: {self.predictor_config}"
         )
-        self.is_setup = True
 
-    def predict(
-        self, data: AtomicData, use_nccl: bool = False
-    ) -> dict[str, torch.tensor] | None:
+    def predict(self, data: AtomicData) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
-            self._distributed_setup()
-
+            self._distributed_setup(
+                self.worker_id,
+                self.master_port,
+                self.world_size,
+                self.predictor_config,
+                self.master_address,
+            )
+            self.is_setup = True
         out = self.predict_unit.predict(data)
+        out = move_tensors_to_cpu(out)
         if self.worker_id == 0:
-            return move_tensors_to_cpu(out)
-
-        if self.worker_id != 0 and use_nccl:
-            self.last_received_atomic_data = data.to(self.device)
-            while True:
-                torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
-                self.predict_unit.predict(self.last_received_atomic_data)
-
-        return None
-
-
-@remote
-class MLIPWorker(MLIPWorkerLocal):
-    pass
+            return out
+        else:
+            return None
 
 
 @requires(ray_installed, message="Requires `ray` to be installed")
-class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
+class ParallelMLIPPredictUnitRay(MLIPPredictUnitProtocol):
     def __init__(
         self,
         inference_model_path: str,
@@ -451,7 +446,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             seed=seed,
             atom_refs=atom_refs,
         )
-        self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
         predict_unit_config = {
@@ -464,16 +458,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "atom_refs": atom_refs,
             "assert_on_nans": assert_on_nans,
         }
-
-        logging.basicConfig(
-            level=logging.INFO,
-            force=True,
-            stream=sys.stdout,
-            format="%(asctime)s %(levelname)s [%(processName)s] %(name)s: %(message)s",
-        )
-        # Optional: keep Ray/uvicorn chatty logs in check
-        logging.getLogger("ray").setLevel(logging.INFO)
-        logging.getLogger("uvicorn").setLevel(logging.INFO)
         if not ray.is_initialized():
             ray.init(
                 logging_level=logging.INFO,
@@ -481,8 +465,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 #     "env_vars": {"RAY_DEBUG": "1"},
                 # },
             )
-
-        self.atomic_data_on_device = None
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -503,7 +485,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             placement_groups.append(pg)
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
-        # Need to still place worker to occupy space, otherwise ray double books this GPU
+        # place rank 0 on placement group 0
         rank0_worker = MLIPWorker.options(
             num_gpus=num_gpu_per_worker,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
@@ -512,18 +494,11 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
             ),
         ).remote(0, num_workers, predict_unit_config)
-
-        local_gpu_or_cpu = ray.get(rank0_worker.get_device_for_local_rank.remote())
-        os.environ[CURRENT_DEVICE_TYPE_STR] = local_gpu_or_cpu
-
-        self.workers = []
-        self.local_rank0 = MLIPWorkerLocal(
-            worker_id=0,
-            world_size=num_workers,
-            predictor_config=predict_unit_config,
+        master_addr, master_port = ray.get(
+            rank0_worker.get_master_address_and_port.remote()
         )
-        master_addr, master_port = self.local_rank0.get_master_address_and_port()
         logging.info(f"Started rank0 on {master_addr}:{master_port}")
+        self.workers = [rank0_worker]
 
         # next place all ranks in order and pack them on placement groups
         # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
@@ -557,21 +532,20 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 self.workers.append(actor)
                 worker_id += 1
 
-    def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
-        if not self.inference_settings.merge_mole or self.atomic_data_on_device is None:
-            data_ref = ray.put(data)
-            # this will put the ray works into an infinite loop listening for broadcasts
-            _futures = [
-                w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
-                for w in self.workers
-            ]
-            self.atomic_data_on_device = data.clone()
-        else:
-            self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
-            torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
-
-        return self.local_rank0.predict(self.atomic_data_on_device)
+        # this data transfer should be made more efficienct by using a shared memory transfer + nccl broadcast
+        data_ref = ray.put(data)
+        futures = [w.predict.remote(data_ref) for w in self.workers]
+        # just get the first result that is ready since they are identical
+        # the rest of the futures should go out of scope and memory garbage collected
+        # ready_ids, _ = ray.wait(futures, num_returns=1)
+        # result = ray.get(ready_ids[0])
+        # result = ray.get(futures)
+        # return result[0]
+        return ray.get(futures[0])
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -582,101 +556,82 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
 class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     """
     PredictUnit wrapper that uses Ray Serve for batched inference.
-    
+
     This provides a clean interface compatible with MLIPPredictUnitProtocol
     while leveraging Ray Serve's batching capabilities under the hood.
     """
 
     def __init__(
         self,
-        predict_unit: MLIPPredictUnit,
-        max_batch_size: int = 32,
-        batch_wait_timeout_s: float = 0.05,
-        num_replicas: int = 1,
-        ray_actor_options: dict | None = None,
+        server_handle,
+        dataset_to_tasks: dict,
+        atom_refs: dict | None = None,
+        pool_size: int = 4,
     ):
-        """Initialize BatchServerPredictUnit.
-        
+        """
         Args:
-            predict_unit: An MLIPPredictUnit instance to use for batched inference
-            max_batch_size: Maximum number of systems per batch
-            batch_wait_timeout_s: Maximum wait time before processing partial batch
-            num_replicas: Number of deployment replicas (for scaling)
-            ray_actor_options: Additional Ray actor options (e.g., num_gpus, num_cpus)
-        """   
-        self._dataset_to_tasks = copy.deepcopy(predict_unit.dataset_to_tasks)
-        self._atom_refs = getattr(predict_unit, 'atom_refs', None)
-        
-        if not ray.is_initialized():
-            ray.init()
-            logging.info("Ray initialized by BatchServerPredictUnit")
-        
-        try:
-            serve.start()
-            logging.info("Ray Serve started by BatchServerPredictUnit")
-        except Exception:
-            # Server might already be running
-            pass
-        
-        # Put the predict unit in Ray's object store
-        predict_unit_ref = ray.put(predict_unit)
-        logging.info("Predict unit stored in Ray object store")
-        
-        # Configure deployment options
-        if ray_actor_options is None:
-            ray_actor_options = {}
-        
-        # Create the deployment with custom batching parameters
-        deployment = BatchPredictServer.options(
-            num_replicas=num_replicas,
-            ray_actor_options=ray_actor_options,
-        ).bind(
-            predict_unit_ref,
-            max_batch_size=max_batch_size,
-            batch_wait_timeout_s=batch_wait_timeout_s
-        )
-        
-        # Deploy and get handle
-        self.handle = serve.run(deployment, name="predict-server", route_prefix="/predict")
-        
-        logging.info(
-            f"BatchServerPredictUnit initialized with max_batch_size={max_batch_size}, "
-            f"batch_wait_timeout_s={batch_wait_timeout_s}, num_replicas={num_replicas}"
-        )
+            server_handle: Ray Serve deployment handle for BatchPredictServer
+            dataset_to_tasks: Mapping from dataset names to their associated tasks
+            atom_refs: Optional atom references dictionary
+            pool_size: Number of actors in the pool
+        """
+        self._dataset_to_tasks = dataset_to_tasks
+        self._atom_refs = atom_refs
+
+        self.actors = [
+            PredictServerActor.options(num_gpus=0.1).remote(
+                server_handle, dataset_to_tasks, atom_refs
+            )
+            for _ in range(pool_size)
+        ]
+        self.pool = ray.util.ActorPool(self.actors)
+
+        logging.info(f"ActorPoolPredictUnit initialized with {pool_size} actors")
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
-        Run inference on a single or batched AtomicData.
-        
         Args:
-            data: AtomicData object (single system or pre-batched)
-            undo_element_references: Whether to undo element references (unused, for compatibility)
-            
+            data: AtomicData object (single system)
+            undo_element_references: Whether to undo element references
+
         Returns:
             Prediction dictionary
         """
-        # Ray Serve handle.remote() returns a DeploymentResponse, not an ObjectRef
-        # Use .result() to get the result synchronously
-        return self.handle.remote(data)
+
+        try:
+            actor = self.pop_idle_actor()
+            result = ray.get(actor.predict.remote(data, undo_element_references))
+        except Exception as e:
+            logging.error(f"Failed to get idle actor from pool: {e}")
+            raise Exception from e
+        finally:
+            self.pool.push(actor)
+
+        return result
+
+    def pop_idle_actor(self) -> Any:
+        """Pop an idle actor from the pool."""
+        while (actor := self.pool.pop_idle()) is None:
+            time.sleep(0.001)
+
+        return actor
 
     @property
-    def dataset_to_tasks(self) -> dict[str, list]:
-        """Get the dataset to tasks mapping from the wrapped predict unit."""
+    def dataset_to_tasks(self) -> dict:
         return self._dataset_to_tasks
 
     @property
-    def atom_refs(self):
-        """Get atom references from the wrapped predict unit."""
+    def atom_refs(self) -> dict | None:
         return self._atom_refs
 
-    def cleanup(self):
-        """Clean up Ray Serve resources."""
+    def shutdown(self):
         try:
-            serve.delete("predict-server")
-            logging.info("BatchServerPredictUnit deployment deleted")
+            for actor in self.actors:
+                ray.kill(actor)
+            logging.info("Actor pool shutdown complete")
         except Exception as e:
-            logging.warning(f"Failed to delete deployment: {e}")
+            logging.warning(f"Error during actor pool shutdown: {e}")
 
     def __del__(self):
-        """Clean up on deletion."""
-        self.cleanup()
+        with suppress(Exception):  # Ignore errors during cleanup
+            self.shutdown()
