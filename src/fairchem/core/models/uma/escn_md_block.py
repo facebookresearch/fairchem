@@ -390,7 +390,7 @@ class eSCNMD_Block(torch.nn.Module):
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
         edge_envelope,
-        total_atoms,
+        total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -409,7 +409,7 @@ class eSCNMD_Block(torch.nn.Module):
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
                 edge_envelope,
-                total_atoms=total_atoms,
+                total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
                 node_offset=node_offset,
             )
             x = x + x_res
