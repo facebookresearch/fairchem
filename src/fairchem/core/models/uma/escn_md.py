@@ -505,7 +505,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     edge_envelope,
-                    total_atoms=data_dict["atomic_numbers_full"].shape[0],
+                    total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
+                        0
+                    ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
