@@ -172,7 +172,9 @@ class AtomicData:
             elif isinstance(dataset, list):
                 self.dataset = dataset
             else:
-                raise ValueError(f"dataset must be a string or list of strings, got {type(dataset)}")
+                raise ValueError(
+                    f"dataset must be a string or list of strings, got {type(dataset)}"
+                )
 
         # tagets
         if energy is not None:
