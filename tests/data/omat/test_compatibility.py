@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 @pytest.fixture(scope="session")
 def mp_computed_structure_entries():
     with importlib.resources.path(
-        compatibility_resources, "test_calc_compounds_mp.json.gz"
+        compatibility_resources, "test_calc_compounds_mp.json"
     ) as path:
         entries = loadfn(path)
         yield entries
@@ -51,7 +51,7 @@ def mp_computed_structure_entries():
 @pytest.fixture(scope="session")
 def omat_computed_structure_entries():
     with importlib.resources.path(
-        compatibility_resources, "test_calc_compounds_omat.json.gz"
+        compatibility_resources, "test_calc_compounds_omat.json"
     ) as path:
         entries = loadfn(path)
         yield entries
