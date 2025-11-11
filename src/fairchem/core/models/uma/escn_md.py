@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
-from torch import distributed as dist
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -406,8 +405,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
-        gloo_backend = (not gp_utils.initialized()) or dist.get_backend() == "gloo"
-
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
@@ -509,7 +506,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping_inv,
                     edge_envelope,
                     total_atoms=data_dict["atomic_numbers_full"].shape[0],
-                    gloo_backend=gloo_backend,
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
