@@ -7,20 +7,32 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import os
+import tempfile
 from itertools import product
-import logging
 from random import choice
 from typing import TYPE_CHECKING
-
+import ray
 import numpy as np
 import pytest
 import torch
+from ase.calculators.singlepoint import SinglePointCalculator
 from ase.db import connect
+from ase.io import write
 from pymatgen.core import Structure
 from pymatgen.core.periodic_table import Element
 from syrupy.extensions.amber import AmberSnapshotExtension
-
-from fairchem.core.datasets import AseDBDataset
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
+from fairchem.core.datasets.ase_datasets import AseDBDataset, AseReadDataset
+from fairchem.core.units.mlip_unit.mlip_unit import (
+    UNIT_INFERENCE_CHECKPOINT,
+    UNIT_RESUME_CONFIG,
+)
+from tests.core.testing_utils import launch_main
+from tests.core.units.mlip_unit.create_fake_dataset import (
+    create_fake_uma_dataset,
+)
 
 if TYPE_CHECKING:
     from syrupy.types import SerializableData
@@ -168,12 +180,14 @@ def dummy_element_refs():
 @pytest.fixture(scope="session")
 def dummy_binary_dataset_path(tmpdir_factory, dummy_element_refs):
     # a dummy dataset with binaries with energy that depends on composition only plus noise
-    all_binaries = list(product(list(Element), repeat=2))
+    # Limit to first 83 elements (up to Bismuth) to avoid CUDA indexing errors with rare/synthetic elements
+    common_elements = [Element.from_Z(z) for z in range(1, 84)]  # H to Bi
+    all_binaries = list(product(common_elements, repeat=2))
     rng = np.random.default_rng(seed=0)
 
     tmpdir = tmpdir_factory.mktemp("dataset")
     with connect(str(tmpdir / "dummy.aselmdb")) as db:
-        for _ in range(1000):
+        for i in range(10):
             elements = choice(all_binaries)
             structure = Structure.from_prototype("cscl", species=elements, a=2.0)
             energy = (
@@ -181,32 +195,167 @@ def dummy_binary_dataset_path(tmpdir_factory, dummy_element_refs):
                 + 0.05 * rng.random() * dummy_element_refs.mean()
             )
             atoms = structure.to_ase_atoms()
-            db.write(
+            atoms.calc = SinglePointCalculator(
                 atoms,
-                data={
-                    "energy": energy,
-                    "forces": rng.random((2, 3)),
-                    "stress": rng.random((3, 3)),
-                },
+                energy=energy,
+                forces=rng.random((2, 3)),
+                stress=rng.random((3, 3)),
             )
+            # write to the lmdb file
+            db.write(atoms, data={"sid": f"structure_{i}"})
 
-    return tmpdir / "dummy.aselmdb"
+            # write it as a cif file as well
+            write(str(tmpdir / f"structure_{i}.cif"), atoms)
+
+    return tmpdir
+
+
+@pytest.fixture(scope="session", params=["asedb", "cif"])
+def dummy_binary_dataset(dummy_binary_dataset_path, request):
+    config = dict(src=str(dummy_binary_dataset_path))
+
+    if request.param == "cif":
+        config["pattern"] = "*.cif"
+        return AseReadDataset(config=config)
+    else:
+        return AseDBDataset(config=config)
 
 
 @pytest.fixture(scope="session")
-def dummy_binary_dataset(dummy_binary_dataset_path):
-    return AseDBDataset(
-        config={
-            "src": str(dummy_binary_dataset_path),
-            "a2g_args": {"r_data_keys": ["energy", "forces", "stress"]},
-        }
-    )
+def dummy_binary_db_dataset(dummy_binary_dataset_path):
+    config = dict(src=str(dummy_binary_dataset_path))
+    return AseDBDataset(config=config)
 
 
 @pytest.fixture(autouse=True)
 def run_around_tests():
-    # If debugging GPU memory issues, uncomment this print statement
-    # to get full GPU memory allocations before each test runs
-    #print(torch.cuda.memory_summary())
     yield
     torch.cuda.empty_cache()
+    if ray.is_initialized():
+        ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
+
+
+@pytest.fixture(scope="session")
+def direct_mole_checkpoint(fake_uma_dataset):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "12345"
+    device = "CPU"
+
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "num_experts=8",
+        "checkpoint_every=10000",
+        "datasets=aselmdb",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "max_epochs=null",
+        "expected_loss=null",
+        "act_type=gate",
+        "ff_type=spectral",
+    ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+    assert os.path.isfile(inference_checkpoint_pt)
+
+    return inference_checkpoint_pt, checkpoint_state_yaml
+
+
+@pytest.fixture(scope="session")
+def direct_checkpoint(fake_uma_dataset):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "12345"
+    device = "CPU"
+
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train.yaml",
+        "num_experts=0",
+        "checkpoint_every=10000",
+        "datasets=aselmdb",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "max_epochs=null",
+        "expected_loss=null",
+        "act_type=gate",
+        "ff_type=spectral",
+        # "max_neighbors=300"
+    ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+    assert os.path.isfile(inference_checkpoint_pt)
+
+    return inference_checkpoint_pt, checkpoint_state_yaml
+
+
+@pytest.fixture(scope="session")
+def conserving_mole_checkpoint(fake_uma_dataset):
+    # first train to completion
+    temp_dir = tempfile.mkdtemp()
+    timestamp_id = "12345"
+    device = "CPU"
+
+    sys_args = [
+        "--config",
+        "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
+        "num_experts=8",
+        "heads.energyandforcehead.module=fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper",
+        "checkpoint_every=10000",
+        "datasets=aselmdb_conserving",
+        f"+job.run_dir={temp_dir}",
+        f"datasets.data_root_dir={fake_uma_dataset}",
+        f"job.device_type={device}",
+        f"+job.timestamp_id={timestamp_id}",
+        "optimizer=savegrad",
+        "max_steps=2",
+        "max_epochs=null",
+        "expected_loss=null",
+        "act_type=gate",
+        "ff_type=spectral",
+    ]
+    launch_main(sys_args)
+
+    # Now resume from checkpoint_step and should get the same result
+    # TODO, should get the run config and get checkpoint location from there
+    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
+    checkpoint_state_yaml = os.path.join(checkpoint_dir, UNIT_RESUME_CONFIG)
+    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
+    assert os.path.isdir(checkpoint_dir)
+    assert os.path.isfile(checkpoint_state_yaml)
+    assert os.path.isfile(inference_checkpoint_pt)
+
+    return inference_checkpoint_pt, checkpoint_state_yaml
+
+
+@pytest.fixture(scope="session")
+def fake_uma_dataset():
+    with tempfile.TemporaryDirectory() as tempdirname:
+        datasets_yaml = create_fake_uma_dataset(tempdirname)
+        yield datasets_yaml

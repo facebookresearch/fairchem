@@ -1,0 +1,19 @@
+units           metal              # Use metal units (Angstroms, eV, ps)
+atom_style      atomic             # Atoms have a single type and position
+lattice fcc 3.567
+boundary p p p
+
+region          simbox block 0 2 0 2 0 2
+create_box      1 simbox
+create_atoms    1 region simbox
+mass 1 12.011
+
+velocity        all create 300.0 12345 dist gaussian # Set initial velocities at 300 K
+
+timestep        0.001 # 1 fs
+# Use NPT (isotropic) thermostat+barostat: target temp 300 K, target pressure 0 bar
+# fix npt syntax: fix ID group-ID npt temp Tstart Tstop Tdamp iso Pstart Pstop Pdamp
+fix 1 all npt temp 300.0 300.0 0.1 iso 0.0 0.0 1.0
+thermo_style custom step temp pe ke etotal press vol
+thermo 1
+run 100
