@@ -174,7 +174,7 @@ def get_gp_world_size() -> int:
 ########## DIST METHODS ##########
 
 
-def size_list_fn(size, parts):
+def size_list_fn(size: int, parts: int) -> list[int]:
     return [size // parts + (1 if idx < size % parts else 0) for idx in range(parts)]
 
 
@@ -243,7 +243,6 @@ def gather_from_model_parallel_region(
 def gather_from_model_parallel_region_sum_grad(
     input: torch.Tensor,
     natoms: int,
-    gloo_backend: bool,
 ) -> torch.Tensor:
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
     world_size = get_gp_world_size()
@@ -253,15 +252,13 @@ def gather_from_model_parallel_region_sum_grad(
         input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
     )
 
-    if gloo_backend:
+    if dist.get_backend() == "gloo":
         tensor_list_w_padding = GatherFromModelParallelRegionSumGradPaddedGLOO.apply(
-            input, False
+            input
         )
     else:
         # tensor_list_w_padding = all_gather(input, group=get_gp_group())
-        tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(
-            input, False
-        )
+        tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(input)
 
     return torch.cat(
         [
@@ -272,57 +269,30 @@ def gather_from_model_parallel_region_sum_grad(
     )
 
 
-def gather_from_model_parallel_region_sum_grad_async(
-    input: torch.Tensor, natoms: int
-) -> torch.Tensor:
-    assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
-    world_size = get_gp_world_size()
-
-    input = pad_input(
-        input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
-    )
-
-    tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(
-        input, True
-    )
-    handle = _tls.handle
-    return tensor_list_w_padding, handle
-
-
 class GatherFromModelParallelRegionGradPadded(torch.autograd.Function):
     @staticmethod
     @torch.compiler.disable
-    def forward(ctx, input: torch.Tensor, async_op: bool) -> torch.Tensor:
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
         tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
-        if async_op:
-            _tls.handle = dist.all_gather(
-                tensor_list, input, group=ctx.group, async_op=async_op
-            )
-        else:
-            dist.all_gather(tensor_list, input, group=ctx.group, async_op=async_op)
+        dist.all_gather(tensor_list, input, group=ctx.group)
         return tuple(tensor_list)
 
     @staticmethod
     @torch.compiler.disable
     def backward(ctx, *grad_outputs):
-        return grad_outputs[ctx.rank], None
+        return grad_outputs[ctx.rank]
 
 
 class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
     @staticmethod
     @torch.compiler.disable
-    def forward(ctx, input: torch.Tensor, async_op: bool) -> torch.Tensor:
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
         tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
-        if async_op:
-            _tls.handle = dist.all_gather(
-                tensor_list, input, group=ctx.group, async_op=async_op
-            )
-        else:
-            dist.all_gather(tensor_list, input, group=ctx.group, async_op=async_op)
+        dist.all_gather(tensor_list, input, group=ctx.group)
         return tuple(tensor_list)
 
     @staticmethod
@@ -330,23 +300,18 @@ class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
     def backward(ctx, *grad_outputs):
         local_grad_output = grad_outputs[ctx.rank]
         output_tensor = torch.empty_like(local_grad_output)
-        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group), None
+        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
 
 
 class GatherFromModelParallelRegionSumGradPaddedGLOO(torch.autograd.Function):
     @staticmethod
     @torch.compiler.disable
-    def forward(ctx, input: torch.Tensor, async_op: bool) -> torch.Tensor:
+    def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
         ctx.shape = input.shape
         tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
-        if async_op:
-            _tls.handle = dist.all_gather(
-                tensor_list, input, group=ctx.group, async_op=async_op
-            )
-        else:
-            dist.all_gather(tensor_list, input, group=ctx.group, async_op=async_op)
+        dist.all_gather(tensor_list, input, group=ctx.group)
         return tuple(tensor_list)
 
     @staticmethod
@@ -357,7 +322,7 @@ class GatherFromModelParallelRegionSumGradPaddedGLOO(torch.autograd.Function):
         result = grad_output[
             ctx.padded_size * ctx.rank : ctx.padded_size * ctx.rank + ctx.shape[0]
         ]
-        return result, None
+        return result
 
 
 def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
