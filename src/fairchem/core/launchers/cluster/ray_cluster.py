@@ -326,6 +326,7 @@ class RayCluster:
     def start_head(
         self,
         requirements: dict[str, int | str],
+        name: str = "",
         executor: str = "slurm",
         payload: Optional[Callable[..., PayloadReturnT]] = None,
         **kwargs,
@@ -341,7 +342,7 @@ class RayCluster:
             cluster=executor,
         )
         s_executor.update_parameters(
-            name=f"ray_head_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_head_{name}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
             **requirements,
         )
         head_job = s_executor.submit(
@@ -360,6 +361,7 @@ class RayCluster:
         self,
         num_workers: int,
         requirements: dict[str, int | str],
+        name: str = "",
         executor: str = "slurm",
     ) -> list[str]:
         """
@@ -370,7 +372,7 @@ class RayCluster:
         # start the workers
         s_executor = submitit.AutoExecutor(folder=str(self.log_dir), cluster=executor)
         s_executor.update_parameters(
-            name=f"ray_worker_{self.num_worker_groups}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_worker_{name}_{self.num_worker_groups}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
             **requirements,
         )
 
