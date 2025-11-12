@@ -88,7 +88,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
-        edge_chunk_size: int = 32,
+        edge_chunk_size: int = 0,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
