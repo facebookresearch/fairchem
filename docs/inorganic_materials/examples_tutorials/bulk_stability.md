@@ -56,12 +56,17 @@ import pprint
 from ase.build import bulk
 from ase.optimize import LBFGS
 from quacc.recipes.mlp.core import relax_job
+from quacc import flow
 
 # Make an Atoms object of a bulk Cu structure
 atoms = bulk("Cu")
 
 # Run a structure relaxation
-result = relax_job(
+@flow
+def relax_flow(*args, **kwargs):
+  return relax_job(*args, **kwargs)
+
+result = relax_flow(
     atoms,
     method="fairchem",
     name_or_path="uma-s-1p1",

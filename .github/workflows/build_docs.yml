@@ -12,6 +12,11 @@ on:
       - "contributor check"
     types:
       - completed
+env:
+  # `BASE_URL` determines, relative to the root of the domain, the URL that your site is served from.
+  # E.g., if your site lives at `https://mydomain.org/myproject`, set `BASE_URL=/myproject`.
+  # If, instead, your site lives at the root of the domain, at `https://mydomain.org`, set `BASE_URL=''`.
+  BASE_URL: ''
 
 jobs:
   build:
@@ -45,8 +50,12 @@ jobs:
       with:
           status-context: '${{ github.job }}'
 
-    - name: Install pandoc
-      run: sudo apt-get -y install pandoc
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
+
+    - name: Install Jupyter Book (via myst)
+      run: npm install -g jupyter-book
 
     # Install dependencies
     - name: Set up Python
@@ -57,8 +66,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e packages/fairchem-core[docs,adsorbml,extras] -e packages/fairchem-data-oc[dev] -e packages/fairchem-applications-cattsunami
-        pip install -r tests/requirements.txt # pin test packages
+        pip install -e packages/fairchem-core[docs,adsorbml,extras] -e packages/fairchem-data-oc[dev] -e packages/fairchem-applications-cattsunami -r tests/requirements.txt
 
     # Build the book
     - name: Build the book
@@ -71,7 +79,7 @@ jobs:
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
         jupytext --to ipynb ./docs/uma_tutorials/uma_tutorial.md
         # find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
-        jupyter-book build docs
+        jupyter-book build --html --execute
 
     - name: Upload documentation artifact
       uses: actions/upload-artifact@v5

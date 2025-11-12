@@ -5,42 +5,36 @@ Many papers have now used FAIR-Chem models to accelerate screening and discovery
 ## Accelerating computational catalysis
 
 ```{bibliography}
-:style: plain
 :filter: category == "accelerating catalysis"
 ```
 
 ## Transfer/fine-tuning strategies for FAIR-Chem pre-trained checkpoints
 
 ```{bibliography}
-:style: plain
 :filter: category == "transfer strategies"
 ```
 
 ## Transfer/fine-tuning applications for FAIR-Chem pre-trained checkpoints
 
 ```{bibliography}
-:style: plain
 :filter: category == "transfer applications"
 ```
 
 ## Catalyst discovery or optimization
 
 ```{bibliography}
-:style: plain
 :filter: category == "catalyst discovery"
 ```
 
 ## Uncertainty quantification
 
 ```{bibliography}
-:style: plain
 :filter: category == "uncertainty"
 ```
 
 ## Properties beyond energies and forces
 
 ```{bibliography}
-:style: plain
 :filter: category == "other properties"
 ```
 

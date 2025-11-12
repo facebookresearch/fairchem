@@ -55,9 +55,8 @@ The following examples are used to search for *OH binding sites on Pt surfaces. 
 This package relies heavily on [asyncio](https://docs.python.org/3/library/asyncio.html). The examples throughout this document can be copied to a python repl launched with:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 %%sh
 $ python -m asyncio
 ```
@@ -65,9 +64,8 @@ $ python -m asyncio
 Alternatively, an async function can be run in a script by wrapping it with [asyncio.run()](https://docs.python.org/3/library/asyncio-runner.html#asyncio.run):
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 import asyncio
 from fairchem.demo.ocpapi import find_adsorbate_binding_sites
 
@@ -79,9 +77,8 @@ Since this is being evaluated as a jupyter notebook, ipython will handle this fo
 ### Search over all surfaces
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import find_adsorbate_binding_sites
 
 results = await find_adsorbate_binding_sites(
@@ -126,9 +123,8 @@ A finite set of bulk materials and adsorbates can be referenced by ID throughout
 2. Use the low-level client that ships with this library:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import Client
 
 client = Client()
@@ -148,9 +144,8 @@ Calls to `find_adsorbate_binding_sites()` will, by default, show the user all pe
 Run relaxations for all slabs that are generated:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import find_adsorbate_binding_sites, keep_all_slabs
 
 results = await find_adsorbate_binding_sites(
@@ -163,9 +158,8 @@ results = await find_adsorbate_binding_sites(
 Run relaxations only for slabs with Miller Indices in the input set:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import find_adsorbate_binding_sites, keep_slabs_with_miller_indices
 
 results = await find_adsorbate_binding_sites(
@@ -184,9 +178,8 @@ print(results)
 Assuming `results` was generated with the `find_adsorbate_binding_sites` method used above, it is an `AdsorbateBindingSites` object. This can be saved to file with:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 with open("results.json", "w") as f:
     f.write(results.to_json())
 ```
@@ -194,9 +187,8 @@ with open("results.json", "w") as f:
 Similarly, results can be read back from file to an `AdsorbateBindingSites` object with:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import AdsorbateBindingSites
 
 with open("results.json", "r") as f:
@@ -210,9 +202,8 @@ Relaxation results can be viewed in a web UI. For example, https://open-catalyst
 Extending the examples above, the URLs to visualize the results of relaxations on each Pt surface can be obtained with:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 print([
     slab.ui_url
     for slab in results.slabs
@@ -230,9 +221,8 @@ The API currently supports two models:
 A specific model type can be requested with:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import find_adsorbate_binding_sites
 
 results = await find_adsorbate_binding_sites(
@@ -261,9 +251,8 @@ Two classes have support for generating [ase.Atoms](https://wiki.fysik.dtu.dk/as
 For example, the following would generate an `ase.Atoms` object for the first relaxed adsorbate configuration on the first slab generated for *OH binding on Pt:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from fairchem.demo.ocpapi import find_adsorbate_binding_sites
 
 results = await find_adsorbate_binding_sites(
@@ -281,9 +270,8 @@ print(ase_atoms)
 From an `ase.Atoms` object (see previous section), is is possible to [write to other structure formats](https://wiki.fysik.dtu.dk/ase/ase/io/io.html#ase.io.write). Extending the example above, the `ase_atoms` object could be written to a [VASP POSCAR file](https://www.vasp.at/wiki/index.php/POSCAR) with:
 
 ```{code-cell} ipython3
----
-tags: ["skip-execution"]
----
+:tags: ["skip-execution"]
+
 from ase.io import write
 
 write("POSCAR", ase_atoms, "vasp")
