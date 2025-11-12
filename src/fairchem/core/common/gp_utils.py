@@ -285,6 +285,8 @@ class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
+        if dist.get_backend() == "gloo":
+            ctx.shape = input.shape
         tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
         dist.all_gather(tensor_list, input, group=ctx.group)
         return tuple(tensor_list)
@@ -292,17 +294,16 @@ class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
     @staticmethod
     @torch.compiler.disable
     def backward(ctx, *grad_outputs):
-        if dist.get_backend() != "gloo":
-            local_grad_output = grad_outputs[ctx.rank]
-            output_tensor = torch.empty_like(local_grad_output)
-            return reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
-
-        grad_output = all_reduce(torch.cat(grad_outputs, dim=0), group=ctx.group)
-        ctx.padded_size = grad_outputs[0].shape[0]
-        result = grad_output[
-            ctx.padded_size * ctx.rank : ctx.padded_size * ctx.rank + ctx.shape[0]
-        ]
-        return result
+        if dist.get_backend() == "gloo":
+            grad_output = all_reduce(torch.cat(grad_outputs, dim=0), group=ctx.group)
+            ctx.padded_size = grad_outputs[0].shape[0]
+            result = grad_output[
+                ctx.padded_size * ctx.rank : ctx.padded_size * ctx.rank + ctx.shape[0]
+            ]
+            return result
+        local_grad_output = grad_outputs[ctx.rank]
+        output_tensor = torch.empty_like(local_grad_output)
+        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
 
 
 def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
