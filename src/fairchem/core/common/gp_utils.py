@@ -252,11 +252,7 @@ def gather_from_model_parallel_region_sum_grad(
         input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
     )
 
-    if dist.get_backend() == "gloo":
-        tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(input)
-    else:
-        # tensor_list_w_padding = all_gather(input, group=get_gp_group())
-        tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(input)
+    tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(input)
 
     return torch.cat(
         [
