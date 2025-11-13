@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 # conftest.py
 from __future__ import annotations
-
+import gc
 import random
 from contextlib import suppress
 import ray
@@ -174,6 +174,9 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
+    gc.collect()
+    gc.collect()
+    gc.collect()
     # Pre-test cleanup and optional CUDA memory reporting
     ray.shutdown()
     if gp_utils.initialized():
@@ -199,3 +202,6 @@ def setup_before_each_test():
             print("\n[CUDA] Memory summary AFTER test:\n" + torch.cuda.memory_summary())
         except Exception as e:  # pragma: no cover
             print(f"[CUDA] Failed to get memory summary after test: {e}")
+    gc.collect()
+    gc.collect()
+    gc.collect()
