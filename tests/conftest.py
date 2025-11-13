@@ -106,6 +106,40 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
+def _system_memory_summary():
+    """Return a concise string with system memory stats from /proc/meminfo.
+
+    Fields reported: total, free, available, used (= total - free), used percent.
+    Falls back gracefully if /proc/meminfo cannot be read.
+    """
+    def _extract_kb(raw: str):
+        # Expect formats like '16367492 kB'
+        parts = raw.split()
+        for p in parts:
+            if p.isdigit():
+                return int(p)
+        # If no digit token, attempt first token numeric conversion
+        with suppress(ValueError):
+            return int(parts[0])
+        return 0
+    try:
+        meminfo = {}
+        with open('/proc/meminfo', 'r') as fh:
+            for line in fh:
+                if ':' in line:
+                    k, v = line.split(':', 1)
+                    meminfo[k.strip()] = v.strip()
+        total_kb = _extract_kb(meminfo.get('MemTotal', '0 kB'))
+        free_kb = _extract_kb(meminfo.get('MemFree', '0 kB'))
+        avail_kb = _extract_kb(meminfo.get('MemAvailable', '0 kB'))
+        used_kb = max(total_kb - free_kb, 0)
+        used_pct = (used_kb / total_kb * 100.0) if total_kb > 0 else 0.0
+        return (f"[SYSTEM] MemTotal={total_kb/1024:.2f}MB MemFree={free_kb/1024:.2f}MB "
+                f"MemAvail={avail_kb/1024:.2f}MB MemUsed={used_kb/1024:.2f}MB Used%={used_pct:.2f}%")
+    except Exception as e:  # pragma: no cover
+        return f"[SYSTEM] Failed to read /proc/meminfo: {e}"
+
+
 @pytest.fixture(scope="function")
 def seed_fixture():
     seed_everywhere(42)  # You can set your desired seed value here
@@ -145,6 +179,8 @@ def setup_before_each_test():
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
+    # System memory report BEFORE
+    print("\n" + _system_memory_summary())
     if torch.cuda.is_available():
         try:
             print("\n[CUDA] Memory summary BEFORE test:\n" + torch.cuda.memory_summary())
@@ -156,6 +192,8 @@ def setup_before_each_test():
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
+    # System memory report AFTER
+    print("\n" + _system_memory_summary())
     if torch.cuda.is_available():
         try:
             print("\n[CUDA] Memory summary AFTER test:\n" + torch.cuda.memory_summary())
