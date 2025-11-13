@@ -93,7 +93,7 @@ class FAIRChemCalculator(Calculator):
 
         self.predictor = predict_unit
 
-        if predict_unit.inference_mode.external_graph_gen is True:
+        if predict_unit.inference_settings.external_graph_gen is True:
             r_edges = True
             max_neigh = 300
             radius = 6.0  # Default radius for edge generation
