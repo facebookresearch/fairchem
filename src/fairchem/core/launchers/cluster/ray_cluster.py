@@ -326,7 +326,7 @@ class RayCluster:
     def start_head(
         self,
         requirements: dict[str, int | str],
-        name: str = "",
+        name: str = "default",
         executor: str = "slurm",
         payload: Optional[Callable[..., PayloadReturnT]] = None,
         **kwargs,
@@ -361,7 +361,7 @@ class RayCluster:
         self,
         num_workers: int,
         requirements: dict[str, int | str],
-        name: str = "",
+        name: str = "default",
         executor: str = "slurm",
     ) -> list[str]:
         """
