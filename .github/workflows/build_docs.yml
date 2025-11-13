@@ -57,6 +57,9 @@ jobs:
     - name: Install Jupyter Book (via myst)
       run: npm install -g jupyter-book
 
+    - name: Install latexmk
+      run: sudo apt-get -y install latexmk
+
     # Install dependencies
     - name: Set up Python
       uses: actions/setup-python@v6
