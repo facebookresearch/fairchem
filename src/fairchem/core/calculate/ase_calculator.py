@@ -97,7 +97,9 @@ class FAIRChemCalculator(Calculator):
             r_edges = True
             max_neigh = 300
             radius = 6.0  # Default radius for edge generation
-            logging.warning("External graph generation is enabled, limiting neighbors to 300.")
+            logging.warning(
+                "External graph generation is enabled, limiting neighbors to 300."
+            )
         else:
             r_edges = False
             max_neigh = None
