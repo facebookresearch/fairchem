@@ -393,6 +393,108 @@ def test_random_seed_final_energy():
             assert results_by_seed[seed_a] != results_by_seed[seed_b]
 
 
+@pytest.mark.gpu()
+def test_external_graph_generation():
+    """Test external_graph_gen=True with different atomic systems"""
+    inference_settings = InferenceSettings(external_graph_gen=True)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1",
+        device="cuda", 
+        inference_settings=inference_settings
+    )
+    
+    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    
+    # Test with different periodic systems
+    systems = [
+        bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2)),
+        fcc111("Pt", size=(2, 2, 3), vacuum=10.0, periodic=True),
+    ]
+    
+    for atoms in systems:
+        atoms.calc = calc
+            
+        energy = atoms.get_potential_energy()
+        assert isinstance(energy, float)
+        
+        forces = atoms.get_forces()
+        assert isinstance(forces, np.ndarray)
+        assert forces.shape == (len(atoms), 3)
+
+
+@pytest.mark.gpu()
+def test_external_graph_generation_molecular_system():
+    inference_settings = InferenceSettings(external_graph_gen=True)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1",
+        device="cuda", 
+        inference_settings=inference_settings
+    )
+    
+    calc_omol = FAIRChemCalculator(predict_unit, task_name="omol")
+    
+    # Create a periodic H2O system instead 
+    atoms = molecule("H2O")
+    atoms.set_cell([10.0, 10.0, 10.0])  # Define a cubic cell
+    atoms.set_pbc(True)  # Enable periodic boundary conditions
+    atoms.info["charge"] = 0
+    atoms.info["spin"] = 1
+    atoms.calc = calc_omol
+    
+    energy = atoms.get_potential_energy()
+    assert isinstance(energy, float)
+    
+    forces = atoms.get_forces()
+    assert isinstance(forces, np.ndarray)
+    assert forces.shape == (len(atoms), 3)
+
+
+@pytest.mark.gpu()
+def test_external_graph_gen_vs_internal():
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    inference_settings_external = InferenceSettings(external_graph_gen=True)
+    predict_unit_external = pretrained_mlip.get_predict_unit(
+        "uma-s-1",
+        device="cuda",
+        inference_settings=inference_settings_external
+    )
+    
+    inference_settings_internal = InferenceSettings(external_graph_gen=False)
+    predict_unit_internal = pretrained_mlip.get_predict_unit(
+        "uma-s-1", 
+        device="cuda",
+        inference_settings=inference_settings_internal
+    )
+    
+    calc_external = FAIRChemCalculator(predict_unit_external, task_name="omat")
+    calc_internal = FAIRChemCalculator(predict_unit_internal, task_name="omat")
+    
+    # Test with a simple bulk system
+    atoms_external = bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
+    atoms_internal = atoms_external.copy()
+    
+    atoms_external.calc = calc_external
+    atoms_internal.calc = calc_internal
+    
+    energy_external = atoms_external.get_potential_energy()
+    energy_internal = atoms_internal.get_potential_energy()
+    
+    forces_external = atoms_external.get_forces()
+    forces_internal = atoms_internal.get_forces()
+    
+    np.testing.assert_allclose(energy_external, energy_internal, rtol=1e-4, atol=1e-4)
+    
+    force_diff = np.abs(forces_external - forces_internal)
+    max_force_diff = np.max(force_diff)
+    
+    assert max_force_diff < 1e-6, f"Maximum force difference is {max_force_diff}, which is too large"
+    
+    external_force_norm = np.linalg.norm(forces_external)
+    internal_force_norm = np.linalg.norm(forces_internal)
+    relative_diff = abs(external_force_norm - internal_force_norm) / max(external_force_norm, internal_force_norm)
+    assert relative_diff < 0.1, f"Force magnitude relative difference is {relative_diff}, which is too large"
+
+
 def run_md_simulation(calc, steps: int = 10):
     atoms = molecule("H2O")
     atoms.calc = calc
