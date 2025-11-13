@@ -3,7 +3,7 @@
 > [!CAUTION]
 > OMat24 DFT calculations are not compatible with Materials Project calculations. If you are using models trained on OMat24 only
 > for such calculations, you can find a OMat24 specific calculations of reference unary compounds and MP2020-style
-> anion and GGA/GGA+U mixing corrections in the [OMat24 Hugging Face repo](https://huggingface.co/datasets/facebook/OMAT24).
+> anion and GGA/GGA+U mixing corrections in [this repo](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/omat/entries).
 > Do not use MP2020 corrections or use the MP references compounds when using OMat24 trained models of OMat24 DFT calculations.
 > Additional care must be taken when computing energy differences, such as formation and energy above hull and comparing with
 > calculations in the Materials Project since DFT pseudopotentials are different and magnetic ground states may differ as well.
