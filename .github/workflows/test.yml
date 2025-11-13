@@ -146,6 +146,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev]
           pip install packages/fairchem-data-omol[dev]
+          pip install packages/fairchem-data-omat
           pip install -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
@@ -209,7 +210,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu 
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
 
       - name: Cleanup
         if: always()
