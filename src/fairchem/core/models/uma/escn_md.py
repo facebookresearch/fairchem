@@ -51,6 +51,44 @@ if TYPE_CHECKING:
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 
 
+def add_n_empty_edges(graph_dict, edges_to_add: int, cutoff: float):
+    graph_dict["edge_index"] = torch.cat(
+        (
+            graph_dict["edge_index"].new_ones(2, edges_to_add)
+            * graph_dict["node_offset"],
+            graph_dict["edge_index"],
+        ),
+        dim=1,
+    )
+
+    self_edge_distance_vec = graph_dict["edge_index"].new_ones(1, 3) + cutoff
+    graph_dict["edge_distance_vec"] = torch.cat(
+        (
+            self_edge_distance_vec.expand(edges_to_add, 3),
+            graph_dict["edge_distance_vec"],
+        ),
+        dim=0,
+    )
+
+    edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+    graph_dict["edge_distance"] = torch.cat(
+        (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
+    )
+
+
+@torch.compiler.disable
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+
+    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
+        # make sure we have a multiple of self.edge_chunk_size edges
+        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
+    if n_edges_post > n_edges:
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
+
+
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
     def __init__(
@@ -404,50 +442,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["node_partition"]
             ]
             data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
-        self._pad_edges(data_dict, graph_dict)
+        pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
 
         return graph_dict
-
-    def _add_n_empty_edges(self, data_dict, graph_dict, edges_to_add):
-        graph_dict["edge_index"] = torch.cat(
-            (
-                graph_dict["edge_index"].new_ones(2, edges_to_add)
-                * graph_dict["node_offset"],
-                graph_dict["edge_index"],
-            ),
-            dim=1,
-        )
-
-        self_edge_distance_vec = (
-            data_dict["pos"][0] - data_dict["pos"][0] + self.cutoff
-        ).unsqueeze(0)  # [1, 3]
-        graph_dict["edge_distance_vec"] = torch.cat(
-            (
-                self_edge_distance_vec.expand(edges_to_add, 3),
-                graph_dict["edge_distance_vec"],
-            ),
-            dim=0,
-        )
-
-        edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
-        graph_dict["edge_distance"] = torch.cat(
-            (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
-        )
-
-    @torch.compiler.disable
-    def _pad_edges(self, data_dict, graph_dict):
-        n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
-
-        if self.edge_chunk_size > 0 and n_edges_post % self.edge_chunk_size != 0:
-            # make sure we have a multiple of self.edge_chunk_size edges
-            n_edges_post += self.edge_chunk_size - n_edges_post % self.edge_chunk_size
-
-        n_edges_post = max(
-            n_edges_post, 1
-        )  # at least 1 edge to avoid empty "edge" case
-        if n_edges_post > n_edges:
-            self._add_n_empty_edges(data_dict, graph_dict, n_edges_post - n_edges)
-        # assert  graph_dict["edge_index"].shape[1]== n_edges_post, f"After padding, the number of edges is not correct: {graph_dict['edge_index'].shape[0]} vs {n_edges_post}"
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
