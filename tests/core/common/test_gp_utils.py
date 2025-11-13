@@ -14,9 +14,9 @@ from torch import distributed as dist
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.gp_utils import (
-    gather_from_model_parallel_region,
     gather_from_model_parallel_region_sum_grad,
     scatter_to_model_parallel_region,
+    size_list_fn,
 )
 from fairchem.core.common.test_utils import (
     PGConfig,
@@ -83,9 +83,9 @@ def test_scatter_tensors(
         assert torch.equal(out, expected_out)
 
 
-def scatter_gather_fn(input: torch.Tensor, dim: int = 0):
-    x = scatter_to_model_parallel_region(input, dim)
-    return gather_from_model_parallel_region(x, dim)
+def scatter_gather_fn(input: torch.Tensor):
+    x = scatter_to_model_parallel_region(input)
+    return gather_from_model_parallel_region_sum_grad(x, input.shape[0])
 
 
 @pytest.mark.parametrize(
@@ -133,7 +133,7 @@ def test_gather_tensors(
 def scatter_bwd_test():
     rank = dist.get_rank()
     x_full = torch.tensor([2, 3, 5, 7], requires_grad=True, dtype=torch.float)
-    x = scatter_to_model_parallel_region(x_full, 0)
+    x = scatter_to_model_parallel_region(x_full)
 
     energy_part = x.prod() ** 2
 
@@ -202,68 +202,13 @@ def test_scatter_bwd():
         compare_and_assert_dict(expected_output[results["gp_rank"]], results)
 
 
-def gather_bwd_test(rank=-1):
-    if rank < 0:
-        rank = dist.get_rank()
-        x = torch.tensor([rank + 2], requires_grad=True, dtype=torch.float)
-        x_full = gather_from_model_parallel_region(x, 0)
-    else:
-        x = torch.tensor([rank + 2], requires_grad=True, dtype=torch.float)
-        x_other = torch.tensor([(1 - rank) + 2], requires_grad=True, dtype=torch.float)
-        x_full = torch.cat([x, x_other]) if rank == 0 else torch.cat([x_other, x])
-
-    energy_part = (x_full.prod() + rank + 1) ** 2
-
-    forces_part = torch.autograd.grad(
-        [energy_part],
-        [x],
-        create_graph=True,
-    )[0]
-
-    dforces_dinput_part = torch.autograd.grad(
-        [forces_part],
-        [x],
-        create_graph=True,
-    )[0]
-
-    return {
-        "gp_rank": rank,
-        "energy": energy_part.detach(),
-        "forces": forces_part.detach(),
-        "dforces_dinput": dforces_dinput_part.detach(),
-    }
-
-
-def test_gather_bwd():
-    # A | B
-    # E_0 = (A*B +1)^2 , E_1 = (A*B+2)^2
-    #     = 49               = 64
-    # dL_0/dA = 2*A*B^2+2*B = 42
-    # dL_1/dB = 2*A^2*B+4*A = 32
-    # dL_0/dB and dL_1/dA are not used! see test_gather_sum_bwd!!
-    # d^2L_1/dA^2 = 2*B^2 = 18
-    # d^2L_1/dB^2 = 2*A^2 = 8
-
-    non_gp_results_by_gp_rank = {0: gather_bwd_test(0), 1: gather_bwd_test(1)}
-
-    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
-    all_rank_results = spawn_multi_process(
-        config,
-        gather_bwd_test,
-        init_pg_and_rank_and_launch_test,
-    )
-
-    for rank_results in all_rank_results:
-        compare_and_assert_dict(
-            non_gp_results_by_gp_rank[rank_results["gp_rank"]], rank_results
-        )
-
-
 def gather_sum_bwd_test(rank=-1):
     if rank < 0:
         rank = dist.get_rank()
         x = torch.tensor([rank + 2], requires_grad=True, dtype=torch.float)
-        x_full = gather_from_model_parallel_region_sum_grad(x, 0)
+        x_full = gather_from_model_parallel_region_sum_grad(
+            x, gp_utils.get_gp_world_size()
+        )
         energy = (x_full.prod() + rank + 1) ** 2
         # sum
         energy = gp_utils.reduce_from_model_parallel_region(energy)
@@ -345,7 +290,7 @@ def scatter_prod_reduce(all_inputs):
 
     x_full = all_inputs.clone()
 
-    x = scatter_to_model_parallel_region(x_full, dim=0) + 0
+    x = scatter_to_model_parallel_region(x_full) + 0
     # BE VERY CAREFUL, inside of this context do not use any variables
     # in other partitions, their gradient will not propagate!
     if rank == 0:
@@ -384,28 +329,13 @@ def test_scatter_prod_reduce():
             ).all(), f"Failed closeness check for {key}"
 
 
-def layer(x, target_rank):
-    rank = dist.get_rank()
-
-    x_full = gather_from_model_parallel_region(x, 0)
-    x_prod = x_full.prod()
-    # backward graphs need to be same operation wise
-    # otherwise might miss a dist sync
-    if rank == target_rank:
-        x = x * 0 + x_prod
-    else:
-        x = x * 0 + x_prod * 0.0 + (rank + 1)
-    return x
-
-
 def embeddings_and_graph_init(atomic_numbers, edge_index):
     if gp_utils.initialized():
-        node_partition = gp_utils.scatter_to_model_parallel_region(
-            torch.arange(len(atomic_numbers)).to(atomic_numbers.device)
-        )
-        assert (
-            node_partition.numel() > 0
-        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+        node_partition = torch.split(
+            torch.arange(atomic_numbers.shape[0]),
+            size_list_fn(atomic_numbers.shape[0], gp_utils.get_gp_world_size()),
+        )[gp_utils.get_gp_rank()]
+
         edge_partition = torch.where(
             torch.logical_and(
                 edge_index[1] >= node_partition.min(),
@@ -416,32 +346,33 @@ def embeddings_and_graph_init(atomic_numbers, edge_index):
         graph_dict = {
             "node_offset": node_partition.min().item(),
             "edge_index": edge_index[:, edge_partition],
+            "natoms": atomic_numbers.shape[0],
         }
-        node_embeddings = atomic_numbers[node_partition]
     else:
         graph_dict = {
             "node_offset": 0,
             "edge_index": edge_index,
+            "natoms": atomic_numbers.shape[0],
         }
-        node_embeddings = atomic_numbers
 
-    return node_embeddings, graph_dict
+    return atomic_numbers, graph_dict
 
 
 # test for one rank to return a product and rest return 0
-def simple_layer(x, edge_index, node_offset, n=3):
+def simple_layer(x, edge_index, node_offset, natoms, n=3):
+    x_source = x[edge_index[0]]
+    x_target = x[edge_index[1]]
     if gp_utils.initialized():
-        x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
-        x_source = x_full[edge_index[0]]
-        x_target = x_full[edge_index[1]]
         dp_rank = gp_utils.get_dp_rank()
+        local_atoms = size_list_fn(natoms, gp_utils.get_gp_world_size())[
+            gp_utils.get_gp_rank()
+        ]
     else:
-        x_source = x[edge_index[0]]
-        x_target = x[edge_index[1]]
         if dist.is_initialized():
             dp_rank = dist.get_rank()
         else:
             dp_rank = 0.0
+        local_atoms = x.shape[0]
 
     # make sure different ddp ranks have different outputs
     # similar to seeing diffferent data batches
@@ -451,14 +382,19 @@ def simple_layer(x, edge_index, node_offset, n=3):
     edge_embeddings = (x_source + 1).pow(n) * (x_target + 1).pow(n)
 
     new_node_embedding = torch.zeros(
-        (x.shape[0],) + edge_embeddings.shape[1:],
+        (local_atoms,) + edge_embeddings.shape[1:],
         dtype=edge_embeddings.dtype,
         device=edge_embeddings.device,
     )
 
     new_node_embedding.index_add_(0, edge_index[1] - node_offset, edge_embeddings)
 
-    return new_node_embedding
+    if gp_utils.initialized():
+        return gp_utils.gather_from_model_parallel_region_sum_grad(
+            new_node_embedding, natoms
+        )
+    else:
+        return new_node_embedding
 
 
 class SimpleNet(nn.Module):
@@ -479,11 +415,20 @@ class SimpleNet(nn.Module):
                     all_node_embeddings[-1],
                     graph_dict["edge_index"],
                     node_offset=graph_dict["node_offset"],
+                    natoms=graph_dict["natoms"],
                     n=self.n,
                 )
             )
 
         final_node_embeddings = all_node_embeddings[-1]
+
+        if gp_utils.initialized():
+            local_atoms = size_list_fn(
+                graph_dict["natoms"], gp_utils.get_gp_world_size()
+            )[gp_utils.get_gp_rank()]
+            final_node_embeddings = final_node_embeddings[
+                graph_dict["node_offset"] : graph_dict["node_offset"] + local_atoms
+            ]
 
         # only 1 system
         energy_part = torch.zeros(
