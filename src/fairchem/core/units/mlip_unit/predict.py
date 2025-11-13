@@ -93,9 +93,6 @@ class MLIPPredictUnitProtocol(Protocol):
     @property
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
-    @property
-    def inference_settings(self) -> InferenceSettings: ...
-
 
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
