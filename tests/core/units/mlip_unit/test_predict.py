@@ -263,7 +263,7 @@ def test_parallel_predict_unit_batch(workers, device):
         ("cpu",  2, 0),
         ("cpu",  2, 1),
         ("cpu",  2, 32),
-        ("cuda",  2, 32),
+        ("cuda",  1, 32),
     ],
 )
 def test_batching_consistency(device, num_workers, padding):
