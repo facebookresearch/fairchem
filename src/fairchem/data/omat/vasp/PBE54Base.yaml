@@ -1,4 +1,6 @@
-POTCAR_FUNCTIONAL: PBE_54
+# refer to pymatgen documentation for POTCAR specification details
+# https://github.com/materialsproject/pymatgen/blob/0704037c2642c6744ca3516deb21e0a811a38deb/src/pymatgen/io/vasp/inputs.py#L1938-L1960
+POTCAR_FUNCTIONAL: PBE_54_W_HASH
 POTCAR:
   Ac: Ac
   Ag: Ag
