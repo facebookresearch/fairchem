@@ -12,6 +12,14 @@ core.models.uma.common.rotation
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   core.models.uma.common.rotation.EPS
+
+
 Classes
 -------
 
@@ -34,6 +42,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: EPS
+   :value: 1e-07
+
 
 .. py:class:: Safeacos(*args, **kwargs)
 

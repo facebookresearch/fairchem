@@ -389,6 +389,7 @@
 </ul>
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../../data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../data/omat/entries/index.html">data.omat.entries</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../data/omat/vasp/index.html">data.omat.vasp</a></li>
 </ul>
 </details></li>
@@ -848,7 +849,7 @@ evaluation mode.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.models.uma.escn_md_block.Edgewise.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_envelope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.escn_md_block.Edgewise.forward" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_envelope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_atoms_across_gp_ranks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.escn_md_block.Edgewise.forward" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -1092,7 +1093,7 @@ evaluation mode.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="core.models.uma.escn_md_block.eSCNMD_Block.forward">
-<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_envelope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sys_node_embedding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.escn_md_block.eSCNMD_Block.forward" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_edge</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_distance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wigner_and_M_mapping_inv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_envelope</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_atoms_across_gp_ranks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sys_node_embedding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node_offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.models.uma.escn_md_block.eSCNMD_Block.forward" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -1247,7 +1248,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2025.
+      © Copyright Meta Platforms, Inc.
       <br/>
     
   </p>

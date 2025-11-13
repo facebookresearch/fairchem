@@ -27,6 +27,7 @@ Classes
 
    core.units.mlip_unit.predict.MLIPPredictUnitProtocol
    core.units.mlip_unit.predict.MLIPPredictUnit
+   core.units.mlip_unit.predict.MLIPWorkerLocal
    core.units.mlip_unit.predict.MLIPWorker
    core.units.mlip_unit.predict.ParallelMLIPPredictUnit
 
@@ -211,7 +212,7 @@ Module Contents
    :returns: Data structure with all tensors moved to CPU
 
 
-.. py:class:: MLIPWorker(worker_id: int, world_size: int, predictor_config: dict, master_port: int | None = None, master_address: str | None = None)
+.. py:class:: MLIPWorkerLocal(worker_id: int, world_size: int, predictor_config: dict, master_port: int | None = None, master_address: str | None = None)
 
    .. py:attribute:: worker_id
 
@@ -233,13 +234,26 @@ Module Contents
 
 
 
+   .. py:attribute:: last_received_atomic_data
+      :value: None
+
+
+
    .. py:method:: get_master_address_and_port()
 
 
-   .. py:method:: _distributed_setup(worker_id: int, master_port: int, world_size: int, predictor_config: dict, master_address: str)
+   .. py:method:: get_device_for_local_rank()
 
 
-   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, torch.tensor] | None
+   .. py:method:: _distributed_setup()
+
+
+   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData, use_nccl: bool = False) -> dict[str, torch.tensor] | None
+
+
+.. py:class:: MLIPWorker(worker_id: int, world_size: int, predictor_config: dict, master_port: int | None = None, master_address: str | None = None)
+
+   Bases: :py:obj:`MLIPWorkerLocal`
 
 
 .. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, num_workers: int = 1, num_workers_per_node: int = 8)
@@ -279,13 +293,26 @@ Module Contents
                ...
 
 
+   .. py:attribute:: inference_settings
+
+
    .. py:attribute:: _dataset_to_tasks
 
 
+   .. py:attribute:: atomic_data_on_device
+      :value: None
+
+
+
    .. py:attribute:: workers
+      :value: []
 
 
-   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData, undo_element_references: bool = True) -> dict[str, torch.tensor]
+
+   .. py:attribute:: local_rank0
+
+
+   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, torch.tensor]
 
 
    .. py:property:: dataset_to_tasks

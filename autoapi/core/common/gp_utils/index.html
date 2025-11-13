@@ -389,6 +389,7 @@
 </ul>
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/omat/entries/index.html">data.omat.entries</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../data/omat/vasp/index.html">data.omat.vasp</a></li>
 </ul>
 </details></li>
@@ -633,6 +634,8 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._GRAPH_PARALLEL_GROUP"><code class="docutils literal notranslate"><span class="pre">_GRAPH_PARALLEL_GROUP</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._DATA_PARALLEL_GROUP"><code class="docutils literal notranslate"><span class="pre">_DATA_PARALLEL_GROUP</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._tls"><code class="docutils literal notranslate"><span class="pre">_tls</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.pad_input"><code class="docutils literal notranslate"><span class="pre">pad_input()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ensure_div"><code class="docutils literal notranslate"><span class="pre">ensure_div()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.divide_and_check_no_remainder"><code class="docutils literal notranslate"><span class="pre">divide_and_check_no_remainder()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.setup_graph_parallel_groups"><code class="docutils literal notranslate"><span class="pre">setup_graph_parallel_groups()</span></code></a></li>
@@ -645,50 +648,37 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.get_gp_rank"><code class="docutils literal notranslate"><span class="pre">get_gp_rank()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.get_dp_world_size"><code class="docutils literal notranslate"><span class="pre">get_dp_world_size()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.get_gp_world_size"><code class="docutils literal notranslate"><span class="pre">get_gp_world_size()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.pad_tensor"><code class="docutils literal notranslate"><span class="pre">pad_tensor()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.trim_tensor"><code class="docutils literal notranslate"><span class="pre">trim_tensor()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._tensor_to_split_partitions"><code class="docutils literal notranslate"><span class="pre">_tensor_to_split_partitions()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._split_tensor"><code class="docutils literal notranslate"><span class="pre">_split_tensor()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._reduce"><code class="docutils literal notranslate"><span class="pre">_reduce()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._split"><code class="docutils literal notranslate"><span class="pre">_split()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._gather"><code class="docutils literal notranslate"><span class="pre">_gather()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._gather_with_padding"><code class="docutils literal notranslate"><span class="pre">_gather_with_padding()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.CopyToModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">CopyToModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">CopyToModelParallelRegion.forward()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.CopyToModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">CopyToModelParallelRegion.backward()</span></code></a></li>
-</ul>
-</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.size_list_fn"><code class="docutils literal notranslate"><span class="pre">size_list_fn()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.reduce_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">reduce_from_model_parallel_region()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ReduceFromModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ReduceFromModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion.forward()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ReduceFromModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion.backward()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scatter_to_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">scatter_to_model_parallel_region()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScatterToModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScatterToModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion.forward()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScatterToModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion.backward()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion.forward()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion.backward()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region_sum_grad()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded.forward()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded.backward()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad.forward()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad.backward()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded.forward()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded.backward()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scale_backward_grad"><code class="docutils literal notranslate"><span class="pre">scale_backward_grad()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScaleBackwardGrad"><code class="docutils literal notranslate"><span class="pre">ScaleBackwardGrad</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScaleBackwardGrad.forward"><code class="docutils literal notranslate"><span class="pre">ScaleBackwardGrad.forward()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScaleBackwardGrad.backward"><code class="docutils literal notranslate"><span class="pre">ScaleBackwardGrad.backward()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.copy_to_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">copy_to_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.reduce_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">reduce_from_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scatter_to_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">scatter_to_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region_sum_grad()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scale_backward_grad"><code class="docutils literal notranslate"><span class="pre">scale_backward_grad()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -717,6 +707,9 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils._DATA_PARALLEL_GROUP" title="core.common.gp_utils._DATA_PARALLEL_GROUP"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_DATA_PARALLEL_GROUP</span></code></a></p></td>
 <td><p></p></td>
 </tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils._tls" title="core.common.gp_utils._tls"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_tls</span></code></a></p></td>
+<td><p></p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -725,22 +718,19 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion" title="core.common.gp_utils.CopyToModelParallelRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CopyToModelParallelRegion</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.ReduceFromModelParallelRegion" title="core.common.gp_utils.ReduceFromModelParallelRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion</span></code></a></p></td>
 <td><p>Base class to create custom <cite>autograd.Function</cite>.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.ReduceFromModelParallelRegion" title="core.common.gp_utils.ReduceFromModelParallelRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.ScatterToModelParallelRegion" title="core.common.gp_utils.ScatterToModelParallelRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion</span></code></a></p></td>
 <td><p>Base class to create custom <cite>autograd.Function</cite>.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.ScatterToModelParallelRegion" title="core.common.gp_utils.ScatterToModelParallelRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded</span></code></a></p></td>
 <td><p>Base class to create custom <cite>autograd.Function</cite>.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion" title="core.common.gp_utils.GatherFromModelParallelRegion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion</span></code></a></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded</span></code></a></p></td>
 <td><p>Base class to create custom <cite>autograd.Function</cite>.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad</span></code></a></p></td>
-<td><p>Base class to create custom <cite>autograd.Function</cite>.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.ScaleBackwardGrad" title="core.common.gp_utils.ScaleBackwardGrad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ScaleBackwardGrad</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.ScaleBackwardGrad" title="core.common.gp_utils.ScaleBackwardGrad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ScaleBackwardGrad</span></code></a></p></td>
 <td><p>Base class to create custom <cite>autograd.Function</cite>.</p></td>
 </tr>
 </tbody>
@@ -751,82 +741,61 @@ LICENSE file in the root directory of this source tree.</p>
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.ensure_div" title="core.common.gp_utils.ensure_div"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ensure_div</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.pad_input" title="core.common.gp_utils.pad_input"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pad_input</span></code></a>(input, padded_size)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.divide_and_check_no_remainder" title="core.common.gp_utils.divide_and_check_no_remainder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">divide_and_check_no_remainder</span></code></a>(→ int)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.ensure_div" title="core.common.gp_utils.ensure_div"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ensure_div</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.setup_graph_parallel_groups" title="core.common.gp_utils.setup_graph_parallel_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_graph_parallel_groups</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.divide_and_check_no_remainder" title="core.common.gp_utils.divide_and_check_no_remainder"><code class="xref py py-obj docutils literal notranslate"><span class="pre">divide_and_check_no_remainder</span></code></a>(→ int)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.setup_gp" title="core.common.gp_utils.setup_gp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_gp</span></code></a>(→ None)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.setup_graph_parallel_groups" title="core.common.gp_utils.setup_graph_parallel_groups"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_graph_parallel_groups</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.cleanup_gp" title="core.common.gp_utils.cleanup_gp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cleanup_gp</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.setup_gp" title="core.common.gp_utils.setup_gp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_gp</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.initialized" title="core.common.gp_utils.initialized"><code class="xref py py-obj docutils literal notranslate"><span class="pre">initialized</span></code></a>(→ bool)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.cleanup_gp" title="core.common.gp_utils.cleanup_gp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cleanup_gp</span></code></a>(→ None)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.get_dp_group" title="core.common.gp_utils.get_dp_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dp_group</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.initialized" title="core.common.gp_utils.initialized"><code class="xref py py-obj docutils literal notranslate"><span class="pre">initialized</span></code></a>(→ bool)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.get_gp_group" title="core.common.gp_utils.get_gp_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gp_group</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.get_dp_group" title="core.common.gp_utils.get_dp_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dp_group</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.get_dp_rank" title="core.common.gp_utils.get_dp_rank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dp_rank</span></code></a>(→ int)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.get_gp_group" title="core.common.gp_utils.get_gp_group"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gp_group</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.get_gp_rank" title="core.common.gp_utils.get_gp_rank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gp_rank</span></code></a>(→ int)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.get_dp_rank" title="core.common.gp_utils.get_dp_rank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dp_rank</span></code></a>(→ int)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.get_dp_world_size" title="core.common.gp_utils.get_dp_world_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dp_world_size</span></code></a>(→ int)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.get_gp_rank" title="core.common.gp_utils.get_gp_rank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gp_rank</span></code></a>(→ int)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.get_gp_world_size" title="core.common.gp_utils.get_gp_world_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gp_world_size</span></code></a>(→ int)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.get_dp_world_size" title="core.common.gp_utils.get_dp_world_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_dp_world_size</span></code></a>(→ int)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.pad_tensor" title="core.common.gp_utils.pad_tensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pad_tensor</span></code></a>(→ torch.Tensor)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.get_gp_world_size" title="core.common.gp_utils.get_gp_world_size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_gp_world_size</span></code></a>(→ int)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.trim_tensor" title="core.common.gp_utils.trim_tensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">trim_tensor</span></code></a>(tensor[, sizes, dim])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.size_list_fn" title="core.common.gp_utils.size_list_fn"><code class="xref py py-obj docutils literal notranslate"><span class="pre">size_list_fn</span></code></a>(→ list[int])</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils._tensor_to_split_partitions" title="core.common.gp_utils._tensor_to_split_partitions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_tensor_to_split_partitions</span></code></a>(tensor[, dim])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.reduce_from_model_parallel_region" title="core.common.gp_utils.reduce_from_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_from_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils._split_tensor" title="core.common.gp_utils._split_tensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_split_tensor</span></code></a>(tensor[, dim, contiguous_chunks])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.scatter_to_model_parallel_region" title="core.common.gp_utils.scatter_to_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scatter_to_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils._reduce" title="core.common.gp_utils._reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_reduce</span></code></a>(→ torch.Tensor)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.gather_from_model_parallel_region" title="core.common.gp_utils.gather_from_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gather_from_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils._split" title="core.common.gp_utils._split"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_split</span></code></a>(→ torch.Tensor)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad" title="core.common.gp_utils.gather_from_model_parallel_region_sum_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gather_from_model_parallel_region_sum_grad</span></code></a>(→ torch.Tensor)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils._gather" title="core.common.gp_utils._gather"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_gather</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils._gather_with_padding" title="core.common.gp_utils._gather_with_padding"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_gather_with_padding</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.copy_to_model_parallel_region" title="core.common.gp_utils.copy_to_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy_to_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.reduce_from_model_parallel_region" title="core.common.gp_utils.reduce_from_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_from_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.scatter_to_model_parallel_region" title="core.common.gp_utils.scatter_to_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scatter_to_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.gather_from_model_parallel_region" title="core.common.gp_utils.gather_from_model_parallel_region"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gather_from_model_parallel_region</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad" title="core.common.gp_utils.gather_from_model_parallel_region_sum_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">gather_from_model_parallel_region_sum_grad</span></code></a>(→ torch.Tensor)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#core.common.gp_utils.scale_backward_grad" title="core.common.gp_utils.scale_backward_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scale_backward_grad</span></code></a>(→ torch.Tensor)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.common.gp_utils.scale_backward_grad" title="core.common.gp_utils.scale_backward_grad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scale_backward_grad</span></code></a>(→ torch.Tensor)</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -843,6 +812,16 @@ LICENSE file in the root directory of this source tree.</p>
 <dl class="py data">
 <dt class="sig sig-object py" id="core.common.gp_utils._DATA_PARALLEL_GROUP">
 <span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_DATA_PARALLEL_GROUP</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.common.gp_utils._DATA_PARALLEL_GROUP" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="core.common.gp_utils._tls">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_tls</span></span><a class="headerlink" href="#core.common.gp_utils._tls" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.common.gp_utils.pad_input">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">pad_input</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padded_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.pad_input" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -906,144 +885,14 @@ LICENSE file in the root directory of this source tree.</p>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.pad_tensor">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">pad_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.pad_tensor" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.size_list_fn">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">size_list_fn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.common.gp_utils.size_list_fn" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.trim_tensor">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">trim_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sizes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.trim_tensor" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.reduce_from_model_parallel_region">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">reduce_from_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.reduce_from_model_parallel_region" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils._tensor_to_split_partitions">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_tensor_to_split_partitions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils._tensor_to_split_partitions" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils._split_tensor">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_split_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tensor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">contiguous_chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils._split_tensor" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils._reduce">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_reduce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils._reduce" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils._split">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_split</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils._split" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils._gather">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_gather</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils._gather" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils._gather_with_padding">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">_gather_with_padding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils._gather_with_padding" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="core.common.gp_utils.CopyToModelParallelRegion">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">CopyToModelParallelRegion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.CopyToModelParallelRegion" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.autograd.Function</span></code></p>
-<p>Base class to create custom <cite>autograd.Function</cite>.</p>
-<p>To create a custom <cite>autograd.Function</cite>, subclass this class and implement
-the <a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.forward" title="core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> and <a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.backward" title="core.common.gp_utils.CopyToModelParallelRegion.backward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">backward()</span></code></a> static methods. Then, to use your custom
-op in the forward pass, call the class method <code class="docutils literal notranslate"><span class="pre">apply</span></code>. Do not call
-<a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.forward" title="core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> directly.</p>
-<p>To ensure correctness and best performance, make sure you are calling the
-correct methods on <code class="docutils literal notranslate"><span class="pre">ctx</span></code> and validating your backward function using
-<code class="xref py py-func docutils literal notranslate"><span class="pre">torch.autograd.gradcheck()</span></code>.</p>
-<p>See <span class="xref std std-ref">extending-autograd</span> for more details on how to use this class.</p>
-<p>Examples:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +REQUIRES(env:TORCH_DOCTEST_AUTOGRAD)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="k">class</span><span class="w"> </span><span class="nc">Exp</span><span class="p">(</span><span class="n">Function</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="nd">@staticmethod</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="n">result</span> <span class="o">=</span> <span class="n">i</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="n">ctx</span><span class="o">.</span><span class="n">save_for_backward</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="k">return</span> <span class="n">result</span>
-<span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="nd">@staticmethod</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">grad_output</span><span class="p">):</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="n">result</span><span class="p">,</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">saved_tensors</span>
-<span class="gp">&gt;&gt;&gt; </span>        <span class="k">return</span> <span class="n">grad_output</span> <span class="o">*</span> <span class="n">result</span>
-<span class="gp">&gt;&gt;&gt;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Use it by calling the apply method:</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="c1"># xdoctest: +SKIP</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">output</span> <span class="o">=</span> <span class="n">Exp</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="nb">input</span><span class="p">)</span>
-</pre></div>
-</div>
-<dl class="py method">
-<dt class="sig sig-object py" id="core.common.gp_utils.CopyToModelParallelRegion.forward">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.CopyToModelParallelRegion.forward" title="Link to this definition">#</a></dt>
-<dd><p>Define the forward of the custom autograd Function.</p>
-<p>This function is to be overridden by all subclasses.
-There are two ways to define forward:</p>
-<p>Usage 1 (Combined forward and ctx):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@staticmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-    <span class="k">pass</span>
-</pre></div>
-</div>
-<ul class="simple">
-<li><p>It must accept a context ctx as the first argument, followed by any
-number of arguments (tensors or other types).</p></li>
-<li><p>See <span class="xref std std-ref">combining-forward-context</span> for more details</p></li>
-</ul>
-<p>Usage 2 (Separate forward and ctx):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@staticmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-    <span class="k">pass</span>
-
-<span class="nd">@staticmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">setup_context</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">inputs</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">output</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">pass</span>
-</pre></div>
-</div>
-<ul class="simple">
-<li><p>The forward no longer accepts a ctx argument.</p></li>
-<li><p>Instead, you must also override the <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.autograd.Function.setup_context()</span></code>
-staticmethod to handle setting up the <code class="docutils literal notranslate"><span class="pre">ctx</span></code> object.
-<code class="docutils literal notranslate"><span class="pre">output</span></code> is the output of the forward, <code class="docutils literal notranslate"><span class="pre">inputs</span></code> are a Tuple of inputs
-to the forward.</p></li>
-<li><p>See <span class="xref std std-ref">extending-autograd</span> for more details</p></li>
-</ul>
-<p>The context can be used to store arbitrary data that can be then
-retrieved during the backward pass. Tensors should not be stored
-directly on <cite>ctx</cite> (though this is not currently enforced for
-backward compatibility). Instead, tensors should be saved either with
-<code class="xref py py-func docutils literal notranslate"><span class="pre">ctx.save_for_backward()</span></code> if they are intended to be used in
-<code class="docutils literal notranslate"><span class="pre">backward</span></code> (equivalently, <code class="docutils literal notranslate"><span class="pre">vjp</span></code>) or <code class="xref py py-func docutils literal notranslate"><span class="pre">ctx.save_for_forward()</span></code>
-if they are intended to be used for in <code class="docutils literal notranslate"><span class="pre">jvp</span></code>.</p>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="core.common.gp_utils.CopyToModelParallelRegion.backward">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.CopyToModelParallelRegion.backward" title="Link to this definition">#</a></dt>
-<dd><p>Define a formula for differentiating the operation with backward mode automatic differentiation.</p>
-<p>This function is to be overridden by all subclasses.
-(Defining this function is equivalent to defining the <code class="docutils literal notranslate"><span class="pre">vjp</span></code> function.)</p>
-<p>It must accept a context <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx</span></code> as the first argument, followed by
-as many outputs as the <a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.forward" title="core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> returned (None will be passed in
-for non tensor outputs of the forward function),
-and it should return as many tensors, as there were inputs to
-<a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.forward" title="core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>. Each argument is the gradient w.r.t the given output,
-and each returned value should be the gradient w.r.t. the
-corresponding input. If an input is not a Tensor or is a Tensor not
-requiring grads, you can just pass None as a gradient for that input.</p>
-<p>The context can be used to retrieve tensors saved during the forward
-pass. It also has an attribute <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx.needs_input_grad</span></code> as a tuple
-of booleans representing whether each input needs gradient. E.g.,
-<a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.backward" title="core.common.gp_utils.CopyToModelParallelRegion.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> will have <code class="docutils literal notranslate"><span class="pre">ctx.needs_input_grad[0]</span> <span class="pre">=</span> <span class="pre">True</span></code> if the
-first input to <a class="reference internal" href="#core.common.gp_utils.CopyToModelParallelRegion.forward" title="core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> needs gradient computed w.r.t. the
-output.</p>
-</dd></dl>
-
-</dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="core.common.gp_utils.ReduceFromModelParallelRegion">
@@ -1145,6 +994,11 @@ output.</p>
 
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="core.common.gp_utils.scatter_to_model_parallel_region">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">scatter_to_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.scatter_to_model_parallel_region" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="core.common.gp_utils.ScatterToModelParallelRegion">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">ScatterToModelParallelRegion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.ScatterToModelParallelRegion" title="Link to this definition">#</a></dt>
@@ -1245,15 +1099,25 @@ output.</p>
 
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="core.common.gp_utils.gather_from_model_parallel_region">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">gather_from_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">natoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.gather_from_model_parallel_region" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.common.gp_utils.gather_from_model_parallel_region_sum_grad">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">gather_from_model_parallel_region_sum_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">natoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 <dl class="py class">
-<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegion">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">GatherFromModelParallelRegion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegion" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionGradPadded">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">GatherFromModelParallelRegionGradPadded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.autograd.Function</span></code></p>
 <p>Base class to create custom <cite>autograd.Function</cite>.</p>
 <p>To create a custom <cite>autograd.Function</cite>, subclass this class and implement
-the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward" title="core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> and <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.backward" title="core.common.gp_utils.GatherFromModelParallelRegion.backward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">backward()</span></code></a> static methods. Then, to use your custom
+the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> and <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">backward()</span></code></a> static methods. Then, to use your custom
 op in the forward pass, call the class method <code class="docutils literal notranslate"><span class="pre">apply</span></code>. Do not call
-<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward" title="core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> directly.</p>
+<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> directly.</p>
 <p>To ensure correctness and best performance, make sure you are calling the
 correct methods on <code class="docutils literal notranslate"><span class="pre">ctx</span></code> and validating your backward function using
 <code class="xref py py-func docutils literal notranslate"><span class="pre">torch.autograd.gradcheck()</span></code>.</p>
@@ -1278,8 +1142,8 @@ correct methods on <code class="docutils literal notranslate"><span class="pre">
 </pre></div>
 </div>
 <dl class="py method">
-<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegion.forward">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward" title="Link to this definition">#</a></dt>
 <dd><p>Define the forward of the custom autograd Function.</p>
 <p>This function is to be overridden by all subclasses.
 There are two ways to define forward:</p>
@@ -1322,38 +1186,38 @@ if they are intended to be used for in <code class="docutils literal notranslate
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegion.backward">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegion.backward" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grad_outputs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward" title="Link to this definition">#</a></dt>
 <dd><p>Define a formula for differentiating the operation with backward mode automatic differentiation.</p>
 <p>This function is to be overridden by all subclasses.
 (Defining this function is equivalent to defining the <code class="docutils literal notranslate"><span class="pre">vjp</span></code> function.)</p>
 <p>It must accept a context <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx</span></code> as the first argument, followed by
-as many outputs as the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward" title="core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> returned (None will be passed in
+as many outputs as the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> returned (None will be passed in
 for non tensor outputs of the forward function),
 and it should return as many tensors, as there were inputs to
-<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward" title="core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>. Each argument is the gradient w.r.t the given output,
+<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>. Each argument is the gradient w.r.t the given output,
 and each returned value should be the gradient w.r.t. the
 corresponding input. If an input is not a Tensor or is a Tensor not
 requiring grads, you can just pass None as a gradient for that input.</p>
 <p>The context can be used to retrieve tensors saved during the forward
 pass. It also has an attribute <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx.needs_input_grad</span></code> as a tuple
 of booleans representing whether each input needs gradient. E.g.,
-<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.backward" title="core.common.gp_utils.GatherFromModelParallelRegion.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> will have <code class="docutils literal notranslate"><span class="pre">ctx.needs_input_grad[0]</span> <span class="pre">=</span> <span class="pre">True</span></code> if the
-first input to <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward" title="core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> needs gradient computed w.r.t. the
+<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> will have <code class="docutils literal notranslate"><span class="pre">ctx.needs_input_grad[0]</span> <span class="pre">=</span> <span class="pre">True</span></code> if the
+first input to <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> needs gradient computed w.r.t. the
 output.</p>
 </dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
-<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionSumGrad">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">GatherFromModelParallelRegionSumGrad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">GatherFromModelParallelRegionSumGradPadded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">torch.autograd.Function</span></code></p>
 <p>Base class to create custom <cite>autograd.Function</cite>.</p>
 <p>To create a custom <cite>autograd.Function</cite>, subclass this class and implement
-the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> and <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">backward()</span></code></a> static methods. Then, to use your custom
+the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> and <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">backward()</span></code></a> static methods. Then, to use your custom
 op in the forward pass, call the class method <code class="docutils literal notranslate"><span class="pre">apply</span></code>. Do not call
-<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> directly.</p>
+<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward()</span></code></a> directly.</p>
 <p>To ensure correctness and best performance, make sure you are calling the
 correct methods on <code class="docutils literal notranslate"><span class="pre">ctx</span></code> and validating your backward function using
 <code class="xref py py-func docutils literal notranslate"><span class="pre">torch.autograd.gradcheck()</span></code>.</p>
@@ -1378,8 +1242,8 @@ correct methods on <code class="docutils literal notranslate"><span class="pre">
 </pre></div>
 </div>
 <dl class="py method">
-<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward" title="Link to this definition">#</a></dt>
 <dd><p>Define the forward of the custom autograd Function.</p>
 <p>This function is to be overridden by all subclasses.
 There are two ways to define forward:</p>
@@ -1422,28 +1286,33 @@ if they are intended to be used for in <code class="docutils literal notranslate
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grad_output</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grad_outputs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward" title="Link to this definition">#</a></dt>
 <dd><p>Define a formula for differentiating the operation with backward mode automatic differentiation.</p>
 <p>This function is to be overridden by all subclasses.
 (Defining this function is equivalent to defining the <code class="docutils literal notranslate"><span class="pre">vjp</span></code> function.)</p>
 <p>It must accept a context <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx</span></code> as the first argument, followed by
-as many outputs as the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> returned (None will be passed in
+as many outputs as the <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> returned (None will be passed in
 for non tensor outputs of the forward function),
 and it should return as many tensors, as there were inputs to
-<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>. Each argument is the gradient w.r.t the given output,
+<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>. Each argument is the gradient w.r.t the given output,
 and each returned value should be the gradient w.r.t. the
 corresponding input. If an input is not a Tensor or is a Tensor not
 requiring grads, you can just pass None as a gradient for that input.</p>
 <p>The context can be used to retrieve tensors saved during the forward
 pass. It also has an attribute <code class="xref py py-attr docutils literal notranslate"><span class="pre">ctx.needs_input_grad</span></code> as a tuple
 of booleans representing whether each input needs gradient. E.g.,
-<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> will have <code class="docutils literal notranslate"><span class="pre">ctx.needs_input_grad[0]</span> <span class="pre">=</span> <span class="pre">True</span></code> if the
-first input to <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> needs gradient computed w.r.t. the
+<a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> will have <code class="docutils literal notranslate"><span class="pre">ctx.needs_input_grad[0]</span> <span class="pre">=</span> <span class="pre">True</span></code> if the
+first input to <a class="reference internal" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward" title="core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> needs gradient computed w.r.t. the
 output.</p>
 </dd></dl>
 
 </dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.common.gp_utils.scale_backward_grad">
+<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">scale_backward_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.scale_backward_grad" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="core.common.gp_utils.ScaleBackwardGrad">
@@ -1545,36 +1414,6 @@ output.</p>
 
 </dd></dl>
 
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.copy_to_model_parallel_region">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">copy_to_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.copy_to_model_parallel_region" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.reduce_from_model_parallel_region">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">reduce_from_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.reduce_from_model_parallel_region" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.scatter_to_model_parallel_region">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">scatter_to_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.scatter_to_model_parallel_region" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.gather_from_model_parallel_region">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">gather_from_model_parallel_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.gather_from_model_parallel_region" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.gather_from_model_parallel_region_sum_grad">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">gather_from_model_parallel_region_sum_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="core.common.gp_utils.scale_backward_grad">
-<span class="sig-prename descclassname"><span class="pre">core.common.gp_utils.</span></span><span class="sig-name descname"><span class="pre">scale_backward_grad</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">torch.Tensor</span></span></span><a class="headerlink" href="#core.common.gp_utils.scale_backward_grad" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
 </section>
 </section>
 
@@ -1648,6 +1487,8 @@ output.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._GRAPH_PARALLEL_GROUP"><code class="docutils literal notranslate"><span class="pre">_GRAPH_PARALLEL_GROUP</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._DATA_PARALLEL_GROUP"><code class="docutils literal notranslate"><span class="pre">_DATA_PARALLEL_GROUP</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._tls"><code class="docutils literal notranslate"><span class="pre">_tls</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.pad_input"><code class="docutils literal notranslate"><span class="pre">pad_input()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ensure_div"><code class="docutils literal notranslate"><span class="pre">ensure_div()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.divide_and_check_no_remainder"><code class="docutils literal notranslate"><span class="pre">divide_and_check_no_remainder()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.setup_graph_parallel_groups"><code class="docutils literal notranslate"><span class="pre">setup_graph_parallel_groups()</span></code></a></li>
@@ -1660,50 +1501,37 @@ output.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.get_gp_rank"><code class="docutils literal notranslate"><span class="pre">get_gp_rank()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.get_dp_world_size"><code class="docutils literal notranslate"><span class="pre">get_dp_world_size()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.get_gp_world_size"><code class="docutils literal notranslate"><span class="pre">get_gp_world_size()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.pad_tensor"><code class="docutils literal notranslate"><span class="pre">pad_tensor()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.trim_tensor"><code class="docutils literal notranslate"><span class="pre">trim_tensor()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._tensor_to_split_partitions"><code class="docutils literal notranslate"><span class="pre">_tensor_to_split_partitions()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._split_tensor"><code class="docutils literal notranslate"><span class="pre">_split_tensor()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._reduce"><code class="docutils literal notranslate"><span class="pre">_reduce()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._split"><code class="docutils literal notranslate"><span class="pre">_split()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._gather"><code class="docutils literal notranslate"><span class="pre">_gather()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils._gather_with_padding"><code class="docutils literal notranslate"><span class="pre">_gather_with_padding()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.CopyToModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">CopyToModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.CopyToModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">CopyToModelParallelRegion.forward()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.CopyToModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">CopyToModelParallelRegion.backward()</span></code></a></li>
-</ul>
-</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.size_list_fn"><code class="docutils literal notranslate"><span class="pre">size_list_fn()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.reduce_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">reduce_from_model_parallel_region()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ReduceFromModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ReduceFromModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion.forward()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ReduceFromModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">ReduceFromModelParallelRegion.backward()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scatter_to_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">scatter_to_model_parallel_region()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScatterToModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScatterToModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion.forward()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScatterToModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">ScatterToModelParallelRegion.backward()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegion"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegion.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion.forward()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegion.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegion.backward()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region_sum_grad()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded.forward()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionGradPadded.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionGradPadded.backward()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad.forward()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGrad.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGrad.backward()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.forward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded.forward()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.GatherFromModelParallelRegionSumGradPadded.backward"><code class="docutils literal notranslate"><span class="pre">GatherFromModelParallelRegionSumGradPadded.backward()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scale_backward_grad"><code class="docutils literal notranslate"><span class="pre">scale_backward_grad()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScaleBackwardGrad"><code class="docutils literal notranslate"><span class="pre">ScaleBackwardGrad</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScaleBackwardGrad.forward"><code class="docutils literal notranslate"><span class="pre">ScaleBackwardGrad.forward()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.ScaleBackwardGrad.backward"><code class="docutils literal notranslate"><span class="pre">ScaleBackwardGrad.backward()</span></code></a></li>
 </ul>
 </li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.copy_to_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">copy_to_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.reduce_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">reduce_from_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scatter_to_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">scatter_to_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.gather_from_model_parallel_region_sum_grad"><code class="docutils literal notranslate"><span class="pre">gather_from_model_parallel_region_sum_grad()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.common.gp_utils.scale_backward_grad"><code class="docutils literal notranslate"><span class="pre">scale_backward_grad()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1730,7 +1558,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2025.
+      © Copyright Meta Platforms, Inc.
       <br/>
     
   </p>

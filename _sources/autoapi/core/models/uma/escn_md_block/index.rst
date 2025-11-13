@@ -116,7 +116,7 @@ Module Contents
    .. py:attribute:: out_mask
 
 
-   .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, edge_envelope, node_offset: int = 0)
+   .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, edge_envelope, total_atoms_across_gp_ranks, node_offset: int = 0)
 
 
    .. py:method:: forward_chunk(x_full, x_original_shape, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, edge_envelope, node_offset: int = 0, ac_mole_start_idx: int = 0)
@@ -308,6 +308,6 @@ Module Contents
    .. py:attribute:: norm_2
 
 
-   .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, edge_envelope, sys_node_embedding=None, node_offset: int = 0)
+   .. py:method:: forward(x, x_edge, edge_distance, edge_index, wigner_and_M_mapping, wigner_and_M_mapping_inv, edge_envelope, total_atoms_across_gp_ranks, sys_node_embedding=None, node_offset: int = 0)
 
 

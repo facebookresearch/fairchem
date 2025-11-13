@@ -389,6 +389,7 @@
 </ul>
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/omat/entries/index.html">data.omat.entries</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
 </ul>
 </details></li>
@@ -814,12 +815,6 @@ document.write(`
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;repr&#39; attribute with value False was provided to the `Field()` function, which has no effect in the context it was used. &#39;repr&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
-  warnings.warn(
-/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/pydantic/_internal/_generate_schema.py:2249: UnsupportedFieldAttributeWarning: The &#39;frozen&#39; attribute with value True was provided to the `Field()` function, which has no effect in the context it was used. &#39;frozen&#39; is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
-  warnings.warn(
-</pre></div>
-</div>
 </div>
 </div>
 <p>Now we setup and run the relaxation.</p>
@@ -839,31 +834,25 @@ document.write(`
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>                Step[ FC]     Time          Energy          fmax
-BFGSLineSearch:    0[  0] 07:05:00     -130.560599  776880.8750
+BFGSLineSearch:    0[  0] 03:46:33     -130.560601       0.7414
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  8] 07:05:01     -130.563541       0.7320
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  2] 03:46:34     -130.703193       0.3842
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[ 10] 07:05:01     -130.703575       0.2990
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[  3] 03:46:34     -130.719021       0.1281
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[ 11] 07:05:01     -130.718671       0.1208
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[  4] 03:46:34     -130.726697       0.1073
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[ 12] 07:05:01     -130.726776       0.0901
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[  6] 03:46:34     -130.730348       0.0595
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[ 14] 07:05:01     -130.729895       0.0773
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[  8] 03:46:34     -130.733409       0.0468
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    6[ 16] 07:05:01     -130.732788       0.0676
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    7[ 18] 07:05:02     -130.733341       0.0370
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 2.2 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 1.3 seconds
 </pre></div>
 </div>
 </div>
@@ -1050,56 +1039,56 @@ BFGSLineSearch:    0[  0] 07:05:00     -130.560599  776880.8750
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|          | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 15.7 seconds for data/slabs/oqmd-349496 slab relaxation
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.3 seconds for data/slabs/oqmd-349496 slab relaxation
 5 H slabs to compute for oqmd-349496
 5 NNH slabs to compute for oqmd-349496
 Running data/adslabs/oqmd-349496_H/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 32.7 seconds for data/adslabs/oqmd-349496_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.7 seconds for data/adslabs/oqmd-349496_H/0
 Running data/adslabs/oqmd-349496_H/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 107.9 seconds for data/adslabs/oqmd-349496_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.5 seconds for data/adslabs/oqmd-349496_H/1
 Running data/adslabs/oqmd-349496_H/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 66.3 seconds for data/adslabs/oqmd-349496_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.6 seconds for data/adslabs/oqmd-349496_H/2
 Running data/adslabs/oqmd-349496_H/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 143.9 seconds for data/adslabs/oqmd-349496_H/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.2 seconds for data/adslabs/oqmd-349496_H/3
 Running data/adslabs/oqmd-349496_H/4
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 48.5 seconds for data/adslabs/oqmd-349496_H/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.3 seconds for data/adslabs/oqmd-349496_H/4
 Running data/adslabs/oqmd-349496_NNH/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.8 seconds for data/adslabs/oqmd-349496_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-349496_NNH/0
 Running data/adslabs/oqmd-349496_NNH/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.2 seconds for data/adslabs/oqmd-349496_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.8 seconds for data/adslabs/oqmd-349496_NNH/1
 Running data/adslabs/oqmd-349496_NNH/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 6.7 seconds for data/adslabs/oqmd-349496_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.0 seconds for data/adslabs/oqmd-349496_NNH/2
 Running data/adslabs/oqmd-349496_NNH/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 7.5 seconds for data/adslabs/oqmd-349496_NNH/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-349496_NNH/3
 Running data/adslabs/oqmd-349496_NNH/4
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [07:25&lt;00:00, 445.56s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [00:38&lt;00:00, 38.31s/it]
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [07:25&lt;00:00, 445.56s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [00:38&lt;00:00, 38.31s/it]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.7 seconds for data/adslabs/oqmd-349496_NNH/4
-Elapsed time: 445.6 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.1 seconds for data/adslabs/oqmd-349496_NNH/4
+Elapsed time: 38.3 seconds
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>
@@ -1269,13 +1258,13 @@ Elapsed time: 445.6 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_3528/1759892815.py:7: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_3442/1759892815.py:7: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
   slope, intercept, r, p, se = linregress(x, y)
-/tmp/ipykernel_3528/1759892815.py:37: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
+/tmp/ipykernel_3442/1759892815.py:37: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
   slope, intercept, r, p, se = linregress(x, y)
 </pre></div>
 </div>
-<img alt="../../../_images/901eecda688f6a8de9f21f6f9143bdd0b6fea4dc41dd4f65b70050d4f06f0bfa.png" src="../../../_images/901eecda688f6a8de9f21f6f9143bdd0b6fea4dc41dd4f65b70050d4f06f0bfa.png" />
+<img alt="../../../_images/21a9fd141765ae10347d118e88201bc3ba691620e6c5d6456de56366e1b1aa01.png" src="../../../_images/21a9fd141765ae10347d118e88201bc3ba691620e6c5d6456de56366e1b1aa01.png" />
 </div>
 </div>
 </section>
@@ -1329,7 +1318,7 @@ Elapsed time: 445.6 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/3ec6e4f3882ac7a22479a3ccd12ed2ffc93bd526b72d0979d4514fac99fa0028.png" src="../../../_images/3ec6e4f3882ac7a22479a3ccd12ed2ffc93bd526b72d0979d4514fac99fa0028.png" />
+<img alt="../../../_images/6225cf467ce8bca58559c41616021baa9121384d463b3f39fff4c92d3f0ee556.png" src="../../../_images/6225cf467ce8bca58559c41616021baa9121384d463b3f39fff4c92d3f0ee556.png" />
 </div>
 </div>
 </section>
@@ -1436,7 +1425,7 @@ By FAIR Chemistry & Collaborators
 
   <p class="copyright">
     
-      © Copyright 2025.
+      © Copyright Meta Platforms, Inc.
       <br/>
     
   </p>
