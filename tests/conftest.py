@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import random
 from contextlib import suppress
-import ray
+
 import numpy as np
 import pytest
 import torch
@@ -140,24 +140,6 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
-    # Pre-test cleanup and optional CUDA memory reporting
-    ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
-    if torch.cuda.is_available():
-        try:
-            print("\n[CUDA] Memory summary BEFORE test:\n" + torch.cuda.memory_summary())
-        except Exception as e:  # pragma: no cover
-            print(f"[CUDA] Failed to get memory summary before test: {e}")
-    yield
-    # Post-test cleanup and optional CUDA memory reporting
-    ray.shutdown()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
-    distutils.cleanup()
-    if torch.cuda.is_available():
-        try:
-            print("\n[CUDA] Memory summary AFTER test:\n" + torch.cuda.memory_summary())
-        except Exception as e:  # pragma: no cover
-            print(f"[CUDA] Failed to get memory summary after test: {e}")
