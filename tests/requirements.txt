@@ -9,6 +9,6 @@ numpy==2.2.5
 scikit-learn==1.7.2
 lmdb==1.7.3
 pymatgen==v2025.10.7
-ray==2.50.1
+ray==2.51.1
 ipykernel==7.1.0
 jupyter_book==1.0.4
