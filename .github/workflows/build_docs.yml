@@ -57,10 +57,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install packages/fairchem-core[docs,adsorbml,extras]
-        pip install packages/fairchem-data-oc[dev]
-        pip install packages/fairchem-applications-cattsunami
-        pip install packages/fairchem-data-omat
+        pip install \
+          packages/fairchem-core[docs,adsorbml,extras] \
+          packages/fairchem-data-oc[dev] \
+          packages/fairchem-applications-cattsunami \
+          packages/fairchem-data-omat
         pip install -r tests/requirements.txt # pin test packages
 
     # Build the book
