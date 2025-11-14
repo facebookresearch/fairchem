@@ -14,7 +14,7 @@ import ray
 import numpy as np
 import pytest
 import torch
-
+import gc
 import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core.common import distutils
 
