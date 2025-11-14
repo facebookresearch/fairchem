@@ -471,6 +471,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     edge_envelope,
+                    total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
+                        0
+                    ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -611,13 +614,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
-
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
-        )
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
@@ -748,7 +749,9 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+            forces = gp_utils.gather_from_model_parallel_region(
+                forces, data_dict["atomic_numbers_full"].shape[0]
+            )
         return {"forces": forces}
 
 
