@@ -86,6 +86,12 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
 
     n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
     if n_edges_post > n_edges:
+        # We append synthetic padding edges whose distance vector has norm > cutoff
+        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
+        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
+        # contribute to embeddings or message passing; they only ensure the edge count
+        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
+        # activation checkpointing and avoiding empty tensor edge cases.
         add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
 
 
