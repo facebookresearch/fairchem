@@ -156,7 +156,16 @@ def setup_before_each_test():
     print("="*80)
     try:
         result = subprocess.run(['ps', 'axf'], capture_output=True, text=True, timeout=5)
-        print(result.stdout)
+        trimmed_lines = []
+        for line in result.stdout.splitlines():
+            # Skip header line
+            if line.strip().startswith('PID'):
+                continue
+            # Split into at most 5 parts (PID, TTY, STAT, TIME, COMMAND(with tree))
+            parts = line.rstrip('\n').split(maxsplit=4)
+            if len(parts) == 5:
+                trimmed_lines.append(parts[4])  # keep only COMMAND (which includes tree branches)
+        print('\n'.join(trimmed_lines))
     except Exception as e:
         print(f"Failed to run ps auxf: {e}")
     print("="*80 + "\n")
