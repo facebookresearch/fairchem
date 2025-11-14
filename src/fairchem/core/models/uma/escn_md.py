@@ -61,7 +61,7 @@ def add_n_empty_edges(graph_dict, edges_to_add: int, cutoff: float):
         dim=1,
     )
 
-    self_edge_distance_vec = graph_dict["edge_index"].new_ones(1, 3) + cutoff
+    self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
     graph_dict["edge_distance_vec"] = torch.cat(
         (
             self_edge_distance_vec.expand(edges_to_add, 3),

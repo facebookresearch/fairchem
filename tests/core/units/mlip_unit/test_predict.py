@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import numpy.testing as npt
 import pytest
+import ray
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 
@@ -160,6 +161,7 @@ def test_parallel_predict_unit(workers, device):
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
+    ray.shutdown()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -258,21 +260,18 @@ def test_parallel_predict_unit_batch(workers, device):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "device, num_workers, padding",
+    "padding",
     [   
-        ("cpu",  2, 0),
-        ("cpu",  2, 1),
-        ("cpu",  2, 32),
-        ("cuda",  1, 32),
+        (0),
+        (1),
+        (32),
     ],
 )
-def test_batching_consistency(device, num_workers, padding):
+def test_batching_consistency(padding):
     """Test that batched and unbatched predictions are consistent."""
-    assert num_workers <= 2 , "Oxygen system alone only supports up to two workers (num atoms)"
     # Get the appropriate predict unit
-    if num_workers > 1:
-        model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
-        ifsets = InferenceSettings(
+
+    ifsets = InferenceSettings(
             tf32=False,
             merge_mole=False,
             activation_checkpointing=True,
@@ -280,14 +279,7 @@ def test_batching_consistency(device, num_workers, padding):
             external_graph_gen=False,
             edge_chunk_size=padding,
         )
-        predict_unit = ParallelMLIPPredictUnit(
-            inference_model_path=model_path,
-            device=device,
-            inference_settings=ifsets,
-            num_workers=num_workers,
-        )
-    else:
-        predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device=device)
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device='cuda', inference_settings=ifsets)
 
     # Create H2O molecule
     h2o = molecule("H2O")
