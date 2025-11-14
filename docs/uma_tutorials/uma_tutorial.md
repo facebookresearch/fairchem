@@ -573,9 +573,9 @@ This could be a good initial guess to initialize an NEB in DFT.
 
 1. FineTuna - use it for initial geometry optimizations then do DFT
 
-  a. https://iopscience.iop.org/article/10.1088/2632-2153/ac8fe0
+  a. http://doi.org/10.1088/2632-2153/ac8fe0
 
-  b. https://iopscience.iop.org/article/10.1088/2632-2153/ad37f0
+  b. http://doi.org/10.1088/2632-2153/ad37f0
 
 2. AdsorbML - prescreen adsorption sites to find relevant ones
 
