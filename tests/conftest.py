@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import random
+import subprocess
 from contextlib import suppress
 import ray
 import numpy as np
@@ -148,8 +149,32 @@ def setup_before_each_test():
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
+    
+    # Print process tree before test
+    print("\n" + "="*80)
+    print("[BEFORE TEST] Process tree (ps auxf):")
+    print("="*80)
+    try:
+        result = subprocess.run(['ps', 'auxf'], capture_output=True, text=True, timeout=5)
+        print(result.stdout)
+    except Exception as e:
+        print(f"Failed to run ps auxf: {e}")
+    print("="*80 + "\n")
+    
     yield
+    
     ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
+    
+    # Print process tree after test
+    print("\n" + "="*80)
+    print("[AFTER TEST] Process tree (ps auxf):")
+    print("="*80)
+    try:
+        result = subprocess.run(['ps', 'auxf'], capture_output=True, text=True, timeout=5)
+        print(result.stdout)
+    except Exception as e:
+        print(f"Failed to run ps auxf: {e}")
+    print("="*80 + "\n")
