@@ -155,7 +155,7 @@ def setup_before_each_test():
     print("[BEFORE TEST] Process tree (ps auxf):")
     print("="*80)
     try:
-        result = subprocess.run(['ps', 'auxf'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(['ps', 'axf'], capture_output=True, text=True, timeout=5)
         print(result.stdout)
     except Exception as e:
         print(f"Failed to run ps auxf: {e}")
@@ -168,13 +168,3 @@ def setup_before_each_test():
         gp_utils.cleanup_gp()
     distutils.cleanup()
     
-    # Print process tree after test
-    print("\n" + "="*80)
-    print("[AFTER TEST] Process tree (ps auxf):")
-    print("="*80)
-    try:
-        result = subprocess.run(['ps', 'auxf'], capture_output=True, text=True, timeout=5)
-        print(result.stdout)
-    except Exception as e:
-        print(f"Failed to run ps auxf: {e}")
-    print("="*80 + "\n")
