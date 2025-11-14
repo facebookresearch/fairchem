@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 
 
-def add_n_empty_edges(graph_dict, edges_to_add: int, cutoff: float):
+def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
     graph_dict["edge_index"] = torch.cat(
         (
             graph_dict["edge_index"].new_ones(2, edges_to_add)
@@ -132,7 +132,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
-        edge_chunk_size: int = 0,
+        edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -448,7 +448,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["node_partition"]
             ]
             data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
-        pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
+
+        if self.edge_chunk_size is not None:
+            pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
 
         return graph_dict
 
@@ -583,7 +585,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             gp_utils.get_gp_world_size(),
         )[gp_utils.get_gp_rank()]
         assert (
-            node_partition.numel() >= 0
+            node_partition.numel() > 0
         ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
         edge_partition = torch.where(
             torch.logical_and(
