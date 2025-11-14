@@ -56,7 +56,7 @@ from ase.build import bulk
 from ase.optimize import LBFGS
 from quacc.recipes.mlp.core import relax_job
 
-from fairchem.core.calculate.ase_calculator import FAIRChemCalculator, set_predict_formation_energy
+from fairchem.core.calculate.ase_calculator import FAIRChemCalculator, FormationEnergyCalculator
 
 # Make an Atoms object of a bulk MgO structure
 atoms = bulk("MgO", "rocksalt", a=4.213)
@@ -76,12 +76,13 @@ atoms = result["atoms"]
 
 # Create an calculator using uma-s-1p1
 calculator = FAIRChemCalculator.from_model_checkpoint("uma-s-1p1", task_name="omat")
-atoms.calc = calculator
 
-# Adapt the calculation to automatically return MP-style corrected formation energies
+# Now use the FormationEnergyCalculator to calculate the formation energy
+# This will now return MP-style corrected formation energies
 # For the omat task, this defaults to apply MP2020 style corrections with OMat24 compatibility
-with set_predict_formation_energy(atoms.calc, apply_corrections=True):
-    form_energy = atoms.get_potential_energy()
+form_e_calc = FormationEnergyCalculator(calculator, apply_corrections=True)
+atoms.calc = form_e_calc
+form_energy = atoms.get_potential_energy()
 ```
 
 ```{code-cell} ipython3
