@@ -202,6 +202,7 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
 
     all_job_ids = []
     head_job_id = cluster.start_head(
+        name=config.job.run_name,
         requirements=cluster_reqs
         | {
             "nodes": 1,
@@ -220,6 +221,7 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
     if worker_nodes > 0:
         worker_ids = cluster.start_workers(
             1,
+            name=config.job.run_name,
             requirements=cluster_reqs
             | {
                 "nodes": worker_nodes,
