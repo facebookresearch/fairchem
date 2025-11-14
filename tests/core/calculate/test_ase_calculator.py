@@ -493,23 +493,22 @@ def test_formation_energy_calculator_missing_element_raises_error(
         water_molecule.get_potential_energy()
 
 
-def test_formation_energy_calculator_mp_corrections_omat_task(
-    bulk_atoms, single_mlip_predict_unit
-):
+def test_formation_energy_calculator_mp_corrections_omat_task(single_mlip_predict_unit):
     """Test MP corrections with FormationEnergyCalculator for OMat task."""
     base_calc = FAIRChemCalculator(single_mlip_predict_unit, task_name="omat")
-
     try:
         # With corrections (should default to True for omat)
+        atoms = bulk("MgO", "rocksalt", a=4.213)
         formation_calc_corrected = FormationEnergyCalculator(
             base_calc, apply_corrections=None
         )
-        bulk_atoms.calc = formation_calc_corrected
+        atoms.calc = formation_calc_corrected
         corrected_energy = bulk_atoms.get_potential_energy()
 
         # Without corrections
+        atoms = bulk("MgO", "rocksalt", a=4.213)
         formation_calc = FormationEnergyCalculator(base_calc, apply_corrections=False)
-        bulk_atoms.calc = formation_calc
+        atoms.calc = formation_calc
         energy = bulk_atoms.get_potential_energy()
 
         assert isinstance(energy, float)
