@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 # conftest.py
 from __future__ import annotations
 
+import os
 import random
 from contextlib import suppress
 import ray
@@ -140,6 +141,7 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
+    os.environ["RAY_USAGE_STATS_ENABLED"]="0"
     gc.collect()
     gc.collect()
     ray.shutdown()
