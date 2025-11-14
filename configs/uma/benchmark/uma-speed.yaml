@@ -1,4 +1,4 @@
-#fairchem -c puma_speed.yaml +run_dir_root=/path/to/run_dir
+#fairchem -c uma-speed.yaml
 
 # job:
 #   device_type: CUDA
@@ -34,12 +34,6 @@ runner:
   _target_: fairchem.core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 100
   natoms_list: [128000]
-  # natoms_list: [432000]
-  # natoms_list: null
-  # input_system:
-  #   # "mygb": "/checkpoint/ocp/shared/structures/emin_lastframe.xyz"
-  #   "3pb": "/checkpoint/ocp/shared/tmp/CONTCAR_3pb"
-  # expand_supercells: 8
   model_checkpoints: {
     "uma_sm_cons": "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt",
     # "uma_sm_direct": "/checkpoint/ocp/shared/run_dir/202510-3123-1909-5e5a/checkpoints/final/inference_ckpt.pt",
