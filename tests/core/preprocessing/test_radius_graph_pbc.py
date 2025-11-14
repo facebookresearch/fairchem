@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from functools import partial
 
+import numpy as np
 import pytest
 import torch
 from ase import Atoms
@@ -326,8 +327,52 @@ def test_simple_systems_nopbc(
 
         assert (
             len(
-                set(tuple(x) for x in edge_index.T.tolist())
-                - set(tuple(x) for x in expected_edge_index.T.tolist())
+                {tuple(x) for x in edge_index.T.tolist()}
+                - {tuple(x) for x in expected_edge_index.T.tolist()}
             )
             == 0
         )
+
+
+def ch4_atoms():
+    bond_length = 1.09
+    tetrahedron = (
+        np.array([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]])
+        * bond_length
+        / np.sqrt(3)
+    )
+    positions = np.vstack([[0, 0, 0], tetrahedron])
+    ch4 = Atoms("CH4", positions=positions)
+    return ch4
+
+
+def test_partitioned_radius_graph_pbc():
+    radius = 6
+    max_neighbors = 300
+    rgbv2 = partial(
+        radius_graph_pbc_v2,
+        radius=radius,
+        max_num_neighbors_threshold=max_neighbors,
+        pbc=torch.BoolTensor([False, False, False]),
+    )
+    atoms = ch4_atoms()  # 5 atoms
+    data = AtomicData.from_ase(atoms)
+    batch = data_list_collater([data])
+    edge_index_no_partition, _, _ = rgbv2(batch)
+    partition_0 = torch.tensor([1, 3, 4], dtype=torch.long)
+    partition_1 = torch.tensor([0, 2], dtype=torch.long)
+    batch["node_partition"] = partition_0
+    edge_index_part_0, _, _ = rgbv2(batch)
+    batch["node_partition"] = partition_1
+    edge_index_part_1, _, _ = rgbv2(batch)
+
+    # Verify that combined partitioned edges match non-partitioned edges
+    combined_edges = torch.cat([edge_index_part_0, edge_index_part_1], dim=1)
+
+    # Convert edge pairs to sets for comparison (order doesn't matter)
+    no_partition_pairs = {tuple(edge.tolist()) for edge in edge_index_no_partition.T}
+    combined_pairs = {tuple(edge.tolist()) for edge in combined_edges.T}
+
+    assert (
+        no_partition_pairs == combined_pairs
+    ), "Partitioned edges don't match non-partitioned edges"

@@ -340,6 +340,19 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
     def _generate_graph(self, data_dict):
+        data_dict["gp_node_offset"] = 0
+        if gp_utils.initialized():
+            # create the partitions
+            atomic_numbers_full = data_dict["atomic_numbers_full"]
+            node_partition = torch.tensor_split(
+                torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
+                gp_utils.get_gp_world_size(),
+            )[gp_utils.get_gp_rank()]
+            assert (
+                node_partition.numel() > 0
+            ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+            data_dict["node_partition"] = node_partition
+
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
@@ -389,17 +402,24 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
             }
-        graph_dict["node_offset"] = 0  # default value
 
         if gp_utils.initialized():
-            graph_dict = self._init_gp_partitions(
-                graph_dict, data_dict["atomic_numbers_full"]
-            )
-            # create partial atomic numbers and batch tensors for GP
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
-                graph_dict["node_partition"]
+                node_partition
             ]
-            data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
+            data_dict["batch"] = data_dict["batch_full"][node_partition]
+            data_dict["gp_node_offset"] = node_partition.min().item()
+        # graph_dict["node_offset"] = 0  # default value
+
+        # if gp_utils.initialized():
+        #     graph_dict = self._init_gp_partitions(
+        #         graph_dict, data_dict["atomic_numbers_full"]
+        #     )
+        #     # create partial atomic numbers and batch tensors for GP
+        #     data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
+        #         graph_dict["node_partition"]
+        #     ]
+        #     data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
         return graph_dict
 
@@ -489,7 +509,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 edge_envelope,
-                graph_dict["node_offset"],
+                data_dict["gp_node_offset"],
             )
 
         ###############################################################
@@ -509,7 +529,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
-                    node_offset=graph_dict["node_offset"],
+                    node_offset=data_dict["gp_node_offset"],
                 )
 
         # Final layer norm
