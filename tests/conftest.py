@@ -8,15 +8,12 @@ LICENSE file in the root directory of this source tree.
 # conftest.py
 from __future__ import annotations
 
-import os
 import random
-import subprocess
 from contextlib import suppress
 import ray
 import numpy as np
 import pytest
 import torch
-import gc
 import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core.common import distutils
 
@@ -142,38 +139,12 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
-    os.environ["RAY_USAGE_STATS_ENABLED"]="0"
-    gc.collect()
-    gc.collect()
     ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
-    
-    # Print process tree before test
-    print("\n" + "="*80)
-    print("[BEFORE TEST] Process tree (ps auxf):")
-    print("="*80)
-    try:
-        result = subprocess.run(['ps', 'axf'], capture_output=True, text=True, timeout=5)
-        trimmed_lines = []
-        for line in result.stdout.splitlines():
-            # Skip header line
-            if line.strip().startswith('PID'):
-                continue
-            # Split into at most 5 parts (PID, TTY, STAT, TIME, COMMAND(with tree))
-            parts = line.rstrip('\n').split(maxsplit=4)
-            if len(parts) == 5:
-                trimmed_lines.append(parts[4])  # keep only COMMAND (which includes tree branches)
-        print('\n'.join(trimmed_lines))
-    except Exception as e:
-        print(f"Failed to run ps auxf: {e}")
-    print("="*80 + "\n")
-    
     yield
-    
     ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
-    
