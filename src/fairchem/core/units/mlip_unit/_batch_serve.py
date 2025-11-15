@@ -1,0 +1,184 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+import ray
+from ray import serve
+
+from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
+
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
+
+
+logger = logging.getLogger("ray")
+
+
+@serve.deployment(max_ongoing_requests=100)
+class BatchPredictServer:
+    """
+    Ray Serve deployment that batches incoming inference requests.
+    """
+
+    def __init__(
+        self,
+        predict_unit_ref,
+        max_batch_size: int = 32,
+        batch_wait_timeout_s: float = 0.05,
+    ):
+        """
+        Initialize with a Ray object reference to a PredictUnit.
+
+        Args:
+            predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
+        """
+        self.predict_unit = ray.get(predict_unit_ref)
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
+
+        logging.info("BatchedPredictor initialized with predict_unit from object store")
+
+    def configure_batching(
+        self, max_batch_size: int = 32, batch_wait_timeout_s: float = 0.05
+    ):
+        self.predict.set_max_batch_size(max_batch_size)
+        self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
+
+    @serve.batch
+    async def predict(
+        self, data_list: list[AtomicData], undo_element_references: bool = True
+    ) -> list[dict]:
+        """
+        Process a batch of AtomicData objects.
+
+        Args:
+            data_list: List of AtomicData objects (automatically batched by Ray Serve)
+
+        Returns:
+            List of prediction dictionaries, one per input
+        """
+        batch = atomicdata_list_to_batch(data_list)
+        predictions = self.predict_unit.predict(batch, undo_element_references)
+        prediction_list = self._split_predictions(predictions, batch)
+
+        return prediction_list
+
+    async def __call__(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict:
+        """
+        Main entry point for inference requests.
+
+        Args:
+            data: Single AtomicData object
+
+        Returns:
+            Prediction dictionary for this system
+        """
+        predictions = await self.predict(data, undo_element_references)
+        return predictions
+
+    def _split_predictions(
+        self,
+        predictions: dict,
+        batch: AtomicData,
+    ) -> list[dict]:
+        """
+        Split batched predictions back into individual system predictions.
+
+        Args:
+            batch_predictions: Dictionary of batched prediction tensors
+            batch: The batched AtomicData used for inference
+
+        Returns:
+            List of prediction dictionaries, one per system
+        """
+        split_preds = []
+        for i in range(len(batch)):
+            system_predictions = {}
+
+            for key, pred in predictions.items():
+                if pred.shape[0] == len(batch):
+                    # Per-system prediction
+                    system_predictions[key] = pred[i : i + 1]
+                elif pred.shape[0] == len(batch.batch):
+                    # Per-atom prediction
+                    mask = batch.batch == i
+                    system_predictions[key] = pred[mask]
+                else:
+                    raise ValueError(
+                        f"Cannot split prediction for key '{key}': "
+                        f"unexpected shape {pred.shape} for batch size {len(batch)} "
+                        f"and num_atoms {batch.num_atoms}"
+                    )
+
+            split_preds.append(system_predictions)
+
+        return split_preds
+
+
+def setup_batch_predict_server(
+    predict_unit: MLIPPredictUnit,
+    max_batch_size: int = 32,
+    batch_wait_timeout_s: float = 0.05,
+    num_replicas: int = 1,
+    ray_actor_options: dict | None = None,
+    deployment_name: str = "predict-server",
+    route_prefix: str = "/predict",
+) -> serve.handle.DeploymentHandle:
+    """
+    Set up and deploy a BatchPredictServer for batched inference.
+
+    Args:
+        predict_unit: An MLIPPredictUnit instance to use for batched inference
+        max_batch_size: Maximum number of systems per batch (default: 32)
+        batch_wait_timeout_s: Maximum wait time before processing partial batch (default: 0.05)
+        num_replicas: Number of deployment replicas for scaling (default: 1)
+        ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})
+        deployment_name: Name for the Ray Serve deployment (default: "predict-server")
+        route_prefix: HTTP route prefix for the deployment (default: "/predict")
+
+    Returns:
+        Ray Serve deployment handle that can be used to initialize BatchServerPredictUnit
+    """
+    if not ray.is_initialized():
+        ray.init(
+            log_to_driver=False, logging_config=ray.LoggingConfig(log_level="ERROR")
+        )
+        logging.info("Ray initialized by setup_batch_predict_server")
+
+    serve.start()
+    logging.info("Ray Serve started by setup_batch_predict_server")
+
+    predict_unit_ref = ray.put(predict_unit)
+    logging.info("Predict unit stored in Ray object store")
+
+    if ray_actor_options is None:
+        ray_actor_options = {}
+
+    deployment = BatchPredictServer.options(
+        num_replicas=num_replicas,
+        ray_actor_options=ray_actor_options,
+    ).bind(
+        predict_unit_ref,
+        max_batch_size=max_batch_size,
+        batch_wait_timeout_s=batch_wait_timeout_s,
+    )
+
+    handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
+
+    logging.info(
+        f"BatchPredictServer deployed with max_batch_size={max_batch_size}, "
+        f"batch_wait_timeout_s={batch_wait_timeout_s}, num_replicas={num_replicas}, "
+        f"name={deployment_name}"
+    )
+
+    return handle
