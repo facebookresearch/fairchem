@@ -48,7 +48,51 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
-ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+    graph_dict["edge_index"] = torch.cat(
+        (
+            graph_dict["edge_index"].new_ones(2, edges_to_add)
+            * graph_dict["node_offset"],
+            graph_dict["edge_index"],
+        ),
+        dim=1,
+    )
+
+    self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
+    graph_dict["edge_distance_vec"] = torch.cat(
+        (
+            self_edge_distance_vec.expand(edges_to_add, 3),
+            graph_dict["edge_distance_vec"],
+        ),
+        dim=0,
+    )
+
+    edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+    graph_dict["edge_distance"] = torch.cat(
+        (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
+    )
+
+
+@torch.compiler.disable
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+
+    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
+        # make sure we have a multiple of self.edge_chunk_size edges
+        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
+    if n_edges_post > n_edges:
+        # We append synthetic padding edges whose distance vector has norm > cutoff
+        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
+        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
+        # contribute to embeddings or message passing; they only ensure the edge count
+        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
+        # activation checkpointing and avoiding empty tensor edge cases.
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
 
 
 @registry.register_model("escnmd_backbone")
@@ -88,6 +132,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
+        edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -116,7 +161,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         activation_checkpoint_chunk_size = None
         if activation_checkpointing:
             # The size of edge blocks to use in activation checkpointing
-            activation_checkpoint_chunk_size = ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
+            activation_checkpoint_chunk_size = (
+                ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
+            )
+        self.edge_chunk_size = edge_chunk_size
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -401,6 +449,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ]
             data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
+        if self.edge_chunk_size is not None:
+            pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
+
         return graph_dict
 
     @conditional_grad(torch.enable_grad())
@@ -505,6 +556,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     edge_envelope,
+                    total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
+                        0
+                    ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -530,7 +584,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
             gp_utils.get_gp_world_size(),
         )[gp_utils.get_gp_rank()]
-
         assert (
             node_partition.numel() > 0
         ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
@@ -548,7 +601,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         graph_dict["edge_distance_vec"] = graph_dict["edge_distance_vec"][
             edge_partition
         ]
-
         return graph_dict
 
     @property
@@ -779,7 +831,9 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+            forces = gp_utils.gather_from_model_parallel_region(
+                forces, data_dict["atomic_numbers_full"].shape[0]
+            )
         return {"forces": forces}
 
 

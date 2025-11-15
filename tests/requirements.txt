@@ -1,7 +1,7 @@
 # this file used only for installing pinned packages for testing only! please do not install using this manually!
 ase==3.26
 ase-db-backends==0.10.0
-e3nn==0.5.7
+e3nn==0.5.8
 huggingface-hub==0.35.3
 torch==2.8.0
 torchtnt==0.2.4
@@ -9,6 +9,6 @@ numpy==2.2.5
 scikit-learn==1.7.2
 lmdb==1.7.3
 pymatgen==v2025.10.7
-ray==2.50.1
-ipykernel==6.30.1
+ray==2.51.1
+ipykernel==7.1.0
 jupyter_book==1.0.4
