@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
-from torch.autograd import grad
 from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
+from torch.autograd import grad
 
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets import data_list_collater
@@ -274,7 +274,7 @@ class FAIRChemCalculator(Calculator):
         # Turn off create_graph for the first derivative
         self.predictor.model.module.output_heads["energyandforcehead"].head.training = False
 
-        return hessian
+        return hessian.reshape(len(atoms) * 3, len(atoms) * 3)
 
     def get_numerical_hessian(self, atoms: Atoms, eps: float = 1e-4) -> np.ndarray:
         """
@@ -287,9 +287,8 @@ class FAIRChemCalculator(Calculator):
         Returns:
             np.ndarray: The Hessian matrix.
         """
-        
+        # Create displaced atoms in batch
         data_list = []
-
         for i in range(len(atoms)):
             for j in range(3):
                 displaced_plus = atoms.copy()
