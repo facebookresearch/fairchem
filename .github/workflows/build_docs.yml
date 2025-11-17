@@ -50,7 +50,7 @@ jobs:
 
     # Install dependencies
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: 3.12
 
@@ -74,7 +74,7 @@ jobs:
         jupyter-book build docs
 
     - name: Upload documentation artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: docs-html
         path: docs/_build/html/*

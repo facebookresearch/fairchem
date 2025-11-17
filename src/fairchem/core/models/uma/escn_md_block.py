@@ -125,11 +125,14 @@ class Edgewise(torch.nn.Module):
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
         edge_envelope,
+        total_atoms_across_gp_ranks,
         node_offset: int = 0,
     ):
         # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
+            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                x, total_atoms_across_gp_ranks
+            )
         else:
             x_full = x
 
@@ -387,6 +390,7 @@ class eSCNMD_Block(torch.nn.Module):
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
         edge_envelope,
+        total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -405,7 +409,8 @@ class eSCNMD_Block(torch.nn.Module):
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
                 edge_envelope,
-                node_offset,
+                total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
+                node_offset=node_offset,
             )
             x = x + x_res
 
