@@ -440,3 +440,21 @@ def test_parallel_md(checkpointing):
 
     calc = FAIRChemCalculator(predictor, task_name="omol")
     run_md_simulation(calc, steps=10)
+
+
+@pytest.mark.parametrize("vmap", [True, False])
+def test_hessian(vmap):
+    atoms = molecule("H2O")
+    calc = FAIRChemCalculator(predictor, task_name="omol")
+
+    hessian = calc.get_hessian(atoms, vmap=vmap)
+    assert np.isfinite(hessian).all()
+
+
+def test_numerical_hessian():
+    atoms = molecule("H2O")
+    calc = FAIRChemCalculator(predictor, task_name="omol")
+
+    hessian = calc.get_numerical_hessian(atoms)
+    assert np.isfinite(hessian).all()
+
