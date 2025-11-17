@@ -271,7 +271,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Regular model prediction path
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
-        data_device = data.to(self.device)#.clone()
+        data_device = data.to(self.device)  # .clone()
 
         dtype = self.inference_settings.base_precision_dtype
         if not self._warned_upcast:
