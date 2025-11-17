@@ -239,7 +239,9 @@ class FAIRChemCalculator(Calculator):
             np.ndarray: The Hessian matrix.
         """
         # Turn on create_graph for the first derivative
-        self.predictor.model.module.output_heads["energyandforcehead"].head.training = True
+        self.predictor.model.module.output_heads[
+            "energyandforcehead"
+        ].head.training = True
 
         # Convert using the current a2g object
         data_object = self.a2g(atoms)
@@ -254,25 +256,38 @@ class FAIRChemCalculator(Calculator):
 
         # Calculate the Hessian using autograd
         if vmap:
-            hessian = torch.vmap(
-                lambda vec: grad(
-                    -forces,
-                    positions,
-                    grad_outputs=vec,
-                    retain_graph=True,
+            hessian = (
+                torch.vmap(
+                    lambda vec: grad(
+                        -forces,
+                        positions,
+                        grad_outputs=vec,
+                        retain_graph=True,
                     )[0],
-                )(torch.eye(forces.numel(), device=forces.device)).detach().cpu().numpy()
+                )(torch.eye(forces.numel(), device=forces.device))
+                .detach()
+                .cpu()
+                .numpy()
+            )
         else:
             hessian = np.zeros((len(forces), len(forces)))
             for i in range(len(forces)):
-                hessian[:, i] = grad(
-                    -forces[i],
-                    positions,
-                    retain_graph=True,
-                )[0].flatten().detach().cpu().numpy()
+                hessian[:, i] = (
+                    grad(
+                        -forces[i],
+                        positions,
+                        retain_graph=True,
+                    )[0]
+                    .flatten()
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
 
         # Turn off create_graph for the first derivative
-        self.predictor.model.module.output_heads["energyandforcehead"].head.training = False
+        self.predictor.model.module.output_heads[
+            "energyandforcehead"
+        ].head.training = False
 
         return hessian.reshape(len(atoms) * 3, len(atoms) * 3)
 
