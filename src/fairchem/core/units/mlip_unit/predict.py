@@ -478,7 +478,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         if not ray.is_initialized():
             ray.init(
                 logging_level=logging.INFO,
-                num_cpus=num_workers_per_node,
                 # runtime_env={
                 #     "env_vars": {"RAY_DEBUG": "1"},
                 # },
