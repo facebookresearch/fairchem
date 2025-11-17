@@ -8,6 +8,7 @@ import hydra
 import numpy as np
 import torch
 from ase.data import atomic_masses, chemical_symbols
+from ase.geometry import wrap_positions
 
 from fairchem.core.datasets.atomic_data import AtomicData
 from lammps import lammps
@@ -32,16 +33,23 @@ def check_input_script(input_script: str):
 
 def check_atom_id_match_masses(types_arr, masses):
     for atom_id in types_arr:
-        assert np.allclose(
-            masses[atom_id], atomic_masses[atom_id], atol=1e-1
-        ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        assert np.allclose(masses[atom_id], atomic_masses[atom_id], atol=1e-1), (
+            f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
+        )
 
 
 def atomic_data_from_lammps_data(
-    x, atomic_numbers, nlocal, cell, periodicity, task_name
+    x: np.ndarray | torch.Tensor,
+    atomic_numbers,
+    nlocal,
+    cell,
+    periodicity,
+    task_name,
+    charge: int = 0,
+    spin: int = 0,
 ):
     # TODO: do we need to take of care of wrapping atoms that are outside the cell?
-    pos = torch.tensor(x, dtype=torch.float32)
+    pos = torch.as_tensor(x, dtype=torch.float32)
     pbc = torch.tensor(periodicity, dtype=torch.bool).unsqueeze(0)
     edge_index = torch.empty((2, 0), dtype=torch.long)
     cell_offsets = torch.empty((0, 3), dtype=torch.float32)
@@ -58,8 +66,8 @@ def atomic_data_from_lammps_data(
         edge_index=edge_index,
         cell_offsets=cell_offsets,
         nedges=nedges,
-        charge=torch.LongTensor([0]),
-        spin=torch.LongTensor([0]),
+        charge=torch.LongTensor([charge]),
+        spin=torch.LongTensor([spin]),
         fixed=fixed,
         tags=tags,
         batch=batch,
@@ -116,7 +124,7 @@ def lookup_atomic_number_by_mass(mass_arr: np.ndarray | float) -> np.ndarray | i
     return atomic_numbers
 
 
-def separate_run_commands(input_script: str) -> str:
+def separate_run_commands(input_script: str) -> tuple[list[str], list[str]]:
     lines = input_script.splitlines()
     run_cmds = []
     script = []
@@ -145,37 +153,58 @@ def cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
     return unit_cell_matrix.unsqueeze(0)
 
 
-def fix_external_call_back(lmp, ntimestep, nlocal, tag, x, f):
-    # force copy here, otherwise we can accident modify the original array in lammps
-    # TODO: only need to get atomic numbers once and cache it?
-    # is there a way to check atom types are mapped correctly?
-    atom_type_np = lmp.numpy.extract_atom("type")
-    masses = lmp.numpy.extract_atom("mass")
-    atomic_mass_arr = masses[atom_type_np]
-    atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
-    boxlo, boxhi, xy, yz, xz, periodicity, box_change = lmp.extract_box()
-    cell = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
-    atomic_data = atomic_data_from_lammps_data(
-        x, atomic_numbers, nlocal, cell, periodicity, lmp._task_name
-    )
-    results = lmp._predictor.predict(atomic_data)
-    assert "forces" in results, "forces must be in results"
-    f[:] = results["forces"].cpu().numpy()[:]
-    lmp.fix_external_set_energy_global(FIX_EXT_ID, results["energy"].item())
+class FixExternalCallback:
+    def __init__(self, charge: int = 0, spin: int = 0):
+        self.charge = charge
+        self.spin = spin
 
-    # during NPT for example, box_change should be set to 1 by lammps to allow the cell to change
-    if box_change:
-        # stress is defined as virial/volume in lammps
-        assert "stress" in results, "stress must be in results to compute virial"
-        volume = torch.det(cell).abs().item()
-        v = (results["stress"].cpu() * volume)[0]
-        # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
-        virial_arr = [v[0], v[4], v[8], v[1], v[2], v[5]]
-        lmp.fix_external_set_virial_global(FIX_EXT_ID, virial_arr)
+    def __call__(self, lmp, ntimestep, nlocal, tag, x, f):
+        # force copy here, otherwise we can accident modify the original array in lammps
+        # TODO: only need to get atomic numbers once and cache it?
+        # is there a way to check atom types are mapped correctly?
+        atom_type_np = lmp.numpy.extract_atom("type")
+        masses = lmp.numpy.extract_atom("mass")
+        atomic_mass_arr = masses[atom_type_np]
+        atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
+        boxlo, boxhi, xy, yz, xz, periodicity, box_change = lmp.extract_box()
+        cell = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
+
+        x_wrapped = wrap_positions(
+            x, cell=cell.squeeze().numpy(), pbc=periodicity, eps=0
+        )
+
+        atomic_data = atomic_data_from_lammps_data(
+            x_wrapped,
+            atomic_numbers,
+            nlocal,
+            cell,
+            periodicity,
+            lmp._task_name,
+            charge=self.charge,
+            spin=self.spin,
+        )
+        results = lmp._predictor.predict(atomic_data)
+        assert "forces" in results, "forces must be in results"
+        f[:] = results["forces"].cpu().numpy()[:]
+        lmp.fix_external_set_energy_global(FIX_EXT_ID, results["energy"].item())
+
+        # during NPT for example, box_change should be set to 1 by lammps to allow the cell to change
+        if box_change:
+            # stress is defined as -virial/volume in lammps
+            assert "stress" in results, "stress must be in results to compute virial"
+            volume = torch.det(cell).abs().item()
+            v = (-results["stress"].detach().cpu() * volume)[0].tolist()
+            # virials need to be in this order: xx, yy, zz, xy, xz, yz. https://docs.lammps.org/Library_utility.html#_CPPv437lammps_fix_external_set_virial_globalPvPKcPd
+            virial_arr = [v[0], v[4], v[8], v[1], v[2], v[5]]
+            lmp.fix_external_set_virial_global(FIX_EXT_ID, virial_arr)
 
 
 def run_lammps_with_fairchem(
-    predictor: MLIPPredictUnitProtocol, lammps_input_path: str, task_name: str
+    predictor: MLIPPredictUnitProtocol,
+    lammps_input_path: str,
+    task_name: str,
+    charge: int = 0,
+    spin: int = 0,
 ):
     machine = None
     if "LAMMPS_MACHINE_NAME" in os.environ:
@@ -183,7 +212,7 @@ def run_lammps_with_fairchem(
     lmp = lammps(name=machine, cmdargs=["-nocite", "-log", "none", "-echo", "screen"])
     lmp._predictor = predictor
     lmp._task_name = task_name
-    run_cmds = []
+    # run_cmds = []
     with open(lammps_input_path) as f:
         input_script = f.read()
         check_input_script(input_script)
@@ -191,6 +220,7 @@ def run_lammps_with_fairchem(
         logging.info(f"Running input script: {input_script}")
         lmp.commands_list(script)
         lmp.command(FIX_EXTERNAL_CMD)
+        fix_external_call_back = FixExternalCallback(charge=charge, spin=spin)
         lmp.set_fix_external_callback(FIX_EXT_ID, fix_external_call_back, lmp)
         lmp.commands_list(run_cmds)
     return lmp
@@ -203,7 +233,13 @@ def run_lammps_with_fairchem(
 )
 def main(cfg: DictConfig):
     predict_unit = hydra.utils.instantiate(cfg.predict_unit)
-    lmp = run_lammps_with_fairchem(predict_unit, cfg.lmp_in, cfg.task_name)
+    lmp = run_lammps_with_fairchem(
+        predict_unit,
+        cfg.lmp_in,
+        cfg.task_name,
+        cfg.charge,
+        cfg.spin,
+    )
     # this is required to cleanup the predictor
     del lmp._predictor
 
