@@ -239,7 +239,7 @@ class FAIRChemCalculator(Calculator):
             np.ndarray: The Hessian matrix.
         """
         # Turn on create_graph for the first derivative
-        self.predictor.model.module.output_heads['energyandforcehead'].head.training = True
+        self.predictor.model.module.output_heads["energyandforcehead"].head.training = True
 
         # Convert using the current a2g object
         data_object = self.a2g(atoms)
@@ -272,7 +272,7 @@ class FAIRChemCalculator(Calculator):
                 )[0].flatten().detach().cpu().numpy()
 
         # Turn off create_graph for the first derivative
-        self.predictor.model.module.output_heads['energyandforcehead'].head.training = False
+        self.predictor.model.module.output_heads["energyandforcehead"].head.training = False
 
         return hessian
 
