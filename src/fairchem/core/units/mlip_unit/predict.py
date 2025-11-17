@@ -250,12 +250,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
-        if self.inference_mode.external_graph_gen and data.edge_index.shape[1] == 0:
-            raise ValueError(
-                "Cannot run inference with external graph generation on empty edge index. "
-                "Please ensure the input data has valid edges."
-            )
-
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
