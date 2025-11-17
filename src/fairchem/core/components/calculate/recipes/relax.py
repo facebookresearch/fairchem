@@ -52,5 +52,8 @@ def relax_atoms(
     opt = optimizer_cls(_atoms, logfile=None)
     opt.run(fmax=fmax, steps=steps)
 
-    atoms.info |= {"opt_nsteps": opt.nsteps, "opt_converged": opt.converged()}
+    atoms.info |= {
+        "opt_nsteps": opt.nsteps,
+        "opt_converged": opt.converged(opt.optimizable.get_gradient()),
+    }
     return atoms

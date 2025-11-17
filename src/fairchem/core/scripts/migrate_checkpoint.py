@@ -53,10 +53,10 @@ class RenameUnpickler(pickle.Unpickler):
         return super().find_class(find_new_module_name(module), name)
 
 
-def generate_stress_task_config(dataset_name, rmsd):
+def generate_stress_task_config(dataset_name, task_name, rmsd):
     return {
         "_target_": "fairchem.core.units.mlip_unit.mlip_unit.Task",
-        "name": f"{dataset_name}_stress",
+        "name": task_name,
         "level": "system",
         "property": "stress",
         "loss_fn": {
@@ -151,16 +151,42 @@ def migrate_checkpoint(
         datasets_with_stress = set()
         datasets_to_rmsd = {}
         # find output datasets
-        for task in checkpoint.tasks_config:
-            if "_energy" in task.name:
-                output_dataset_names.add(task.name.replace("_energy", ""))
-                datasets_to_rmsd[task.name.replace("_energy", "")] = task["normalizer"][
-                    "rmsd"
-                ]
-        for dataset_name in output_dataset_names - datasets_with_stress:
+
+        # figure out if this is a UMA like model
+        uma_like_model = any(
+            "_energy" in task.name and "omol" in task.name
+            for task in checkpoint.tasks_config
+        )
+        if uma_like_model:
+            # we dont have tests here , preserving this for uma like model migration
+            for task in checkpoint.tasks_config:
+                if "_energy" in task.name:
+                    output_dataset_names.add(task.name.replace("_energy", ""))
+                    datasets_to_rmsd[task.name.replace("_energy", "")] = task[
+                        "normalizer"
+                    ]["rmsd"]
+            for dataset_name in output_dataset_names - datasets_with_stress:
+                checkpoint.tasks_config.append(
+                    generate_stress_task_config(
+                        dataset_name,
+                        f"{dataset_name}_stress",
+                        datasets_to_rmsd[dataset_name],
+                    )
+                )
+        else:
+            energy_tasks = list(
+                filter(lambda task: task.name == "energy", checkpoint.tasks_config)
+            )
+            assert (
+                len(energy_tasks) == 1
+            ), f"Expected exactly one energy task for non uma like model, found {[task.name for task in energy_tasks]}"
+            energy_task = energy_tasks[0]
+            assert (
+                len(energy_task.datasets) == 1
+            ), f"Expected exactly one dataset for energy task, found {energy_task.datasets}"
             checkpoint.tasks_config.append(
                 generate_stress_task_config(
-                    dataset_name, datasets_to_rmsd[dataset_name]
+                    energy_task.datasets[0], "stress", energy_task["normalizer"]["rmsd"]
                 )
             )
 
