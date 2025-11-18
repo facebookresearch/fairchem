@@ -441,7 +441,7 @@ def test_ac_with_chunking_and_batching(
     merge_mole,
 ):
     monkeypatch.setattr(
-        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_CHUNK_SIZE", chunk_size
+        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE", chunk_size
     )
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     ifs = InferenceSettings(

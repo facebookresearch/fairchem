@@ -78,6 +78,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### Terms of use & privacy policy
+
+Please read the following [Terms of Use](https://opensource.fb.com/legal/terms) and
+[Privacy Policy](https://opensource.fb.com/legal/privacy) covering usage of `fairchem` software and models.
+
 ### Model checkpoints and datasets
 
 Please check each dataset and model for their own licenses.
