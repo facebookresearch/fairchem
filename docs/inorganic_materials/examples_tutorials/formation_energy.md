@@ -53,7 +53,7 @@ from __future__ import annotations
 import pprint
 
 from ase.build import bulk
-from ase.optimize import LBFGS
+from ase.optimize import FIRE
 from quacc.recipes.mlp.core import relax_job
 
 from fairchem.core.calculate.ase_calculator import FAIRChemCalculator, FormationEnergyCalculator
