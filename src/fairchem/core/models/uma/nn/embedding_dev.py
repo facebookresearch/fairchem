@@ -8,11 +8,12 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+from typing import Literal
 
 import torch
 import torch.nn as nn
 
-from .radial import PolynomialEnvelope, RadialMLP
+from .radial import RadialMLP
 
 
 class EdgeDegreeEmbedding(torch.nn.Module):
@@ -40,10 +41,8 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         sphere_channels: int,
         lmax: int,
         mmax: int,
-        max_num_elements: int,
         edge_channels_list,
         rescale_factor,
-        cutoff,
         mappingReduced,
         # Enables activation checkpointing in size of
         # activation_checkpoint_chunk_size edge blocks
@@ -61,47 +60,34 @@ class EdgeDegreeEmbedding(torch.nn.Module):
 
         # Create edge scalar (invariant to rotations) features
         # Embedding function of the atomic numbers
-        self.max_num_elements = max_num_elements
-        self.edge_channels_list = copy.deepcopy(edge_channels_list)
+        edge_channels_list = copy.deepcopy(edge_channels_list)
 
         # Embedding function of distance
-        self.edge_channels_list.append(self.m_0_num_coefficients * self.sphere_channels)
-        self.rad_func = RadialMLP(self.edge_channels_list)
+        edge_channels_list.append(self.m_0_num_coefficients * self.sphere_channels)
+        self.rad_func = RadialMLP(edge_channels_list)
 
         self.rescale_factor = rescale_factor
-
-        self.cutoff = cutoff
-        self.envelope = PolynomialEnvelope(exponent=5)
 
     def forward_chunk(
         self,
         x,
         x_edge,
-        edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
+        edge_envelope,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
         x_edge_m_0 = x_edge_m_0.reshape(
             -1, self.m_0_num_coefficients, self.sphere_channels
         )
-        x_edge_m_pad = torch.zeros(
-            (
-                x_edge_m_0.shape[0],
-                (self.m_all_num_coefficents - self.m_0_num_coefficients),
-                self.sphere_channels,
-            ),
-            device=x_edge_m_0.device,
-            dtype=x_edge_m_0.dtype,
+        x_edge_embedding = torch.nn.functional.pad(
+            x_edge_m_0,
+            (0, 0, 0, (self.m_all_num_coefficents - self.m_0_num_coefficients)),
         )
-        x_edge_embedding = torch.cat((x_edge_m_0, x_edge_m_pad), dim=1)
         x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
-        # envelope
-        dist_scaled = edge_distance / self.cutoff
-        env = self.envelope(dist_scaled)
-        x_edge_embedding = x_edge_embedding * env.view(-1, 1, 1)
+        x_edge_embedding = x_edge_embedding * edge_envelope
 
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
@@ -114,18 +100,18 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
         edge_index,
         wigner_and_M_mapping_inv,
+        edge_envelope,
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
                 x,
                 x_edge,
-                edge_distance,
                 edge_index,
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 node_offset,
             )
 
@@ -135,7 +121,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_inv_partitions = wigner_and_M_mapping_inv.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
-        edge_distance_parititons = edge_distance.split(
+        edge_envelope_partitions = edge_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -145,9 +131,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 self.forward_chunk,
                 x,
                 x_edge_partitions[idx],
-                edge_distance_parititons[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
+                edge_envelope_partitions[idx],
                 node_offset,
                 use_reentrant=False,
             )
@@ -158,17 +144,18 @@ class EdgeDegreeEmbedding(torch.nn.Module):
 class ChgSpinEmbedding(nn.Module):
     def __init__(
         self,
-        embedding_type,
-        embedding_target,
-        embedding_size,
-        grad,
-        scale=1.0,
-    ):
+        embedding_type: Literal["pos_emb", "lin_emb", "rand_emb"],
+        embedding_target: Literal["charge", "spin"],
+        embedding_size: int,
+        grad: bool,
+        scale: float = 1.0,
+    ) -> None:
         super().__init__()
         assert embedding_type in ["pos_emb", "lin_emb", "rand_emb"]
         self.embedding_type = embedding_type
         assert embedding_target in ["charge", "spin"]
         self.embedding_target = embedding_target
+        assert embedding_size % 2 == 0, f"{embedding_size=} must be even"
 
         if self.embedding_target == "charge":
             # 100 is a conservative upper bound

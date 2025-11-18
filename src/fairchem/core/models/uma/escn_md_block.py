@@ -8,10 +8,12 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
+from typing_extensions import Literal
 
 from fairchem.core.common import gp_utils
 from fairchem.core.models.uma.nn.activation import (
@@ -25,6 +27,9 @@ from fairchem.core.models.uma.nn.mole import MOLE
 from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+
+if TYPE_CHECKING:
+    from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 
 
 def set_mole_ac_start_index(module: nn.Module, index: int) -> None:
@@ -40,14 +45,14 @@ class Edgewise(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        edge_channels_list,
-        mappingReduced,
-        SO3_grid,
-        cutoff,
+        edge_channels_list: list[int],
+        mappingReduced: CoefficientMapping,
+        SO3_grid: SO3_Grid,
+        cutoff: float,
         # Enables activation checkpointing of edges in
         # activation_checkpoint_chunk_size size edge blocks
         activation_checkpoint_chunk_size: int | None,
-        act_type: str = "gate",
+        act_type: Literal["gate", "s2"] = "gate",
     ):
         super().__init__()
 
@@ -119,16 +124,28 @@ class Edgewise(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        edge_envelope,
+        total_atoms_across_gp_ranks,
         node_offset: int = 0,
     ):
+        # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
+        if gp_utils.initialized():
+            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                x, total_atoms_across_gp_ranks
+            )
+        else:
+            x_full = x
+
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
-                x,
+                x_full,
+                x.shape[0],
                 x_edge,
                 edge_distance,
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 node_offset,
             )
         edge_index_partitions = edge_index.split(
@@ -143,21 +160,27 @@ class Edgewise(torch.nn.Module):
         edge_distance_parititons = edge_distance.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
+        edge_envelope_partitions = edge_envelope.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
         new_embeddings = []
         # when chunking, we need to keep track of the start index of the chunk and give this information
         # to the mole layers
         ac_mole_start_idx = 0
+
         for idx in range(len(edge_index_partitions)):
             new_embeddings.append(
                 torch.utils.checkpoint.checkpoint(
                     self.forward_chunk,
-                    x,
+                    x_full,
+                    x.shape[0],
                     x_edge_partitions[idx],
                     edge_distance_parititons[idx],
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
+                    edge_envelope_partitions[idx],
                     node_offset,
                     ac_mole_start_idx,
                     use_reentrant=False,
@@ -171,12 +194,14 @@ class Edgewise(torch.nn.Module):
 
     def forward_chunk(
         self,
-        x,
+        x_full,
+        x_original_shape,
         x_edge,
         edge_distance,
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        edge_envelope,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
@@ -184,13 +209,8 @@ class Edgewise(torch.nn.Module):
         # work properly with MoLE together
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
-        if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
-            x_source = x_full[edge_index[0]]
-            x_target = x_full[edge_index[1]]
-        else:
-            x_source = x[edge_index[0]]
-            x_target = x[edge_index[1]]
+        x_source = x_full[edge_index[0]]
+        x_target = x_full[edge_index[1]]
 
         x_message = torch.cat((x_source, x_target), dim=2)
 
@@ -206,17 +226,14 @@ class Edgewise(torch.nn.Module):
 
             x_message = self.so2_conv_2(x_message, x_edge)
 
-            # envelope
-            dist_scaled = edge_distance / self.cutoff
-            env = self.envelope(dist_scaled)
-            x_message = x_message * env.view(-1, 1, 1)
+            x_message = x_message * edge_envelope
 
             # Rotate back the irreps
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
 
         # Compute the sum of the incoming neighboring messages for each target node
         new_embedding = torch.zeros(
-            (x.shape[0],) + x_message.shape[1:],
+            (x_original_shape,) + x_message.shape[1:],
             dtype=x_message.dtype,
             device=x_message.device,
         )
@@ -234,7 +251,7 @@ class SpectralAtomwise(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        SO3_grid,
+        SO3_grid: SO3_Grid,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -277,7 +294,7 @@ class GridAtomwise(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        SO3_grid,
+        SO3_grid: SO3_Grid,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -311,13 +328,13 @@ class eSCNMD_Block(torch.nn.Module):
         hidden_channels: int,
         lmax: int,
         mmax: int,
-        mappingReduced,
-        SO3_grid,
+        mappingReduced: CoefficientMapping,
+        SO3_grid: SO3_Grid,
         edge_channels_list: list[int],
         cutoff: float,
-        norm_type: str,
-        act_type: str,
-        ff_type: str,
+        norm_type: Literal["layer_norm", "layer_norm_sh", "rms_norm_sh"],
+        act_type: Literal["gate", "s2"],
+        ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
     ) -> None:
         super().__init__()
@@ -372,6 +389,8 @@ class eSCNMD_Block(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        edge_envelope,
+        total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -389,7 +408,9 @@ class eSCNMD_Block(torch.nn.Module):
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
-                node_offset,
+                edge_envelope,
+                total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
+                node_offset=node_offset,
             )
             x = x + x_res
 

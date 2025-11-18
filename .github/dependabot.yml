@@ -6,6 +6,17 @@ updates:
   directory: "/"
   schedule:
     interval: weekly
+  labels:
+    - "no-op"
+    - "dependencies"
+  commit-message:
+    # Prefix all commit messages with "gh-actions: "
+    prefix: "gh-actions"
+  assignees:
+    - "rayg1234"
+    - "misko"
+    - "mshuaibii"
+    - "lbluque"
 
 # Python dependencies
 - package-ecosystem: pip
@@ -15,6 +26,14 @@ updates:
   allow:
   - dependency-type: direct
   - dependency-type: indirect
+  commit-message:
+    # Prefix all commit messages with "pip: "
+    prefix: "pip"
+  assignees:
+    - "rayg1234"
+    - "misko"
+    - "mshuaibii"
+    - "lbluque"
 
 # to ignore certain dependencies
 #ignore:

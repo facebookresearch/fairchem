@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from torchtnt.framework.state import State
     from torchtnt.framework.unit import TEvalUnit, TTrainUnit
 
-
 class TrainEndCallback(Callback):
     def __init__(
         self,
@@ -468,11 +467,11 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
-        (3, 2, 6.207723140716553),
-        (6, 2, 6.207660675048828),
-        (5, 2, 6.207639217376709),
-        (6, 3, 43.085227966308594),
-        (14, 3, 43.08521270751953),
+        (3, 2, 6.2054009437561035),
+        (6, 2, 6.2054009437561035),
+        (5, 2, 6.2054009437561035),
+        (6, 3, 43.08491516113281),
+        (14, 3, 43.08491516113281),
     ],
 )
 def test_train_and_resume_max_epochs(
