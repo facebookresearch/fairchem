@@ -139,13 +139,15 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
             x = self.data_preprocess(data)
 
         # compile forward function
+
         self.forward_fn = (
             torch.compile(self.compiled_forward)
             if self.global_cfg.use_compile
             else self.compiled_forward
         )
+        with record_function("backbone_compile_forward"):
+            results = self.forward_fn(x)
 
-        results = self.forward_fn(x)
         results["displacement"] = displacement
         results["orig_cell"] = orig_cell
         return results
@@ -214,7 +216,8 @@ class AllScAIPDirectForceHead(AllScAIPHeadBase):
             if self.global_cfg.use_compile
             else self.compiled_forward
         )
-        force_output = self.forward_fn(emb)  # type: ignore
+        with record_function("force_head_compile_forward"):
+            force_output = self.forward_fn(emb)  # type: ignore
         return unpad_results(
             results={"forces": force_output},
             data=emb["data"],
@@ -260,7 +263,8 @@ class AllScAIPEnergyHead(AllScAIPHeadBase):
             else self.compiled_forward
         )
 
-        energy_output = self.forward_fn(emb)  # type: ignore
+        with record_function("energy_head_compile_forward"):
+            energy_output = self.forward_fn(emb)  # type: ignore
         if len(energy_output.shape) == 0:
             energy_output = energy_output.unsqueeze(0)
         return unpad_results(
@@ -297,7 +301,8 @@ class AllScAIPGradientEnergyForceStressHead(AllScAIPEnergyHead):  # type: ignore
             stress_key = "stress"
 
         outputs = {}
-        energy_output = self.compiled_forward(emb)
+        with record_function("grad_head_energy"):
+            energy_output = self.compiled_forward(emb)
         if len(energy_output.shape) == 0:
             energy_output = energy_output.unsqueeze(0)
 
@@ -306,31 +311,39 @@ class AllScAIPGradientEnergyForceStressHead(AllScAIPEnergyHead):  # type: ignore
         )
 
         if self.regress_stress:
-            grads = torch.autograd.grad(
-                [energy_output.sum()],
-                [data["pos_original"], emb["displacement"]],
-                create_graph=self.training,
-            )
+            with record_function("grad_head_stress_forces"):
+                grads = torch.autograd.grad(
+                    [energy_output.sum()],
+                    [data["pos_original"], emb["displacement"]],
+                    create_graph=self.training,
+                )
 
-            forces = torch.neg(grads[0])
-            virial = grads[1].view(-1, 3, 3)
-            volume = torch.det(data["cell"]).abs().unsqueeze(-1)
-            stress = virial / volume.view(-1, 1, 1)
-            virial = torch.neg(virial)
-            stress = stress.view(
-                -1, 9
-            )  # NOTE to work better with current Multi-task trainer
-            outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
-            outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
-            data["cell"] = emb["orig_cell"]
+                forces = torch.neg(grads[0])
+                virial = grads[1].view(-1, 3, 3)
+                volume = torch.det(data["cell"]).abs().unsqueeze(-1)
+                stress = virial / volume.view(-1, 1, 1)
+                virial = torch.neg(virial)
+                stress = stress.view(
+                    -1, 9
+                )  # NOTE to work better with current Multi-task trainer
+                outputs[forces_key] = (
+                    {"forces": forces} if self.wrap_property else forces
+                )
+                outputs[stress_key] = (
+                    {"stress": stress} if self.wrap_property else stress
+                )
+                data["cell"] = emb["orig_cell"]
         elif self.regress_forces:
-            forces = (
-                -1
-                * torch.autograd.grad(
-                    energy_output.sum(), data["pos"], create_graph=self.training
-                )[0]
-            )
-            outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+            with record_function("grad_head_forces"):
+                forces = (
+                    -1
+                    * torch.autograd.grad(
+                        energy_output.sum(), data["pos"], create_graph=self.training
+                    )[0]
+                )
+                outputs[forces_key] = (
+                    {"forces": forces} if self.wrap_property else forces
+                )
 
         return unpad_results(
             results=outputs,

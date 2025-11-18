@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
+from torch.profiler import record_function
 
 if TYPE_CHECKING:
     from fairchem.core.models.allscaip.configs import (
@@ -72,22 +73,25 @@ class GraphAttentionBlock(nn.Module):
         neighbor_reps: torch.Tensor,
     ):
         # graph messages: (num_nodes, num_neighbors, hidden_dim)
-
-        # 1. neighborhood self attention
-        neighbor_reps = self.neighborhood_attention(data, neighbor_reps)
+        with record_function("neighborhood_attention"):
+            # 1. neighborhood self attention
+            neighbor_reps = self.neighborhood_attention(data, neighbor_reps)
 
         # get node reps via self-loop
         node_reps = neighbor_reps[:, 0]
 
         # edge ffn
-        edge_reps = self.edge_ffn(neighbor_reps[:, 1:])
+        with record_function("edge_ffn"):
+            edge_reps = self.edge_ffn(neighbor_reps[:, 1:])
 
         if self.use_node_path:
             # 3. node self attention
-            node_reps = self.node_attention(data, node_reps)
+            with record_function("node_attention"):
+                node_reps = self.node_attention(data, node_reps)
 
         # 4. node ffn
-        node_reps = self.node_ffn(node_reps)
+        with record_function("node_ffn"):
+            node_reps = self.node_ffn(node_reps)
 
         # restore neighbor reps
         neighbor_reps = torch.cat([node_reps.unsqueeze(1), edge_reps], dim=1)
