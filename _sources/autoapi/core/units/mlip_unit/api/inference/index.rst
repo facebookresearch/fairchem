@@ -173,12 +173,6 @@ Module Contents
 
 
 
-   .. py:attribute:: edge_chunk_size
-      :type:  int | None
-      :value: None
-
-
-
 .. py:function:: inference_settings_default()
 
 .. py:function:: inference_settings_turbo()
