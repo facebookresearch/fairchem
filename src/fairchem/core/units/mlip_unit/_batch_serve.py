@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+from multiprocessing import cpu_count
 from typing import TYPE_CHECKING
 
 import ray
@@ -20,10 +21,9 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
-logger = logging.getLogger("ray")
-
-
-@serve.deployment(max_ongoing_requests=100)
+@serve.deployment(
+    serve.schema.LoggingConfig(log_level="WARNING"), max_ongoing_requests=100
+)
 class BatchPredictServer:
     """
     Ray Serve deployment that batches incoming inference requests.
@@ -128,7 +128,7 @@ class BatchPredictServer:
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
     max_batch_size: int = 32,
-    batch_wait_timeout_s: float = 0.05,
+    batch_wait_timeout_s: float = 0.1,
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
     deployment_name: str = "predict-server",
@@ -149,20 +149,38 @@ def setup_batch_predict_server(
     Returns:
         Ray Serve deployment handle that can be used to initialize BatchServerPredictUnit
     """
+    cpu_per_actor = (
+        ray_actor_options.get("num_cpus", 1)
+        if ray_actor_options
+        else min(cpu_count(), 4)
+    )
+
+    if ray_actor_options is None:
+        ray_actor_options = {}
+
+    if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
+        # assign 1 GPU per replica by default if using GPU device
+        ray_actor_options["num_gpus"] = 1
+
+    if "num_cpus" not in ray_actor_options:
+        ray_actor_options["num_cpus"] = cpu_per_actor
+
     if not ray.is_initialized():
         ray.init(
-            log_to_driver=False, logging_config=ray.LoggingConfig(log_level="ERROR")
+            log_to_driver=False,
+            logging_config=ray.LoggingConfig(log_level="WARNING"),
+            num_cpus=cpu_per_actor * num_replicas,
         )
         logging.info("Ray initialized by setup_batch_predict_server")
 
-    serve.start()
+    serve.start(
+        logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+        log_to_driver=False,
+    )
     logging.info("Ray Serve started by setup_batch_predict_server")
 
     predict_unit_ref = ray.put(predict_unit)
     logging.info("Predict unit stored in Ray object store")
-
-    if ray_actor_options is None:
-        ray_actor_options = {}
 
     deployment = BatchPredictServer.options(
         num_replicas=num_replicas,
