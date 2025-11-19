@@ -479,9 +479,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         if not ray.is_initialized():
             # in CI envrionment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
             if os.environ.get("CI"):
+                logging.info(
+                    f"CI environment detected, initializing ray with limited CPUs: {num_workers_per_node}"
+                )
                 ray.init(
                     logging_level=log_level,
-                    cpusnum_cpus=num_workers_per_node,
+                    num_cpus=num_workers_per_node,
                     runtime_env={
                         "env_vars": {"RAY_DEBUG": "1"},
                     },
