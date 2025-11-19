@@ -29,6 +29,22 @@ except ImportError:
     ray_serve_installed = False
 
 
+class ExecutorProtocol(Protocol):
+    def submit(self, fn, *args, **kwargs): ...
+    def map(self, fn, *iterables, **kwargs): ...
+    def shutdown(self, wait: bool = True): ...
+
+
+def _get_concurrency_backend(
+    backend: Literal["threads"], options: dict
+) -> ExecutorProtocol:
+    """Get a backend to run ASE calculations concurrently."""
+    if backend == "threads":
+        return ThreadPoolExecutor(**options)
+    else:
+        raise ValueError(f"Invalid concurrency backend: {backend}")
+
+
 @requires(ray_serve_installed, message="Requires `ray[serve]` to be installed")
 class InferenceBatcher:
     """
@@ -105,19 +121,3 @@ class InferenceBatcher:
     def __del__(self):
         """Cleanup on deletion."""
         self.shutdown(wait=False)
-
-
-class ExecutorProtocol(Protocol):
-    def submit(self, fn, *args, **kwargs): ...
-    def map(self, fn, *iterables, **kwargs): ...
-    def shutdown(self, wait: bool = True): ...
-
-
-def _get_concurrency_backend(
-    backend: Literal["threads"], options: dict
-) -> ExecutorProtocol:
-    """Get a backend to run ASE calculations concurrently."""
-    if backend == "threads":
-        return ThreadPoolExecutor(**options)
-    else:
-        raise ValueError(f"Invalid concurrency backend: {backend}")
