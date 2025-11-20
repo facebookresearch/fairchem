@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import random
 from contextlib import suppress
-
+import ray
 import numpy as np
 import pytest
 import torch
-
 import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core.common import distutils
 
@@ -140,6 +139,12 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
+    ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
+    yield
+    ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
