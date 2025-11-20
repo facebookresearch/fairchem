@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import contextlib
+
 import numpy as np
 import numpy.testing as npt
 import pytest
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, molecule
+
+import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
+from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
-import fairchem.core.common.gp_utils as gp_utils
-from fairchem.core.common import distutils
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
@@ -31,7 +34,7 @@ def get_fcc_carbon_xtal(
     return sampled_atoms
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def uma_predict_unit(request):
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     return pretrained_mlip.get_predict_unit(uma_models[0])
@@ -199,16 +202,16 @@ def test_parallel_predict_unit_batch(workers, device):
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    
+
     # Create H2O and O molecules batch
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
     h2o.pbc = True
-    
+
     o_atom = molecule("O")
     o_atom.info.update({"charge": 0, "spin": 2})  # triplet oxygen
     o_atom.pbc = True
-    
+
     h2o_data = AtomicData.from_ase(
         h2o,
         task_name="omol",
@@ -217,7 +220,7 @@ def test_parallel_predict_unit_batch(workers, device):
     )
     o_data = AtomicData.from_ase(
         o_atom,
-        task_name="omol", 
+        task_name="omol",
         r_data_keys=["spin", "charge"],
         molecule_cell_size=120,
     )
@@ -318,3 +321,139 @@ def test_original_out_of_plane_forces(mol_name):
     forces = atoms.get_forces()
     print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
     assert np.abs(forces[:, 0]).max() < FORCE_TOL
+
+
+@pytest.fixture()
+def batch_server_setup(uma_predict_unit):
+    """Set up a batch server for testing."""
+    pytest.importorskip("ray.serve", reason="ray[serve] not installed")
+    import ray
+    from ray import serve
+
+    from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
+
+    # Ensure Ray is properly shut down before initializing
+    if ray.is_initialized():
+        with contextlib.suppress(Exception):
+            serve.shutdown()
+        ray.shutdown()
+
+    # Initialize Ray with specific configuration
+    ray.init(
+        ignore_reinit_error=True,
+        num_cpus=4,
+        num_gpus=1 if torch.cuda.is_available() else 0,
+        logging_level="ERROR",  # Reduce noise in test output
+    )
+
+    # Setup the batch server
+    server_handle = setup_batch_predict_server(
+        predict_unit=uma_predict_unit,
+        max_batch_size=8,
+        batch_wait_timeout_s=0.05,
+        num_replicas=1,
+        ray_actor_options={
+            "num_gpus": 1 if torch.cuda.is_available() else 0,
+            "num_cpus": 2,
+        },
+    )
+
+    yield (
+        server_handle,
+        uma_predict_unit.dataset_to_tasks,
+        getattr(uma_predict_unit, "atom_refs", None),
+    )
+
+    # Cleanup
+    try:
+        serve.shutdown()
+    except Exception as e:
+        print(f"Warning: Error during serve shutdown: {e}")
+    try:
+        ray.shutdown()
+    except Exception as e:
+        print(f"Warning: Error during ray shutdown: {e}")
+
+
+@pytest.mark.gpu()
+def test_batch_server_predict_unit_with_calculator(
+    batch_server_setup, uma_predict_unit
+):
+    """Test BatchServerPredictUnit works with FAIRChemCalculator."""
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+
+    server_handle, dataset_to_tasks, atom_refs = batch_server_setup
+
+    batch_predict_unit = BatchServerPredictUnit(
+        server_handle=server_handle,
+        dataset_to_tasks=dataset_to_tasks,
+        atom_refs=atom_refs,
+    )
+
+    atoms = bulk("Cu")
+    atoms.calc = FAIRChemCalculator(batch_predict_unit, task_name="omat")
+
+    atoms_ = bulk("Cu")
+    atoms_.calc = FAIRChemCalculator(uma_predict_unit, task_name="omat")
+
+    energy = atoms.get_potential_energy()
+    forces = atoms.get_forces()
+    stress = atoms.get_stress(voigt=False)
+
+    energy_ = atoms_.get_potential_energy()
+    forces_ = atoms_.get_forces()
+    stress_ = atoms_.get_stress(voigt=False)
+
+    npt.assert_allclose(
+        energy,
+        energy_,
+        atol=ATOL,
+    )
+    npt.assert_allclose(
+        forces,
+        forces_,
+        atol=ATOL,
+    )
+    npt.assert_allclose(
+        stress,
+        stress_,
+        atol=ATOL,
+    )
+
+
+@pytest.mark.gpu()
+def test_batch_server_predict_unit_multiple_systems(batch_server_setup):
+    """Test BatchServerPredictUnit with multiple concurrent requests."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
+
+    server_handle, dataset_to_tasks, atom_refs = batch_server_setup
+
+    batch_predict_unit = BatchServerPredictUnit(
+        server_handle=server_handle,
+        dataset_to_tasks=dataset_to_tasks,
+        atom_refs=atom_refs,
+    )
+
+    atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
+    atomic_data_list = [
+        AtomicData.from_ase(atoms, task_name="omat") for atoms in atoms_list
+    ]
+
+    # Submit concurrent predictions
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(batch_predict_unit.predict, data)
+            for data in atomic_data_list
+        ]
+        results = [future.result() for future in futures]
+
+    # Check all predictions completed successfully
+    assert len(results) == len(atoms_list)
+    for i, preds in enumerate(results):
+        assert "energy" in preds
+        assert "forces" in preds
+        assert "stress" in preds
+        assert preds["energy"].shape == (1,)
+        assert preds["forces"].shape == (len(atoms_list[i]), 3)
