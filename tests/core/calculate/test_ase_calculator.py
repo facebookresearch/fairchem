@@ -503,13 +503,13 @@ def test_formation_energy_calculator_mp_corrections_omat_task(single_mlip_predic
             base_calc, apply_corrections=None
         )
         atoms.calc = formation_calc_corrected
-        corrected_energy = bulk_atoms.get_potential_energy()
+        corrected_energy = atoms.get_potential_energy()
 
         # Without corrections
         atoms = bulk("MgO", "rocksalt", a=4.213)
         formation_calc = FormationEnergyCalculator(base_calc, apply_corrections=False)
         atoms.calc = formation_calc
-        energy = bulk_atoms.get_potential_energy()
+        energy = atoms.get_potential_energy()
 
         assert isinstance(energy, float)
         assert isinstance(corrected_energy, float)
