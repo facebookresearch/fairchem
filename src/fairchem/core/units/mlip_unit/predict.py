@@ -436,6 +436,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         assert_on_nans: bool = False,
         num_workers: int = 1,
         num_workers_per_node: int = 8,
+        log_level: int = logging.INFO,
     ):
         super().__init__()
         _mlip_pred_unit = MLIPPredictUnit(
@@ -461,22 +462,29 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         }
 
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             force=True,
             stream=sys.stdout,
             format="%(asctime)s %(levelname)s [%(processName)s] %(name)s: %(message)s",
         )
         # Optional: keep Ray/uvicorn chatty logs in check
-        logging.getLogger("ray").setLevel(logging.INFO)
-        logging.getLogger("uvicorn").setLevel(logging.INFO)
+        logging.getLogger("ray").setLevel(log_level)
+        logging.getLogger("uvicorn").setLevel(log_level)
         if not ray.is_initialized():
-            ray.init(
-                logging_level=logging.INFO,
-                num_cpus=num_workers_per_node,
-                # runtime_env={
-                #     "env_vars": {"RAY_DEBUG": "1"},
-                # },
-            )
+            # in CI envrionment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
+            if os.environ.get("CI"):
+                logging.info(
+                    f"CI environment detected, initializing ray with limited CPUs: {num_workers_per_node}"
+                )
+                ray.init(
+                    logging_level=log_level,
+                    num_cpus=num_workers_per_node,
+                    runtime_env={
+                        "env_vars": {"RAY_DEBUG": "1"},
+                    },
+                )
+            else:
+                ray.init(logging_level=log_level)
 
         self.atomic_data_on_device = None
 
