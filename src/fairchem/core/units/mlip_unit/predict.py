@@ -237,9 +237,18 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 assert (
                     data.natoms.numel() == 1
                 ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
+
+                #merge the backbone
                 self.model.module.backbone = (
                     self.model.module.backbone.merge_MOLE_model(data.clone())
                 )
+
+                #merge any heads
+                new_output_heads=torch.nn.ModuleDict()
+                for head_name , head in self.model.module.output_heads.items():
+                    new_output_heads[head_name]=head.merge_MOLE_model(data.clone())
+                self.model.module.output_heads=new_output_heads
+                
                 self.model.eval()
             # move to device
             self.move_to_device()
@@ -570,5 +579,4 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         return self.local_rank0.predict(self.atomic_data_on_device)
 
     @property
-    def dataset_to_tasks(self) -> dict[str, list]:
-        return self._dataset_to_tasks
+    de
