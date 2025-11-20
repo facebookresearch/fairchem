@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from ase.build import make_supercell
 from ase.io import read
-from torch.profiler import ProfilerActivity, profile
+from torch.profiler import ProfilerActivity, profile, record_function
 
 from fairchem.core.common import distutils
 from fairchem.core.common.profiler_utils import get_profile_schedule
@@ -61,17 +61,21 @@ def ase_to_graph(
     return atomicdata_list_to_batch([data_object])
 
 
-def get_qps(data, predictor, warmups: int = 10, timeiters: int = 100):
+def get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: int = 5):
     def timefunc():
         predictor.predict(data)
-        torch.cuda.synchronize()
+        # torch.cuda.synchronize()
+        torch.distributed.barrier()
 
     for _ in range(warmups):
         timefunc()
         logging.info(f"memory allocated: {torch.cuda.memory_allocated()/(1024**3)}")
 
-    result = timeit.timeit(timefunc, number=timeiters)
-    qps = timeiters / result
+    result = timeit.repeat(timefunc, number=timeiters, repeat=repeats)
+    logging.info(
+        f"Timing results over {repeats} repeats: {result}, mean: {np.mean(result)}, std: {np.std(result)}"
+    )
+    qps = timeiters / np.mean(result)
     ns_per_day = qps * 24 * 3600 / 1e6
     return qps, ns_per_day
 
@@ -93,10 +97,12 @@ def make_profile(data, predictor, name, save_loc):
         schedule=profile_schedule,
         on_trace_ready=tc,
     ) as p:
+        torch.distributed.barrier()
         for i in range(total_profile_steps):
             predictor.predict(data)
             logging.info(f"done step {i}")
-            torch.cuda.synchronize()
+            with record_function(f"final_barrier_{i}"):
+                torch.distributed.barrier()
             p.step()
 
 
@@ -107,6 +113,7 @@ class InferenceBenchRunner(Runner):
         natoms_list: list[int] | None = None,
         input_system: dict | None = None,
         timeiters: int = 10,
+        repeats: int = 5,
         seed: int = 1,
         device="cuda",
         overrides: dict | None = None,
@@ -191,7 +198,9 @@ class InferenceBenchRunner(Runner):
                 inp = data.clone()
                 if self.generate_traces:
                     make_profile(inp, predictor, name=name, save_loc=self.run_dir)
-                qps, ns_per_day = get_qps(inp, predictor, timeiters=self.timeiters)
+                qps, ns_per_day = get_qps(
+                    inp, predictor, timeiters=self.timeiters, repeats=self.repeats
+                )
                 model_to_qps_data[model_name].append([num_atoms, ns_per_day])
                 logging.info(
                     f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"

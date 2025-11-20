@@ -51,11 +51,12 @@ if TYPE_CHECKING:
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 
 
-def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+def add_n_empty_edges(
+    graph_dict: dict, edges_to_add: int, cutoff: float, node_offset: int = 0
+):
     graph_dict["edge_index"] = torch.cat(
         (
-            graph_dict["edge_index"].new_ones(2, edges_to_add)
-            * graph_dict["node_offset"],
+            graph_dict["edge_index"].new_ones(2, edges_to_add) * node_offset,
             graph_dict["edge_index"],
         ),
         dim=1,
@@ -77,7 +78,7 @@ def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
 
 
 @torch.compiler.disable
-def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
     n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
 
     if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
@@ -92,7 +93,7 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
         # contribute to embeddings or message passing; they only ensure the edge count
         # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
         # activation checkpointing and avoiding empty tensor edge cases.
-        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
 @registry.register_model("escnmd_backbone")
@@ -393,7 +394,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
             node_partition = torch.tensor_split(
-                torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
+                torch.arange(
+                    len(atomic_numbers_full), device=atomic_numbers_full.device
+                ),
                 gp_utils.get_gp_world_size(),
             )[gp_utils.get_gp_rank()]
             assert (
@@ -470,7 +473,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         #     data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
         if self.edge_chunk_size is not None:
-            pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
+            pad_edges(
+                graph_dict,
+                self.edge_chunk_size,
+                self.cutoff,
+                data_dict["gp_node_offset"],
+            )
 
         return graph_dict
 
