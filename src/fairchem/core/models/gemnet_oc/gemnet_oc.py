@@ -101,8 +101,6 @@ class GemNetOCBackbone(nn.Module):
         after adding the atom embedding.
     num_atom_emb_layers: int
         Number of residual blocks for transforming atom embeddings.
-    num_global_out_layers: int
-        Number of final residual blocks before the output.
 
     regress_forces: bool
         Whether to predict forces. Default: True
@@ -204,8 +202,8 @@ class GemNetOCBackbone(nn.Module):
         num_atom: int,
         num_output_afteratom: int,
         num_atom_emb_layers: int = 0,
-        num_global_out_layers: int = 2,
         regress_forces: bool = True,
+        regress_stress: bool = False,
         direct_forces: bool = False,
         use_pbc: bool = True,
         use_pbc_single: bool = False,
@@ -282,6 +280,7 @@ class GemNetOCBackbone(nn.Module):
         self.direct_forces = direct_forces
         self.forces_coupled = forces_coupled
         self.regress_forces = regress_forces
+        self.regress_stress = regress_stress
         self.scaler = ForceScaler(enabled=scale_backprop_forces)
 
         self.init_basis_functions(
@@ -838,7 +837,7 @@ class GemNetOCBackbone(nn.Module):
 
         if max_neighbors is not None:
             edge_mask, subgraph["num_neighbors"] = get_max_neighbors_mask(
-                natoms=data_dict["atomic_numbers"].size(0),
+                natoms=data_dict["natoms"],
                 index=subgraph["edge_index"][1],
                 atom_distance=subgraph["distance"],
                 max_num_neighbors_threshold=max_neighbors,
@@ -853,6 +852,7 @@ class GemNetOCBackbone(nn.Module):
         empty_image = subgraph["num_neighbors"] == 0
         if torch.any(empty_image):
             logging.warning(f"An image has no neighbors: {data_dict}")
+
         return subgraph
 
     def generate_graph_dict(self, data_dict, cutoff, max_neighbors):
@@ -907,7 +907,7 @@ class GemNetOCBackbone(nn.Module):
             select_neighbors = max_neighbors
 
         return self.subselect_edges(
-            data=data,
+            data_dict=data,
             graph=graph,
             cutoff=select_cutoff,
             max_neighbors=select_neighbors,
@@ -1240,7 +1240,6 @@ class GemNetOCBackbone(nn.Module):
     @conditional_grad(torch.enable_grad())
     def forward(self, data: Batch) -> dict[str, torch.Tensor]:
         pos = data.pos
-        batch = data.batch
         atomic_numbers = data.atomic_numbers.long()
         num_atoms = atomic_numbers.shape[0]
         data.batch_full = data.batch
