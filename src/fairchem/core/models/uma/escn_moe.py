@@ -305,6 +305,9 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]
+        self.non_merged_dataset_names = [
+            name for name in self.dataset_names if name != self.merged_on_dataset
+        ]
         return self
 
     @conditional_grad(torch.enable_grad())
@@ -325,11 +328,10 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
                 nan_tensor = head_output[key].new_full(
                     head_output[key].shape, float("nan")
                 )
-                for dataset in self.dataset_names:
-                    if dataset != self.merged_on_dataset:
-                        full_output[f"{dataset}_{key}"] = (
-                            {key: nan_tensor} if self.wrap_property else nan_tensor
-                        )
+                for dataset in self.non_merged_dataset_names:
+                    full_output[f"{dataset}_{key}"] = (
+                        {key: nan_tensor} if self.wrap_property else nan_tensor
+                    )
             return full_output
 
         # check that all the input dataset names is a strict subset of dataset names
