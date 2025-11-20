@@ -12,6 +12,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.testing as npt
 import pytest
 import torch
 from ase import Atoms, units
@@ -129,7 +130,7 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
         atoms.calc = calc
         energy = atoms.get_potential_energy()
         energies.append(energy)
-    np.testing.assert_allclose(energies[0], energies[1])
+    npt.assert_allclose(energies[0], energies[1])
 
 
 def test_no_task_name_single_task():
@@ -394,33 +395,6 @@ def test_random_seed_final_energy():
 
 
 @pytest.mark.gpu()
-def test_external_graph_generation():
-    """Test external_graph_gen=True with different atomic systems"""
-    inference_settings = InferenceSettings(external_graph_gen=True)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings
-    )
-
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
-
-    # Test with different periodic systems
-    systems = [
-        bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2)),
-        fcc111("Pt", size=(2, 2, 3), vacuum=10.0, periodic=True),
-    ]
-
-    for atoms in systems:
-        atoms.calc = calc
-
-        energy = atoms.get_potential_energy()
-        assert isinstance(energy, float)
-
-        forces = atoms.get_forces()
-        assert isinstance(forces, np.ndarray)
-        assert forces.shape == (len(atoms), 3)
-
-
-@pytest.mark.gpu()
 def test_external_graph_generation_molecular_system():
     inference_settings = InferenceSettings(external_graph_gen=True)
     predict_unit = pretrained_mlip.get_predict_unit(
@@ -463,7 +437,8 @@ def test_external_graph_gen_vs_internal():
     calc_internal = FAIRChemCalculator(predict_unit_internal, task_name="omat")
 
     # Test with a simple bulk system
-    atoms_external = bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
+    atoms_external = bulk("Fe", "bcc", a=2).repeat((2, 1, 1))
+    atoms_external.rattle(0.1)
     atoms_internal = atoms_external.copy()
 
     atoms_external.calc = calc_external
@@ -475,23 +450,8 @@ def test_external_graph_gen_vs_internal():
     forces_external = atoms_external.get_forces()
     forces_internal = atoms_internal.get_forces()
 
-    np.testing.assert_allclose(energy_external, energy_internal, rtol=1e-4, atol=1e-4)
-
-    force_diff = np.abs(forces_external - forces_internal)
-    max_force_diff = np.max(force_diff)
-
-    assert (
-        max_force_diff < 1e-6
-    ), f"Maximum force difference is {max_force_diff}, which is too large"
-
-    external_force_norm = np.linalg.norm(forces_external)
-    internal_force_norm = np.linalg.norm(forces_internal)
-    relative_diff = abs(external_force_norm - internal_force_norm) / max(
-        external_force_norm, internal_force_norm
-    )
-    assert (
-        relative_diff < 0.1
-    ), f"Force magnitude relative difference is {relative_diff}, which is too large"
+    npt.assert_allclose(energy_external, energy_internal, rtol=1e-6, atol=1e-6)
+    npt.assert_allclose(forces_external, forces_internal, rtol=1e-6, atol=1e-6)
 
 
 def run_md_simulation(calc, steps: int = 10):
