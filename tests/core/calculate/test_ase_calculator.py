@@ -537,7 +537,7 @@ def test_formation_energy_calculator_auto_loads_references(single_mlip_predict_u
     formation_calc = FormationEnergyCalculator(base_calc)
 
     assert formation_calc.element_references is not None
-    assert isinstance(formation_calc.element_references, dict)
+    assert isinstance(formation_calc.element_references["H"], float)
 
 
 def test_formation_energy_calculator_non_fairchemcalculator():
