@@ -246,7 +246,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 # merge any heads
                 new_output_heads = torch.nn.ModuleDict()
                 for head_name, head in self.model.module.output_heads.items():
-                    new_output_heads[head_name] = head.merge_MOLE_model(data.clone())
+                    if hasattr(head, "merge_MOLE_model"):
+                        new_output_heads[head_name] = head.merge_MOLE_model(
+                            data.clone()
+                        )
+                    else:
+                        new_output_heads[head_name] = head
                 self.model.module.output_heads = new_output_heads
 
                 self.model.eval()
