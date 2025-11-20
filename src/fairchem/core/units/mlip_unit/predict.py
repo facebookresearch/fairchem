@@ -132,6 +132,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
             )
+        if inference_settings.edge_chunk_size is not None:
+            overrides["backbone"]["edge_chunk_size"] = (
+                inference_settings.edge_chunk_size
+            )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
                 "otf_graph"
@@ -245,12 +249,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 )
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
-
-        if self.inference_settings.external_graph_gen and data.edge_index.shape[1] == 0:
-            raise ValueError(
-                "Cannot run inference with external graph generation on empty edge index. "
-                "Please ensure the input data has valid edges."
-            )
 
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
@@ -474,6 +472,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         if not ray.is_initialized():
             ray.init(
                 logging_level=logging.INFO,
+                num_cpus=num_workers_per_node,
                 # runtime_env={
                 #     "env_vars": {"RAY_DEBUG": "1"},
                 # },
