@@ -27,7 +27,6 @@ Classes
 .. autoapisummary::
 
    core.calculate.ase_calculator.FAIRChemCalculator
-   core.calculate.ase_calculator.FormationEnergyCalculator
 
 
 Module Contents
@@ -142,48 +141,6 @@ Module Contents
 
       :param atoms: The atomic structure containing charge and spin information.
       :type atoms: Atoms
-
-
-
-.. py:class:: FormationEnergyCalculator(calculator: ase.calculators.calculator.Calculator, element_references: dict | None = None, apply_corrections: bool | None = None, correction_type: Literal['MP2020', 'OMat24'] = 'OMat24')
-
-   Bases: :py:obj:`ase.calculators.calculator.Calculator`
-
-
-   Base-class for all ASE calculators.
-
-   A calculator must raise PropertyNotImplementedError if asked for a
-   property that it can't calculate.  So, if calculation of the
-   stress tensor has not been implemented, get_stress(atoms) should
-   raise PropertyNotImplementedError.  This can be achieved simply by not
-   including the string 'stress' in the list implemented_properties
-   which is a class member.  These are the names of the standard
-   properties: 'energy', 'forces', 'stress', 'dipole', 'charges',
-   'magmom' and 'magmoms'.
-
-
-   .. py:attribute:: calculator
-
-
-   .. py:attribute:: element_references
-
-
-   .. py:attribute:: apply_corrections
-
-
-   .. py:attribute:: _correction_type
-
-
-   .. py:method:: calculate(atoms: ase.Atoms, properties: list[str], system_changes: list[str]) -> None
-
-      Calculate formation energy by wrapping the base calculator.
-
-      :param atoms: The atomic structure to calculate properties for.
-      :type atoms: Atoms
-      :param properties: The list of properties to calculate.
-      :type properties: list[str]
-      :param system_changes: The list of changes in the system.
-      :type system_changes: list[str]
 
 
 

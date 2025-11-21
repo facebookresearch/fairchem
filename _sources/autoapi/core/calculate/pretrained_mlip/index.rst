@@ -37,7 +37,7 @@ Functions
 
    core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
    core.calculate.pretrained_mlip.get_predict_unit
-   core.calculate.pretrained_mlip.get_reference_energies
+   core.calculate.pretrained_mlip.get_isolated_atomic_energies
 
 
 Module Contents
@@ -66,12 +66,6 @@ Module Contents
 
 
    .. py:attribute:: atom_refs
-      :type:  dict | None
-      :value: None
-
-
-
-   .. py:attribute:: form_elem_refs
       :type:  dict | None
       :value: None
 
@@ -108,15 +102,14 @@ Module Contents
    :raises KeyError: If the specified model_name is not found in available models.
 
 
-.. py:function:: get_reference_energies(model_name: str, reference_type: Literal['atom_refs', 'form_elem_refs'] = 'atom_refs', cache_dir: str = CACHE_DIR) -> dict
+.. py:function:: get_isolated_atomic_energies(model_name: str, cache_dir: str = CACHE_DIR) -> dict
 
    Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
 
    :param model_name: Name of the model to load from available pretrained models.
-   :param reference_type: Type of references file to download: atom_refs or bulk_refs.
    :param cache_dir: Path to folder where files will be stored. Default is "~/.cache/fairchem"
 
-   :returns: Atomic or bulk phase element reference data
+   :returns: Atomic element reference data
 
    :raises KeyError: If the specified model_name is not found in available models.
 

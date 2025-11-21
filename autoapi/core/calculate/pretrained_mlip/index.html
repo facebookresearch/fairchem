@@ -273,7 +273,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../inorganic_materials/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/bulk_stability.html">Stability</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
 </ul>
@@ -640,7 +640,6 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.subfolder"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.subfolder</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.revision"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.revision</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.atom_refs</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.form_elem_refs"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.form_elem_refs</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.PretrainedModels"><code class="docutils literal notranslate"><span class="pre">PretrainedModels</span></code></a><ul class="nav section-nav flex-column">
@@ -651,7 +650,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.available_models"><code class="docutils literal notranslate"><span class="pre">available_models</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name"><code class="docutils literal notranslate"><span class="pre">pretrained_checkpoint_path_from_name()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.get_predict_unit"><code class="docutils literal notranslate"><span class="pre">get_predict_unit()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.get_reference_energies"><code class="docutils literal notranslate"><span class="pre">get_reference_energies()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.get_isolated_atomic_energies"><code class="docutils literal notranslate"><span class="pre">get_isolated_atomic_energies()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -708,7 +707,7 @@ LICENSE file in the root directory of this source tree.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#core.calculate.pretrained_mlip.get_predict_unit" title="core.calculate.pretrained_mlip.get_predict_unit"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_predict_unit</span></code></a>(...)</p></td>
 <td><p>Retrieves a prediction unit for a specified model.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.calculate.pretrained_mlip.get_reference_energies" title="core.calculate.pretrained_mlip.get_reference_energies"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_reference_energies</span></code></a>(→ dict)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.calculate.pretrained_mlip.get_isolated_atomic_energies" title="core.calculate.pretrained_mlip.get_isolated_atomic_energies"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_isolated_atomic_energies</span></code></a>(→ dict)</p></td>
 <td><p>Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR</p></td>
 </tr>
 </tbody>
@@ -743,11 +742,6 @@ LICENSE file in the root directory of this source tree.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs">
 <span class="sig-name descname"><span class="pre">atom_refs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="core.calculate.pretrained_mlip.HuggingFaceCheckpoint.form_elem_refs">
-<span class="sig-name descname"><span class="pre">form_elem_refs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.form_elem_refs" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -805,19 +799,18 @@ we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="core.calculate.pretrained_mlip.get_reference_energies">
-<span class="sig-prename descclassname"><span class="pre">core.calculate.pretrained_mlip.</span></span><span class="sig-name descname"><span class="pre">get_reference_energies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reference_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'atom_refs'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'form_elem_refs'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'atom_refs'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">CACHE_DIR</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#core.calculate.pretrained_mlip.get_reference_energies" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.calculate.pretrained_mlip.get_isolated_atomic_energies">
+<span class="sig-prename descclassname"><span class="pre">core.calculate.pretrained_mlip.</span></span><span class="sig-name descname"><span class="pre">get_isolated_atomic_energies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">CACHE_DIR</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#core.calculate.pretrained_mlip.get_isolated_atomic_energies" title="Link to this definition">#</a></dt>
 <dd><p>Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>model_name</strong> – Name of the model to load from available pretrained models.</p></li>
-<li><p><strong>reference_type</strong> – Type of references file to download: atom_refs or bulk_refs.</p></li>
 <li><p><strong>cache_dir</strong> – Path to folder where files will be stored. Default is “~/.cache/fairchem”</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Atomic or bulk phase element reference data</p>
+<dd class="field-even"><p>Atomic element reference data</p>
 </dd>
 <dt class="field-odd">Raises<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>KeyError</strong> – If the specified model_name is not found in available models.</p>
@@ -902,7 +895,6 @@ we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.subfolder"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.subfolder</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.revision"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.revision</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.atom_refs</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.form_elem_refs"><code class="docutils literal notranslate"><span class="pre">HuggingFaceCheckpoint.form_elem_refs</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.PretrainedModels"><code class="docutils literal notranslate"><span class="pre">PretrainedModels</span></code></a><ul class="nav section-nav flex-column">
@@ -913,7 +905,7 @@ we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.available_models"><code class="docutils literal notranslate"><span class="pre">available_models</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name"><code class="docutils literal notranslate"><span class="pre">pretrained_checkpoint_path_from_name()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.get_predict_unit"><code class="docutils literal notranslate"><span class="pre">get_predict_unit()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.get_reference_energies"><code class="docutils literal notranslate"><span class="pre">get_reference_energies()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.pretrained_mlip.get_isolated_atomic_energies"><code class="docutils literal notranslate"><span class="pre">get_isolated_atomic_energies()</span></code></a></li>
 </ul>
 </li>
 </ul>
