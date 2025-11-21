@@ -136,6 +136,7 @@ class InferenceBenchRunner(Runner):
         self.generate_traces = generate_traces
         self.expand_supercells = expand_supercells
         self.dataset_name = dataset_name
+        self.repeats = repeats
 
     def run(self) -> None:
         self.run_dir = self.job_config.metadata.results_dir
