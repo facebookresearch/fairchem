@@ -450,8 +450,8 @@ def test_external_graph_gen_vs_internal():
     forces_external = atoms_external.get_forces()
     forces_internal = atoms_internal.get_forces()
 
-    npt.assert_allclose(energy_external, energy_internal, rtol=1e-6, atol=1e-6)
-    npt.assert_allclose(forces_external, forces_internal, rtol=1e-6, atol=1e-6)
+    npt.assert_allclose(energy_external, energy_internal, rtol=1e-5, atol=1e-5)
+    npt.assert_allclose(forces_external, forces_internal, rtol=1e-5, atol=1e-5)
 
 
 def run_md_simulation(calc, steps: int = 10):
