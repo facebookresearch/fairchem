@@ -460,17 +460,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
-        # graph_dict["node_offset"] = 0  # default value
-
-        # if gp_utils.initialized():
-        #     graph_dict = self._init_gp_partitions(
-        #         graph_dict, data_dict["atomic_numbers_full"]
-        #     )
-        #     # create partial atomic numbers and batch tensors for GP
-        #     data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
-        #         graph_dict["node_partition"]
-        #     ]
-        #     data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
         if self.edge_chunk_size is not None:
             pad_edges(
