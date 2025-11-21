@@ -210,6 +210,14 @@ Module Contents
    .. py:attribute:: head
 
 
+   .. py:attribute:: merged_on_dataset
+      :value: None
+
+
+
+   .. py:method:: merge_MOLE_model(data)
+
+
    .. py:method:: forward(data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]
 
       Head forward.
