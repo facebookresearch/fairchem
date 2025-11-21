@@ -281,7 +281,6 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
                 full_output[f"{dataset_name}_{key}"] = (
                     {key: output_tensor} if self.wrap_property else output_tensor
                 )
-        breakpoint()
         return full_output
 
 
