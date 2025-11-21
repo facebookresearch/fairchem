@@ -51,11 +51,12 @@ if TYPE_CHECKING:
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 
 
-def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+def add_n_empty_edges(
+    graph_dict: dict, edges_to_add: int, cutoff: float, node_offset: int = 0
+):
     graph_dict["edge_index"] = torch.cat(
         (
-            graph_dict["edge_index"].new_ones(2, edges_to_add)
-            * graph_dict["node_offset"],
+            graph_dict["edge_index"].new_ones(2, edges_to_add) * node_offset,
             graph_dict["edge_index"],
         ),
         dim=1,
@@ -77,7 +78,7 @@ def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
 
 
 @torch.compiler.disable
-def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
     n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
 
     if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
@@ -92,7 +93,7 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
         # contribute to embeddings or message passing; they only ensure the edge count
         # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
         # activation checkpointing and avoiding empty tensor edge cases.
-        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
 @registry.register_model("escnmd_backbone")
@@ -388,6 +389,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
     def _generate_graph(self, data_dict):
+        data_dict["gp_node_offset"] = 0
+        if gp_utils.initialized():
+            # create the partitions
+            atomic_numbers_full = data_dict["atomic_numbers_full"]
+            node_partition = torch.tensor_split(
+                torch.arange(
+                    len(atomic_numbers_full), device=atomic_numbers_full.device
+                ),
+                gp_utils.get_gp_world_size(),
+            )[gp_utils.get_gp_rank()]
+            assert (
+                node_partition.numel() > 0
+            ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+            data_dict["node_partition"] = node_partition
+
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
@@ -437,20 +453,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
             }
-        graph_dict["node_offset"] = 0  # default value
 
         if gp_utils.initialized():
-            graph_dict = self._init_gp_partitions(
-                graph_dict, data_dict["atomic_numbers_full"]
-            )
-            # create partial atomic numbers and batch tensors for GP
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
-                graph_dict["node_partition"]
+                node_partition
             ]
-            data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
+            data_dict["batch"] = data_dict["batch_full"][node_partition]
+            data_dict["gp_node_offset"] = node_partition.min().item()
 
         if self.edge_chunk_size is not None:
-            pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
+            pad_edges(
+                graph_dict,
+                self.edge_chunk_size,
+                self.cutoff,
+                data_dict["gp_node_offset"],
+            )
 
         return graph_dict
 
@@ -540,7 +557,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 edge_envelope,
-                graph_dict["node_offset"],
+                data_dict["gp_node_offset"],
             )
 
         ###############################################################
@@ -560,7 +577,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
-                    node_offset=graph_dict["node_offset"],
+                    node_offset=data_dict["gp_node_offset"],
                 )
 
         # Final layer norm

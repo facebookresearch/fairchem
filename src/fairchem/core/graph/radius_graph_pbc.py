@@ -443,9 +443,15 @@ def radius_graph_pbc_v2(
     cell_matrix = torch.repeat_interleave(cell_matrix, cells_per_image, dim=0)
     pbc_cell_offsets = torch.bmm(cell_matrix, unit_cell.view(-1, 3, 1)).squeeze(-1)
 
-    # Position of the target atoms for the edges
-    target_atom_pos = atom_pos
-    target_atom_image = data_batch_idxs
+    # If node_partition exists, this means we want to generate only a partial graph
+    # from a subset of target atoms to the entire set of source atoms
+    if hasattr(data, "node_partition"):
+        node_partition = data.node_partition
+        target_atom_pos = atom_pos[node_partition]
+        target_atom_image = data_batch_idxs[node_partition]
+    else:
+        target_atom_pos = atom_pos
+        target_atom_image = data_batch_idxs
 
     # Compute the position of the source atoms for the edges. There are
     # more source atoms than target atoms, since the source atoms are
@@ -729,5 +735,9 @@ def radius_graph_pbc_v2(
         source_cell = source_cell.view(-1, 3)
 
     edge_index = torch.stack((source_idx, target_idx))
+
+    # if we used node_partition, we need to map target indexs back to original indices
+    if hasattr(data, "node_partition"):
+        edge_index[1] = data.node_partition[edge_index[1]]
 
     return edge_index, source_cell, num_neighbors_image
