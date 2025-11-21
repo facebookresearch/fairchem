@@ -242,13 +242,13 @@ Module Contents
    .. py:attribute:: worker_wait_timeout_seconds
 
 
-   .. py:method:: start_head(requirements: dict[str, int | str], executor: str = 'slurm', payload: Optional[Callable[Ellipsis, PayloadReturnT]] = None, **kwargs) -> str
+   .. py:method:: start_head(requirements: dict[str, int | str], name: str = 'default', executor: str = 'slurm', payload: Optional[Callable[Ellipsis, PayloadReturnT]] = None, **kwargs) -> str
 
       Start the head node of the Ray cluster on slurm. You should do this first. Interesting requirements: qos, partition, time, gpus, cpus-per-task, mem-per-gpu, etc.
 
 
 
-   .. py:method:: start_workers(num_workers: int, requirements: dict[str, int | str], executor: str = 'slurm') -> list[str]
+   .. py:method:: start_workers(num_workers: int, requirements: dict[str, int | str], name: str = 'default', executor: str = 'slurm') -> list[str]
 
       Start an array of worker nodes of the Ray cluster on slurm. You should do this after starting a head.
       Interesting requirements: qos, partition, time, gpus, cpus-per-task, mem-per-gpu, etc.

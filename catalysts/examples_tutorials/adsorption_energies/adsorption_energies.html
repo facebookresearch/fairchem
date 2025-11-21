@@ -240,10 +240,12 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
 
+<li class="toctree-l2"><a class="reference internal" href="../../datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../datasets/oc25.html">OC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../models.html">Pretrained models</a></li>
@@ -271,7 +273,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../inorganic_materials/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../inorganic_materials/examples_tutorials/bulk_stability.html">Stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
 </ul>
@@ -389,6 +391,7 @@
 </ul>
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/omat/entries/index.html">data.omat.entries</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
 </ul>
 </details></li>
@@ -719,7 +722,7 @@ document.write(`
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>PosixPath(&#39;/home/runner/work/fairchem/fairchem/src/fairchem/data/oc/databases/pkls/adsorbates.pkl&#39;)
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>PosixPath(&#39;/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/fairchem/data/oc/databases/pkls/adsorbates.pkl&#39;)
 </pre></div>
 </div>
 </div>
@@ -833,22 +836,22 @@ document.write(`
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>                Step[ FC]     Time          Energy          fmax
-BFGSLineSearch:    0[  0] 22:26:39     -130.560599       0.7414
+BFGSLineSearch:    0[  0] 00:29:07     -130.560599       0.7414
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  2] 22:26:39     -130.703192       0.3842
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    1[  2] 00:29:08     -130.703193       0.3842
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[  3] 22:26:39     -130.719019       0.1281
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    2[  3] 00:29:08     -130.719019       0.1281
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[  4] 22:26:39     -130.726698       0.1073
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    3[  4] 00:29:08     -130.726696       0.1073
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[  6] 22:26:39     -130.730349       0.0593
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    4[  6] 00:29:08     -130.730351       0.0591
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[  8] 22:26:39     -130.733413       0.0471
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGSLineSearch:    5[  8] 00:29:08     -130.733406       0.0481
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Elapsed time 1.4 seconds
@@ -1044,15 +1047,15 @@ BFGSLineSearch:    0[  0] 22:26:39     -130.560599       0.7414
 Running data/adslabs/oqmd-349496_H/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.3 seconds for data/adslabs/oqmd-349496_H/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.2 seconds for data/adslabs/oqmd-349496_H/0
 Running data/adslabs/oqmd-349496_H/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.1 seconds for data/adslabs/oqmd-349496_H/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.8 seconds for data/adslabs/oqmd-349496_H/1
 Running data/adslabs/oqmd-349496_H/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 2.9 seconds for data/adslabs/oqmd-349496_H/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.1 seconds for data/adslabs/oqmd-349496_H/2
 Running data/adslabs/oqmd-349496_H/3
 </pre></div>
 </div>
@@ -1060,34 +1063,34 @@ Running data/adslabs/oqmd-349496_H/3
 Running data/adslabs/oqmd-349496_H/4
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.3 seconds for data/adslabs/oqmd-349496_H/4
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.6 seconds for data/adslabs/oqmd-349496_H/4
 Running data/adslabs/oqmd-349496_NNH/0
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-349496_NNH/0
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.0 seconds for data/adslabs/oqmd-349496_NNH/0
 Running data/adslabs/oqmd-349496_NNH/1
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 3.9 seconds for data/adslabs/oqmd-349496_NNH/1
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.1 seconds for data/adslabs/oqmd-349496_NNH/1
 Running data/adslabs/oqmd-349496_NNH/2
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.1 seconds for data/adslabs/oqmd-349496_NNH/2
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 5.5 seconds for data/adslabs/oqmd-349496_NNH/2
 Running data/adslabs/oqmd-349496_NNH/3
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-349496_NNH/3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.7 seconds for data/adslabs/oqmd-349496_NNH/3
 Running data/adslabs/oqmd-349496_NNH/4
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [00:38&lt;00:00, 39.00s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [00:41&lt;00:00, 41.67s/it]
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [00:38&lt;00:00, 39.00s/it]
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|██████████| 1/1 [00:41&lt;00:00, 41.67s/it]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.2 seconds for data/adslabs/oqmd-349496_NNH/4
-Elapsed time: 39.0 seconds
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  Elapsed time: 4.4 seconds for data/adslabs/oqmd-349496_NNH/4
+Elapsed time: 41.7 seconds
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>
@@ -1257,9 +1260,9 @@ Elapsed time: 39.0 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_3340/1759892815.py:7: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_3187/1759892815.py:7: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
   slope, intercept, r, p, se = linregress(x, y)
-/tmp/ipykernel_3340/1759892815.py:37: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
+/tmp/ipykernel_3187/1759892815.py:37: SmallSampleWarning: One or more sample arguments is too small; all returned values will be NaN. See documentation for sample size requirements.
   slope, intercept, r, p, se = linregress(x, y)
 </pre></div>
 </div>
@@ -1317,7 +1320,7 @@ Elapsed time: 39.0 seconds
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../../_images/e5d8be61626a4b99e0c0ddd7f0263cc6f4210b578c0f5257c7443e1febb53b38.png" src="../../../_images/e5d8be61626a4b99e0c0ddd7f0263cc6f4210b578c0f5257c7443e1febb53b38.png" />
+<img alt="../../../_images/e74dba824771d5f285aa5207248f96e7633b5bc52aac6279fc3f58c2fdbdda44.png" src="../../../_images/e74dba824771d5f285aa5207248f96e7633b5bc52aac6279fc3f58c2fdbdda44.png" />
 </div>
 </div>
 </section>

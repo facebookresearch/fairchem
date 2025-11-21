@@ -240,10 +240,12 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../catalysts/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
 
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../catalysts/datasets/oc25.html">OC25</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../catalysts/models.html">Pretrained models</a></li>
@@ -271,7 +273,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../../../inorganic_materials/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../../../inorganic_materials/examples_tutorials/bulk_stability.html">Stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
 </ul>
@@ -389,6 +391,7 @@
 </ul>
 </details></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../../../data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../../../data/omat/entries/index.html">data.omat.entries</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../../../data/omat/vasp/index.html">data.omat.vasp</a></li>
 </ul>
 </details></li>
@@ -661,6 +664,7 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.external_graph_gen"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.external_graph_gen</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.internal_graph_gen_version"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.internal_graph_gen_version</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.torch_num_threads"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.torch_num_threads</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.edge_chunk_size"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.edge_chunk_size</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.inference_settings_default"><code class="docutils literal notranslate"><span class="pre">inference_settings_default()</span></code></a></li>
@@ -881,6 +885,11 @@ file in the root directory of this source tree.</p>
 <span class="sig-name descname"><span class="pre">torch_num_threads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.api.inference.InferenceSettings.torch_num_threads" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.units.mlip_unit.api.inference.InferenceSettings.edge_chunk_size">
+<span class="sig-name descname"><span class="pre">edge_chunk_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.units.mlip_unit.api.inference.InferenceSettings.edge_chunk_size" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 <dl class="py function">
@@ -1009,6 +1018,7 @@ file in the root directory of this source tree.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.external_graph_gen"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.external_graph_gen</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.internal_graph_gen_version"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.internal_graph_gen_version</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.torch_num_threads"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.torch_num_threads</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.InferenceSettings.edge_chunk_size"><code class="docutils literal notranslate"><span class="pre">InferenceSettings.edge_chunk_size</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.units.mlip_unit.api.inference.inference_settings_default"><code class="docutils literal notranslate"><span class="pre">inference_settings_default()</span></code></a></li>

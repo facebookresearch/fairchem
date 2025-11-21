@@ -96,7 +96,7 @@ Module Contents
 
 
 
-.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False)
+.. py:class:: MLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, form_elem_refs: dict | None = None, assert_on_nans: bool = False)
 
    Bases: :py:obj:`torchtnt.framework.PredictUnit`\ [\ :py:obj:`fairchem.core.datasets.atomic_data.AtomicData`\ ], :py:obj:`MLIPPredictUnitProtocol`
 
@@ -133,6 +133,9 @@ Module Contents
 
 
    .. py:attribute:: atom_refs
+
+
+   .. py:attribute:: form_elem_refs
 
 
    .. py:attribute:: tasks
@@ -256,7 +259,7 @@ Module Contents
    Bases: :py:obj:`MLIPWorkerLocal`
 
 
-.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, assert_on_nans: bool = False, num_workers: int = 1, num_workers_per_node: int = 8)
+.. py:class:: ParallelMLIPPredictUnit(inference_model_path: str, device: str = 'cpu', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.InferenceSettings | None = None, seed: int = 41, atom_refs: dict | None = None, form_elem_refs: dict | None = None, assert_on_nans: bool = False, num_workers: int = 1, num_workers_per_node: int = 8)
 
    Bases: :py:obj:`MLIPPredictUnitProtocol`
 

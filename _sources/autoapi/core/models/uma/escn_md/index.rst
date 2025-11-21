@@ -17,7 +17,7 @@ Attributes
 
 .. autoapisummary::
 
-   core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
+   core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
 
 
 Classes
@@ -38,15 +38,21 @@ Functions
 
 .. autoapisummary::
 
+   core.models.uma.escn_md.add_n_empty_edges
+   core.models.uma.escn_md.pad_edges
    core.models.uma.escn_md.compose_tensor
 
 
 Module Contents
 ---------------
 
-.. py:data:: ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
+.. py:data:: ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
 
-.. py:class:: eSCNMDBackbone(max_num_elements: int = 100, sphere_channels: int = 128, lmax: int = 2, mmax: int = 2, grid_resolution: int | None = None, num_sphere_samples: int = 128, otf_graph: bool = False, max_neighbors: int = 300, use_pbc: bool = True, use_pbc_single: bool = True, cutoff: float = 5.0, edge_channels: int = 128, distance_function: Literal['gaussian'] = 'gaussian', num_distance_basis: int = 512, direct_forces: bool = True, regress_forces: bool = True, regress_stress: bool = False, num_layers: int = 2, hidden_channels: int = 128, norm_type: str = 'rms_norm_sh', act_type: str = 'gate', ff_type: str = 'grid', activation_checkpointing: bool = False, chg_spin_emb_type: Literal['pos_emb', 'lin_emb', 'rand_emb'] = 'pos_emb', cs_emb_grad: bool = False, dataset_emb_grad: bool = False, dataset_list: list[str] | None = None, use_dataset_embedding: bool = True, use_cuda_graph_wigner: bool = False, radius_pbc_version: int = 1, always_use_pbc: bool = True)
+.. py:function:: add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float)
+
+.. py:function:: pad_edges(graph_dict, edge_chunk_size: int, cutoff: float)
+
+.. py:class:: eSCNMDBackbone(max_num_elements: int = 100, sphere_channels: int = 128, lmax: int = 2, mmax: int = 2, grid_resolution: int | None = None, num_sphere_samples: int = 128, otf_graph: bool = False, max_neighbors: int = 300, use_pbc: bool = True, use_pbc_single: bool = True, cutoff: float = 5.0, edge_channels: int = 128, distance_function: Literal['gaussian'] = 'gaussian', num_distance_basis: int = 512, direct_forces: bool = True, regress_forces: bool = True, regress_stress: bool = False, num_layers: int = 2, hidden_channels: int = 128, norm_type: str = 'rms_norm_sh', act_type: str = 'gate', ff_type: str = 'grid', activation_checkpointing: bool = False, chg_spin_emb_type: Literal['pos_emb', 'lin_emb', 'rand_emb'] = 'pos_emb', cs_emb_grad: bool = False, dataset_emb_grad: bool = False, dataset_list: list[str] | None = None, use_dataset_embedding: bool = True, use_cuda_graph_wigner: bool = False, radius_pbc_version: int = 1, always_use_pbc: bool = True, edge_chunk_size: int | None = None)
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.uma.nn.mole_utils.MOLEInterface`
 
@@ -126,6 +132,9 @@ Module Contents
    .. py:attribute:: enforce_max_neighbors_strictly
       :value: False
 
+
+
+   .. py:attribute:: edge_chunk_size
 
 
    .. py:attribute:: chg_spin_emb_type
