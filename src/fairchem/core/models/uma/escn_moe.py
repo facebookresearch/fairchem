@@ -80,7 +80,6 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
     def merge_MOLE_model(self, data):
         if self.num_experts == 0:
             return self
-        data["atomic_numbers"] = data["atomic_numbers"].long()
         csd_mixed_emb = self.csd_embedding(
             charge=data["charge"],
             spin=data["spin"],
@@ -281,7 +280,6 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
                 full_output[f"{dataset_name}_{key}"] = (
                     {key: output_tensor} if self.wrap_property else output_tensor
                 )
-
         return full_output
 
 
@@ -300,11 +298,39 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         self.dataset_names = sorted(dataset_names)
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
 
+        # keep track if this head has been merged or not
+        self.merged_on_dataset = None
+
+    def merge_MOLE_model(self, data):
+        self.merged_on_dataset = data.dataset[0]
+        self.non_merged_dataset_names = [
+            name for name in self.dataset_names if name != self.merged_on_dataset
+        ]
+        return self
+
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         data_batch_full = data.batch_full.cpu()
         # run the internal head
         head_output = self.head(data, emb)
+
+        # if merged just return the merged outputs
+        # put NaN in other dataset outputs just in case
+        # someone tries to use them
+        if self.merged_on_dataset is not None:
+            full_output = {}
+            for key in head_output:
+                full_output[f"{self.merged_on_dataset}_{key}"] = (
+                    {key: head_output[key]} if self.wrap_property else head_output[key]
+                )
+                nan_tensor = head_output[key].new_full(
+                    head_output[key].shape, float("nan")
+                )
+                for dataset in self.non_merged_dataset_names:
+                    full_output[f"{dataset}_{key}"] = (
+                        {key: nan_tensor} if self.wrap_property else nan_tensor
+                    )
+            return full_output
 
         # check that all the input dataset names is a strict subset of dataset names
         assert (

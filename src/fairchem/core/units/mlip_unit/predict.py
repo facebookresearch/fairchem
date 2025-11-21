@@ -94,6 +94,20 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
+def merge_uma_model(model, data):
+    # merge the backbone
+    model.backbone = model.backbone.merge_MOLE_model(data)
+
+    # merge any heads
+    new_output_heads = torch.nn.ModuleDict()
+    for head_name, head in model.output_heads.items():
+        if hasattr(head, "merge_MOLE_model"):
+            new_output_heads[head_name] = head.merge_MOLE_model(data)
+        else:
+            new_output_heads[head_name] = head
+    model.output_heads = new_output_heads
+
+
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -237,9 +251,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 assert (
                     data.natoms.numel() == 1
                 ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
-                self.model.module.backbone = (
-                    self.model.module.backbone.merge_MOLE_model(data.clone())
-                )
+
+                merge_uma_model(self.model.module, data.clone())
+
                 self.model.eval()
             # move to device
             self.move_to_device()
