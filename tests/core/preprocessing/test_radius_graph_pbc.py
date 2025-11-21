@@ -20,6 +20,7 @@ from ase.lattice.cubic import FaceCenteredCubic
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 
@@ -346,28 +347,43 @@ def ch4_atoms():
     return ch4
 
 
-def test_partitioned_radius_graph_pbc():
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_atoms, num_partitions, pbc, device",
+    [
+        (10, 2, False, "cpu"),
+        (20, 4, True, "cpu"),
+        (30, 3, True, "cpu"),
+        (101, 5, False, "cuda"),
+        (105, 5, True, "cuda"),
+    ],
+)
+def test_partitioned_radius_graph_pbc(
+    num_atoms: int, num_partitions: int, pbc: bool, device: str
+):
     radius = 6
     max_neighbors = 300
+    pbc_tensor = torch.BoolTensor([pbc, pbc, pbc]).to(device)
     rgbv2 = partial(
         radius_graph_pbc_v2,
         radius=radius,
         max_num_neighbors_threshold=max_neighbors,
-        pbc=torch.BoolTensor([False, False, False]),
+        pbc=pbc_tensor,
     )
-    atoms = ch4_atoms()  # 5 atoms
-    data = AtomicData.from_ase(atoms)
+    atoms = get_fcc_carbon_xtal(num_atoms)
+    data = AtomicData.from_ase(atoms).to(device)
     batch = data_list_collater([data])
     edge_index_no_partition, _, _ = rgbv2(batch)
-    partition_0 = torch.tensor([1, 3, 4], dtype=torch.long)
-    partition_1 = torch.tensor([0, 2], dtype=torch.long)
-    batch["node_partition"] = partition_0
-    edge_index_part_0, _, _ = rgbv2(batch)
-    batch["node_partition"] = partition_1
-    edge_index_part_1, _, _ = rgbv2(batch)
+    edge_index_list = []
+    for i in range(num_partitions):
+        batch["node_partition"] = torch.tensor_split(
+            torch.arange(num_atoms, device=device), num_partitions
+        )[i]
+        edge_index_part, _, _ = rgbv2(batch)
+        edge_index_list.append(edge_index_part)
 
     # Verify that combined partitioned edges match non-partitioned edges
-    combined_edges = torch.cat([edge_index_part_0, edge_index_part_1], dim=1)
+    combined_edges = torch.cat(edge_index_list, dim=1)
 
     # Convert edge pairs to sets for comparison (order doesn't matter)
     no_partition_pairs = {tuple(edge.tolist()) for edge in edge_index_no_partition.T}
