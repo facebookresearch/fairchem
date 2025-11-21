@@ -80,7 +80,6 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
     def merge_MOLE_model(self, data):
         if self.num_experts == 0:
             return self
-        data["atomic_numbers"] = data["atomic_numbers"].long()
         csd_mixed_emb = self.csd_embedding(
             charge=data["charge"],
             spin=data["spin"],
