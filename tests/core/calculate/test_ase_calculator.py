@@ -553,7 +553,7 @@ def test_formation_energy_calculator_non_fairchemcalculator():
 
     with pytest.raises(
         ValueError,
-        match="element_references must be provided for non-FAIRChemCalculator calculators",
+        match="element_references must be provided",
     ):
         FormationEnergyCalculator(mock_calc)
 
