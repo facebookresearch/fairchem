@@ -51,10 +51,12 @@ parts:
   - file: catalysts/datasets/summary
     sections:
       - file: catalysts/datasets/oc20
+      - file: catalysts/datasets/oc20_mads
       - file: catalysts/datasets/oc22
       - file: catalysts/datasets/oc20dense
       - file: catalysts/datasets/oc20neb
       - file: catalysts/datasets/ocx24
+      - file: catalysts/datasets/oc25
   - file: catalysts/models
   - file: catalysts/examples_tutorials/summary
     sections:
