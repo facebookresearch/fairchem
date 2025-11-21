@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 from functools import partial
 
-import numpy as np
 import pytest
 import torch
 from ase import Atoms
@@ -333,18 +332,6 @@ def test_simple_systems_nopbc(
             )
             == 0
         )
-
-
-def ch4_atoms():
-    bond_length = 1.09
-    tetrahedron = (
-        np.array([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]])
-        * bond_length
-        / np.sqrt(3)
-    )
-    positions = np.vstack([[0, 0, 0], tetrahedron])
-    ch4 = Atoms("CH4", positions=positions)
-    return ch4
 
 
 @pytest.mark.gpu()
