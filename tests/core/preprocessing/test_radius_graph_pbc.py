@@ -341,8 +341,9 @@ def test_simple_systems_nopbc(
         (10, 2, False, "cpu"),
         (20, 4, True, "cpu"),
         (30, 3, True, "cpu"),
-        (101, 5, False, "cuda"),
-        (105, 5, True, "cuda"),
+        (101, 8, True, "cpu"),
+        (101, 2, False, "cuda"),
+        (105, 2, True, "cuda"),
     ],
 )
 def test_partitioned_radius_graph_pbc(
