@@ -171,7 +171,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.model.eval()
 
         self.lazy_model_intialized = False
-        self.inference_mode = inference_settings
+        self.inference_settings = inference_settings
 
         # store composition embedding of system the model was merged on
         self.merged_on = None
@@ -232,7 +232,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
             # merge everything on CPU
-            if self.inference_mode.merge_mole:
+            if self.inference_settings.merge_mole:
                 # replace backbone with non MOE version
                 assert (
                     data.natoms.numel() == 1
@@ -243,7 +243,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 self.model.eval()
             # move to device
             self.move_to_device()
-            if self.inference_mode.compile:
+            if self.inference_settings.compile:
                 logging.warning(
                     "Model is being compiled this might take a while for the first time"
                 )
@@ -253,7 +253,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
-        if self.inference_mode.merge_mole:
+        if self.inference_settings.merge_mole:
             if self.merged_on is None:
                 # only get embeddings after moved to final device to get right types
                 self.merged_on = self.get_composition_charge_spin_dataset(data_device)
@@ -284,7 +284,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
         tf32_context = (
-            tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
+            tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
         )
 
         pred_output = {}
