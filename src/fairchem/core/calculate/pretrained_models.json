@@ -6,6 +6,10 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        },
+        "form_elem_refs": {
+            "subfolder": "references",
+            "filename": "form_elem_refs.yaml"
         }
     },
     "uma-s-1p1": {
@@ -15,6 +19,10 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        },
+        "form_elem_refs": {
+            "subfolder": "references",
+            "filename": "form_elem_refs.yaml"
         }
     },
     "uma-m-1p1": {
@@ -24,6 +32,10 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        },
+        "form_elem_refs": {
+            "subfolder": "references",
+            "filename": "form_elem_refs.yaml"
         }
     },
     "esen-md-direct-all-omol": {
