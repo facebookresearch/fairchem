@@ -17,6 +17,7 @@ on:
 # the sha from the head of the branch that triggered it. For
 # pushes and manual triggers, we want the sha of the branch.
 env:
+  CI: true
   HEAD_SHA: |
     ${{
       github.event.workflow_run.head_sha ||
@@ -34,7 +35,7 @@ jobs:
     strategy:
       max-parallel: 10
       matrix:
-        python_version: ['3.10', '3.12']
+        python_version: ['3.10', '3.13']
 
     steps:
       - name: Checkout code
@@ -68,6 +69,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras]
           pip install packages/fairchem-data-oc[dev]
+          pip install packages/fairchem-data-omat
           pip install packages/fairchem-data-omol[dev]
           pip install packages/fairchem-demo-ocpapi[dev]
           pip install -r tests/requirements.txt # pin test packages
@@ -87,7 +89,7 @@ jobs:
         run: |
           NCCL_DEBUG=INFO pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
-      - if: ${{ matrix.python_version == '3.12' }}
+      - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
         name: codecov-coverage
         uses: codecov/codecov-action@v5
         with:
@@ -96,7 +98,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
-      - if: ${{ matrix.python_version == '3.12' }}
+      - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
         name: codecov-test-results
         uses: codecov/test-results-action@v1
         with:
@@ -120,7 +122,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        python_version: ['3.12']
+        python_version: ['3.13']
 
     steps:
       - name: Checkout code
@@ -167,7 +169,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        python_version: ['3.12']
+        python_version: ['3.13']
 
     steps:
       - uses: actions/checkout@v5
@@ -175,7 +177,7 @@ jobs:
         with:
           generate-run-shell: true # This is the default behavior
           environment-name: test_env # Specifies a new environment to be created
-          create-args: python=3.12 # Specifies packages to install into the new environment
+          create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
         uses: actions/checkout@v5
@@ -190,7 +192,7 @@ jobs:
           status-context: '${{ github.job }} (${{ matrix.python_version }})'
 
       - name: Set up Python ${{ matrix.python_version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version:  ${{ matrix.python_version }}
 
@@ -208,7 +210,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu 
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
 
       - name: Cleanup
         if: always()

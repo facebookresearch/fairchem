@@ -12,6 +12,7 @@ import tempfile
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.testing as npt
 import pytest
 import torch
 from ase import Atoms, units
@@ -129,7 +130,7 @@ def test_calculator_with_task_names_matches_uma_task(aperiodic_atoms):
         atoms.calc = calc
         energy = atoms.get_potential_energy()
         energies.append(energy)
-    np.testing.assert_allclose(energies[0], energies[1])
+    npt.assert_allclose(energies[0], energies[1])
 
 
 def test_no_task_name_single_task():
@@ -391,6 +392,66 @@ def test_random_seed_final_energy():
     for seed_a in set(seeds):
         for seed_b in set(seeds) - {seed_a}:
             assert results_by_seed[seed_a] != results_by_seed[seed_b]
+
+
+@pytest.mark.gpu()
+def test_external_graph_generation_molecular_system():
+    inference_settings = InferenceSettings(external_graph_gen=True)
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1", device="cuda", inference_settings=inference_settings
+    )
+
+    calc_omol = FAIRChemCalculator(predict_unit, task_name="omol")
+
+    # Create a periodic H2O system instead
+    atoms = molecule("H2O")
+    atoms.set_cell([10.0, 10.0, 10.0])  # Define a cubic cell
+    atoms.set_pbc(True)  # Enable periodic boundary conditions
+    atoms.info["charge"] = 0
+    atoms.info["spin"] = 1
+    atoms.calc = calc_omol
+
+    energy = atoms.get_potential_energy()
+    assert isinstance(energy, float)
+
+    forces = atoms.get_forces()
+    assert isinstance(forces, np.ndarray)
+    assert forces.shape == (len(atoms), 3)
+
+
+@pytest.mark.gpu()
+def test_external_graph_gen_vs_internal():
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+    inference_settings_external = InferenceSettings(external_graph_gen=True)
+    predict_unit_external = pretrained_mlip.get_predict_unit(
+        "uma-s-1", device="cuda", inference_settings=inference_settings_external
+    )
+
+    inference_settings_internal = InferenceSettings(external_graph_gen=False)
+    predict_unit_internal = pretrained_mlip.get_predict_unit(
+        "uma-s-1", device="cuda", inference_settings=inference_settings_internal
+    )
+
+    calc_external = FAIRChemCalculator(predict_unit_external, task_name="omat")
+    calc_internal = FAIRChemCalculator(predict_unit_internal, task_name="omat")
+
+    # Test with a simple bulk system
+    atoms_external = bulk("Fe", "bcc", a=2).repeat((2, 1, 1))
+    atoms_external.rattle(0.1)
+    atoms_internal = atoms_external.copy()
+
+    atoms_external.calc = calc_external
+    atoms_internal.calc = calc_internal
+
+    energy_external = atoms_external.get_potential_energy()
+    energy_internal = atoms_internal.get_potential_energy()
+
+    forces_external = atoms_external.get_forces()
+    forces_internal = atoms_internal.get_forces()
+
+    npt.assert_allclose(energy_external, energy_internal, rtol=1e-5, atol=1e-5)
+    npt.assert_allclose(forces_external, forces_internal, rtol=1e-5, atol=1e-5)
 
 
 def run_md_simulation(calc, steps: int = 10):
