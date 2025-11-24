@@ -94,6 +94,20 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
+def merge_uma_model(model, data):
+    # merge the backbone
+    model.backbone = model.backbone.merge_MOLE_model(data)
+
+    # merge any heads
+    new_output_heads = torch.nn.ModuleDict()
+    for head_name, head in model.output_heads.items():
+        if hasattr(head, "merge_MOLE_model"):
+            new_output_heads[head_name] = head.merge_MOLE_model(data)
+        else:
+            new_output_heads[head_name] = head
+    model.output_heads = new_output_heads
+
+
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -171,7 +185,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.model.eval()
 
         self.lazy_model_intialized = False
-        self.inference_mode = inference_settings
+        self.inference_settings = inference_settings
 
         # store composition embedding of system the model was merged on
         self.merged_on = None
@@ -232,18 +246,18 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
             # merge everything on CPU
-            if self.inference_mode.merge_mole:
+            if self.inference_settings.merge_mole:
                 # replace backbone with non MOE version
                 assert (
                     data.natoms.numel() == 1
                 ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
-                self.model.module.backbone = (
-                    self.model.module.backbone.merge_MOLE_model(data.clone())
-                )
+
+                merge_uma_model(self.model.module, data.clone())
+
                 self.model.eval()
             # move to device
             self.move_to_device()
-            if self.inference_mode.compile:
+            if self.inference_settings.compile:
                 logging.warning(
                     "Model is being compiled this might take a while for the first time"
                 )
@@ -253,7 +267,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
-        if self.inference_mode.merge_mole:
+        if self.inference_settings.merge_mole:
             if self.merged_on is None:
                 # only get embeddings after moved to final device to get right types
                 self.merged_on = self.get_composition_charge_spin_dataset(data_device)
@@ -284,7 +298,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
         tf32_context = (
-            tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
+            tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
         )
 
         pred_output = {}
@@ -436,6 +450,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         assert_on_nans: bool = False,
         num_workers: int = 1,
         num_workers_per_node: int = 8,
+        log_level: int = logging.INFO,
     ):
         super().__init__()
         _mlip_pred_unit = MLIPPredictUnit(
@@ -461,22 +476,29 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         }
 
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             force=True,
             stream=sys.stdout,
             format="%(asctime)s %(levelname)s [%(processName)s] %(name)s: %(message)s",
         )
         # Optional: keep Ray/uvicorn chatty logs in check
-        logging.getLogger("ray").setLevel(logging.INFO)
-        logging.getLogger("uvicorn").setLevel(logging.INFO)
+        logging.getLogger("ray").setLevel(log_level)
+        logging.getLogger("uvicorn").setLevel(log_level)
         if not ray.is_initialized():
-            ray.init(
-                logging_level=logging.INFO,
-                num_cpus=num_workers_per_node,
-                # runtime_env={
-                #     "env_vars": {"RAY_DEBUG": "1"},
-                # },
-            )
+            # in CI envrionment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
+            if os.environ.get("CI"):
+                logging.info(
+                    f"CI environment detected, initializing ray with limited CPUs: {num_workers_per_node}"
+                )
+                ray.init(
+                    logging_level=log_level,
+                    num_cpus=num_workers_per_node,
+                    runtime_env={
+                        "env_vars": {"RAY_DEBUG": "1"},
+                    },
+                )
+            else:
+                ray.init(logging_level=log_level)
 
         self.atomic_data_on_device = None
 

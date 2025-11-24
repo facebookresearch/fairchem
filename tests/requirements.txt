@@ -1,6 +1,6 @@
 # this file used only for installing pinned packages for testing only! please do not install using this manually!
 ase==3.26
-ase-db-backends==0.10.0
+ase-db-backends==0.11.0
 e3nn==0.5.8
 huggingface-hub==0.35.3
 torch==2.8.0
