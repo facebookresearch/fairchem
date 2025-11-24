@@ -25,7 +25,7 @@ jobs:
 
     # Check out the code
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         # The path to the sha of the commit we want to build will depend
         # on the trigger type. If a workflow_run trigger, then we want
