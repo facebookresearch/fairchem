@@ -273,9 +273,12 @@ def data_preprocess_radius_graph(
     # atomic numbers
     atomic_numbers = data.atomic_numbers.long()
 
+    # Only compute dist_pairwise if needed for sincx mask in node attention
+    need_dist_pairwise = global_cfg.use_node_path and gnn_cfg.use_sincx_mask
+
     # generate graph
     (
-        dist_pairwise,  # (num_nodes, num_nodes)
+        dist_pairwise,  # (num_nodes, num_nodes) or None
         disp,  # (num_nodes, num_neighbors, 3)
         src_env,
         dst_env,
@@ -292,6 +295,7 @@ def data_preprocess_radius_graph(
         molecular_graph_cfg.knn_use_low_mem,
         molecular_graph_cfg.knn_pad_size if global_cfg.use_padding else None,
         data.pos.device,
+        compute_dist_pairwise=need_dist_pairwise,
     )
 
     num_nodes, max_num_neighbors, _ = disp.shape
@@ -487,7 +491,8 @@ def pad_batch(
     dst_mask = F.pad(dst_mask, (0, 0, 0, pad_size), value=-torch.inf)
     src_index = F.pad(src_index, (0, 0, 0, pad_size), value=-1)
     dst_index = F.pad(dst_index, (0, 0, 0, pad_size), value=-1)
-    dist_pairwise = F.pad(dist_pairwise, (0, pad_size, 0, pad_size), value=0)
+    if dist_pairwise is not None:
+        dist_pairwise = F.pad(dist_pairwise, (0, pad_size, 0, pad_size), value=0)
     if charge is not None:
         charge = F.pad(charge, (0, max_batch_size - num_graphs), value=0)
     else:

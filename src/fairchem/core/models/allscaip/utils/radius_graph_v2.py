@@ -83,6 +83,7 @@ def build_radius_graph(
     lse_scale: float = 0.1,
     use_low_mem: bool = False,
     delta: int = 20,
+    compute_dist_pairwise: bool = True,
 ) -> tuple[
     torch.Tensor,
     torch.Tensor,
@@ -90,7 +91,7 @@ def build_radius_graph(
     torch.Tensor,
     torch.Tensor,
     torch.Tensor,
-    torch.Tensor,
+    torch.Tensor | None,
 ]:
     """
     construct the biknn radius graph for one system.
@@ -122,9 +123,9 @@ def build_radius_graph(
     disp = src_pos[None, :, :, :] - pos[:, None, None, :]
     dist = safe_norm(disp, dim=-1)
     dist_T = dist.transpose(0, 1).contiguous()
-    # get the pairwise distance between all atoms
+    # get the pairwise distance between all atoms (only if needed)
     # pairwise minimum-image distance matrix for this system (N, N)
-    dist_pairwise = dist.min(dim=2)[0]
+    dist_pairwise = dist.min(dim=2)[0] if compute_dist_pairwise else None
     # compute the rankings, depending on the soft or hard knn
     if soft:
         # calculate the rankings in a soft manner
@@ -210,8 +211,9 @@ def batched_radius_graph(
     knn_pad_size: int | None,
     cutoff: float,
     device: torch.device,
+    compute_dist_pairwise: bool = True,
 ) -> tuple[
-    torch.Tensor,
+    torch.Tensor | None,
     torch.Tensor,
     torch.Tensor,
     torch.Tensor,
@@ -254,6 +256,7 @@ def batched_radius_graph(
             knn_sigmoid_scale,
             knn_lse_scale,
             knn_use_low_mem,
+            compute_dist_pairwise=compute_dist_pairwise,
         )
         for pos, cell, image_id, start_idx in zip(
             pos_list, cell_list, image_id_list, slices
@@ -278,8 +281,11 @@ def batched_radius_graph(
     disp = torch.cat(disp_list)
     env = torch.cat(env_list)
 
-    # Assemble a block-diagonal pairwise distance matrix (N, N)
-    dist_pairwise = torch.block_diag(*dist_blocks)
+    # Assemble a block-diagonal pairwise distance matrix (N, N) only if computed
+    if compute_dist_pairwise:
+        dist_pairwise = torch.block_diag(*dist_blocks)
+    else:
+        dist_pairwise = None
 
     # if soft knn, pad the tensors with the maximum number of neighbors.
     if knn_pad_size is None:
@@ -377,8 +383,9 @@ def biknn_radius_graph(
     knn_pad_size: int | None,
     device: torch.device,
     max_atoms: int | None = None,
+    compute_dist_pairwise: bool = True,
 ) -> tuple[
-    torch.Tensor,
+    torch.Tensor | None,
     torch.Tensor,
     torch.Tensor,
     torch.Tensor,
@@ -398,7 +405,9 @@ def biknn_radius_graph(
         device: the device on which the tensors are allocated
         max_atoms: the size to pad to for the number of atoms
         max_neighbors: the size to pad to for the number of neighbors
+        compute_dist_pairwise: whether to compute and return dist_pairwise (N×N matrix)
     Returns:
+        dist_pairwise: the pairwise distance matrix (None if compute_dist_pairwise=False)
         padded_disp: the padded displacement tensor
         src_env: the source envelope tensor
         dst_env: the destination envelope tensor
@@ -412,41 +421,51 @@ def biknn_radius_graph(
         raise ValueError("The data object must be batched.")
 
     pos_list: list[torch.Tensor] = list(torch.split(data.pos, natoms_list, dim=0))
+    num_graphs = len(natoms_list)
 
-    # if PBC is used, construct the image identifier list by including all images within
-    # the cutoff distance. Adopted from FairChem repository
-    cross_a2a3 = torch.cross(data.cell[:, 1], data.cell[:, 2], dim=-1)
-    cell_vol = torch.sum(data.cell[:, 0] * cross_a2a3, dim=-1, keepdim=True)
+    # Check if PBC is used at all - if not, skip expensive PBC calculations
+    pbc_any = data.pbc.any().item()
 
-    inv_min_dist_a1 = safe_norm(cross_a2a3 / cell_vol, dim=-1)
-    rep_a1 = torch.ceil(cutoff * inv_min_dist_a1)
+    if pbc_any:
+        # if PBC is used, construct the image identifier list by including all images within
+        # the cutoff distance. Adopted from FairChem repository
+        cross_a2a3 = torch.cross(data.cell[:, 1], data.cell[:, 2], dim=-1)
+        cell_vol = torch.sum(data.cell[:, 0] * cross_a2a3, dim=-1, keepdim=True)
 
-    cross_a3a1 = torch.cross(data.cell[:, 2], data.cell[:, 0], dim=-1)
-    inv_min_dist_a2 = safe_norm(cross_a3a1 / cell_vol, dim=-1)
-    rep_a2 = torch.ceil(cutoff * inv_min_dist_a2)
+        inv_min_dist_a1 = safe_norm(cross_a2a3 / cell_vol, dim=-1)
+        rep_a1 = torch.ceil(cutoff * inv_min_dist_a1)
 
-    cross_a1a2 = torch.cross(data.cell[:, 0], data.cell[:, 1], dim=-1)
-    inv_min_dist_a3 = safe_norm(cross_a1a2 / cell_vol, dim=-1)
-    rep_a3 = torch.ceil(cutoff * inv_min_dist_a3)
+        cross_a3a1 = torch.cross(data.cell[:, 2], data.cell[:, 0], dim=-1)
+        inv_min_dist_a2 = safe_norm(cross_a3a1 / cell_vol, dim=-1)
+        rep_a2 = torch.ceil(cutoff * inv_min_dist_a2)
 
-    rep_a1 = rep_a1.masked_fill(data.pbc[:, 0] == 0, 0).tolist()
-    rep_a2 = rep_a2.masked_fill(data.pbc[:, 1] == 0, 0).tolist()
-    rep_a3 = rep_a3.masked_fill(data.pbc[:, 2] == 0, 0).tolist()
+        cross_a1a2 = torch.cross(data.cell[:, 0], data.cell[:, 1], dim=-1)
+        inv_min_dist_a3 = safe_norm(cross_a1a2 / cell_vol, dim=-1)
+        rep_a3 = torch.ceil(cutoff * inv_min_dist_a3)
 
-    image_id_list: list[torch.Tensor] = [
-        torch.cartesian_prod(
-            *[
-                torch.arange(
-                    -rep,
-                    rep + 1,
-                    device=device,
-                    dtype=torch.get_default_dtype(),
-                )
-                for rep in reps
-            ]
-        )
-        for reps in zip(rep_a1, rep_a2, rep_a3)
-    ]
+        rep_a1 = rep_a1.masked_fill(data.pbc[:, 0] == 0, 0).tolist()
+        rep_a2 = rep_a2.masked_fill(data.pbc[:, 1] == 0, 0).tolist()
+        rep_a3 = rep_a3.masked_fill(data.pbc[:, 2] == 0, 0).tolist()
+
+        image_id_list: list[torch.Tensor] = [
+            torch.cartesian_prod(
+                *[
+                    torch.arange(
+                        -rep,
+                        rep + 1,
+                        device=device,
+                        dtype=torch.get_default_dtype(),
+                    )
+                    for rep in reps
+                ]
+            )
+            for reps in zip(rep_a1, rep_a2, rep_a3)
+        ]
+    else:
+        # No PBC - use identity image only (no replications needed)
+        identity_image = torch.zeros((1, 3), device=device, dtype=torch.get_default_dtype())
+        image_id_list = [identity_image for _ in range(num_graphs)]
+
     cell_list: list[torch.Tensor] = list(data.cell)
 
     # call to the batched_radius_graph function to perform per-system biknn radius
@@ -466,4 +485,5 @@ def biknn_radius_graph(
         knn_pad_size,
         cutoff,
         device,
+        compute_dist_pairwise,
     )
