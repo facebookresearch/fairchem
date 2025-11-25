@@ -203,6 +203,7 @@ def get_node_attention_mask(
     n_freq: int = 32,
     r_min: float = 0.25,
     r_max: float = 30.0,
+    use_sincx_mask: bool = True,
 ):
     # get base attention mask
     N_pad = node_batch.size(0)
@@ -223,6 +224,10 @@ def get_node_attention_mask(
     neg_inf = torch.finfo(base_mask.dtype).min
     base_mask = base_mask.masked_fill(~valid_mask, neg_inf)  # (N_pad,N_pad)
     base_mask = base_mask.unsqueeze(0)  # (1,N_pad,N_pad)
+
+    # Skip sincx computation if not needed (lazy evaluation)
+    if not use_sincx_mask:
+        return None, base_mask, None
 
     # Euclidean Rotary Encoding (Sinc Kernels)
     # Frequencies
@@ -360,7 +365,10 @@ def data_preprocess_radius_graph(
     # get attention mask for node attention
     if global_cfg.use_node_path:
         sincx, base_mask, valid_mask = get_node_attention_mask(
-            node_batch, dist_pairwise, gnn_cfg.attn_num_freq
+            node_batch,
+            dist_pairwise,
+            gnn_cfg.attn_num_freq,
+            use_sincx_mask=gnn_cfg.use_sincx_mask,
         )
     else:
         sincx = None
