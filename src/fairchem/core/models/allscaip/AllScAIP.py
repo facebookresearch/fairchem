@@ -243,6 +243,10 @@ class AllScAIPEnergyHead(AllScAIPHeadBase):
         node_reps = self.get_node_reps(emb)
         energy_output = self.energy_ffn(node_reps)
 
+        # Mask out padded nodes to prevent them from contributing to energy
+        # (padded nodes have node_batch=0 which would incorrectly add to batch 0's energy)
+        energy_output = energy_output * emb["data"].node_padding_mask.unsqueeze(-1)
+
         # the following not compatible with torch.compile (grpah break)
         # energy_output = torch_scatter.scatter(energy_output, node_batch, dim=0, reduce="sum")
 

@@ -199,20 +199,17 @@ def get_node_direction_expansion_neighbor(
 
 def get_node_attention_mask(
     node_batch: torch.Tensor,
-    dist_pairwise: torch.Tensor,
+    dist_pairwise: torch.Tensor | None,
     n_freq: int = 32,
     r_min: float = 0.25,
     r_max: float = 30.0,
     use_sincx_mask: bool = True,
-    skip_single_system_base_mask: bool = True,
-    num_graphs: int = 1,
-    num_nodes: int = 0,
+    single_system_no_padding: bool = False,
 ):
     N_pad = node_batch.size(0)
 
     # Skip base_mask for single system without padding (no graph masking needed)
-    if skip_single_system_base_mask and num_graphs == 1 and num_nodes == N_pad:
-        # No masking needed - single system, no padding
+    if single_system_no_padding:
         if not use_sincx_mask:
             return None, None, None
         # Still need sincx computation but no base_mask
@@ -381,9 +378,7 @@ def data_preprocess_radius_graph(
             dist_pairwise,
             gnn_cfg.attn_num_freq,
             use_sincx_mask=gnn_cfg.use_sincx_mask,
-            skip_single_system_base_mask=global_cfg.skip_single_system_base_mask,
-            num_graphs=num_graphs,
-            num_nodes=num_nodes,
+            single_system_no_padding=global_cfg.single_system_no_padding,
         )
     else:
         sincx = None
@@ -392,6 +387,11 @@ def data_preprocess_radius_graph(
 
     # change the -1 in node_batch to avoid indexing error
     node_batch = node_batch.masked_fill(node_batch == -1, 0)
+
+    # Create node padding mask: 1.0 for real nodes, 0.0 for padded nodes
+    # Use arange comparison which is compile-friendly
+    node_indices = torch.arange(max_num_nodes, device=node_batch.device)
+    node_padding_mask = (node_indices < num_nodes).to(torch.float32)
 
     if gnn_cfg.atten_name in ["memory_efficient", "flash", "math"]:
         if (
@@ -431,6 +431,7 @@ def data_preprocess_radius_graph(
         node_valid_mask=valid_mask,
         neighbor_index=neighbor_index,
         node_batch=node_batch,
+        node_padding_mask=node_padding_mask,
         max_batch_size=max_batch_size,
         num_graphs=num_graphs,
         max_num_nodes=max_num_nodes,

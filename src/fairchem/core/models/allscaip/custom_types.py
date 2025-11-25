@@ -33,6 +33,8 @@ class GraphAttentionData:
     # graph structure
     neighbor_index: torch.Tensor
     node_batch: torch.Tensor
+    # padding mask: 1.0 for real nodes, 0.0 for padded nodes (shape: max_num_nodes,)
+    node_padding_mask: torch.Tensor
     max_batch_size: int
     num_graphs: int
     max_num_nodes: int
