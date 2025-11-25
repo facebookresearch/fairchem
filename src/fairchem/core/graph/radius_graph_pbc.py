@@ -337,6 +337,16 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     elif pbc is None:
         pbc = torch.BoolTensor([True, True, True])
 
+    # We only supports only the same pbc for all systems in the batch
+    # so we must check that all pbc are the same if we are given a list of them
+    # if this is ok, we just take the first pbc in the batch to represent
+    if pbc.ndim > 1:
+        # check all pbc are the same along each pbc dimension
+        if not torch.all(pbc == pbc[0], dim=0).all():
+            raise ValueError(
+                "All pbc values must be the same for all systems in the batch"
+            )
+        pbc = pbc[0]
     assert isinstance(pbc, torch.Tensor)
     assert pbc.ndim == 1
     assert pbc.shape[0] == 3
@@ -717,9 +727,18 @@ def radius_graph_pbc_v2(
 
     # Reduce the number of neighbors for each atom to the
     # desired threshold max_num_neighbors_threshold
+
+    # need to map the target_idx back to the reference frame of the original data before indexing
+    # otherwise the neighbor count will be wrong
+    # this will fail the test test_generate_graph_batch_partition in test_radius_graph_pbc.py
+    if hasattr(data, "node_partition"):
+        target_idx_for_num_neighbors = data.node_partition[target_idx]
+    else:
+        target_idx_for_num_neighbors = target_idx
+
     mask_num_neighbors, num_neighbors_image = get_max_neighbors_mask(
         natoms=data.natoms,
-        index=target_idx,
+        index=target_idx_for_num_neighbors,
         atom_distance=atom_distance_sqr,
         max_num_neighbors_threshold=max_num_neighbors_threshold,
         enforce_max_strictly=enforce_max_neighbors_strictly,

@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from torch.profiler import record_function
 
-from fairchem.core.common import gp_utils
+from fairchem.core.common import distutils, gp_utils
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
@@ -131,7 +131,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
-        radius_pbc_version: int = 1,
+        radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         edge_chunk_size: int | None = None,
     ) -> None:
@@ -416,7 +416,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
+            logging.info(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -460,6 +460,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
+        #     logging.info(f"Node part: {node_partition}, size: {node_partition.numel()}")
+        # logging.info(
+        #     f"Rank:{distutils.get_rank()}, edge_index: {graph_dict['edge_index']}, edge_index_shape: {graph_dict['edge_index'].shape}, node_offset: {data_dict['gp_node_offset']}"
+        # )
+        # logging.info(
+        #     f"Rank:{distutils.get_rank()}, edge_distance: {graph_dict['edge_distance']}, edge_distance_vec: {graph_dict['edge_distance_vec'].sum()}"
+        # )
 
         if self.edge_chunk_size is not None:
             pad_edges(
@@ -476,6 +483,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
+        logging.info(f"rank: {distutils.get_rank()} starting")
 
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
@@ -589,36 +597,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "batch": data_dict["batch"],
         }
         return out
-
-    def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
-        """Graph Parallel
-        This creates the required partial tensors for each rank given the full tensors.
-        The tensors are split on the dimension along the node index using node_partition.
-        """
-        edge_index = graph_dict["edge_index"]
-
-        node_partition = torch.tensor_split(
-            torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
-            gp_utils.get_gp_world_size(),
-        )[gp_utils.get_gp_rank()]
-        assert (
-            node_partition.numel() > 0
-        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-        edge_partition = torch.where(
-            torch.logical_and(
-                edge_index[1] >= node_partition.min(),
-                edge_index[1] <= node_partition.max(),  # TODO: 0 or 1?
-            )
-        )[0]
-        graph_dict["node_offset"] = node_partition.min().item()
-        graph_dict["node_partition"] = node_partition
-        # gp versions of data
-        graph_dict["edge_index"] = edge_index[:, edge_partition]
-        graph_dict["edge_distance"] = graph_dict["edge_distance"][edge_partition]
-        graph_dict["edge_distance_vec"] = graph_dict["edge_distance_vec"][
-            edge_partition
-        ]
-        return graph_dict
 
     @property
     def num_params(self) -> int:
@@ -791,6 +769,7 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             energy = gp_utils.reduce_from_model_parallel_region(energy_part)
         else:
             energy = energy_part
+        logging.info(f"rank: {distutils.get_rank()}, energy: {energy}")
 
         if self.reduce == "sum":
             return {"energy": energy}
@@ -851,6 +830,8 @@ class Linear_Force_Head(nn.Module, HeadInterface):
             forces = gp_utils.gather_from_model_parallel_region(
                 forces, data_dict["atomic_numbers_full"].shape[0]
             )
+
+        logging.info(f"rank: {distutils.get_rank()}, forces: {forces.sum()}")
         return {"forces": forces}
 
 
