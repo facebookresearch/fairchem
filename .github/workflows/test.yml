@@ -17,6 +17,7 @@ on:
 # the sha from the head of the branch that triggered it. For
 # pushes and manual triggers, we want the sha of the branch.
 env:
+  CI: true
   HEAD_SHA: |
     ${{
       github.event.workflow_run.head_sha ||
