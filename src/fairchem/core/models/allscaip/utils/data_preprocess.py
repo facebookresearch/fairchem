@@ -204,30 +204,42 @@ def get_node_attention_mask(
     r_min: float = 0.25,
     r_max: float = 30.0,
     use_sincx_mask: bool = True,
+    skip_single_system_base_mask: bool = True,
+    num_graphs: int = 1,
+    num_nodes: int = 0,
 ):
-    # get base attention mask
     N_pad = node_batch.size(0)
 
-    # (N_pad,1) == (1,N_pad) -> (N_pad,N_pad) bool
-    same_graph = node_batch.unsqueeze(1) == node_batch.unsqueeze(0)
-    real = node_batch.unsqueeze(0) != -1  # (1,N_pad) bool
-    real2 = node_batch.unsqueeze(1) != -1  # (N_pad,1)
+    # Skip base_mask for single system without padding (no graph masking needed)
+    if skip_single_system_base_mask and num_graphs == 1 and num_nodes == N_pad:
+        # No masking needed - single system, no padding
+        if not use_sincx_mask:
+            return None, None, None
+        # Still need sincx computation but no base_mask
+        base_mask = None
+        valid_mask = None
+    else:
+        # get base attention mask
+        # (N_pad,1) == (1,N_pad) -> (N_pad,N_pad) bool
+        same_graph = node_batch.unsqueeze(1) == node_batch.unsqueeze(0)
+        real = node_batch.unsqueeze(0) != -1  # (1,N_pad) bool
+        real2 = node_batch.unsqueeze(1) != -1  # (N_pad,1)
 
-    valid_mask = same_graph & real & real2  # True where attention allowed
+        valid_mask = same_graph & real & real2  # True where attention allowed
 
-    # filter distance larger than 15 A
-    # valid_mask = valid_mask & (dist_pairwise < 15.0)
+        # filter distance larger than 15 A
+        # valid_mask = valid_mask & (dist_pairwise < 15.0)
 
-    base_mask = torch.zeros(
-        (N_pad, N_pad), dtype=torch.float32, device=node_batch.device
-    )
-    neg_inf = torch.finfo(base_mask.dtype).min
-    base_mask = base_mask.masked_fill(~valid_mask, neg_inf)  # (N_pad,N_pad)
-    base_mask = base_mask.unsqueeze(0)  # (1,N_pad,N_pad)
+        base_mask = torch.zeros(
+            (N_pad, N_pad), dtype=torch.float32, device=node_batch.device
+        )
+        neg_inf = torch.finfo(base_mask.dtype).min
+        base_mask = base_mask.masked_fill(~valid_mask, neg_inf)  # (N_pad,N_pad)
+        base_mask = base_mask.unsqueeze(0)  # (1,N_pad,N_pad)
 
-    # Skip sincx computation if not needed (lazy evaluation)
-    if not use_sincx_mask:
-        return None, base_mask, None
+        # Skip sincx computation if not needed (lazy evaluation)
+        if not use_sincx_mask:
+            return None, base_mask, None
 
     # Euclidean Rotary Encoding (Sinc Kernels)
     # Frequencies
@@ -369,6 +381,9 @@ def data_preprocess_radius_graph(
             dist_pairwise,
             gnn_cfg.attn_num_freq,
             use_sincx_mask=gnn_cfg.use_sincx_mask,
+            skip_single_system_base_mask=global_cfg.skip_single_system_base_mask,
+            num_graphs=num_graphs,
+            num_nodes=num_nodes,
         )
     else:
         sincx = None

@@ -19,6 +19,8 @@ class GlobalConfigs:
     use_residual_scaling: bool = True
     use_node_path: bool = True
     dataset_list: list = field(default_factory=list)
+    # Skip base_mask for single system (no graph masking needed)
+    skip_single_system_base_mask: bool = True
 
 
 @dataclass

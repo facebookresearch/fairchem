@@ -73,9 +73,10 @@ class NodeAttention(BaseAttention):
         )
 
         # get attention output
-        attn_output = self.scaled_dot_product_attention(
-            q, k, v, node_attn_mask[None, :, :, :].to(q.dtype)
-        )
+        # Handle None mask (single system, no padding case)
+        if node_attn_mask is not None:
+            node_attn_mask = node_attn_mask[None, :, :, :].to(q.dtype)
+        attn_output = self.scaled_dot_product_attention(q, k, v, node_attn_mask)
 
         # output shape: (num_nodes, hidden_dim)
         return self.node_attn_res_scale * attn_output.squeeze(0) + node_reps
@@ -87,8 +88,9 @@ class NodeAttention(BaseAttention):
         eps: float = 1e-6,
         normalize: bool = True,
     ):
-        if data.node_base_attn_mask is None:
-            raise ValueError("node_base_attn_mask is None in data when using node path")
+        # Handle single system without padding - no mask needed
+        if data.node_base_attn_mask is None and not self.use_sincx_mask:
+            return None
 
         if self.use_sincx_mask:
             if radial_weight is None:
@@ -121,6 +123,11 @@ class NodeAttention(BaseAttention):
 
             attn_bias = freq_weight.log()
 
-            return attn_bias + data.node_base_attn_mask.expand(self.num_heads, -1, -1)
+            if data.node_base_attn_mask is not None:
+                return attn_bias + data.node_base_attn_mask.expand(self.num_heads, -1, -1)
+            return attn_bias
 
+        # base_mask only case
+        if data.node_base_attn_mask is None:
+            return None
         return data.node_base_attn_mask.expand(self.num_heads, -1, -1)
