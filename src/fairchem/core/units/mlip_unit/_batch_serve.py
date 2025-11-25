@@ -8,10 +8,12 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import logging
+from collections import deque
 from multiprocessing import cpu_count
 from typing import TYPE_CHECKING
 
 import ray
+import torch
 from ray import serve
 
 from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
@@ -34,15 +36,20 @@ class BatchPredictServer:
         predict_unit_ref,
         max_batch_size: int = 32,
         batch_wait_timeout_s: float = 0.05,
+        split_oom_batch: bool = True,
     ):
         """
         Initialize with a Ray object reference to a PredictUnit.
 
         Args:
             predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
+            max_batch_size: Maximum number of prediction requests to send to Ray.
+            batch_wait_timeout_s: Timeout in seconds to wait for a prediction
+            split_oom_batch: If true will split batch if an OOM error is raised
         """
         self.predict_unit = ray.get(predict_unit_ref)
         self.configure_batching(max_batch_size, batch_wait_timeout_s)
+        self.split_oom_batch = split_oom_batch
 
         logging.info("BatchedPredictor initialized with predict_unit from object store")
 
@@ -65,9 +72,33 @@ class BatchPredictServer:
         Returns:
             List of prediction dictionaries, one per input
         """
-        batch = atomicdata_list_to_batch(data_list)
-        predictions = self.predict_unit.predict(batch, undo_element_references)
-        prediction_list = self._split_predictions(predictions, batch)
+        data_deque = deque([data_list])
+        prediction_list = []
+        while len(data_deque) > 0:
+            oom = False
+            data_list = data_deque.popleft()
+            batch = atomicdata_list_to_batch(data_list)
+
+            try:
+                predictions = self.predict_unit.predict(
+                    batch, undo_element_references=undo_element_references
+                )
+                prediction_list.extend(self._split_predictions(predictions, batch))
+            except torch.OutOfMemoryError as err:
+                if not self.split_oom_batch:
+                    raise torch.OutOfMemoryError(
+                        "Reduce max_batch_size or set oom_split_batch=True to automatically split OOM batches."
+                    ) from err
+
+                logging.warning(
+                    "Caught out of memory error. Splitting batch and retrying."
+                )
+                oom = True
+
+            if oom:
+                mid = len(data_deque) // 2
+                data_deque.appendleft(data_list[mid:])
+                data_deque.appendleft(data_list[:mid])
 
         return prediction_list
 
