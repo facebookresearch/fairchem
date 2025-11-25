@@ -39,6 +39,11 @@ class MolecularGraphConfigs:
         "gaussian"
     )
     use_envelope: bool = True
+    # Chunked graph construction to reduce peak memory
+    use_chunked_graph: bool = False
+    graph_chunk_size: int = 512
+    # Run preprocessing on CPU to reduce GPU memory
+    preprocess_on_cpu: bool = False
 
 
 @dataclass

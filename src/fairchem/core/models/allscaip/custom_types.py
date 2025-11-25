@@ -40,6 +40,17 @@ class GraphAttentionData:
     max_num_nodes: int
     num_nodes: int
 
+    def to(self, device: torch.device) -> "GraphAttentionData":
+        """Move all tensor fields to the specified device."""
+        new_fields = {}
+        for field in dataclasses.fields(self):
+            value = getattr(self, field.name)
+            if isinstance(value, torch.Tensor):
+                new_fields[field.name] = value.to(device)
+            else:
+                new_fields[field.name] = value
+        return GraphAttentionData(**new_fields)
+
 
 def flatten_graph_attention_data_with_spec(data, spec):
     # Flatten based on the in_spec structure
