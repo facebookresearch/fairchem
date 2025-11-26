@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import TYPE_CHECKING, Literal
 
@@ -15,7 +14,7 @@ import torch
 import torch.nn as nn
 from torch.profiler import record_function
 
-from fairchem.core.common import distutils, gp_utils
+from fairchem.core.common import gp_utils
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
@@ -767,7 +766,6 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             energy = gp_utils.reduce_from_model_parallel_region(energy_part)
         else:
             energy = energy_part
-        logging.info(f"rank: {distutils.get_rank()}, energy: {energy}")
 
         if self.reduce == "sum":
             return {"energy": energy}
@@ -829,7 +827,6 @@ class Linear_Force_Head(nn.Module, HeadInterface):
                 forces, data_dict["atomic_numbers_full"].shape[0]
             )
 
-        logging.info(f"rank: {distutils.get_rank()}, forces: {forces.sum()}")
         return {"forces": forces}
 
 
