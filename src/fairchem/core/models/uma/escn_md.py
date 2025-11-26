@@ -416,7 +416,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            logging.info(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -483,7 +482,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
         data_dict["batch_full"] = data_dict["batch"]
-        logging.info(f"rank: {distutils.get_rank()} starting")
 
         csd_mixed_emb = self.csd_embedding(
             charge=data_dict["charge"],
