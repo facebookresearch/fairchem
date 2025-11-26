@@ -12,7 +12,7 @@ import typing
 import numpy as np
 import torch
 import torch.nn as nn
-from torch_scatter import segment_coo
+from torch_scatter import scatter, segment_coo
 
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import (
@@ -47,6 +47,20 @@ from .utils import (
 
 if typing.TYPE_CHECKING:
     from torch_geometric.data.batch import Batch
+
+
+def scatter_det(*args, **kwargs):
+    from fairchem.core.common.registry import registry
+
+    if registry.get("set_deterministic_scatter", no_warning=True):
+        torch.use_deterministic_algorithms(mode=True)
+
+    out = scatter(*args, **kwargs)
+
+    if registry.get("set_deterministic_scatter", no_warning=True):
+        torch.use_deterministic_algorithms(mode=False)
+
+    return out
 
 
 @registry.register_model("gemnet_oc")
@@ -1475,23 +1489,21 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
     ) -> dict[str, torch.Tensor]:
         # Global output block for final predictions
         x_E = self.out_mlp_E(torch.cat(emb["xs_E"], dim=-1))
-        with torch.cuda.amp.autocast(False):
-            E_t = self.out_energy(x_E)
+        with torch.autocast("cuda", enabled=False):
+            E_t = self.out_energy(x_E.float())
 
-        nMolecules = torch.max(data_dict["batch"]) + 1
+        batch = data_dict["batch"]
+        nMolecules = torch.max(batch) + 1
         if self.extensive:
-            E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
-            E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
+            E_t = scatter_det(
+                E_t, batch, dim=0, dim_size=nMolecules, reduce="add"
+            )  # (nMolecules, 1)
         else:
-            # For mean aggregation
-            E_t_agg = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
-            count = torch.zeros(nMolecules, 1, device=E_t.device, dtype=E_t.dtype)
-            ones = torch.ones_like(E_t)
-            E_t_agg.scatter_add_(0, data_dict["batch"].unsqueeze(-1), E_t)
-            count.scatter_add_(0, data_dict["batch"].unsqueeze(-1), ones)
-            E_t_agg = E_t_agg / count.clamp(min=1)  # avoid division by zero
+            E_t = scatter_det(
+                E_t, batch, dim=0, dim_size=nMolecules, reduce="mean"
+            )  # (nMolecules, 1)
 
-        outputs = {"energy": E_t_agg.squeeze(1)}  # (num_molecules)
+        outputs = {"energy": E_t.squeeze(1)}  # (num_molecules)
 
         if self.regress_forces and not self.direct_forces:
             F_t = self.scaler.calc_forces_and_update(
