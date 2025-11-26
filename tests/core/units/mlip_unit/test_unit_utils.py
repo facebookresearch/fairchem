@@ -32,7 +32,7 @@ class GradSaveOptimizer(torch.optim.AdamW):
             gp_size = 0
             gp_rank = 0
             if gp_utils.initialized():
-                gp_size = gp_utils.get_dp_world_size()
+                gp_size = gp_utils.get_gp_world_size()
                 gp_rank = gp_utils.get_dp_rank()
 
             ddp_size = distutils.get_world_size()
