@@ -90,10 +90,16 @@ class BatchPredictServer:
                         "Reduce max_batch_size or set oom_split_batch=True to automatically split OOM batches."
                     ) from err
 
+                if len(data_list) == 1:
+                    raise torch.OutOfMemoryError(
+                        "Out of memory for a single system left in batch."
+                    ) from err
+
                 logging.warning(
                     "Caught out of memory error. Splitting batch and retrying."
                 )
                 oom = True
+                torch.cuda.empty_cache()
 
             if oom:
                 mid = len(data_deque) // 2
