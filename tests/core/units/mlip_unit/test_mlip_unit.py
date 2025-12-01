@@ -219,7 +219,9 @@ def test_full_train_eval_from_cli_aselmdb(fake_uma_dataset, torch_deterministic)
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=13.662849426269531",
+        # this is slightly different for the cpu version from radius_pbc v1
+        # v1 value is 13.662849426269531
+        "+expected_loss=13.661477088928223",
     ]
     launch_main(sys_args)
 
