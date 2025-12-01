@@ -188,27 +188,21 @@ def setup_batch_predict_server(
     Returns:
         Ray Serve deployment handle that can be used to initialize BatchServerPredictUnit
     """
-    cpu_per_actor = (
-        ray_actor_options.get("num_cpus", 1)
-        if ray_actor_options
-        else min(cpu_count(), 4)
-    )
-
     if ray_actor_options is None:
         ray_actor_options = {}
+
+    cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
+    ray_actor_options["num_cpus"] = cpus_per_actor
 
     if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
         # assign 1 GPU per replica by default if using GPU device
         ray_actor_options["num_gpus"] = 1
 
-    if "num_cpus" not in ray_actor_options:
-        ray_actor_options["num_cpus"] = cpu_per_actor
-
     if not ray.is_initialized():
         ray.init(
             log_to_driver=False,
             logging_config=ray.LoggingConfig(log_level="WARNING"),
-            num_cpus=cpu_per_actor * num_replicas,
+            num_cpus=cpus_per_actor * num_replicas,
         )
         logging.info("Ray initialized by setup_batch_predict_server")
 
