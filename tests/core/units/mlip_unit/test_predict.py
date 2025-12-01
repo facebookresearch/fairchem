@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import numpy.testing as npt
 import pytest
+import ray
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 
@@ -160,6 +161,7 @@ def test_parallel_predict_unit(workers, device):
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
+    ray.shutdown()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -256,6 +258,87 @@ def test_parallel_predict_unit_batch(workers, device):
         atol=FORCE_TOL,
     )
 
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "padding",
+    [   
+        (0),
+        (1),
+        (32),
+    ],
+)
+def test_batching_consistency(padding):
+    """Test that batched and unbatched predictions are consistent."""
+    # Get the appropriate predict unit
+
+    ifsets = InferenceSettings(
+            tf32=False,
+            merge_mole=False,
+            activation_checkpointing=True,
+            internal_graph_gen_version=2,
+            external_graph_gen=False,
+            edge_chunk_size=padding,
+        )
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device='cuda', inference_settings=ifsets)
+
+    # Create H2O molecule
+    h2o = molecule("H2O")
+    h2o.info.update({"charge": 0, "spin": 1})
+    h2o.pbc = True
+
+    # Create system of two oxygen atoms 100 A apart
+    from ase import Atoms
+    o_atom = Atoms('O2', positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
+    o_atom.info.update({"charge": 0, "spin": 4})  # two triplet oxygens -> quintet
+    o_atom.pbc = True
+
+    # Convert to AtomicData
+    h2o_data = AtomicData.from_ase(
+        h2o,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    o_data = AtomicData.from_ase(
+        o_atom,
+        task_name="omol", 
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+
+    # Batch 1: [H2O, O]
+    batch1 = atomicdata_list_to_batch([h2o_data, o_data])
+    seed_everywhere(42)
+    preds1 = predict_unit.predict(batch1)
+
+    # Batch 2: [H2O]
+    batch2 = atomicdata_list_to_batch([h2o_data])
+    seed_everywhere(42)
+    preds2 = predict_unit.predict(batch2)
+
+    # Batch 3: [O]
+    batch3 = atomicdata_list_to_batch([o_data])
+    seed_everywhere(42)
+    preds3 = predict_unit.predict(batch3)
+
+    # Assert energies match
+    assert torch.allclose(preds1["energy"][0], preds2["energy"][0], atol=ATOL)
+    assert torch.allclose(preds1["energy"][1], preds3["energy"][0], atol=ATOL)
+
+    # Assert forces match
+    batch1_batch = batch1.batch
+    h2o_forces_batch1 = preds1["forces"][batch1_batch == 0]
+    o_forces_batch1 = preds1["forces"][batch1_batch == 1]
+
+    h2o_forces_batch2 = preds2["forces"]
+    o_forces_batch3 = preds3["forces"]
+
+    assert torch.allclose(h2o_forces_batch1, h2o_forces_batch2, atol=ATOL)
+    assert torch.allclose(o_forces_batch1, o_forces_batch3, atol=ATOL)
+
+    # Assert stress matches
+    assert torch.allclose(preds1["stress"][0], preds2["stress"][0], atol=ATOL)
+    assert torch.allclose(preds1["stress"][1], preds3["stress"][0], atol=ATOL)
 
 # ---------------------------------------------------------------------------
 # Rotation / out-of-plane force invariance tests (planar molecules)
@@ -393,6 +476,61 @@ def test_merge_mole_composition_check():
         match="Cannot run on merged model on system. Relative compositions seem different",
     ):
         _ = atoms_al.get_potential_energy()
+
+
+@pytest.mark.gpu()
+def test_merge_mole_vs_non_merged_consistency():
+    """Test that merged and non-merged versions produce identical results."""
+    atoms = bulk("MgO", "rocksalt", a=4.213)
+    
+    # Test with merge_mole=True
+    settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    predict_unit_merged = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings_merged
+    )
+    calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
+    
+    atoms_merged = atoms.copy()
+    atoms_merged.calc = calc_merged
+    energy_merged = atoms_merged.get_potential_energy()
+    forces_merged = atoms_merged.get_forces()
+    stress_merged = atoms_merged.get_stress(voigt=False)
+    
+    # Test with merge_mole=False
+    settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
+    predict_unit_non_merged = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged
+    )
+    calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
+    
+    atoms_non_merged = atoms.copy()
+    atoms_non_merged.calc = calc_non_merged
+    energy_non_merged = atoms_non_merged.get_potential_energy()
+    forces_non_merged = atoms_non_merged.get_forces()
+    stress_non_merged = atoms_non_merged.get_stress(voigt=False)
+    
+    # Assert that results are identical
+    npt.assert_allclose(
+        energy_merged,
+        energy_non_merged,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg=f"Energies differ: merged={energy_merged}, non-merged={energy_non_merged}",
+    )
+    npt.assert_allclose(
+        forces_merged,
+        forces_non_merged,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg="Forces differ between merged and non-merged versions",
+    )
+    npt.assert_allclose(
+        stress_merged,
+        stress_non_merged,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg="Stress differs between merged and non-merged versions",
+    )
 
 
 @pytest.mark.gpu()
