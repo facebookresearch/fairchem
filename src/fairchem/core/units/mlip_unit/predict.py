@@ -265,7 +265,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             self.lazy_model_intialized = True
 
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
-        data_device = data.to(self.device).clone()
+        data_device = data.to(self.device)  # .clone()
 
         if self.inference_settings.merge_mole:
             if self.merged_on is None:
