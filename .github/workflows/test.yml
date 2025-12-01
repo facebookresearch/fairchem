@@ -39,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
@@ -128,7 +128,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
@@ -176,7 +176,7 @@ jobs:
         python_version: ['3.13']
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mamba-org/setup-micromamba@v2
         with:
           generate-run-shell: true # This is the default behavior
@@ -184,7 +184,7 @@ jobs:
           create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
