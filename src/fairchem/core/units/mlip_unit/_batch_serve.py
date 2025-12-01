@@ -34,8 +34,8 @@ class BatchPredictServer:
     def __init__(
         self,
         predict_unit_ref,
-        max_batch_size: int = 32,
-        batch_wait_timeout_s: float = 0.05,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
     ):
         """
@@ -166,6 +166,7 @@ def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
     max_batch_size: int = 32,
     batch_wait_timeout_s: float = 0.1,
+    split_oom_batch: bool = True,
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
     deployment_name: str = "predict-server",
@@ -176,12 +177,13 @@ def setup_batch_predict_server(
 
     Args:
         predict_unit: An MLIPPredictUnit instance to use for batched inference
-        max_batch_size: Maximum number of systems per batch (default: 32)
-        batch_wait_timeout_s: Maximum wait time before processing partial batch (default: 0.05)
-        num_replicas: Number of deployment replicas for scaling (default: 1)
+        max_batch_size: Maximum number of systems per batch.
+        batch_wait_timeout_s: Maximum wait time before processing partial batch.
+        split_oom_batch: Whether to split batches that cause OOM errors.
+        num_replicas: Number of deployment replicas for scaling.
         ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})
-        deployment_name: Name for the Ray Serve deployment (default: "predict-server")
-        route_prefix: HTTP route prefix for the deployment (default: "/predict")
+        deployment_name: Name for the Ray Serve deployment.
+        route_prefix: HTTP route prefix for the deployment.
 
     Returns:
         Ray Serve deployment handle that can be used to initialize BatchServerPredictUnit
@@ -226,6 +228,7 @@ def setup_batch_predict_server(
         predict_unit_ref,
         max_batch_size=max_batch_size,
         batch_wait_timeout_s=batch_wait_timeout_s,
+        split_oom_batch=split_oom_batch,
     )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
