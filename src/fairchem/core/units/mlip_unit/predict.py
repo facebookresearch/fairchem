@@ -126,6 +126,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
     ):
         super().__init__()
@@ -138,6 +139,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if atom_refs is not None
             else {}
         )
+        self.form_elem_refs = form_elem_refs if form_elem_refs is not None else {}
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -456,6 +458,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
         num_workers: int = 1,
         num_workers_per_node: int = 8,
@@ -469,6 +472,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             inference_settings=inference_settings,
             seed=seed,
             atom_refs=atom_refs,
+            form_elem_refs=form_elem_refs,
         )
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
@@ -481,6 +485,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "inference_settings": inference_settings,
             "seed": seed,
             "atom_refs": atom_refs,
+            "form_elem_refs": form_elem_refs,
             "assert_on_nans": assert_on_nans,
         }
 
