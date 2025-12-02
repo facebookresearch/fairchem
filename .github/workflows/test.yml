@@ -72,9 +72,8 @@ jobs:
             packages/fairchem-data-oc[dev] \
             packages/fairchem-data-omat \
             packages/fairchem-data-omol[dev] \
-            packages/fairchem-demo-ocpapi[dev]
-
-          pip install -r tests/requirements.txt # pin test packages
+            packages/fairchem-demo-ocpapi[dev] \
+            -r tests/requirements.txt # pin test packages
 
       - name: Install additional dependencies
         run: |
@@ -149,9 +148,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev] \
           packages/fairchem-data-omol[dev] \
-          packages/fairchem-data-omat
-
-          pip install -r tests/requirements.txt # pin test packages
+          packages/fairchem-data-omat \
+          -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
         env:
@@ -206,9 +204,8 @@ jobs:
           micromamba install lammps
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras] \
-          packages/fairchem-lammps
-
-          pip install -r tests/requirements.txt # pin test packages
+          packages/fairchem-lammps \
+          -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
         shell: micromamba-shell {0}
