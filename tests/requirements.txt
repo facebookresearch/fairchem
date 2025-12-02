@@ -12,3 +12,4 @@ pymatgen==v2025.10.7
 ray==2.52.1
 ipykernel==7.1.0
 jupyter_book==1.0.4
+pytest-xdist==3.8.0
