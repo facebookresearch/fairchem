@@ -124,11 +124,15 @@ class Edgewise(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        edge_envelope,
+        total_atoms_across_gp_ranks,
         node_offset: int = 0,
     ):
         # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
-            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(x, dim=0)
+            x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
+                x, total_atoms_across_gp_ranks
+            )
         else:
             x_full = x
 
@@ -141,6 +145,7 @@ class Edgewise(torch.nn.Module):
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 node_offset,
             )
         edge_index_partitions = edge_index.split(
@@ -153,6 +158,9 @@ class Edgewise(torch.nn.Module):
             self.activation_checkpoint_chunk_size, dim=0
         )
         edge_distance_parititons = edge_distance.split(
+            self.activation_checkpoint_chunk_size, dim=0
+        )
+        edge_envelope_partitions = edge_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -172,6 +180,7 @@ class Edgewise(torch.nn.Module):
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
+                    edge_envelope_partitions[idx],
                     node_offset,
                     ac_mole_start_idx,
                     use_reentrant=False,
@@ -192,6 +201,7 @@ class Edgewise(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        edge_envelope,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
@@ -216,10 +226,7 @@ class Edgewise(torch.nn.Module):
 
             x_message = self.so2_conv_2(x_message, x_edge)
 
-            # envelope
-            dist_scaled = edge_distance / self.cutoff
-            env = self.envelope(dist_scaled)
-            x_message = x_message * env.view(-1, 1, 1)
+            x_message = x_message * edge_envelope
 
             # Rotate back the irreps
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
@@ -382,6 +389,8 @@ class eSCNMD_Block(torch.nn.Module):
         edge_index,
         wigner_and_M_mapping,
         wigner_and_M_mapping_inv,
+        edge_envelope,
+        total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
     ):
@@ -399,7 +408,9 @@ class eSCNMD_Block(torch.nn.Module):
                 edge_index,
                 wigner_and_M_mapping,
                 wigner_and_M_mapping_inv,
-                node_offset,
+                edge_envelope,
+                total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
+                node_offset=node_offset,
             )
             x = x + x_res
 

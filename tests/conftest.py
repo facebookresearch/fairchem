@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import random
 from contextlib import suppress
-
+import ray
 import numpy as np
 import pytest
 import torch
-
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
 
 @pytest.fixture()
 def command_line_inference_checkpoint(request):
@@ -114,3 +115,36 @@ def compile_reset_state():
     torch.compiler.reset()
     yield
     torch.compiler.reset()
+
+
+@pytest.fixture(scope="session")
+def water_xyz_file(tmp_path_factory):
+    """Provide a reusable minimal water molecule XYZ file path.
+
+    Returns the filesystem path to a temporary XYZ file containing a 3-atom
+    water cluster suitable for quick inference / graph generation tests.
+    """
+    contents = (
+        "3\n"
+        "water\n"
+        "O 0.000000 0.000000 0.000000\n"
+        "H 0.758602 0.000000 0.504284\n"
+        "H -0.758602 0.000000 0.504284\n"
+    )
+    d = tmp_path_factory.mktemp("xyz_inputs")
+    fpath = d / "water.xyz"
+    fpath.write_text(contents)
+    return str(fpath)
+
+
+@pytest.fixture(autouse=True)
+def setup_before_each_test():
+    ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
+    yield
+    ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()

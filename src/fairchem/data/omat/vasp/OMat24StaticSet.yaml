@@ -1,0 +1,110 @@
+# OMat24 VASP input settings
+PARENT: PBE54Base
+INCAR:
+  ALGO: NORMAL
+  EDIFF_PER_ATOM: 5.0e-05
+  ENCUT: 520
+  IBRION: -1
+  ISIF: 3
+  ISMEAR: -5
+  ISPIN: 2
+  LASPH: true
+  LDAU: true
+  LDAUJ:
+    F:
+      Co: 0
+      Cr: 0
+      Fe: 0
+      Mn: 0
+      Mo: 0
+      Ni: 0
+      V: 0
+      W: 0
+    O:
+      Co: 0
+      Cr: 0
+      Fe: 0
+      Mn: 0
+      Mo: 0
+      Ni: 0
+      V: 0
+      W: 0
+  LDAUL:
+    F:
+      Co: 2
+      Cr: 2
+      Fe: 2
+      Mn: 2
+      Mo: 2
+      Ni: 2
+      V: 2
+      W: 2
+    O:
+      Co: 2
+      Cr: 2
+      Fe: 2
+      Mn: 2
+      Mo: 2
+      Ni: 2
+      V: 2
+      W: 2
+  LDAUTYPE: 2
+  LDAUU:
+    F:
+      Co: 3.32
+      Cr: 3.7
+      Fe: 5.3
+      Mn: 3.9
+      Mo: 4.38
+      Ni: 6.2
+      V: 3.25
+      W: 6.2
+    O:
+      Co: 3.32
+      Cr: 3.7
+      Fe: 5.3
+      Mn: 3.9
+      Mo: 4.38
+      Ni: 6.2
+      V: 3.25
+      W: 6.2
+  MAGMOM:
+    Ce: 5
+    Ce3+: 1
+    Co: 0.6
+    Co3+: 0.6
+    Co4+: 1
+    Cr: 5
+    Dy3+: 5
+    Er3+: 3
+    Eu: 10
+    Eu2+: 7
+    Eu3+: 6
+    Fe: 5
+    Gd3+: 7
+    Ho3+: 4
+    La3+: 0.6
+    Lu3+: 0.6
+    Mn: 5
+    Mn3+: 4
+    Mn4+: 3
+    Mo: 5
+    Nd3+: 3
+    Ni: 5
+    Pm3+: 4
+    Pr3+: 2
+    Sm3+: 5
+    Tb3+: 6
+    Tm3+: 2
+    V: 5
+    W: 5
+    Yb3+: 1
+  LDAUPRINT: 1
+  LORBIT: 11
+  LREAL: AUTO
+  LWAVE: false
+  NELM: 100
+  PREC: Accurate
+  SIGMA: 0.05
+KPOINTS:
+  reciprocal_density: 64

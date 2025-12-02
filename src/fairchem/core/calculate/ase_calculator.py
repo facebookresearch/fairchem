@@ -93,11 +93,25 @@ class FAIRChemCalculator(Calculator):
 
         self.predictor = predict_unit
 
+        if predict_unit.inference_settings.external_graph_gen is True:
+            r_edges = True
+            max_neigh = 300
+            radius = 6.0  # Default radius for edge generation
+            logging.warning(
+                "External graph generation is enabled, limiting neighbors to 300."
+            )
+        else:
+            r_edges = False
+            max_neigh = None
+            radius = 6.0  # Still need radius even for internal graph gen
+
         self.a2g = partial(
             AtomicData.from_ase,
             task_name=self.task_name,
-            r_edges=False,
+            r_edges=r_edges,
             r_data_keys=["spin", "charge"],
+            max_neigh=max_neigh,
+            radius=radius,
         )
 
     @property
@@ -295,7 +309,7 @@ class FAIRChemCalculator(Calculator):
 
         # Validate charge
         charge = atoms.info["charge"]
-        if not isinstance(charge, int):
+        if not isinstance(charge, (int, np.integer)):
             raise TypeError(
                 f"Invalid type for charge: {type(charge)}. Charge must be an integer representing the total charge on the system."
             )
@@ -306,7 +320,7 @@ class FAIRChemCalculator(Calculator):
 
         # Validate spin
         spin = atoms.info["spin"]
-        if not isinstance(spin, int):
+        if not isinstance(charge, (int, np.integer)):
             raise TypeError(
                 f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
             )

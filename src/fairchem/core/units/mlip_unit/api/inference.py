@@ -70,11 +70,7 @@ class InferenceSettings:
     compile: bool = False
 
     # Flag to enable or disable the use of CUDA Graphs for compute
-    # Wigner matrices during inference, reducing overhead and increases
-    # speed This is recommended for simulation use cases, if the input
-    # shapes changes frequently, it will need to rebuild the CUDA graphs
-    # If set to None, the setting from the model checkpoint will be
-    # used.
+    # This flag is no longer used and will be removed in future versions
     wigner_cuda: bool | None = None
 
     # Flag to enable or disable the generation of external graphs during
@@ -91,6 +87,8 @@ class InferenceSettings:
     # Number of internal torch threads to use for inference
     torch_num_threads: int | None = None
 
+    edge_chunk_size: int | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
@@ -100,7 +98,6 @@ def inference_settings_default():
         activation_checkpointing=True,
         merge_mole=False,
         compile=False,
-        wigner_cuda=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
@@ -113,10 +110,9 @@ def inference_settings_default():
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,
-        activation_checkpointing=True,
+        activation_checkpointing=False,
         merge_mole=True,
         compile=True,
-        wigner_cuda=True,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
@@ -129,7 +125,6 @@ def inference_settings_traineval():
         activation_checkpointing=False,
         merge_mole=False,
         compile=False,
-        wigner_cuda=False,
         internal_graph_gen_version=1,
     )
 

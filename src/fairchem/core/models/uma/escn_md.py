@@ -16,7 +16,6 @@ import torch.nn as nn
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
-from fairchem.core.common.distutils import get_device_for_local_rank
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
@@ -25,7 +24,6 @@ from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
-from fairchem.core.models.uma.common.rotation_cuda_graph import RotMatWignerCudaGraph
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
@@ -40,7 +38,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing
+from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
@@ -50,7 +48,51 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
-ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+    graph_dict["edge_index"] = torch.cat(
+        (
+            graph_dict["edge_index"].new_ones(2, edges_to_add)
+            * graph_dict["node_offset"],
+            graph_dict["edge_index"],
+        ),
+        dim=1,
+    )
+
+    self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
+    graph_dict["edge_distance_vec"] = torch.cat(
+        (
+            self_edge_distance_vec.expand(edges_to_add, 3),
+            graph_dict["edge_distance_vec"],
+        ),
+        dim=0,
+    )
+
+    edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+    graph_dict["edge_distance"] = torch.cat(
+        (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
+    )
+
+
+@torch.compiler.disable
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+
+    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
+        # make sure we have a multiple of self.edge_chunk_size edges
+        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
+    if n_edges_post > n_edges:
+        # We append synthetic padding edges whose distance vector has norm > cutoff
+        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
+        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
+        # contribute to embeddings or message passing; they only ensure the edge count
+        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
+        # activation checkpointing and avoiding empty tensor edge cases.
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
 
 
 @registry.register_model("escnmd_backbone")
@@ -90,6 +132,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
         always_use_pbc: bool = True,
+        edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -118,7 +161,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         activation_checkpoint_chunk_size = None
         if activation_checkpointing:
             # The size of edge blocks to use in activation checkpointing
-            activation_checkpoint_chunk_size = ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
+            activation_checkpoint_chunk_size = (
+                ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
+            )
+        self.edge_chunk_size = edge_chunk_size
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -130,7 +176,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 self.dataset_list
             ), "the dataset list is empty, please add it to the model backbone config"
-        self.use_cuda_graph_wigner = use_cuda_graph_wigner
 
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
@@ -212,13 +257,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             sphere_channels=self.sphere_channels,
             lmax=self.lmax,
             mmax=self.mmax,
-            max_num_elements=self.max_num_elements,
             edge_channels_list=self.edge_channels_list,
             rescale_factor=5.0,  # NOTE: sqrt avg degree
-            cutoff=self.cutoff,
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
         )
+
+        self.envelope = PolynomialEnvelope(exponent=5)
 
         self.num_layers = num_layers
         self.hidden_channels = hidden_channels
@@ -251,37 +296,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             num_channels=self.sphere_channels,
         )
 
-        self.rot_mat_wigner_cuda = None  # lazily initialize this
         coefficient_index = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(
             self.lmax, self.mmax
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
     def _get_rotmat_and_wigner(
-        self, edge_distance_vecs: torch.Tensor, use_cuda_graph: bool
+        self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         Jd_buffers = [
             getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
         ]
 
-        if use_cuda_graph:
-            if self.rot_mat_wigner_cuda is None:
-                self.rot_mat_wigner_cuda = RotMatWignerCudaGraph()
-            with record_function("obtain rotmat wigner cudagraph"):
-                wigner, wigner_inv = self.rot_mat_wigner_cuda.get_rotmat_and_wigner(
-                    edge_distance_vecs, Jd_buffers
-                )
-        else:
-            with record_function("obtain rotmat wigner original"):
-                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-                wigner = eulers_to_wigner(
-                    euler_angles,
-                    0,
-                    self.lmax,
-                    Jd_buffers,
-                )
-                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+        with record_function("obtain rotmat wigner original"):
+            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+            wigner = eulers_to_wigner(
+                euler_angles,
+                0,
+                self.lmax,
+                Jd_buffers,
+            )
+            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
         # select subset of coefficients we are using
         if self.mmax != self.lmax:
@@ -413,6 +449,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ]
             data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
 
+        if self.edge_chunk_size is not None:
+            pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
+
         return graph_dict
 
     @conditional_grad(torch.enable_grad())
@@ -448,9 +487,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
                 self._get_rotmat_and_wigner(
                     graph_dict["edge_distance_vec"],
-                    use_cuda_graph=self.use_cuda_graph_wigner
-                    and "cuda" in get_device_for_local_rank()
-                    and not self.training,
                 )
             )
 
@@ -484,6 +520,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # edge degree embedding
         with record_function("edge embedding"):
+            dist_scaled = graph_dict["edge_distance"] / self.cutoff
+            edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
             edge_distance_embedding = self.distance_expansion(
                 graph_dict["edge_distance"]
             )
@@ -499,9 +537,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
-                graph_dict["edge_distance"],
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
+                edge_envelope,
                 graph_dict["node_offset"],
             )
 
@@ -517,6 +555,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
+                    edge_envelope,
+                    total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
+                        0
+                    ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=graph_dict["node_offset"],
                 )
@@ -542,7 +584,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
             gp_utils.get_gp_world_size(),
         )[gp_utils.get_gp_rank()]
-
         assert (
             node_partition.numel() > 0
         ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
@@ -560,7 +601,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         graph_dict["edge_distance_vec"] = graph_dict["edge_distance_vec"][
             edge_partition
         ]
-
         return graph_dict
 
     @property
@@ -659,13 +699,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
-
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
-        )
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
@@ -793,7 +831,9 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+            forces = gp_utils.gather_from_model_parallel_region(
+                forces, data_dict["atomic_numbers_full"].shape[0]
+            )
         return {"forces": forces}
 
 

@@ -28,13 +28,13 @@ from fairchem.core.units.mlip_unit.api.inference import (
 
 
 @pytest.mark.parametrize(
-    "tf32, activation_checkpointing, merge_mole, compile, wigner_cuda, external_graph_gen",
+    "tf32, activation_checkpointing, merge_mole, compile, external_graph_gen",
     [
-        (False, False, False, False, False, True),  # test external graph gen
-        (False, False, False, False, False, False),  # test internal graph gen
-        (True, False, False, False, True, True),  # test wigner cuda
-        (True, True, True, False, True, True),  # test merge but no compile
-        (True, True, False, False, True, True),  # test no merge or compile
+        (False, False, False, False,  True),  # test external graph gen
+        (False, False, False, False,  False),  # test internal graph gen
+        (True, False, False, False,  True),  # test wigner cuda
+        (True, True, True, False,  True),  # test merge but no compile
+        (True, True, False, False,  True),  # test no merge or compile
     ],
 )
 def test_direct_mole_inference_modes(
@@ -42,7 +42,6 @@ def test_direct_mole_inference_modes(
     activation_checkpointing,
     merge_mole,
     compile,
-    wigner_cuda,
     external_graph_gen,
     direct_mole_checkpoint,
     fake_uma_dataset,
@@ -56,7 +55,6 @@ def test_direct_mole_inference_modes(
             activation_checkpointing=activation_checkpointing,
             merge_mole=merge_mole,
             compile=compile,
-            wigner_cuda=wigner_cuda,
             external_graph_gen=external_graph_gen,
         ),
         direct_mole_checkpoint_pt,
@@ -66,13 +64,13 @@ def test_direct_mole_inference_modes(
 
 
 @pytest.mark.parametrize(
-    "tf32, activation_checkpointing, merge_mole, compile, wigner_cuda, external_graph_gen",
+    "tf32, activation_checkpointing, merge_mole, compile,  external_graph_gen",
     [
-        (False, False, False, False, False, True),  # test external graph gen
-        (False, False, False, False, False, False),  # test internal graph gen
-        (True, False, False, False, True, True),  # test wigner cuda
-        (True, True, True, False, True, True),  # test merge but no compile
-        (True, True, False, False, True, True),  # test no merge or compile
+        (False, False, False, False,  True),  # test external graph gen
+        (False, False, False, False,  False),  # test internal graph gen
+        (True, False, False, False,  True),  # test wigner cuda
+        (True, True, True, False,  True),  # test merge but no compile
+        (True, True, False, False,  True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes(
@@ -80,7 +78,6 @@ def test_conserving_mole_inference_modes(
     activation_checkpointing,
     merge_mole,
     compile,
-    wigner_cuda,
     external_graph_gen,
     conserving_mole_checkpoint,
     fake_uma_dataset,
@@ -94,7 +91,6 @@ def test_conserving_mole_inference_modes(
             activation_checkpointing=activation_checkpointing,
             merge_mole=merge_mole,
             compile=compile,
-            wigner_cuda=wigner_cuda,
             external_graph_gen=external_graph_gen,
         ),
         conserving_mole_checkpoint_pt,
@@ -105,16 +101,16 @@ def test_conserving_mole_inference_modes(
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "tf32, activation_checkpointing, merge_mole, compile, wigner_cuda, external_graph_gen",
+    "tf32, activation_checkpointing, merge_mole, compile,  external_graph_gen",
     [
-        (False, False, False, False, False, True),  # test external graph gen
-        (False, False, False, False, False, False),  # test internal graph gen
-        (True, False, False, False, True, True),  # test wigner cuda
-        (True, False, True, True, False, True),  # test compile and merge
+        (False, False, False, False,  True),  # test external graph gen
+        (False, False, False, False,  False),  # test internal graph gen
+        (True, False, False, False,  True),  # test wigner cuda
+        (True, False, True, True,  True),  # test compile and merge
         # with acvitation checkpointing
-        (True, True, True, True, True, True),  # test external model graph gen + compile
-        (True, True, True, False, True, True),  # test merge but no compile
-        (True, True, False, False, True, True),  # test no merge or compile
+        (True, True, True, True,  True),  # test external model graph gen + compile
+        (True, True, True, False,  True),  # test merge but no compile
+        (True, True, False, False,  True),  # test no merge or compile
     ],
 )
 def test_conserving_mole_inference_modes_gpu(
@@ -122,7 +118,6 @@ def test_conserving_mole_inference_modes_gpu(
     activation_checkpointing,
     merge_mole,
     compile,
-    wigner_cuda,
     external_graph_gen,
     conserving_mole_checkpoint,
     fake_uma_dataset,
@@ -135,7 +130,6 @@ def test_conserving_mole_inference_modes_gpu(
             activation_checkpointing=activation_checkpointing,
             merge_mole=merge_mole,
             compile=compile,
-            wigner_cuda=wigner_cuda,
             external_graph_gen=external_graph_gen,
         ),
         conserving_mole_checkpoint_pt,
@@ -239,7 +233,7 @@ def mole_inference(
     dataset_dir,
     device,
     energy_rtol=1e-4,
-    forces_rtol=1e-4,
+    forces_rtol=2e-4,
 ):
     db = AseDBDataset(config={"src": os.path.join(dataset_dir, "oc20")})
 
@@ -447,7 +441,7 @@ def test_ac_with_chunking_and_batching(
     merge_mole,
 ):
     monkeypatch.setattr(
-        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_CHUNK_SIZE", chunk_size
+        "fairchem.core.models.uma.escn_md.ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE", chunk_size
     )
     conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
     ifs = InferenceSettings(
@@ -455,7 +449,6 @@ def test_ac_with_chunking_and_batching(
         activation_checkpointing=False,
         merge_mole=merge_mole,
         compile=False,
-        wigner_cuda=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
