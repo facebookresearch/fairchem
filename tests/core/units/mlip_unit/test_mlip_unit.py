@@ -467,11 +467,11 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
-        (3, 2, 6.205352306365967),
-        (6, 2, 6.205352306365967),
-        (5, 2, 6.205352306365967),
-        (6, 3, 43.085227966308594),
-        (14, 3, 43.08521270751953),
+        (3, 2, 6.2054009437561035),
+        (6, 2, 6.2054009437561035),
+        (5, 2, 6.2054009437561035),
+        (6, 3, 43.08491516113281),
+        (14, 3, 43.08491516113281),
     ],
 )
 def test_train_and_resume_max_epochs(

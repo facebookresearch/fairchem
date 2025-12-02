@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import random
+import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
@@ -93,6 +94,20 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
+def merge_uma_model(model, data):
+    # merge the backbone
+    model.backbone = model.backbone.merge_MOLE_model(data)
+
+    # merge any heads
+    new_output_heads = torch.nn.ModuleDict()
+    for head_name, head in model.output_heads.items():
+        if hasattr(head, "merge_MOLE_model"):
+            new_output_heads[head_name] = head.merge_MOLE_model(data)
+        else:
+            new_output_heads[head_name] = head
+    model.output_heads = new_output_heads
+
+
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -102,6 +117,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
     ):
         super().__init__()
@@ -114,6 +130,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if atom_refs is not None
             else {}
         )
+        self.form_elem_refs = form_elem_refs if form_elem_refs is not None else {}
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -130,6 +147,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if inference_settings.activation_checkpointing is not None:
             overrides["backbone"]["activation_checkpointing"] = (
                 inference_settings.activation_checkpointing
+            )
+        if inference_settings.edge_chunk_size is not None:
+            overrides["backbone"]["edge_chunk_size"] = (
+                inference_settings.edge_chunk_size
             )
         if inference_settings.external_graph_gen is not None:
             overrides["backbone"][
@@ -166,7 +187,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.model.eval()
 
         self.lazy_model_intialized = False
-        self.inference_mode = inference_settings
+        self.inference_settings = inference_settings
 
         # store composition embedding of system the model was merged on
         self.merged_on = None
@@ -227,34 +248,28 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
             # merge everything on CPU
-            if self.inference_mode.merge_mole:
+            if self.inference_settings.merge_mole:
                 # replace backbone with non MOE version
                 assert (
                     data.natoms.numel() == 1
                 ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
-                self.model.module.backbone = (
-                    self.model.module.backbone.merge_MOLE_model(data.clone())
-                )
+
+                merge_uma_model(self.model.module, data.clone())
+
                 self.model.eval()
             # move to device
             self.move_to_device()
-            if self.inference_mode.compile:
+            if self.inference_settings.compile:
                 logging.warning(
                     "Model is being compiled this might take a while for the first time"
                 )
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
-        if self.inference_mode.external_graph_gen and data.edge_index.shape[1] == 0:
-            raise ValueError(
-                "Cannot run inference with external graph generation on empty edge index. "
-                "Please ensure the input data has valid edges."
-            )
-
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
-        if self.inference_mode.merge_mole:
+        if self.inference_settings.merge_mole:
             if self.merged_on is None:
                 # only get embeddings after moved to final device to get right types
                 self.merged_on = self.get_composition_charge_spin_dataset(data_device)
@@ -263,22 +278,29 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 assert (
                     data_device.natoms.numel() == 1
                 ), f"Cannot run merged model on batch with multiple systems. Must be exactly 1 system, found {data_device.natoms.numel()}"
-                assert (
-                    self.merged_on[0][0].isclose(this_sys[0][0], rtol=1e-5).all()
-                ), "Cannot run on merged model on system. Embeddings seem different..."
+
+                # Normalize compositions by total number of atoms to allow same reduced composition
+                merged_comp = self.merged_on[0][0].float()
+                this_comp = this_sys[0][0].float()
+                merged_comp_norm = merged_comp / merged_comp.sum()
+                this_comp_norm = this_comp / this_comp.sum()
+
+                assert merged_comp_norm.isclose(
+                    this_comp_norm, rtol=1e-5
+                ).all(), "Cannot run on merged model on system. Relative compositions seem different..."
                 assert (
                     self.merged_on[0][1] == this_sys[0][1]
-                ), f"Cannot run on merged model on system. Charge is diferrent {self.merged_on[0][1]} vs {this_sys[0][1]}"
+                ), f"Cannot run on merged model on system. Charge is different {self.merged_on[0][1]} vs {this_sys[0][1]}"
                 assert (
                     self.merged_on[0][2] == this_sys[0][2]
-                ), f"Cannot run on merged model on system. Spin is diferrent {self.merged_on[0][2]} vs {this_sys[0][2]}"
+                ), f"Cannot run on merged model on system. Spin is different {self.merged_on[0][2]} vs {this_sys[0][2]}"
                 assert (
                     self.merged_on[1] == this_sys[1]
-                ), f"Cannot run on merged model on system. Dataset is diferrent {self.merged_on[1]} vs {this_sys[1]}"
+                ), f"Cannot run on merged model on system. Dataset is different {self.merged_on[1]} vs {this_sys[1]}"
 
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
         tf32_context = (
-            tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
+            tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
         )
 
         pred_output = {}
@@ -340,8 +362,7 @@ def move_tensors_to_cpu(data):
         return data
 
 
-@remote
-class MLIPWorker:
+class MLIPWorkerLocal:
     def __init__(
         self,
         worker_id: int,
@@ -361,54 +382,61 @@ class MLIPWorker:
         )
         self.master_port = get_free_port() if master_port is None else master_port
         self.is_setup = False
+        self.last_received_atomic_data = None
 
     def get_master_address_and_port(self):
         return (self.master_address, self.master_port)
 
+    def get_device_for_local_rank(self):
+        return get_device_for_local_rank()
+
     def _distributed_setup(
         self,
-        worker_id: int,
-        master_port: int,
-        world_size: int,
-        predictor_config: dict,
-        master_address: str,
     ):
         # initialize distributed environment
         # TODO, this wont work for multi-node, need to fix master addr
-        logging.info(f"Initializing worker {worker_id}...")
-        setup_env_local_multi_gpu(worker_id, master_port, master_address)
-        # local_rank = int(os.environ["LOCAL_RANK"])
-        device = predictor_config.get("device", "cpu")
+        logging.info(f"Initializing worker {self.worker_id}...")
+        setup_env_local_multi_gpu(self.worker_id, self.master_port, self.master_address)
+
+        device = self.predictor_config.get("device", "cpu")
         assign_device_for_local_rank(device == "cpu", 0)
         backend = "gloo" if device == "cpu" else "nccl"
         dist.init_process_group(
             backend=backend,
-            rank=worker_id,
-            world_size=world_size,
+            rank=self.worker_id,
+            world_size=self.world_size,
         )
-        gp_utils.setup_graph_parallel_groups(world_size, backend)
-        self.predict_unit = hydra.utils.instantiate(predictor_config)
+        gp_utils.setup_graph_parallel_groups(self.world_size, backend)
+        self.predict_unit = hydra.utils.instantiate(self.predictor_config)
+        self.device = get_device_for_local_rank()
         logging.info(
-            f"Worker {worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
-            f"on port {self.master_port}, with device: {get_device_for_local_rank()}, config: {self.predictor_config}"
+            f"Worker {self.worker_id}, gpu_id: {ray.get_gpu_ids()}, loaded predict unit: {self.predict_unit}, "
+            f"on port {self.master_port}, with device: {self.device}, config: {self.predictor_config}"
         )
+        self.is_setup = True
 
-    def predict(self, data: AtomicData) -> dict[str, torch.tensor] | None:
+    def predict(
+        self, data: AtomicData, use_nccl: bool = False
+    ) -> dict[str, torch.tensor] | None:
         if not self.is_setup:
-            self._distributed_setup(
-                self.worker_id,
-                self.master_port,
-                self.world_size,
-                self.predictor_config,
-                self.master_address,
-            )
-            self.is_setup = True
+            self._distributed_setup()
+
         out = self.predict_unit.predict(data)
-        out = move_tensors_to_cpu(out)
         if self.worker_id == 0:
-            return out
-        else:
-            return None
+            return move_tensors_to_cpu(out)
+
+        if self.worker_id != 0 and use_nccl:
+            self.last_received_atomic_data = data.to(self.device)
+            while True:
+                torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
+                self.predict_unit.predict(self.last_received_atomic_data)
+
+        return None
+
+
+@remote
+class MLIPWorker(MLIPWorkerLocal):
+    pass
 
 
 @requires(ray_installed, message="Requires `ray` to be installed")
@@ -421,9 +449,11 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
         num_workers: int = 1,
         num_workers_per_node: int = 8,
+        log_level: int = logging.INFO,
     ):
         super().__init__()
         _mlip_pred_unit = MLIPPredictUnit(
@@ -433,7 +463,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             inference_settings=inference_settings,
             seed=seed,
             atom_refs=atom_refs,
+            form_elem_refs=form_elem_refs,
         )
+        self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
         predict_unit_config = {
@@ -444,15 +476,36 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "inference_settings": inference_settings,
             "seed": seed,
             "atom_refs": atom_refs,
+            "form_elem_refs": form_elem_refs,
             "assert_on_nans": assert_on_nans,
         }
+
+        logging.basicConfig(
+            level=log_level,
+            force=True,
+            stream=sys.stdout,
+            format="%(asctime)s %(levelname)s [%(processName)s] %(name)s: %(message)s",
+        )
+        # Optional: keep Ray/uvicorn chatty logs in check
+        logging.getLogger("ray").setLevel(log_level)
+        logging.getLogger("uvicorn").setLevel(log_level)
         if not ray.is_initialized():
-            ray.init(
-                logging_level=logging.INFO,
-                # runtime_env={
-                #     "env_vars": {"RAY_DEBUG": "1"},
-                # },
-            )
+            # in CI envrionment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
+            if os.environ.get("CI"):
+                logging.info(
+                    f"CI environment detected, initializing ray with limited CPUs: {num_workers_per_node}"
+                )
+                ray.init(
+                    logging_level=log_level,
+                    num_cpus=num_workers_per_node,
+                    runtime_env={
+                        "env_vars": {"RAY_DEBUG": "1"},
+                    },
+                )
+            else:
+                ray.init(logging_level=log_level)
+
+        self.atomic_data_on_device = None
 
         num_nodes = math.ceil(num_workers / num_workers_per_node)
         num_workers_on_node_array = [num_workers_per_node] * num_nodes
@@ -473,7 +526,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             placement_groups.append(pg)
         ray.get(pg.ready())  # Wait for each placement group to be scheduled
 
-        # place rank 0 on placement group 0
+        # Need to still place worker to occupy space, otherwise ray double books this GPU
         rank0_worker = MLIPWorker.options(
             num_gpus=num_gpu_per_worker,
             scheduling_strategy=PlacementGroupSchedulingStrategy(
@@ -482,11 +535,18 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 placement_group_capture_child_tasks=True,  # Ensure child tasks also run in this PG
             ),
         ).remote(0, num_workers, predict_unit_config)
-        master_addr, master_port = ray.get(
-            rank0_worker.get_master_address_and_port.remote()
+
+        local_gpu_or_cpu = ray.get(rank0_worker.get_device_for_local_rank.remote())
+        os.environ[CURRENT_DEVICE_TYPE_STR] = local_gpu_or_cpu
+
+        self.workers = []
+        self.local_rank0 = MLIPWorkerLocal(
+            worker_id=0,
+            world_size=num_workers,
+            predictor_config=predict_unit_config,
         )
+        master_addr, master_port = self.local_rank0.get_master_address_and_port()
         logging.info(f"Started rank0 on {master_addr}:{master_port}")
-        self.workers = [rank0_worker]
 
         # next place all ranks in order and pack them on placement groups
         # ie: rank0-7 -> placement group 0, 8->15 -> placement group 1 etc.
@@ -520,20 +580,21 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
                 self.workers.append(actor)
                 worker_id += 1
 
-    def predict(
-        self, data: AtomicData, undo_element_references: bool = True
-    ) -> dict[str, torch.tensor]:
+    def predict(self, data: AtomicData) -> dict[str, torch.tensor]:
         # put the reference in the object store only once
-        # this data transfer should be made more efficienct by using a shared memory transfer + nccl broadcast
-        data_ref = ray.put(data)
-        futures = [w.predict.remote(data_ref) for w in self.workers]
-        # just get the first result that is ready since they are identical
-        # the rest of the futures should go out of scope and memory garbage collected
-        # ready_ids, _ = ray.wait(futures, num_returns=1)
-        # result = ray.get(ready_ids[0])
-        # result = ray.get(futures)
-        # return result[0]
-        return ray.get(futures[0])
+        if not self.inference_settings.merge_mole or self.atomic_data_on_device is None:
+            data_ref = ray.put(data)
+            # this will put the ray works into an infinite loop listening for broadcasts
+            _futures = [
+                w.predict.remote(data_ref, use_nccl=self.inference_settings.merge_mole)
+                for w in self.workers
+            ]
+            self.atomic_data_on_device = data.clone()
+        else:
+            self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+            torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
+
+        return self.local_rank0.predict(self.atomic_data_on_device)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:

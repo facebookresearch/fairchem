@@ -178,3 +178,53 @@ jobs:
           packages-dir: dist-lammps/
           skip-existing: true
           verbose: true
+
+  release-data-omat:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    if: |
+      ( github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_data_omat-') ) || startsWith(github.event.release.tag_name, 'fairchem_data_omat-')
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fairchem-data-omat/
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist-data-omat
+          path: dist-data-omat
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          packages-dir: dist-data-omat/
+          skip-existing: true
+
+  release-data-omc:
+    needs: [ build ]
+    runs-on: ubuntu-latest
+    if: |
+      ( github.event.inputs.release-pypi == 'true' && startsWith(github.ref_name, 'fairchem_data_omc-') ) || startsWith(github.event.release.tag_name, 'fairchem_data_omc-')
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fairchem-data-omc/
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist-data-omc
+          path: dist-data-omc
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          packages-dir: dist-data-omc/
+          skip-existing: true
