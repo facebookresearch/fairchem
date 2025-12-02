@@ -61,8 +61,8 @@ jobs:
           packages/fairchem-core[docs,adsorbml,extras] \
           packages/fairchem-data-oc[dev] \
           packages/fairchem-applications-cattsunami \
-          packages/fairchem-data-omat
-        pip install -r tests/requirements.txt # pin test packages
+          packages/fairchem-data-omat \
+          -r tests/requirements.txt # pin test packages
 
     # Build the book
     - name: Build the book
