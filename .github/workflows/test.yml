@@ -27,7 +27,7 @@ env:
 
 jobs:
   test:
-    runs-on: 32-core-ubuntu
+    runs-on: 4-core-ubuntu
     permissions:
       contents: read
       # Needed to manually set commit status
