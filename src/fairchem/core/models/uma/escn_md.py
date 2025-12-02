@@ -55,7 +55,135 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
-ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+    graph_dict["edge_index"] = torch.cat(
+        (
+            graph_dict["edge_index"].new_ones(2, edges_to_add)
+            * graph_dict["node_offset"],
+            graph_dict["edge_index"],
+        ),
+        dim=1,
+    )
+
+    self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
+    graph_dict["edge_distance_vec"] = torch.cat(
+        (
+            self_edge_distance_vec.expand(edges_to_add, 3),
+            graph_dict["edge_distance_vec"],
+        ),
+        dim=0,
+    )
+
+    edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+    graph_dict["edge_distance"] = torch.cat(
+        (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
+    )
+
+
+@torch.compiler.disable
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+
+    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
+        # make sure we have a multiple of self.edge_chunk_size edges
+        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
+    if n_edges_post > n_edges:
+        # We append synthetic padding edges whose distance vector has norm > cutoff
+        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
+        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
+        # contribute to embeddings or message passing; they only ensure the edge count
+        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
+        # activation checkpointing and avoiding empty tensor edge cases.
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
+
+
+def compose_tensor(
+    trace: torch.Tensor,
+    l2_symmetric: torch.Tensor,
+) -> torch.Tensor:
+    """Re-compose a tensor from its decomposition
+
+    Args:
+        trace: a tensor with scalar part of the decomposition of r2 tensors in the batch
+        l2_symmetric: tensor with the symmetric/traceless part of decomposition
+
+    Returns:
+        tensor: rank 2 tensor
+    """
+
+    if trace.shape[1] != 1:
+        raise ValueError("batch of traces must be shape (batch size, 1)")
+
+    if l2_symmetric.shape[1] != 5:
+        raise ValueError("batch of l2_symmetric tensors must be shape (batch size, 5)")
+
+    if trace.shape[0] != l2_symmetric.shape[0]:
+        raise ValueError(
+            "Shape missmatch between trace and l2_symmetric parts. The first dimension is the batch dimension"
+        )
+
+    batch_size = trace.shape[0]
+    decomposed_preds = torch.zeros(
+        batch_size, irreps_sum(2), device=trace.device
+    )  # rank 2
+    decomposed_preds[:, : irreps_sum(0)] = trace
+    decomposed_preds[:, irreps_sum(1) : irreps_sum(2)] = l2_symmetric
+
+    r2_tensor = torch.einsum(
+        "ba, cb->ca",
+        cg_change_mat(2, device=trace.device),
+        decomposed_preds,
+    )
+    return r2_tensor
+
+
+def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+    graph_dict["edge_index"] = torch.cat(
+        (
+            graph_dict["edge_index"].new_ones(2, edges_to_add)
+            * graph_dict["node_offset"],
+            graph_dict["edge_index"],
+        ),
+        dim=1,
+    )
+
+    self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
+    graph_dict["edge_distance_vec"] = torch.cat(
+        (
+            self_edge_distance_vec.expand(edges_to_add, 3),
+            graph_dict["edge_distance_vec"],
+        ),
+        dim=0,
+    )
+
+    edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+    graph_dict["edge_distance"] = torch.cat(
+        (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
+    )
+
+
+@torch.compiler.disable
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+
+    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
+        # make sure we have a multiple of self.edge_chunk_size edges
+        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
+    if n_edges_post > n_edges:
+        # We append synthetic padding edges whose distance vector has norm > cutoff
+        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
+        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
+        # contribute to embeddings or message passing; they only ensure the edge count
+        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
+        # activation checkpointing and avoiding empty tensor edge cases.
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
 
 
 def compose_tensor(
@@ -1269,13 +1397,354 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
 
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
+        if self.regress_stress:
+            grads = torch.autograd.grad(
+                [energy_part.sum()],
+                [data["pos_original"], emb["displacement"]],
+                create_graph=self.training,
+            )
+            if gp_utils.initialized():
+                grads = (
+                    gp_utils.reduce_from_model_parallel_region(grads[0]),
+                    gp_utils.reduce_from_model_parallel_region(grads[1]),
+                )
+
+            forces = torch.neg(grads[0])
+            virial = grads[1].view(-1, 3, 3)
+            volume = torch.det(data["cell"]).abs().unsqueeze(-1)
+            stress = virial / volume.view(-1, 1, 1)
+            virial = torch.neg(virial)
+            stress = stress.view(
+                -1, 9
+            )  # NOTE to work better with current Multi-task trainer
+            outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+            outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
+            data["cell"] = emb["orig_cell"]
+        
+        elif self.regress_forces:
+            forces = (
+                -1
+                * torch.autograd.grad(
+                    energy_part.sum(), data["pos"], create_graph=self.training
+                )[0]
+            )
+            if gp_utils.initialized():
+                forces = gp_utils.reduce_from_model_parallel_region(forces)
+            outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+        return outputs
+
+
+@registry.register_model("esen_efs_head_lr")
+class MLP_EFS_Head_LR(nn.Module, HeadInterface):
+    def __init__(
+            self, 
+            backbone: eSCNMDBackboneLR, 
+            prefix: str | None = None, 
+            wrap_property: bool = True,
+    ) -> None:
+        super().__init__()
+        backbone.energy_block = None
+        backbone.force_block = None
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+        self.prefix = prefix
+        self.wrap_property = wrap_property
+        self.return_bec = backbone.return_bec
+        self.conv_function_tf = backbone.conv_function_tf
+        self.lr_output_scaling_factor = backbone.lr_output_scaling_factor
+
+        self.sphere_channels = backbone.sphere_channels
+        self.hidden_channels = backbone.hidden_channels
+        self.hidden_channels_lr = (
+            backbone.hidden_channels_lr
+        )  # this might not be in the backbone
+        self.heisenberg_tf = backbone.heisenberg_tf
+        self.latent_charge_tf = backbone.latent_charge_tf
+        self.normalize_charges_tf = backbone.normalize_charges_tf
+        self.equil_charges_tf = backbone.equil_charges_tf
+        self.use_ewald_tf = backbone.use_ewald_tf
+
+        self.lr_comp_size = 1
+        if self.heisenberg_tf:
+            self.lr_comp_size = 2
+
+        self.energy_block = nn.Sequential(
+            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, 1, bias=True),
         )
+
+        if self.latent_charge_tf:
+            self.q_output_lr = nn.Sequential(
+                nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                nn.SiLU(),
+                nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                nn.SiLU(),
+                nn.Linear(self.hidden_channels_lr, self.lr_comp_size, bias=True),
+            )
+            if self.equil_charges_tf:
+                self.hardness_output_lr = nn.Sequential(
+                    nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, 1, bias=True),
+                )
+                
+                self.electroneg_output_lr = nn.Sequential(
+                    nn.Linear(self.sphere_channels, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                    nn.SiLU(),
+                    nn.Linear(self.hidden_channels_lr, 1, bias=True),
+                )
+
+        if self.heisenberg_tf:
+            self.coupling_nn = nn.Sequential(
+                nn.Linear(1, self.hidden_channels_lr, bias=True),
+                nn.SiLU(),
+                nn.Linear(self.hidden_channels_lr, self.hidden_channels_lr, bias=True),
+                nn.SiLU(),
+                nn.Linear(self.hidden_channels_lr, 1, bias=True),
+            )
+
+        
+        # but is currently necessary for finetuning pretrained models that did not have
+        # the direct_forces flag set to False
+        backbone.direct_forces = False
+        assert not backbone.direct_forces, (
+            "EFS head is only used for gradient-based forces/stress."
+        )
+
+    def get_charges(
+        self, 
+        node_features: torch.Tensor,
+        data: AtomicData, 
+        epsilon: float = 1e-8
+    ):
+        results = {}
+        with torch.enable_grad():  # Ensure gradients are enabled even during evaluation
+            charges_raw = self.q_output_lr(node_features)
+
+        if self.lr_comp_size == 1:
+            #charges_raw = charges_raw.abs()
+            results["charges"] = charges_raw.view(-1, 1, 1)  * self.lr_output_scaling_factor
+            
+            if self.equil_charges_tf:
+                hardness = self.hardness_output_lr(node_features)
+                electroneg = self.electroneg_output_lr(node_features)
+                results["hardness"] = hardness.view(-1, 1, 1)   
+                results["electroneg"] = electroneg.view(-1, 1, 1)
+            
+            # TODO: renormalize charges if 
+            if self.normalize_charges_tf:
+                global_charges = scatter_add(
+                    charges_raw.view(-1, 1), 
+                    data["batch"], 
+                    dim=0,
+                )
+                # renormalize charges
+                global_charges_broadcasted = global_charges[data["batch"]]
+                true_charge_broadcasted = data["charge"][data["batch"]].view(-1, 1)
+                # renormalizes via division
+                charges_raw = true_charge_broadcasted * charges_raw / ( global_charges_broadcasted + epsilon)
+                results["charges"] = charges_raw
+                
+                """global_charges = scatter_add(
+                    charges_raw.view(-1, 1), 
+                    data["batch"], 
+                    dim=0,
+                )"""
+                #print("renormalized global_charges: ", global_charges)
+
+        if self.lr_comp_size == 2:
+
+            # sum across components
+            charges_raw = charges_raw
+            results["charges"] = charges_raw.sum(dim=1).view(-1, 1, 1) * self.lr_output_scaling_factor
+            results["charges_raw"] = charges_raw  * self.lr_output_scaling_factor
+            alpha = results["charges_raw"][:, 0]
+            beta = results["charges_raw"][:, 1]
+            spin = alpha - beta
+            results["net_partial_spin"] = spin.view(-1, 1, 1)
+
+            if self.normalize_charges_tf:            
+                global_charges_batchwise = data["charge"]
+                global_spin_batchwise = data["spin"]
+
+                charges_renorm = batch_spin_charge_renormalization(
+                    charges_raw=results["charges_raw"],
+                    batch=data["batch"],
+                    s_total=global_spin_batchwise,
+                    q_total=global_charges_batchwise
+                ) # return [N_atoms, 2]
+
+                
+                results["charges_raw"] = charges_renorm
+                results["charges"] = charges_renorm.sum(dim=1).view(-1, 1, 1) 
+                results["net_partial_spin"] = (
+                    charges_renorm[:, 0] - charges_renorm[:, 1]
+                ).view(-1, 1, 1) 
+                
+        return results
+
+
+    def get_lr_energies(
+        self, 
+        emb: dict[str, torch.Tensor], 
+        data: AtomicData, 
+        return_charges: bool = False
+    ):        
+        results = {}
+
+        charge_dict = self.get_charges(
+            emb["node_embedding"].narrow(1, 0, 1).squeeze(), 
+            data
+        )
+        #print("data dict keys: ", data.keys())
+
+        if "edge_index_lr" in emb: 
+           edges_lr = emb["edge_index_lr"]
+        else:
+            edges_lr = emb["edge_index"]
+
+        energy_output_lr_dict = potential_full_from_edge_inds(
+            edge_index=edges_lr,
+            pos=data["pos"],
+            q=charge_dict["charges"],
+            sigma=1.0,
+            epsilon=1e-6,
+            return_bec=False,
+            batch=data["batch"],
+            conv_function_tf=self.conv_function_tf,
+        )
+        
+
+        #################################### HACK REMOVE LATER ####################################
+        '''
+        sid = data.get("sid", None)
+        import numpy as np
+        import os
+        bec = energy_output_lr_dict['bec']
+        bec = bec.detach().cpu().numpy() if bec is not None else None
+        # save to numpy array
+        #print("bec_shape", bec.shape)
+        tag = "spice_spin_charge_constrain"
+        file_name = '{}.npy'.format(tag)
+        file_name_ids = '{}_ids.npy'.format(tag)
+        
+        if os.path.exists(file_name):
+            # append to the file
+            existing_bec = np.load(file_name)
+            bec = bec#.reshape(-1, 9)
+            #print("bec_shape", bec.shape, sid, positions.shape)
+            #bec = bec.reshape(-1, bec.shape[-1])
+            # make jagged array
+            
+            bec = np.concatenate((existing_bec, bec), axis=0)
+        else:
+            # create the file
+            bec = bec#.reshape(-1, 9)
+        
+        np.save(file_name, bec)
+
+        if os.path.exists(file_name_ids):
+            # append to the file
+            existing_ids = np.load(file_name_ids)
+            sid = sid#.reshape(-1, 1)
+            # append
+            #sid = sid.reshape(-1, 1) if sid is not None else None
+            if sid is not None:
+                sid = np.concatenate((existing_ids, sid), axis=0)
+    
+        
+        if sid is not None:
+            np.save(file_name_ids, sid)
+        '''
+        #################################### HACK REMOVE LATER ####################################
+
+        results["energy"] = energy_output_lr_dict["potential"]
+        
+        if self.equil_charges_tf:
+            en_electrostatic = (charge_dict["electroneg"] * charge_dict["charges"]).view(-1)
+            en_hardness = 0.5 * (charge_dict["hardness"] * charge_dict["charges"]**2).view(-1)
+            #print("en_electrostatic: ", en_electrostatic.shape)
+            #print("en_hardness: ", en_hardness.shape)
+            #print("energy_output_lr_dict[potential]: ", results["energy"].shape)
+            results["energy"] += en_electrostatic + en_hardness
+
+        if self.heisenberg_tf:
+            energy_spin = heisenberg_potential_full_from_edge_inds(
+                edge_index=edges_lr,
+                q=charge_dict["charges_raw"],
+                pos=data["pos"],
+                nn=self.coupling_nn,
+                sigma=1.0,
+            )
+            results["energy_spin"] = energy_spin
+
+        if return_charges:
+            results["charges"] = charge_dict["charges"]
+
+            if self.lr_comp_size == 2:
+                results["spin"] = charge_dict["spin"]
+
+        return results
+
+    @conditional_grad(torch.enable_grad())
+    def forward(
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        if self.prefix:
+            energy_key = f"{self.prefix}_energy"
+            forces_key = f"{self.prefix}_forces"
+            stress_key = f"{self.prefix}_stress"
+        else:
+            energy_key = "energy"
+            forces_key = "forces"
+            stress_key = "stress"
+
+        outputs = {}
+        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
+        _output = self.energy_block(_input)
+        node_energy = _output.view(-1, 1, 1)
+        energy_part = torch.zeros(
+            len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
+        )
+        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
+
+        if self.latent_charge_tf:
+            lr_energy = self.get_lr_energies(emb, data)
+            energy_part.index_add_(0, data["batch"], lr_energy["energy"])
+        
+        if self.heisenberg_tf:
+            energy_part.index_add_(0, data["batch"], lr_energy["energy_spin"])
+
+        if gp_utils.initialized():
+            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
+        else:
+            energy = energy_part
+
+        outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
+
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
