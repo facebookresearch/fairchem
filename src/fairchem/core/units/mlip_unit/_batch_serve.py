@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from multiprocessing import cpu_count
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import ray
 import torch
@@ -58,6 +58,9 @@ class BatchPredictServer:
     ):
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
+
+    def get_predict_unit_attribute(self, attribute_name: str) -> Any:
+        return getattr(self.predict_unit, attribute_name)
 
     @serve.batch
     async def predict(

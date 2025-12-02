@@ -617,8 +617,6 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
         server_handle,
-        dataset_to_tasks: dict,
-        atom_refs: dict | None = None,
     ):
         """
         Args:
@@ -626,8 +624,6 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             dataset_to_tasks: Mapping from dataset names to their associated tasks
             atom_refs: Optional atom references dictionary
         """
-        self._dataset_to_tasks = dataset_to_tasks
-        self._atom_refs = atom_refs
         self.server_handle = server_handle
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
@@ -646,8 +642,18 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
 
     @property
     def dataset_to_tasks(self) -> dict:
-        return self._dataset_to_tasks
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "dataset_to_tasks"
+        ).result()
 
     @property
     def atom_refs(self) -> dict | None:
-        return self._atom_refs
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "atom_refs"
+        ).result()
+
+    @property
+    def inference_settings(self) -> InferenceSettings:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "inference_settings"
+        ).result()

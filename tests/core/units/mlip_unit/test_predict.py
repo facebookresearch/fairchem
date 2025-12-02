@@ -631,8 +631,6 @@ def test_batch_server_predict_unit_with_calculator(
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=server_handle,
-        dataset_to_tasks=dataset_to_tasks,
-        atom_refs=atom_refs,
     )
 
     atoms = bulk("Cu")
@@ -677,8 +675,6 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_setup):
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=server_handle,
-        dataset_to_tasks=dataset_to_tasks,
-        atom_refs=atom_refs,
     )
 
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]

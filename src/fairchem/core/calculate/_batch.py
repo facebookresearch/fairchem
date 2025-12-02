@@ -108,8 +108,6 @@ class InferenceBatcher:
     def batch_predict_unit(self):
         return BatchServerPredictUnit(
             server_handle=self.predict_server_handle,
-            dataset_to_tasks=self.predict_unit.dataset_to_tasks,
-            atom_refs=getattr(self.predict_unit, "atom_refs", None),
         )
 
     def shutdown(self, wait: bool = True):
