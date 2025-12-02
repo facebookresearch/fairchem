@@ -17,6 +17,7 @@ on:
 # the sha from the head of the branch that triggered it. For
 # pushes and manual triggers, we want the sha of the branch.
 env:
+  CI: true
   HEAD_SHA: |
     ${{
       github.event.workflow_run.head_sha ||
@@ -38,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
@@ -66,12 +67,13 @@ jobs:
       - name: Install core dependencies and package
         run: |
           python -m pip install --upgrade pip
-          pip install packages/fairchem-core[dev,extras]
-          pip install packages/fairchem-data-oc[dev]
-          pip install packages/fairchem-data-omat
-          pip install packages/fairchem-data-omol[dev]
-          pip install packages/fairchem-demo-ocpapi[dev]
-          pip install -r tests/requirements.txt # pin test packages
+          pip install \
+            packages/fairchem-core[dev,extras] \
+            packages/fairchem-data-oc[dev] \
+            packages/fairchem-data-omat \
+            packages/fairchem-data-omol[dev] \
+            packages/fairchem-demo-ocpapi[dev] \
+            -r tests/requirements.txt # pin test packages
 
       - name: Install additional dependencies
         run: |
@@ -125,7 +127,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
@@ -144,9 +146,10 @@ jobs:
       - name: Install core dependencies and package
         run: |
           python -m pip install --upgrade pip
-          pip install packages/fairchem-core[dev]
-          pip install packages/fairchem-data-omol[dev]
-          pip install -r tests/requirements.txt # pin test packages
+          pip install packages/fairchem-core[dev] \
+          packages/fairchem-data-omol[dev] \
+          packages/fairchem-data-omat \
+          -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
         env:
@@ -171,7 +174,7 @@ jobs:
         python_version: ['3.13']
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mamba-org/setup-micromamba@v2
         with:
           generate-run-shell: true # This is the default behavior
@@ -179,7 +182,7 @@ jobs:
           create-args: python=3.13 # Specifies packages to install into the new environment
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
           # Optional: get full history if needed
@@ -200,16 +203,16 @@ jobs:
         run: |
           micromamba install lammps
           python -m pip install --upgrade pip
-          pip install packages/fairchem-core[dev,extras]
-          pip install packages/fairchem-lammps
-          pip install -r tests/requirements.txt # pin test packages
+          pip install packages/fairchem-core[dev,extras] \
+          packages/fairchem-lammps \
+          -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
         shell: micromamba-shell {0}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu 
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
 
       - name: Cleanup
         if: always()
