@@ -479,6 +479,61 @@ def test_merge_mole_composition_check():
 
 
 @pytest.mark.gpu()
+def test_merge_mole_vs_non_merged_consistency():
+    """Test that merged and non-merged versions produce identical results."""
+    atoms = bulk("MgO", "rocksalt", a=4.213)
+    
+    # Test with merge_mole=True
+    settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    predict_unit_merged = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings_merged
+    )
+    calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
+    
+    atoms_merged = atoms.copy()
+    atoms_merged.calc = calc_merged
+    energy_merged = atoms_merged.get_potential_energy()
+    forces_merged = atoms_merged.get_forces()
+    stress_merged = atoms_merged.get_stress(voigt=False)
+    
+    # Test with merge_mole=False
+    settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
+    predict_unit_non_merged = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged
+    )
+    calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
+    
+    atoms_non_merged = atoms.copy()
+    atoms_non_merged.calc = calc_non_merged
+    energy_non_merged = atoms_non_merged.get_potential_energy()
+    forces_non_merged = atoms_non_merged.get_forces()
+    stress_non_merged = atoms_non_merged.get_stress(voigt=False)
+    
+    # Assert that results are identical
+    npt.assert_allclose(
+        energy_merged,
+        energy_non_merged,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg=f"Energies differ: merged={energy_merged}, non-merged={energy_non_merged}",
+    )
+    npt.assert_allclose(
+        forces_merged,
+        forces_non_merged,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg="Forces differ between merged and non-merged versions",
+    )
+    npt.assert_allclose(
+        stress_merged,
+        stress_non_merged,
+        rtol=1e-6,
+        atol=1e-6,
+        err_msg="Stress differs between merged and non-merged versions",
+    )
+
+
+@pytest.mark.gpu()
 def test_merge_mole_supercell_energy_forces_consistency():
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
