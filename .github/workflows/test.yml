@@ -27,7 +27,7 @@ env:
 
 jobs:
   test:
-    runs-on: 32-core-ubuntu
+    runs-on: 4-core-ubuntu
     permissions:
       contents: read
       # Needed to manually set commit status
@@ -154,8 +154,9 @@ jobs:
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # Note: These tests seem to fail if "-n auto" is added
         run: |
-          NCCL_DEBUG=INFO pytest -n auto tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
@@ -212,7 +213,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto tests/lammps --durations=0 -vv -m gpu
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
 
       - name: Cleanup
         if: always()
