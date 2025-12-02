@@ -36,7 +36,7 @@ class ElementReferences(nn.Module):
 
     @staticmethod
     def compute_references(batch, tensor, elem_refs, operation):
-        assert tensor.shape[0] == len(batch)
+        assert tensor.shape[0] == len(batch.natoms)
         with torch.autocast(elem_refs.device.type, enabled=False):
             refs = torch.zeros(
                 tensor.shape, dtype=elem_refs.dtype, device=tensor.device

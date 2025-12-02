@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Optional, use if you use setuptools_scm
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: |
           # add packages that are supposed to be built to this list
-          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol fairchem-data-omat fairchem-lammps
+          for package in fairchem-core fairchem-data-oc fairchem-demo-ocpapi fairchem-applications-cattsunami fairchem-data-omol fairchem-data-omat fairchem-data-omc fairchem-lammps
           do
             pushd packages/$package
             hatch build
@@ -36,43 +36,43 @@ jobs:
       # unfortunately there isn't a clean way to upload artifacts separately so just copy
       # for each new package right now
       - name: Upload core artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist-core
           path: dist-core/*
 
       - name: Upload data-oc artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist-data-oc
           path: dist-data-oc/*
 
       - name: Upload demo-ocpapi artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist-demo-ocpapi
           path: dist-demo-ocpapi/*
 
       - name: Upload applications-cattsunami artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist-applications-cattsunami
           path: dist-applications-cattsunami/*
 
       - name: Upload lammps artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: dist-lammps
           path: dist-lammps/*
 
-      - name: Upload lammps artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload omat artifact
+        uses: actions/upload-artifact@v5
         with:
-          name: dist-omat
-          path: dist-omat/*
+          name: dist-data-omat
+          path: dist-data-omat/*
 
-      - name: Upload lammps artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload omc artifact
+        uses: actions/upload-artifact@v5
         with:
-          name: dist-lammps
-          path: dist-lammps/*
+          name: dist-data-omc
+          path: dist-data-omc/*
