@@ -273,7 +273,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../../inorganic_materials/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/bulk_stability.html">Stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
 </ul>
@@ -646,6 +646,14 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._validate_charge_and_spin"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._validate_charge_and_spin()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.calculator"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.calculator</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.element_references"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.element_references</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.apply_corrections"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.apply_corrections</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator._correction_type"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator._correction_type</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.calculate"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.calculate()</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.MixedPBCError"><code class="docutils literal notranslate"><span class="pre">MixedPBCError</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.MixedPBCError.message"><code class="docutils literal notranslate"><span class="pre">MixedPBCError.message</span></code></a></li>
 </ul>
@@ -691,6 +699,9 @@ LICENSE file in the root directory of this source tree.</p>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#core.calculate.ase_calculator.FAIRChemCalculator" title="core.calculate.ase_calculator.FAIRChemCalculator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FAIRChemCalculator</span></code></a></p></td>
+<td><p>Base-class for all ASE calculators.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.calculate.ase_calculator.FormationEnergyCalculator" title="core.calculate.ase_calculator.FormationEnergyCalculator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FormationEnergyCalculator</span></code></a></p></td>
 <td><p>Base-class for all ASE calculators.</p></td>
 </tr>
 </tbody>
@@ -829,6 +840,56 @@ It is only set for ASE routines/optimizers that are hard-coded to use this rathe
 
 </dd></dl>
 
+<dl class="py class">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FormationEnergyCalculator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">FormationEnergyCalculator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">calculator</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.calculators.calculator.Calculator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">element_references</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">apply_corrections</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">correction_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'MP2020'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'OMat24'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'OMat24'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.FormationEnergyCalculator" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">ase.calculators.calculator.Calculator</span></code></p>
+<p>Base-class for all ASE calculators.</p>
+<p>A calculator must raise PropertyNotImplementedError if asked for a
+property that it can’t calculate.  So, if calculation of the
+stress tensor has not been implemented, get_stress(atoms) should
+raise PropertyNotImplementedError.  This can be achieved simply by not
+including the string ‘stress’ in the list implemented_properties
+which is a class member.  These are the names of the standard
+properties: ‘energy’, ‘forces’, ‘stress’, ‘dipole’, ‘charges’,
+‘magmom’ and ‘magmoms’.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FormationEnergyCalculator.calculator">
+<span class="sig-name descname"><span class="pre">calculator</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FormationEnergyCalculator.calculator" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FormationEnergyCalculator.element_references">
+<span class="sig-name descname"><span class="pre">element_references</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FormationEnergyCalculator.element_references" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FormationEnergyCalculator.apply_corrections">
+<span class="sig-name descname"><span class="pre">apply_corrections</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FormationEnergyCalculator.apply_corrections" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FormationEnergyCalculator._correction_type">
+<span class="sig-name descname"><span class="pre">_correction_type</span></span><a class="headerlink" href="#core.calculate.ase_calculator.FormationEnergyCalculator._correction_type" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.calculate.ase_calculator.FormationEnergyCalculator.calculate">
+<span class="sig-name descname"><span class="pre">calculate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.Atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">properties</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">system_changes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#core.calculate.ase_calculator.FormationEnergyCalculator.calculate" title="Link to this definition">#</a></dt>
+<dd><p>Calculate formation energy by wrapping the base calculator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>atoms</strong> (<a class="reference internal" href="../../../ocpapi/client/index.html#ocpapi.client.Atoms" title="ocpapi.client.Atoms"><em>Atoms</em></a>) – The atomic structure to calculate properties for.</p></li>
+<li><p><strong>properties</strong> (<em>list</em><em>[</em><em>str</em><em>]</em>) – The list of properties to calculate.</p></li>
+<li><p><strong>system_changes</strong> (<em>list</em><em>[</em><em>str</em><em>]</em>) – The list of changes in the system.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 <dl class="py exception">
 <dt class="sig sig-object py" id="core.calculate.ase_calculator.MixedPBCError">
 <em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.calculate.ase_calculator.</span></span><span class="sig-name descname"><span class="pre">MixedPBCError</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Attempted</span> <span class="pre">to</span> <span class="pre">guess</span> <span class="pre">PBC</span> <span class="pre">for</span> <span class="pre">an</span> <span class="pre">atoms</span> <span class="pre">object,</span> <span class="pre">but</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">PBC</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">True</span> <span class="pre">for</span> <span class="pre">somedimensions</span> <span class="pre">but</span> <span class="pre">not</span> <span class="pre">others.</span> <span class="pre">Please</span> <span class="pre">ensure</span> <span class="pre">that</span> <span class="pre">the</span> <span class="pre">atoms</span> <span class="pre">object</span> <span class="pre">has</span> <span class="pre">PBC</span> <span class="pre">set</span> <span class="pre">to</span> <span class="pre">True</span> <span class="pre">for</span> <span class="pre">all</span> <span class="pre">dimensions.'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.calculate.ase_calculator.MixedPBCError" title="Link to this definition">#</a></dt>
@@ -934,6 +995,14 @@ It is only set for ASE routines/optimizers that are hard-coded to use this rathe
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._get_single_atom_energies"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._get_single_atom_energies()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._check_atoms_pbc"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._check_atoms_pbc()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FAIRChemCalculator._validate_charge_and_spin"><code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator._validate_charge_and_spin()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.calculator"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.calculator</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.element_references"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.element_references</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.apply_corrections"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.apply_corrections</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator._correction_type"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator._correction_type</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.FormationEnergyCalculator.calculate"><code class="docutils literal notranslate"><span class="pre">FormationEnergyCalculator.calculate()</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.calculate.ase_calculator.MixedPBCError"><code class="docutils literal notranslate"><span class="pre">MixedPBCError</span></code></a><ul class="nav section-nav flex-column">

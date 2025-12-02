@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Stability &#8212; fairchem</title>
+    <title>Formation energies &#8212; fairchem</title>
   
   
   
@@ -58,7 +58,7 @@
     <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'inorganic_materials/examples_tutorials/bulk_stability';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'inorganic_materials/examples_tutorials/formation_energy';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Phonons" href="phonons.html" />
@@ -273,7 +273,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../models.html">Pretrained models</a></li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Examples &amp; Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
-<li class="toctree-l2 current active"><a class="current reference internal" href="#">Stability</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Formation energies</a></li>
 <li class="toctree-l2"><a class="reference internal" href="phonons.html">Phonons</a></li>
 <li class="toctree-l2"><a class="reference internal" href="elastic.html">Elastic Tensors</a></li>
 </ul>
@@ -506,7 +506,7 @@
       
       
       
-      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Finorganic_materials/examples_tutorials/bulk_stability.html&body=Your%20issue%20content%20here." target="_blank"
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Finorganic_materials/examples_tutorials/formation_energy.html&body=Your%20issue%20content%20here." target="_blank"
    class="btn btn-sm btn-source-issues-button dropdown-item"
    title="Open an issue"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -536,7 +536,7 @@
       
       
       
-      <li><a href="../../_sources/inorganic_materials/examples_tutorials/bulk_stability.md" target="_blank"
+      <li><a href="../../_sources/inorganic_materials/examples_tutorials/formation_energy.md" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -618,7 +618,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Stability</h1>
+    <h1>Formation energies</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -632,13 +632,10 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="stability">
-<h1>Stability<a class="headerlink" href="#stability" title="Link to this heading">#</a></h1>
-<p>We’re going to start simple here - let’s run a local relaxation (optimize the unit cell and positions) using a pre-trained EquiformerV2-31M-OMAT24-MP-sAlex checkpoint. This checkpoint has a few fun properties</p>
-<ol class="arabic simple">
-<li><p>It’s a relatively small (31M) parameter model</p></li>
-<li><p>It was pre-trained on the OMat24 dataset, and then fine-tuned on the MPtrj and Alexandria datasets, so it should emit energies and forces that are consistent with the MP GGA (PBE/PBE+U) level of theory</p></li>
-</ol>
+  <section id="formation-energies">
+<h1>Formation energies<a class="headerlink" href="#formation-energies" title="Link to this heading">#</a></h1>
+<p>We’re going to start simple here - let’s run a local relaxation (optimize the unit cell and positions) using a pre-trained UMA model to compute formation energies for inorganic materials.</p>
+<p>Note predicting formation energy using models that models trained solely on OMat24 must use OMat24 compatible references and corrections for mixing PBE and PBE+U calculations. We use MP2020-style corrections fitted to OMat24 DFT calculations. For more information see the <a class="reference external" href="https://docs.materialsproject.org/methodology/materials-methodology/thermodynamic-stability/thermodynamic-stability/anion-and-gga-gga+u-mixing">documentation</a> at the Materials Project. The necessary references can be found using the <code class="docutils literal notranslate"><span class="pre">fairchem.data.omat</span></code> package!</p>
 <div class="dropdown admonition">
 <p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
 <ol class="arabic simple">
@@ -662,11 +659,13 @@ document.write(`
 <span class="kn">import</span><span class="w"> </span><span class="nn">pprint</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">bulk</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">LBFGS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">FIRE</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quacc.recipes.mlp.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">relax_job</span>
 
-<span class="c1"># Make an Atoms object of a bulk Cu structure</span>
-<span class="n">atoms</span> <span class="o">=</span> <span class="n">bulk</span><span class="p">(</span><span class="s2">&quot;Cu&quot;</span><span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.calculate.ase_calculator</span><span class="w"> </span><span class="kn">import</span> <span class="n">FAIRChemCalculator</span><span class="p">,</span> <span class="n">FormationEnergyCalculator</span>
+
+<span class="c1"># Make an Atoms object of a bulk MgO structure</span>
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">bulk</span><span class="p">(</span><span class="s2">&quot;MgO&quot;</span><span class="p">,</span> <span class="s2">&quot;rocksalt&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="mf">4.213</span><span class="p">)</span>
 
 <span class="c1"># Run a structure relaxation</span>
 <span class="n">result</span> <span class="o">=</span> <span class="n">relax_job</span><span class="p">(</span>
@@ -674,100 +673,79 @@ document.write(`
     <span class="n">method</span><span class="o">=</span><span class="s2">&quot;fairchem&quot;</span><span class="p">,</span>
     <span class="n">name_or_path</span><span class="o">=</span><span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">,</span>
     <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">,</span>
-    <span class="n">opt_params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;fmax&quot;</span><span class="p">:</span> <span class="mf">1e-3</span><span class="p">,</span> <span class="s2">&quot;optimizer&quot;</span><span class="p">:</span> <span class="n">LBFGS</span><span class="p">},</span>
+    <span class="n">relax_cell</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">opt_params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;fmax&quot;</span><span class="p">:</span> <span class="mf">1e-3</span><span class="p">,</span> <span class="s2">&quot;optimizer&quot;</span><span class="p">:</span> <span class="n">FIRE</span><span class="p">},</span>
 <span class="p">)</span>
+
+<span class="c1"># Get the realxed atoms!</span>
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;atoms&quot;</span><span class="p">]</span>
+
+<span class="c1"># Create an calculator using uma-s-1p1</span>
+<span class="n">calculator</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="o">.</span><span class="n">from_model_checkpoint</span><span class="p">(</span><span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">)</span>
+
+<span class="c1"># Now use the FormationEnergyCalculator to calculate the formation energy</span>
+<span class="c1"># This will now return MP-style corrected formation energies</span>
+<span class="c1"># For the omat task, this defaults to apply MP2020 style corrections with OMat24 compatibility</span>
+<span class="n">form_e_calc</span> <span class="o">=</span> <span class="n">FormationEnergyCalculator</span><span class="p">(</span><span class="n">calculator</span><span class="p">,</span> <span class="n">apply_corrections</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">atoms</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">form_e_calc</span>
+<span class="n">form_energy</span> <span class="o">=</span> <span class="n">atoms</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 <div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/checkpoints/uma-s-1p1.pt &quot;HTTP/1.1 302 Found&quot;
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/references/iso_atom_elem_refs.yaml &quot;HTTP/1.1 200 OK&quot;
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/references/form_elem_refs.yaml &quot;HTTP/1.1 200 OK&quot;
+</pre></div>
+</div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
 </pre></div>
 </div>
 <div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:The &#39;seed&#39; argument is deprecated and will be removed in future versions. Please set the seed in the MLIPPredictUnit configuration instead.
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-11-21-23-47-37-200899-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation will run at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/tmp-quacc-2025-12-02-18-40-44-153658-59941
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-11-21-23-47-37-200899-59941
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:quacc.runners.prep:Calculation results stored at /home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-12-02-18-40-44-153658-59941
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/checkpoints/uma-s-1p1.pt &quot;HTTP/1.1 302 Found&quot;
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/references/iso_atom_elem_refs.yaml &quot;HTTP/1.1 200 OK&quot;
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/references/form_elem_refs.yaml &quot;HTTP/1.1 200 OK&quot;
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:The &#39;seed&#39; argument is deprecated and will be removed in future versions. Please set the seed in the MLIPPredictUnit configuration instead.
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pprint</span><span class="o">.</span><span class="n">pprint</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pprint</span><span class="o">.</span><span class="n">pprint</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total energy: </span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;results&#39;</span><span class="p">][</span><span class="s1">&#39;energy&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> eV </span><span class="se">\n</span><span class="s2"> Formation energy </span><span class="si">{</span><span class="n">form_energy</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>{&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
- &#39;converged&#39;: np.True_,
- &#39;dir_name&#39;: &#39;/home/runner/work/fairchem/fairchem/docs/inorganic_materials/examples_tutorials/quacc-2025-11-21-23-47-37-200899-59941&#39;,
- &#39;input_atoms&#39;: {&#39;atoms&#39;: Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]]),
-                 &#39;structure_metadata&#39;: {&#39;chemsys&#39;: &#39;Cu&#39;,
-                                        &#39;composition&#39;: {&#39;Cu&#39;: 1.0},
-                                        &#39;composition_reduced&#39;: {&#39;Cu&#39;: 1.0},
-                                        &#39;density&#39;: 8.971719813140734,
-                                        &#39;density_atomic&#39;: 11.761470249999999,
-                                        &#39;elements&#39;: [&#39;Cu&#39;],
-                                        &#39;formula_anonymous&#39;: &#39;A&#39;,
-                                        &#39;formula_pretty&#39;: &#39;Cu&#39;,
-                                        &#39;nelements&#39;: 1,
-                                        &#39;nsites&#39;: 1,
-                                        &#39;symmetry&#39;: {&#39;angle_tolerance&#39;: 5.0,
-                                                     &#39;crystal_system&#39;: &#39;Cubic&#39;,
-                                                     &#39;hall&#39;: &#39;-F 4 2 3&#39;,
-                                                     &#39;number&#39;: 225,
-                                                     &#39;point_group&#39;: &#39;m-3m&#39;,
-                                                     &#39;symbol&#39;: &#39;Fm-3m&#39;,
-                                                     &#39;symprec&#39;: 0.1,
-                                                     &#39;version&#39;: &#39;2.6.0&#39;},
-                                        &#39;volume&#39;: 11.761470249999999}},
- &#39;name&#39;: &#39;fairchem Relax&#39;,
- &#39;nid&#39;: &#39;runnervm3a41e.ilonryld4j1ubp2vurtnjdzw0f.bx.internal.cloudapp.net&#39;,
- &#39;parameters&#39;: {&#39;version&#39;: &#39;2.12.0&#39;},
- &#39;parameters_opt&#39;: {&#39;fmax&#39;: 0.001,
-                    &#39;max_steps&#39;: 1000,
-                    &#39;maxstep&#39;: 0.2,
-                    &#39;optimizer&#39;: &#39;LBFGS&#39;,
-                    &#39;type&#39;: &#39;optimization&#39;},
- &#39;quacc_version&#39;: &#39;1.0.6&#39;,
- &#39;results&#39;: {&#39;energy&#39;: -3.750168406173663,
-             &#39;forces&#39;: array([[0., 0., 0.]], dtype=float32),
-             &#39;free_energy&#39;: -3.750168406173663,
-             &#39;stress&#39;: array([-4.3533491e-03, -4.3533733e-03, -4.3533514e-03, -1.0742662e-09,
-        1.0059429e-09, -5.0324139e-10], dtype=float32)},
- &#39;structure_metadata&#39;: {&#39;chemsys&#39;: &#39;Cu&#39;,
-                        &#39;composition&#39;: {&#39;Cu&#39;: 1.0},
-                        &#39;composition_reduced&#39;: {&#39;Cu&#39;: 1.0},
-                        &#39;density&#39;: 8.971719813140734,
-                        &#39;density_atomic&#39;: 11.761470249999999,
-                        &#39;elements&#39;: [&#39;Cu&#39;],
-                        &#39;formula_anonymous&#39;: &#39;A&#39;,
-                        &#39;formula_pretty&#39;: &#39;Cu&#39;,
-                        &#39;nelements&#39;: 1,
-                        &#39;nsites&#39;: 1,
-                        &#39;symmetry&#39;: {&#39;angle_tolerance&#39;: 5.0,
-                                     &#39;crystal_system&#39;: &#39;Cubic&#39;,
-                                     &#39;hall&#39;: &#39;-F 4 2 3&#39;,
-                                     &#39;number&#39;: 225,
-                                     &#39;point_group&#39;: &#39;m-3m&#39;,
-                                     &#39;symbol&#39;: &#39;Fm-3m&#39;,
-                                     &#39;symprec&#39;: 0.1,
-                                     &#39;version&#39;: &#39;2.6.0&#39;},
-                        &#39;volume&#39;: 11.761470249999999},
- &#39;trajectory&#39;: [Atoms(symbols=&#39;Cu&#39;, pbc=True, cell=[[0.0, 1.805, 1.805], [1.805, 0.0, 1.805], [1.805, 1.805, 0.0]], calculator=SinglePointCalculator(...))],
- &#39;trajectory_results&#39;: [{&#39;energy&#39;: -3.750168406173663,
-                         &#39;forces&#39;: array([[0., 0., 0.]]),
-                         &#39;free_energy&#39;: -3.750168406173663,
-                         &#39;stress&#39;: array([-4.35334910e-03, -4.35337331e-03, -4.35335143e-03, -1.07426623e-09,
-        1.00594288e-09, -5.03241393e-10])}]}
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>&#39;Total energy: -11.866120776797066 eV \n Formation energy -6.084163336797066 eV&#39;
 </pre></div>
 </div>
 </div>
 </div>
-<p>Congratulations; you ran your first relaxation using an OMat24-trained checkpoint and <code class="docutils literal notranslate"><span class="pre">quacc</span></code>!</p>
+<p>Compare the results to the value of <a class="reference external" href="https://next-gen.materialsproject.org/materials/mp-1265?chemsys=Mg-O#thermodynamic_stability">-3.038 eV/atom reported</a> in the the Materials Project!
+<em>Note that we expect differences due to the different DFT settings used to calculate the OMat24 training data.</em></p>
+<p>Congratulations; you ran your first relaxation and predicted the formation energy of MgO using UMA and <code class="docutils literal notranslate"><span class="pre">quacc</span></code>!</p>
 </section>
 
     <script type="text/x-thebe-config">

@@ -272,7 +272,7 @@
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="inorganic_materials/models.html">Pretrained models</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
-<li class="toctree-l2"><a class="reference internal" href="inorganic_materials/examples_tutorials/bulk_stability.html">Stability</a></li>
+<li class="toctree-l2"><a class="reference internal" href="inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
 <li class="toctree-l2"><a class="reference internal" href="inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
 <li class="toctree-l2"><a class="reference internal" href="inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
 </ul>
@@ -915,6 +915,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState._cluster_id">_cluster_id (core.launchers.cluster.ray_cluster.RayClusterState attribute)</a>
 </li>
+      <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FormationEnergyCalculator._correction_type">_correction_type (core.calculate.ase_calculator.FormationEnergyCalculator attribute)</a>
+</li>
       <li><a href="autoapi/core/components/benchmark/_single/materials_discovery_reducer/index.html#core.components.benchmark._single.materials_discovery_reducer.MaterialsDiscoveryReducer._corrections">_corrections (core.components.benchmark._single.materials_discovery_reducer.MaterialsDiscoveryReducer attribute)</a>
 
       <ul>
@@ -957,10 +959,10 @@ document.write(`
 </li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._delete_system">_delete_system() (in module ocpapi.workflows.adsorbates)</a>
 </li>
-      <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.BalancedBatchSampler._dist_enabled">_dist_enabled() (core.common.data_parallel.BalancedBatchSampler static method)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.BalancedBatchSampler._dist_enabled">_dist_enabled() (core.common.data_parallel.BalancedBatchSampler static method)</a>
+</li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker._distributed_setup">_distributed_setup() (core.launchers.ray_on_slurm_launch.SPMDWorker method)</a>
 
       <ul>
@@ -1682,6 +1684,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.apply">apply() (core.datasets.atomic_data.AtomicData method)</a>
 </li>
+      <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FormationEnergyCalculator.apply_corrections">apply_corrections (core.calculate.ase_calculator.FormationEnergyCalculator attribute)</a>
+</li>
       <li><a href="autoapi/data/omat/entries/compatibility/index.html#data.omat.entries.compatibility.apply_mp_style_corrections">apply_mp_style_corrections() (in module data.omat.entries.compatibility)</a>
 </li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.apply_one_tags">apply_one_tags() (in module core.datasets.ase_datasets)</a>
@@ -2081,6 +2085,8 @@ document.write(`
       <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FAIRChemCalculator.calculate">calculate() (core.calculate.ase_calculator.FAIRChemCalculator method)</a>
 
       <ul>
+        <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FormationEnergyCalculator.calculate">(core.calculate.ase_calculator.FormationEnergyCalculator method)</a>
+</li>
         <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner.calculate">(core.components.calculate._calculate_runner.CalculateRunner method)</a>
 </li>
         <li><a href="autoapi/core/components/calculate/_single/adsorbml_runner/index.html#core.components.calculate._single.adsorbml_runner.AdsorbMLRunner.calculate">(core.components.calculate._single.adsorbml_runner.AdsorbMLRunner method)</a>
@@ -2158,8 +2164,12 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner">CalculateRunner (class in core.components.calculate._calculate_runner)</a>
 </li>
-      <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner.calculator">calculator (core.components.calculate._calculate_runner.CalculateRunner property)</a>
+      <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FormationEnergyCalculator.calculator">calculator (core.calculate.ase_calculator.FormationEnergyCalculator attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner.calculator">(core.components.calculate._calculate_runner.CalculateRunner property)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.callbacks">callbacks (core.components.evaluate.eval_runner.EvalRunner attribute)</a>
 
       <ul>
@@ -2803,6 +2813,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/singlepoint_runner/index.html#module-core.components.calculate._single.singlepoint_runner">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes
 
@@ -2810,8 +2822,6 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/recipes/index.html#module-core.components.calculate.recipes">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes.adsorbml
 
@@ -4426,8 +4436,12 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/elasticity_runner/index.html#core.components.calculate._single.elasticity_runner.ElasticityRunner">(class in core.components.calculate._single.elasticity_runner)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.element_references">element_references (core.units.mlip_unit.mlip_unit.Task attribute)</a>
+      <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FormationEnergyCalculator.element_references">element_references (core.calculate.ase_calculator.FormationEnergyCalculator attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.element_references">(core.units.mlip_unit.mlip_unit.Task attribute)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/modules/normalization/element_references/index.html#core.modules.normalization.element_references.ElementReferences">ElementReferences (class in core.modules.normalization.element_references)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.Bulk.elements">elements (ocpapi.Bulk attribute)</a>
@@ -4855,6 +4869,14 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/common/test_utils/index.html#core.common.test_utils.ForkedPdb">ForkedPdb (class in core.common.test_utils)</a>
+</li>
+      <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.form_elem_refs">form_elem_refs (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.form_elem_refs">(core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
+</li>
+      </ul></li>
+      <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FormationEnergyCalculator">FormationEnergyCalculator (class in core.calculate.ase_calculator)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.Bulk.formula">formula (ocpapi.Bulk attribute)</a>
 
@@ -5368,8 +5390,6 @@ document.write(`
         <li><a href="autoapi/data/oc/core/ion/index.html#data.oc.core.ion.Ion.get_ion_concentration">(data.oc.core.ion.Ion method)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.get_isolated_atomic_energies">get_isolated_atomic_energies() (in module core.calculate.pretrained_mlip)</a>
-</li>
       <li><a href="autoapi/core/components/calculate/_single/kappa_runner/index.html#core.components.calculate._single.kappa_runner.get_kappa103_data_list">get_kappa103_data_list() (in module core.components.calculate._single.kappa_runner)</a>
 </li>
       <li><a href="autoapi/core/models/uma/nn/layer_norm/index.html#core.models.uma.nn.layer_norm.get_l_to_all_m_expand_index">get_l_to_all_m_expand_index() (in module core.models.uma.nn.layer_norm)</a>
@@ -5382,10 +5402,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/common/registry/index.html#core.common.registry.Registry.get_loss_class">get_loss_class() (core.common.registry.Registry class method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/modules/scheduler/index.html#core.modules.scheduler.LRScheduler.get_lr">get_lr() (core.modules.scheduler.LRScheduler method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker.get_master_address_and_port">get_master_address_and_port() (core.launchers.ray_on_slurm_launch.SPMDWorker method)</a>
 
       <ul>
@@ -5499,6 +5519,8 @@ document.write(`
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.get_random_sites_on_triangle">get_random_sites_on_triangle() (in module data.oc.core.adsorbate_slab_config)</a>
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.get_rank">get_rank() (in module core.common.distutils)</a>
+</li>
+      <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.get_reference_energies">get_reference_energies() (in module core.calculate.pretrained_mlip)</a>
 </li>
       <li><a href="autoapi/core/scripts/diatomic_tests/index.html#core.scripts.diatomic_tests.get_relative_energies">get_relative_energies() (in module core.scripts.diatomic_tests)</a>
 </li>
