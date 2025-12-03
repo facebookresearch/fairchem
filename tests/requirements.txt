@@ -5,6 +5,7 @@ e3nn==0.5.8
 huggingface-hub==1.1.7
 torch==2.8.0
 torchtnt==0.2.4
+numba==0.62.1
 numpy==2.2.5
 scikit-learn==1.7.2
 lmdb==1.7.3
