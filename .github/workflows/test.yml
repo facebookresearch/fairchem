@@ -27,7 +27,7 @@ env:
 
 jobs:
   test:
-    runs-on: 32-core-ubuntu
+    runs-on: 4-core-ubuntu
     permissions:
       contents: read
       # Needed to manually set commit status
@@ -88,7 +88,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest -n auto tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
         name: codecov-coverage
@@ -154,6 +154,7 @@ jobs:
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        # Note: These tests seem to fail if "-n auto" is added
         run: |
           NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
       - name: Cleanup
