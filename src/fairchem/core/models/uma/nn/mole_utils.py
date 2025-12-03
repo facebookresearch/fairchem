@@ -16,7 +16,7 @@ import torch.nn as nn
 from fairchem.core.models.uma.nn.mole import (
     MOLE,
     MOLEDGL,
-    MOLEGlobals,
+    ThreadSafeMOLEGlobals,
     norm_str_to_fn,
 )
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
@@ -210,7 +210,7 @@ def convert_model_to_MOLE_model(
 
     #
     model.use_composition_embedding = use_composition_embedding
-    model.global_mole_tensors = MOLEGlobals(
+    model.global_mole_tensors = ThreadSafeMOLEGlobals(
         expert_mixing_coefficients=None, mole_sizes=None
     )
 
