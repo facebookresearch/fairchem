@@ -18,7 +18,7 @@ from ase.build import bulk
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
 
-pytest.skip(allow_module_level=True)
+# pytest.skip(allow_module_level=True)
 
 
 @pytest.fixture(scope="module")
