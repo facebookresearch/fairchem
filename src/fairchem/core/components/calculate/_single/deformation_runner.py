@@ -26,9 +26,8 @@ from fairchem.core.components.calculate.recipes.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from ase.calculators.calculator import Calculator
+    from collections.abc import Sequence
     from fairchem.core.datasets import AseDBDataset
 
 
