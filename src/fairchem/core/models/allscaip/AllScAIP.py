@@ -111,8 +111,7 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
 
         # transformer blocks
         for idx in range(self.global_cfg.num_layers):
-            with record_function(f"transformer_block_{idx}"):
-                neighbor_reps = self.transformer_blocks[idx](data, neighbor_reps)
+            neighbor_reps = self.transformer_blocks[idx](data, neighbor_reps, layer_idx=idx)
 
         return {
             "data": data,

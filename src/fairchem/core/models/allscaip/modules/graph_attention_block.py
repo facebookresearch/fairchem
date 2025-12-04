@@ -71,9 +71,10 @@ class GraphAttentionBlock(nn.Module):
         self,
         data: GraphAttentionData,
         neighbor_reps: torch.Tensor,
+        layer_idx: int = 0,
     ):
         # graph messages: (num_nodes, num_neighbors, hidden_dim)
-        with record_function("neighborhood_attention"):
+        with record_function(f"layer_{layer_idx}_neighbor_att"):
             # 1. neighborhood self attention
             neighbor_reps = self.neighborhood_attention(data, neighbor_reps)
 
@@ -81,16 +82,16 @@ class GraphAttentionBlock(nn.Module):
         node_reps = neighbor_reps[:, 0]
 
         # edge ffn
-        with record_function("edge_ffn"):
+        with record_function(f"layer_{layer_idx}_edge_ffn"):
             edge_reps = self.edge_ffn(neighbor_reps[:, 1:])
 
         if self.use_node_path:
             # 3. node self attention
-            with record_function("node_attention"):
+            with record_function(f"layer_{layer_idx}_node_att"):
                 node_reps = self.node_attention(data, node_reps)
 
         # 4. node ffn
-        with record_function("node_ffn"):
+        with record_function(f"layer_{layer_idx}_node_ffn"):
             node_reps = self.node_ffn(node_reps)
 
         # restore neighbor reps
