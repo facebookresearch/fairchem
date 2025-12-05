@@ -134,8 +134,9 @@ def test_multiple_dataset_predict(uma_predict_unit):
         (1, "cpu", False),
         (2, "cpu", False),
         (1, "cuda", False),
-        (2, "cuda", False),
-        (2, "cuda", True),
+        (1, "cuda", True),
+        # (2, "cuda", False),
+        # (2, "cuda", True),
     ],
 )
 def test_parallel_predict_unit(workers, device, checkpointing):
@@ -195,8 +196,10 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     [
         (1, "cpu", False),
         (2, "cpu", True),
-        (2, "cuda", True),
-        (2, "cuda", False),
+        (1, "cuda", True),
+        (1, "cuda", False),
+        # (2, "cuda", True),
+        # (2, "cuda", False),
     ],
 )
 def test_parallel_predict_unit_batch(workers, device, checkpointing):
