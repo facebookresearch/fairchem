@@ -40,7 +40,7 @@ class GraphAttentionData:
     max_num_nodes: int
     num_nodes: int
 
-    def to(self, device: torch.device) -> "GraphAttentionData":
+    def to(self, device: torch.device) -> GraphAttentionData:
         """Move all tensor fields to the specified device."""
         new_fields = {}
         for field in dataclasses.fields(self):

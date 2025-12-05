@@ -124,7 +124,9 @@ class NodeAttention(BaseAttention):
             attn_bias = freq_weight.log()
 
             if data.node_base_attn_mask is not None:
-                return attn_bias + data.node_base_attn_mask.expand(self.num_heads, -1, -1)
+                return attn_bias + data.node_base_attn_mask.expand(
+                    self.num_heads, -1, -1
+                )
             return attn_bias
 
         # base_mask only case

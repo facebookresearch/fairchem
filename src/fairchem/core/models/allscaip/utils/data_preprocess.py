@@ -272,15 +272,17 @@ def data_preprocess_radius_graph(
 ) -> GraphAttentionData:
     # Check if we should preprocess on CPU
     original_device = data.pos.device
-    preprocess_on_cpu = molecular_graph_cfg.preprocess_on_cpu and original_device.type == "cuda"
-    
+    preprocess_on_cpu = (
+        molecular_graph_cfg.preprocess_on_cpu and original_device.type == "cuda"
+    )
+
     if preprocess_on_cpu:
         # Move data to CPU for preprocessing
         data = data.cpu()
         preprocess_device = torch.device("cpu")
     else:
         preprocess_device = original_device
-    
+
     # atomic numbers
     atomic_numbers = data.atomic_numbers.long()
 
@@ -454,11 +456,11 @@ def data_preprocess_radius_graph(
         max_num_nodes=max_num_nodes,
         num_nodes=num_nodes,
     )
-    
+
     # Move results back to original device if preprocessed on CPU
     if preprocess_on_cpu:
         x = x.to(original_device)
-    
+
     return x
 
 

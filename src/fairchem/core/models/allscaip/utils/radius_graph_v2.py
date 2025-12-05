@@ -20,43 +20,45 @@ from fairchem.core.models.escaip.utils.radius_graph import (
 )
 
 
-def segment_argsort(values: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
+def segment_argsort(
+    values: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
+) -> torch.Tensor:
     """
     Compute argsort within each segment.
-    
+
     Args:
         values: (E,) values to sort
         segment_ids: (E,) segment ID for each value (must be sorted!)
         num_segments: total number of segments
-    
+
     Returns:
         ranks: (E,) rank of each value within its segment (0-indexed)
     """
     E = values.size(0)
     device = values.device
-    
+
     # Add large offset per segment to make global sort work per-segment
     # offset[i] = segment_ids[i] * max_possible_value
     max_val = values.max() - values.min() + 1
     offset_values = values + segment_ids.float() * max_val
-    
+
     # Global argsort
     global_order = torch.argsort(offset_values)
-    
+
     # Compute rank within segment using scatter
     ranks = torch.zeros(E, device=device, dtype=torch.long)
-    
+
     # Count elements per segment up to each position
     # For each position in sorted order, its rank is its position within segment
     segment_counts = torch.zeros(num_segments, device=device, dtype=torch.long)
     sorted_segments = segment_ids[global_order]
-    
+
     # Compute cumulative count per segment
     for i in range(E):
         seg = sorted_segments[i].item()
         ranks[global_order[i]] = segment_counts[seg]
         segment_counts[seg] += 1
-    
+
     return ranks
 
 
@@ -71,103 +73,125 @@ def compute_soft_ranks_single_segment(
     """
     Compute soft ranks for a single padded segment.
     vmap-compatible: uses only out-of-place operations.
-    
+
     Args:
         dist_padded: (max_seg_size,) padded distances
         valid_mask: (max_seg_size,) bool mask for valid entries
         k, delta, sigmoid_scale: ranking parameters
         use_low_mem: whether to use low memory mode
-    
+
     Returns:
         ranks: (max_seg_size,) ranks (inf for invalid entries)
     """
     max_size = dist_padded.size(0)
     kd = k + delta
-    
+
     # Set invalid distances to inf so they sort to the end
-    dist_masked = torch.where(valid_mask, dist_padded, torch.full_like(dist_padded, float('inf')))
-    
+    dist_masked = torch.where(
+        valid_mask, dist_padded, torch.full_like(dist_padded, float("inf"))
+    )
+
     if use_low_mem:
         # Sort and only consider k+delta nearest
         sorted_dist, sort_idx = torch.sort(dist_masked)
-        
+
         # Compute soft ranks for top kd (handle case where max_size < kd)
         actual_kd = min(kd, max_size)
         top_dist = sorted_dist[:actual_kd]
         diff = top_dist[:, None] - top_dist[None, :]
         top_ranks = bump_function(diff / sigmoid_scale).sum(dim=-1)
-        
+
         # Create full-size ranks with inf for entries beyond kd
         # Note: sorted_dist entries beyond actual valid count are inf, so they get sorted to end
-        full_sorted_ranks = torch.full((max_size,), float('inf'), device=dist_padded.device, dtype=dist_padded.dtype)
+        full_sorted_ranks = torch.full(
+            (max_size,),
+            float("inf"),
+            device=dist_padded.device,
+            dtype=dist_padded.dtype,
+        )
         # We can't use indexing, so we use where with position mask
         pos_mask = torch.arange(max_size, device=dist_padded.device) < actual_kd
-        full_sorted_ranks = torch.where(pos_mask, 
-            torch.cat([top_ranks, torch.zeros(max_size - actual_kd, device=dist_padded.device, dtype=dist_padded.dtype)]),
-            full_sorted_ranks)
-        
+        full_sorted_ranks = torch.where(
+            pos_mask,
+            torch.cat(
+                [
+                    top_ranks,
+                    torch.zeros(
+                        max_size - actual_kd,
+                        device=dist_padded.device,
+                        dtype=dist_padded.dtype,
+                    ),
+                ]
+            ),
+            full_sorted_ranks,
+        )
+
         # Map back to original order using inverse permutation
         inv_sort_idx = torch.argsort(sort_idx)
         ranks = full_sorted_ranks[inv_sort_idx]
-        
+
         # Mask out invalid entries
-        ranks = torch.where(valid_mask, ranks, torch.full_like(ranks, float('inf')))
+        ranks = torch.where(valid_mask, ranks, torch.full_like(ranks, float("inf")))
     else:
         # Full soft ranking
         diff = dist_masked[:, None] - dist_masked[None, :]
         ranks = torch.sigmoid(diff / sigmoid_scale).sum(dim=-1)
-        ranks = torch.where(valid_mask, ranks, torch.full_like(ranks, float('inf')))
-    
+        ranks = torch.where(valid_mask, ranks, torch.full_like(ranks, float("inf")))
+
     return ranks
 
 
-def segment_argsort_vectorized(values: torch.Tensor, segment_ids: torch.Tensor, num_segments: int) -> torch.Tensor:
+def segment_argsort_vectorized(
+    values: torch.Tensor, segment_ids: torch.Tensor, num_segments: int
+) -> torch.Tensor:
     """
     Vectorized version of segment argsort using cumsum trick.
-    
+
     Args:
         values: (E,) values to sort
         segment_ids: (E,) segment ID for each value
         num_segments: total number of segments
-    
+
     Returns:
         ranks: (E,) rank of each value within its segment (0-indexed)
     """
     E = values.size(0)
     device = values.device
-    
+
     # Add large offset per segment
     max_val = values.max() - values.min() + 1
     offset_values = values + segment_ids.to(values.dtype) * max_val
-    
+
     # Global argsort
     global_order = torch.argsort(offset_values)
     sorted_segments = segment_ids[global_order]
-    
+
     # Create position-in-segment using cumsum
     # When segment changes, reset counter; otherwise increment
-    segment_change = torch.cat([
-        torch.ones(1, device=device, dtype=torch.long),
-        (sorted_segments[1:] != sorted_segments[:-1]).long()
-    ])
-    
+    segment_change = torch.cat(
+        [
+            torch.ones(1, device=device, dtype=torch.long),
+            (sorted_segments[1:] != sorted_segments[:-1]).long(),
+        ]
+    )
+
     # Cumsum gives position, but resets at segment boundaries
     cumsum = torch.cumsum(torch.ones(E, device=device, dtype=torch.long), dim=0)
     # Subtract the cumsum value at segment start
-    segment_starts = cumsum * segment_change
+    # segment_starts = cumsum * segment_change
     segment_start_values = torch.zeros(E, device=device, dtype=torch.long)
     segment_start_values[segment_change.bool()] = cumsum[segment_change.bool()]
-    
+
     # Forward fill segment start values
     segment_start_filled = torch.cummax(segment_start_values, dim=0)[0]
-    
+
     # Rank within segment = cumsum - segment_start
     sorted_ranks = cumsum - segment_start_filled
-    
+
     # Map back to original order
     ranks = torch.zeros(E, device=device, dtype=torch.long)
     ranks[global_order] = sorted_ranks
-    
+
     return ranks
 
 
@@ -247,14 +271,14 @@ def build_radius_graph_chunked(
 ]:
     """
     Chunked version of build_radius_graph to reduce peak memory.
-    
-    This processes the N×N×M distance computation in chunks of source atoms,
+
+    This processes the NxNxM distance computation in chunks of source atoms,
     computing rankings correctly by:
     1. Phase 1: For each source chunk, compute distances and src_ranks for ALL edges
     2. Phase 2: Group collected edges by destination and compute dst_ranks
     3. Phase 3: Compute envelope and filter edges
-    
-    Memory is reduced from O(N²M) to O(chunk_size × N × M) for the main tensor.
+
+    Memory is reduced from O(N²M) to O(chunk_size x N x M) for the main tensor.
     """
     N = pos.size(0)
     M = image_id.size(0)
@@ -263,19 +287,19 @@ def build_radius_graph_chunked(
     image_offsets = torch.mm(image_id, cell)  # (M, 3)
 
     # Phase 1: Process in chunks, using vmap within each chunk
-    # Chunking is necessary for memory - we can't materialize full N×N×M at once
-    
+    # Chunking is necessary for memory - we can't materialize full NxNxM at once
+
     # Precompute destination positions with all images: (N, M, 3)
     dst_pos_all = pos[:, None, :] + image_offsets[None, :, :]  # (N, M, 3)
-    
+
     def compute_distances_single_source(src_pos_single):
         """Compute distances from one source to all N*M destinations - vmap compatible."""
         disp_single = dst_pos_all - src_pos_single[None, None, :]  # (N, M, 3)
         dist_single = safe_norm(disp_single, dim=-1)  # (N, M)
         return disp_single, dist_single
-    
+
     vmapped_distances = torch.vmap(compute_distances_single_source)
-    
+
     all_src_idx = []
     all_dst_idx = []
     all_disp = []
@@ -287,10 +311,12 @@ def build_radius_graph_chunked(
         chunk_end = min(chunk_start + chunk_size, N)
         chunk_N = chunk_end - chunk_start
         pos_chunk = pos[chunk_start:chunk_end]  # (chunk_N, 3)
-        
+
         # Use vmap to compute distances for all sources in chunk
-        disp_chunk, dist_chunk = vmapped_distances(pos_chunk)  # (chunk_N, N, M, 3), (chunk_N, N, M)
-        
+        disp_chunk, dist_chunk = vmapped_distances(
+            pos_chunk
+        )  # (chunk_N, N, M, 3), (chunk_N, N, M)
+
         if compute_dist_pairwise:
             dist_pairwise_chunks.append(dist_chunk.min(dim=2)[0])
 
@@ -298,9 +324,13 @@ def build_radius_graph_chunked(
         dist_flat = dist_chunk.view(chunk_N, N * M)
         if soft:
             if use_low_mem:
-                src_ranks_chunk = soft_rank_low_mem(dist_flat, k, sigmoid_scale, delta).view(chunk_N, N, M)
+                src_ranks_chunk = soft_rank_low_mem(
+                    dist_flat, k, sigmoid_scale, delta
+                ).view(chunk_N, N, M)
             else:
-                src_ranks_chunk = soft_rank(dist_flat, sigmoid_scale).view(chunk_N, N, M)
+                src_ranks_chunk = soft_rank(dist_flat, sigmoid_scale).view(
+                    chunk_N, N, M
+                )
         else:
             src_ranks_chunk = hard_rank(dist_flat).view(chunk_N, N, M)
 
@@ -330,41 +360,53 @@ def build_radius_graph_chunked(
     dst_sort_order = torch.argsort(dst_idx)
     sorted_dst_idx = dst_idx[dst_sort_order]
     sorted_dist = dist[dst_sort_order]
-    
+
     if soft:
         # For soft ranking, use vmap over padded segments
         # Get segment boundaries
-        unique_dsts, counts = torch.unique_consecutive(sorted_dst_idx, return_counts=True)
+        unique_dsts, counts = torch.unique_consecutive(
+            sorted_dst_idx, return_counts=True
+        )
         num_segments = len(unique_dsts)
         segment_ends = torch.cumsum(counts, dim=0)
-        segment_starts = torch.cat([torch.zeros(1, device=device, dtype=torch.long), segment_ends[:-1]])
-        
+        segment_starts = torch.cat(
+            [torch.zeros(1, device=device, dtype=torch.long), segment_ends[:-1]]
+        )
+
         # Use actual max segment size - can't truncate or we lose edges
         max_seg_size = int(counts.max().item())
-        
+
         # Create padded distance tensor and validity mask
-        padded_dists = torch.full((num_segments, max_seg_size), float('inf'), device=device, dtype=dist.dtype)
-        valid_masks = torch.zeros((num_segments, max_seg_size), device=device, dtype=torch.bool)
-        
+        padded_dists = torch.full(
+            (num_segments, max_seg_size), float("inf"), device=device, dtype=dist.dtype
+        )
+        valid_masks = torch.zeros(
+            (num_segments, max_seg_size), device=device, dtype=torch.bool
+        )
+
         for seg_idx in range(num_segments):
             start = segment_starts[seg_idx].item()
             end = segment_ends[seg_idx].item()
             seg_len = end - start
             padded_dists[seg_idx, :seg_len] = sorted_dist[start:end]
             valid_masks[seg_idx, :seg_len] = True
-        
+
         # Define vmap function
         def compute_ranks_for_segment(dist_seg, mask_seg):
             return compute_soft_ranks_single_segment(
                 dist_seg, mask_seg, k, delta, sigmoid_scale, use_low_mem
             )
-        
+
         # Apply vmap over all segments
         vmapped_compute = torch.vmap(compute_ranks_for_segment)
-        all_ranks = vmapped_compute(padded_dists, valid_masks)  # (num_segments, max_seg_size)
-        
+        all_ranks = vmapped_compute(
+            padded_dists, valid_masks
+        )  # (num_segments, max_seg_size)
+
         # Scatter results back to original positions
-        dst_ranks = torch.full((num_edges,), float('inf'), device=device, dtype=dist.dtype)
+        dst_ranks = torch.full(
+            (num_edges,), float("inf"), device=device, dtype=dist.dtype
+        )
         for seg_idx in range(num_segments):
             start = segment_starts[seg_idx].item()
             end = segment_ends[seg_idx].item()
@@ -399,7 +441,7 @@ def build_radius_graph_chunked(
 
     # Compute index rankings using vectorized segment argsort
     num_final_edges = src_idx.size(0)
-    
+
     # index1_rank: rank of each edge among source's outgoing edges (by envelope)
     src_sort_order = torch.argsort(src_idx)
     sorted_src_idx = src_idx[src_sort_order]
@@ -407,7 +449,7 @@ def build_radius_graph_chunked(
     sorted_index1_rank = segment_argsort_vectorized(sorted_env_src, sorted_src_idx, N)
     index1_rank = torch.zeros(num_final_edges, device=device, dtype=torch.long)
     index1_rank[src_sort_order] = sorted_index1_rank
-    
+
     # index2_rank: rank of each edge among destination's incoming edges (by envelope)
     dst_sort_order = torch.argsort(dst_idx)
     sorted_dst_idx = dst_idx[dst_sort_order]
@@ -783,7 +825,7 @@ def biknn_radius_graph(
         device: the device on which the tensors are allocated
         max_atoms: the size to pad to for the number of atoms
         max_neighbors: the size to pad to for the number of neighbors
-        compute_dist_pairwise: whether to compute and return dist_pairwise (N×N matrix)
+        compute_dist_pairwise: whether to compute and return dist_pairwise (NxN matrix)
         use_chunked: whether to use chunked graph construction
         chunk_size: size of chunks for chunked graph construction
     Returns:
@@ -843,7 +885,9 @@ def biknn_radius_graph(
         ]
     else:
         # No PBC - use identity image only (no replications needed)
-        identity_image = torch.zeros((1, 3), device=device, dtype=torch.get_default_dtype())
+        identity_image = torch.zeros(
+            (1, 3), device=device, dtype=torch.get_default_dtype()
+        )
         image_id_list = [identity_image for _ in range(num_graphs)]
 
     cell_list: list[torch.Tensor] = list(data.cell)
