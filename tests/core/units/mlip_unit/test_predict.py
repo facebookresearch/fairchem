@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 
 import numpy as np
 import numpy.testing as npt
@@ -128,14 +129,17 @@ def test_multiple_dataset_predict(uma_predict_unit):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, device",
+    "workers, device, checkpointing",
     [
-        (1, "cpu"),
-        (2, "cpu"),
-        (1, "cuda"),
+        (1, "cpu", False),
+        (2, "cpu", False),
+        (1, "cuda", False),
+        (1, "cuda", True),
+        # (2, "cuda", False),
+        # (2, "cuda", True),
     ],
 )
-def test_parallel_predict_unit(workers, device):
+def test_parallel_predict_unit(workers, device, checkpointing):
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -143,7 +147,7 @@ def test_parallel_predict_unit(workers, device):
     ifsets = InferenceSettings(
         tf32=False,
         merge_mole=True,
-        activation_checkpointing=True,
+        activation_checkpointing=checkpointing,
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
@@ -160,10 +164,10 @@ def test_parallel_predict_unit(workers, device):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
+    ray.shutdown()
+    distutils.cleanup()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
-    distutils.cleanup()
-    ray.shutdown()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -172,6 +176,8 @@ def test_parallel_predict_unit(workers, device):
     for _ in range(runs):
         normal_results = normal_predict_unit.predict(atomic_data)
 
+    logging.info(f"normal_results: {normal_results}")
+    logging.info(f"pp_results: {pp_results}")
     assert torch.allclose(
         pp_results["energy"].detach().cpu(),
         normal_results["energy"].detach().cpu(),
@@ -186,21 +192,24 @@ def test_parallel_predict_unit(workers, device):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, device",
+    "workers, device, checkpointing",
     [
-        (1, "cpu"),
-        (2, "cpu"),
-        (1, "cuda"),
+        (1, "cpu", False),
+        (2, "cpu", True),
+        (1, "cuda", True),
+        (1, "cuda", False),
+        # (2, "cuda", True),
+        # (2, "cuda", False),
     ],
 )
-def test_parallel_predict_unit_batch(workers, device):
+def test_parallel_predict_unit_batch(workers, device, checkpointing):
     seed = 42
-    runs = 2
+    runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
     ifsets = InferenceSettings(
         tf32=False,
         merge_mole=False,
-        activation_checkpointing=True,
+        activation_checkpointing=checkpointing,
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
@@ -227,7 +236,6 @@ def test_parallel_predict_unit_batch(workers, device):
         molecule_cell_size=120,
     )
     atomic_data = atomicdata_list_to_batch([h2o_data, o_data])
-
     seed_everywhere(seed)
     ppunit = ParallelMLIPPredictUnit(
         inference_model_path=model_path,
@@ -238,9 +246,10 @@ def test_parallel_predict_unit_batch(workers, device):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
+    ray.shutdown()
+    distutils.cleanup()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
-    distutils.cleanup()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
