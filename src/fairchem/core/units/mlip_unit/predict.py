@@ -59,6 +59,15 @@ except ImportError:
     ray_installed = False
 
 
+try:
+    from ray import serve
+
+    ray_serve_installed = True
+except ImportError:
+    serve = None
+    ray_serve_installed = False
+
+
 def collate_predictions(predict_fn):
     @wraps(predict_fn)
     def collated_predict(
@@ -117,6 +126,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
     ):
         super().__init__()
@@ -129,6 +139,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if atom_refs is not None
             else {}
         )
+        self.form_elem_refs = form_elem_refs if form_elem_refs is not None else {}
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
@@ -447,6 +458,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
         num_workers: int = 1,
         num_workers_per_node: int = 8,
@@ -460,6 +472,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             inference_settings=inference_settings,
             seed=seed,
             atom_refs=atom_refs,
+            form_elem_refs=form_elem_refs,
         )
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
@@ -472,6 +485,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "inference_settings": inference_settings,
             "seed": seed,
             "atom_refs": atom_refs,
+            "form_elem_refs": form_elem_refs,
             "assert_on_nans": assert_on_nans,
         }
 
@@ -594,3 +608,57 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
         return self._dataset_to_tasks
+
+
+@requires(ray_serve_installed, message="Requires `ray[serve]` to be installed")
+class BatchServerPredictUnit(MLIPPredictUnitProtocol):
+    """
+    PredictUnit wrapper that uses Ray Serve for batched inference.
+
+    This provides a clean interface compatible with MLIPPredictUnitProtocol
+    while leveraging Ray Serve's batching capabilities under the hood.
+    """
+
+    def __init__(
+        self,
+        server_handle,
+    ):
+        """
+        Args:
+            server_handle: Ray Serve deployment handle for BatchPredictServer
+            dataset_to_tasks: Mapping from dataset names to their associated tasks
+            atom_refs: Optional atom references dictionary
+        """
+        self.server_handle = server_handle
+
+    def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
+        """
+        Args:
+            data: AtomicData object (single system)
+            undo_element_references: Whether to undo element references
+
+        Returns:
+            Prediction dictionary
+        """
+        result = self.server_handle.predict.remote(
+            data, undo_element_references
+        ).result()
+        return result
+
+    @property
+    def dataset_to_tasks(self) -> dict:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "dataset_to_tasks"
+        ).result()
+
+    @property
+    def atom_refs(self) -> dict | None:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "atom_refs"
+        ).result()
+
+    @property
+    def inference_settings(self) -> InferenceSettings:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "inference_settings"
+        ).result()
