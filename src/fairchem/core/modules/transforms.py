@@ -168,6 +168,42 @@ def omol_transform(data_object: AtomicData, config) -> AtomicData:
     return common_transform(data_object, config)
 
 
+def random_rotation_transform(data_object: AtomicData, config) -> AtomicData:
+    alpha, beta, gamma = torch.rand(3) * 2 * np.pi
+    Rz = torch.tensor(
+        [
+            [torch.cos(alpha), -torch.sin(alpha), 0],
+            [torch.sin(alpha), torch.cos(alpha), 0],
+            [0, 0, 1],
+        ]
+    )
+    Ry = torch.tensor(
+        [
+            [torch.cos(beta), 0, torch.sin(beta)],
+            [0, 1, 0],
+            [-torch.sin(beta), 0, torch.cos(beta)],
+        ]
+    )
+    Rx = torch.tensor(
+        [
+            [1, 0, 0],
+            [0, torch.cos(gamma), -torch.sin(gamma)],
+            [0, torch.sin(gamma), torch.cos(gamma)],
+        ]
+    )
+    R = Rz @ Ry @ Rx
+    for k in data_object.keys():  # noqa: SIM118
+        if "forces" in k:
+            data_object[k] = data_object[k] @ R.T
+        if "stress" in k and ("iso" not in k and "aniso" not in k):
+            data_object[k] = (R @ data_object[k].reshape(3, 3) @ R.T).reshape(1, 9)
+        if k == "pos":
+            data_object.pos = data_object.pos @ R.T
+        if k == "cell":
+            data_object.cell = data_object.cell @ R.T
+    return data_object
+
+
 def stress_reshape_transform(data_object: AtomicData, config) -> AtomicData:
     for k in data_object.keys():  # noqa: SIM118
         if "stress" in k and ("iso" not in k and "aniso" not in k):
