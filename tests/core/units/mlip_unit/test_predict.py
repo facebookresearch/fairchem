@@ -578,7 +578,7 @@ def test_merge_mole_supercell_energy_forces_consistency():
 
 
 @pytest.fixture()
-def batch_server_setup(uma_predict_unit):
+def batch_server_handle(uma_predict_unit):
     """Set up a batch server for testing."""
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
     import ray
@@ -612,11 +612,7 @@ def batch_server_setup(uma_predict_unit):
         },
     )
 
-    yield (
-        server_handle,
-        uma_predict_unit.dataset_to_tasks,
-        getattr(uma_predict_unit, "atom_refs", None),
-    )
+    yield server_handle
 
     # Cleanup
     try:
@@ -631,15 +627,13 @@ def batch_server_setup(uma_predict_unit):
 
 @pytest.mark.gpu()
 def test_batch_server_predict_unit_with_calculator(
-    batch_server_setup, uma_predict_unit
+    batch_server_handle, uma_predict_unit
 ):
     """Test BatchServerPredictUnit works with FAIRChemCalculator."""
     from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
-    server_handle, dataset_to_tasks, atom_refs = batch_server_setup
-
     batch_predict_unit = BatchServerPredictUnit(
-        server_handle=server_handle,
+        server_handle=batch_server_handle,
     )
 
     atoms = bulk("Cu")
@@ -674,16 +668,14 @@ def test_batch_server_predict_unit_with_calculator(
 
 
 @pytest.mark.gpu()
-def test_batch_server_predict_unit_multiple_systems(batch_server_setup):
+def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
     """Test BatchServerPredictUnit with multiple concurrent requests."""
     from concurrent.futures import ThreadPoolExecutor
 
     from fairchem.core.units.mlip_unit.predict import BatchServerPredictUnit
 
-    server_handle, dataset_to_tasks, atom_refs = batch_server_setup
-
     batch_predict_unit = BatchServerPredictUnit(
-        server_handle=server_handle,
+        server_handle=batch_server_handle,
     )
 
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
