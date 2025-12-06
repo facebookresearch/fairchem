@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import os
 import shutil
 import socket
@@ -16,6 +17,7 @@ from pathlib import Path
 
 import psutil
 import submitit
+from submitit.helpers import Checkpointable, DelayedSubmission
 
 
 def kill_proc_tree(pid, including_parent=True):
@@ -166,6 +168,41 @@ class RayClusterState:
     def list_job_ids(self) -> list[str]:
         """Lists all job IDs stored in the jobs directory."""
         return [f.stem for f in self.jobs_dir.iterdir()]
+
+
+class RayHeadScript(Checkpointable):
+    def __init__(
+        self,
+        cluster_state: RayClusterState,
+        worker_wait_timeout_seconds: int,
+        payload: Optional[
+            Callable[..., PayloadReturnT]
+        ],  # does payload also need a checkpoint method?
+        **kwargs,
+    ):
+        self.cluster_state = cluster_state
+        self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
+        self.payload = payload
+        self.kwargs = kwargs
+
+    def __call__(self, checkpoint_path: str):
+        _ray_head_script(
+            self.cluster_state,
+            self.worker_wait_timeout_seconds,
+            self.payload,  # the payload just need to accept a checkpoint path?
+            **self.kwargs,
+        )
+
+    def checkpoint(self, checkpoint_path: str) -> DelayedSubmission:
+        logging.error("RayHeadScript checkpointing callback is triggered")
+        new_ray_head_script = RayHeadScript(
+            self.cluster_state,
+            self.worker_wait_timeout_seconds,
+            self.payload,
+            # also give the checkpoint path to the payload?
+            **self.kwargs,
+        )
+        return DelayedSubmission(new_ray_head_script, checkpoint_path)
 
 
 def _ray_head_script(
@@ -345,13 +382,13 @@ class RayCluster:
             name=f"ray_head_{name}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
             **requirements,
         )
-        head_job = s_executor.submit(
-            _ray_head_script,
+        head_script = RayHeadScript(
             self.state,
             self.worker_wait_timeout_seconds,
             payload,
             **kwargs,
         )
+        head_job = s_executor.submit(head_script, self.log_dir)
         self.state.add_job(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         print("head slurm job id:", head_job.job_id)
