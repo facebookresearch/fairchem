@@ -175,34 +175,41 @@ class RayHeadScript(Checkpointable):
         self,
         cluster_state: RayClusterState,
         worker_wait_timeout_seconds: int,
+        output_dir: str,
         payload: Optional[
             Callable[..., PayloadReturnT]
         ],  # does payload also need a checkpoint method?
+        checkpoint_path: str | None = None,
         **kwargs,
     ):
         self.cluster_state = cluster_state
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         self.payload = payload
+        self.output_dir = output_dir
+        self.checkpoint_path = checkpoint_path
         self.kwargs = kwargs
 
-    def __call__(self, checkpoint_path: str):
+    def __call__(self):
         _ray_head_script(
             self.cluster_state,
             self.worker_wait_timeout_seconds,
-            self.payload,  # the payload just need to accept a checkpoint path?
+            self.payload,
             **self.kwargs,
         )
 
-    def checkpoint(self, checkpoint_path: str) -> DelayedSubmission:
-        logging.error("RayHeadScript checkpointing callback is triggered")
+    def checkpoint(self) -> DelayedSubmission:
+        logging.error(
+            f"RayHeadScript checkpointing callback is triggered, submitting new run with checkpoint_path as {self.checkpoint_path}"
+        )
         new_ray_head_script = RayHeadScript(
-            self.cluster_state,
-            self.worker_wait_timeout_seconds,
-            self.payload,
-            # also give the checkpoint path to the payload?
+            cluster_state=self.cluster_state,
+            worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+            payload=self.payload,
+            output_dir=self.output_dir,
+            checkpoint_path=self.output_dir,  # use the output_dir as the checkpoint path for the new run
             **self.kwargs,
         )
-        return DelayedSubmission(new_ray_head_script, checkpoint_path)
+        return DelayedSubmission(new_ray_head_script)
 
 
 def _ray_head_script(
@@ -355,6 +362,7 @@ class RayCluster:
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
         print(f"cluster {self.state.cluster_id}")
+        self.output_dir = log_dir
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
@@ -385,10 +393,11 @@ class RayCluster:
         head_script = RayHeadScript(
             self.state,
             self.worker_wait_timeout_seconds,
+            self.output_dir,
             payload,
             **kwargs,
         )
-        head_job = s_executor.submit(head_script, self.log_dir)
+        head_job = s_executor.submit(head_script)
         self.state.add_job(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         print("head slurm job id:", head_job.job_id)
