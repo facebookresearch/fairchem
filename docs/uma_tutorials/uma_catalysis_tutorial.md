@@ -1732,14 +1732,14 @@ print("   Setting up 7-image NEB chain with TS guess in middle...")
 print("   Reaction: C* + O* (initial) → TS → CO* (final)")
 
 n_images = 7
-images = [initial_co]  # Start with C* + O*
+images = [initial_c_o]  # Start with C* + O*
 
 # Create images: C*+O* → TS → CO*
 for i in range(1, n_images):
     if i == n_images // 2:  # Middle image
         image = ts_structure.copy()
     else:
-        image = initial_co.copy()
+        image = initial_c_o.copy()
     image.set_pbc([True, True, True])
     image.calc = FAIRChemCalculator(predictor, task_name="oc20")
     images.append(image)
@@ -1768,7 +1768,7 @@ opt.run(fmax=0.1, steps=relaxation_steps)
 
 # Extract barrier (from C*+O* to TS)
 energies = [img.get_potential_energy() for img in images]
-energies_rel = np.array(energies) - E_initial_co
+energies_rel = np.array(energies) - E_initial_c_o
 E_barrier = np.max(energies_rel)
 
 print(f"\n   ✓ NEB converged!")
@@ -1843,7 +1843,7 @@ print("   → Saved as neb_path.gif")
 # Visualize key structures
 fig, axes = plt.subplots(1, 3, figsize=(15, 4))
 structures = [
-    (initial_co, "Initial: C* + O*", 0),
+    (initial_c_o, "Initial: C* + O*", 0),
     (images[ts_idx], f"TS (Image {ts_idx})", 1),
     (final_co, "Final: CO*", 2),
 ]
