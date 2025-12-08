@@ -19,7 +19,7 @@ Original paper: Bjarne Kreitz et al. JPCC (2021)
 
 ## Overview
 
-This tutorial demonstrates how to use the **UMA-S-1P1** machine learning potential from the OMat24 dataset to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acscatal.0c05387) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
+This tutorial demonstrates how to use the **UMA-S-1P1** machine learning potential to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acscatal.0c05387) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
 
 :::{admonition} Learning Objectives
 :class: note
@@ -1547,9 +1547,9 @@ print(f"   ZPE(CO*): {zpe_co:.4f} eV ({zpe_co*1000:.1f} meV)")
 
 # Calculate ZPE for C* and O* (initial state)
 print(f"\n   Computing ZPE for C* and O*...")
-initial_co.calc = base_calc
-co_indices = np.where(final_co.get_tags() == 2)[0]
-vib_c_o = Vibrations(initial_co, indices=c_o_indices, delta=0.02, name="vib_c_o")
+initial_c_o.calc = base_calc
+c_o_indices = np.where(initial_c_o.get_tags() == 2)[0]
+vib_c_o = Vibrations(initial_c_o, indices=c_o_indices, delta=0.02, name="vib_c_o")
 vib_c_o.run()
 vib_energies_c_o = vib_c_o.get_energies()
 zpe_c_o = np.sum(vib_energies_c_o[vib_energies_c_o > 0]) / 2.0
