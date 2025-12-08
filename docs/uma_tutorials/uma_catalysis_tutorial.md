@@ -15,13 +15,15 @@ kernelspec:
 # Tutorial: Catalyst Surface Analysis with Machine Learning Potentials
 
 Author: Zack Ulissi (Meta, CMU), with help from AI coding agents / LLMs
+
 Original paper: Bjarne Kreitz et al. JPCC (2021)
 
 ## Overview
 
 This tutorial demonstrates how to use the **UMA-S-1P1** machine learning potential to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acs.jpcc.0c09985) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
 
-:::{admonition} Learning Objectives
+
+```{admonition} Learning Objectives
 :class: note
 
 By the end of this tutorial, you will be able to:
@@ -32,53 +34,75 @@ By the end of this tutorial, you will be able to:
 - Study coverage-dependent binding phenomena
 - Calculate reaction barriers using the nudged elastic band (NEB) method
 - Apply D3 dispersion corrections to improve accuracy
-:::
+```
 
-:::{admonition} Prerequisites
-:class: warning
+```{admonition} About UMa-S-1P1
+:class: tip
 
-Required packages:
+The **UMa-S-1P1** model is a state-of-the-art universal machine learning potential trained on the OMat24 dataset, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies.
+```
+
+## Installation and Setup
+
+This tutorial uses a number of helpful open source packages:
 - `ase` - Atomic Simulation Environment
 - `fairchem` - FAIR Chemistry ML potentials (formerly OCP)
 - `pymatgen` - Materials analysis
 - `matplotlib` - Visualization
 - `numpy` - Numerical computing
 - `simple-dftd3` - Dispersion corrections
+among many others!
 
-:::
+### Huggingface setups
 
+You need to get a HuggingFace account and request access to the UMA models.
 
-````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
-:class: dropdown
+You need a Huggingface account, request access to https://huggingface.co/facebook/UMA, and to create a Huggingface token at https://huggingface.co/settings/tokens/ with these permission:
 
+Permissions: Read access to contents of all public gated repos you can access
 
-1. Install the necessary packages using pip, uv etc
-```{code-cell} ipython3
+Then, add the token as an environment variable (using `huggingface-cli login`: 
+
+```{code-cell}
 :tags: [skip-execution]
 
-! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami
-```
-
-2. Get access to any necessary huggingface gated models
-    * Get and login to your Huggingface account
-    * Request access to https://huggingface.co/facebook/UMA
-    * Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission "Permissions: Read access to contents of all public gated repos you can access"
-    * Add the token as an environment variable using `huggingface-cli login` or by setting the HF_TOKEN environment variable.
-
-```{code-cell} ipython3
-:tags: [skip-execution]
-
-# Login using the huggingface-cli utility
+# Enter token via huggingface-cli
 ! huggingface-cli login
-
-# alternatively,
-import os
-os.environ['HF_TOKEN'] = 'MY_TOKEN'
 ```
 
-````
+or you can set the token via HF_TOKEN variable:
+```{code-cell}
+:tags: [skip-execution]
 
-## Setup and Initialization
+# Set token via env variable
+import os
+os.environ['HF_TOKEN'] = 'MYTOKEN'
+```
+
+### FAIR Chemistry (UMA) installation
+
+It may be enough to use `pip install fairchem-core`. This gets you the latest version on PyPi (https://pypi.org/project/fairchem-core/)
+
+Here we install some sub-packages. This can take 2-5 minutes to run.
+
+```{code-cell}
+:tags: [skip-execution]
+
+! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami x3dase
+```
+
+```{code-cell}
+# Check that packages are installed
+!pip list | grep fairchem
+```
+
+```{code-cell}
+import fairchem.core
+
+fairchem.core.__version__
+```
+
+## Package imports
 
 First, let's import all necessary libraries and initialize the UMA-S-1P1 predictor:
 
@@ -91,6 +115,7 @@ import ase.io
 from ase import Atoms
 from ase.build import bulk
 from ase.io import write
+from ase.mep import interpolate
 from ase.mep.dyneb import DyNEB
 from ase.optimize import FIRE, LBFGS
 from ase.vibrations import Vibrations
@@ -150,11 +175,7 @@ else:
     relaxation_steps = 300
 ```
 
-:::{admonition} About UMa-S-1P1
-:class: tip
 
-The **UMa-S-1P1** model is a state-of-the-art universal machine learning potential trained on the OMat24 dataset, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies.
-:::
 
 ---
 
@@ -173,7 +194,7 @@ For FCC metals like Ni, the lattice constant **a** defines the unit cell size. T
 a_initial = 3.52  # Å, close to experimental
 ni_bulk = bulk("Ni", "fcc", a=a_initial, cubic=True)
 
-print(f"Initial lattice constant: {a_initial:.4f} Å")
+print(f"Initial lattice constant: {a_initial:.2f} Å")
 print(f"Number of atoms: {len(ni_bulk)}")
 
 # Set up calculator for bulk optimization
@@ -200,8 +221,8 @@ a_exp = 3.524  # Experimental value
 error = abs(a_optimized - a_exp) / a_exp * 100
 
 print(f"\n{'='*50}")
-print(f"Experimental lattice constant: {a_exp:.4f} Å")
-print(f"Optimized lattice constant:    {a_optimized:.4f} Å")
+print(f"Experimental lattice constant: {a_exp:.2f} Å")
+print(f"Optimized lattice constant:    {a_optimized:.2f} Å")
 print(f"Relative error:                {error:.2f}%")
 print(f"{'='*50}")
 
@@ -211,36 +232,39 @@ ase.io.write(str(output_dir / part_dirs["part1"] / "ni_bulk_relaxed.cif"), ni_bu
 a_opt = a_optimized
 ```
 
-:::{admonition} Understanding the Results
+```{admonition} Understanding the Results
 :class: note
 
-The ML potential typically predicts lattice constants within 1-2% of experimental values. Small discrepancies arise from:
-- Training data biases
-- Temperature effects (0 K vs room temperature)
-- Quantum effects not captured by classical models
+UMA-s-1p1 using the `omat` task name will predict lattice constants at the PBE level of DFT. For metals, PBE typically predicts lattice constants within 1-2% of experimental values. 
+
+Small discrepancies arise from:
+- Training data biases (if your structure is far from OMAT24)
+- Temperature effects (0 K vs room temperature). You can do a quasi-harmonic analysis to include finite temperature effects if desired. 
+- Quantum effects not captured by the underlying DFT/PBE simulations
 
 For surface calculations, using the ML-optimized lattice constant maintains internal consistency.
-:::
+```
 
-:::{admonition} Comparison with Paper
-:class: important
+```{admonition} Comparison with Paper
+:class: note
 
 **Paper (Table 1):** Ni lattice constant = 3.524 Å (experimental reference)
 
-**This work:** {a_optimized:.4f} Å (error: {error:.2f}%)
+**This work:** {a_optimized:.2f} Å (error: {error:.2f}%)
 
 The UMa-S-1P1 model with OMAT provides excellent agreement with experiment. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
 
-:::
+```
 
 ### Explore on Your Own
 
 Try modifying the following parameters and observe the effects:
 
-1. **Initial guess**: Change `a_initial` to 3.0 or 4.0 Å. Does the optimizer still converge to the same value?
-2. **Convergence criterion**: Tighten `fmax` to 0.01 eV/Å. How many more steps are required?
-3. **Different metals**: Replace `"Ni"` with `"Cu"`, `"Pd"`, or `"Pt"`. Compare predicted vs experimental lattice constants.
-4. **Cell shape**: Remove `cubic=True` and allow the cell to distort. Does FCC remain stable?
+1. **Task name**: The original paper re-relaxed the structures at the RPBE level of theory before continuing. Try that with the UMA-s-1p1 model (using the oc20 task name) and see if it matters here.
+2. **Initial guess**: Change `a_initial` to 3.0 or 4.0 Å. Does the optimizer still converge to the same value?
+3. **Convergence criterion**: Tighten `fmax` to 0.01 eV/Å. How many more steps are required?
+4. **Different metals**: Replace `"Ni"` with `"Cu"`, `"Pd"`, or `"Pt"`. Compare predicted vs experimental lattice constants.
+5. **Cell shape**: Remove `cubic=True` and allow the cell to distort. Does FCC remain stable?
 
 ---
 
@@ -265,9 +289,9 @@ where:
 - $A$ = surface area
 - Factor of 2 accounts for two surfaces (top and bottom)
 
-**Challenge**: Direct calculation suffers from quantum size effects. 
+**Challenge**: Direct calculation suffers from quantum size effects, and if you were doing DFT calculations small numerical errors in the simulation or from the K-point grid sampling can lead to small (but significant) errors in the bulk lattice energy. 
 
-**Solution**: Linear extrapolation method - calculate slabs at multiple thicknesses and extrapolate to infinite thickness.
+**Solution**: It is common when calculating surface energies to either use oriented unit cells, or the linear extrapolation method - calculate slabs at multiple thicknesses and extrapolate to infinite thickness. We'll use the linear extrapolation method here as it's more likely to work in future studies if you use this code!
 
 ### Step 1: Setup and Bulk Energy Reference
 
@@ -286,7 +310,7 @@ N_bulk = len(ni_bulk)
 E_bulk_per_atom = E_bulk_total / N_bulk
 
 print(f"Bulk energy reference:")
-print(f"  Total energy: {E_bulk_total:.4f} eV")
+print(f"  Total energy: {E_bulk_total:.2f} eV")
 print(f"  Number of atoms: {N_bulk}")
 print(f"  Energy per atom: {E_bulk_per_atom:.6f} eV/atom")
 ```
@@ -337,7 +361,7 @@ for facet in facets:
         E_slab = slab.get_potential_energy()
         n_atoms_list.append(len(slab))
         energies_list.append(E_slab)
-        print(f"    Energy: {E_slab:.4f} eV")
+        print(f"    Energy: {E_slab:.2f} eV")
 
     # Linear regression: E_slab = slope * N + intercept
     coeffs = np.polyfit(n_atoms_list, energies_list, 1)
@@ -352,7 +376,7 @@ for facet in facets:
 
     print(f"\n  Linear fit:")
     print(f"    Slope:     {slope:.6f} eV/atom (cf. bulk {E_bulk_per_atom:.6f})")
-    print(f"    Intercept: {intercept:.4f} eV")
+    print(f"    Intercept: {intercept:.2f} eV")
     print(f"\n  Surface energy:")
     print(f"    γ = {gamma:.6f} eV/Å² = {gamma_SI:.2f} J/m²")
 
@@ -399,7 +423,7 @@ for idx, facet in enumerate(facets):
         E_fit,
         "r--",
         linewidth=2,
-        label=f'Fit: {data["slope"]:.4f}N + {data["intercept"]:.2f}',
+        label=f'Fit: {data["slope"]:.2f}N + {data["intercept"]:.2f}',
     )
 
     # Formatting
@@ -446,8 +470,8 @@ for facet in facets:
     print(f"{facet_str:<10} {calc:>8.2f} J/m²  (Lit: {lit:.2f}, Δ={diff:.1f}%)")
 ```
 
-:::{admonition} Comparison with Paper (Table 1)
-:class: important
+```{admonition} Comparison with Paper (Table 1)
+:class: note
 
 **Paper Results (PBE-DFT, Tran et al.):**
 - Ni(111): 1.92 J/m²
@@ -470,10 +494,10 @@ for facet in facets:
 Both methods here use PBE as the underlying functional in DFT. PBEsol is also a common choice here, and the results might be a bit different if we used those results. 
 
 **Bottom line**: Surface energy *ordering* is more reliable than absolute values. Use ML for screening, validate critical cases with DFT.
-:::
+```
 
-:::{admonition} Why Linear Extrapolation?
-:class: important
+```{admonition} Why Linear Extrapolation?
+:class: note
 
 Single-thickness slabs suffer from:
 - **Quantum confinement**: Electronic structure depends on slab thickness
@@ -481,7 +505,7 @@ Single-thickness slabs suffer from:
 - **Relaxation artifacts**: Atoms at center may not reach bulk-like coordination
 
 Linear extrapolation eliminates these by fitting $E_{\text{slab}}(N)$ and extracting the asymptotic surface energy.
-:::
+```
 
 ### Explore on Your Own
 
@@ -526,7 +550,7 @@ energy_list = [surface_energies_SI[m] for m in miller_list]
 
 print(f"Using {len(miller_list)} facets:")
 for miller, energy in zip(miller_list, energy_list):
-    print(f"  {miller}: {energy:.3f} J/m²")
+    print(f"  {miller}: {energy:.2f} J/m²")
 ```
 
 ### Step 2: Generate Wulff Construction
@@ -542,7 +566,7 @@ print(f"\nWulff Shape Properties:")
 print(f"  Volume:          {wulff.volume:.2f} Å³")
 print(f"  Surface area:    {wulff.surface_area:.2f} Å²")
 print(f"  Effective radius: {wulff.effective_radius:.2f} Å")
-print(f"  Weighted γ:      {wulff.weighted_surface_energy:.4f} J/m²")
+print(f"  Weighted γ:      {wulff.weighted_surface_energy:.2f} J/m²")
 
 # Area fractions
 print(f"\nFacet Area Fractions:")
@@ -576,8 +600,8 @@ for hkl in miller_list:
     print(f"  {hkl}: {calc_frac:>6.1f}% (Paper: {paper_frac:.1f}%)")
 ```
 
-:::{admonition} Comparison with Paper (Table 2)
-:class: important
+```{admonition} Comparison with Paper (Table 2)
+:class: note
 
 **Paper Results (Wulff Construction):**
 - Ni(111): 69.23% of surface area
@@ -601,10 +625,10 @@ for hkl in miller_list:
 - Must study (111) surface for representative results
 - (100) sites may be important for minority reaction pathways
 - Edge/corner sites (not captured here) can be highly active
-:::
+```
 
 
-:::{admonition} Physical Interpretation
+```{admonition} Physical Interpretation
 :class: note
 
 The Wulff shape shows:
@@ -613,7 +637,7 @@ The Wulff shape shows:
 - **(110), (211) minor**: Higher energy → small or absent
 
 This predicts that Ni nanoparticles will be predominantly {111}-faceted octahedra with {100} truncations, matching experimental observations.
-:::
+```
 
 ### Explore on Your Own
 
@@ -652,9 +676,6 @@ The ZPE correction is calculated by analyzing the vibrational modes of the molec
 First, we create the Ni(111) surface and relax it:
 
 ```{code-cell} ipython3
-print("\n" + "=" * 70)
-print("PART 4: H Adsorption Energy Calculation")
-print("=" * 70)
 
 # Create Ni(111) slab
 ni_bulk_atoms = bulk("Ni", "fcc", a=a_opt, cubic=True)
@@ -693,7 +714,7 @@ E_clean_ml = clean_slab.get_potential_energy()
 clean_slab.calc = d3_calc
 E_clean_d3 = clean_slab.get_potential_energy()
 E_clean = E_clean_ml + E_clean_d3
-print(f"   E(clean): {E_clean:.4f} eV (ML: {E_clean_ml:.4f}, D3: {E_clean_d3:.4f})")
+print(f"   E(clean): {E_clean:.2f} eV (ML: {E_clean_ml:.2f}, D3: {E_clean_d3:.2f})")
 
 # Save clean slab
 ase.io.write(str(output_dir / part_dirs["part4"] / "ni111_clean.xyz"), clean_slab)
@@ -746,7 +767,7 @@ for idx, config in enumerate(ads_slab_config.atoms_list):
 
     h_energies.append(E_total)
     h_configs.append(config_relaxed)
-    print(f"   Config {idx+1}: {E_total:.4f} eV (ML: {E_ml:.4f}, D3: {E_d3:.4f})")
+    print(f"   Config {idx+1}: {E_total:.2f} eV (ML: {E_ml:.2f}, D3: {E_d3:.2f})")
 
     # Save structure
     ase.io.write(str(output_dir / part_dirs["part4"] / f"h_site_{idx+1}.xyz"), config_relaxed)
@@ -756,8 +777,8 @@ best_idx = np.argmin(h_energies)
 slab_with_h = h_configs[best_idx]
 E_with_h = h_energies[best_idx]
 
-print(f"\n   ✓ Best site: Config {best_idx+1}, E = {E_with_h:.4f} eV")
-print(f"   Energy spread: {max(h_energies) - min(h_energies):.4f} eV")
+print(f"\n   ✓ Best site: Config {best_idx+1}, E = {E_with_h:.2f} eV")
+print(f"   Energy spread: {max(h_energies) - min(h_energies):.2f} eV")
 print(f"   This spread indicates the importance of testing multiple sites!")
 ```
 
@@ -783,7 +804,7 @@ E_h2_ml = h2.get_potential_energy()
 h2.calc = d3_calc
 E_h2_d3 = h2.get_potential_energy()
 E_h2 = E_h2_ml + E_h2_d3
-print(f"   E(H₂): {E_h2:.4f} eV (ML: {E_h2_ml:.4f}, D3: {E_h2_d3:.4f})")
+print(f"   E(H₂): {E_h2:.2f} eV (ML: {E_h2_ml:.2f}, D3: {E_h2_d3:.2f})")
 
 # Save H2 structure
 ase.io.write(str(output_dir / part_dirs["part4"] / "h2_optimized.xyz"), h2)
@@ -800,9 +821,9 @@ print("   E_ads = E(slab+H) - E(slab) - 0.5×E(H₂)")
 E_ads = E_with_h - E_clean - 0.5 * E_h2
 E_ads_no_d3 = (E_with_h - E_clean_d3) - (E_clean - E_clean_d3) - 0.5 * (E_h2 - E_h2_d3)
 
-print(f"\n   Without D3: {E_ads_no_d3:.3f} eV")
-print(f"   With D3:    {E_ads:.3f} eV")
-print(f"   D3 effect:  {E_ads - E_ads_no_d3:.4f} eV")
+print(f"\n   Without D3: {E_ads_no_d3:.2f} eV")
+print(f"   With D3:    {E_ads:.2f} eV")
+print(f"   D3 effect:  {E_ads - E_ads_no_d3:.2f} eV")
 print(f"\n   → D3 corrections are negligible for H* (small, covalent bonding)")
 ```
 
@@ -828,9 +849,9 @@ zpe_h2 = np.sum(vib_energies_h2) / 2.0
 
 E_ads_zpe = E_ads + zpe_ads - 0.5 * zpe_h2
 
-print(f"   ZPE(H*):  {zpe_ads:.4f} eV")
-print(f"   ZPE(H₂):  {zpe_h2:.4f} eV")
-print(f"   E_ads(ZPE): {E_ads_zpe:.3f} eV")
+print(f"   ZPE(H*):  {zpe_ads:.2f} eV")
+print(f"   ZPE(H₂):  {zpe_h2:.2f} eV")
+print(f"   E_ads(ZPE): {E_ads_zpe:.2f} eV")
 
 # Visualize vibrational modes
 print("\n   Creating animations of vibrational modes...")
@@ -853,7 +874,7 @@ Visualize the best configuration and compare with literature:
 print("\n7. Visualizing best H* configuration...")
 fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 plot_atoms(slab_with_h, ax, radii=0.5, rotation=("0x,0y,0z"))
-ax.set_title(f"Best H* Configuration: E_ads = {E_ads:.3f} eV", fontsize=14)
+ax.set_title(f"Best H* Configuration: E_ads = {E_ads:.2f} eV", fontsize=14)
 plt.savefig("h_adsorption_best.png", dpi=300, bbox_inches="tight")
 plt.show()
 
@@ -866,7 +887,7 @@ print(f"This work:     {E_ads_zpe:.2f} eV")
 print(f"Difference:    {abs(E_ads_zpe - (-0.60)):.2f} eV")
 ```
 
-:::{admonition} D3 Dispersion Corrections
+```{admonition} D3 Dispersion Corrections
 :class: tip
 
 Dispersion (van der Waals) interactions are important for:
@@ -875,7 +896,7 @@ Dispersion (van der Waals) interactions are important for:
 - Metal-support interfaces
 
 For H adsorption, D3 corrections are typically small (<0.1 eV) because H forms strong covalent bonds with the surface. However, always check the magnitude!
-:::
+```
 
 ### Explore on Your Own
 
@@ -955,7 +976,7 @@ E_clean_ml = clean_slab.get_potential_energy()
 clean_slab.calc = d3_calc
 E_clean_d3 = clean_slab.get_potential_energy()
 E_clean = E_clean_ml + E_clean_d3
-print(f"   E(clean): {E_clean:.4f} eV")
+print(f"   E(clean): {E_clean:.2f} eV")
 
 print("\n2. Calculating H₂ reference...")
 h2 = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]])
@@ -974,7 +995,7 @@ E_h2_ml = h2.get_potential_energy()
 h2.calc = d3_calc
 E_h2_d3 = h2.get_potential_energy()
 E_h2 = E_h2_ml + E_h2_d3
-print(f"   E(H₂): {E_h2:.4f} eV")
+print(f"   E(H₂): {E_h2:.2f} eV")
 ```
 
 ### Step 3: Set Up Coverage Study
@@ -989,7 +1010,7 @@ print(f"\n3. Surface sites: {n_sites} (4×4 Ni(111))")
 
 # Test coverages: 1 H, 0.25 ML, 0.5 ML, 0.75 ML, 1.0 ML
 coverages_to_test = [1, 4, 8, 12, 16]
-print(f"\n   Will test coverages: {[f'{n/n_sites:.3f} ML' for n in coverages_to_test]}")
+print(f"\n   Will test coverages: {[f'{n/n_sites:.2f} ML' for n in coverages_to_test]}")
 print("   This spans from dilute to nearly full monolayer")
 
 coverages = []
@@ -1002,7 +1023,7 @@ For each coverage, generate multiple configurations and find the lowest energy:
 
 ```{code-cell} ipython3
 for n_h in coverages_to_test:
-    print(f"\n3. Coverage: {n_h} H ({n_h/n_sites:.3f} ML)")
+    print(f"\n3. Coverage: {n_h} H ({n_h/n_sites:.2f} ML)")
 
     # Generate configurations
     ni_bulk_obj_h = Bulk(bulk_atoms=ni_bulk_atoms)
@@ -1045,7 +1066,7 @@ for n_h in coverages_to_test:
         E_total = E_ml + E_d3
 
         config_energies.append(E_total)
-        print(f"     Config {idx+1}: {E_total:.3f} eV")
+        print(f"     Config {idx+1}: {E_total:.2f} eV")
 
     best_idx = np.argmin(config_energies)
     best_energy = config_energies[best_idx]
@@ -1056,7 +1077,7 @@ for n_h in coverages_to_test:
     coverages.append(coverage)
     adsorption_energies.append(E_ads_per_h)
 
-    print(f"   → E_ads/H: {E_ads_per_h:.3f} eV")
+    print(f"   → E_ads/H: {E_ads_per_h:.2f} eV")
 
     # Visualize best configuration at this coverage
     fig, ax = plt.subplots(1, 1, figsize=(6, 5))
@@ -1087,7 +1108,7 @@ slope = p.coef[1]
 intercept = p.coef[0]
 
 print(f"\n{'='*60}")
-print(f"Linear Fit: E_ads = {intercept:.3f} + {slope:.3f}θ (eV)")
+print(f"Linear Fit: E_ads = {intercept:.2f} + {slope:.2f}θ (eV)")
 print(f"Slope: {slope * 96.485:.1f} kJ/mol per ML")
 print(f"Paper: 8.7 kJ/mol per ML")
 print(f"{'='*60}")
@@ -1130,8 +1151,8 @@ plt.show()
 print("\n✓ Coverage dependence analysis complete!")
 ```
 
-:::{admonition} Comparison with Paper
-:class: important
+```{admonition} Comparison with Paper
+:class: note
 
 **Expected Results from Paper:**
 - **Slope**: 8.7 kJ/mol per ML (indicating repulsive lateral H-H interactions)
@@ -1146,9 +1167,9 @@ print("\n✓ Coverage dependence analysis complete!")
 - Slope can vary by ±2-3 kJ/mol depending on slab size and configuration sampling
 - Non-linearity may appear at very high coverage (θ > 0.75 ML)
 - Model differences can affect lateral interactions more than adsorption energies
-:::
+```
 
-:::{admonition} Physical Insights
+```{admonition} Physical Insights
 :class: note
 
 **Positive slope** (repulsive interactions):
@@ -1161,7 +1182,7 @@ print("\n✓ Coverage dependence analysis complete!")
 - Strong (>50 kJ/mol/ML) → clustering or phase separation likely
 
 The paper reports 8.7 kJ/mol/ML, indicating relatively weak lateral interactions for H on Ni(111).
-:::
+```
 
 ### Explore on Your Own
 
@@ -1262,7 +1283,7 @@ for idx, config in enumerate(multi_ads_config_co.atoms_list):
     co_energies_d3.append(E_d3)
     co_configs.append(config_relaxed)
     print(
-        f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f})"
+        f"     Config {idx+1}: E_total = {E_total:.2f} eV (RPBE: {E_ml:.2f}, D3: {E_d3:.2f})"
     )
 
 best_co_idx = np.argmin(co_energies)
@@ -1272,9 +1293,9 @@ E_final_co_ml = co_energies_ml[best_co_idx]
 E_final_co_d3 = co_energies_d3[best_co_idx]
 
 print(f"\n   → Best CO* (Config {best_co_idx+1}):")
-print(f"      RPBE:  {E_final_co_ml:.4f} eV")
-print(f"      D3:    {E_final_co_d3:.4f} eV")
-print(f"      Total: {E_final_co:.4f} eV")
+print(f"      RPBE:  {E_final_co_ml:.2f} eV")
+print(f"      D3:    {E_final_co_d3:.2f} eV")
+print(f"      Total: {E_final_co:.2f} eV")
 
 # Save best CO state
 ase.io.write(str(output_dir / part_dirs["part6"] / "co_final_best.traj"), final_co)
@@ -1323,7 +1344,7 @@ for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     # CO bond length is ~1.15 Å, so if distance < 1.5 Å, they've formed a molecule
     if c_o_dist < 1.5:
         print(
-            f"     Config {idx+1}: ⚠ REJECTED - C and O formed CO molecule (d = {c_o_dist:.3f} Å)"
+            f"     Config {idx+1}: ⚠ REJECTED - C and O formed CO molecule (d = {c_o_dist:.2f} Å)"
         )
         continue
 
@@ -1337,7 +1358,7 @@ for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     c_o_energies_d3.append(E_d3)
     c_o_configs.append(config_relaxed)
     print(
-        f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f}, C-O dist: {c_o_dist:.3f} Å)"
+        f"     Config {idx+1}: E_total = {E_total:.2f} eV (RPBE: {E_ml:.2f}, D3: {E_d3:.2f}, C-O dist: {c_o_dist:.2f} Å)"
     )
 
 best_c_o_idx = np.argmin(c_o_energies)
@@ -1347,9 +1368,9 @@ E_initial_c_o_ml = c_o_energies_ml[best_c_o_idx]
 E_initial_c_o_d3 = c_o_energies_d3[best_c_o_idx]
 
 print(f"\n   → Best C*+O* (Config {best_c_o_idx+1}):")
-print(f"      RPBE:  {E_initial_c_o_ml:.4f} eV")
-print(f"      D3:    {E_initial_c_o_d3:.4f} eV")
-print(f"      Total: {E_initial_c_o:.4f} eV")
+print(f"      RPBE:  {E_initial_c_o_ml:.2f} eV")
+print(f"      D3:    {E_initial_c_o_d3:.2f} eV")
+print(f"      Total: {E_initial_c_o:.2f} eV")
 
 # Save best C+O state
 ase.io.write(str(output_dir / part_dirs["part6"] / "co_initial_best.traj"), initial_c_o)
@@ -1377,7 +1398,7 @@ E_clean_d3 = clean_slab.get_potential_energy()
 E_clean = E_clean_ml + E_clean_d3
 
 print(
-    f"\n   Clean slab: E_total = {E_clean:.4f} eV (RPBE: {E_clean_ml:.4f}, D3: {E_clean_d3:.4f})"
+    f"\n   Clean slab: E_total = {E_clean:.2f} eV (RPBE: {E_clean_ml:.2f}, D3: {E_clean_d3:.2f})"
 )
 ```
 
@@ -1419,7 +1440,7 @@ for idx, config in enumerate(multi_ads_config_c.atoms_list):
     c_energies_d3.append(E_d3)
     c_configs.append(config_relaxed)
     print(
-        f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f})"
+        f"     Config {idx+1}: E_total = {E_total:.2f} eV (RPBE: {E_ml:.2f}, D3: {E_d3:.2f})"
     )
 
 best_c_idx = np.argmin(c_energies)
@@ -1429,9 +1450,9 @@ E_c_ml = c_energies_ml[best_c_idx]
 E_c_d3 = c_energies_d3[best_c_idx]
 
 print(f"\n   → Best C* (Config {best_c_idx+1}):")
-print(f"      RPBE:  {E_c_ml:.4f} eV")
-print(f"      D3:    {E_c_d3:.4f} eV")
-print(f"      Total: {E_c:.4f} eV")
+print(f"      RPBE:  {E_c_ml:.2f} eV")
+print(f"      D3:    {E_c_d3:.2f} eV")
+print(f"      Total: {E_c:.2f} eV")
 
 # Save best C state
 ase.io.write(str(output_dir / part_dirs["part6"] / "c_best.traj"), c_ads)
@@ -1465,7 +1486,7 @@ for idx, config in enumerate(multi_ads_config_o.atoms_list):
     o_energies_d3.append(E_d3)
     o_configs.append(config_relaxed)
     print(
-        f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f})"
+        f"     Config {idx+1}: E_total = {E_total:.2f} eV (RPBE: {E_ml:.2f}, D3: {E_d3:.2f})"
     )
 
 best_o_idx = np.argmin(o_energies)
@@ -1475,9 +1496,9 @@ E_o_ml = o_energies_ml[best_o_idx]
 E_o_d3 = o_energies_d3[best_o_idx]
 
 print(f"\n   → Best O* (Config {best_o_idx+1}):")
-print(f"      RPBE:  {E_o_ml:.4f} eV")
-print(f"      D3:    {E_o_d3:.4f} eV")
-print(f"      Total: {E_o:.4f} eV")
+print(f"      RPBE:  {E_o_ml:.2f} eV")
+print(f"      D3:    {E_o_d3:.2f} eV")
+print(f"      Total: {E_o:.2f} eV")
 
 # Save best O state
 ase.io.write(str(output_dir / part_dirs["part6"] / "o_best.traj"), o_ads)
@@ -1490,15 +1511,15 @@ E_initial_c_o_separate_d3 = E_c_d3 + E_o_d3
 
 ```{code-cell} ipython3
 print(f"\n   Combined C* + O* (separate calculations):")
-print(f"      RPBE:  {E_initial_c_o_separate_ml:.4f} eV")
-print(f"      D3:    {E_initial_c_o_separate_d3:.4f} eV")
-print(f"      Total: {E_initial_c_o_separate:.4f} eV")
+print(f"      RPBE:  {E_initial_c_o_separate_ml:.2f} eV")
+print(f"      D3:    {E_initial_c_o_separate_d3:.2f} eV")
+print(f"      Total: {E_initial_c_o_separate:.2f} eV")
 
 print(f"\n   Comparison:")
-print(f"      C*+O* (same cell):  {E_initial_c_o - E_clean:.4f} eV")
-print(f"      C* + O* (separate): {E_initial_c_o_separate - 2*E_clean:.4f} eV")
+print(f"      C*+O* (same cell):  {E_initial_c_o - E_clean:.2f} eV")
+print(f"      C* + O* (separate): {E_initial_c_o_separate - 2*E_clean:.2f} eV")
 print(
-    f"      Difference:         {(E_initial_c_o - E_clean) - (E_initial_c_o_separate - 2*E_clean):.3f} eV"
+    f"      Difference:         {(E_initial_c_o - E_clean) - (E_initial_c_o_separate - 2*E_clean):.2f} eV"
 )
 print("   ✓ Separate C* and O* energies calculated")
 ```
@@ -1514,10 +1535,10 @@ print(f"   " + "=" * 60)
 # Electronic energies
 print(f"\n   Electronic Energies:")
 print(
-    f"   Initial (C*+O*): RPBE = {E_initial_c_o_ml:.4f} eV, D3 = {E_initial_c_o_d3:.4f} eV, Total = {E_initial_c_o:.4f} eV"
+    f"   Initial (C*+O*): RPBE = {E_initial_c_o_ml:.2f} eV, D3 = {E_initial_c_o_d3:.2f} eV, Total = {E_initial_c_o:.2f} eV"
 )
 print(
-    f"   Final (CO*):     RPBE = {E_final_co_ml:.4f} eV, D3 = {E_final_co_d3:.4f} eV, Total = {E_final_co:.4f} eV"
+    f"   Final (CO*):     RPBE = {E_final_co_ml:.2f} eV, D3 = {E_final_co_d3:.2f} eV, Total = {E_final_co:.2f} eV"
 )
 
 # Reaction energies without ZPE
@@ -1526,11 +1547,11 @@ delta_E_d3_contrib = E_final_co_d3 - E_initial_c_o_d3
 delta_E_elec = E_final_co - E_initial_c_o
 
 print(f"\n   Reaction Energies (without ZPE):")
-print(f"   ΔE(RPBE only):     {delta_E_rpbe:.4f} eV = {delta_E_rpbe*96.485:.1f} kJ/mol")
+print(f"   ΔE(RPBE only):     {delta_E_rpbe:.2f} eV = {delta_E_rpbe*96.485:.1f} kJ/mol")
 print(
-    f"   ΔE(D3 contrib):    {delta_E_d3_contrib:.4f} eV = {delta_E_d3_contrib*96.485:.1f} kJ/mol"
+    f"   ΔE(D3 contrib):    {delta_E_d3_contrib:.2f} eV = {delta_E_d3_contrib*96.485:.1f} kJ/mol"
 )
-print(f"   ΔE(RPBE+D3):       {delta_E_elec:.4f} eV = {delta_E_elec*96.485:.1f} kJ/mol")
+print(f"   ΔE(RPBE+D3):       {delta_E_elec:.2f} eV = {delta_E_elec*96.485:.1f} kJ/mol")
 
 # Calculate ZPE for CO* (final state)
 print(f"\n   Computing ZPE for CO*...")
@@ -1542,7 +1563,7 @@ vib_co.run()
 vib_energies_co = vib_co.get_energies()
 zpe_co = np.sum(vib_energies_co[vib_energies_co > 0]) / 2.0
 vib_co.clean()
-print(f"   ZPE(CO*): {zpe_co:.4f} eV ({zpe_co*1000:.1f} meV)")
+print(f"   ZPE(CO*): {zpe_co:.2f} eV ({zpe_co*1000:.1f} meV)")
 
 
 # Calculate ZPE for C* and O* (initial state)
@@ -1554,7 +1575,7 @@ vib_c_o.run()
 vib_energies_c_o = vib_c_o.get_energies()
 zpe_c_o = np.sum(vib_energies_c_o[vib_energies_c_o > 0]) / 2.0
 vib_c_o.clean()
-print(f"   ZPE(C*+O*): {zpe_c_o:.4f} eV ({zpe_c_o*1000:.1f} meV)")
+print(f"   ZPE(C*+O*): {zpe_c_o:.2f} eV ({zpe_c_o*1000:.1f} meV)")
 
 
 # Total reaction energy with ZPE
@@ -1562,21 +1583,21 @@ delta_zpe = zpe_co - zpe_c_o
 delta_E_zpe = delta_E_elec + delta_zpe
 
 print(f"\n   Reaction Energy (with ZPE):")
-print(f"   ΔE(electronic):    {delta_E_elec:.4f} eV = {delta_E_elec*96.485:.1f} kJ/mol")
+print(f"   ΔE(electronic):    {delta_E_elec:.2f} eV = {delta_E_elec*96.485:.1f} kJ/mol")
 print(
-    f"   ΔZPE:              {delta_zpe:.4f} eV = {delta_zpe*96.485:.1f} kJ/mol ({delta_zpe*1000:.1f} meV)"
+    f"   ΔZPE:              {delta_zpe:.2f} eV = {delta_zpe*96.485:.1f} kJ/mol ({delta_zpe*1000:.1f} meV)"
 )
-print(f"   ΔE(total):         {delta_E_zpe:.4f} eV = {delta_E_zpe*96.485:.1f} kJ/mol")
+print(f"   ΔE(total):         {delta_E_zpe:.2f} eV = {delta_E_zpe*96.485:.1f} kJ/mol")
 
 print(f"\n   Summary:")
 print(
-    f"   Without D3, without ZPE: {delta_E_rpbe:.4f} eV = {delta_E_rpbe*96.485:.1f} kJ/mol"
+    f"   Without D3, without ZPE: {delta_E_rpbe:.2f} eV = {delta_E_rpbe*96.485:.1f} kJ/mol"
 )
 print(
-    f"   With D3, without ZPE:    {delta_E_elec:.4f} eV = {delta_E_elec*96.485:.1f} kJ/mol"
+    f"   With D3, without ZPE:    {delta_E_elec:.2f} eV = {delta_E_elec*96.485:.1f} kJ/mol"
 )
 print(
-    f"   With D3, with ZPE:       {delta_E_zpe:.4f} eV = {delta_E_zpe*96.485:.1f} kJ/mol"
+    f"   With D3, with ZPE:       {delta_E_zpe:.2f} eV = {delta_E_zpe*96.485:.1f} kJ/mol"
 )
 
 print(f"\n   " + "=" * 60)
@@ -1613,7 +1634,7 @@ E_co_gas_d3 = co_gas.get_potential_energy()
 E_co_gas = E_co_gas_ml + E_co_gas_d3
 
 print(
-    f"   CO(g):       E_total = {E_co_gas:.4f} eV (RPBE: {E_co_gas_ml:.4f}, D3: {E_co_gas_d3:.4f})"
+    f"   CO(g):       E_total = {E_co_gas:.2f} eV (RPBE: {E_co_gas_ml:.2f}, D3: {E_co_gas_d3:.2f})"
 )
 
 # Calculate ZPE for CO(g)
@@ -1625,8 +1646,8 @@ vib_energies_co_gas = vib_co_gas.get_energies()
 zpe_co_gas = 0.5 * np.sum(vib_energies_co_gas[vib_energies_co_gas > 0])
 vib_co_gas.clean()
 
-print(f"   ZPE(CO(g)):  {zpe_co_gas:.4f} eV")
-print(f"   ZPE(CO*):    {zpe_co:.4f} eV (from Step 4 calculation)")
+print(f"   ZPE(CO(g)):  {zpe_co_gas:.2f} eV")
+print(f"   ZPE(CO*):    {zpe_co:.2f} eV (from Step 4 calculation)")
 
 # Electronic adsorption energy
 E_ads_co_elec = E_final_co - E_clean - E_co_gas
@@ -1638,13 +1659,13 @@ delta_zpe_ads = zpe_co - zpe_co_gas
 E_ads_co_total = E_ads_co_elec + delta_zpe_ads
 
 print(f"\n   Electronic Energy Breakdown:")
-print(f"   ΔE(RPBE only) = {(E_final_co_ml - E_clean_ml - E_co_gas_ml):.4f} eV")
-print(f"   ΔE(D3 contrib) = {((E_final_co_d3 - E_clean_d3 - E_co_gas_d3)):.4f} eV")
-print(f"   ΔE(RPBE+D3) = {E_ads_co_elec:.4f} eV")
+print(f"   ΔE(RPBE only) = {(E_final_co_ml - E_clean_ml - E_co_gas_ml):.2f} eV")
+print(f"   ΔE(D3 contrib) = {((E_final_co_d3 - E_clean_d3 - E_co_gas_d3)):.2f} eV")
+print(f"   ΔE(RPBE+D3) = {E_ads_co_elec:.2f} eV")
 print(f"\n   ZPE Contribution:")
-print(f"   ΔZPE = {delta_zpe_ads:.4f} eV")
+print(f"   ΔZPE = {delta_zpe_ads:.2f} eV")
 print(f"\n   Total Adsorption Energy:")
-print(f"   ΔE(total) = {E_ads_co_total:.4f} eV = {E_ads_co_total*96.485:.1f} kJ/mol")
+print(f"   ΔE(total) = {E_ads_co_total:.2f} eV = {E_ads_co_total*96.485:.1f} kJ/mol")
 print(f"\n   Summary:")
 print(
     f"   E_ads(CO) without ZPE = {-E_ads_co_elec:.2f} eV = {-E_ads_co_elec*96.485:.1f} kJ/mol"
@@ -1716,7 +1737,7 @@ final_co_dist = np.linalg.norm(
     ts_structure.get_positions()[co_indices[1]]
     - ts_structure.get_positions()[co_indices[0]]
 )
-print(f"   Final C-O distance at TS: {final_co_dist:.3f} Å")
+print(f"   Final C-O distance at TS: {final_co_dist:.2f} Å")
 
 # Save TS guess
 ase.io.write(str(output_dir / part_dirs["part6"] / "ts_guess.xyz"), ts_structure)
@@ -1732,7 +1753,9 @@ print("   Setting up 7-image NEB chain with TS guess in middle...")
 print("   Reaction: C* + O* (initial) → TS → CO* (final)")
 
 n_images = 7
-images = [initial_c_o]  # Start with C* + O*
+initial = initial_c_o.copy()
+initial.calc = FAIRChemCalculator(predictor, task_name="oc20")
+images = [initial]  # Start with C* + O*
 
 # Create images: C*+O* → TS → CO*
 for i in range(1, n_images):
@@ -1744,14 +1767,14 @@ for i in range(1, n_images):
     image.calc = FAIRChemCalculator(predictor, task_name="oc20")
     images.append(image)
 
-images.append(final_co)  # End with CO*
+final = final_co.copy()
+final.calc = FAIRChemCalculator(predictor, task_name="oc20")
+images.append(final)  # End with CO*
 
 # Interpolate with better initial guess
 dyneb = DyNEB(images, climb=True, fmax=0.1)
 
 # Interpolate first half (C*+O* → TS)
-from ase.neb import interpolate
-
 print("\n   Interpolating images...")
 interpolate(images[:n_images//2 + 1])
 # Interpolate second half (TS → CO*)
@@ -1772,8 +1795,8 @@ energies_rel = np.array(energies) - E_initial_c_o
 E_barrier = np.max(energies_rel)
 
 print(f"\n   ✓ NEB converged!")
-print(f"\n   Forward barrier (C*+O* → CO*): {E_barrier:.3f} eV = {E_barrier*96.485:.1f} kJ/mol")
-print(f"   Reverse barrier (CO* → C*+O*): {E_barrier - delta_E_zpe:.3f} eV = {(E_barrier - delta_E_zpe)*96.485:.1f} kJ/mol")
+print(f"\n   Forward barrier (C*+O* → CO*): {E_barrier:.2f} eV = {E_barrier*96.485:.1f} kJ/mol")
+print(f"   Reverse barrier (CO* → C*+O*): {E_barrier - delta_E_zpe:.2f} eV = {(E_barrier - delta_E_zpe)*96.485:.1f} kJ/mol")
 print(f"\n   Paper (Table 5): 153 kJ/mol = 1.59 eV (reverse barrier)")
 print(f"   Difference: {abs((E_barrier - delta_E_zpe) - 1.59):.2f} eV")
 ```
@@ -1863,8 +1886,8 @@ plt.show()
 print("\n✓ NEB analysis complete!")
 ```
 
-:::{admonition} Comparison with Paper (Tables 4 & 5)
-:class: important
+```{admonition} Comparison with Paper (Tables 4 & 5)
+:class: note
 
 **Expected Results from Paper:**
 - **Reaction Energy (C* + O* → CO*)**: **-142.7 kJ/mol = -1.48 eV** (exothermic, DFT-D3)
@@ -1893,10 +1916,10 @@ print("\n✓ NEB analysis complete!")
 - Small forward barrier (0.11 eV) means C+O rapidly recombine to CO
 - This explains why Ni produces CO in Fischer-Tropsch rather than keeping C and O separate
 - High temperatures needed to overcome the dissociation barrier for further C-C coupling
-:::
+```
 
-:::{admonition} NEB Method Explained
-:class: important
+```{admonition} NEB Method Explained
+:class: note
 
 The **Nudged Elastic Band (NEB)** method finds the minimum energy path between reactants and products:
 
@@ -1913,7 +1936,7 @@ Advantages:
 Limitations:
 - Computationally expensive (optimize N images)
 - May find wrong path if initial interpolation is poor
-:::
+```
 
 ### Explore on Your Own
 
@@ -2002,11 +2025,11 @@ graph TD
 
 ## Caveats and Pitfalls
 
-:::{admonition} Important Considerations
+```{admonition} Important Considerations
 :class: warning
 
-When using ML potentials for surface catalysis, be aware of these critical issues:
-:::
+When using ML potentials for surface catalysis, be aware of these critical issues!
+```
 
 ### 1. Task Selection: OMAT vs OC20
 
@@ -2152,7 +2175,7 @@ atoms.set_pbc([True, True, True])  # Always required
 
 ---
 
-:::{admonition} Congratulations! 🎉
+```{admonition} Congratulations! 🎉
 :class: tip
 
 You've completed a comprehensive computational catalysis workflow using state-of-the-art ML potentials. You can now:
@@ -2167,8 +2190,4 @@ You've completed a comprehensive computational catalysis workflow using state-of
 - Validate key results with DFT
 - Develop microkinetic models
 - Publish your findings!
-:::
-
-```{code-cell} ipython3
-
 ```
