@@ -1759,24 +1759,23 @@ interpolate(images[n_images//2:])
 
 # Optimize
 print("   Optimizing NEB path (this may take a while)...")
-try:
-    opt = FIRE(
-        dyneb,
-        trajectory=str(output_dir / part_dirs["part6"] / 'neb.traj'),
-        logfile=str(output_dir / part_dirs["part6"] / 'neb.log')
-    )
-    opt.run(fmax=0.1, steps=relaxation_steps)
-    
-    # Extract barrier (from C*+O* to TS)
-    energies = [img.get_potential_energy() for img in images]
-    energies_rel = np.array(energies) - E_initial_co
-    E_barrier = np.max(energies_rel)
-    
-    print(f"\n   ✓ NEB converged!")
-    print(f"\n   Forward barrier (C*+O* → CO*): {E_barrier:.3f} eV = {E_barrier*96.485:.1f} kJ/mol")
-    print(f"   Reverse barrier (CO* → C*+O*): {E_barrier - delta_E_zpe:.3f} eV = {(E_barrier - delta_E_zpe)*96.485:.1f} kJ/mol")
-    print(f"\n   Paper (Table 5): 153 kJ/mol = 1.59 eV (reverse barrier)")
-    print(f"   Difference: {abs((E_barrier - delta_E_zpe) - 1.59):.2f} eV")
+opt = FIRE(
+    dyneb,
+    trajectory=str(output_dir / part_dirs["part6"] / 'neb.traj'),
+    logfile=str(output_dir / part_dirs["part6"] / 'neb.log')
+)
+opt.run(fmax=0.1, steps=relaxation_steps)
+
+# Extract barrier (from C*+O* to TS)
+energies = [img.get_potential_energy() for img in images]
+energies_rel = np.array(energies) - E_initial_co
+E_barrier = np.max(energies_rel)
+
+print(f"\n   ✓ NEB converged!")
+print(f"\n   Forward barrier (C*+O* → CO*): {E_barrier:.3f} eV = {E_barrier*96.485:.1f} kJ/mol")
+print(f"   Reverse barrier (CO* → C*+O*): {E_barrier - delta_E_zpe:.3f} eV = {(E_barrier - delta_E_zpe)*96.485:.1f} kJ/mol")
+print(f"\n   Paper (Table 5): 153 kJ/mol = 1.59 eV (reverse barrier)")
+print(f"   Difference: {abs((E_barrier - delta_E_zpe) - 1.59):.2f} eV")
 ```
 
 ### Step 8: Visualize NEB Path and Key Structures
