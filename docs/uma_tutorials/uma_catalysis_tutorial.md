@@ -19,7 +19,7 @@ Original paper: Bjarne Kreitz et al. JPCC (2021)
 
 ## Overview
 
-This tutorial demonstrates how to use the **UMA-S-1P1** machine learning potential to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acscatal.0c05387) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
+This tutorial demonstrates how to use the **UMA-S-1P1** machine learning potential to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acs.jpcc.0c09985) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
 
 :::{admonition} Learning Objectives
 :class: note
@@ -1303,10 +1303,10 @@ multi_ads_config_c_o = MultipleAdsorbateSlabConfig(
 
 print(f"   Generated {len(multi_ads_config_c_o.atoms_list)} configurations")
 
-co2_energies = []
-co2_energies_ml = []
-co2_energies_d3 = []
-co2_configs = []
+c_o_energies = []
+c_o_energies_ml = []
+c_o_energies_d3 = []
+c_o_configs = []
 
 for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     config_relaxed = config.copy()
@@ -1316,12 +1316,12 @@ for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     opt.run(fmax=0.05, steps=relaxation_steps)
 
     # Check C-O bond distance to ensure they haven't formed CO molecule
-    co_dist = config_relaxed[config_relaxed.get_tags() == 2].get_distance(
+    c_o_dist = config_relaxed[config_relaxed.get_tags() == 2].get_distance(
         0, 1, mic=True
     )
 
     # CO bond length is ~1.15 Å, so if distance < 1.5 Å, they've formed a molecule
-    if co_dist < 1.5:
+    if c_o_dist < 1.5:
         print(
             f"     Config {idx+1}: ⚠ REJECTED - C and O formed CO molecule (d = {co_dist:.3f} Å)"
         )
@@ -1332,27 +1332,27 @@ for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     E_d3 = config_relaxed.get_potential_energy()
     E_total = E_ml + E_d3
 
-    co2_energies.append(E_total)
-    co2_energies_ml.append(E_ml)
-    co2_energies_d3.append(E_d3)
-    co2_configs.append(config_relaxed)
+    c_o_energies.append(E_total)
+    c_o_energies_ml.append(E_ml)
+    c_o_energies_d3.append(E_d3)
+    c_o_configs.append(config_relaxed)
     print(
         f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f}, C-O dist: {co_dist:.3f} Å)"
     )
 
 best_co2_idx = np.argmin(co2_energies)
-initial_co = co2_configs[best_co2_idx]
-E_initial_co = co2_energies[best_co2_idx]
-E_initial_co_ml = co2_energies_ml[best_co2_idx]
-E_initial_co_d3 = co2_energies_d3[best_co2_idx]
+initial_c_o = co2_configs[best_co2_idx]
+E_initial_c_o = co2_energies[best_co2_idx]
+E_initial_c_o_ml = co2_energies_ml[best_co2_idx]
+E_initial_c_o_d3 = co2_energies_d3[best_co2_idx]
 
 print(f"\n   → Best C*+O* (Config {best_co2_idx+1}):")
-print(f"      RPBE:  {E_initial_co_ml:.4f} eV")
-print(f"      D3:    {E_initial_co_d3:.4f} eV")
-print(f"      Total: {E_initial_co:.4f} eV")
+print(f"      RPBE:  {E_initial_c_o_ml:.4f} eV")
+print(f"      D3:    {E_initial_c_o_d3:.4f} eV")
+print(f"      Total: {E_initial_c_o:.4f} eV")
 
 # Save best C+O state
-ase.io.write(str(output_dir / part_dirs["part6"] / "co_initial_best.traj"), initial_co)
+ase.io.write(str(output_dir / part_dirs["part6"] / "co_initial_best.traj"), initial_c_o)
 print("   ✓ Best C*+O* structure saved")
 ```
 
@@ -1483,22 +1483,22 @@ print(f"      Total: {E_o:.4f} eV")
 ase.io.write(str(output_dir / part_dirs["part6"] / "o_best.traj"), o_ads)
 
 # Calculate combined energy for separate C* and O*
-E_initial_co_separate = E_c + E_o
-E_initial_co_separate_ml = E_c_ml + E_o_ml
-E_initial_co_separate_d3 = E_c_d3 + E_o_d3
+E_initial_c_o_separate = E_c + E_o
+E_initial_c_o_separate_ml = E_c_ml + E_o_ml
+E_initial_c_o_separate_d3 = E_c_d3 + E_o_d3
 ```
 
 ```{code-cell} ipython3
 print(f"\n   Combined C* + O* (separate calculations):")
-print(f"      RPBE:  {E_initial_co_separate_ml:.4f} eV")
-print(f"      D3:    {E_initial_co_separate_d3:.4f} eV")
-print(f"      Total: {E_initial_co_separate:.4f} eV")
+print(f"      RPBE:  {E_initial_c_o_separate_ml:.4f} eV")
+print(f"      D3:    {E_initial_c_o_separate_d3:.4f} eV")
+print(f"      Total: {E_initial_c_o_separate:.4f} eV")
 
 print(f"\n   Comparison:")
-print(f"      C*+O* (same cell):  {E_initial_co - E_clean:.4f} eV")
-print(f"      C* + O* (separate): {E_initial_co_separate - 2*E_clean:.4f} eV")
+print(f"      C*+O* (same cell):  {E_initial_c_o - E_clean:.4f} eV")
+print(f"      C* + O* (separate): {E_initial_c_o_separate - 2*E_clean:.4f} eV")
 print(
-    f"      Difference:         {(E_initial_co - E_clean) - (E_initial_co_separate - 2*E_clean):.3f} eV"
+    f"      Difference:         {(E_initial_c_o - E_clean) - (E_initial_c_o_separate - 2*E_clean):.3f} eV"
 )
 print("   ✓ Separate C* and O* energies calculated")
 ```
@@ -1514,16 +1514,16 @@ print(f"   " + "=" * 60)
 # Electronic energies
 print(f"\n   Electronic Energies:")
 print(
-    f"   Initial (C*+O*): RPBE = {E_initial_co_ml:.4f} eV, D3 = {E_initial_co_d3:.4f} eV, Total = {E_initial_co:.4f} eV"
+    f"   Initial (C*+O*): RPBE = {E_initial_c_o_ml:.4f} eV, D3 = {E_initial_c_o_d3:.4f} eV, Total = {E_initial_c_o:.4f} eV"
 )
 print(
     f"   Final (CO*):     RPBE = {E_final_co_ml:.4f} eV, D3 = {E_final_co_d3:.4f} eV, Total = {E_final_co:.4f} eV"
 )
 
 # Reaction energies without ZPE
-delta_E_rpbe = E_final_co_ml - E_initial_co_ml
-delta_E_d3_contrib = E_final_co_d3 - E_initial_co_d3
-delta_E_elec = E_final_co - E_initial_co
+delta_E_rpbe = E_final_co_ml - E_initial_c_o_ml
+delta_E_d3_contrib = E_final_co_d3 - E_initial_c_o_d3
+delta_E_elec = E_final_co - E_initial_c_o
 
 print(f"\n   Reaction Energies (without ZPE):")
 print(f"   ΔE(RPBE only):     {delta_E_rpbe:.4f} eV = {delta_E_rpbe*96.485:.1f} kJ/mol")
