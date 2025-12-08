@@ -1323,7 +1323,7 @@ for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     # CO bond length is ~1.15 Å, so if distance < 1.5 Å, they've formed a molecule
     if c_o_dist < 1.5:
         print(
-            f"     Config {idx+1}: ⚠ REJECTED - C and O formed CO molecule (d = {co_dist:.3f} Å)"
+            f"     Config {idx+1}: ⚠ REJECTED - C and O formed CO molecule (d = {c_o_dist:.3f} Å)"
         )
         continue
 
@@ -1337,16 +1337,16 @@ for idx, config in enumerate(multi_ads_config_c_o.atoms_list):
     c_o_energies_d3.append(E_d3)
     c_o_configs.append(config_relaxed)
     print(
-        f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f}, C-O dist: {co_dist:.3f} Å)"
+        f"     Config {idx+1}: E_total = {E_total:.4f} eV (RPBE: {E_ml:.4f}, D3: {E_d3:.4f}, C-O dist: {c_o_dist:.3f} Å)"
     )
 
-best_co2_idx = np.argmin(co2_energies)
-initial_c_o = co2_configs[best_co2_idx]
-E_initial_c_o = co2_energies[best_co2_idx]
-E_initial_c_o_ml = co2_energies_ml[best_co2_idx]
-E_initial_c_o_d3 = co2_energies_d3[best_co2_idx]
+best_c_o_idx = np.argmin(c_o_energies)
+initial_c_o = c_o_configs[best_c_o_idx]
+E_initial_c_o = c_o_energies[best_c_o_idx]
+E_initial_c_o_ml = c_o_energies_ml[best_c_o_idx]
+E_initial_c_o_d3 = c_o_energies_d3[best_c_o_idx]
 
-print(f"\n   → Best C*+O* (Config {best_co2_idx+1}):")
+print(f"\n   → Best C*+O* (Config {best_c_o_idx+1}):")
 print(f"      RPBE:  {E_initial_c_o_ml:.4f} eV")
 print(f"      D3:    {E_initial_c_o_d3:.4f} eV")
 print(f"      Total: {E_initial_c_o:.4f} eV")
