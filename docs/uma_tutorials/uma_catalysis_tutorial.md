@@ -1,14 +1,13 @@
 ---
 jupytext:
-  formats: ipynb,md:myst
   text_representation:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.2
+    jupytext_version: 1.17.1
 kernelspec:
-  name: aims_tutorial
-  display_name: aims_tutorial
+  display_name: Python 3 (ipykernel)
+  name: python3
   language: python
 ---
 
@@ -20,7 +19,7 @@ Original paper: Bjarne Kreitz et al. JPCC (2021)
 
 ## Overview
 
-This tutorial demonstrates how to use the **UMA-S-1P1** machine learning potential to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acs.jpcc.0c09985) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
+This tutorial demonstrates how to use the Universal Model for Atoms (UMA) machine learning potential to perform comprehensive catalyst surface analysis. We replicate key computational workflows from ["Microkinetic Modeling of CO₂ Desorption from Supported Multifaceted Ni Catalysts"](https://pubs.acs.org/doi/10.1021/acs.jpcc.0c09985) by Bjarne Kreitz (now faculty at Georgia Tech!), showing how ML potentials can accelerate computational catalysis research.
 
 
 ```{admonition} Learning Objectives
@@ -36,10 +35,12 @@ By the end of this tutorial, you will be able to:
 - Apply D3 dispersion corrections to improve accuracy
 ```
 
-```{admonition} About UMa-S-1P1
+```{admonition} About UMA-S-1P1
 :class: tip
 
-The **UMa-S-1P1** model is a state-of-the-art universal machine learning potential trained on the OMat24 dataset, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies.
+The **UMA-S-1P1** model is a state-of-the-art universal machine learning potential trained on the OMat24, OC20, OMol25, ODAC23, and OMC25 datasets, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies. Here we'll use the UMA-s-1p1 checkpoint which is the small (=faster) 1.1 version released in June. The UMA-s-1p1 checkpoint is open science with a lightweight license that users have to agree to through Huggingface. 
+
+You can read more about the UMA models here: https://arxiv.org/abs/2506.23971
 ```
 
 ## Installation and Setup
@@ -233,7 +234,7 @@ a_opt = a_optimized
 ```
 
 ```{admonition} Understanding the Results
-:class: note
+:class: tip
 
 UMA-s-1p1 using the `omat` task name will predict lattice constants at the PBE level of DFT. For metals, PBE typically predicts lattice constants within 1-2% of experimental values. 
 
@@ -250,13 +251,11 @@ For surface calculations, using the ML-optimized lattice constant maintains inte
 
 **Paper (Table 1):** Ni lattice constant = 3.524 Å (experimental reference)
 
-**This work:** {a_optimized:.2f} Å (error: {error:.2f}%)
-
-The UMa-S-1P1 model with OMAT provides excellent agreement with experiment. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
-
+The UMA-S-1P1 model with OMAT provides excellent agreement with experiment, as would be expected for the PBE functional for simple BCC Ni. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
 ```
 
-### Explore on Your Own
+```{admonition} Further exploration
+:class: seealso
 
 Try modifying the following parameters and observe the effects:
 
@@ -265,6 +264,8 @@ Try modifying the following parameters and observe the effects:
 3. **Convergence criterion**: Tighten `fmax` to 0.01 eV/Å. How many more steps are required?
 4. **Different metals**: Replace `"Ni"` with `"Cu"`, `"Pd"`, or `"Pt"`. Compare predicted vs experimental lattice constants.
 5. **Cell shape**: Remove `cubic=True` and allow the cell to distort. Does FCC remain stable?
+
+```
 
 ---
 
@@ -935,10 +936,6 @@ where β quantifies lateral interactions (repulsive if β > 0).
 Create a larger Ni(111) slab to accommodate multiple adsorbates:
 
 ```{code-cell} ipython3
-print("\n" + "=" * 70)
-print("PART 5: Coverage-Dependent H Adsorption")
-print("=" * 70)
-
 # Create large Ni(111) slab
 ni_bulk_atoms = bulk("Ni", "fcc", a=a_opt, cubic=True)
 ni_bulk_obj = Bulk(bulk_atoms=ni_bulk_atoms)
@@ -1202,28 +1199,16 @@ CO dissociation (CO* → C* + O*) is the rate-limiting step in many catalytic pr
 
 ### Theory
 
-**Forward Reaction**: C* + O* → CO* (recombination)
-**Reverse Reaction**: CO* → C* + O* (dissociation)
-
-**Thermochemistry**:
-$$
-\Delta E_{\text{rxn}} = E(\text{C}^* + \text{O}^*) - E(\text{CO}^*)
-$$
-
-**Barrier**: NEB finds the minimum energy path (MEP) and transition state:
-$$
-E_a = E^{\ddagger} - E_{\text{initial}}
-$$
+* **Forward Reaction**: C* + O* → CO* + * (recombination)
+* **Reverse Reaction**: CO* + *→ C* + O* (dissociation)
+* **Thermochemistry**: $\Delta E_{\text{rxn}} = E(\text{C}^* + \text{O}^*) - E(\text{CO}^*)$
+* **Barrier**: NEB finds the minimum energy path (MEP) and transition state: $E_a = E^{\ddagger} - E_{\text{initial}}$
 
 ### Step 1: Setup Slab and Calculators
 
 Initialize the Ni(111) surface and calculators:
 
 ```{code-cell} ipython3
-print("\n" + "=" * 70)
-print("PART 6: CO Dissociation on Ni(111)")
-print("=" * 70)
-
 # Create slab
 ni_bulk_atoms = bulk("Ni", "fcc", a=a_opt, cubic=True)
 ni_bulk_obj = Bulk(bulk_atoms=ni_bulk_atoms)
