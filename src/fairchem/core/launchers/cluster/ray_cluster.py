@@ -354,17 +354,6 @@ class RayCluster:
 
     """
 
-    log_dir: Path
-    state: RayClusterState
-
-    jobs: list[submitit.Job] = []
-    is_shutdown = False
-    num_worker_groups = 0
-    num_drivers = 0
-    head_started = False
-
-    # keeping this in a separate object so it's easy to serialize and pass to jobs
-
     def __init__(
         self,
         log_dir: Path = Path("raycluster_logs"),
@@ -378,6 +367,11 @@ class RayCluster:
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
+        self.is_shutdown = False
+        self.num_worker_groups = 0
+        self.num_drivers = 0
+        self.head_started = False
+        self.jobs: list[submitit.Job] = []
         print(f"logs will be in {self.log_dir.resolve()}")
 
     def start_head_and_workers(
