@@ -13,6 +13,7 @@ from submitit import AutoExecutor
 from submitit.core.utils import JobPaths, cloudpickle_dump
 from submitit.helpers import Checkpointable, DelayedSubmission
 from submitit.slurm.slurm import SlurmJobEnvironment
+from torch.distributed.elastic.utils.distributed import get_free_port
 
 from fairchem.core.common import distutils
 from fairchem.core.common.gp_utils import setup_graph_parallel_groups
@@ -278,6 +279,7 @@ def local_launch(cfg: DictConfig, log_dir: str):
             nproc_per_node=scheduler_cfg.ranks_per_node,
             rdzv_backend="c10d",
             max_restarts=0,
+            rdzv_endpoint=f"127.0.0.1:{get_free_port()}",
         )
         elastic_launch(launch_config, runner_wrapper)(cfg)
         if "reducer" in cfg:

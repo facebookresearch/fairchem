@@ -458,13 +458,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
-        #     logging.info(f"Node part: {node_partition}, size: {node_partition.numel()}")
-        # logging.info(
-        #     f"Rank:{distutils.get_rank()}, edge_index: {graph_dict['edge_index']}, edge_index_shape: {graph_dict['edge_index'].shape}, node_offset: {data_dict['gp_node_offset']}"
-        # )
-        # logging.info(
-        #     f"Rank:{distutils.get_rank()}, edge_distance: {graph_dict['edge_distance']}, edge_distance_vec: {graph_dict['edge_distance_vec'].sum()}"
-        # )
 
         if self.edge_chunk_size is not None:
             pad_edges(
