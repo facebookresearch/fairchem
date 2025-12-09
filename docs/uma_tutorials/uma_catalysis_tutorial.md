@@ -121,7 +121,7 @@ from ase.mep.dyneb import DyNEB
 from ase.optimize import FIRE, LBFGS
 from ase.vibrations import Vibrations
 from ase.visualize.plot import plot_atoms
-from dftd3.ase import DFTD3
+from torch_dftd.torch_dftd3_calculator import TorchDFTD3Calculator
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.data.oc.core import (
     Adsorbate,
@@ -690,7 +690,7 @@ print(f"   Created {len(ni_slab)} atom slab")
 
 # Set up calculators
 calc = FAIRChemCalculator(predictor, task_name="oc20")
-d3_calc = DFTD3(method="PBE", damping="d3bj")
+d3_calc = TorchDFTD3Calculator(device="cpu", damping="bj")
 print("   Calculators initialized (ML + D3)")
 ```
 
@@ -948,7 +948,7 @@ print(f"   Created {len(slab)} atom slab")
 
 # Set up calculators
 base_calc = FAIRChemCalculator(predictor, task_name="oc20")
-d3_calc = DFTD3(method="PBE", damping="d3bj")
+d3_calc = TorchDFTD3Calculator(device="cpu", damping="bj")
 print("   ✓ Calculators initialized")
 ```
 
@@ -1220,7 +1220,7 @@ slab = ni_slabs[0].atoms
 print(f"   Created {len(slab)} atom slab")
 
 base_calc = FAIRChemCalculator(predictor, task_name="oc20")
-d3_calc = DFTD3(method="PBE", damping="d3bj")
+d3_calc = TorchDFTD3Calculator(device="cpu", damping="bj")
 print("   \u2713 Calculators initialized")
 ```
 
@@ -1776,7 +1776,7 @@ opt.run(fmax=0.1, steps=relaxation_steps)
 
 # Extract barrier (from C*+O* to TS)
 energies = [img.get_potential_energy() for img in images]
-energies_rel = np.array(energies) - E_initial_c_o
+energies_rel = np.array(energies) - energies[0]
 E_barrier = np.max(energies_rel)
 
 print(f"\n   ✓ NEB converged!")
