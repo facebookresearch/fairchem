@@ -16,6 +16,7 @@ from contextlib import closing
 from pathlib import Path
 
 import psutil
+from fairchem.core.common.distutils import os_environ_get_or_throw
 import submitit
 from submitit.helpers import Checkpointable, DelayedSubmission
 
@@ -170,46 +171,52 @@ class RayClusterState:
         return [f.stem for f in self.jobs_dir.iterdir()]
 
 
-class RayHeadScript(Checkpointable):
+class CheckpointableRayJob(Checkpointable):
+    """
+    A checkpointable Ray job that can restart itself upon failure or preemption.
+    It gang schedules the head and worker nodes together to keep preemption logic simple.
+    """
+
     def __init__(
         self,
         cluster_state: RayClusterState,
         worker_wait_timeout_seconds: int,
-        output_dir: str,
-        payload: Optional[
-            Callable[..., PayloadReturnT]
-        ],  # does payload also need a checkpoint method?
-        checkpoint_path: str | None = None,
+        payload: Optional[Callable[..., PayloadReturnT]],
         **kwargs,
     ):
         self.cluster_state = cluster_state
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         self.payload = payload
-        self.output_dir = output_dir
-        self.checkpoint_path = checkpoint_path
         self.kwargs = kwargs
 
     def __call__(self):
-        _ray_head_script(
-            self.cluster_state,
-            self.worker_wait_timeout_seconds,
-            self.payload,
-            **self.kwargs,
-        )
+        # if we are the head node, start head
+        # the worker nodes need to get the head address from the cluster state
+        node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
+        if node_id == 0:
+            _ray_head_script(
+                cluster_state=self.cluster_state,
+                worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+                payload=self.payload,
+                **self.kwargs,
+            )
+        else:
+            worker_script(
+                cluster_state=self.cluster_state,
+                worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+            )
 
     def checkpoint(self) -> DelayedSubmission:
-        logging.error(
-            f"RayHeadScript checkpointing callback is triggered, submitting new run with checkpoint_path as {self.checkpoint_path}"
-        )
-        new_ray_head_script = RayHeadScript(
+        logging.error(f"CheckpointableRayJob checkpointing callback is triggered")
+        # need to clean the cluster state, otherwise the new job will end up reusing to the old head info
+        self.cluster_state.clean()
+        job = CheckpointableRayJob(
             cluster_state=self.cluster_state,
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
             payload=self.payload,
-            output_dir=self.output_dir,
-            checkpoint_path=self.output_dir,  # use the output_dir as the checkpoint path for the new run
             **self.kwargs,
         )
-        return DelayedSubmission(new_ray_head_script)
+        return DelayedSubmission(job)
 
 
 def _ray_head_script(
@@ -368,6 +375,38 @@ class RayCluster:
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
         print(f"logs will be in {self.log_dir.resolve()}")
 
+    def start_head_and_workers(
+        self,
+        requirements: dict[str, int | str],
+        name: str = "default",
+        executor: str = "slurm",
+        payload: Optional[Callable[..., PayloadReturnT]] = None,
+        **kwargs,
+    ):
+        assert not self.head_started, "head already started"
+        # start the head node
+        self.head_started = True
+        s_executor = submitit.AutoExecutor(
+            folder=str(self.log_dir),
+            cluster=executor,
+        )
+        s_executor.update_parameters(
+            name=f"ray_{name}_{self.state.cluster_id}",
+            **requirements,
+        )
+        ray_job = CheckpointableRayJob(
+            cluster_state=self.state,
+            worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+            payload=payload,
+            **kwargs,
+        )
+        slurm_job = s_executor.submit(ray_job)
+        self.state.add_job(slurm_job)
+        self.jobs.append(slurm_job)
+        mk_symlinks(self.log_dir, "job", slurm_job.paths)
+        print("slurm job id:", slurm_job.job_id)
+        return slurm_job.job_id
+
     def start_head(
         self,
         requirements: dict[str, int | str],
@@ -387,18 +426,19 @@ class RayCluster:
             cluster=executor,
         )
         s_executor.update_parameters(
-            name=f"ray_head_{name}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_head_{name}_{self.state.cluster_id}",
             **requirements,
         )
-        head_script = RayHeadScript(
+        head_job = s_executor.submit(
+            _ray_head_script,
             self.state,
             self.worker_wait_timeout_seconds,
             self.output_dir,
             payload,
             **kwargs,
         )
-        head_job = s_executor.submit(head_script)
         self.state.add_job(head_job)
+        self.jobs.append(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         print("head slurm job id:", head_job.job_id)
         return head_job.job_id
@@ -438,6 +478,7 @@ class RayCluster:
         print("workers slurm job ids:", [job.job_id for job in jobs])
         for j in jobs:
             self.state.add_job(j)
+            self.jobs.append(j)
         self.num_worker_groups += 1
         return [job.job_id for job in jobs]
 
