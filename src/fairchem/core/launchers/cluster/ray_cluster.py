@@ -147,6 +147,11 @@ class RayClusterState:
         with self._head_json.open("w") as f:
             json.dump(dataclasses.asdict(head_info), f)
 
+    def reset_state(self):
+        """Resets the head node information by removing the stored JSON file, useful for preemption resumes"""
+        if self._head_json.exists():
+            self._head_json.unlink()
+
     def clean(self):
         """Removes the rendezvous directory and all its contents."""
         shutil.rmtree(self.rendezvous_dir)
@@ -208,8 +213,8 @@ class CheckpointableRayJob(Checkpointable):
 
     def checkpoint(self) -> DelayedSubmission:
         logging.error(f"CheckpointableRayJob checkpointing callback is triggered")
-        # need to clean the cluster state, otherwise the new job will end up reusing to the old head info
-        self.cluster_state.clean()
+        # reset head info so that on restart we can create a new head
+        self.cluster_state.reset_state()
         job = CheckpointableRayJob(
             cluster_state=self.cluster_state,
             worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
