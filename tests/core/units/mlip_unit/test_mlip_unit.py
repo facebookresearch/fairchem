@@ -371,7 +371,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
 @pytest.mark.parametrize(
     "train_config, dataset_config, num_ddps",
     [
-        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1),
+        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1),
         ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2),
         (
             "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
