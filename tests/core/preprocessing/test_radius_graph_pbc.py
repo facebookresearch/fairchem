@@ -474,10 +474,11 @@ def test_generate_graph_batch_partition(
 ):
     # Convert to AtomicData
     data_list = []
-    for _ in range(num_systems):
+    for i in range(num_systems):
         # pick a random lattice constant, this ensures that we have mixed cells in the batch too
         lattice_constant = np.random.uniform(3.7, 3.9)
-        atoms = get_fcc_carbon_xtal(num_atoms, lattice_constant=lattice_constant)
+        # add i to num_atoms to ensure different sizes
+        atoms = get_fcc_carbon_xtal(num_atoms + i, lattice_constant=lattice_constant)
         data_list.append(
             AtomicData.from_ase(
                 atoms,
