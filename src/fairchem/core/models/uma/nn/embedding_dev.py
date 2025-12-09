@@ -237,11 +237,9 @@ class DatasetEmbedding(nn.Module):
         #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
         # ]
         emb_for_datasets = [
-            (
-                self.dataset_emb_dict["omat"](emb_idx)
-                if dataset in ["mptrj", "salex"]
-                else self.dataset_emb_dict[dataset](emb_idx)
-            )
+            self.dataset_emb_dict["omat"](emb_idx)
+            if dataset in ["mptrj", "salex"]
+            else self.dataset_emb_dict[dataset](emb_idx)
             for dataset in dataset_list
         ]
 

@@ -25,4 +25,3 @@ norm_type: rms_norm_sh
 act_type: ${act_type} #s2
 ff_type: ${ff_type} #grid
 dataset_list: ["oc20", "omol"]
-radius_pbc_version: 2
