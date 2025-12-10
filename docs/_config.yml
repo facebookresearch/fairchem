@@ -13,7 +13,7 @@ copyright                   : "Meta Platforms, Inc"  # Copyright year to be plac
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: force
+  execute_notebooks: cache
   timeout: 14400
   allow_errors: false
 
@@ -49,6 +49,7 @@ sphinx:
   extra_extensions:
   - 'sphinx.ext.napoleon'
   - 'autoapi.extension'
+  - 'sphinxcontrib.mermaid'
   config:
     autosummary_generate: True
     autoapi_dirs: ['../src/fairchem/core','../src/fairchem/data','../src/fairchem/applications/AdsorbML/adsorbml','../src/fairchem/applications/cattsunami','../src/fairchem/demo/ocpapi']

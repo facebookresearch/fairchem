@@ -27,9 +27,8 @@ parts:
   - file: uma_tutorials/summary
     sections:
     - file: uma_tutorials/uma_tutorial
-    - file: core/uma_examples/uma_catalysis_tutorial
+    - file: uma_tutorials/uma_catalysis_tutorial
   - file: core/generative_models
-
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
