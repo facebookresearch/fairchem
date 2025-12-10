@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 from functools import partial
 
-import pytest
 import torch
 from e3nn.o3 import rand_matrix
 
@@ -21,8 +20,6 @@ from fairchem.core.units.mlip_unit.mlip_unit import Task
 # Otherwise error mi
 
 
-# skip this test because it OOMs on 4-core CI machines
-@pytest.mark.skip(reason="Skipping test for now")
 def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     inference_checkpoint_path, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
@@ -56,9 +53,8 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
         torch.manual_seed(42)
 
         sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
-        # previously sample.cell was made 1000x but pbcv2 is currently bad at handling extremely large cells
-        # sample.pos += 500
-        sample.cell *= 10
+        sample.pos += 500
+        sample.cell *= 2000
 
         batch = data_list_collater([sample], otf_graph=True)
 
@@ -85,8 +81,8 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
         a2g(db.get_atoms(sample_idx), task_name="oc20") for sample_idx in range(5)
     ]
     for sample in samples:
-        # sample.pos += 500
-        sample.cell *= 10
+        sample.pos += 500
+        sample.cell *= 2000
 
     batch = data_list_collater(samples, otf_graph=True)
     out = predictor.predict(batch)
