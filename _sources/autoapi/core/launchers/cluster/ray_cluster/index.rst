@@ -20,6 +20,7 @@ Classes
 
    core.launchers.cluster.ray_cluster.HeadInfo
    core.launchers.cluster.ray_cluster.RayClusterState
+   core.launchers.cluster.ray_cluster.CheckpointableRayJob
    core.launchers.cluster.ray_cluster.RayCluster
 
 
@@ -158,6 +159,12 @@ Module Contents
 
 
 
+   .. py:method:: reset_state()
+
+      Resets the head node information by removing the stored JSON file, useful for preemption resumes
+
+
+
    .. py:method:: clean()
 
       Removes the rendezvous directory and all its contents.
@@ -176,6 +183,36 @@ Module Contents
    .. py:method:: list_job_ids() -> list[str]
 
       Lists all job IDs stored in the jobs directory.
+
+
+
+.. py:class:: CheckpointableRayJob(cluster_state: RayClusterState, worker_wait_timeout_seconds: int, payload: Optional[Callable[Ellipsis, PayloadReturnT]], **kwargs)
+
+   Bases: :py:obj:`submitit.helpers.Checkpointable`
+
+
+   A checkpointable Ray job that can restart itself upon failure or preemption.
+   It gang schedules the head and worker nodes together to keep preemption logic simple.
+
+
+   .. py:attribute:: cluster_state
+
+
+   .. py:attribute:: worker_wait_timeout_seconds
+
+
+   .. py:attribute:: payload
+
+
+   .. py:attribute:: kwargs
+
+
+   .. py:method:: __call__()
+
+
+   .. py:method:: checkpoint() -> submitit.helpers.DelayedSubmission
+
+      Resubmits the same callable with the same arguments
 
 
 
@@ -205,18 +242,16 @@ Module Contents
 
 
 
-   .. py:attribute:: log_dir
-      :type:  pathlib.Path
-
-
    .. py:attribute:: state
-      :type:  RayClusterState
 
 
-   .. py:attribute:: jobs
-      :type:  list[submitit.Job]
-      :value: []
+   .. py:attribute:: output_dir
 
+
+   .. py:attribute:: log_dir
+
+
+   .. py:attribute:: worker_wait_timeout_seconds
 
 
    .. py:attribute:: is_shutdown
@@ -239,7 +274,13 @@ Module Contents
 
 
 
-   .. py:attribute:: worker_wait_timeout_seconds
+   .. py:attribute:: jobs
+      :type:  list[submitit.Job]
+      :value: []
+
+
+
+   .. py:method:: start_head_and_workers(requirements: dict[str, int | str], name: str = 'default', executor: str = 'slurm', payload: Optional[Callable[Ellipsis, PayloadReturnT]] = None, **kwargs)
 
 
    .. py:method:: start_head(requirements: dict[str, int | str], name: str = 'default', executor: str = 'slurm', payload: Optional[Callable[Ellipsis, PayloadReturnT]] = None, **kwargs) -> str

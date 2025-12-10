@@ -18,6 +18,7 @@ Submodules
 .. toctree::
    :maxdepth: 1
 
+   /autoapi/core/units/mlip_unit/_batch_serve/index
    /autoapi/core/units/mlip_unit/_metrics/index
    /autoapi/core/units/mlip_unit/api/index
    /autoapi/core/units/mlip_unit/mlip_unit/index

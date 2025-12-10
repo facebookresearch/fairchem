@@ -306,6 +306,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../../../_cli/index.html">core._cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../../_config/index.html">core._config</a></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="../../../calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../calculate/_batch/index.html">core.calculate._batch</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../../calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
 </ul>
@@ -656,22 +657,34 @@ document.write(`
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.is_head_ready"><code class="docutils literal notranslate"><span class="pre">RayClusterState.is_head_ready()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.head_info"><code class="docutils literal notranslate"><span class="pre">RayClusterState.head_info()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.save_head_info"><code class="docutils literal notranslate"><span class="pre">RayClusterState.save_head_info()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.reset_state"><code class="docutils literal notranslate"><span class="pre">RayClusterState.reset_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.clean"><code class="docutils literal notranslate"><span class="pre">RayClusterState.clean()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.add_job"><code class="docutils literal notranslate"><span class="pre">RayClusterState.add_job()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.list_job_ids"><code class="docutils literal notranslate"><span class="pre">RayClusterState.list_job_ids()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.cluster_state"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.cluster_state</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.worker_wait_timeout_seconds"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.worker_wait_timeout_seconds</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.payload"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.payload</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.kwargs"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.kwargs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.__call__"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.__call__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.checkpoint"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.checkpoint()</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster._ray_head_script"><code class="docutils literal notranslate"><span class="pre">_ray_head_script()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.worker_script"><code class="docutils literal notranslate"><span class="pre">worker_script()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster"><code class="docutils literal notranslate"><span class="pre">RayCluster</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.log_dir"><code class="docutils literal notranslate"><span class="pre">RayCluster.log_dir</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.state"><code class="docutils literal notranslate"><span class="pre">RayCluster.state</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.jobs"><code class="docutils literal notranslate"><span class="pre">RayCluster.jobs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.output_dir"><code class="docutils literal notranslate"><span class="pre">RayCluster.output_dir</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.log_dir"><code class="docutils literal notranslate"><span class="pre">RayCluster.log_dir</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds"><code class="docutils literal notranslate"><span class="pre">RayCluster.worker_wait_timeout_seconds</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.is_shutdown"><code class="docutils literal notranslate"><span class="pre">RayCluster.is_shutdown</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.num_worker_groups"><code class="docutils literal notranslate"><span class="pre">RayCluster.num_worker_groups</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.num_drivers"><code class="docutils literal notranslate"><span class="pre">RayCluster.num_drivers</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.head_started"><code class="docutils literal notranslate"><span class="pre">RayCluster.head_started</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds"><code class="docutils literal notranslate"><span class="pre">RayCluster.worker_wait_timeout_seconds</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.jobs"><code class="docutils literal notranslate"><span class="pre">RayCluster.jobs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.start_head_and_workers"><code class="docutils literal notranslate"><span class="pre">RayCluster.start_head_and_workers()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.start_head"><code class="docutils literal notranslate"><span class="pre">RayCluster.start_head()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.start_workers"><code class="docutils literal notranslate"><span class="pre">RayCluster.start_workers()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.shutdown"><code class="docutils literal notranslate"><span class="pre">RayCluster.shutdown()</span></code></a></li>
@@ -718,7 +731,10 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="#core.launchers.cluster.ray_cluster.RayClusterState" title="core.launchers.cluster.ray_cluster.RayClusterState"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RayClusterState</span></code></a></p></td>
 <td><p>This class is responsible for managing the state of the Ray cluster. It is useful to keep track</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.launchers.cluster.ray_cluster.RayCluster" title="core.launchers.cluster.ray_cluster.RayCluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RayCluster</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob" title="core.launchers.cluster.ray_cluster.CheckpointableRayJob"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CheckpointableRayJob</span></code></a></p></td>
+<td><p>A checkpointable Ray job that can restart itself upon failure or preemption.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.launchers.cluster.ray_cluster.RayCluster" title="core.launchers.cluster.ray_cluster.RayCluster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RayCluster</span></code></a></p></td>
 <td><p>A RayCluster offers tools to start a Ray cluster (head and wokers) on slurm with the correct settings.</p></td>
 </tr>
 </tbody>
@@ -892,6 +908,12 @@ of the head node and the workers, and to make sure they are all ready before sta
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayClusterState.reset_state">
+<span class="sig-name descname"><span class="pre">reset_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayClusterState.reset_state" title="Link to this definition">#</a></dt>
+<dd><p>Resets the head node information by removing the stored JSON file, useful for preemption resumes</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayClusterState.clean">
 <span class="sig-name descname"><span class="pre">clean</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayClusterState.clean" title="Link to this definition">#</a></dt>
 <dd><p>Removes the rendezvous directory and all its contents.</p>
@@ -912,6 +934,45 @@ of the head node and the workers, and to make sure they are all ready before sta
 <dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayClusterState.list_job_ids">
 <span class="sig-name descname"><span class="pre">list_job_ids</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayClusterState.list_job_ids" title="Link to this definition">#</a></dt>
 <dd><p>Lists all job IDs stored in the jobs directory.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.launchers.cluster.ray_cluster.</span></span><span class="sig-name descname"><span class="pre">CheckpointableRayJob</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cluster_state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#core.launchers.cluster.ray_cluster.RayClusterState" title="core.launchers.cluster.ray_cluster.RayClusterState"><span class="pre">RayClusterState</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker_wait_timeout_seconds</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="pre">Ellipsis</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">PayloadReturnT</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">submitit.helpers.Checkpointable</span></code></p>
+<p>A checkpointable Ray job that can restart itself upon failure or preemption.
+It gang schedules the head and worker nodes together to keep preemption logic simple.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob.cluster_state">
+<span class="sig-name descname"><span class="pre">cluster_state</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.cluster_state" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob.worker_wait_timeout_seconds">
+<span class="sig-name descname"><span class="pre">worker_wait_timeout_seconds</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.worker_wait_timeout_seconds" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob.payload">
+<span class="sig-name descname"><span class="pre">payload</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.payload" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob.kwargs">
+<span class="sig-name descname"><span class="pre">kwargs</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.kwargs" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.__call__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.CheckpointableRayJob.checkpoint">
+<span class="sig-name descname"><span class="pre">checkpoint</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">submitit.helpers.DelayedSubmission</span></span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.checkpoint" title="Link to this definition">#</a></dt>
+<dd><p>Resubmits the same callable with the same arguments</p>
 </dd></dl>
 
 </dd></dl>
@@ -943,18 +1004,23 @@ worker_wait_timeout_seconds (int): The number of seconds ray will wait for a wor
 <div><p>workers in a queue that takes time for allocation, you might want to increase this otherwise your ray payload will fail, not finding resources.</p>
 </div></blockquote>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.log_dir">
-<span class="sig-name descname"><span class="pre">log_dir</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">pathlib.Path</span></em><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.log_dir" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.state">
-<span class="sig-name descname"><span class="pre">state</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#core.launchers.cluster.ray_cluster.RayClusterState" title="core.launchers.cluster.ray_cluster.RayClusterState"><span class="pre">RayClusterState</span></a></em><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.state" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">state</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.state" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.jobs">
-<span class="sig-name descname"><span class="pre">jobs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">submitit.Job</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.jobs" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.output_dir">
+<span class="sig-name descname"><span class="pre">output_dir</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.output_dir" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.log_dir">
+<span class="sig-name descname"><span class="pre">log_dir</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.log_dir" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds">
+<span class="sig-name descname"><span class="pre">worker_wait_timeout_seconds</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -978,8 +1044,13 @@ worker_wait_timeout_seconds (int): The number of seconds ray will wait for a wor
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds">
-<span class="sig-name descname"><span class="pre">worker_wait_timeout_seconds</span></span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.jobs">
+<span class="sig-name descname"><span class="pre">jobs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">submitit.Job</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.jobs" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.launchers.cluster.ray_cluster.RayCluster.start_head_and_workers">
+<span class="sig-name descname"><span class="pre">start_head_and_workers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">requirements</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">executor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'slurm'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="pre">Ellipsis</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">PayloadReturnT</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.launchers.cluster.ray_cluster.RayCluster.start_head_and_workers" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -1089,22 +1160,34 @@ You can call this multiple times to start an heterogeneous cluster.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.is_head_ready"><code class="docutils literal notranslate"><span class="pre">RayClusterState.is_head_ready()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.head_info"><code class="docutils literal notranslate"><span class="pre">RayClusterState.head_info()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.save_head_info"><code class="docutils literal notranslate"><span class="pre">RayClusterState.save_head_info()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.reset_state"><code class="docutils literal notranslate"><span class="pre">RayClusterState.reset_state()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.clean"><code class="docutils literal notranslate"><span class="pre">RayClusterState.clean()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.add_job"><code class="docutils literal notranslate"><span class="pre">RayClusterState.add_job()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayClusterState.list_job_ids"><code class="docutils literal notranslate"><span class="pre">RayClusterState.list_job_ids()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.cluster_state"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.cluster_state</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.worker_wait_timeout_seconds"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.worker_wait_timeout_seconds</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.payload"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.payload</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.kwargs"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.kwargs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.__call__"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.__call__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.CheckpointableRayJob.checkpoint"><code class="docutils literal notranslate"><span class="pre">CheckpointableRayJob.checkpoint()</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster._ray_head_script"><code class="docutils literal notranslate"><span class="pre">_ray_head_script()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.worker_script"><code class="docutils literal notranslate"><span class="pre">worker_script()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster"><code class="docutils literal notranslate"><span class="pre">RayCluster</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.log_dir"><code class="docutils literal notranslate"><span class="pre">RayCluster.log_dir</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.state"><code class="docutils literal notranslate"><span class="pre">RayCluster.state</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.jobs"><code class="docutils literal notranslate"><span class="pre">RayCluster.jobs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.output_dir"><code class="docutils literal notranslate"><span class="pre">RayCluster.output_dir</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.log_dir"><code class="docutils literal notranslate"><span class="pre">RayCluster.log_dir</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds"><code class="docutils literal notranslate"><span class="pre">RayCluster.worker_wait_timeout_seconds</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.is_shutdown"><code class="docutils literal notranslate"><span class="pre">RayCluster.is_shutdown</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.num_worker_groups"><code class="docutils literal notranslate"><span class="pre">RayCluster.num_worker_groups</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.num_drivers"><code class="docutils literal notranslate"><span class="pre">RayCluster.num_drivers</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.head_started"><code class="docutils literal notranslate"><span class="pre">RayCluster.head_started</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds"><code class="docutils literal notranslate"><span class="pre">RayCluster.worker_wait_timeout_seconds</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.jobs"><code class="docutils literal notranslate"><span class="pre">RayCluster.jobs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.start_head_and_workers"><code class="docutils literal notranslate"><span class="pre">RayCluster.start_head_and_workers()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.start_head"><code class="docutils literal notranslate"><span class="pre">RayCluster.start_head()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.start_workers"><code class="docutils literal notranslate"><span class="pre">RayCluster.start_workers()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.launchers.cluster.ray_cluster.RayCluster.shutdown"><code class="docutils literal notranslate"><span class="pre">RayCluster.shutdown()</span></code></a></li>

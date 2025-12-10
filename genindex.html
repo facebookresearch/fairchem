@@ -305,6 +305,7 @@
 <li class="toctree-l3"><a class="reference internal" href="autoapi/core/_cli/index.html">core._cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="autoapi/core/_config/index.html">core._config</a></li>
 <li class="toctree-l3 has-children"><a class="reference internal" href="autoapi/core/calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="autoapi/core/calculate/_batch/index.html">core.calculate._batch</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
 <li class="toctree-l4"><a class="reference internal" href="autoapi/core/calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
 </ul>
@@ -632,11 +633,15 @@ document.write(`
 </li>
         <li><a href="autoapi/core/datasets/collaters/mt_collater/index.html#core.datasets.collaters.mt_collater.MTCollater.__call__">(core.datasets.collaters.mt_collater.MTCollater method)</a>
 </li>
+        <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob.__call__">(core.launchers.cluster.ray_cluster.CheckpointableRayJob method)</a>
+</li>
         <li><a href="autoapi/core/launchers/slurm_launch/index.html#core.launchers.slurm_launch.SlurmSPMDProgram.__call__">(core.launchers.slurm_launch.SlurmSPMDProgram method)</a>
 </li>
         <li><a href="autoapi/core/modules/scheduler/index.html#core.modules.scheduler.CosineLRLambda.__call__">(core.modules.scheduler.CosineLRLambda method)</a>
 </li>
         <li><a href="autoapi/core/modules/transforms/index.html#core.modules.transforms.DataTransforms.__call__">(core.modules.transforms.DataTransforms method)</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer.__call__">(core.units.mlip_unit._batch_serve.BatchPredictServer method)</a>
 </li>
         <li><a href="autoapi/ocpapi/index.html#ocpapi.keep_all_slabs.__call__">(ocpapi.keep_all_slabs method)</a>
 </li>
@@ -667,9 +672,11 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.__cumsum__">__cumsum__ (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
-      <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseDBDataset.__del__">__del__() (core.datasets.ase_datasets.AseDBDataset method)</a>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.__del__">__del__() (core.calculate._batch.InferenceBatcher method)</a>
 
       <ul>
+        <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseDBDataset.__del__">(core.datasets.ase_datasets.AseDBDataset method)</a>
+</li>
         <li><a href="autoapi/core/datasets/index.html#core.datasets.AseDBDataset.__del__">(core.datasets.AseDBDataset method)</a>
 </li>
       </ul></li>
@@ -681,8 +688,12 @@ document.write(`
         <li><a href="autoapi/data/oc/utils/vasp/index.html#data.oc.utils.vasp.__email__">(in module data.oc.utils.vasp)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.__enter__">__enter__() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.__enter__">__enter__() (core.calculate._batch.InferenceBatcher method)</a>
+
+      <ul>
+        <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.__enter__">(core.launchers.cluster.ray_cluster.RayCluster method)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.Bulk.__eq__">__eq__() (data.oc.core.Bulk method)</a>
 
       <ul>
@@ -693,8 +704,12 @@ document.write(`
         <li><a href="autoapi/data/oc/core/slab/index.html#data.oc.core.slab.Slab.__eq__">(data.oc.core.slab.Slab method)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.__exit__">__exit__() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.__exit__">__exit__() (core.calculate._batch.InferenceBatcher method)</a>
+
+      <ul>
+        <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.__exit__">(core.launchers.cluster.ray_cluster.RayCluster method)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/components/utils/index.html#core.components.utils.ManagedAttribute.__get__">__get__() (core.components.utils.ManagedAttribute method)</a>
 </li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseAtomsDataset.__getitem__">__getitem__() (core.datasets.ase_datasets.AseAtomsDataset method)</a>
@@ -957,10 +972,10 @@ document.write(`
 </li>
       <li><a href="autoapi/ocpapi/workflows/retry/index.html#ocpapi.workflows.retry._wait_check_retry_after._default_wait">_default_wait (ocpapi.workflows.retry._wait_check_retry_after attribute)</a>
 </li>
-      <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._delete_system">_delete_system() (in module ocpapi.workflows.adsorbates)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._delete_system">_delete_system() (in module ocpapi.workflows.adsorbates)</a>
+</li>
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.BalancedBatchSampler._dist_enabled">_dist_enabled() (core.common.data_parallel.BalancedBatchSampler static method)</a>
 </li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDWorker._distributed_setup">_distributed_setup() (core.launchers.ray_on_slurm_launch.SPMDWorker method)</a>
@@ -1028,6 +1043,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._get_bulk_if_supported">_get_bulk_if_supported() (in module ocpapi.workflows.adsorbates)</a>
+</li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch._get_concurrency_backend">_get_concurrency_backend() (in module core.calculate._batch)</a>
 </li>
       <li><a href="autoapi/data/oc/utils/index.html#data.oc.utils.DetectTrajAnomaly._get_connectivity">_get_connectivity() (data.oc.utils.DetectTrajAnomaly method)</a>
 
@@ -1295,6 +1312,8 @@ document.write(`
         <li><a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.prompt_for_slabs_to_keep._sort_key">(ocpapi.workflows.prompt_for_slabs_to_keep static method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer._split_predictions">_split_predictions() (core.units.mlip_unit._batch_serve.BatchPredictServer method)</a>
+</li>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor._Stats">_Stats (class in core.modules.scaling.scale_factor)</a>
 </li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._submit_relaxations">_submit_relaxations() (in module ocpapi.workflows.adsorbates)</a>
@@ -1751,6 +1770,8 @@ document.write(`
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.atom_refs">atom_refs (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
 
       <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.BatchServerPredictUnit.atom_refs">(core.units.mlip_unit.predict.BatchServerPredictUnit property)</a>
+</li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.atom_refs">(core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
 </li>
       </ul></li>
@@ -1910,11 +1931,19 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/utils/basis/index.html#core.models.utils.basis.Basis.basis_type">basis_type (core.models.utils.basis.Basis attribute)</a>
 </li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.batch_predict_unit">batch_predict_unit (core.calculate._batch.InferenceBatcher property)</a>
+</li>
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.StatefulDistributedSampler.batch_size">batch_size (core.common.data_parallel.StatefulDistributedSampler attribute)</a>
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.batch_to_atomicdata_list">batch_to_atomicdata_list() (core.datasets.atomic_data.AtomicData method)</a>
 </li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.batch_wait_timeout_s">batch_wait_timeout_s (core.calculate._batch.InferenceBatcher attribute)</a>
+</li>
       <li><a href="autoapi/core/models/escaip/utils/radius_graph/index.html#core.models.escaip.utils.radius_graph.batched_radius_graph">batched_radius_graph() (in module core.models.escaip.utils.radius_graph)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer">BatchPredictServer (class in core.units.mlip_unit._batch_serve)</a>
+</li>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.BatchServerPredictUnit">BatchServerPredictUnit (class in core.units.mlip_unit.predict)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/_single/omol_runner/index.html#core.components.calculate._single.omol_runner.OMolRunner.benchmark">benchmark (core.components.calculate._single.omol_runner.OMolRunner attribute)</a>
 
@@ -2260,8 +2289,12 @@ document.write(`
 </li>
       <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FAIRChemCalculator.check_state">check_state() (core.calculate.ase_calculator.FAIRChemCalculator method)</a>
 </li>
-      <li><a href="autoapi/core/launchers/slurm_launch/index.html#core.launchers.slurm_launch.SlurmSPMDProgram.checkpoint">checkpoint() (core.launchers.slurm_launch.SlurmSPMDProgram method)</a>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob.checkpoint">checkpoint() (core.launchers.cluster.ray_cluster.CheckpointableRayJob method)</a>
+
+      <ul>
+        <li><a href="autoapi/core/launchers/slurm_launch/index.html#core.launchers.slurm_launch.SlurmSPMDProgram.checkpoint">(core.launchers.slurm_launch.SlurmSPMDProgram method)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainEvalRunner.checkpoint_callback">checkpoint_callback (core.components.train.train_runner.TrainEvalRunner attribute)</a>
 </li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.checkpoint_dir">checkpoint_dir (core.components.train.train_runner.TrainCheckpointCallback attribute)</a>
@@ -2275,6 +2308,8 @@ document.write(`
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.checkpoint_every_n_steps">checkpoint_every_n_steps (core.components.train.train_runner.TrainCheckpointCallback attribute)</a>
 </li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.Checkpointable">Checkpointable (class in core.components.train.train_runner)</a>
+</li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob">CheckpointableRayJob (class in core.launchers.cluster.ray_cluster)</a>
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.PretrainedModels.checkpoints">checkpoints (core.calculate.pretrained_mlip.PretrainedModels attribute)</a>
 </li>
@@ -2311,6 +2346,8 @@ document.write(`
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState.cluster_id">cluster_id (core.launchers.cluster.ray_cluster.RayClusterState property)</a>
 </li>
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.Metadata.cluster_name">cluster_name (core.launchers.api.Metadata attribute)</a>
+</li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob.cluster_state">cluster_state (core.launchers.cluster.ray_cluster.CheckpointableRayJob attribute)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/utils/smearing/index.html#core.models.escaip.utils.smearing.GaussianSmearing.coeff">coeff (core.models.escaip.utils.smearing.GaussianSmearing attribute)</a>
 
@@ -2496,6 +2533,8 @@ document.write(`
         <li><a href="autoapi/ocpapi/workflows/index.html#ocpapi.workflows.AdsorbateSlabRelaxations.configs">(ocpapi.workflows.AdsorbateSlabRelaxations attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer.configure_batching">configure_batching() (core.units.mlip_unit._batch_serve.BatchPredictServer method)</a>
+</li>
       <li><a href="autoapi/core/components/calculate/recipes/omol/index.html#core.components.calculate.recipes.omol.conformers">conformers() (in module core.components.calculate.recipes.omol)</a>
 </li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseDBDataset.connect_db">connect_db() (core.datasets.ase_datasets.AseDBDataset static method)</a>
@@ -2552,6 +2591,13 @@ document.write(`
 
       <ul>
         <li><a href="autoapi/core/calculate/index.html#module-core.calculate">module</a>
+</li>
+      </ul></li>
+      <li>
+    core.calculate._batch
+
+      <ul>
+        <li><a href="autoapi/core/calculate/_batch/index.html#module-core.calculate._batch">module</a>
 </li>
       </ul></li>
       <li>
@@ -2806,6 +2852,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/relaxation_runner/index.html#module-core.components.calculate._single.relaxation_runner">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate._single.singlepoint_runner
 
@@ -2813,8 +2861,6 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/singlepoint_runner/index.html#module-core.components.calculate._single.singlepoint_runner">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes
 
@@ -3649,6 +3695,13 @@ document.write(`
 </li>
       </ul></li>
       <li>
+    core.units.mlip_unit._batch_serve
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#module-core.units.mlip_unit._batch_serve">module</a>
+</li>
+      </ul></li>
+      <li>
     core.units.mlip_unit._metrics
 
       <ul>
@@ -4130,9 +4183,11 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/datasets/collaters/mt_collater/index.html#core.datasets.collaters.mt_collater.MTCollater.dataset_task_map">dataset_task_map (core.datasets.collaters.mt_collater.MTCollater attribute)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.dataset_to_tasks">dataset_to_tasks (core.units.mlip_unit.predict.MLIPPredictUnit property)</a>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.BatchServerPredictUnit.dataset_to_tasks">dataset_to_tasks (core.units.mlip_unit.predict.BatchServerPredictUnit property)</a>
 
       <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.dataset_to_tasks">(core.units.mlip_unit.predict.MLIPPredictUnit property)</a>
+</li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnitProtocol.dataset_to_tasks">(core.units.mlip_unit.predict.MLIPPredictUnitProtocol property)</a>
 </li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.dataset_to_tasks">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit property)</a>
@@ -4522,10 +4577,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/modules/transforms/index.html#core.modules.transforms.ensure_tensor">ensure_tensor() (in module core.modules.transforms)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/scripts/precompute_sample_structures/index.html#data.oc.scripts.precompute_sample_structures.enumerate_surfaces_for_saving">enumerate_surfaces_for_saving() (in module data.oc.scripts.precompute_sample_structures)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/models/uma/escn_md/index.html#core.models.uma.escn_md.eSCNMDBackbone.envelope">envelope (core.models.uma.escn_md.eSCNMDBackbone attribute)</a>
 
       <ul>
@@ -4639,6 +4694,10 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/datasets/collaters/mt_collater/index.html#core.datasets.collaters.mt_collater.MTCollater.exclude_keys">exclude_keys (core.datasets.collaters.mt_collater.MTCollater attribute)</a>
+</li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.executor">executor (core.calculate._batch.InferenceBatcher attribute)</a>
+</li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.ExecutorProtocol">ExecutorProtocol (class in core.calculate._batch)</a>
 </li>
       <li><a href="autoapi/core/models/uma/nn/mole/index.html#core.models.uma.nn.mole.MOLEGlobals.expert_mixing_coefficients">expert_mixing_coefficients (core.models.uma.nn.mole.MOLEGlobals attribute)</a>
 </li>
@@ -5506,6 +5565,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.get_predict_unit">get_predict_unit() (in module core.calculate.pretrained_mlip)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer.get_predict_unit_attribute">get_predict_unit_attribute() (core.units.mlip_unit._batch_serve.BatchPredictServer method)</a>
+</li>
       <li><a href="autoapi/cattsunami/core/autoframe/index.html#cattsunami.core.autoframe.get_product2_idx">get_product2_idx() (in module cattsunami.core.autoframe)</a>
 </li>
       <li><a href="autoapi/core/common/profiler_utils/index.html#core.common.profiler_utils.get_profile_schedule">get_profile_schedule() (in module core.common.profiler_utils)</a>
@@ -5817,6 +5878,8 @@ document.write(`
       <ul>
         <li><a href="autoapi/core/components/benchmark/index.html#core.components.benchmark.InferenceBenchRunner.inference_settings">(core.components.benchmark.InferenceBenchRunner attribute)</a>
 </li>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.BatchServerPredictUnit.inference_settings">(core.units.mlip_unit.predict.BatchServerPredictUnit property)</a>
+</li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.inference_settings">(core.units.mlip_unit.predict.MLIPPredictUnit attribute)</a>
 </li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.inference_settings">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit attribute)</a>
@@ -5827,6 +5890,8 @@ document.write(`
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.inference_settings_traineval">inference_settings_traineval() (in module core.units.mlip_unit.api.inference)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.inference_settings_turbo">inference_settings_turbo() (in module core.units.mlip_unit.api.inference)</a>
+</li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher">InferenceBatcher (class in core.calculate._batch)</a>
 </li>
       <li><a href="autoapi/core/components/benchmark/index.html#core.components.benchmark.InferenceBenchRunner">InferenceBenchRunner (class in core.components.benchmark)</a>
 
@@ -5872,6 +5937,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.initialize_finetuning_model">initialize_finetuning_model() (in module core.units.mlip_unit.mlip_unit)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/common/logger/index.html#core.common.logger.WandBSingletonLogger.initialized">initialized() (core.common.logger.WandBSingletonLogger class method)</a>
 
       <ul>
@@ -5880,8 +5947,6 @@ document.write(`
         <li><a href="autoapi/core/common/gp_utils/index.html#core.common.gp_utils.initialized">(in module core.common.gp_utils)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/models/uma/nn/activation/index.html#core.models.uma.nn.activation.ScaledSiLU.inplace">inplace (core.models.uma.nn.activation.ScaledSiLU attribute)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/EScAIP/index.html#core.models.escaip.EScAIP.EScAIPBackbone.input_block">input_block (core.models.escaip.EScAIP.EScAIPBackbone attribute)</a>
@@ -6130,10 +6195,10 @@ document.write(`
         <li><a href="autoapi/ocpapi/workflows/filter/index.html#ocpapi.workflows.filter.keep_slabs_with_miller_indices">(class in ocpapi.workflows.filter)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseAtomsDataset.key_mapping">key_mapping (core.datasets.ase_datasets.AseAtomsDataset attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.keys">keys() (core.datasets.atomic_data.AtomicData method)</a>
 </li>
       <li><a href="autoapi/core/datasets/embeddings/index.html#core.datasets.embeddings.KHOT_EMBEDDINGS">KHOT_EMBEDDINGS (in module core.datasets.embeddings)</a>
@@ -6157,6 +6222,8 @@ document.write(`
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.MolecularGraphConfigs.knn_use_low_mem">knn_use_low_mem (core.models.escaip.configs.MolecularGraphConfigs attribute)</a>
 </li>
       <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.kpoints_updates">kpoints_updates (data.omat.vasp.sets.OMat24AIMDSet property)</a>
+</li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob.kwargs">kwargs (core.launchers.cluster.ray_cluster.CheckpointableRayJob attribute)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -6598,6 +6665,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/utils/index.html#core.components.utils.ManagedAttribute">ManagedAttribute (class in core.components.utils)</a>
 </li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.ExecutorProtocol.map">map() (core.calculate._batch.ExecutorProtocol method)</a>
+</li>
       <li><a href="autoapi/core/models/escaip/custom_types/index.html#core.models.escaip.custom_types.map_graph_attention_data_to_device">map_graph_attention_data_to_device() (in module core.models.escaip.custom_types)</a>
 </li>
       <li><a href="autoapi/core/launchers/slurm_launch/index.html#core.launchers.slurm_launch.map_job_config_to_dist_config">map_job_config_to_dist_config() (in module core.launchers.slurm_launch)</a>
@@ -6670,8 +6739,12 @@ document.write(`
         <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.MolecularGraphConfigs.max_atoms">(core.models.escaip.configs.MolecularGraphConfigs attribute)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.MolecularGraphConfigs.max_batch_size">max_batch_size (core.models.escaip.configs.MolecularGraphConfigs attribute)</a>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.max_batch_size">max_batch_size (core.calculate._batch.InferenceBatcher attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.MolecularGraphConfigs.max_batch_size">(core.models.escaip.configs.MolecularGraphConfigs attribute)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/models/uma/common/rotation_cuda_graph/index.html#core.models.uma.common.rotation_cuda_graph.RotMatWignerCudaGraph.max_edge_size">max_edge_size (core.models.uma.common.rotation_cuda_graph.RotMatWignerCudaGraph attribute)</a>
 </li>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainEvalRunner.max_epochs">max_epochs (core.components.train.train_runner.TrainEvalRunner attribute)</a>
@@ -6996,6 +7069,8 @@ document.write(`
 </li>
         <li><a href="autoapi/core/calculate/index.html#module-core.calculate">core.calculate</a>
 </li>
+        <li><a href="autoapi/core/calculate/_batch/index.html#module-core.calculate._batch">core.calculate._batch</a>
+</li>
         <li><a href="autoapi/core/calculate/ase_calculator/index.html#module-core.calculate.ase_calculator">core.calculate.ase_calculator</a>
 </li>
         <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#module-core.calculate.pretrained_mlip">core.calculate.pretrained_mlip</a>
@@ -7307,6 +7382,8 @@ document.write(`
         <li><a href="autoapi/core/units/index.html#module-core.units">core.units</a>
 </li>
         <li><a href="autoapi/core/units/mlip_unit/index.html#module-core.units.mlip_unit">core.units.mlip_unit</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#module-core.units.mlip_unit._batch_serve">core.units.mlip_unit._batch_serve</a>
 </li>
         <li><a href="autoapi/core/units/mlip_unit/_metrics/index.html#module-core.units.mlip_unit._metrics">core.units.mlip_unit._metrics</a>
 </li>
@@ -7645,10 +7722,10 @@ document.write(`
 </li>
       <li><a href="autoapi/core/components/calculate/recipes/utils/index.html#core.components.calculate.recipes.utils.normalize_property">normalize_property() (in module core.components.calculate.recipes.utils)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/modules/normalization/normalizer/index.html#core.modules.normalization.normalizer.Normalizer">Normalizer (class in core.modules.normalization.normalizer)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.normalizer">normalizer (core.units.mlip_unit.mlip_unit.Task attribute)</a>
 </li>
       <li><a href="autoapi/ocpapi/client/models/index.html#ocpapi.client.models.Status.NOT_AVAILABLE">NOT_AVAILABLE (ocpapi.client.models.Status attribute)</a>
@@ -7749,8 +7826,12 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.AdsorbMLRunner.num_placements">(core.components.calculate.AdsorbMLRunner attribute)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler.num_replicas">num_replicas (core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler attribute)</a>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.num_replicas">num_replicas (core.calculate._batch.InferenceBatcher attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler.num_replicas">(core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler attribute)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseAtomsDataset.num_samples">num_samples (core.datasets.ase_datasets.AseAtomsDataset attribute)</a>
 
       <ul>
@@ -7959,14 +8040,14 @@ document.write(`
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_end">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPEvalUnit.on_eval_epoch_start">on_eval_epoch_start() (core.units.mlip_unit.mlip_unit.MLIPEvalUnit method)</a>
 
       <ul>
         <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit.on_eval_epoch_start">(core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/core/components/train/train_runner/index.html#core.components.train.train_runner.TrainCheckpointCallback.on_train_end">on_train_end() (core.components.train.train_runner.TrainCheckpointCallback method)</a>
 
       <ul>
@@ -8066,6 +8147,8 @@ document.write(`
       <li><a href="autoapi/core/models/uma/escn_md_block/index.html#core.models.uma.escn_md_block.Edgewise.out_mask">out_mask (core.models.uma.escn_md_block.Edgewise attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/mlip_unit/index.html#core.units.mlip_unit.mlip_unit.Task.out_spec">out_spec (core.units.mlip_unit.mlip_unit.Task attribute)</a>
+</li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.output_dir">output_dir (core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
 </li>
       <li><a href="autoapi/core/models/base/index.html#core.models.base.HydraModelV2.output_heads">output_heads (core.models.base.HydraModelV2 attribute)</a>
 </li>
@@ -8201,6 +8284,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/base_dataset/index.html#core.datasets.base_dataset.BaseDataset.paths">paths (core.datasets.base_dataset.BaseDataset attribute)</a>
 </li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob.payload">payload (core.launchers.cluster.ray_cluster.CheckpointableRayJob attribute)</a>
+</li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.PayloadReturnT">PayloadReturnT (in module core.launchers.cluster.ray_cluster)</a>
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.pbc">pbc (core.datasets.atomic_data.AtomicData attribute)</a>
@@ -8253,14 +8338,14 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/data/odac/force_field/FF_analysis/index.html#data.odac.force_field.FF_analysis.phys_err">phys_err() (in module data.odac.force_field.FF_analysis)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig.place_adsorbate_on_site">place_adsorbate_on_site() (data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig method)</a>
 
       <ul>
         <li><a href="autoapi/data/oc/core/index.html#data.oc.core.AdsorbateSlabConfig.place_adsorbate_on_site">(data.oc.core.AdsorbateSlabConfig method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/data/oc/core/adsorbate_slab_config/index.html#data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig.place_adsorbate_on_sites">place_adsorbate_on_sites() (data.oc.core.adsorbate_slab_config.AdsorbateSlabConfig method)</a>
 
       <ul>
@@ -8345,9 +8430,13 @@ document.write(`
 </li>
       <li><a href="autoapi/data/oc/structure_generator/index.html#data.oc.structure_generator.precompute_slabs">precompute_slabs() (in module data.oc.structure_generator)</a>
 </li>
-      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.predict">predict() (core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer.predict">predict() (core.units.mlip_unit._batch_serve.BatchPredictServer method)</a>
 
       <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.BatchServerPredictUnit.predict">(core.units.mlip_unit.predict.BatchServerPredictUnit method)</a>
+</li>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.predict">(core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
+</li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnitProtocol.predict">(core.units.mlip_unit.predict.MLIPPredictUnitProtocol method)</a>
 </li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorkerLocal.predict">(core.units.mlip_unit.predict.MLIPWorkerLocal method)</a>
@@ -8355,8 +8444,16 @@ document.write(`
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.predict">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.predict_server_handle">predict_server_handle (core.calculate._batch.InferenceBatcher attribute)</a>
+</li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPPredictUnit.predict_step">predict_step() (core.units.mlip_unit.predict.MLIPPredictUnit method)</a>
 </li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.predict_unit">predict_unit (core.calculate._batch.InferenceBatcher attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer.predict_unit">(core.units.mlip_unit._batch_serve.BatchPredictServer attribute)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FAIRChemCalculator.predictor">predictor (core.calculate.ase_calculator.FAIRChemCalculator attribute)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.MLIPWorkerLocal.predictor_config">predictor_config (core.units.mlip_unit.predict.MLIPWorkerLocal attribute)</a>
@@ -8523,6 +8620,12 @@ document.write(`
 </li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.ray_on_slurm_launch">ray_on_slurm_launch() (in module core.launchers.ray_on_slurm_launch)</a>
 </li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.ray_serve_installed">ray_serve_installed (in module core.calculate._batch)</a>
+
+      <ul>
+        <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ray_serve_installed">(in module core.units.mlip_unit.predict)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster">RayCluster (class in core.launchers.cluster.ray_cluster)</a>
 </li>
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.RayClusterConfig">RayClusterConfig (class in core.launchers.api)</a>
@@ -8747,6 +8850,8 @@ document.write(`
         <li><a href="autoapi/core/modules/scaling/index.html#core.modules.scaling.ScaleFactor.reset_">(core.modules.scaling.ScaleFactor method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayClusterState.reset_state">reset_state() (core.launchers.cluster.ray_cluster.RayClusterState method)</a>
+</li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.reshape_features">reshape_features() (in module core.datasets.atomic_data)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/configs/index.html#core.models.escaip.configs.resolve_type_hint">resolve_type_hint() (in module core.models.escaip.configs)</a>
@@ -9241,6 +9346,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/models/uma/nn/activation/index.html#core.models.uma.nn.activation.SeparableS2Activation_M">SeparableS2Activation_M (class in core.models.uma.nn.activation)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.BatchServerPredictUnit.server_handle">server_handle (core.units.mlip_unit.predict.BatchServerPredictUnit attribute)</a>
+</li>
       <li><a href="autoapi/core/modules/scaling/scale_factor/index.html#core.modules.scaling.scale_factor.ScaleFactor.set_">set_() (core.modules.scaling.scale_factor.ScaleFactor method)</a>
 
       <ul>
@@ -9297,6 +9404,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.setup">setup() (in module core.common.distutils)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.setup_batch_predict_server">setup_batch_predict_server() (in module core.units.mlip_unit._batch_serve)</a>
+</li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.setup_env_local">setup_env_local() (in module core.common.distutils)</a>
 </li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.setup_env_local_multi_gpu">setup_env_local_multi_gpu() (in module core.common.distutils)</a>
@@ -9341,8 +9450,14 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler.shuffle">shuffle (core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler attribute)</a>
 </li>
-      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.shutdown">shutdown() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.ExecutorProtocol.shutdown">shutdown() (core.calculate._batch.ExecutorProtocol method)</a>
+
+      <ul>
+        <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.InferenceBatcher.shutdown">(core.calculate._batch.InferenceBatcher method)</a>
 </li>
+        <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.shutdown">(core.launchers.cluster.ray_cluster.RayCluster method)</a>
+</li>
+      </ul></li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.sid">sid (core.datasets.atomic_data.AtomicData attribute)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/utils/smearing/index.html#core.models.escaip.utils.smearing.SigmoidSmearing">SigmoidSmearing (class in core.models.escaip.utils.smearing)</a>
@@ -9631,6 +9746,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.SPIN_RANGE">SPIN_RANGE (in module core.units.mlip_unit.api.inference)</a>
 </li>
+      <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.BatchPredictServer.split_oom_batch">split_oom_batch (core.units.mlip_unit._batch_serve.BatchPredictServer attribute)</a>
+</li>
       <li><a href="autoapi/core/scripts/make_submission_file/index.html#core.scripts.make_submission_file.SPLITS">SPLITS (in module core.scripts.make_submission_file)</a>
 </li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController">SPMDController (class in core.launchers.ray_on_slurm_launch)</a>
@@ -9666,6 +9783,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.start_head">start_head() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
+</li>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.start_head_and_workers">start_head_and_workers() (core.launchers.cluster.ray_cluster.RayCluster method)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.start_ip_pattern">start_ip_pattern (in module core.launchers.cluster.ray_cluster)</a>
 </li>
@@ -9762,6 +9881,8 @@ document.write(`
       <li><a href="autoapi/data/oc/structure_generator/index.html#data.oc.structure_generator.StructureGenerator">StructureGenerator (class in data.oc.structure_generator)</a>
 </li>
       <li><a href="autoapi/core/calculate/pretrained_mlip/index.html#core.calculate.pretrained_mlip.HuggingFaceCheckpoint.subfolder">subfolder (core.calculate.pretrained_mlip.HuggingFaceCheckpoint attribute)</a>
+</li>
+      <li><a href="autoapi/core/calculate/_batch/index.html#core.calculate._batch.ExecutorProtocol.submit">submit() (core.calculate._batch.ExecutorProtocol method)</a>
 </li>
       <li><a href="autoapi/ocpapi/index.html#ocpapi.Client.submit_adsorbate_slab_relaxations">submit_adsorbate_slab_relaxations() (ocpapi.Client method)</a>
 
@@ -10295,8 +10416,12 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.worker_script">worker_script() (in module core.launchers.cluster.ray_cluster)</a>
 </li>
-      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds">worker_wait_timeout_seconds (core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
+      <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.CheckpointableRayJob.worker_wait_timeout_seconds">worker_wait_timeout_seconds (core.launchers.cluster.ray_cluster.CheckpointableRayJob attribute)</a>
+
+      <ul>
+        <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds">(core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
 </li>
+      </ul></li>
       <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController.workers">workers (core.launchers.ray_on_slurm_launch.SPMDController attribute)</a>
 
       <ul>

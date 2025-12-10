@@ -18,6 +18,7 @@ Attributes
 .. autoapisummary::
 
    core.units.mlip_unit.predict.ray_installed
+   core.units.mlip_unit.predict.ray_serve_installed
 
 
 Classes
@@ -30,6 +31,7 @@ Classes
    core.units.mlip_unit.predict.MLIPWorkerLocal
    core.units.mlip_unit.predict.MLIPWorker
    core.units.mlip_unit.predict.ParallelMLIPPredictUnit
+   core.units.mlip_unit.predict.BatchServerPredictUnit
 
 
 Functions
@@ -47,6 +49,10 @@ Module Contents
 ---------------
 
 .. py:data:: ray_installed
+   :value: True
+
+
+.. py:data:: ray_serve_installed
    :value: True
 
 
@@ -323,6 +329,44 @@ Module Contents
 
    .. py:property:: dataset_to_tasks
       :type: dict[str, list]
+
+
+
+.. py:class:: BatchServerPredictUnit(server_handle)
+
+   Bases: :py:obj:`MLIPPredictUnitProtocol`
+
+
+   PredictUnit wrapper that uses Ray Serve for batched inference.
+
+   This provides a clean interface compatible with MLIPPredictUnitProtocol
+   while leveraging Ray Serve's batching capabilities under the hood.
+
+
+   .. py:attribute:: server_handle
+
+
+   .. py:method:: predict(data: fairchem.core.datasets.atomic_data.AtomicData, undo_element_references: bool = True) -> dict
+
+      :param data: AtomicData object (single system)
+      :param undo_element_references: Whether to undo element references
+
+      :returns: Prediction dictionary
+
+
+
+   .. py:property:: dataset_to_tasks
+      :type: dict
+
+
+
+   .. py:property:: atom_refs
+      :type: dict | None
+
+
+
+   .. py:property:: inference_settings
+      :type: fairchem.core.units.mlip_unit.InferenceSettings
 
 
 
