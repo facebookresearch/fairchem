@@ -309,9 +309,9 @@ def ligand_pocket(orca_results, mlip_results):
         "interaction_forces_mae": interaction_forces_mae / ixn_force_denom,
         "interaction_energy_mae_dist": interaction_energy_mae_dist,
     }
-    assert (
-        sum(interaction_energy_mae_dist) / len(orca_results)
-        == results["interaction_energy_mae"]
+    assert np.isclose(
+        sum(interaction_energy_mae_dist) / len(orca_results),
+        results["interaction_energy_mae"],
     )
     return results
 
@@ -392,6 +392,7 @@ def geom_conformers(orca_results, mlip_results):
             )
             _deltaE_mae = abs(orca_deltaE - mlip_deltaE) / (len(orca_structs) - 1)
             deltaE_mae_system += _deltaE_mae
+            deltaE_mae += _deltaE_mae
         deltaE_mae_dist.append(deltaE_mae_system)
 
     results = {
@@ -399,7 +400,7 @@ def geom_conformers(orca_results, mlip_results):
         "deltaE_mae": deltaE_mae / len(orca_results),
         "deltaE_mae_dist": deltaE_mae_dist,
     }
-    assert sum(deltaE_mae_dist) / len(orca_results) == results["deltaE_mae"]
+    assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
     return results
 
 
@@ -445,7 +446,7 @@ def protonation_energies(orca_results, mlip_results):
         "rmsd": tot_rmsd / len(orca_results),
         "deltaE_mae_dist": deltaE_mae_dist,
     }
-    assert sum(deltaE_mae_dist) / len(orca_results) == results["deltaE_mae"]
+    assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
     return results
 
 
@@ -523,8 +524,8 @@ def unoptimized_ie_ea(orca_results, mlip_results):
         "energy_mae_dist": energy_mae_dist,
         "deltaE_mae_dist": deltaE_mae_dist,
     }
-    assert sum(energy_mae_dist) / len(orca_results) == results["energy_mae"]
-    assert sum(deltaE_mae_dist) / len(orca_results) == results["deltaE_mae"]
+    assert np.isclose(sum(energy_mae_dist) / len(orca_results), results["energy_mae"])
+    assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
     return results
 
 
@@ -653,8 +654,12 @@ def distance_scaling(orca_results, mlip_results):
         "sr_ddE_mae_dist": deltadeltaE_mae_dist["sr"],
         "lr_ddE_mae_dist": deltadeltaE_mae_dist["lr"],
     }
-    assert sum(deltadeltaE_mae_dist["sr"]) / n_systems_with_sr == results["sr_ddE_mae"]
-    assert sum(deltadeltaE_mae_dist["lr"]) / n_systems_with_lr == results["lr_ddE_mae"]
+    assert np.isclose(
+        sum(deltadeltaE_mae_dist["sr"]) / n_systems_with_sr, results["sr_ddE_mae"]
+    )
+    assert np.isclose(
+        sum(deltadeltaE_mae_dist["lr"]) / n_systems_with_lr, results["lr_ddE_mae"]
+    )
     return results
 
 
@@ -719,8 +724,8 @@ def unoptimized_spin_gap(orca_results, mlip_results):
         "energy_mae_dist": energy_mae_dist,
         "deltaE_mae_dist": deltaE_mae_dist,
     }
-    assert sum(energy_mae_dist) / len(orca_results) == results["energy_mae"]
-    assert sum(deltaE_mae_dist) / len(orca_results) == results["deltaE_mae"]
+    assert np.isclose(sum(energy_mae_dist) / len(orca_results), results["energy_mae"])
+    assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
     return results
 
 
