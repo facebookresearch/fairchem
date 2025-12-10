@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 from functools import partial
 
+import pytest
 import torch
 from e3nn.o3 import rand_matrix
 
@@ -20,6 +21,8 @@ from fairchem.core.units.mlip_unit.mlip_unit import Task
 # Otherwise error mi
 
 
+# skip this test because it OOMs on 4-core CI machines
+@pytest.mark.skip(reason="Skipping test for now")
 def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     inference_checkpoint_path, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
