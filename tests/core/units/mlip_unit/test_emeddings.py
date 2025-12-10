@@ -53,8 +53,9 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
         torch.manual_seed(42)
 
         sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
-        sample.pos += 500
-        sample.cell *= 2000
+        # previously sample.cell was made 1000x but pbcv2 is currently bad at handling extremely large cells
+        # sample.pos += 500
+        sample.cell *= 10
 
         batch = data_list_collater([sample], otf_graph=True)
 
@@ -81,8 +82,8 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
         a2g(db.get_atoms(sample_idx), task_name="oc20") for sample_idx in range(5)
     ]
     for sample in samples:
-        sample.pos += 500
-        sample.cell *= 2000
+        # sample.pos += 500
+        sample.cell *= 10
 
     batch = data_list_collater(samples, otf_graph=True)
     out = predictor.predict(batch)
