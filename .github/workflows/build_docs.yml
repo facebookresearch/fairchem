@@ -46,7 +46,7 @@ jobs:
           status-context: '${{ github.job }}'
 
     - name: Install pandoc and ffmpeg
-      run: sudo apt-get -y install pandoc ffmpeg
+      run: sudo apt-get update && sudo apt-get -y install pandoc ffmpeg
 
     # Install dependencies
     - name: Set up Python
