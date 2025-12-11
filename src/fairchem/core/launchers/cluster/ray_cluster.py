@@ -432,7 +432,6 @@ class RayCluster:
             _ray_head_script,
             self.state,
             self.worker_wait_timeout_seconds,
-            self.output_dir,
             payload,
             **kwargs,
         )
