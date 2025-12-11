@@ -755,6 +755,7 @@ Relax each configuration and identify the most stable site:
 print("\n3. Relaxing all H adsorption configurations...")
 h_energies = []
 h_configs = []
+h_d3_energies = []
 
 for idx, config in enumerate(ads_slab_config.atoms_list):
     config_relaxed = config.copy()
