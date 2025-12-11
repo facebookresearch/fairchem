@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.1
+    jupytext_version: 1.17.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   name: python3
@@ -62,9 +62,9 @@ You need a Huggingface account, request access to https://huggingface.co/faceboo
 
 Permissions: Read access to contents of all public gated repos you can access
 
-Then, add the token as an environment variable (using `huggingface-cli login`: 
+Then, add the token as an environment variable (using `huggingface-cli login`:
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [skip-execution]
 
 # Enter token via huggingface-cli
@@ -72,12 +72,14 @@ Then, add the token as an environment variable (using `huggingface-cli login`:
 ```
 
 or you can set the token via HF_TOKEN variable:
-```{code-cell}
+
+```{code-cell} ipython3
 :tags: [skip-execution]
 
 # Set token via env variable
 import os
-os.environ['HF_TOKEN'] = 'MYTOKEN'
+
+os.environ["HF_TOKEN"] = "MYTOKEN"
 ```
 
 ### FAIR Chemistry (UMA) installation
@@ -86,18 +88,18 @@ It may be enough to use `pip install fairchem-core`. This gets you the latest ve
 
 Here we install some sub-packages. This can take 2-5 minutes to run.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [skip-execution]
 
 ! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami x3dase
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 # Check that packages are installed
 !pip list | grep fairchem
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 import fairchem.core
 
 fairchem.core.__version__
@@ -110,18 +112,18 @@ First, let's import all necessary libraries and initialize the UMA-S-1P1 predict
 ```{code-cell} ipython3
 from pathlib import Path
 
+import ase.io
 import matplotlib.pyplot as plt
 import numpy as np
-import ase.io
 from ase import Atoms
 from ase.build import bulk
+from ase.constraints import FixBondLengths
 from ase.io import write
 from ase.mep import interpolate
 from ase.mep.dyneb import DyNEB
 from ase.optimize import FIRE, LBFGS
 from ase.vibrations import Vibrations
 from ase.visualize.plot import plot_atoms
-from torch_dftd.torch_dftd3_calculator import TorchDFTD3Calculator
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.data.oc.core import (
     Adsorbate,
@@ -134,6 +136,7 @@ from pymatgen.analysis.wulff import WulffShape
 from pymatgen.core import Lattice, Structure
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
+from torch_dftd.torch_dftd3_calculator import TorchDFTD3Calculator
 
 # Set up output directory structure
 output_dir = Path("ni_tutorial_results")
@@ -175,8 +178,6 @@ else:
     num_sites = 5
     relaxation_steps = 300
 ```
-
-
 
 ---
 
@@ -677,7 +678,6 @@ The ZPE correction is calculated by analyzing the vibrational modes of the molec
 First, we create the Ni(111) surface and relax it:
 
 ```{code-cell} ipython3
-
 # Create Ni(111) slab
 ni_bulk_atoms = bulk("Ni", "fcc", a=a_opt, cubic=True)
 ni_bulk_obj = Bulk(bulk_atoms=ni_bulk_atoms)
@@ -733,7 +733,10 @@ ni_slab_for_ads.atoms = clean_slab.copy()
 
 adsorbate_h = Adsorbate(adsorbate_smiles_from_db="*H")
 ads_slab_config = AdsorbateSlabConfig(
-    ni_slab_for_ads, adsorbate_h, mode="random_site_heuristic_placement", num_sites=num_sites
+    ni_slab_for_ads,
+    adsorbate_h,
+    mode="random_site_heuristic_placement",
+    num_sites=num_sites,
 )
 
 print(f"   Generated {len(ads_slab_config.atoms_list)} initial configurations")
@@ -771,7 +774,9 @@ for idx, config in enumerate(ads_slab_config.atoms_list):
     print(f"   Config {idx+1}: {E_total:.2f} eV (ML: {E_ml:.2f}, D3: {E_d3:.2f})")
 
     # Save structure
-    ase.io.write(str(output_dir / part_dirs["part4"] / f"h_site_{idx+1}.xyz"), config_relaxed)
+    ase.io.write(
+        str(output_dir / part_dirs["part4"] / f"h_site_{idx+1}.xyz"), config_relaxed
+    )
 
 # Select best configuration
 best_idx = np.argmin(h_energies)
@@ -1364,7 +1369,7 @@ print("   ✓ Best C*+O* structure saved")
 
 ### Step 3b: Calculate C* and O* Energies Separately
 
-Another strategy to calculate the initial energies for *C and *O at very low coverage (without interactions between the two reactants) is to do two separate relaxations. 
+Another strategy to calculate the initial energies for *C and *O at very low coverage (without interactions between the two reactants) is to do two separate relaxations.
 
 ```{code-cell} ipython3
 # Clean slab
@@ -1675,57 +1680,42 @@ These results show:
 
 ```
 
-### Step 6: Find Transition State with Dimer Method
+### Step 6: Find guesses for nearby initial and final states for the reaction
 
-Use the dimer method to get a good initial guess for the transition state:
+Now that we have an estimate on the reaction energy from the best possible initial and final states, we want to find a transition state (barrier) for this reaction. There are MANY possible ways that we could do this. In this case, we'll start with the *CO final state and then try and find a nearby local minimal of *C and *O, by fixing the C-O bond distance and finding a nearby local minima. Note that this approach required some insight into what the transition state might look like, and could be considerably more complicated for a reaction that did not involve breaking a single bond.
 
 ```{code-cell} ipython3
-print(f"\n5. Finding Transition State with Dimer Method")
+print(f"\nFinding Transition State Initial and Final States")
 print("   Creating initial guess with stretched C-O bond...")
 print("   Starting from CO* and stretching the C-O bond...")
 
 # Create a guess structure with stretched CO bond (start from CO*)
-ts_guess = final_co.copy()
+initial_guess = final_co.copy()
+initial_guess.calc = FAIRChemCalculator(predictor, task_name="oc20")
 
-# Optimize with dimer method to find saddle point
-print("   Running dimer optimization to find transition state...")
-from ase.mep import DimerControl, MinModeAtoms, MinModeTranslate
+# Set up a constraint to fix the bond length to ~2 Angstroms, which should be far enough that we'll be closer to *C+*O than *CO
+co_indices = np.where(initial_guess.get_tags() == 2)[0]
+initial_guess.constraints += [
+    FixBondLengths([co_indices], tolerance=1e-3, iterations=5000, bondlengths=[2.0])
+]
 
-ts_guess.calc = FAIRChemCalculator(predictor, task_name="oc20")
-
-# Set up dimer control
-d_control = DimerControl(
-    initial_eigenmode_method="displacement",
-    displacement_method="vector",
-    mask=[i >= len(slab) for i in range(len(ts_guess))],
-)  # Only move adsorbates
-
-# Create displacement vector along C-O bond
-displacement_vector = np.zeros((len(ts_guess), 3))
-# displacement_vector[co_indices[1]] = (ts_guess.positions[-1]-ts_guess.positions[-2]) / co_distance  # O moves away
-# displacement_vector[co_indices[1],0:1] = 0.5
-
-displacement_vector[co_indices] = np.random.normal(size=(len(co_indices), 3)) * 0.1
-
-d_atoms = MinModeAtoms(ts_guess, d_control)
-d_atoms.displace(displacement_vector=displacement_vector)
-
-# Run dimer
-with MinModeTranslate(d_atoms, trajectory="dimer.traj", logfile="dimer.log") as dim_rlx:
-    dim_rlx.run(fmax=0.1, steps=500)
-
-ts_structure = ts_guess.copy()
-print("   ✓ Dimer optimization completed")
-
-# Check final C-O distance
-final_co_dist = np.linalg.norm(
-    ts_structure.get_positions()[co_indices[1]]
-    - ts_structure.get_positions()[co_indices[0]]
+# Rattle the atoms a bit just to break the symmetry and prevent the O from going straight up to satisfy the constraint
+initial_guess.positions[co_indices[1]] += [0.1, 0.1, -0.1]
+opt = LBFGS(
+    initial_guess,
+    trajectory=output_dir / part_dirs["part6"] / "initial_guess_with_constraint.traj",
 )
-print(f"   Final C-O distance at TS: {final_co_dist:.2f} Å")
+opt.run(fmax=0.05)
 
-# Save TS guess
-ase.io.write(str(output_dir / part_dirs["part6"] / "ts_guess.xyz"), ts_structure)
+# Now that we have a guess, re-relax without the constraints
+initial_guess.constraints = initial_guess.constraints[:-1]
+opt = LBFGS(
+    initial_guess,
+    trajectory=output_dir
+    / part_dirs["part6"]
+    / "initial_guess_without_constraint.traj",
+)
+opt.run(fmax=0.05)
 ```
 
 ### Step 7: Run NEB to Find Activation Barrier
@@ -1737,18 +1727,13 @@ print(f"\n6. NEB Barrier Calculation (C* + O* → CO*)")
 print("   Setting up 7-image NEB chain with TS guess in middle...")
 print("   Reaction: C* + O* (initial) → TS → CO* (final)")
 
-n_images = 7
-initial = initial_c_o.copy()
+initial = initial_guess.copy()
 initial.calc = FAIRChemCalculator(predictor, task_name="oc20")
 images = [initial]  # Start with C* + O*
 
-# Create images: C*+O* → TS → CO*
-for i in range(1, n_images):
-    if i == n_images // 2:  # Middle image
-        image = ts_structure.copy()
-    else:
-        image = initial_c_o.copy()
-    image.set_pbc([True, True, True])
+n_images = 10
+for i in range(n_images):
+    image = initial.copy()
     image.calc = FAIRChemCalculator(predictor, task_name="oc20")
     images.append(image)
 
@@ -1757,20 +1742,18 @@ final.calc = FAIRChemCalculator(predictor, task_name="oc20")
 images.append(final)  # End with CO*
 
 # Interpolate with better initial guess
-dyneb = DyNEB(images, climb=True, fmax=0.1)
+dyneb = DyNEB(images, climb=True, fmax=0.05)
 
 # Interpolate first half (C*+O* → TS)
 print("\n   Interpolating images...")
-interpolate(images[:n_images//2 + 1])
-# Interpolate second half (TS → CO*)
-interpolate(images[n_images//2:])
+dyneb.interpolate("idpp")
 
 # Optimize
 print("   Optimizing NEB path (this may take a while)...")
 opt = FIRE(
     dyneb,
-    trajectory=str(output_dir / part_dirs["part6"] / 'neb.traj'),
-    logfile=str(output_dir / part_dirs["part6"] / 'neb.log')
+    trajectory=str(output_dir / part_dirs["part6"] / "neb.traj"),
+    logfile=str(output_dir / part_dirs["part6"] / "neb.log"),
 )
 opt.run(fmax=0.1, steps=relaxation_steps)
 
@@ -1780,10 +1763,14 @@ energies_rel = np.array(energies) - energies[0]
 E_barrier = np.max(energies_rel)
 
 print(f"\n   ✓ NEB converged!")
-print(f"\n   Forward barrier (C*+O* → CO*): {E_barrier:.2f} eV = {E_barrier*96.485:.1f} kJ/mol")
-print(f"   Reverse barrier (CO* → C*+O*): {E_barrier - delta_E_zpe:.2f} eV = {(E_barrier - delta_E_zpe)*96.485:.1f} kJ/mol")
-print(f"\n   Paper (Table 5): 153 kJ/mol = 1.59 eV (reverse barrier)")
-print(f"   Difference: {abs((E_barrier - delta_E_zpe) - 1.59):.2f} eV")
+print(
+    f"\n   Forward barrier (C*+O* → CO*): {E_barrier:.2f} eV = {E_barrier*96.485:.1f} kJ/mol"
+)
+print(
+    f"   Reverse barrier (CO* → C*+O*): {E_barrier - energies_rel[-1]:.2f} eV = {(E_barrier- energies_rel[-1])*96.485:.1f} kJ/mol"
+)
+print(f"\n   Paper (Table 5): 153 kJ/mol = 1.59 eV ")
+print(f"   Difference: {abs(E_barrier - 1.59):.2f} eV")
 ```
 
 ### Step 8: Visualize NEB Path and Key Structures
@@ -1845,7 +1832,9 @@ plt.show()
 print("\n   Creating NEB path animation...")
 from ase.io import write as ase_write
 
-ase.io.write(str(output_dir / part_dirs["part6"] / "neb_path.gif"), images, format="gif")
+ase.io.write(
+    str(output_dir / part_dirs["part6"] / "neb_path.gif"), images, format="gif"
+)
 print("   → Saved as neb_path.gif")
 
 # Visualize key structures
