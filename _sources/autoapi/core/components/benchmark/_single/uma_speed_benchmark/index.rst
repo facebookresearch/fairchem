@@ -39,13 +39,13 @@ Module Contents
 
 .. py:function:: ase_to_graph(atoms, neighbors: int, cutoff: float, external_graph=True, dataset_name='omat')
 
-.. py:function:: get_qps(data, predictor, warmups: int = 10, timeiters: int = 100)
+.. py:function:: get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: int = 5)
 
 .. py:function:: trace_handler(p, name, save_loc)
 
 .. py:function:: make_profile(data, predictor, name, save_loc)
 
-.. py:class:: InferenceBenchRunner(run_dir_root, model_checkpoints: dict[str, str], natoms_list: list[int] | None = None, input_system: dict | None = None, timeiters: int = 10, seed: int = 1, device='cuda', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings = inference_settings_default(), generate_traces: bool = False, dataset_name: str = 'omat')
+.. py:class:: InferenceBenchRunner(model_checkpoints: dict[str, str], natoms_list: list[int] | None = None, input_system: dict | None = None, timeiters: int = 10, repeats: int = 5, seed: int = 1, device='cuda', overrides: dict | None = None, inference_settings: fairchem.core.units.mlip_unit.api.inference.InferenceSettings = inference_settings_default(), generate_traces: bool = False, expand_supercells: int | None = None, dataset_name: str = 'omat')
 
    Bases: :py:obj:`fairchem.core.components.runner.Runner`
 
@@ -84,9 +84,6 @@ Module Contents
    .. py:attribute:: model_checkpoints
 
 
-   .. py:attribute:: run_dir
-
-
    .. py:attribute:: overrides
 
 
@@ -96,7 +93,13 @@ Module Contents
    .. py:attribute:: generate_traces
 
 
+   .. py:attribute:: expand_supercells
+
+
    .. py:attribute:: dataset_name
+
+
+   .. py:attribute:: repeats
 
 
    .. py:method:: run() -> None

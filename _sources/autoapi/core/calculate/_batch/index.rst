@@ -12,14 +12,6 @@ core.calculate._batch
 
 
 
-Attributes
-----------
-
-.. autoapisummary::
-
-   core.calculate._batch.ray_serve_installed
-
-
 Classes
 -------
 
@@ -39,10 +31,6 @@ Functions
 
 Module Contents
 ---------------
-
-.. py:data:: ray_serve_installed
-   :value: True
-
 
 .. py:class:: ExecutorProtocol
 

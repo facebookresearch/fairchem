@@ -678,22 +678,36 @@ document.write(`
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+0it [00:00, ?it/s]
+
+
+
+
+
+
+
 0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
 
 
+
+
+
 0it [00:00, ?it/s]
+
 0it [00:00, ?it/s]
-
-
-
-
-
 
   0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
-0it [00:00, ?it/s]
-0it [00:00, ?it/s]
 
 
 
@@ -704,34 +718,35 @@ document.write(`
 0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
-
-
-
-
-
-
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 106.93it/s]
 
 
 
 
 
 0it [00:00, ?it/s]
-
-0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
-0it [00:00, ?it/s]
-
-100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 103.91it/s]
-
-100%|█████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 83.53it/s]
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 102.44it/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Computing normalizer values.:   0%|                       | 0/2 [00:00&lt;?, ?it/s]
-Computing normalizer values.: 100%|██████████████| 2/2 [00:00&lt;00:00, 850.43it/s]
+Computing normalizer values.: 100%|██████████████| 2/2 [00:00&lt;00:00, 813.95it/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+
+
+
+
+0it [00:00, ?it/s]
+
+
+
+
+
+
+0it [00:00, ?it/s]
   0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
 
 
@@ -741,21 +756,6 @@ Computing normalizer values.: 100%|██████████████| 2
 
 
 
-
-0it [00:00, ?it/s]
-0it [00:00, ?it/s]
-
-
-
-
-
-
-0it [00:00, ?it/s]
-0it [00:00, ?it/s]
-
-
-
-
 0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
@@ -774,13 +774,17 @@ Computing normalizer values.: 100%|██████████████| 2
 
 
 
-
 0it [00:00, ?it/s]
 0it [00:00, ?it/s]
 
-100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 110.67it/s]
+0it [00:00, ?it/s]
 
-100%|█████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 95.52it/s]
+0it [00:00, ?it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 108.86it/s]
+
+100%|█████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 94.09it/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Generated dataset and data config yaml in /tmp/bulk
@@ -834,15 +838,13 @@ INFO:root:Setting up distributed backend...
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=True, seed=0)...
 WARNING:root:Disabled BalancedBatchSampler because num_replicas=1.
 INFO:root:rank: 0: Sampler created...
-INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x7a9f9c19e660&gt;, batch_size=2, drop_last=False
+INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x783fdda30830&gt;, batch_size=2, drop_last=False
 INFO:root:get_dataloader::Calling Dataloader...
 INFO:root:get_dataloader::Done!
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=False, seed=0)...
+INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=False, seed=0)...
 WARNING:root:Disabled BalancedBatchSampler because num_replicas=1.
 INFO:root:rank: 0: Sampler created...
-INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x7a9f8403a330&gt;, batch_size=2, drop_last=False
+INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x783fdd8d5f10&gt;, batch_size=2, drop_last=False
 INFO:root:get_dataloader::Calling Dataloader...
 INFO:root:get_dataloader::Done!
 </pre></div>
@@ -855,37 +857,37 @@ INFO:root:get_dataloader::Done!
 checkpoints/uma-s-1.pt:   0%|                       | 0.00/1.17G [00:00&lt;?, ?B/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   0%|                | 615k/1.17G [00:01&lt;39:10, 499kB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   0%|                | 615k/1.17G [00:01&lt;44:00, 444kB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   6%|▊             | 67.7M/1.17G [00:01&lt;00:19, 56.3MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   6%|▊             | 67.7M/1.17G [00:01&lt;00:22, 49.8MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  17%|██▊             | 202M/1.17G [00:01&lt;00:05, 171MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  17%|██▊             | 202M/1.17G [00:01&lt;00:06, 158MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  26%|████            | 302M/1.17G [00:01&lt;00:03, 265MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  26%|████            | 302M/1.17G [00:02&lt;00:03, 248MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  37%|█████▉          | 437M/1.17G [00:02&lt;00:01, 404MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  37%|█████▉          | 437M/1.17G [00:02&lt;00:01, 369MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  49%|███████▊        | 571M/1.17G [00:02&lt;00:01, 545MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  49%|███████▊        | 571M/1.17G [00:02&lt;00:01, 514MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  60%|█████████▌      | 705M/1.17G [00:02&lt;00:00, 682MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  60%|█████████▌      | 705M/1.17G [00:02&lt;00:00, 657MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  71%|███████████▍    | 839M/1.17G [00:02&lt;00:00, 809MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  71%|███████████▍    | 839M/1.17G [00:02&lt;00:00, 793MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  83%|█████████████▎  | 972M/1.17G [00:02&lt;00:00, 924MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  83%|█████████████▎  | 973M/1.17G [00:02&lt;00:00, 905MB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  94%|█████████████▏| 1.11G/1.17G [00:02&lt;00:00, 1.02GB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  94%|█████████████▏| 1.11G/1.17G [00:02&lt;00:00, 1.01GB/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt: 100%|███████████████| 1.17G/1.17G [00:02&lt;00:00, 449MB/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt: 100%|███████████████| 1.17G/1.17G [00:02&lt;00:00, 419MB/s]
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:initialize_finetuning_model starting from checkpoint_location: /home/runner/.cache/fairchem/models--facebook--UMA/snapshots/38529caa2c51a9a8a0d71f0b56b79ac33bc9eceb/checkpoints/uma-s-1.pt
@@ -913,12 +915,12 @@ INFO:root:0: Expert mean: 6.88e-03,1.02e-01,6.92e-03,6.72e-03,2.17e-02,6.83e-03,
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/torch/optim/lr_scheduler.py:367: UserWarning: To get the last learning rate computed by the scheduler, please use `get_last_lr()`.
   _warn_get_lr_called_within_step(self)
-INFO:root:{&#39;train/loss&#39;: 1.2937601246535735, &#39;train/lr&#39;: 4e-05, &#39;train/step&#39;: 0, &#39;train/epoch&#39;: 0.0, &#39;train/samples_per_second(approx)&#39;: 0.06086189667707827, &#39;train/atoms_per_second(approx)&#39;: 1.4606855202498785, &#39;train/num_atoms_on_rank&#39;: 48, &#39;train/num_samples_on_rank&#39;: 2}
+INFO:root:{&#39;train/loss&#39;: 1.2937600874006705, &#39;train/lr&#39;: 4e-05, &#39;train/step&#39;: 0, &#39;train/epoch&#39;: 0.0, &#39;train/samples_per_second(approx)&#39;: 0.06824778688948784, &#39;train/atoms_per_second(approx)&#39;: 1.6379468853477082, &#39;train/num_atoms_on_rank&#39;: 48, &#39;train/num_samples_on_rank&#39;: 2}
 
-Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:32&lt;00:00, 32.90s/it]
+Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:29&lt;00:00, 29.34s/it]
 INFO:torchtnt.framework.train:Reached end of train dataloader
 
-Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:32&lt;00:00, 32.90s/it]
+Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:29&lt;00:00, 29.34s/it]
 
 INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
 </pre></div>
@@ -926,17 +928,17 @@ INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 0:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.67it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.32it/s]
 INFO:root:Done eval epoch, aggregating metrics
 INFO:root:Finished aggregating metrics: 
-  val/atoms_per_second: 817.9145
+  val/atoms_per_second: 896.7188
   val/epoch: 0.0000
   val/loss: 61.0236
   val/omat.val,energy,mae: 97.6377
   val/omat.val,energy,per_atom_mae: 3.0512
 
 
-Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.62it/s]
+Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.26it/s]
 
 INFO:torchtnt.framework.train:Ended train epoch
 INFO:torchtnt.framework.train:After train epoch, train progress: num_epochs_completed = 1, num_steps_completed = 1
@@ -946,30 +948,30 @@ INFO:root:at beginning of epoch 1, setting sampler start step to 0
 Train Epoch 1:   0%|                                     | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.35it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.37it/s]
 INFO:torchtnt.framework.train:Reached end of train dataloader
 
-Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.34it/s]
+Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.36it/s]
 
 INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
+
+Eval Epoch 1:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 1:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.60it/s]
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.74it/s]
 INFO:root:Done eval epoch, aggregating metrics
 INFO:root:Finished aggregating metrics: 
-  val/atoms_per_second: 947.3000
+  val/atoms_per_second: 950.8299
   val/epoch: 0.0000
   val/loss: 61.0235
   val/omat.val,energy,mae: 97.6376
   val/omat.val,energy,per_atom_mae: 3.0512
 
 
-Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.53it/s]
-
-INFO:torchtnt.framework.train:Ended train epoch
+Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.67it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:torchtnt.framework.train:Ended train epoch
 INFO:torchtnt.framework.train:After train epoch, train progress: num_epochs_completed = 2, num_steps_completed = 2
 INFO:root:Training Completed 2 steps
 </pre></div>

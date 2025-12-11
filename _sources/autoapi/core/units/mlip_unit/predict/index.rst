@@ -12,15 +12,6 @@ core.units.mlip_unit.predict
 
 
 
-Attributes
-----------
-
-.. autoapisummary::
-
-   core.units.mlip_unit.predict.ray_installed
-   core.units.mlip_unit.predict.ray_serve_installed
-
-
 Classes
 -------
 
@@ -47,14 +38,6 @@ Functions
 
 Module Contents
 ---------------
-
-.. py:data:: ray_installed
-   :value: True
-
-
-.. py:data:: ray_serve_installed
-   :value: True
-
 
 .. py:function:: collate_predictions(predict_fn)
 

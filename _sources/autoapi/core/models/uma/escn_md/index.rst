@@ -48,11 +48,11 @@ Module Contents
 
 .. py:data:: ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
 
-.. py:function:: add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float)
+.. py:function:: add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float, node_offset: int = 0)
 
-.. py:function:: pad_edges(graph_dict, edge_chunk_size: int, cutoff: float)
+.. py:function:: pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0)
 
-.. py:class:: eSCNMDBackbone(max_num_elements: int = 100, sphere_channels: int = 128, lmax: int = 2, mmax: int = 2, grid_resolution: int | None = None, num_sphere_samples: int = 128, otf_graph: bool = False, max_neighbors: int = 300, use_pbc: bool = True, use_pbc_single: bool = True, cutoff: float = 5.0, edge_channels: int = 128, distance_function: Literal['gaussian'] = 'gaussian', num_distance_basis: int = 512, direct_forces: bool = True, regress_forces: bool = True, regress_stress: bool = False, num_layers: int = 2, hidden_channels: int = 128, norm_type: str = 'rms_norm_sh', act_type: str = 'gate', ff_type: str = 'grid', activation_checkpointing: bool = False, chg_spin_emb_type: Literal['pos_emb', 'lin_emb', 'rand_emb'] = 'pos_emb', cs_emb_grad: bool = False, dataset_emb_grad: bool = False, dataset_list: list[str] | None = None, use_dataset_embedding: bool = True, use_cuda_graph_wigner: bool = False, radius_pbc_version: int = 1, always_use_pbc: bool = True, edge_chunk_size: int | None = None)
+.. py:class:: eSCNMDBackbone(max_num_elements: int = 100, sphere_channels: int = 128, lmax: int = 2, mmax: int = 2, grid_resolution: int | None = None, num_sphere_samples: int = 128, otf_graph: bool = False, max_neighbors: int = 300, use_pbc: bool = True, use_pbc_single: bool = True, cutoff: float = 5.0, edge_channels: int = 128, distance_function: Literal['gaussian'] = 'gaussian', num_distance_basis: int = 512, direct_forces: bool = True, regress_forces: bool = True, regress_stress: bool = False, num_layers: int = 2, hidden_channels: int = 128, norm_type: str = 'rms_norm_sh', act_type: str = 'gate', ff_type: str = 'grid', activation_checkpointing: bool = False, chg_spin_emb_type: Literal['pos_emb', 'lin_emb', 'rand_emb'] = 'pos_emb', cs_emb_grad: bool = False, dataset_emb_grad: bool = False, dataset_list: list[str] | None = None, use_dataset_embedding: bool = True, use_cuda_graph_wigner: bool = False, radius_pbc_version: int = 2, always_use_pbc: bool = True, edge_chunk_size: int | None = None)
 
    Bases: :py:obj:`torch.nn.Module`, :py:obj:`fairchem.core.models.uma.nn.mole_utils.MOLEInterface`
 
@@ -231,14 +231,6 @@ Module Contents
 
 
    .. py:method:: forward(data_dict: fairchem.core.datasets.atomic_data.AtomicData) -> dict[str, torch.Tensor]
-
-
-   .. py:method:: _init_gp_partitions(graph_dict, atomic_numbers_full)
-
-      Graph Parallel
-      This creates the required partial tensors for each rank given the full tensors.
-      The tensors are split on the dimension along the node index using node_partition.
-
 
 
    .. py:property:: num_params
