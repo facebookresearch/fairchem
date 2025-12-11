@@ -293,7 +293,11 @@ where:
 
 **Challenge**: Direct calculation suffers from quantum size effects, and if you were doing DFT calculations small numerical errors in the simulation or from the K-point grid sampling can lead to small (but significant) errors in the bulk lattice energy. 
 
-**Solution**: It is common when calculating surface energies to either use oriented unit cells, or the linear extrapolation method - calculate slabs at multiple thicknesses and extrapolate to infinite thickness. We'll use the linear extrapolation method here as it's more likely to work in future studies if you use this code!
+**Solution**: It is fairly common when calculating surface energies to use the bulk energy from a bulk relaxation in the above equation. However, because DFT often has some small numerical noise in the predictions from k-point convergence, this might lead to the wrong surface energy. Instead, two more careful schemes are either:
+1. Calculate the energy of a bulk structure oriented to each slab to maximize cancellation of small numerical errors or
+2. Calculate the energy of multiple slabs at multiple thicknesses and extrapolate to zero thickness. The intercept will be the surface energy, and the slope will be a fitted bulk energy. A benefit of this approach is that it also forces us to check that we have a sufficiently thick slab for a well defined surface energy; if the fit is non-linear we need thicker slabs.
+
+We'll use the linear extrapolation method here as it's more likely to work in future DFT studies if you use this code! 
 
 ### Step 1: Setup and Bulk Energy Reference
 
@@ -771,6 +775,7 @@ for idx, config in enumerate(ads_slab_config.atoms_list):
 
     h_energies.append(E_total)
     h_configs.append(config_relaxed)
+    h_d3_energies.append(E_d3)
     print(f"   Config {idx+1}: {E_total:.2f} eV (ML: {E_ml:.2f}, D3: {E_d3:.2f})")
 
     # Save structure
@@ -782,6 +787,7 @@ for idx, config in enumerate(ads_slab_config.atoms_list):
 best_idx = np.argmin(h_energies)
 slab_with_h = h_configs[best_idx]
 E_with_h = h_energies[best_idx]
+E_with_h_d3 = h_d3_energies[best_idx]
 
 print(f"\n   ✓ Best site: Config {best_idx+1}, E = {E_with_h:.2f} eV")
 print(f"   Energy spread: {max(h_energies) - min(h_energies):.2f} eV")
@@ -825,7 +831,7 @@ print(f"\n4. Computing Adsorption Energy:")
 print("   E_ads = E(slab+H) - E(slab) - 0.5×E(H₂)")
 
 E_ads = E_with_h - E_clean - 0.5 * E_h2
-E_ads_no_d3 = (E_with_h - E_clean_d3) - (E_clean - E_clean_d3) - 0.5 * (E_h2 - E_h2_d3)
+E_ads_no_d3 = (E_with_h - E_with_h_d3) - (E_clean - E_clean_d3) - 0.5 * (E_h2 - E_h2_d3)
 
 print(f"\n   Without D3: {E_ads_no_d3:.2f} eV")
 print(f"   With D3:    {E_ads:.2f} eV")
