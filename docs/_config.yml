@@ -22,6 +22,9 @@ latex:
   latex_documents:
     targetname: fairchem.tex
 
+launch_buttons:
+  colab_url: "https://colab.research.google.com"
+
 # Add a bibtex file so that we can create citations
 bibtex_bibfiles:
   - references.bib
