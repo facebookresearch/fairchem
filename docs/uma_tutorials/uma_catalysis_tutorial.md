@@ -51,7 +51,7 @@ This tutorial uses a number of helpful open source packages:
 - `pymatgen` - Materials analysis
 - `matplotlib` - Visualization
 - `numpy` - Numerical computing
-- `simple-dftd3` - Dispersion corrections
+- `torch-dftd` - Dispersion corrections
 among many others!
 
 ### Huggingface setups
@@ -1698,21 +1698,29 @@ print("   Starting from CO* and stretching the C-O bond...")
 
 # Create a guess structure with stretched CO bond (start from CO*)
 initial_guess = final_co.copy()
-initial_guess.calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up a constraint to fix the bond length to ~2 Angstroms, which should be far enough that we'll be closer to *C+*O than *CO
 co_indices = np.where(initial_guess.get_tags() == 2)[0]
+
+# Rotate the atoms a bit just to break the symmetry and prevent the O from going straight up to satisfy the constraint
+initial_slab = initial_guess[initial_guess.get_tags() != 2]
+initial_co = initial_guess[initial_guess.get_tags() == 2]
+initial_co.rotate(30, "x", center=initial_co.positions[0])
+initial_guess = initial_slab + initial_co
+
+initial_guess.calc = FAIRChemCalculator(predictor, task_name="oc20")
+
+# Add constraints to keep the CO bond length extended
 initial_guess.constraints += [
-    FixBondLengths([co_indices], tolerance=1e-3, iterations=5000, bondlengths=[2.0])
+    FixBondLengths([co_indices], tolerance=1e-2, iterations=5000, bondlengths=[2.0])
 ]
 
-# Rattle the atoms a bit just to break the symmetry and prevent the O from going straight up to satisfy the constraint
-initial_guess.positions[co_indices[1]] += [0.1, 0.1, -0.1]
+
 opt = LBFGS(
     initial_guess,
     trajectory=output_dir / part_dirs["part6"] / "initial_guess_with_constraint.traj",
 )
-opt.run(fmax=0.05)
+opt.run(fmax=0.01)
 
 # Now that we have a guess, re-relax without the constraints
 initial_guess.constraints = initial_guess.constraints[:-1]
@@ -1722,7 +1730,7 @@ opt = LBFGS(
     / part_dirs["part6"]
     / "initial_guess_without_constraint.traj",
 )
-opt.run(fmax=0.05)
+opt.run(fmax=0.01)
 ```
 
 ### Step 7: Run NEB to Find Activation Barrier
@@ -1730,7 +1738,7 @@ opt.run(fmax=0.05)
 Use the nudged elastic band method to find the minimum energy path:
 
 ```{code-cell} ipython3
-print(f"\n6. NEB Barrier Calculation (C* + O* → CO*)")
+print(f"\n7. NEB Barrier Calculation (C* + O* → CO*)")
 print("   Setting up 7-image NEB chain with TS guess in middle...")
 print("   Reaction: C* + O* (initial) → TS → CO* (final)")
 
@@ -1753,7 +1761,7 @@ dyneb = DyNEB(images, climb=True, fmax=0.05)
 
 # Interpolate first half (C*+O* → TS)
 print("\n   Interpolating images...")
-dyneb.interpolate("idpp")
+dyneb.interpolate("idpp", mic=True)
 
 # Optimize
 print("   Optimizing NEB path (this may take a while)...")
