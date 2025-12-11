@@ -60,9 +60,376 @@
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
     <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.2.0/dist/mermaid-layout-elk.esm.min.mjs"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.2.0/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+
+const defaultStyle = document.createElement('style');
+defaultStyle.textContent = `pre.mermaid {
+    /* Same as .mermaid-container > pre */
+    display: block;
+    width: 100%;
+}
+
+pre.mermaid > svg {
+    /* Same as .mermaid-container > pre > svg */
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+`;
+document.head.appendChild(defaultStyle);
+
+const fullscreenStyle = document.createElement('style');
+fullscreenStyle.textContent = `.mermaid-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+}
+
+.mermaid-container > pre {
+    display: block;
+    width: 100%;
+}
+
+.mermaid-container > pre > svg {
+    height: 500px;
+    width: 100%;
+    max-width: 100% !important;
+}
+
+.mermaid-fullscreen-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 95vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-container-fullscreen pre.mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-container-fullscreen .mermaid svg {
+    height: 100% !important;
+    width: 100% !important;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}`;
+document.head.appendChild(fullscreenStyle);
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness < 128;
+    }
+    return false;
+};
+
+const load = async () => {
+    await mermaid.run();
+
+    const all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if ("False" === "True") {
+        const mermaids_to_add_zoom = -1 === -1 ? all_mermaids.length : -1;
+        if(mermaids_to_add_zoom > 0) {
+            var svgs = d3.selectAll("");
+            if(all_mermaids.length !== mermaids_processed.length) {
+                setTimeout(load, 200);
+                return;
+            } else if(svgs.size() !== mermaids_to_add_zoom) {
+                setTimeout(load, 200);
+                return;
+            } else {
+                svgs.each(function() {
+                    var svg = d3.select(this);
+                    svg.html("<g class='wrapper'>" + svg.html() + "</g>");
+                    var inner = svg.select("g");
+                    var zoom = d3.zoom().on("zoom", function(event) {
+                        inner.attr("transform", event.transform);
+                    });
+                    svg.call(zoom);
+                });
+            }
+        }
+    } else if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(load, 200);
+        return;
+    }
+
+    const darkTheme = isDarkTheme();
+
+    // Stop here if not adding fullscreen capability
+    if ("True" !== "True") return;
+
+    const modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-container-fullscreen${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    const modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    let previousScrollOffset = [window.scrollX, window.scrollY];
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = ''
+        window.scrollTo({left: previousScrollOffset[0], top: previousScrollOffset[1], behavior: 'instant'});
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    const allButtons = [];
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.style.opacity = '50%';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            previousScrollOffset = [window.scroll, window.scrollY];
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.sdisplay = 'block';
+
+                if ("False" === "True") {
+                    setTimeout(() => {
+                        const g = svg.querySelector('g');
+                        if (g) {
+                            var svgD3 = d3.select(svg);
+                            svgD3.html("<g class='wrapper'>" + svgD3.html() + "</g>");
+                            var inner = svgD3.select("g");
+                            var zoom = d3.zoom().on("zoom", function(event) {
+                                inner.attr("transform", event.transform);
+                            });
+                            svgD3.call(zoom);
+                        }
+                    }, 100);
+                }
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+
+        container.appendChild(fullscreenBtn);
+        allButtons.push(fullscreenBtn);
+    });
+
+    // Update theme classes when theme changes
+    const updateTheme = () => {
+        const dark = isDarkTheme();
+        allButtons.forEach(btn => {
+            if (dark) {
+                btn.classList.add('dark-theme');
+            } else {
+                btn.classList.remove('dark-theme');
+            }
+        });
+        if (dark) {
+            modal.classList.add('dark-theme');
+            modalContent.classList.add('dark-theme');
+            closeBtn.classList.add('dark-theme');
+        } else {
+            modal.classList.remove('dark-theme');
+            modalContent.classList.remove('dark-theme');
+            closeBtn.classList.remove('dark-theme');
+        }
+    };
+
+    // Watch for theme changes
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style']
+    });
+};
+
+window.addEventListener("load", load);
+</script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'uma_tutorials/uma_catalysis_tutorial';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Generative Models" href="../core/generative_models.html" />
+    <link rel="prev" title="UMA Intro Tutorial" href="uma_tutorial.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -125,8 +492,6 @@
       
       
       
-        
-      
       <div class="bd-sidebar-primary bd-sidebar">
         
 
@@ -184,7 +549,7 @@
 <li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../core/intro.html">GNNs for Chemistry</a></li>
 
 
@@ -208,7 +573,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../core/uma_faq.html">FAQ</a></li>
 </ul>
 </details></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">UMA tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="uma_tutorial.html">UMA Intro Tutorial</a></li>
 
 
@@ -219,6 +584,7 @@
 
 
 
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Tutorial: Catalyst Surface Analysis with Machine Learning Potentials</a></li>
 </ul>
 </details></li>
 <li class="toctree-l1"><a class="reference internal" href="../core/generative_models.html">Generative Models</a></li>
@@ -484,6 +850,37 @@
 
 
 
+<div class="dropdown dropdown-launch-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Launch interactive content">
+    <i class="fas fa-rocket"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://colab.research.google.com/github/facebookresearch/fairchem/blob/main/docs/uma_tutorials/uma_catalysis_tutorial.ipynb" target="_blank"
+   class="btn btn-sm dropdown-item"
+   title="Launch on Colab"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  
+    <img alt="Colab logo" src="../_static/images/logo_colab.png">
+  </span>
+<span class="btn__text-container">Colab</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
 <div class="dropdown dropdown-source-buttons">
   <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
     <i class="fab fa-github"></i>
@@ -539,7 +936,7 @@
       
       
       
-      <li><a href="../_sources/uma_tutorials/uma_catalysis_tutorial.md" target="_blank"
+      <li><a href="../_sources/uma_tutorials/uma_catalysis_tutorial.ipynb" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -549,7 +946,7 @@
 <span class="btn__icon-container">
   <i class="fas fa-file"></i>
   </span>
-<span class="btn__text-container">.md</span>
+<span class="btn__text-container">.ipynb</span>
 </a>
 </li>
       
@@ -699,7 +1096,7 @@ document.write(`
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3b-calculate-c-and-o-energies-separately">Step 3b: Calculate C* and O* Energies Separately</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-calculate-reaction-energy-with-zpe">Step 4: Calculate Reaction Energy with ZPE</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-5-calculate-co-adsorption-energy-bonus">Step 5: Calculate CO Adsorption Energy (Bonus)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-6-find-transition-state-with-dimer-method">Step 6: Find Transition State with Dimer Method</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-6-find-guesses-for-nearby-initial-and-final-states-for-the-reaction">Step 6: Find guesses for nearby initial and final states for the reaction</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-7-run-neb-to-find-activation-barrier">Step 7: Run NEB to Find Activation Barrier</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-8-visualize-neb-path-and-key-structures">Step 8: Visualize NEB Path and Key Structures</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id15">Explore on Your Own</a></li>
@@ -778,7 +1175,7 @@ document.write(`
 <li><p><code class="docutils literal notranslate"><span class="pre">pymatgen</span></code> - Materials analysis</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">matplotlib</span></code> - Visualization</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">numpy</span></code> - Numerical computing</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">simple-dftd3</span></code> - Dispersion corrections
+<li><p><code class="docutils literal notranslate"><span class="pre">torch-dftd</span></code> - Dispersion corrections
 among many others!</p></li>
 </ul>
 <section id="huggingface-setups">
@@ -800,7 +1197,8 @@ among many others!</p></li>
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Set token via env variable</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;HF_TOKEN&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;MYTOKEN&#39;</span>
+
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;HF_TOKEN&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;MYTOKEN&quot;</span>
 </pre></div>
 </div>
 </div>
@@ -825,10 +1223,10 @@ among many others!</p></li>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>fairchem-applications-cattsunami   1.1.2.dev122+g0c649ae3
-fairchem-core                      2.13.0
-fairchem-data-oc                   1.0.3.dev122+g0c649ae3
-fairchem-data-omat                 0.2.1.dev27+g0c649ae3
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>fairchem-applications-cattsunami   1.1.2.dev123+ga70d5b04
+fairchem-core                      2.13.1.dev1+ga70d5b04
+fairchem-data-oc                   1.0.3.dev123+ga70d5b04
+fairchem-data-omat                 0.2.1.dev28+ga70d5b04
 </pre></div>
 </div>
 </div>
@@ -842,7 +1240,7 @@ fairchem-data-omat                 0.2.1.dev27+g0c649ae3
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>&#39;2.13.0&#39;
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>&#39;2.13.1.dev1+ga70d5b04&#39;
 </pre></div>
 </div>
 </div>
@@ -856,18 +1254,18 @@ fairchem-data-omat                 0.2.1.dev27+g0c649ae3
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">ase.io</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">ase.io</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase</span><span class="w"> </span><span class="kn">import</span> <span class="n">Atoms</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.build</span><span class="w"> </span><span class="kn">import</span> <span class="n">bulk</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.constraints</span><span class="w"> </span><span class="kn">import</span> <span class="n">FixBondLengths</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">write</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.mep</span><span class="w"> </span><span class="kn">import</span> <span class="n">interpolate</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.mep.dyneb</span><span class="w"> </span><span class="kn">import</span> <span class="n">DyNEB</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">FIRE</span><span class="p">,</span> <span class="n">LBFGS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.vibrations</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vibrations</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.visualize.plot</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_atoms</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">torch_dftd.torch_dftd3_calculator</span><span class="w"> </span><span class="kn">import</span> <span class="n">TorchDFTD3Calculator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">FAIRChemCalculator</span><span class="p">,</span> <span class="n">pretrained_mlip</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.data.oc.core</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Adsorbate</span><span class="p">,</span>
@@ -880,6 +1278,7 @@ fairchem-data-omat                 0.2.1.dev27+g0c649ae3
 <span class="kn">from</span><span class="w"> </span><span class="nn">pymatgen.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">Lattice</span><span class="p">,</span> <span class="n">Structure</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pymatgen.core.surface</span><span class="w"> </span><span class="kn">import</span> <span class="n">SlabGenerator</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pymatgen.io.ase</span><span class="w"> </span><span class="kn">import</span> <span class="n">AseAtomsAdaptor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch_dftd.torch_dftd3_calculator</span><span class="w"> </span><span class="kn">import</span> <span class="n">TorchDFTD3Calculator</span>
 
 <span class="c1"># Set up output directory structure</span>
 <span class="n">output_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;ni_tutorial_results&quot;</span><span class="p">)</span>
@@ -998,7 +1397,7 @@ fairchem-data-omat                 0.2.1.dev27+g0c649ae3
 Number of atoms: 4
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_4025/3959847705.py:15: DeprecationWarning: Use FrechetCellFilter for better convergence w.r.t. cell variables.
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/tmp/ipykernel_8150/3959847705.py:15: DeprecationWarning: Use FrechetCellFilter for better convergence w.r.t. cell variables.
   ecf = ExpCellFilter(ni_bulk)
 </pre></div>
 </div>
@@ -1063,7 +1462,12 @@ Relative error:                0.25%
 <li><p>Factor of 2 accounts for two surfaces (top and bottom)</p></li>
 </ul>
 <p><strong>Challenge</strong>: Direct calculation suffers from quantum size effects, and if you were doing DFT calculations small numerical errors in the simulation or from the K-point grid sampling can lead to small (but significant) errors in the bulk lattice energy.</p>
-<p><strong>Solution</strong>: It is common when calculating surface energies to either use oriented unit cells, or the linear extrapolation method - calculate slabs at multiple thicknesses and extrapolate to infinite thickness. We’ll use the linear extrapolation method here as it’s more likely to work in future studies if you use this code!</p>
+<p><strong>Solution</strong>: It is fairly common when calculating surface energies to use the bulk energy from a bulk relaxation in the above equation. However, because DFT often has some small numerical noise in the predictions from k-point convergence, this might lead to the wrong surface energy. Instead, two more careful schemes are either:</p>
+<ol class="arabic simple">
+<li><p>Calculate the energy of a bulk structure oriented to each slab to maximize cancellation of small numerical errors or</p></li>
+<li><p>Calculate the energy of multiple slabs at multiple thicknesses and extrapolate to zero thickness. The intercept will be the surface energy, and the slope will be a fitted bulk energy. A benefit of this approach is that it also forces us to check that we have a sufficiently thick slab for a well defined surface energy; if the fit is non-linear we need thicker slabs.</p></li>
+</ol>
+<p>We’ll use the linear extrapolation method here as it’s more likely to work in future DFT studies if you use this code!</p>
 </section>
 <section id="step-1-setup-and-bulk-energy-reference">
 <h3>Step 1: Setup and Bulk Energy Reference<a class="headerlink" href="#step-1-setup-and-bulk-energy-reference" title="Link to this heading">#</a></h3>
@@ -1232,7 +1636,7 @@ Calculating Ni(100) surface energy
     Intercept: 1.78 eV
 
   Surface energy:
-    γ = 0.143730 eV/Å² = 2.30 J/m²
+    γ = 0.143731 eV/Å² = 2.30 J/m²
 
 ============================================================
 Calculating Ni(110) surface energy
@@ -1270,12 +1674,20 @@ Calculating Ni(211) surface energy
   Thickness: 4 layers
 </pre></div>
 </div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Atoms: 8
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Energy: -39.69 eV
+
+  Thickness: 6 layers
+</pre></div>
+</div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Atoms: 12
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Energy: -61.61 eV
 
-  Thickness: 6 layers
+  Thickness: 8 layers
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Atoms: 16
@@ -1283,20 +1695,12 @@ Calculating Ni(211) surface energy
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Energy: -83.58 eV
 
-  Thickness: 8 layers
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Atoms: 20
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>    Energy: -105.55 eV
-
   Linear fit:
-    Slope:     -5.492494 eV/atom (cf. bulk -5.491441)
-    Intercept: 4.30 eV
+    Slope:     -5.485733 eV/atom (cf. bulk -5.491441)
+    Intercept: 4.20 eV
 
   Surface energy:
-    γ = 0.142119 eV/Å² = 2.28 J/m²
+    γ = 0.138877 eV/Å² = 2.23 J/m²
 </pre></div>
 </div>
 </div>
@@ -1360,7 +1764,7 @@ Calculating Ni(211) surface energy
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/ab25b9fd796bfc2ca230b68eee3e575fd2a5a260b4b7d7a0470a34ce05cecb99.png" src="../_images/ab25b9fd796bfc2ca230b68eee3e575fd2a5a260b4b7d7a0470a34ce05cecb99.png" />
+<img alt="../_images/ccad1c3128d4762a8532fe3e0c26cb07eec9c25ba199dd38c097ac22c76e85d5.png" src="../_images/ccad1c3128d4762a8532fe3e0c26cb07eec9c25ba199dd38c097ac22c76e85d5.png" />
 </div>
 </div>
 </section>
@@ -1395,7 +1799,7 @@ Comparison with DFT Literature (Tran et al., 2016)
 Ni(111)        1.93 J/m²  (Lit: 1.92, Δ=0.3%)
 Ni(100)        2.30 J/m²  (Lit: 2.21, Δ=4.2%)
 Ni(110)        2.35 J/m²  (Lit: 2.29, Δ=2.8%)
-Ni(211)        2.28 J/m²  (Lit: 2.24, Δ=1.7%)
+Ni(211)        2.23 J/m²  (Lit: 2.24, Δ=0.7%)
 </pre></div>
 </div>
 </div>
@@ -1492,7 +1896,7 @@ Using 4 facets:
   (1, 1, 1): 1.93 J/m²
   (1, 0, 0): 2.30 J/m²
   (1, 1, 0): 2.35 J/m²
-  (2, 1, 1): 2.28 J/m²
+  (2, 1, 1): 2.23 J/m²
 </pre></div>
 </div>
 </div>
@@ -1523,16 +1927,16 @@ Using 4 facets:
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Wulff Shape Properties:
-  Volume:          45.03 Å³
-  Surface area:    67.20 Å²
-  Effective radius: 2.21 Å
-  Weighted γ:      2.01 J/m²
+  Volume:          44.64 Å³
+  Surface area:    66.04 Å²
+  Effective radius: 2.20 Å
+  Weighted γ:      2.03 J/m²
 
 Facet Area Fractions:
-  (1, 1, 1): 77.3%
-  (1, 0, 0): 16.9%
-  (2, 1, 1): 5.5%
-  (1, 1, 0): 0.4%
+  (1, 1, 1): 69.5%
+  (2, 1, 1): 17.3%
+  (1, 0, 0): 13.0%
+  (1, 1, 0): 0.3%
 </pre></div>
 </div>
 </div>
@@ -1565,12 +1969,12 @@ Facet Area Fractions:
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/d31b6c6772bde7b94ac735b8bca856bb86e05eeb25a8341b73b5227f8cdef04f.png" src="../_images/d31b6c6772bde7b94ac735b8bca856bb86e05eeb25a8341b73b5227f8cdef04f.png" />
+<img alt="../_images/8f492832a89cc70bc7d9fadf986637efe51e954b501cb59f8dbc32a8fd029fce.png" src="../_images/8f492832a89cc70bc7d9fadf986637efe51e954b501cb59f8dbc32a8fd029fce.png" />
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Comparison with Paper (Table 2):
-  (1, 1, 1):   77.3% (Paper: 69.2%)
-  (1, 0, 0):   16.9% (Paper: 21.1%)
-  (1, 1, 0):    0.4% (Paper: 5.3%)
-  (2, 1, 1):    5.5% (Paper: 4.4%)
+  (1, 1, 1):   69.5% (Paper: 69.2%)
+  (1, 0, 0):   13.0% (Paper: 21.1%)
+  (1, 1, 0):    0.3% (Paper: 5.3%)
+  (2, 1, 1):   17.3% (Paper: 4.4%)
 </pre></div>
 </div>
 </div>
@@ -1733,7 +2137,10 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 
 <span class="n">adsorbate_h</span> <span class="o">=</span> <span class="n">Adsorbate</span><span class="p">(</span><span class="n">adsorbate_smiles_from_db</span><span class="o">=</span><span class="s2">&quot;*H&quot;</span><span class="p">)</span>
 <span class="n">ads_slab_config</span> <span class="o">=</span> <span class="n">AdsorbateSlabConfig</span><span class="p">(</span>
-    <span class="n">ni_slab_for_ads</span><span class="p">,</span> <span class="n">adsorbate_h</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;random_site_heuristic_placement&quot;</span><span class="p">,</span> <span class="n">num_sites</span><span class="o">=</span><span class="n">num_sites</span>
+    <span class="n">ni_slab_for_ads</span><span class="p">,</span>
+    <span class="n">adsorbate_h</span><span class="p">,</span>
+    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;random_site_heuristic_placement&quot;</span><span class="p">,</span>
+    <span class="n">num_sites</span><span class="o">=</span><span class="n">num_sites</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Generated </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ads_slab_config</span><span class="o">.</span><span class="n">atoms_list</span><span class="p">)</span><span class="si">}</span><span class="s2"> initial configurations&quot;</span><span class="p">)</span>
@@ -1743,7 +2150,7 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 </div>
 <div class="cell_output docutils container">
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>2. Generating 5 H adsorption sites...
-   Generated 2 initial configurations
+   Generated 5 initial configurations
    These include fcc, hcp, bridge, and top sites
 </pre></div>
 </div>
@@ -1758,6 +2165,7 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">3. Relaxing all H adsorption configurations...&quot;</span><span class="p">)</span>
 <span class="n">h_energies</span> <span class="o">=</span> <span class="p">[]</span>
 <span class="n">h_configs</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">h_d3_energies</span> <span class="o">=</span> <span class="p">[]</span>
 
 <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">config</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ads_slab_config</span><span class="o">.</span><span class="n">atoms_list</span><span class="p">):</span>
     <span class="n">config_relaxed</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
@@ -1778,15 +2186,19 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 
     <span class="n">h_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">E_total</span><span class="p">)</span>
     <span class="n">h_configs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">config_relaxed</span><span class="p">)</span>
+    <span class="n">h_d3_energies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">E_d3</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Config </span><span class="si">{</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">E_total</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV (ML: </span><span class="si">{</span><span class="n">E_ml</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">, D3: </span><span class="si">{</span><span class="n">E_d3</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 
     <span class="c1"># Save structure</span>
-    <span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part4&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;h_site_</span><span class="si">{</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.xyz&quot;</span><span class="p">),</span> <span class="n">config_relaxed</span><span class="p">)</span>
+    <span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+        <span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part4&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;h_site_</span><span class="si">{</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">.xyz&quot;</span><span class="p">),</span> <span class="n">config_relaxed</span>
+    <span class="p">)</span>
 
 <span class="c1"># Select best configuration</span>
 <span class="n">best_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">h_energies</span><span class="p">)</span>
 <span class="n">slab_with_h</span> <span class="o">=</span> <span class="n">h_configs</span><span class="p">[</span><span class="n">best_idx</span><span class="p">]</span>
 <span class="n">E_with_h</span> <span class="o">=</span> <span class="n">h_energies</span><span class="p">[</span><span class="n">best_idx</span><span class="p">]</span>
+<span class="n">E_with_h_d3</span> <span class="o">=</span> <span class="n">h_d3_energies</span><span class="p">[</span><span class="n">best_idx</span><span class="p">]</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   ✓ Best site: Config </span><span class="si">{</span><span class="n">best_idx</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">, E = </span><span class="si">{</span><span class="n">E_with_h</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Energy spread: </span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">h_energies</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">h_energies</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
@@ -1798,13 +2210,22 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>3. Relaxing all H adsorption configurations...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 1: -491.49 eV (ML: -454.84, D3: -36.65)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 1: -491.53 eV (ML: -454.88, D3: -36.65)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 2: -491.50 eV (ML: -454.85, D3: -36.65)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 2: -491.51 eV (ML: -454.86, D3: -36.65)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 3: -491.51 eV (ML: -454.86, D3: -36.65)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 4: -491.53 eV (ML: -454.88, D3: -36.65)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Config 5: -491.53 eV (ML: -454.88, D3: -36.65)
 
-   ✓ Best site: Config 2, E = -491.50 eV
-   Energy spread: 0.00 eV
+   ✓ Best site: Config 1, E = -491.53 eV
+   Energy spread: 0.02 eV
    This spread indicates the importance of testing multiple sites!
 </pre></div>
 </div>
@@ -1857,7 +2278,7 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   E_ads = E(slab+H) - E(slab) - 0.5×E(H₂)&quot;</span><span class="p">)</span>
 
 <span class="n">E_ads</span> <span class="o">=</span> <span class="n">E_with_h</span> <span class="o">-</span> <span class="n">E_clean</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">E_h2</span>
-<span class="n">E_ads_no_d3</span> <span class="o">=</span> <span class="p">(</span><span class="n">E_with_h</span> <span class="o">-</span> <span class="n">E_clean_d3</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">E_clean</span> <span class="o">-</span> <span class="n">E_clean_d3</span><span class="p">)</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">E_h2</span> <span class="o">-</span> <span class="n">E_h2_d3</span><span class="p">)</span>
+<span class="n">E_ads_no_d3</span> <span class="o">=</span> <span class="p">(</span><span class="n">E_with_h</span> <span class="o">-</span> <span class="n">E_with_h_d3</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">E_clean</span> <span class="o">-</span> <span class="n">E_clean_d3</span><span class="p">)</span> <span class="o">-</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="p">(</span><span class="n">E_h2</span> <span class="o">-</span> <span class="n">E_h2_d3</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Without D3: </span><span class="si">{</span><span class="n">E_ads_no_d3</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   With D3:    </span><span class="si">{</span><span class="n">E_ads</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
@@ -1870,9 +2291,9 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>4. Computing Adsorption Energy:
    E_ads = E(slab+H) - E(slab) - 0.5×E(H₂)
 
-   Without D3: -0.55 eV
-   With D3:    -0.55 eV
-   D3 effect:  0.00 eV
+   Without D3: -0.51 eV
+   With D3:    -0.58 eV
+   D3 effect:  -0.08 eV
 
    → D3 corrections are negligible for H* (small, covalent bonding)
 </pre></div>
@@ -1921,12 +2342,9 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
    This accounts for quantum vibrational effects
 </pre></div>
 </div>
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:matplotlib.animation:MovieWriter ffmpeg unavailable; using Pillow instead.
-</pre></div>
-</div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ZPE(H*):  0.19+0.00j eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ZPE(H*):  0.18+0.00j eV
    ZPE(H₂):  0.27+0.00j eV
-   E_ads(ZPE): -0.50-0.00j eV
+   E_ads(ZPE): -0.55-0.00j eV
 
    Creating animations of vibrational modes...
 </pre></div>
@@ -1934,7 +2352,7 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>0
 </pre></div>
 </div>
-<img alt="../_images/7c11f799dd83de5768c04f428a96cbeaa8f1db11a59ec8374811518eba4e4bed.png" src="../_images/7c11f799dd83de5768c04f428a96cbeaa8f1db11a59ec8374811518eba4e4bed.png" />
+<img alt="../_images/6f2bfd091ba08497f3bc036b020998756ca767f3d9eddec12d0d426f0e8e8e10.png" src="../_images/6f2bfd091ba08497f3bc036b020998756ca767f3d9eddec12d0d426f0e8e8e10.png" />
 </div>
 </div>
 <img src="vib.0.gif" width="750" align="center"></section>
@@ -1964,13 +2382,13 @@ E_{\text{ads}}^{\text{ZPE}} = E_{\text{ads}} + \text{ZPE}(\text{H}^*) - \frac{1}
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>7. Visualizing best H* configuration...
 </pre></div>
 </div>
-<img alt="../_images/7450fbbf029b6a673298d6ec897e8cfbd2942614eb3d0f41c7f856490537f6d2.png" src="../_images/7450fbbf029b6a673298d6ec897e8cfbd2942614eb3d0f41c7f856490537f6d2.png" />
+<img alt="../_images/db34dc3147688f2e6133dd1ed6ecb0c76598492dfecdd97e37e1f8e020b8221c.png" src="../_images/db34dc3147688f2e6133dd1ed6ecb0c76598492dfecdd97e37e1f8e020b8221c.png" />
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>============================================================
 Comparison with Literature:
 ============================================================
 Table 4 (DFT): -0.60 eV (Ni(111), ref H₂)
-This work:     -0.50-0.00j eV
-Difference:    0.10 eV
+This work:     -0.55-0.00j eV
+Difference:    0.05 eV
 </pre></div>
 </div>
 </div>
@@ -2216,66 +2634,111 @@ E_{\text{ads}}(\theta) = E_{\text{ads}}(0) + \beta \theta
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>3. Coverage: 1 H (0.06 ML)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -491.51 eV
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -491.01 eV
-   → E_ads/H: -0.56 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -491.51 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: -491.53 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: -490.95 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: -491.53 eV
+   → E_ads/H: -0.59 eV
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>3. Coverage: 4 H (0.25 ML)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -503.17 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -503.69 eV
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -503.27 eV
-   → E_ads/H: -0.47 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -503.61 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: -503.71 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: -503.75 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: -503.73 eV
+   → E_ads/H: -0.59 eV
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>3. Coverage: 8 H (0.50 ML)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -518.83 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -519.94 eV
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -518.55 eV
-   → E_ads/H: -0.43 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -519.87 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: -519.59 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: -519.90 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: -518.70 eV
+   → E_ads/H: -0.57 eV
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>3. Coverage: 12 H (0.75 ML)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -534.00 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -535.13 eV
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -532.14 eV
-   → E_ads/H: -0.39 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -534.30 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: -535.42 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: -535.52 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: -534.39 eV
+   → E_ads/H: -0.52 eV
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>3. Coverage: 16 H (1.00 ML)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -548.30 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: -549.47 eV
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -545.70 eV
-   → E_ads/H: -0.32 eV
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: -550.43 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: -550.42 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: -549.29 eV
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: -548.70 eV
+   → E_ads/H: -0.45 eV
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>✓ Completed coverage study: 5 data points
@@ -2310,8 +2773,8 @@ E_{\text{ads}}(\theta) = E_{\text{ads}}(0) + \beta \theta
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>4. Performing linear fit to coverage dependence...
 
 ============================================================
-Linear Fit: E_ads = -0.43 + 0.11θ (eV)
-Slope: 10.6 kJ/mol per ML
+Linear Fit: E_ads = -0.54 + 0.07θ (eV)
+Slope: 6.6 kJ/mol per ML
 Paper: 8.7 kJ/mol per ML
 ============================================================
 </pre></div>
@@ -2361,7 +2824,7 @@ Paper: 8.7 kJ/mol per ML
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>5. Plotting coverage dependence...
 </pre></div>
 </div>
-<img alt="../_images/ab6b595af49f7d91ab1cbc8c5db027e4ef30b4084bde4ad62c7cc4e89d265148.png" src="../_images/ab6b595af49f7d91ab1cbc8c5db027e4ef30b4084bde4ad62c7cc4e89d265148.png" />
+<img alt="../_images/4a6ce608ec0311005ab6d1a76d79937a7128987e868f9fdba6a25ff9f3a2b52c.png" src="../_images/4a6ce608ec0311005ab6d1a76d79937a7128987e868f9fdba6a25ff9f3a2b52c.png" />
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>✓ Coverage dependence analysis complete!
 </pre></div>
 </div>
@@ -2528,18 +2991,27 @@ Paper: 8.7 kJ/mol per ML
    Generating CO adsorption configurations...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -503.93 eV (RPBE: -467.11, D3: -36.83)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -503.96 eV (RPBE: -467.14, D3: -36.82)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -503.84 eV (RPBE: -466.98, D3: -36.86)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -503.97 eV (RPBE: -467.14, D3: -36.82)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: E_total = -503.96 eV (RPBE: -467.14, D3: -36.82)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: E_total = -503.86 eV (RPBE: -467.00, D3: -36.85)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: E_total = -503.86 eV (RPBE: -467.01, D3: -36.86)
 
-   → Best CO* (Config 1):
-      RPBE:  -467.11 eV
-      D3:    -36.83 eV
-      Total: -503.93 eV
+   → Best CO* (Config 2):
+      RPBE:  -467.14 eV
+      D3:    -36.82 eV
+      Total: -503.97 eV
    ✓ Best CO* structure saved
 </pre></div>
 </div>
@@ -2627,18 +3099,27 @@ Paper: 8.7 kJ/mol per ML
    Generating C+O configurations...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 2 configurations
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generated 5 configurations
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -502.80 eV (RPBE: -465.89, D3: -36.91, C-O dist: 5.07 Å)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: ⚠ REJECTED - C and O formed CO molecule (d = 1.20 Å)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -502.79 eV (RPBE: -465.89, D3: -36.90, C-O dist: 4.31 Å)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -502.79 eV (RPBE: -465.89, D3: -36.90, C-O dist: 4.33 Å)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: E_total = -502.83 eV (RPBE: -465.94, D3: -36.89, C-O dist: 4.31 Å)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: E_total = -502.88 eV (RPBE: -465.98, D3: -36.90, C-O dist: 3.83 Å)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: E_total = -502.82 eV (RPBE: -465.93, D3: -36.89, C-O dist: 4.34 Å)
 
-   → Best C*+O* (Config 1):
-      RPBE:  -465.89 eV
-      D3:    -36.91 eV
-      Total: -502.80 eV
+   → Best C*+O* (Config 3):
+      RPBE:  -465.98 eV
+      D3:    -36.90 eV
+      Total: -502.88 eV
    ✓ Best C*+O* structure saved
 </pre></div>
 </div>
@@ -2794,12 +3275,21 @@ Paper: 8.7 kJ/mol per ML
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Generating C* configurations...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -495.73 eV (RPBE: -458.94, D3: -36.78)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -493.14 eV (RPBE: -456.36, D3: -36.79)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -495.70 eV (RPBE: -458.91, D3: -36.79)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -495.73 eV (RPBE: -458.94, D3: -36.78)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: E_total = -495.66 eV (RPBE: -458.89, D3: -36.77)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: E_total = -495.72 eV (RPBE: -458.94, D3: -36.78)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: E_total = -495.66 eV (RPBE: -458.89, D3: -36.77)
 
-   → Best C* (Config 1):
+   → Best C* (Config 2):
       RPBE:  -458.94 eV
       D3:    -36.78 eV
       Total: -495.73 eV
@@ -2807,12 +3297,21 @@ Paper: 8.7 kJ/mol per ML
    Generating O* configurations...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -492.61 eV (RPBE: -455.90, D3: -36.71)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 1: E_total = -494.66 eV (RPBE: -457.97, D3: -36.69)
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -494.66 eV (RPBE: -457.97, D3: -36.69)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 2: E_total = -494.66 eV (RPBE: -457.97, D3: -36.68)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 3: E_total = -494.66 eV (RPBE: -457.97, D3: -36.69)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 4: E_total = -494.55 eV (RPBE: -457.87, D3: -36.68)
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>     Config 5: E_total = -494.55 eV (RPBE: -457.87, D3: -36.68)
 
-   → Best O* (Config 2):
+   → Best O* (Config 1):
       RPBE:  -457.97 eV
       D3:    -36.69 eV
       Total: -494.66 eV
@@ -2841,12 +3340,12 @@ Paper: 8.7 kJ/mol per ML
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Combined C* + O* (separate calculations):
       RPBE:  -916.91 eV
       D3:    -73.47 eV
-      Total: -990.38 eV
+      Total: -990.39 eV
 
    Comparison:
-      C*+O* (same cell):  -15.34 eV
-      C* + O* (separate): -15.46 eV
-      Difference:         0.13 eV
+      C*+O* (same cell):  -15.42 eV
+      C* + O* (separate): -15.47 eV
+      Difference:         0.04 eV
    ✓ Separate C* and O* energies calculated
 </pre></div>
 </div>
@@ -2947,40 +3446,40 @@ Paper: 8.7 kJ/mol per ML
    ============================================================
 
    Electronic Energies:
-   Initial (C*+O*): RPBE = -465.89 eV, D3 = -36.91 eV, Total = -502.80 eV
-   Final (CO*):     RPBE = -467.11 eV, D3 = -36.83 eV, Total = -503.93 eV
+   Initial (C*+O*): RPBE = -465.98 eV, D3 = -36.90 eV, Total = -502.88 eV
+   Final (CO*):     RPBE = -467.14 eV, D3 = -36.82 eV, Total = -503.97 eV
 
    Reaction Energies (without ZPE):
-   ΔE(RPBE only):     -1.21 eV = -117.2 kJ/mol
-   ΔE(D3 contrib):    0.08 eV = 7.5 kJ/mol
-   ΔE(RPBE+D3):       -1.14 eV = -109.7 kJ/mol
+   ΔE(RPBE only):     -1.16 eV = -112.2 kJ/mol
+   ΔE(D3 contrib):    0.08 eV = 7.4 kJ/mol
+   ΔE(RPBE+D3):       -1.09 eV = -104.7 kJ/mol
 
    Computing ZPE for CO*...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ZPE(CO*): 0.18+0.00j eV (181.5+0.0j meV)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ZPE(CO*): 0.18+0.00j eV (182.6+0.0j meV)
 
    Computing ZPE for C* and O*...
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ZPE(C*+O*): 0.18+0.00j eV (183.1+0.0j meV)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ZPE(C*+O*): 0.18+0.00j eV (176.3+0.0j meV)
 
    Reaction Energy (with ZPE):
-   ΔE(electronic):    -1.14 eV = -109.7 kJ/mol
-   ΔZPE:              -0.00+0.00j eV = -0.2+0.0j kJ/mol (-1.6+0.0j meV)
-   ΔE(total):         -1.14+0.00j eV = -109.9+0.0j kJ/mol
+   ΔE(electronic):    -1.09 eV = -104.7 kJ/mol
+   ΔZPE:              0.01+0.00j eV = 0.6+0.0j kJ/mol (6.3+0.0j meV)
+   ΔE(total):         -1.08+0.00j eV = -104.1+0.0j kJ/mol
 
    Summary:
-   Without D3, without ZPE: -1.21 eV = -117.2 kJ/mol
-   With D3, without ZPE:    -1.14 eV = -109.7 kJ/mol
-   With D3, with ZPE:       -1.14+0.00j eV = -109.9+0.0j kJ/mol
+   Without D3, without ZPE: -1.16 eV = -112.2 kJ/mol
+   With D3, without ZPE:    -1.09 eV = -104.7 kJ/mol
+   With D3, with ZPE:       -1.08+0.00j eV = -104.1+0.0j kJ/mol
 
    ============================================================
 
    Comparison with Paper (Table 5):
    Paper (DFT-D3): -142.7 kJ/mol = -1.48 eV
-   This work:      -109.9+0.0j kJ/mol = -1.14+0.00j eV
-   Difference:     0.34 eV
+   This work:      -104.1+0.0j kJ/mol = -1.08+0.00j eV
+   Difference:     0.40 eV
 
    ✓ Reaction is exothermic (C+O recombination favorable)
 </pre></div>
@@ -3067,20 +3566,20 @@ Paper: 8.7 kJ/mol per ML
    ZPE(CO*):    0.18+0.00j eV (from Step 4 calculation)
 
    Electronic Energy Breakdown:
-   ΔE(RPBE only) = -1.80 eV
-   ΔE(D3 contrib) = -0.25 eV
-   ΔE(RPBE+D3) = -2.04 eV
+   ΔE(RPBE only) = -1.84 eV
+   ΔE(D3 contrib) = -0.24 eV
+   ΔE(RPBE+D3) = -2.08 eV
 
    ZPE Contribution:
    ΔZPE = 0.05-0.00j eV
 
    Total Adsorption Energy:
-   ΔE(total) = -2.00-0.00j eV = -192.5-0.0j kJ/mol
+   ΔE(total) = -2.03-0.00j eV = -195.7-0.0j kJ/mol
 
    Summary:
-   E_ads(CO) without ZPE = 2.04 eV = 197.3 kJ/mol
-   E_ads(CO) with ZPE    = 2.00+0.00j eV = 192.5+0.0j kJ/mol
-   → CO binds 2.00 eV stronger than H (3.3x)
+   E_ads(CO) without ZPE = 2.08 eV = 200.6 kJ/mol
+   E_ads(CO) with ZPE    = 2.03+0.00j eV = 195.7+0.0j kJ/mol
+   → CO binds 2.03 eV stronger than H (3.4x)
 </pre></div>
 </div>
 </div>
@@ -3096,289 +3595,639 @@ Paper: 8.7 kJ/mol per ML
 </ul>
 </div>
 </section>
-<section id="step-6-find-transition-state-with-dimer-method">
-<h3>Step 6: Find Transition State with Dimer Method<a class="headerlink" href="#step-6-find-transition-state-with-dimer-method" title="Link to this heading">#</a></h3>
-<p>Use the dimer method to get a good initial guess for the transition state:</p>
+<section id="step-6-find-guesses-for-nearby-initial-and-final-states-for-the-reaction">
+<h3>Step 6: Find guesses for nearby initial and final states for the reaction<a class="headerlink" href="#step-6-find-guesses-for-nearby-initial-and-final-states-for-the-reaction" title="Link to this heading">#</a></h3>
+<p>Now that we have an estimate on the reaction energy from the best possible initial and final states, we want to find a transition state (barrier) for this reaction. There are MANY possible ways that we could do this. In this case, we’ll start with the *CO final state and then try and find a nearby local minimal of *C and *O, by fixing the C-O bond distance and finding a nearby local minima. Note that this approach required some insight into what the transition state might look like, and could be considerably more complicated for a reaction that did not involve breaking a single bond.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">5. Finding Transition State with Dimer Method&quot;</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Finding Transition State Initial and Final States&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   Creating initial guess with stretched C-O bond...&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   Starting from CO* and stretching the C-O bond...&quot;</span><span class="p">)</span>
 
 <span class="c1"># Create a guess structure with stretched CO bond (start from CO*)</span>
-<span class="n">ts_guess</span> <span class="o">=</span> <span class="n">final_co</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="n">initial_guess</span> <span class="o">=</span> <span class="n">final_co</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
 
-<span class="c1"># Optimize with dimer method to find saddle point</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   Running dimer optimization to find transition state...&quot;</span><span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">ase.mep</span><span class="w"> </span><span class="kn">import</span> <span class="n">DimerControl</span><span class="p">,</span> <span class="n">MinModeAtoms</span><span class="p">,</span> <span class="n">MinModeTranslate</span>
+<span class="c1"># Set up a constraint to fix the bond length to ~2 Angstroms, which should be far enough that we&#39;ll be closer to *C+*O than *CO</span>
+<span class="n">co_indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">initial_guess</span><span class="o">.</span><span class="n">get_tags</span><span class="p">()</span> <span class="o">==</span> <span class="mi">2</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
 
-<span class="n">ts_guess</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;oc20&quot;</span><span class="p">)</span>
+<span class="c1"># Rotate the atoms a bit just to break the symmetry and prevent the O from going straight up to satisfy the constraint</span>
+<span class="n">initial_slab</span> <span class="o">=</span> <span class="n">initial_guess</span><span class="p">[</span><span class="n">initial_guess</span><span class="o">.</span><span class="n">get_tags</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">]</span>
+<span class="n">initial_co</span> <span class="o">=</span> <span class="n">initial_guess</span><span class="p">[</span><span class="n">initial_guess</span><span class="o">.</span><span class="n">get_tags</span><span class="p">()</span> <span class="o">==</span> <span class="mi">2</span><span class="p">]</span>
+<span class="n">initial_co</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span><span class="mi">30</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="n">initial_co</span><span class="o">.</span><span class="n">positions</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">initial_guess</span> <span class="o">=</span> <span class="n">initial_slab</span> <span class="o">+</span> <span class="n">initial_co</span>
 
-<span class="c1"># Set up dimer control</span>
-<span class="n">d_control</span> <span class="o">=</span> <span class="n">DimerControl</span><span class="p">(</span>
-    <span class="n">initial_eigenmode_method</span><span class="o">=</span><span class="s2">&quot;displacement&quot;</span><span class="p">,</span>
-    <span class="n">displacement_method</span><span class="o">=</span><span class="s2">&quot;vector&quot;</span><span class="p">,</span>
-    <span class="n">mask</span><span class="o">=</span><span class="p">[</span><span class="n">i</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">slab</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ts_guess</span><span class="p">))],</span>
-<span class="p">)</span>  <span class="c1"># Only move adsorbates</span>
+<span class="n">initial_guess</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;oc20&quot;</span><span class="p">)</span>
 
-<span class="c1"># Create displacement vector along C-O bond</span>
-<span class="n">displacement_vector</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">ts_guess</span><span class="p">),</span> <span class="mi">3</span><span class="p">))</span>
-<span class="c1"># displacement_vector[co_indices[1]] = (ts_guess.positions[-1]-ts_guess.positions[-2]) / co_distance  # O moves away</span>
-<span class="c1"># displacement_vector[co_indices[1],0:1] = 0.5</span>
+<span class="c1"># Add constraints to keep the CO bond length extended</span>
+<span class="n">initial_guess</span><span class="o">.</span><span class="n">constraints</span> <span class="o">+=</span> <span class="p">[</span>
+    <span class="n">FixBondLengths</span><span class="p">([</span><span class="n">co_indices</span><span class="p">],</span> <span class="n">tolerance</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span> <span class="n">bondlengths</span><span class="o">=</span><span class="p">[</span><span class="mf">2.0</span><span class="p">])</span>
+<span class="p">]</span>
 
-<span class="n">displacement_vector</span><span class="p">[</span><span class="n">co_indices</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">co_indices</span><span class="p">),</span> <span class="mi">3</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.1</span>
 
-<span class="n">d_atoms</span> <span class="o">=</span> <span class="n">MinModeAtoms</span><span class="p">(</span><span class="n">ts_guess</span><span class="p">,</span> <span class="n">d_control</span><span class="p">)</span>
-<span class="n">d_atoms</span><span class="o">.</span><span class="n">displace</span><span class="p">(</span><span class="n">displacement_vector</span><span class="o">=</span><span class="n">displacement_vector</span><span class="p">)</span>
-
-<span class="c1"># Run dimer</span>
-<span class="k">with</span> <span class="n">MinModeTranslate</span><span class="p">(</span><span class="n">d_atoms</span><span class="p">,</span> <span class="n">trajectory</span><span class="o">=</span><span class="s2">&quot;dimer.traj&quot;</span><span class="p">,</span> <span class="n">logfile</span><span class="o">=</span><span class="s2">&quot;dimer.log&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">dim_rlx</span><span class="p">:</span>
-    <span class="n">dim_rlx</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
-
-<span class="n">ts_structure</span> <span class="o">=</span> <span class="n">ts_guess</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   ✓ Dimer optimization completed&quot;</span><span class="p">)</span>
-
-<span class="c1"># Check final C-O distance</span>
-<span class="n">final_co_dist</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span>
-    <span class="n">ts_structure</span><span class="o">.</span><span class="n">get_positions</span><span class="p">()[</span><span class="n">co_indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
-    <span class="o">-</span> <span class="n">ts_structure</span><span class="o">.</span><span class="n">get_positions</span><span class="p">()[</span><span class="n">co_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
+<span class="n">opt</span> <span class="o">=</span> <span class="n">LBFGS</span><span class="p">(</span>
+    <span class="n">initial_guess</span><span class="p">,</span>
+    <span class="n">trajectory</span><span class="o">=</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;initial_guess_with_constraint.traj&quot;</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Final C-O distance at TS: </span><span class="si">{</span><span class="n">final_co_dist</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Å&quot;</span><span class="p">)</span>
+<span class="n">opt</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
 
-<span class="c1"># Save TS guess</span>
-<span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;ts_guess.xyz&quot;</span><span class="p">),</span> <span class="n">ts_structure</span><span class="p">)</span>
+<span class="c1"># Now that we have a guess, re-relax without the constraints</span>
+<span class="n">initial_guess</span><span class="o">.</span><span class="n">constraints</span> <span class="o">=</span> <span class="n">initial_guess</span><span class="o">.</span><span class="n">constraints</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<span class="n">opt</span> <span class="o">=</span> <span class="n">LBFGS</span><span class="p">(</span>
+    <span class="n">initial_guess</span><span class="p">,</span>
+    <span class="n">trajectory</span><span class="o">=</span><span class="n">output_dir</span>
+    <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span>
+    <span class="o">/</span> <span class="s2">&quot;initial_guess_without_constraint.traj&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">opt</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>5. Finding Transition State with Dimer Method
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Finding Transition State Initial and Final States
    Creating initial guess with stretched C-O bond...
    Starting from CO* and stretching the C-O bond...
-   Running dimer optimization to find transition state...
-MINMODE:METHOD: Dimer
-DIM:CONTROL: Search Parameters:
-DIM:CONTROL: ------------------
-DIM:CONTROL: eigenmode_method = dimer
-DIM:CONTROL: f_rot_min = 0.1
-DIM:CONTROL: f_rot_max = 1.0
-DIM:CONTROL: max_num_rot = 1
-DIM:CONTROL: trial_angle = 0.7853981633974483
-DIM:CONTROL: trial_trans_step = 0.001
-DIM:CONTROL: maximum_translation = 0.1
-DIM:CONTROL: cg_translation = True
-DIM:CONTROL: use_central_forces = True
-DIM:CONTROL: dimer_separation = 0.0001
-DIM:CONTROL: initial_eigenmode_method = displacement
-DIM:CONTROL: extrapolate_forces = False
-DIM:CONTROL: displacement_method = vector
-DIM:CONTROL: gauss_std = 0.1
-DIM:CONTROL: order = 1
-DIM:CONTROL: mask = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, True, True]
-DIM:CONTROL: displacement_center = None
-DIM:CONTROL: displacement_radius = None
-DIM:CONTROL: number_of_displacement_atoms = None
-DIM:CONTROL: ------------------
-DIM:ROT: OPT-STEP ROT-STEP CURVATURE ROT-ANGLE ROT-FORCE
+       Step     Time          Energy          fmax
+LBFGS:    0 20:40:49     -466.828456        0.924906
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>MINMODE:DISP:       0      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       1      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       2      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       3      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       4      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       5      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       6      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       7      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       8      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:       9      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      10      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      11      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      12      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      13      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      14      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      15      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      16      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      17      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      18      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      19      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      20      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      21      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      22      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      23      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      24      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      25      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      26      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      27      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      28      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      29      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      30      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      31      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      32      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      33      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      34      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      35      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      36      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      37      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      38      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      39      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      40      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      41      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      42      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      43      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      44      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      45      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      46      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      47      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      48      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      49      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      50      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      51      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      52      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      53      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      54      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      55      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      56      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      57      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      58      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      59      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      60      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      61      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      62      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      63      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      64      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      65      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      66      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      67      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      68      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      69      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      70      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      71      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      72      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      73      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      74      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      75      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      76      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      77      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      78      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      79      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      80      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      81      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      82      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      83      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      84      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      85      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      86      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      87      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      88      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      89      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      90      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      91      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      92      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      93      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      94      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      95      0.00000000      0.00000000      0.00000000
-MINMODE:DISP:      96      0.15978801      0.12827701     -0.10831076
-MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 20:40:49     -461.461969        4.205855
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       0         1    3.7528   32.2301   15.7311
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 20:40:50     -461.528795        3.834735
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       1         1    1.0154   26.8012    4.5592
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 20:40:50     -461.858429        0.982042
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       2         1    0.5635    6.0932    2.7617
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 20:40:50     -461.928568        0.974327
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       3         1    0.3022    4.5426    1.8835
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 20:40:50     -461.953529        0.981629
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       4         1    0.0063    5.0123    1.7585
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 20:40:50     -461.943569        0.808603
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       5         1   -0.2620    4.3160    2.2405
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 20:40:51     -462.001764        0.448797
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       6         1   -0.5660    6.0934    1.7369
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 20:40:51     -461.963711        0.389110
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       7         1   -0.2771    2.6098    6.4450
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 20:40:51     -462.020624        0.847128
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       8         1   -0.3192    1.0319    2.2427
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 20:40:51     -462.027096        0.397794
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:       9         1   -0.3613    1.9072    5.4573
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 20:40:51     -462.041656        0.440472
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      10         1   -0.4170    4.4268    0.9462
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 20:40:52     -462.038013        0.717821
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      11         1   -0.4528    1.5836    4.0286
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 20:40:52     -462.169838        1.349131
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      12         1   -0.4626    1.0877    3.0006
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 20:40:52     -462.232130        2.316899
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      13         1   -0.3577    0.8034    1.4191
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 20:40:52     -462.283684        2.591798
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      14         1   -0.4004    0.8525    1.6362
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 20:40:52     -462.272295        2.075945
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      15         1   -0.4087    0.9803    2.5123
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 20:40:53     -462.270754        1.793324
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      16         1   -0.2695    1.7175    4.7420
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 20:40:53     -462.270248        1.636059
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      17         1   -0.2359    0.9161    1.8023
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 20:40:53     -462.270086        1.551101
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      18         1   -0.2506    0.7724    1.2633
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 20:40:53     -462.270056        1.500407
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      19         1   -0.2151    0.8717    1.6513
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   21 20:40:53     -462.270052        1.466797
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      20         1   -0.1746    0.8640    1.4217
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   22 20:40:54     -462.270058        1.442745
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      21         1   -0.2257    0.5785    0.9312
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   23 20:40:54     -462.270077        1.424858
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      22         1   -0.2337    0.5019    0.8830
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   24 20:40:54     -462.270073        1.411190
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      23         1   -0.1627    0.8534    2.1047
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   25 20:40:54     -462.270084        1.400562
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      24         1   -0.2035    0.8709    2.1624
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   26 20:40:54     -462.270090        1.392161
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      25         1   -0.2125    2.5475    0.8046
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   27 20:40:55     -462.270094        1.385522
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      26         1   -0.2325    3.1407    0.5396
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   28 20:40:55     -462.270088        1.380225
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      27         1   -0.2282    1.1494    0.4090
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   29 20:40:55     -462.270096        1.375918
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      28         1   -0.3007    0.7432    1.9309
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   30 20:40:55     -462.270096        1.372458
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      29         1   -0.2993    0.3957    0.6372
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   31 20:40:55     -462.270098        1.369642
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      30         1   -0.3070    0.3388    0.7384
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   32 20:40:56     -462.270103        1.367339
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>DIM:ROT:      31         1   -0.3208    0.8308    1.8277
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   33 20:40:56     -462.270105        1.365491
 </pre></div>
 </div>
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ✓ Dimer optimization completed
-   Final C-O distance at TS: 1.19 Å
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   34 20:40:56     -462.270096        1.363968
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   35 20:40:56     -462.270094        1.362681
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   36 20:40:56     -462.270096        1.361670
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   37 20:40:57     -462.270098        1.360856
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   38 20:40:57     -462.270099        1.359987
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   39 20:40:57     -462.270096        1.359471
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   40 20:40:57     -462.270096        1.358827
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   41 20:40:57     -462.270099        1.358636
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   42 20:40:58     -462.270101        1.356758
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   43 20:40:58     -462.270099        1.356344
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   44 20:40:58     -462.270105        1.354685
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   45 20:40:58     -462.270101        1.354653
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   46 20:40:58     -462.267404        1.311877
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   47 20:40:59     -462.261709        1.407613
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   48 20:40:59     -462.291488        1.581730
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   49 20:40:59     -462.242922        2.771852
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   50 20:40:59     -462.314604        2.827921
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   51 20:40:59     -462.311086        1.638555
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   52 20:41:00     -462.314867        1.696225
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   53 20:41:00     -462.318193        1.694156
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   54 20:41:00     -462.320291        1.717998
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   55 20:41:00     -462.317407        1.756198
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   56 20:41:00     -462.326261        1.678238
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   57 20:41:01     -462.345531        1.502775
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   58 20:41:01     -462.348038        1.602862
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   59 20:41:01     -462.304199        1.728908
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   60 20:41:01     -462.270515        2.466956
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   61 20:41:01     -462.316448        2.191411
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   62 20:41:02     -462.320064        2.636855
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   63 20:41:02     -462.344339        2.637042
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   64 20:41:02     -462.402309        2.517304
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   65 20:41:02     -462.485205        2.315066
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   66 20:41:02     -462.552746        2.045332
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   67 20:41:03     -462.605394        1.761522
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   68 20:41:03     -462.643263        1.628778
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   69 20:41:03     -462.670315        1.644868
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   70 20:41:03     -462.689846        1.652976
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   71 20:41:03     -462.704441        1.653946
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   72 20:41:04     -462.716600        1.646726
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   73 20:41:04     -462.732153        1.618531
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   74 20:41:04     -462.768276        1.501030
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   75 20:41:04     -462.781424        1.463357
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   76 20:41:04     -462.890019        1.086687
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   77 20:41:05     -462.900289        1.092134
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   78 20:41:05     -462.911054        1.046619
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   79 20:41:05     -462.941387        0.966550
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   80 20:41:05     -462.955663        0.918387
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   81 20:41:05     -462.973481        0.882357
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   82 20:41:06     -462.985689        0.843543
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   83 20:41:06     -463.004268        0.807082
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   84 20:41:06     -463.016297        0.766580
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   85 20:41:06     -463.031940        0.740477
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   86 20:41:06     -463.043161        0.701536
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   87 20:41:07     -463.057717        0.675211
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   88 20:41:07     -463.068291        0.637645
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   89 20:41:07     -463.081277        0.613486
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   90 20:41:07     -463.091107        0.576234
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   91 20:41:07     -463.102993        0.554373
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   92 20:41:08     -463.112123        0.516660
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   93 20:41:08     -463.122884        0.496728
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   94 20:41:08     -463.131306        0.459477
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   95 20:41:08     -463.141082        0.440296
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   96 20:41:08     -463.148806        0.403274
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   97 20:41:09     -463.157648        0.385458
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   98 20:41:09     -463.164695        0.347971
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   99 20:41:09     -463.172669        0.331604
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  100 20:41:09     -463.179060        0.294070
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  101 20:41:09     -463.186237        0.278422
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  102 20:41:10     -463.220849        0.419996
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  103 20:41:10     -463.227289        0.386212
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  104 20:41:10     -463.257356        0.434182
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  105 20:41:10     -463.267277        0.285720
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  106 20:41:10     -463.277366        0.346357
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  107 20:41:11     -463.286707        0.225322
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  108 20:41:11     -463.293734        0.223435
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  109 20:41:11     -463.304441        0.320072
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  110 20:41:11     -463.315628        0.646994
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  111 20:41:11     -463.358064        1.190119
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  112 20:41:12     -463.387018        1.759279
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  113 20:41:12     -463.409468        2.198531
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  114 20:41:12     -463.459498        1.827035
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  115 20:41:12     -463.511336        1.450581
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  116 20:41:12     -463.630736        1.300056
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  117 20:41:13     -463.858758        1.313545
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  118 20:41:13     -463.980477        1.206361
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  119 20:41:13     -464.098133        2.282594
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  120 20:41:13     -464.214846        0.679653
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  121 20:41:13     -464.245385        0.445831
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  122 20:41:14     -464.311027        0.409445
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  123 20:41:14     -464.296790        0.384834
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  124 20:41:14     -464.332898        0.334061
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  125 20:41:14     -464.324603        0.213326
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  126 20:41:14     -464.335365        0.150922
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  127 20:41:15     -464.343164        0.178195
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  128 20:41:15     -464.308180        0.145699
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  129 20:41:15     -464.334495        0.569909
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  130 20:41:15     -464.378459        0.211376
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  131 20:41:15     -464.354417        0.090735
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  132 20:41:16     -464.354358        0.094855
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  133 20:41:16     -464.329816        0.135739
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  134 20:41:16     -464.359081        0.074632
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  135 20:41:16     -464.359781        0.079920
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  136 20:41:16     -464.346149        0.099730
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  137 20:41:17     -464.351472        0.097404
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  138 20:41:17     -464.364633        0.089006
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  139 20:41:17     -464.377936        0.071520
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  140 20:41:17     -464.382579        0.076348
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  141 20:41:17     -464.375930        0.053523
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  142 20:41:18     -464.367406        0.040769
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  143 20:41:18     -464.363660        0.038803
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  144 20:41:18     -464.364736        0.025902
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  145 20:41:18     -464.367765        0.026509
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  146 20:41:18     -464.370236        0.025467
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  147 20:41:19     -464.370796        0.018025
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  148 20:41:19     -464.370075        0.013127
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  149 20:41:19     -464.369170        0.011216
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:  150 20:41:19     -464.368690        0.008885
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 20:41:19     -464.368690        1.731413
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 20:41:19     -464.453204        1.755788
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 20:41:20     -464.910612        2.028119
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 20:41:20     -465.013658        2.021610
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 20:41:20     -465.187319        1.897749
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 20:41:20     -465.259675        1.700698
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 20:41:20     -465.365039        1.202155
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 20:41:21     -465.424366        0.864151
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 20:41:21     -465.473745        0.774830
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 20:41:21     -465.506536        0.556415
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 20:41:21     -465.530433        0.437271
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 20:41:21     -465.538840        0.232107
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 20:41:22     -465.542337        0.160906
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 20:41:22     -465.544247        0.154338
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 20:41:22     -465.546203        0.147274
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 20:41:22     -465.547806        0.107666
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 20:41:22     -465.548968        0.103725
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 20:41:23     -465.549796        0.088308
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 20:41:23     -465.550474        0.085817
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 20:41:23     -465.550967        0.062634
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 20:41:23     -465.551375        0.069253
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   21 20:41:23     -465.551785        0.062792
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   22 20:41:24     -465.552186        0.069246
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   23 20:41:24     -465.552484        0.049801
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   24 20:41:24     -465.552672        0.033666
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   25 20:41:24     -465.552806        0.040533
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   26 20:41:24     -465.552935        0.045193
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   27 20:41:25     -465.553044        0.032663
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   28 20:41:25     -465.553133        0.023060
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   29 20:41:25     -465.553204        0.024064
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   30 20:41:25     -465.553277        0.029476
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   31 20:41:25     -465.553348        0.027552
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   32 20:41:26     -465.553412        0.018124
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   33 20:41:26     -465.553457        0.017171
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   34 20:41:26     -465.553495        0.018543
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   35 20:41:26     -465.553525        0.014103
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   36 20:41:26     -465.553544        0.012950
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   37 20:41:27     -465.553570        0.015443
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   38 20:41:27     -465.553592        0.014447
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   39 20:41:27     -465.553615        0.015684
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   40 20:41:27     -465.553634        0.011303
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   41 20:41:27     -465.553639        0.006608
+</pre></div>
+</div>
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>np.True_
 </pre></div>
 </div>
 </div>
@@ -3389,22 +4238,17 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
 <p>Use the nudged elastic band method to find the minimum energy path:</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">6. NEB Barrier Calculation (C* + O* → CO*)&quot;</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">7. NEB Barrier Calculation (C* + O* → CO*)&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   Setting up 7-image NEB chain with TS guess in middle...&quot;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   Reaction: C* + O* (initial) → TS → CO* (final)&quot;</span><span class="p">)</span>
 
-<span class="n">n_images</span> <span class="o">=</span> <span class="mi">7</span>
-<span class="n">initial</span> <span class="o">=</span> <span class="n">initial_c_o</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+<span class="n">initial</span> <span class="o">=</span> <span class="n">initial_guess</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
 <span class="n">initial</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;oc20&quot;</span><span class="p">)</span>
 <span class="n">images</span> <span class="o">=</span> <span class="p">[</span><span class="n">initial</span><span class="p">]</span>  <span class="c1"># Start with C* + O*</span>
 
-<span class="c1"># Create images: C*+O* → TS → CO*</span>
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_images</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="n">n_images</span> <span class="o">//</span> <span class="mi">2</span><span class="p">:</span>  <span class="c1"># Middle image</span>
-        <span class="n">image</span> <span class="o">=</span> <span class="n">ts_structure</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">image</span> <span class="o">=</span> <span class="n">initial_c_o</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-    <span class="n">image</span><span class="o">.</span><span class="n">set_pbc</span><span class="p">([</span><span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">,</span> <span class="kc">True</span><span class="p">])</span>
+<span class="n">n_images</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_images</span><span class="p">):</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">initial</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
     <span class="n">image</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;oc20&quot;</span><span class="p">)</span>
     <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
 
@@ -3413,20 +4257,18 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
 <span class="n">images</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">final</span><span class="p">)</span>  <span class="c1"># End with CO*</span>
 
 <span class="c1"># Interpolate with better initial guess</span>
-<span class="n">dyneb</span> <span class="o">=</span> <span class="n">DyNEB</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">climb</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fmax</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+<span class="n">dyneb</span> <span class="o">=</span> <span class="n">DyNEB</span><span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">climb</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">fmax</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
 
 <span class="c1"># Interpolate first half (C*+O* → TS)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Interpolating images...&quot;</span><span class="p">)</span>
-<span class="n">interpolate</span><span class="p">(</span><span class="n">images</span><span class="p">[:</span><span class="n">n_images</span><span class="o">//</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
-<span class="c1"># Interpolate second half (TS → CO*)</span>
-<span class="n">interpolate</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="n">n_images</span><span class="o">//</span><span class="mi">2</span><span class="p">:])</span>
+<span class="n">dyneb</span><span class="o">.</span><span class="n">interpolate</span><span class="p">(</span><span class="s2">&quot;idpp&quot;</span><span class="p">,</span> <span class="n">mic</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="c1"># Optimize</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   Optimizing NEB path (this may take a while)...&quot;</span><span class="p">)</span>
 <span class="n">opt</span> <span class="o">=</span> <span class="n">FIRE</span><span class="p">(</span>
     <span class="n">dyneb</span><span class="p">,</span>
-    <span class="n">trajectory</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s1">&#39;neb.traj&#39;</span><span class="p">),</span>
-    <span class="n">logfile</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s1">&#39;neb.log&#39;</span><span class="p">)</span>
+    <span class="n">trajectory</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;neb.traj&quot;</span><span class="p">),</span>
+    <span class="n">logfile</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;neb.log&quot;</span><span class="p">),</span>
 <span class="p">)</span>
 <span class="n">opt</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="n">relaxation_steps</span><span class="p">)</span>
 
@@ -3436,29 +4278,35 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
 <span class="n">E_barrier</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">energies_rel</span><span class="p">)</span>
 
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   ✓ NEB converged!&quot;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Forward barrier (C*+O* → CO*): </span><span class="si">{</span><span class="n">E_barrier</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV = </span><span class="si">{</span><span class="n">E_barrier</span><span class="o">*</span><span class="mf">96.485</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> kJ/mol&quot;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Reverse barrier (CO* → C*+O*): </span><span class="si">{</span><span class="n">E_barrier</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">delta_E_zpe</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV = </span><span class="si">{</span><span class="p">(</span><span class="n">E_barrier</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">delta_E_zpe</span><span class="p">)</span><span class="o">*</span><span class="mf">96.485</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> kJ/mol&quot;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Paper (Table 5): 153 kJ/mol = 1.59 eV (reverse barrier)&quot;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Difference: </span><span class="si">{</span><span class="nb">abs</span><span class="p">((</span><span class="n">E_barrier</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">delta_E_zpe</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.59</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span>
+    <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Forward barrier (C*+O* → CO*): </span><span class="si">{</span><span class="n">E_barrier</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV = </span><span class="si">{</span><span class="n">E_barrier</span><span class="o">*</span><span class="mf">96.485</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> kJ/mol&quot;</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span>
+    <span class="sa">f</span><span class="s2">&quot;   Reverse barrier (CO* → C*+O*): </span><span class="si">{</span><span class="n">E_barrier</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">energies_rel</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV = </span><span class="si">{</span><span class="p">(</span><span class="n">E_barrier</span><span class="o">-</span><span class="w"> </span><span class="n">energies_rel</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="mf">96.485</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> kJ/mol&quot;</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Paper (Table 5): 153 kJ/mol = 1.59 eV &quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;   Difference: </span><span class="si">{</span><span class="nb">abs</span><span class="p">(</span><span class="n">E_barrier</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.59</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>6. NEB Barrier Calculation (C* + O* → CO*)
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>7. NEB Barrier Calculation (C* + O* → CO*)
    Setting up 7-image NEB chain with TS guess in middle...
    Reaction: C* + O* (initial) → TS → CO* (final)
 
    Interpolating images...
-   Optimizing NEB path (this may take a while)...
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Optimizing NEB path (this may take a while)...
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   ✓ NEB converged!
 
-   Forward barrier (C*+O* → CO*): 2.20 eV = 212.4 kJ/mol
-   Reverse barrier (CO* → C*+O*): 3.34+0.00j eV = 322.3+0.0j kJ/mol
+   Forward barrier (C*+O* → CO*): 1.32 eV = 127.5 kJ/mol
+   Reverse barrier (CO* → C*+O*): 2.91 eV = 280.9 kJ/mol
 
-   Paper (Table 5): 153 kJ/mol = 1.59 eV (reverse barrier)
-   Difference: 1.75 eV
+   Paper (Table 5): 153 kJ/mol = 1.59 eV 
+   Difference: 0.27 eV
 </pre></div>
 </div>
 </div>
@@ -3523,7 +4371,9 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">   Creating NEB path animation...&quot;</span><span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">write</span> <span class="k">as</span> <span class="n">ase_write</span>
 
-<span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;neb_path.gif&quot;</span><span class="p">),</span> <span class="n">images</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;gif&quot;</span><span class="p">)</span>
+<span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">write</span><span class="p">(</span>
+    <span class="nb">str</span><span class="p">(</span><span class="n">output_dir</span> <span class="o">/</span> <span class="n">part_dirs</span><span class="p">[</span><span class="s2">&quot;part6&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="s2">&quot;neb_path.gif&quot;</span><span class="p">),</span> <span class="n">images</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">&quot;gif&quot;</span>
+<span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;   → Saved as neb_path.gif&quot;</span><span class="p">)</span>
 
 <span class="c1"># Visualize key structures</span>
@@ -3558,18 +4408,15 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
   return np.asarray(x, float)
 </pre></div>
 </div>
-<img alt="../_images/04a6175f7d0ace1759321e173e9d0f70ea71a42596519906c2fe83bb90f49d88.png" src="../_images/04a6175f7d0ace1759321e173e9d0f70ea71a42596519906c2fe83bb90f49d88.png" />
-<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:matplotlib.animation:MovieWriter ffmpeg unavailable; using Pillow instead.
-</pre></div>
-</div>
+<img alt="../_images/288ed33324a3939ac622db19f99cbe2190d551da004fa560e84617dd850b24c4.png" src="../_images/288ed33324a3939ac622db19f99cbe2190d551da004fa560e84617dd850b24c4.png" />
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   Creating NEB path animation...
 </pre></div>
 </div>
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>   → Saved as neb_path.gif
 </pre></div>
 </div>
-<img alt="../_images/7c9a0361aa3e0d679cd3ed70993ce9e7a893842444c428f9700b24bee1d592f8.png" src="../_images/7c9a0361aa3e0d679cd3ed70993ce9e7a893842444c428f9700b24bee1d592f8.png" />
-<img alt="../_images/aeacb13c8aa30ce77a20abfb098074bb03b638085cfb097e2f10f199aed056f2.png" src="../_images/aeacb13c8aa30ce77a20abfb098074bb03b638085cfb097e2f10f199aed056f2.png" />
+<img alt="../_images/e12cdf0965dcb77c0925bec93790b3ba5ec6f5631fac2bcfe2caf1529af4ad4c.png" src="../_images/e12cdf0965dcb77c0925bec93790b3ba5ec6f5631fac2bcfe2caf1529af4ad4c.png" />
+<img alt="../_images/cf42bdb96cb8fc1c67cc91c28a6e49a5635faa70b1bc9a4a0f25b9acba874a5d.png" src="../_images/cf42bdb96cb8fc1c67cc91c28a6e49a5635faa70b1bc9a4a0f25b9acba874a5d.png" />
 <div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>✓ NEB analysis complete!
 </pre></div>
 </div>
@@ -3660,7 +4507,17 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
 </section>
 <section id="recommended-workflow-for-new-systems">
 <h3>Recommended Workflow for New Systems<a class="headerlink" href="#recommended-workflow-for-new-systems" title="Link to this heading">#</a></h3>
-</section>
+<pre  class="mermaid">
+        graph TD
+    A[Optimize Bulk] --&gt; B[Calculate Surface Energies]
+    B --&gt; C[Wulff Construction]
+    C --&gt; D[Low-Coverage Adsorption]
+    D --&gt; E{Coverage Important?}
+    E --&gt;|Yes| F[Coverage Study]
+    E --&gt;|No| G[Reaction Barriers]
+    F --&gt; G
+    G --&gt; H[Microkinetic Modeling]
+    </pre></section>
 <section id="accuracy-considerations">
 <h3>Accuracy Considerations<a class="headerlink" href="#accuracy-considerations" title="Link to this heading">#</a></h3>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -3986,6 +4843,24 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="uma_tutorial.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">UMA Intro Tutorial</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../core/generative_models.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Generative Models</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               
@@ -4068,7 +4943,7 @@ MINMODE:DISP:      97      0.12718724     -0.12416525      0.02867346
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-3b-calculate-c-and-o-energies-separately">Step 3b: Calculate C* and O* Energies Separately</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-4-calculate-reaction-energy-with-zpe">Step 4: Calculate Reaction Energy with ZPE</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-5-calculate-co-adsorption-energy-bonus">Step 5: Calculate CO Adsorption Energy (Bonus)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-6-find-transition-state-with-dimer-method">Step 6: Find Transition State with Dimer Method</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-6-find-guesses-for-nearby-initial-and-final-states-for-the-reaction">Step 6: Find guesses for nearby initial and final states for the reaction</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-7-run-neb-to-find-activation-barrier">Step 7: Run NEB to Find Activation Barrier</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-8-visualize-neb-path-and-key-structures">Step 8: Visualize NEB Path and Key Structures</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id15">Explore on Your Own</a></li>

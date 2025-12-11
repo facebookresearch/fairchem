@@ -1,4 +1,0 @@
-# UMA tutorials
-
-```{tableofcontents}
-```
