@@ -12,7 +12,7 @@ kernelspec:
   language: python
 ---
 
-# Tutorial: Catalyst Surface Analysis with Machine Learning Potentials
+# UMA Catalysis Tutorial
 
 Author: Zack Ulissi (Meta, CMU), with help from AI coding agents / LLMs
 
@@ -63,7 +63,7 @@ You need a Huggingface account, request access to https://huggingface.co/faceboo
 
 Permissions: Read access to contents of all public gated repos you can access
 
-Then, add the token as an environment variable (using `huggingface-cli login`:
+Then, add the token as an environment variable using `huggingface-cli login`:
 
 ```{code-cell} ipython3
 :tags: [skip-execution]
@@ -92,7 +92,7 @@ Here we install some sub-packages. This can take 2-5 minutes to run.
 ```{code-cell} ipython3
 :tags: [skip-execution]
 
-! pip install fairchem-core fairchem-data-oc fairchem-applications-cattsunami x3dase
+! pip install fairchem-core[docs] fairchem-data-oc fairchem-applications-cattsunami x3dase
 ```
 
 ```{code-cell} ipython3
@@ -124,7 +124,7 @@ from ase.mep import interpolate
 from ase.mep.dyneb import DyNEB
 from ase.optimize import FIRE, LBFGS
 from ase.vibrations import Vibrations
-from ase.visualize.plot import plot_atoms
+from ase.visualize import view
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.data.oc.core import (
     Adsorbate,
@@ -233,6 +233,14 @@ ase.io.write(str(output_dir / part_dirs["part1"] / "ni_bulk_relaxed.cif"), ni_bu
 
 # Store results for later use
 a_opt = a_optimized
+```
+
+```{admonition} Missing UMA access?
+:class: dropdown, tip
+
+Don't have access to UMA yet? You can still explore this calculation!
+
+[Download example Ni bulk structure](example_configs/ni_bulk.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts properties for bulk Ni.
 ```
 
 ```{admonition} Understanding the Results
@@ -475,6 +483,14 @@ for facet in facets:
     lit = lit_values[facet]
     diff = abs(calc - lit) / lit * 100
     print(f"{facet_str:<10} {calc:>8.2f} J/m²  (Lit: {lit:.2f}, Δ={diff:.1f}%)")
+```
+
+```{admonition} Missing UMA access?
+:class: dropdown, tip
+
+Don't have access to UMA yet? You can still explore this calculation!
+
+[Download example Ni(111) slab structure](example_configs/ni111_slab.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts energies for Ni surfaces.
 ```
 
 ```{admonition} Comparison with Paper (Table 1)
@@ -886,12 +902,18 @@ Visualize the best configuration and compare with literature:
 
 ```{code-cell} ipython3
 print("\n7. Visualizing best H* configuration...")
-fig, ax = plt.subplots(1, 1, figsize=(8, 6))
-plot_atoms(slab_with_h, ax, radii=0.5, rotation=("0x,0y,0z"))
-ax.set_title(f"Best H* Configuration: E_ads = {E_ads:.2f} eV", fontsize=14)
-plt.savefig("h_adsorption_best.png", dpi=300, bbox_inches="tight")
-plt.show()
+view(slab_with_h, viewer='x3d')
+```
 
+```{admonition} Missing UMA access?
+:class: dropdown, tip
+
+Don't have access to UMA yet? You can still explore this calculation!
+
+[Download example H on Ni(111) structure](example_configs/h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model predicts adsorption properties.
+```
+
+```{code-cell} ipython3
 # 6. Compare with literature
 print(f"\n{'='*60}")
 print("Comparison with Literature:")
@@ -914,7 +936,7 @@ For H adsorption, D3 corrections are typically small (<0.1 eV) because H forms s
 
 ### Explore on Your Own
 
-1. **Site preference**: Identify which site (fcc, hcp, bridge, top) the H prefers. Visualize with `plot_atoms()`.
+1. **Site preference**: Identify which site (fcc, hcp, bridge, top) the H prefers. Visualize with `view(atoms, viewer='x3d')`.
 2. **Coverage effects**: Place 2 H atoms on the slab. How does binding change with separation?
 3. **Different facets**: Compare H adsorption on (100) and (110) surfaces. Which is strongest?
 4. **Subsurface H**: Place H below the surface layer. Is it stable?
@@ -1090,15 +1112,8 @@ for n_h in coverages_to_test:
     print(f"   → E_ads/H: {E_ads_per_h:.2f} eV")
 
     # Visualize best configuration at this coverage
-    fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-    plot_atoms(best_config, ax, radii=0.5, rotation=("10x,10y,0z"))
-    ax.set_title(f"{n_h} H atoms (θ = {coverage:.2f} ML)", fontsize=12)
-    plt.savefig(
-        str(output_dir / part_dirs["part5"] / f"coverage_{n_h}H.png"),
-        dpi=200,
-        bbox_inches="tight",
-    )
-    plt.close()
+    print(f"   Visualizing configuration with {n_h} H atoms...")
+    view(best_config, viewer='x3d')
 
 print(f"\n✓ Completed coverage study: {len(coverages)} data points")
 ```
@@ -1159,6 +1174,14 @@ plt.savefig(str(output_dir / part_dirs["part5"] / "coverage_dependence.png"), dp
 plt.show()
 
 print("\n✓ Coverage dependence analysis complete!")
+```
+
+```{admonition} Missing UMA access?
+:class: dropdown, tip
+
+Don't have access to UMA yet? You can still explore this calculation!
+
+[Download example multiple H on Ni(111) structure](example_configs/4h_on_ni111.xyz) and test it in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) to see how the model handles coverage-dependent binding.
 ```
 
 ```{admonition} Comparison with Paper
@@ -1298,6 +1321,10 @@ print(f"      Total: {E_final_co:.2f} eV")
 # Save best CO state
 ase.io.write(str(output_dir / part_dirs["part6"] / "co_final_best.traj"), final_co)
 print("   ✓ Best CO* structure saved")
+
+# Visualize best CO* structure
+print("\n   Visualizing best CO* structure...")
+view(final_co, viewer='x3d')
 ```
 
 ### Step 3: Generate and Relax Initial State (C* + O*)
@@ -1373,6 +1400,10 @@ print(f"      Total: {E_initial_c_o:.2f} eV")
 # Save best C+O state
 ase.io.write(str(output_dir / part_dirs["part6"] / "co_initial_best.traj"), initial_c_o)
 print("   ✓ Best C*+O* structure saved")
+
+# Visualize best C*+O* structure
+print("\n   Visualizing best C*+O* structure...")
+view(initial_c_o, viewer='x3d')
 ```
 
 ### Step 3b: Calculate C* and O* Energies Separately
@@ -1455,6 +1486,10 @@ print(f"      Total: {E_c:.2f} eV")
 # Save best C state
 ase.io.write(str(output_dir / part_dirs["part6"] / "c_best.traj"), c_ads)
 
+# Visualize best C* structure
+print("\n   Visualizing best C* structure...")
+view(c_ads, viewer='x3d')
+
 # Generate O* configuration
 print("\n   Generating O* configurations...")
 multi_ads_config_o = MultipleAdsorbateSlabConfig(
@@ -1500,6 +1535,10 @@ print(f"      Total: {E_o:.2f} eV")
 
 # Save best O state
 ase.io.write(str(output_dir / part_dirs["part6"] / "o_best.traj"), o_ads)
+
+# Visualize best O* structure
+print("\n   Visualizing best O* structure...")
+view(o_ads, viewer='x3d')
 
 # Calculate combined energy for separate C* and O*
 E_initial_c_o_separate = E_c + E_o
@@ -1854,26 +1893,24 @@ ase.io.write(
 print("   → Saved as neb_path.gif")
 
 # Visualize key structures
-fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-structures = [
-    (initial_c_o, "Initial: C* + O*", 0),
-    (images[ts_idx], f"TS (Image {ts_idx})", 1),
-    (final_co, "Final: CO*", 2),
-]
+print("\n   Visualizing initial state (C* + O*)...")
+view(initial_c_o, viewer='x3d')
 
-for atoms, title, idx in structures:
-    plot_atoms(atoms, axes[idx], radii=0.5, rotation=("10x,10y,0z"))
-    axes[idx].set_title(title, fontsize=12, fontweight="bold")
+print("\n   Visualizing transition state...")
+view(images[ts_idx], viewer='x3d')
 
-plt.tight_layout()
-plt.savefig(
-    str(output_dir / part_dirs["part6"] / "neb_structures.png"),
-    dpi=300,
-    bbox_inches="tight",
-)
-plt.show()
+print("\n   Visualizing final state (CO*)...")
+view(final_co, viewer='x3d')
 
 print("\n✓ NEB analysis complete!")
+```
+
+```{admonition} Missing UMA access?
+:class: dropdown, tip
+
+Don't have access to UMA yet? You can still explore this calculation!
+
+[Download example CO on Ni(111) structure](example_configs/co_on_ni111.xyz) and [Download C+O on Ni(111) structure](example_configs/c_o_on_ni111.xyz) to test in the [UMA demo (no login required)](https://facebook-fairchem-uma-demo.hf.space/) and explore the reaction pathway.
 ```
 
 ```{admonition} Comparison with Paper (Tables 4 & 5)
