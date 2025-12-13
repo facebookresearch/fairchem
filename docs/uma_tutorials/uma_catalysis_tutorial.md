@@ -1756,11 +1756,17 @@ initial_guess.constraints += [
 ]
 
 
-opt = LBFGS(
-    initial_guess,
-    trajectory=output_dir / part_dirs["part6"] / "initial_guess_with_constraint.traj",
-)
-opt.run(fmax=0.01)
+try:
+    opt = LBFGS(
+        initial_guess,
+        trajectory=output_dir / part_dirs["part6"] / "initial_guess_with_constraint.traj",
+    )
+    opt.run(fmax=0.01)
+except RuntimeError:
+    # The FixBondLength constraint is sometimes a little finicky,
+    # but it's ok if it doesn't finish as it's just an initial guess
+    # for the next step
+    pass
 
 # Now that we have a guess, re-relax without the constraints
 initial_guess.constraints = initial_guess.constraints[:-1]
@@ -2015,7 +2021,7 @@ graph TD
 
 - **UMA Paper**: [Wood et al. 2025](https://arxiv.org/abs/2506.23971)
 - **OMat24 Paper**: [Barroso-Luque et al., 2024](https://arxiv.org/abs/2410.12771)
-- **OC20 Dataset**: [Chanussot et al., Nature, 2021](https://www.nature.com/articles/s41586-021-03828-1)
+- **OC20 Dataset**: [Chanussot et al., ACS Catalysis, 2021](https://pubs.acs.org/doi/full/10.1021/acscatal.0c04525)
 - **ASE Tutorial**: [https://wiki.fysik.dtu.dk/ase/](https://wiki.fysik.dtu.dk/ase/)
 ---
 
