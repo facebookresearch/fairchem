@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 import torch
 from ase import Atoms
-from ase.build import bulk, molecule
+from ase.build import molecule
 from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
@@ -333,28 +333,36 @@ def test_simple_systems_nopbc(
         )
 
 
-@pytest.mark.parametrize("atoms", [bulk("Cu", "fcc", a=5.0)])
+@pytest.mark.parametrize(
+    "atoms",
+    [FaceCenteredCubic("Cu", size=(2, 2, 2), latticeconstant=5.0), molecule("H2O")],
+)
 def test_pymatgen_vs_internal_graph(atoms):
-    radius = 20
-    max_neigh = 1000
-    atoms = Atoms(symbols=atoms.get_chemical_symbols(), positions=atoms.get_positions())
+    radius = 10
+    max_neigh = 200
 
     for radius_pbc_version in (1, 2):
         for pbc in [True, False]:
+            atoms_copy = Atoms(
+                symbols=atoms.get_chemical_symbols(),
+                positions=atoms.get_positions().copy(),
+                cell=atoms.get_cell().copy()
+                if atoms.cell is not None
+                and np.linalg.det(atoms.get_cell().copy()) != 0
+                else np.eye(3) * 5.0,
+                pbc=atoms.get_pbc().copy(),
+            )
             if pbc:
-                atoms.set_pbc([True, True, True])
-                if atoms.cell is None:
-                    atoms.set_cell(np.eye(3) * 5.0)
+                atoms_copy.set_pbc([True, True, True])
             else:
-                atoms.cell = None
-                atoms.set_pbc([False, False, False])
+                atoms_copy.set_pbc([False, False, False])
             for unwrap in [True, False]:
                 if unwrap and pbc:
-                    atoms.positions = -atoms.positions
+                    atoms_copy.positions = -atoms_copy.positions
 
                 # Use pymatgen graph generation
                 data = AtomicData.from_ase(
-                    atoms,
+                    atoms_copy,
                     max_neigh=max_neigh,
                     radius=radius,
                     r_edges=True,
@@ -378,6 +386,8 @@ def test_pymatgen_vs_internal_graph(atoms):
                     graph_dict["edge_index"],
                     graph_dict["cell_offsets"],
                 )
+
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "num_atoms, num_partitions, pbc, device",
