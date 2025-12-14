@@ -19,7 +19,8 @@ from ase.io import read
 from ase.lattice.cubic import FaceCenteredCubic
 
 from fairchem.core.datasets import data_list_collater
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 
@@ -325,8 +326,8 @@ def test_simple_systems_nopbc(
 
         assert (
             len(
-                set(tuple(x) for x in edge_index.T.tolist())
-                - set(tuple(x) for x in expected_edge_index.T.tolist())
+                {tuple(x) for x in edge_index.T.tolist()}
+                - {tuple(x) for x in expected_edge_index.T.tolist()}
             )
             == 0
         )
@@ -377,3 +378,197 @@ def test_pymatgen_vs_internal_graph(atoms):
                     graph_dict["edge_index"],
                     graph_dict["cell_offsets"],
                 )
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_atoms, num_partitions, pbc, device",
+    [
+        (5, 2, False, "cpu"),
+        (20, 4, True, "cpu"),
+        (30, 3, True, "cpu"),
+        (101, 8, True, "cpu"),
+        (101, 2, False, "cuda"),
+        (105, 2, True, "cuda"),
+    ],
+)
+def test_partitioned_radius_graph_pbc(
+    num_atoms: int, num_partitions: int, pbc: bool, device: str
+):
+    radius = 6
+    max_neighbors = 300
+    pbc_tensor = torch.BoolTensor([pbc, pbc, pbc]).to(device)
+    rgbv2 = partial(
+        radius_graph_pbc_v2,
+        radius=radius,
+        max_num_neighbors_threshold=max_neighbors,
+        pbc=pbc_tensor,
+    )
+    atoms = get_fcc_carbon_xtal(num_atoms)
+    data = AtomicData.from_ase(atoms).to(device)
+    batch = data_list_collater([data])
+    edge_index_no_partition, _, _ = rgbv2(batch)
+    edge_index_list = []
+    for i in range(num_partitions):
+        batch["node_partition"] = torch.tensor_split(
+            torch.arange(num_atoms, device=device), num_partitions
+        )[i]
+        edge_index_part, _, _ = rgbv2(batch)
+        edge_index_list.append(edge_index_part)
+
+    # Verify that combined partitioned edges match non-partitioned edges
+    combined_edges = torch.cat(edge_index_list, dim=1)
+
+    # Convert edge pairs to sets for comparison (order doesn't matter)
+    no_partition_pairs = {tuple(edge.tolist()) for edge in edge_index_no_partition.T}
+    combined_pairs = {tuple(edge.tolist()) for edge in combined_edges.T}
+    assert (
+        no_partition_pairs == combined_pairs
+    ), "Partitioned edges don't match non-partitioned edges"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_systems, num_partitions, pbc, device",
+    [
+        (2, 2, True, "cpu"),
+    ],
+)
+def test_generate_graph_h2o_partition(
+    num_systems: int, num_partitions: int, pbc: bool, device: str
+):
+    radius = 6
+    max_neighbors = 300
+    # Create H2O molecule
+    # Create H2O and O molecules batch
+    h2o = molecule("H2O")
+    h2o.info.update({"charge": 0, "spin": 1})
+    h2o.pbc = True
+
+    o_atom = molecule("O")
+    o_atom.info.update({"charge": 0, "spin": 2})  # triplet oxygen
+    o_atom.pbc = True
+
+    h2o_data = AtomicData.from_ase(
+        h2o,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    o_data = AtomicData.from_ase(
+        o_atom,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch1 = atomicdata_list_to_batch([h2o_data, o_data]).to(device)
+
+    generate_graph_partial = partial(
+        generate_graph,
+        cutoff=radius,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=2,
+        pbc=batch1.pbc,
+    )
+    no_partition_graph_data = generate_graph_partial(batch1)
+    edge_index_no_partition = no_partition_graph_data["edge_index"]
+
+    edge_index_list = []
+    for i in range(num_partitions):
+        batch1["node_partition"] = torch.tensor_split(
+            torch.arange(len(batch1.atomic_numbers), device=device), num_partitions
+        )[i]
+        # breakpoint()
+        graph_dict = generate_graph_partial(batch1)
+        edge_index_list.append(graph_dict["edge_index"])
+    print(f"edge_index_list: {edge_index_list}")
+    combined_edges = torch.cat(edge_index_list, dim=1)
+    assert combined_edges.shape[1] == edge_index_no_partition.shape[1]
+
+    # Convert edge pairs to sets for comparison (order doesn't matter)
+    no_partition_pairs = {tuple(edge.tolist()) for edge in edge_index_no_partition.T}
+    combined_pairs = {tuple(edge.tolist()) for edge in combined_edges.T}
+    assert (
+        no_partition_pairs == combined_pairs
+    ), "Partitioned edges don't match non-partitioned edges"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_atoms, num_systems, num_partitions, radius, max_neighbors, device",
+    [
+        (10, 2, 1, 6, 300, "cpu"),
+        (10, 2, 2, 6, 300, "cpu"),
+        (10, 4, 4, 6, 300, "cpu"),
+        (10, 4, 4, 6, 30, "cpu"),
+        (10, 4, 4, 5, 20, "cpu"),
+        (34, 2, 2, 6, 1, "cpu"),
+        (100, 7, 3, 6, 300, "cpu"),
+        (100, 7, 1, 6, 300, "cuda"),
+        (100, 7, 2, 6, 300, "cuda"),
+    ],
+)
+def test_generate_graph_batch_partition(
+    num_atoms: int,
+    num_systems: int,
+    num_partitions: int,
+    radius: float,
+    max_neighbors: int,
+    device: str,
+):
+    # Convert to AtomicData
+    data_list = []
+    for i in range(num_systems):
+        # pick a random lattice constant, this ensures that we have mixed cells in the batch too
+        lattice_constant = np.random.uniform(3.7, 3.9)
+        # add i to num_atoms to ensure different sizes
+        atoms = get_fcc_carbon_xtal(num_atoms + i, lattice_constant=lattice_constant)
+        data_list.append(
+            AtomicData.from_ase(
+                atoms,
+                task_name="omol",
+                r_data_keys=["spin", "charge"],
+            ).to(device)
+        )
+    batch = atomicdata_list_to_batch(data_list)
+
+    generate_graph_partial = partial(
+        generate_graph,
+        cutoff=radius,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=2,
+        pbc=batch.pbc,
+    )
+    no_partition_graph_data = generate_graph_partial(batch)
+    edge_index_no_partition = no_partition_graph_data["edge_index"]
+    edge_distance_no_partition = no_partition_graph_data["edge_distance"]
+    edge_distance_vec_no_partition = no_partition_graph_data["edge_distance_vec"]
+
+    edge_index_list = []
+    edge_distance_list = []
+    edge_distance_vecs = []
+    for i in range(num_partitions):
+        batch["node_partition"] = torch.tensor_split(
+            torch.arange(len(batch.atomic_numbers), device=device), num_partitions
+        )[i]
+        graph_dict = generate_graph_partial(batch)
+        edge_index_list.append(graph_dict["edge_index"])
+        edge_distance_list.append(graph_dict["edge_distance"])
+        edge_distance_vecs.append(graph_dict["edge_distance_vec"])
+
+    combined_edges = torch.cat(edge_index_list, dim=1)
+    combined_distances = torch.cat(edge_distance_list, dim=0)
+    combined_distance_vecs = torch.cat(edge_distance_vecs, dim=0)
+    assert combined_edges.shape[1] == edge_index_no_partition.shape[1]
+    assert combined_distances.shape[0] == edge_distance_no_partition.shape[0]
+    assert combined_distance_vecs.shape[0] == edge_distance_vec_no_partition.shape[0]
+
+    # Convert edge pairs to sets for comparison (order doesn't matter)
+    no_partition_pairs = {tuple(edge.tolist()) for edge in edge_index_no_partition.T}
+    combined_pairs = {tuple(edge.tolist()) for edge in combined_edges.T}
+    assert (
+        no_partition_pairs == combined_pairs
+    ), "Partitioned edges don't match non-partitioned edges"
+
+    assert torch.allclose(combined_distances, edge_distance_no_partition)
+    assert torch.allclose(combined_distance_vecs, edge_distance_vec_no_partition)

@@ -27,11 +27,8 @@ parts:
   - file: uma_tutorials/summary
     sections:
     - file: uma_tutorials/uma_tutorial
-  - file: core/uma_examples/summary
-    sections:
-    - file: core/uma_examples/uma_tutorial
+    - file: uma_tutorials/uma_catalysis_tutorial
   - file: core/generative_models
-
 - caption: Molecules & Molecular Crystals
   chapters:
   - file: molecules/datasets/summary
@@ -74,7 +71,7 @@ parts:
   - file: inorganic_materials/models
   - file: inorganic_materials/examples_tutorials/summary
     sections:
-    - file: inorganic_materials/examples_tutorials/bulk_stability
+    - file: inorganic_materials/examples_tutorials/formation_energy
     - file: inorganic_materials/examples_tutorials/phonons
     - file: inorganic_materials/examples_tutorials/elastic
   - file: inorganic_materials/FAQ
