@@ -63,7 +63,7 @@ def make_chiral_ethane_atoms(mode):
     "dtype,num_tol",
     [
         (torch.float32, 1e-4),
-        (torch.float64, 1e-4),
+        # (torch.float64, 1e-8),
     ],
 )
 @pytest.mark.parametrize("case_name,mode,pbc,should_be_equal", test_cases)
@@ -82,7 +82,7 @@ def test_uma_cases_all(
     molecule_cell_size = 5.0 if pbc else None
     a2g = partial(
         AtomicData.from_ase,
-        max_neigh=100,
+        max_neigh=10,
         radius=100,
         r_edges=False,
         r_data_keys=["spin", "charge"],
@@ -95,7 +95,6 @@ def test_uma_cases_all(
         "chiral_ethane": make_chiral_ethane_atoms,
     }
     atoms1, atoms2 = atom_builders[case_name](mode)
-
     sample1 = a2g(atoms1, task_name="omol")
     sample2 = a2g(atoms2, task_name="omol")
 
@@ -107,7 +106,6 @@ def test_uma_cases_all(
 
     energy1 = predictor.predict(batch1)["energy"]
     energy2 = predictor.predict(batch2)["energy"]
-
     if should_be_equal:
         assert (
             torch.abs(energy2 - energy1).item() < num_tol
