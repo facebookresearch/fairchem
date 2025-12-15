@@ -7,7 +7,7 @@ torch==2.8.0
 torchtnt==0.2.4
 numba==0.62.1
 numpy==2.2.5
-scikit-learn==1.7.2
+scikit-learn==1.8.0
 lmdb==1.7.3
 pymatgen==v2025.10.7
 ray[serve]==2.52.1
