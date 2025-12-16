@@ -270,6 +270,7 @@ def ligand_pocket(orca_results, mlip_results):
     forces_mae = 0
     interaction_energy_mae = 0
     interaction_energy_mae_dist = []
+    ids = []
     interaction_forces_mae = 0
     orca_interaction_energy, orca_interaction_forces = interaction_energy_and_forces(
         orca_results, "ligand_pocket"
@@ -293,6 +294,7 @@ def ligand_pocket(orca_results, mlip_results):
             orca_interaction_energy[identifier] - mlip_interaction_energy[identifier]
         )
         interaction_energy_mae_dist.append(_interaction_energy_mae)
+        ids.append(identifier)
         interaction_energy_mae += _interaction_energy_mae
         interaction_forces_mae += np.sum(
             np.abs(
@@ -308,6 +310,7 @@ def ligand_pocket(orca_results, mlip_results):
         "interaction_energy_mae": interaction_energy_mae / len(orca_results),
         "interaction_forces_mae": interaction_forces_mae / ixn_force_denom,
         "interaction_energy_mae_dist": interaction_energy_mae_dist,
+        "ids": ids,
     }
     assert np.isclose(
         sum(interaction_energy_mae_dist) / len(orca_results),
@@ -331,6 +334,7 @@ def ligand_strain(orca_results, mlip_results):
     processed_mlip_results = ligand_strain_processing(mlip_results)
     strain_energy_mae = 0
     strain_energy_mae_dist = []
+    ids = []
     global_min_rmsd = 0
     for identifier in orca_results:
         _strain_energy_mae = abs(
@@ -338,6 +342,7 @@ def ligand_strain(orca_results, mlip_results):
             - processed_mlip_results[identifier]["strain_energy"]
         )
         strain_energy_mae_dist.append(_strain_energy_mae)
+        ids.append(identifier)
         strain_energy_mae += _strain_energy_mae
         global_min_rmsd += rmsd(
             processed_orca_results[identifier]["global_min"]["final"]["atoms"],
@@ -348,6 +353,7 @@ def ligand_strain(orca_results, mlip_results):
         "strain_energy_mae": strain_energy_mae / len(orca_results),
         "global_min_rmsd": global_min_rmsd / len(orca_results),
         "strain_energy_mae_dist": strain_energy_mae_dist,
+        "ids": ids,
     }
     assert (
         sum(strain_energy_mae_dist) / len(orca_results) == results["strain_energy_mae"]
@@ -369,6 +375,7 @@ def geom_conformers(orca_results, mlip_results):
     ensemble_rmsd = 0
     deltaE_mae = 0
     deltaE_mae_dist = []
+    ids = []
     for family_identifier, orca_structs in orca_results.items():
         mlip_structs = mlip_results[family_identifier]
         mapping, cost_vector = rmsd_mapping(orca_structs, mlip_structs)
@@ -394,11 +401,13 @@ def geom_conformers(orca_results, mlip_results):
             deltaE_mae_system += _deltaE_mae
             deltaE_mae += _deltaE_mae
         deltaE_mae_dist.append(deltaE_mae_system)
+        ids.append(family_identifier)
 
     results = {
         "ensemble_rmsd": ensemble_rmsd / len(orca_results),
         "deltaE_mae": deltaE_mae / len(orca_results),
         "deltaE_mae_dist": deltaE_mae_dist,
+        "ids": ids,
     }
     assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
     return results
@@ -417,6 +426,8 @@ def protonation_energies(orca_results, mlip_results):
     """
     deltaE_mae = 0
     deltaE_mae_dist = []
+    deltaE_denom = 0
+    ids = []
     tot_rmsd = 0
     for identifier, orca_structs in orca_results.items():
         mlip_structs = mlip_results[identifier]
@@ -439,14 +450,18 @@ def protonation_energies(orca_results, mlip_results):
             _deltaE_mae = abs(orca_deltaE - mlip_deltaE) / len(one_prot_diff_name_pairs)
             _deltaE_mae_system += _deltaE_mae
             deltaE_mae += _deltaE_mae
-        deltaE_mae_dist.append(_deltaE_mae_system)
+        if one_prot_diff_name_pairs:
+            deltaE_mae_dist.append(_deltaE_mae_system)
+            ids.append(identifier)
+            deltaE_denom += 1
 
     results = {
-        "deltaE_mae": deltaE_mae / len(orca_results),
+        "deltaE_mae": deltaE_mae / deltaE_denom,
         "rmsd": tot_rmsd / len(orca_results),
         "deltaE_mae_dist": deltaE_mae_dist,
+        "ids": ids,
     }
-    assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
+    assert np.isclose(sum(deltaE_mae_dist) / deltaE_denom, results["deltaE_mae"])
     return results
 
 
@@ -467,6 +482,7 @@ def unoptimized_ie_ea(orca_results, mlip_results):
     force_denom = 0
     deltaE_mae = 0
     deltaE_mae_dist = []
+    ids = []
     deltaF_mae = 0
     deltaF_denom = 0
     orca_deltaE, orca_deltaF = charge_deltas(orca_results)
@@ -515,6 +531,7 @@ def unoptimized_ie_ea(orca_results, mlip_results):
                 deltaF_denom += 3 * len(orca_deltaF[identifier][tag][spin])
         energy_mae_dist.append(_energy_mae_system)
         deltaE_mae_dist.append(_deltaE_mae_system)
+        ids.append(identifier)
 
     results = {
         "energy_mae": energy_mae / len(orca_results),
@@ -523,6 +540,7 @@ def unoptimized_ie_ea(orca_results, mlip_results):
         "deltaF_mae": deltaF_mae / deltaF_denom,
         "energy_mae_dist": energy_mae_dist,
         "deltaE_mae_dist": deltaE_mae_dist,
+        "ids": ids,
     }
     assert np.isclose(sum(energy_mae_dist) / len(orca_results), results["energy_mae"])
     assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
@@ -679,6 +697,7 @@ def unoptimized_spin_gap(orca_results, mlip_results):
     forces_mae = 0
     deltaE_mae = 0
     deltaE_mae_dist = []
+    ids = []
     deltaF_mae = 0
     force_denom = 0
     deltaF_denom = 0
@@ -715,6 +734,7 @@ def unoptimized_spin_gap(orca_results, mlip_results):
             deltaF_denom += 3 * len(orca_deltaF[identifier][spin])
         energy_mae_dist.append(_energy_mae_system)
         deltaE_mae_dist.append(_deltaE_mae_system)
+        ids.append(identifier)
 
     results = {
         "energy_mae": energy_mae / len(orca_results),
@@ -723,6 +743,7 @@ def unoptimized_spin_gap(orca_results, mlip_results):
         "deltaF_mae": deltaF_mae / deltaF_denom,
         "energy_mae_dist": energy_mae_dist,
         "deltaE_mae_dist": deltaE_mae_dist,
+        "ids": ids,
     }
     assert np.isclose(sum(energy_mae_dist) / len(orca_results), results["energy_mae"])
     assert np.isclose(sum(deltaE_mae_dist) / len(orca_results), results["deltaE_mae"])
