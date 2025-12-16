@@ -228,9 +228,9 @@ def ligand_strain_processing(results):
     return processed_results
 
 
-def get_one_prot_diff_name_pairs(names):
+def get_prot_diff_name_pairs(names):
     """
-    Get all pairs of names that have a charge difference of 1.
+    Get all pairs of names that have a charge difference of at least 1.
 
     Assumes that the names are in the format "name_charge_spin"
     """
@@ -238,7 +238,7 @@ def get_one_prot_diff_name_pairs(names):
     for name0, name1 in itertools.combinations(names, 2):
         name0_charge = int(name0.split("_")[-2])
         name1_charge = int(name1.split("_")[-2])
-        if abs(name0_charge - name1_charge) == 1:
+        if abs(name0_charge - name1_charge) >= 1:
             name_pairs.append((name0, name1))
     return name_pairs
 
@@ -431,14 +431,14 @@ def protonation_energies(orca_results, mlip_results):
     tot_rmsd = 0
     for identifier, orca_structs in orca_results.items():
         mlip_structs = mlip_results[identifier]
-        one_prot_diff_name_pairs = get_one_prot_diff_name_pairs(list(orca_structs))
+        prot_diff_name_pairs = get_prot_diff_name_pairs(list(orca_structs))
         for name, orca_struct in orca_structs.items():
             tot_rmsd += rmsd(
                 orca_struct["final"]["atoms"],
                 mlip_structs[name]["final"]["atoms"],
             ) / len(orca_structs)
         _deltaE_mae_system = 0
-        for name0, name1 in one_prot_diff_name_pairs:
+        for name0, name1 in prot_diff_name_pairs:
             orca_deltaE = (
                 orca_structs[name0]["final"]["energy"]
                 - orca_structs[name1]["final"]["energy"]
@@ -447,10 +447,10 @@ def protonation_energies(orca_results, mlip_results):
                 mlip_structs[name0]["final"]["energy"]
                 - mlip_structs[name1]["final"]["energy"]
             )
-            _deltaE_mae = abs(orca_deltaE - mlip_deltaE) / len(one_prot_diff_name_pairs)
+            _deltaE_mae = abs(orca_deltaE - mlip_deltaE) / len(prot_diff_name_pairs)
             _deltaE_mae_system += _deltaE_mae
             deltaE_mae += _deltaE_mae
-        if one_prot_diff_name_pairs:
+        if prot_diff_name_pairs:
             deltaE_mae_dist.append(_deltaE_mae_system)
             ids.append(identifier)
             deltaE_denom += 1
