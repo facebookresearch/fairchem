@@ -1,4 +1,4 @@
-# Batched Atomic Simulations with an InferenceBatcher
+# Batched atomic simulations with an `InferenceBatcher`
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -30,11 +30,16 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ````
 
+```{admonition} Learning Objectives
+:class: note
+The `InferenceBatcher` class and underlying concurrent batching implementations are experimental and under current development. The following tutorial is intended to provide a basic understanding of the class and its usage, but the API may change. If you have suggestions for improvements, please open an issue or submit a pull request.
+```
+
 When running many independent ASE calculations (relaxations, molecular dynamics, etc.) on small to medium-sized systems, you can significantly improve GPU utilization by batching model inference calls together. The `InferenceBatcher` class provides a high-level API to do this with minimal code changes.
 
 The key idea is simple: instead of running each simulation sequentially, `InferenceBatcher` collects inference requests from multiple concurrent simulations and batches them together for more efficient GPU computation.
 
-## Basic Setup
+## Basic setup
 
 To use `InferenceBatcher`, you need to:
 
@@ -57,7 +62,7 @@ batcher = InferenceBatcher(
 
 The `max_workers` parameter controls how many concurrent simulations can run concurrently.
 
-## Writing Simulation Functions
+## Writing simulation functions
 
 The only requirement for using `InferenceBatcher` is to write your simulation logic as a function that takes an `Atoms` object and a predict unit as arguments:
 
@@ -76,7 +81,7 @@ def run_relaxation(atoms, predict_unit):
     return atoms.get_potential_energy()
 ```
 
-## Running Batched Relaxations
+## Running batched relaxations
 
 Once you have your simulation function, you can run it in batched mode using the executor's `map` or `submit` methods:
 
@@ -107,7 +112,7 @@ run_relaxation_batched = partial(
 relaxed_energies = list(batcher.executor.map(run_relaxation_batched, atoms_list))
 ```
 
-### Using `executor.submit` for More Control
+### Using `executor.submit` for more control
 
 If you need more control over the execution or want to process results as they complete:
 
@@ -128,7 +133,7 @@ futures = [
 relaxed_energies = [future.result() for future in futures]
 ```
 
-## Running Batched Molecular Dynamics
+## Running batched molecular dynamics
 
 The same pattern works for molecular dynamics simulations:
 
@@ -168,7 +173,7 @@ futures = [
 [future.result() for future in futures]
 ```
 
-## When to Use InferenceBatcher
+## When to use an `InferenceBatcher`
 
 `InferenceBatcher` is most beneficial when:
 
