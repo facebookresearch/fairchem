@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from multiprocessing import cpu_count
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import ray
 import torch
@@ -24,7 +24,8 @@ if TYPE_CHECKING:
 
 
 @serve.deployment(
-    serve.schema.LoggingConfig(log_level="WARNING"), max_ongoing_requests=100
+    logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+    max_ongoing_requests=300,
 )
 class BatchPredictServer:
     """
@@ -37,6 +38,7 @@ class BatchPredictServer:
         max_batch_size: int,
         batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
+        batch_size_fn: Callable[[list], int] | None = None,
     ):
         """
         Initialize with a Ray object reference to a PredictUnit.
@@ -46,23 +48,32 @@ class BatchPredictServer:
             max_batch_size: Maximum number of prediction requests to send to Ray.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction
             split_oom_batch: If true will split batch if an OOM error is raised
+            batch_size_fn: Optional function to compute the effective batch size.
+                If None, uses len(batch).
         """
         self.predict_unit = ray.get(predict_unit_ref)
-        self.configure_batching(max_batch_size, batch_wait_timeout_s)
         self.split_oom_batch = split_oom_batch
+        self.configure_batching(max_batch_size, batch_wait_timeout_s, batch_size_fn)
 
         logging.info("BatchedPredictor initialized with predict_unit from object store")
 
     def configure_batching(
-        self, max_batch_size: int = 32, batch_wait_timeout_s: float = 0.05
+        self,
+        max_batch_size: int = 32,
+        batch_wait_timeout_s: float = 0.05,
+        batch_size_fn: Callable[[list], int] | None = None,
     ):
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
+        # this getter is not implemented atm
+        # self.predict.set_batch_size_fn(batch_size_fn)
 
     def get_predict_unit_attribute(self, attribute_name: str) -> Any:
         return getattr(self.predict_unit, attribute_name)
 
-    @serve.batch
+    @serve.batch(
+        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
+    )
     async def predict(
         self, data_list: list[AtomicData], undo_element_references: bool = True
     ) -> list[dict]:
@@ -71,6 +82,7 @@ class BatchPredictServer:
 
         Args:
             data_list: List of AtomicData objects (automatically batched by Ray Serve)
+            undo_element_references: Whether to undo element references in predictions
 
         Returns:
             List of prediction dictionaries, one per input
@@ -90,7 +102,7 @@ class BatchPredictServer:
             except torch.OutOfMemoryError as err:
                 if not self.split_oom_batch:
                     raise torch.OutOfMemoryError(
-                        "Reduce max_batch_size or set oom_split_batch=True to automatically split OOM batches."
+                        "Reduce max_batch_size or set split_oom_batch=True to automatically split OOM batches."
                     ) from err
 
                 if len(data_list) == 1:
@@ -105,7 +117,7 @@ class BatchPredictServer:
                 torch.cuda.empty_cache()
 
             if oom:
-                mid = len(data_deque) // 2
+                mid = len(data_list) // 2
                 data_deque.appendleft(data_list[mid:])
                 data_deque.appendleft(data_list[:mid])
 
@@ -119,6 +131,7 @@ class BatchPredictServer:
 
         Args:
             data: Single AtomicData object
+            undo_element_references: Whether to undo element references in predictions
 
         Returns:
             Prediction dictionary for this system
@@ -135,7 +148,7 @@ class BatchPredictServer:
         Split batched predictions back into individual system predictions.
 
         Args:
-            batch_predictions: Dictionary of batched prediction tensors
+            predictions: Dictionary of batched prediction tensors
             batch: The batched AtomicData used for inference
 
         Returns:
@@ -167,8 +180,9 @@ class BatchPredictServer:
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    max_batch_size: int = 32,
+    max_batch_size: int = 300,
     batch_wait_timeout_s: float = 0.1,
+    # batch_size_fn: Callable[[list], int] | None = None,
     split_oom_batch: bool = True,
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
@@ -182,6 +196,8 @@ def setup_batch_predict_server(
         predict_unit: An MLIPPredictUnit instance to use for batched inference
         max_batch_size: Maximum number of systems per batch.
         batch_wait_timeout_s: Maximum wait time before processing partial batch.
+        batch_size_fn: Optional function to compute the effective batch size.
+            If None, uses number of atoms in batch.
         split_oom_batch: Whether to split batches that cause OOM errors.
         num_replicas: Number of deployment replicas for scaling.
         ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})
@@ -196,6 +212,7 @@ def setup_batch_predict_server(
 
     cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
     ray_actor_options["num_cpus"] = cpus_per_actor
+    # batch_size_fn = batch_size_fn or (lambda batch: sum(sample.natoms for sample in batch))
 
     if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
         # assign 1 GPU per replica by default if using GPU device
@@ -211,7 +228,6 @@ def setup_batch_predict_server(
 
     serve.start(
         logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-        log_to_driver=False,
     )
     logging.info("Ray Serve started by setup_batch_predict_server")
 
@@ -226,6 +242,7 @@ def setup_batch_predict_server(
         max_batch_size=max_batch_size,
         batch_wait_timeout_s=batch_wait_timeout_s,
         split_oom_batch=split_oom_batch,
+        # batch_size_fn=batch_size_fn,
     )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
