@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from multiprocessing import cpu_count
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import ray
 import torch
@@ -38,7 +38,6 @@ class BatchPredictServer:
         max_batch_size: int,
         batch_wait_timeout_s: float,
         split_oom_batch: bool = True,
-        batch_size_fn: Callable[[list], int] | None = None,
     ):
         """
         Initialize with a Ray object reference to a PredictUnit.
@@ -48,12 +47,10 @@ class BatchPredictServer:
             max_batch_size: Maximum number of prediction requests to send to Ray.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction
             split_oom_batch: If true will split batch if an OOM error is raised
-            batch_size_fn: Optional function to compute the effective batch size.
-                If None, uses len(batch).
         """
         self.predict_unit = ray.get(predict_unit_ref)
         self.split_oom_batch = split_oom_batch
-        self.configure_batching(max_batch_size, batch_wait_timeout_s, batch_size_fn)
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
 
         logging.info("BatchedPredictor initialized with predict_unit from object store")
 
@@ -61,12 +58,9 @@ class BatchPredictServer:
         self,
         max_batch_size: int = 32,
         batch_wait_timeout_s: float = 0.05,
-        batch_size_fn: Callable[[list], int] | None = None,
     ):
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
-        # this getter is not implemented atm
-        # self.predict.set_batch_size_fn(batch_size_fn)
 
     def get_predict_unit_attribute(self, attribute_name: str) -> Any:
         return getattr(self.predict_unit, attribute_name)
@@ -180,9 +174,8 @@ class BatchPredictServer:
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    max_batch_size: int = 300,
+    max_batch_size: int = 500,
     batch_wait_timeout_s: float = 0.1,
-    # batch_size_fn: Callable[[list], int] | None = None,
     split_oom_batch: bool = True,
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
@@ -196,8 +189,6 @@ def setup_batch_predict_server(
         predict_unit: An MLIPPredictUnit instance to use for batched inference
         max_batch_size: Maximum number of systems per batch.
         batch_wait_timeout_s: Maximum wait time before processing partial batch.
-        batch_size_fn: Optional function to compute the effective batch size.
-            If None, uses number of atoms in batch.
         split_oom_batch: Whether to split batches that cause OOM errors.
         num_replicas: Number of deployment replicas for scaling.
         ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})
@@ -212,7 +203,6 @@ def setup_batch_predict_server(
 
     cpus_per_actor = ray_actor_options.get("num_cpus", min(cpu_count(), 8))
     ray_actor_options["num_cpus"] = cpus_per_actor
-    # batch_size_fn = batch_size_fn or (lambda batch: sum(sample.natoms for sample in batch))
 
     if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
         # assign 1 GPU per replica by default if using GPU device
@@ -242,7 +232,6 @@ def setup_batch_predict_server(
         max_batch_size=max_batch_size,
         batch_wait_timeout_s=batch_wait_timeout_s,
         split_oom_batch=split_oom_batch,
-        # batch_size_fn=batch_size_fn,
     )
 
     handle = serve.run(deployment, name=deployment_name, route_prefix=route_prefix)
