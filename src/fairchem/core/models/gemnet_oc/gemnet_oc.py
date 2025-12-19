@@ -1398,10 +1398,9 @@ class GemNetOCForceHead(nn.Module, HeadInterface):
         self, data_dict, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         if self.direct_forces:
-            with torch.cuda.amp.autocast(False):
-                x_F_cat = torch.cat(emb["xs_F"], dim=-1)
-                x_F = self.out_mlp_F(x_F_cat)
-                F_st = self.out_forces(x_F)
+            x_F_cat = torch.cat(emb["xs_F"], dim=-1).float()
+            x_F = self.out_mlp_F(x_F_cat)
+            F_st = self.out_forces(x_F)
 
             if self.forces_coupled:  # enforce F_st = F_ts
                 nEdges = emb["edge_idx"].shape[0]
@@ -1488,9 +1487,8 @@ class GemNetOCEnergyAndGradForceHead(nn.Module, HeadInterface):
         self, data_dict, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         # Global output block for final predictions
-        x_E = self.out_mlp_E(torch.cat(emb["xs_E"], dim=-1))
-        with torch.autocast("cuda", enabled=False):
-            E_t = self.out_energy(x_E.float())
+        x_E = self.out_mlp_E(torch.cat(emb["xs_E"], dim=-1).float())
+        E_t = self.out_energy(x_E)
 
         batch = data_dict["batch"]
         nMolecules = torch.max(batch) + 1
