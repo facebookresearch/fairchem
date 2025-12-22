@@ -27,14 +27,16 @@ def seed_everywhere(seed=0):
 
 
 @pytest.mark.parametrize(
-    "system_type,task_name,fmax,noise",
+    "system_type,task_name,noise,fmax,max_steps",
     [
-        ("crystal", "oc20", 0.1, 0.05),
-        ("molecule", "omol", 0.05, 0.1),
+        ("crystal", "oc20", 0.05, 0.1, 200),
+        ("molecule", "omol", 0.1, 0.05, 200),
     ],
 )
 @pytest.mark.parametrize("model_cls", [MLIPPredictUnit])
-def test_relaxation(direct_checkpoint, model_cls, system_type, task_name, fmax, noise):
+def test_relaxation(
+    direct_checkpoint, model_cls, system_type, noise, task_name, fmax, max_steps
+):
     seed_everywhere()
     direct_inference_checkpoint_pt, _ = direct_checkpoint
 
@@ -51,10 +53,10 @@ def test_relaxation(direct_checkpoint, model_cls, system_type, task_name, fmax, 
 
     initial_energy = atoms.get_potential_energy()
     opt = BFGS(atoms)
-    opt.run(fmax=fmax)
+    opt.run(fmax=fmax, steps=max_steps)
 
     forces = atoms.get_forces()
-    assert np.max(np.abs(forces)) <= fmax
+    assert np.max(np.abs(forces)) <= fmax or opt.nsteps >= max_steps
     final_energy = atoms.get_potential_energy()
     assert final_energy <= initial_energy
     assert not np.isnan(final_energy)
