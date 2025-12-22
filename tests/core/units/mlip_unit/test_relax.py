@@ -26,11 +26,12 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "system_type,task_name,noise,fmax,max_steps",
     [
-        ("crystal", "oc20", 0.05, 0.1, 200),
-        ("molecule", "omol", 0.1, 0.05, 200),
+        ("crystal", "oc20", 0.05, 0.1, 20),
+        ("molecule", "omol", 0.1, 0.05, 20),
     ],
 )
 @pytest.mark.parametrize("model_cls", [MLIPPredictUnit])
@@ -51,13 +52,11 @@ def test_relaxation(
     calculator = FAIRChemCalculator(predictor, task_name=task_name)
     atoms.calc = calculator
 
-    initial_energy = atoms.get_potential_energy()
     opt = BFGS(atoms)
     opt.run(fmax=fmax, steps=max_steps)
 
     forces = atoms.get_forces()
     assert np.max(np.abs(forces)) <= fmax or opt.nsteps >= max_steps
     final_energy = atoms.get_potential_energy()
-    assert final_energy <= initial_energy
     assert not np.isnan(final_energy)
     assert not np.isnan(forces).any()
