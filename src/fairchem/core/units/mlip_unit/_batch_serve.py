@@ -24,7 +24,8 @@ if TYPE_CHECKING:
 
 
 @serve.deployment(
-    serve.schema.LoggingConfig(log_level="WARNING"), max_ongoing_requests=100
+    logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+    max_ongoing_requests=300,
 )
 class BatchPredictServer:
     """
@@ -48,13 +49,15 @@ class BatchPredictServer:
             split_oom_batch: If true will split batch if an OOM error is raised
         """
         self.predict_unit = ray.get(predict_unit_ref)
-        self.configure_batching(max_batch_size, batch_wait_timeout_s)
         self.split_oom_batch = split_oom_batch
+        self.configure_batching(max_batch_size, batch_wait_timeout_s)
 
         logging.info("BatchedPredictor initialized with predict_unit from object store")
 
     def configure_batching(
-        self, max_batch_size: int = 32, batch_wait_timeout_s: float = 0.05
+        self,
+        max_batch_size: int = 32,
+        batch_wait_timeout_s: float = 0.05,
     ):
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
@@ -62,7 +65,9 @@ class BatchPredictServer:
     def get_predict_unit_attribute(self, attribute_name: str) -> Any:
         return getattr(self.predict_unit, attribute_name)
 
-    @serve.batch
+    @serve.batch(
+        batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
+    )
     async def predict(
         self, data_list: list[AtomicData], undo_element_references: bool = True
     ) -> list[dict]:
@@ -71,6 +76,7 @@ class BatchPredictServer:
 
         Args:
             data_list: List of AtomicData objects (automatically batched by Ray Serve)
+            undo_element_references: Whether to undo element references in predictions
 
         Returns:
             List of prediction dictionaries, one per input
@@ -90,7 +96,7 @@ class BatchPredictServer:
             except torch.OutOfMemoryError as err:
                 if not self.split_oom_batch:
                     raise torch.OutOfMemoryError(
-                        "Reduce max_batch_size or set oom_split_batch=True to automatically split OOM batches."
+                        "Reduce max_batch_size or set split_oom_batch=True to automatically split OOM batches."
                     ) from err
 
                 if len(data_list) == 1:
@@ -105,7 +111,7 @@ class BatchPredictServer:
                 torch.cuda.empty_cache()
 
             if oom:
-                mid = len(data_deque) // 2
+                mid = len(data_list) // 2
                 data_deque.appendleft(data_list[mid:])
                 data_deque.appendleft(data_list[:mid])
 
@@ -119,6 +125,7 @@ class BatchPredictServer:
 
         Args:
             data: Single AtomicData object
+            undo_element_references: Whether to undo element references in predictions
 
         Returns:
             Prediction dictionary for this system
@@ -135,7 +142,7 @@ class BatchPredictServer:
         Split batched predictions back into individual system predictions.
 
         Args:
-            batch_predictions: Dictionary of batched prediction tensors
+            predictions: Dictionary of batched prediction tensors
             batch: The batched AtomicData used for inference
 
         Returns:
@@ -167,7 +174,7 @@ class BatchPredictServer:
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    max_batch_size: int = 32,
+    max_batch_size: int = 500,
     batch_wait_timeout_s: float = 0.1,
     split_oom_batch: bool = True,
     num_replicas: int = 1,
@@ -211,7 +218,6 @@ def setup_batch_predict_server(
 
     serve.start(
         logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-        log_to_driver=False,
     )
     logging.info("Ray Serve started by setup_batch_predict_server")
 
