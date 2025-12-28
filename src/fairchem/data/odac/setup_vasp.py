@@ -49,6 +49,7 @@ def setup_vasp_calc_mof(atoms: ase.Atoms, path: Path):
         gamma=True,
         isym=0,
         directory=path,
+        pp_version="54",
     )
     atoms.set_calculator(calc)
     calc.write_input(
