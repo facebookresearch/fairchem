@@ -35,6 +35,8 @@ updates:
     - "mshuaibii"
     - "lbluque"
 
+open-pull-requests-limit: 20
+
 # to ignore certain dependencies
 #ignore:
 #  - dependency-name: pymatgen
