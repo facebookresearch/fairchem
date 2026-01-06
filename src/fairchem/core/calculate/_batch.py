@@ -12,21 +12,11 @@ from functools import cached_property
 from multiprocessing import cpu_count
 from typing import Literal, Protocol
 
-from monty.dev import requires
-
 from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
 from fairchem.core.units.mlip_unit.predict import (
     BatchServerPredictUnit,
     MLIPPredictUnit,
 )
-
-try:
-    from ray import serve
-
-    ray_serve_installed = True
-except ImportError:
-    serve = None
-    ray_serve_installed = False
 
 
 class ExecutorProtocol(Protocol):
@@ -44,7 +34,6 @@ def _get_concurrency_backend(
     raise ValueError(f"Invalid concurrency backend: {backend}")
 
 
-@requires(ray_serve_installed, message="Requires `ray[serve]` to be installed")
 class InferenceBatcher:
     """Batches incoming inference requests."""
 
