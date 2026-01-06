@@ -18,6 +18,7 @@ parts:
     - file: core/common_tasks/ase_calculator
     - file: core/common_tasks/lammps
     - file: core/common_tasks/batch_inference
+    - file: core/common_tasks/inference_batcher
     - file: core/common_tasks/ase_dataset_creation
     - file: core/common_tasks/training
     - file: core/common_tasks/evaluation
