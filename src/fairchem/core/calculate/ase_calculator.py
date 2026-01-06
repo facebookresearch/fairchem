@@ -18,7 +18,6 @@ from ase.calculators.calculator import Calculator
 from ase.stress import full_3x3_to_voigt_6_stress
 
 from fairchem.core.calculate import pretrained_mlip
-from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
@@ -217,11 +216,10 @@ class FAIRChemCalculator(Calculator):
             self.results = self._get_single_atom_energies(atoms)
         else:
             # Convert using the current a2g object
-            data_object = self.a2g(atoms)
+            data = self.a2g(atoms)
 
             # Batch and predict
-            batch = data_list_collater([data_object], otf_graph=True)
-            pred = self.predictor.predict(batch)
+            pred = self.predictor.predict(data)
 
             # Collect the results into self.results
             self.results = {}
