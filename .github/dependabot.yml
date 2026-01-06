@@ -17,6 +17,7 @@ updates:
     - "misko"
     - "mshuaibii"
     - "lbluque"
+  open-pull-requests-limit: 20
 
 # Python dependencies
 - package-ecosystem: pip
@@ -34,11 +35,5 @@ updates:
     - "misko"
     - "mshuaibii"
     - "lbluque"
+  open-pull-requests-limit: 20
 
-open-pull-requests-limit: 20
-
-# to ignore certain dependencies
-#ignore:
-#  - dependency-name: pymatgen
-#    versions:
-#      -
