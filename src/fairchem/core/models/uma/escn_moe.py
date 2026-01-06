@@ -125,20 +125,35 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 if self.training:
                     if self.composition_dropout > 0.0:
                         # if greater than keep
-                        mask = torch.rand_like(atomic_numbers_full, dtype=torch.float) > self.composition_dropout
+                        mask = (
+                            torch.rand_like(atomic_numbers_full, dtype=torch.float)
+                            > self.composition_dropout
+                        )
                         effective_atomic_numbers_full = atomic_numbers_full[mask]
                         effective_batch_full = batch_full[mask]
                     if self.composition_noise > 0.0:
                         # if greater than keep
-                        composition_mask = torch.rand(*batch_full.shape) > self.composition_noise
-                        rand_batch_full=batch_full[composition_mask]
-                        rand_atomic_numbers_full = torch.randint(
-                            0, self.max_num_elements, rand_batch_full.shape, device=rand_batch_full.device
+                        composition_mask = (
+                            torch.rand(*batch_full.shape) > self.composition_noise
                         )
-                        effective_atomic_numbers_full = torch.cat([effective_atomic_numbers_full, rand_atomic_numbers_full], dim=0)
-                        effective_batch_full = torch.cat([effective_batch_full, rand_batch_full], dim=0)
+                        rand_batch_full = batch_full[composition_mask]
+                        rand_atomic_numbers_full = torch.randint(
+                            0,
+                            self.max_num_elements,
+                            rand_batch_full.shape,
+                            device=rand_batch_full.device,
+                        )
+                        effective_atomic_numbers_full = torch.cat(
+                            [effective_atomic_numbers_full, rand_atomic_numbers_full],
+                            dim=0,
+                        )
+                        effective_batch_full = torch.cat(
+                            [effective_batch_full, rand_batch_full], dim=0
+                        )
 
-                composition_by_atom = self.composition_embedding(effective_atomic_numbers_full)
+                composition_by_atom = self.composition_embedding(
+                    effective_atomic_numbers_full
+                )
                 composition = composition_by_atom.new_zeros(
                     csd_mixed_emb.shape[0],
                     self.sphere_channels,
@@ -224,6 +239,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_mapping: dict[str, str] | None = None,
     ):
         super().__init__()
         if head_kwargs is None:
@@ -234,9 +250,25 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.wrap_property = wrap_property
 
         self.dataset_names = sorted(dataset_names)
-        self.dataset_name_to_exp = {
-            value: idx for idx, value in enumerate(self.dataset_names)
-        }
+        if dataset_mapping is not None:
+            # get unquie sorted dataset names
+            mapped_dataset_names = sorted(
+                {dataset_mapping.get(name, name) for name in self.dataset_names}
+            )
+            # expert idx for mapped dataset names
+            mapped_dataset_idx = {
+                value: idx for idx, value in enumerate(mapped_dataset_names)
+            }
+            # remap dataset name to expert idx using mapping
+            self.dataset_name_to_exp = {
+                name: mapped_dataset_idx[dataset_mapping.get(name, name)]
+                for name in self.dataset_names
+            }
+        else:
+            self.dataset_name_to_exp = {
+                name: idx for idx, name in enumerate(self.dataset_names)
+            }
+
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
         self.global_mole_tensors = MOLEGlobals(

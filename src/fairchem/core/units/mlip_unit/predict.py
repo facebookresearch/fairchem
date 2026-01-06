@@ -156,9 +156,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.tasks = {t.name: t for t in tasks}
 
         self._dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
-        assert set(self._dataset_to_tasks.keys()).issubset(
-            set(self.model.module.backbone.dataset_list)
-        ), "Datasets in tasks is not a strict subset of datasets in backbone."
+        # assert set(self._dataset_to_tasks.keys()).issubset(
+        #    set(self.model.module.backbone.dataset_list)
+        # ), "Datasets in tasks is not a strict subset of datasets in backbone."
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
 
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"

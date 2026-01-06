@@ -123,6 +123,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
+        dataset_mapping: dict[str, str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 1,
@@ -172,6 +173,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
+        self.dataset_mapping = dataset_mapping
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
             assert (
@@ -219,6 +221,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.sphere_channels,
                 grad=self.dataset_emb_grad,
                 dataset_list=self.dataset_list,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
@@ -361,17 +364,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
 
     def _safety_edge(self, data_dict, graph_dict):
-        graph_dict["edge_index"] = torch.cat((graph_dict["edge_index"], graph_dict["edge_index"].new_zeros(2, 1)), dim=1)
+        graph_dict["edge_index"] = torch.cat(
+            (graph_dict["edge_index"], graph_dict["edge_index"].new_zeros(2, 1)), dim=1
+        )
 
         self_edge_distance_vec = (
-            data_dict["pos"][0] - data_dict["pos"][0]
-         + self.cutoff ).unsqueeze(0)  # [1, 3]
-        graph_dict["edge_distance_vec"] = torch.cat((graph_dict["edge_distance_vec"], self_edge_distance_vec), dim=0)
+            data_dict["pos"][0] - data_dict["pos"][0] + self.cutoff
+        ).unsqueeze(0)  # [1, 3]
+        graph_dict["edge_distance_vec"] = torch.cat(
+            (graph_dict["edge_distance_vec"], self_edge_distance_vec), dim=0
+        )
 
-        edge_distance = torch.linalg.norm(
-            self_edge_distance_vec, dim=-1, keepdim=False
-        ) 
-        graph_dict["edge_distance"] = torch.cat((graph_dict["edge_distance"], edge_distance), dim=0)
+        edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+        graph_dict["edge_distance"] = torch.cat(
+            (graph_dict["edge_distance"], edge_distance), dim=0
+        )
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -480,7 +487,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             }
         graph_dict["node_offset"] = 0  # default value
 
-        if graph_dict["edge_index"].numel()==0:
+        if graph_dict["edge_index"].numel() == 0:
             self._safety_edge(data_dict, graph_dict)
 
         if gp_utils.initialized():
