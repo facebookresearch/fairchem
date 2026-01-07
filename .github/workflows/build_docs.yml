@@ -45,8 +45,8 @@ jobs:
       with:
           status-context: '${{ github.job }}'
 
-    - name: Install pandoc
-      run: sudo apt-get -y install pandoc
+    - name: Install pandoc and ffmpeg
+      run: sudo apt-get update && sudo apt-get -y install pandoc ffmpeg
 
     # Install dependencies
     - name: Set up Python
@@ -57,8 +57,12 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e packages/fairchem-core[docs,adsorbml,extras] -e packages/fairchem-data-oc[dev] -e packages/fairchem-applications-cattsunami
-        pip install -r tests/requirements.txt # pin test packages
+        pip install \
+          packages/fairchem-core[docs,adsorbml,extras] \
+          packages/fairchem-data-oc[dev] \
+          packages/fairchem-applications-cattsunami \
+          packages/fairchem-data-omat \
+          -r tests/requirements.txt # pin test packages
 
     # Build the book
     - name: Build the book
@@ -69,12 +73,12 @@ jobs:
         FAST_DOCS: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && 'true' || '' }}
       run: |
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
-        jupytext --to ipynb ./docs/uma_tutorials/uma_tutorial.md
+        jupytext --to ipynb ./docs/uma_tutorials/*.md
         # find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
         jupyter-book build docs
 
     - name: Upload documentation artifact
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: docs-html
         path: docs/_build/html/*
