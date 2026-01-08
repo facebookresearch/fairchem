@@ -25,6 +25,7 @@ VASP_FLAGS = {
     "gga": "RP",
     "pp": "PBE",
     "xc": "PBE",
+    "pp_version": "54",
 }
 # This is the setting for bulk optmization.
 # Only use when expanding the bulk_db with other crystal structures.
