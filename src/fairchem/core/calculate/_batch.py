@@ -40,7 +40,7 @@ class InferenceBatcher:
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,
-        max_batch_size: int = 500,
+        max_batch_size: int = 512,
         batch_wait_timeout_s: float = 0.1,
         num_replicas: int = 1,
         concurrency_backend: Literal["threads"] = "threads",

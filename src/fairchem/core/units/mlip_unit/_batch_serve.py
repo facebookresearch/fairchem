@@ -56,8 +56,8 @@ class BatchPredictServer:
 
     def configure_batching(
         self,
-        max_batch_size: int = 32,
-        batch_wait_timeout_s: float = 0.05,
+        max_batch_size: int,
+        batch_wait_timeout_s: float,
     ):
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
@@ -174,7 +174,7 @@ class BatchPredictServer:
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    max_batch_size: int = 500,
+    max_batch_size: int = 512,
     batch_wait_timeout_s: float = 0.1,
     split_oom_batch: bool = True,
     num_replicas: int = 1,
