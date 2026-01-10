@@ -1,5 +1,5 @@
 defaults:
-  - cluster: h100
+  - cluster: h100_local
   - backbone: K4L2_multihead
   - dataset: uma_no_dimers_split_omat_phase_1_oc20
   - element_refs: uma_v1_2b_hof_lin_refs
@@ -11,7 +11,7 @@ job:
   scheduler:
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
-    num_nodes: 16
+    #num_nodes: 16
     slurm:
       account: ${cluster.account}
       qos: h200_ocp_high
@@ -36,7 +36,7 @@ max_atoms: 700
 bf16: False
 cpu_graph: True
 otf_graph: False
-normalizer_rmsd: 1.343
+normalizer_rmsd: 1.342
 force_coef: 10
 stress_coef: 1
 omat_force_coef: 10
