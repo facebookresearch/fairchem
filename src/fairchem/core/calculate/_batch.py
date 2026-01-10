@@ -50,7 +50,9 @@ class InferenceBatcher:
         """
         Args:
             predict_unit: The predict unit to use for inference.
-            max_batch_size: The maximum batch size to use for inference.
+            max_batch_size: Maximum number of atoms in a batch.
+                The actual number of atoms will likely be larger than this as batches
+                are split when num atoms exceeds this value.
             batch_wait_timeout_s: The maximum time to wait for a batch to be ready.
             num_replicas: The number of replicas to use for inference.
             concurrency_backend: The concurrency backend to use for inference.

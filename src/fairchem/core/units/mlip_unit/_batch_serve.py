@@ -44,7 +44,9 @@ class BatchPredictServer:
 
         Args:
             predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
-            max_batch_size: Maximum number of prediction requests to send to Ray.
+            max_batch_size: Maximum number of atoms in a batch.
+                The actual number of atoms will likely be larger than this as batches
+                are split when num atoms exceeds this value.
             batch_wait_timeout_s: Timeout in seconds to wait for a prediction
             split_oom_batch: If true will split batch if an OOM error is raised
         """
@@ -187,7 +189,9 @@ def setup_batch_predict_server(
 
     Args:
         predict_unit: An MLIPPredictUnit instance to use for batched inference
-        max_batch_size: Maximum number of systems per batch.
+        max_batch_size: Maximum number of atoms in a batch.
+            The actual number of atoms will likely be larger than this as batches
+            are split when num atoms exceeds this value.
         batch_wait_timeout_s: Maximum wait time before processing partial batch.
         split_oom_batch: Whether to split batches that cause OOM errors.
         num_replicas: Number of deployment replicas for scaling.
