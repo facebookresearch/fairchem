@@ -171,6 +171,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 inference_settings.internal_graph_gen_version
             )
 
+        if inference_settings.energy_only:
+            overrides["backbone"]["regress_stress"] = False
+            overrides["backbone"]["regress_forces"] = False
+
         if inference_settings.wigner_cuda:
             logging.warning(
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
@@ -184,6 +188,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             for task_config in checkpoint.tasks_config
         ]
         self.tasks = {t.name: t for t in tasks}
+        if inference_settings.energy_only:
+            self.tasks = {t.name: t for t in tasks if t.property == "energy"}
 
         self._dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
         assert set(self._dataset_to_tasks.keys()).issubset(
