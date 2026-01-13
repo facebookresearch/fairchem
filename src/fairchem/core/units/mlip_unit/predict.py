@@ -22,7 +22,6 @@ import hydra
 import numpy as np
 import torch
 import torch.distributed as dist
-from monty.dev import requires
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
@@ -43,29 +42,9 @@ from fairchem.core.units.mlip_unit.utils import (
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
 
-try:
-    import ray
-    from ray import remote
-    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
-
-    ray_installed = True
-except ImportError:
-    ray = None
-
-    def remote(cls):
-        # dummy
-        return cls
-
-    ray_installed = False
-
-
-try:
-    from ray import serve
-
-    ray_serve_installed = True
-except ImportError:
-    serve = None
-    ray_serve_installed = False
+import ray
+from ray import remote
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 
 def collate_predictions(predict_fn):
@@ -386,9 +365,6 @@ class MLIPWorkerLocal:
         master_port: int | None = None,
         master_address: str | None = None,
     ):
-        if ray_installed is False:
-            raise RuntimeError("Requires `ray` to be installed")
-
         self.worker_id = worker_id
         self.world_size = world_size
         self.predictor_config = predictor_config
@@ -454,7 +430,6 @@ class MLIPWorker(MLIPWorkerLocal):
     pass
 
 
-@requires(ray_installed, message="Requires `ray` to be installed")
 class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -616,7 +591,6 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         return self._dataset_to_tasks
 
 
-@requires(ray_serve_installed, message="Requires `ray[serve]` to be installed")
 class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     """
     PredictUnit wrapper that uses Ray Serve for batched inference.
