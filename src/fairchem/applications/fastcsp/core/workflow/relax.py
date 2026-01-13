@@ -30,6 +30,7 @@ import pandas as pd
 import submitit
 from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
+from ase.io import Trajectory
 from ase.optimize import BFGS, FIRE, LBFGS
 from ase.units import eV, kJ, mol
 from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
@@ -121,6 +122,8 @@ def get_relax_config_and_dir(
         "max_steps": relax_config.get("max-steps", 1000),
         "fix_symmetry": relax_config.get("fix-symmetry", False),
         "relax_cell": relax_config.get("relax-cell", True),
+        "write_traj": relax_config.get("write-traj", False),
+        "traj_interval": relax_config.get("traj-interval", 1),
     }
 
     relax_output_dir = f"{relax_params['calculator']}_{relax_params['optimizer']}_{relax_params['fmax']}_{relax_params['max_steps']}"
@@ -205,6 +208,7 @@ def relax_atoms(atoms, relax_config, calc):
 
     Args:
         atoms: ASE Atoms object representing the crystal structure
+        structure_id: Identifier for the structure being relaxed
         relax_config: Dictionary containing relaxation parameters:
             - optimizer: Optimization algorithm ("bfgs", "fire", "lbfgs")
             - relax_cell: Whether to optimize unit cell parameters
@@ -248,10 +252,15 @@ def relax_atoms(atoms, relax_config, calc):
         optimizer = optimizer_cls(FrechetCellFilter(atoms))
     else:
         optimizer = optimizer_cls(atoms)
+
     # Perform optimization
+    if relax_config.get("write_traj"):
+        traj = Trajectory(atoms.info["traj_path"], "w", atoms)
+        optimizer.attach(traj.write, interval=relax_config.get("traj_interval"))
     converged = optimizer.run(
         fmax=relax_config["fmax"], steps=relax_config["max_steps"]
     )
+
     logger = get_central_logger()
     logger.debug(
         f"Relaxation converged: {converged}, Energy: {atoms.get_potential_energy()}"
@@ -263,6 +272,9 @@ def relax_atoms(atoms, relax_config, calc):
     atoms.info["optimizer_steps"] = (
         optimizer.nsteps
     )  # Store number of optimization steps
+
+    if relax_config.get("write_traj"):
+        traj.close()
     return atoms
 
 
@@ -276,10 +288,10 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
             output_dir.parent.parent.parent
         )
         if output_file.exists():
-            logger.info(f"Skipping {input_file} because {output_file} exists")
+            logger.debug(f"Skipping {input_file} because {output_file} exists")
             continue
 
-        logger.info(f"Relaxing structures from {input_file}")
+        logger.debug(f"Relaxing structures from {input_file}")
 
         structures_df = pd.read_parquet(input_file)
         atoms_list = (
@@ -289,6 +301,19 @@ def relax_structures(input_files, output_dir, relax_config, column_name="cif"):
             )
             .to_numpy()
         )
+        structure_ids_list = structures_df["structure_id"].to_numpy().astype(str)
+
+        # Create traj folder
+        if relax_config.get("write_traj"):
+            traj_folder = (
+                output_dir.parent
+                / "trajectories"
+                / input_file.parent.relative_to(output_dir.parent.parent.parent)
+            )
+            traj_folder.mkdir(parents=True, exist_ok=True)
+            for structure_id, atoms in zip(structure_ids_list, atoms_list):
+                traj_path = traj_folder / f"{structure_id}.traj"
+                atoms.info["traj_path"] = str(traj_path)
 
         # Special handling for OMol tasks - setting spin and charge
         if relax_config["calculator"] == "uma_sm_1p1_omol":
@@ -374,7 +399,7 @@ def run_relax_jobs(input_dir, output_dir, relax_config, column_name="cif"):
     logger.info(f"Number of input files to relax: {len(input_files)}")
 
     jobs = []
-    num_ranks = relax_slurm_config.get("num_ranks", 5000)
+    num_ranks = relax_slurm_config.get("num_ranks", 25000)
     with executor.batch():
         for rank in range(min(num_ranks, len(input_files))):
             input_files_rank = input_files[rank::num_ranks]

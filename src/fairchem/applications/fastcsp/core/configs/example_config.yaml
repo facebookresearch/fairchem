@@ -43,6 +43,8 @@ relax:
   max-steps: 1000            # Maximum optimization steps
   fix-symmetry: false        # Do not preserve crystal symmetry
   relax-cell: true           # Allow unit cell relaxation
+  write_traj: true           # Enable writing of trajectory files
+  traj-interval: 1           # Interval for writing trajectory frames
   slurm:
     num_ranks: 1000
 

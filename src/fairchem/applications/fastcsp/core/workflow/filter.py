@@ -50,7 +50,7 @@ def get_post_relax_config(config: dict[str, Any]) -> dict[str, Any]:
     """
     Extract and validate post-relaxation filtering parameters from workflow configuration.
     """
-    match_config = config.get("post_relax_match_params", {})
+    match_config = config.get("post_relaxation_filter", {})
     return {
         "remove_problematic": match_config.get(
             "remove_problematic", False
@@ -79,7 +79,7 @@ def filter_and_deduplicate_structures_single(
     remove_problematic: bool = False,
     energy_cutoff: float | None = None,
     density_cutoff: float | None = None,
-    assign_groups: bool = False,
+    assign_groups: bool = True,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
@@ -139,7 +139,7 @@ def filter_and_deduplicate_structures_single(
             check_no_changes_in_covalent_matrix,
             initial_atoms,
             final_atoms,
-            num_cpus=120,  # Parallel processing for connectivity validation
+            num_cpus=70,  # Parallel processing for connectivity validation
         )
 
         # Save intermediate results with connectivity validation flags
@@ -204,6 +204,7 @@ def filter_and_deduplicate_structures_single(
 
     if not remove_problematic:
         # Reintegrate problematic structures if not removing them
+        logger.info("Reintegrating problematic structures")
         structures_df_filtered = pd.concat(
             [structures_df_filtered, problematic_structures_df], ignore_index=True
         )
@@ -221,8 +222,8 @@ def filter_and_deduplicate_structures(
     output_dir: Path,
     post_relax_config: dict[str, Any],
     remove_problematic: bool,
-    energy_cutoff: float,
-    density_cutoff: float,
+    energy_cutoff: float | None,
+    density_cutoff: float | None,
     assign_groups: bool,
     ltol: float,
     stol: float,

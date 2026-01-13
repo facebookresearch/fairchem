@@ -16,7 +16,6 @@ dependencies = [
 
 [project.optional-dependencies]
 free_energy = [] # TODO
-vasp = ["atomate2"]
 
 [project.scripts]
 fastcsp = "fairchem.applications.fastcsp.core.cli:cli_main"

@@ -107,7 +107,12 @@ def main(args: argparse.Namespace) -> None:
     # Set up logging to FastCSP.log in root directory
     log_file = root / "FastCSP.log"
     is_restart = logging.detect_restart(root)
-    logging.setup_fastcsp_logger(log_file=log_file, append=True)
+    log_config = config.get("logging", {})
+    console_output = log_config.get("console", True)
+    log_level = log_config.get("level", "INFO")
+    logging.setup_fastcsp_logger(
+        log_file=log_file, level=log_level, console_output=console_output, append=True
+    )
     logging.ensure_all_modules_use_central_logger()
     logger = logging.get_central_logger()
 

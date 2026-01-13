@@ -5,21 +5,6 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 Structure Deduplication Utilities for FastCSP
-
-Key Features:
-- Hierarchical deduplication: fast pre-filtering followed by detailed comparison
-- Parallel processing for scalable performance on large structure databases
-- Configurable tolerance parameters for different similarity requirements
-
-Deduplication Strategy:
-1. Fast Pre-filtering: Group structures by binned properties
-2. Crystallographic Comparison: Apply StructureMatcher within each group
-3. Clustering: Identify connected components of similar structures
-4. Representative Selection: Choose optimal representative from each cluster
-
-The module is optimized for crystal structure prediction workflows where hundreds
-to thousands of structures per molecule need to be efficiently deduplicated while
-preserving all unique polymorphs and avoiding false positive matches.
 """
 
 from __future__ import annotations
@@ -84,7 +69,7 @@ def process_structure_group(group_data, ltol=0.2, stol=0.3, angle_tol=5):
 
 
 def deduplicate_structures(
-    xtals_df: pd.DataFrame,
+    structures_df: pd.DataFrame,
     hash_density: bool = True,
     hash_volume: bool = True,
     ltol: float = 0.2,
@@ -100,10 +85,11 @@ def deduplicate_structures(
     logger = get_central_logger()
 
     # Stage 1: Generate hash-based groups for pre-filtering
-    logger.debug("Generating structure hashes for pre-filtering...")
-    logger.debug(f"Hashing settings - Density: {hash_density}, Volume: {hash_volume}")
-    logger.debug(f"Total structures to process: {len(xtals_df)}")
-    hashes = xtals_df[["structure", "z"]].apply(
+    logger.info("Generating structure hashes for pre-filtering...")
+    logger.info(f"Hashing settings - Density: {hash_density}, Volume: {hash_volume}")
+    logger.info(f"Total structures to process: {len(structures_df)}")
+    logger.info(f"Structure DataFrame head:\n{structures_df.head()}")
+    hashes = structures_df[["structure", "z"]].apply(
         lambda x: get_structure_hash(
             x["structure"],
             x["z"],
@@ -118,13 +104,15 @@ def deduplicate_structures(
     for i, h in enumerate(hashes):
         hash_groups[h].append(i)
     hash_groups = list(hash_groups.items())
-    logger.debug(f"Number of unique hashes: {len(hash_groups)}")
+    logger.info(f"Number of unique hashes: {len(hash_groups)}")
 
     # Stage 2: Prepare data for parallel crystallographic comparison
     groups_to_process = []
     for _, indices in hash_groups:
         # Extract structures for this hash group
-        groups_to_process.append((indices, xtals_df["structure"].to_numpy()[indices]))
+        groups_to_process.append(
+            (indices, structures_df["structure"].to_numpy()[indices])
+        )
 
     # Stage 3: Parallel crystallographic deduplication within hash groups
     num_groups = len(groups_to_process)
@@ -146,19 +134,19 @@ def deduplicate_structures(
             all_matches.append((idx, f"{hash_val}_{subgroup}"))
 
     unique_groups = len({match[1] for match in all_matches})
-    logger.debug(
+    logger.info(
         f"Deduplication completed: {unique_groups} unique groups from {len(all_matches)} structures"
     )
 
     # Stage 5: Apply group assignments to DataFrame
     all_matches.sort(key=lambda x: x[0])  # Sort by original DataFrame index
-    xtals_df["group_index"] = [match[1] for match in all_matches]
+    structures_df["group_index"] = [match[1] for match in all_matches]
 
     # Stage 6: Optional duplicate removal (keep one representative per group)
     if remove_duplicates:
-        logger.debug("Removing duplicates, keeping one structure per group...")
-        xtals_df = xtals_df.drop_duplicates(subset=["group_index"]).reset_index(
-            drop=True
-        )
-        logger.info(f"Structures after deduplication: {len(xtals_df)}")
-    return xtals_df
+        logger.info("Removing duplicates, keeping one structure per group...")
+        structures_df = structures_df.drop_duplicates(
+            subset=["group_index"]
+        ).reset_index(drop=True)
+        logger.info(f"Structures after deduplication: {len(structures_df)}")
+    return structures_df
