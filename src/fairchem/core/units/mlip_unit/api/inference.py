@@ -87,6 +87,8 @@ class InferenceSettings:
     # Number of internal torch threads to use for inference
     torch_num_threads: int | None = None
 
+    edge_chunk_size: int | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
@@ -108,7 +110,7 @@ def inference_settings_default():
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,
-        activation_checkpointing=True,
+        activation_checkpointing=False,
         merge_mole=True,
         compile=True,
         external_graph_gen=False,

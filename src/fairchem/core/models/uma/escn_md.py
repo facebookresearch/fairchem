@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import TYPE_CHECKING, Literal
 
@@ -48,7 +47,52 @@ if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
 
 
-ESCNMD_DEFAULT_EDGE_CHUNK_SIZE = 1024 * 128
+ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+def add_n_empty_edges(
+    graph_dict: dict, edges_to_add: int, cutoff: float, node_offset: int = 0
+):
+    graph_dict["edge_index"] = torch.cat(
+        (
+            graph_dict["edge_index"].new_ones(2, edges_to_add) * node_offset,
+            graph_dict["edge_index"],
+        ),
+        dim=1,
+    )
+
+    self_edge_distance_vec = graph_dict["edge_distance_vec"].new_ones(1, 3) + cutoff
+    graph_dict["edge_distance_vec"] = torch.cat(
+        (
+            self_edge_distance_vec.expand(edges_to_add, 3),
+            graph_dict["edge_distance_vec"],
+        ),
+        dim=0,
+    )
+
+    edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+    graph_dict["edge_distance"] = torch.cat(
+        (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
+    )
+
+
+@torch.compiler.disable
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
+    n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
+
+    if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
+        # make sure we have a multiple of self.edge_chunk_size edges
+        n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
+    if n_edges_post > n_edges:
+        # We append synthetic padding edges whose distance vector has norm > cutoff
+        # (see add_n_empty_edges where distance_vec is set to 1+cutoff). The radial
+        # polynomial envelope returns 0 for distances >= cutoff, so these edges never
+        # contribute to embeddings or message passing; they only ensure the edge count
+        # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
+        # activation checkpointing and avoiding empty tensor edge cases.
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
 @registry.register_model("escnmd_backbone")
@@ -86,8 +130,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
-        radius_pbc_version: int = 1,
+        radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
+        edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -116,7 +161,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         activation_checkpoint_chunk_size = None
         if activation_checkpointing:
             # The size of edge blocks to use in activation checkpointing
-            activation_checkpoint_chunk_size = ESCNMD_DEFAULT_EDGE_CHUNK_SIZE
+            activation_checkpoint_chunk_size = (
+                ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
+            )
+        self.edge_chunk_size = edge_chunk_size
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -340,6 +388,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
     def _generate_graph(self, data_dict):
+        data_dict["gp_node_offset"] = 0
+        if gp_utils.initialized():
+            # create the partitions
+            atomic_numbers_full = data_dict["atomic_numbers_full"]
+            node_partition = torch.tensor_split(
+                torch.arange(
+                    len(atomic_numbers_full), device=atomic_numbers_full.device
+                ),
+                gp_utils.get_gp_world_size(),
+            )[gp_utils.get_gp_rank()]
+            assert (
+                node_partition.numel() > 0
+            ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+            data_dict["node_partition"] = node_partition
+
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
@@ -352,7 +415,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -389,17 +451,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
             }
-        graph_dict["node_offset"] = 0  # default value
 
         if gp_utils.initialized():
-            graph_dict = self._init_gp_partitions(
-                graph_dict, data_dict["atomic_numbers_full"]
-            )
-            # create partial atomic numbers and batch tensors for GP
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
-                graph_dict["node_partition"]
+                node_partition
             ]
-            data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
+            data_dict["batch"] = data_dict["batch_full"][node_partition]
+            data_dict["gp_node_offset"] = node_partition.min().item()
+
+        if self.edge_chunk_size is not None:
+            pad_edges(
+                graph_dict,
+                self.edge_chunk_size,
+                self.cutoff,
+                data_dict["gp_node_offset"],
+            )
 
         return graph_dict
 
@@ -489,7 +555,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 edge_envelope,
-                graph_dict["node_offset"],
+                data_dict["gp_node_offset"],
             )
 
         ###############################################################
@@ -505,8 +571,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
                     edge_envelope,
+                    total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
+                        0
+                    ],
                     sys_node_embedding=sys_node_embedding,
-                    node_offset=graph_dict["node_offset"],
+                    node_offset=data_dict["gp_node_offset"],
                 )
 
         # Final layer norm
@@ -518,38 +587,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "batch": data_dict["batch"],
         }
         return out
-
-    def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
-        """Graph Parallel
-        This creates the required partial tensors for each rank given the full tensors.
-        The tensors are split on the dimension along the node index using node_partition.
-        """
-        edge_index = graph_dict["edge_index"]
-
-        node_partition = torch.tensor_split(
-            torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
-            gp_utils.get_gp_world_size(),
-        )[gp_utils.get_gp_rank()]
-
-        assert (
-            node_partition.numel() > 0
-        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-        edge_partition = torch.where(
-            torch.logical_and(
-                edge_index[1] >= node_partition.min(),
-                edge_index[1] <= node_partition.max(),  # TODO: 0 or 1?
-            )
-        )[0]
-        graph_dict["node_offset"] = node_partition.min().item()
-        graph_dict["node_partition"] = node_partition
-        # gp versions of data
-        graph_dict["edge_index"] = edge_index[:, edge_partition]
-        graph_dict["edge_distance"] = graph_dict["edge_distance"][edge_partition]
-        graph_dict["edge_distance_vec"] = graph_dict["edge_distance_vec"][
-            edge_partition
-        ]
-
-        return graph_dict
 
     @property
     def num_params(self) -> int:
@@ -647,13 +684,11 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
-        embeddings = emb["node_embedding"].detach()
-        if gp_utils.initialized():
-            embeddings = gp_utils.gather_from_model_parallel_region(embeddings, dim=0)
-
-        outputs["embeddings"] = (
-            {"embeddings": embeddings} if self.wrap_property else embeddings
-        )
+        if not gp_utils.initialized():
+            embeddings = emb["node_embedding"].detach()
+            outputs["embeddings"] = (
+                {"embeddings": embeddings} if self.wrap_property else embeddings
+            )
 
         if self.regress_stress:
             grads = torch.autograd.grad(
@@ -781,7 +816,10 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.narrow(1, 1, 3)
         forces = forces.view(-1, 3).contiguous()
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(forces, dim=0)
+            forces = gp_utils.gather_from_model_parallel_region(
+                forces, data_dict["atomic_numbers_full"].shape[0]
+            )
+
         return {"forces": forces}
 
 

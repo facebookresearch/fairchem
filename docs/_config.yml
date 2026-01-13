@@ -7,13 +7,13 @@
 # Book settings
 title                       : "fairchem" # FAIR Chemistry Documentation  # The title of the book. Will be placed in the left navbar.
 author                      : FAIR Chemistry & Collaborators  # The author of the book
-copyright                   : "2025"  # Copyright year to be placed in the footer
+copyright                   : "Meta Platforms, Inc"  # Copyright year to be placed in the footer
 # logo                        : logo.png  # A path to the book logo - no logo looks better than old logo
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
 execute:
-  execute_notebooks: force
+  execute_notebooks: cache
   timeout: 14400
   allow_errors: false
 
@@ -21,6 +21,9 @@ execute:
 latex:
   latex_documents:
     targetname: fairchem.tex
+
+launch_buttons:
+  colab_url: "https://colab.research.google.com"
 
 # Add a bibtex file so that we can create citations
 bibtex_bibfiles:
@@ -49,6 +52,7 @@ sphinx:
   extra_extensions:
   - 'sphinx.ext.napoleon'
   - 'autoapi.extension'
+  - 'sphinxcontrib.mermaid'
   config:
     autosummary_generate: True
     autoapi_dirs: ['../src/fairchem/core','../src/fairchem/data','../src/fairchem/applications/AdsorbML/adsorbml','../src/fairchem/applications/cattsunami','../src/fairchem/demo/ocpapi']

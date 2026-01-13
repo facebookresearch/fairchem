@@ -30,6 +30,7 @@ class HuggingFaceCheckpoint:
     subfolder: str | None = None  # specify a hf repo subfolder
     revision: str | None = None  # specify a version tag, branch, commit hash
     atom_refs: dict | None = None  # specify an isolated atomic reference
+    form_elem_refs: dict | None = None  # specify a form elemental reference
 
 
 @dataclass
@@ -71,6 +72,7 @@ def get_predict_unit(
     overrides: dict | None = None,
     device: Literal["cuda", "cpu"] | None = None,
     cache_dir: str = CACHE_DIR,
+    workers: int = 1,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
@@ -83,6 +85,8 @@ def get_predict_unit(
         overrides: Optional dictionary of settings to override default inference settings.
         device: Optional torch device to load the model onto. If None, uses the default device.
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
+        workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
+            we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
@@ -90,48 +94,52 @@ def get_predict_unit(
     Raises:
         KeyError: If the specified model_name is not found in available models.
     """
-    if model_name == "uma-sm":
-        raise NotImplementedError(
-            "uma-sm has been renamed to 'uma-s-1', please update and try again."
-        )
-    try:
-        model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
-    except KeyError as err:
-        raise KeyError(
-            f"Model '{model_name}' not found. Available models: {available_models}"
-        ) from err
-    checkpoint_path = hf_hub_download(
-        filename=model_checkpoint.filename,
-        repo_id=model_checkpoint.repo_id,
-        subfolder=model_checkpoint.subfolder,
-        revision=model_checkpoint.revision,
-        cache_dir=cache_dir,
-    )
-    atom_refs = get_isolated_atomic_energies(model_name, cache_dir)
+    checkpoint_path = pretrained_checkpoint_path_from_name(model_name)
+    atom_refs = get_reference_energies(model_name, "atom_refs", cache_dir)
+
+    if _MODEL_CKPTS.checkpoints[model_name].form_elem_refs is not None:
+        form_elem_refs = get_reference_energies(
+            model_name, "form_elem_refs", cache_dir
+        )["refs"]
+    else:
+        form_elem_refs = None
+
     return load_predict_unit(
-        checkpoint_path, inference_settings, overrides, device, atom_refs
+        checkpoint_path,
+        inference_settings,
+        overrides,
+        device,
+        atom_refs,
+        form_elem_refs,
+        workers,
     )
 
 
-def get_isolated_atomic_energies(model_name: str, cache_dir: str = CACHE_DIR) -> dict:
+def get_reference_energies(
+    model_name: str,
+    reference_type: Literal["atom_refs", "form_elem_refs"] = "atom_refs",
+    cache_dir: str = CACHE_DIR,
+) -> dict:
     """
     Retrieves the isolated atomic energies for use with single atom systems into the CACHE_DIR
 
     Args:
         model_name: Name of the model to load from available pretrained models.
+        reference_type: Type of references file to download: atom_refs or bulk_refs.
         cache_dir: Path to folder where files will be stored. Default is "~/.cache/fairchem"
     Returns:
-        Atomic element reference data
+        Atomic or bulk phase element reference data
 
     Raises:
         KeyError: If the specified model_name is not found in available models.
     """
     model_checkpoint = _MODEL_CKPTS.checkpoints[model_name]
-    atomic_refs_path = hf_hub_download(
-        filename=model_checkpoint.atom_refs["filename"],
+    file_data = getattr(model_checkpoint, reference_type)
+    refs_path = hf_hub_download(
+        filename=file_data["filename"],
         repo_id=model_checkpoint.repo_id,
-        subfolder=model_checkpoint.atom_refs["subfolder"],
+        subfolder=file_data["subfolder"],
         revision=model_checkpoint.revision,
         cache_dir=cache_dir,
     )
-    return OmegaConf.load(atomic_refs_path)
+    return OmegaConf.load(refs_path)
