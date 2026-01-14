@@ -171,7 +171,7 @@ def create_genarris_jobs(
     if spg_info == "standard":
         spg_info = ["standard"] * len(z_list)
     if isinstance(spg_info[0], int):
-        spg_info = [[spg_info]]
+        spg_info = [spg_info]
     if len(spg_info) == 1 and len(z_list) > 1:
         spg_info = spg_info * len(z_list)
     if len(spg_info) != len(z_list):
