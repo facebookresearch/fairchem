@@ -162,7 +162,7 @@ class FixExternalCallback:
         # force copy here, otherwise we can accident modify the original array in lammps
         # TODO: only need to get atomic numbers once and cache it?
         # is there a way to check atom types are mapped correctly?
-        atom_type_np = lmp.numpy.extract_atom("type")
+        atom_type_np = lmp.numpy.extract_atom("type")[:nlocal]
         masses = lmp.numpy.extract_atom("mass")
         atomic_mass_arr = masses[atom_type_np]
         atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
