@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-data-odac"
+dynamic = ["version", "readme"]
+description = "Code for ODAC MOF configurations and VASP input sets for direct air capture"
+license = {text = "MIT License"}
+dependencies = [
+    "ase>=3.27",
+    "pymatgen>=2023.10.3",
+]
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/odac"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match  fairchem_data_odac-*'
+
+[tool.hatch.build]
+directory = "../../dist-data-odac"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/data/odac"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/data/odac"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/data/odac/README.md" }
+]

@@ -82,5 +82,23 @@
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
         }
+    },
+    "esen-sm-filtered-odac25": {
+        "filename": "esen_sm_odac25_filtered.pt",
+        "repo_id": "facebook/ODAC25",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "odac_elem_refs.yaml"
+        }
+    },
+    "esen-sm-full-odac25": {
+        "filename": "esen_sm_odac25_full.pt",
+        "repo_id": "facebook/ODAC25",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "odac_elem_refs.yaml"
+        }
     }
 }
