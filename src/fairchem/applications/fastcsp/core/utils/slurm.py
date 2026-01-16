@@ -220,7 +220,9 @@ def get_slurm_config(
                 "timeout_min": normalized_config.get("time", 7200),
                 "slurm_use_srun": False,
                 "cpus_per_task": normalized_config.get("cpus_per_task", 1),
-                "slurm_array_parallelism": 0,
+                "slurm_array_parallelism": normalized_config.get(
+                    "array_parallelism", 0
+                ),
             }
 
         elif module_name == "relax":
@@ -231,7 +233,9 @@ def get_slurm_config(
                 "gpus_per_node": normalized_config.get("gpus_per_node", 1),
                 "cpus_per_task": normalized_config.get("cpus_per_task", 10),
                 "mem_gb": normalized_config.get("mem_gb", 50),
-                "slurm_array_parallelism": 0,
+                "slurm_array_parallelism": normalized_config.get(
+                    "array_parallelism", 0
+                ),
             }
 
         executor_params.update(base_params)
