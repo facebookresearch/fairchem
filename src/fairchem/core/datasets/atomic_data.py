@@ -79,7 +79,7 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
 
 @requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
-    """Preforms nearest neighbor search and returns edge index, distances,
+    """Performs nearest neighbor search and returns edge index, distances,
     and cell offsets"""
     struct = AseAtomsAdaptor.get_structure(atoms)
 
