@@ -249,9 +249,9 @@ def relax_atoms(atoms, relax_config, calc):
             f"Unsupported optimizer: {optimizer_name}. (L)BFGS and FIRE are recommended."
         )
     if relax_config.get("relax_cell"):
-        optimizer = optimizer_cls(FrechetCellFilter(atoms))
+        optimizer = optimizer_cls(FrechetCellFilter(atoms), logfile=None)
     else:
-        optimizer = optimizer_cls(atoms)
+        optimizer = optimizer_cls(atoms, logfile=None)
 
     # Perform optimization
     if relax_config.get("write_traj"):
