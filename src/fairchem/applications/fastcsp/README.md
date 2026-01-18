@@ -1,6 +1,6 @@
 # FastCSP: Accelerated Molecular Crystal Structure Prediction with Universal Model for Atoms
 
-FastCSP is a complete computational workflow for predicting molecular crystal structures for rigid molecules by combining random structure generation and machine learning-based optimization without requiring high-accuracy DFT validation.
+FastCSP is a complete computational workflow for predicting molecular crystal structures from selected conformers by combining random structure generation and machine learning-based optimization without requiring high-accuracy DFT validation.
 
 ## Overview
 
@@ -85,14 +85,12 @@ your_project_root/
         │
         ├── filtered_structures/    # Stage 4: Energy-filtered and deduplicated structures
         │   ├── MOLECULE1/
-        │   │   └── CONFORMER1/
-        │   │       └── *.parquet      # Best structures ranked by energy
+        │   │   └── *.parquet      # Best structures ranked by energy/
         │   └── MOLECULE2/
         │
         ├── matched_structures/     # Stage 5: Structures compared to experimental data
         │   ├── MOLECULE1/
-        │   │   └── CONFORMER1/
-        │   │       └── *.parquet      # Structures with experimental similarity scores
+        │   │   └── *.parquet      # Structures with experimental similarity scores/
         │   └── MOLECULE2/
 ```
 
@@ -102,6 +100,48 @@ your_project_root/
 - **CIF Strings**: Stored within Parquet files for easy structure visualization and analysis
 - **JSON Files**: Raw Genarris outputs with structure information
 - **Log Files**: Comprehensive workflow logs with timestamps, stage progress, and error tracking
+
+### Input File: molecules.csv
+
+The `molecules.csv` file defines the target molecules for crystal structure prediction.
+
+**Required Columns:**
+| Column | Description |
+|--------|-------------|
+| `name` | Unique identifier for the molecule |
+| `molecule_path` | Path to molecular geometry file (.xyz, .extxyz, .mol) or directory containing multiple conformers |
+
+**Optional Columns (for per-molecule customization):**
+| Column | Description | Example |
+|--------|-------------|---------|
+| `z` | List of Z-values (molecules per unit cell) | `[1, 2, 4]` |
+| `spg` | Space group specification per Z-value | `[[1, 2, 4], [14, 19]]` or `"standard"` |
+| `cif_path` | Path to experimental CIF file(s) for evaluation | `/path/to/experimental.cif` |
+
+**Example molecules.csv:**
+```csv
+name,molecule_path,z,spg,cif_path
+aspirin,/data/conformers/aspirin/,"[1, 2, 4]","standard",/data/experimental/ACSALA.cif
+caffeine,/data/conformers/caffeine.xyz,"[2, 4]","[[14, 19], [2, 4, 14]]",/data/experimental/caffeine/
+```
+
+**Space Group (`spg`) Behavior:**
+The `spg` column supports flexible specification with automatic broadcasting:
+
+| `spg` value | `z` value | Result |
+|-------------|-----------|--------|
+| `"standard"` | `[1, 2, 4]` | All compatible space groups used for each Z |
+| `[14, 19]` | `[1, 2, 4]` | Space groups 14 and 19 used for **all** Z values |
+| `[[14, 19], [2, 4], [14]]` | `[1, 2, 4]` | SG 14,19 for Z=1; SG 2,4 for Z=2; SG 14 for Z=4 |
+
+- A single list of integers (e.g., `[14, 19]`) is automatically replicated for all Z values
+- `"standard"` is expanded to use all compatible space groups for each Z value
+- A list of lists must have the same length as the Z list (one entry per Z value)
+
+**Notes:**
+- Enable `read_z_from_file: true` and/or `read_spg_from_file: true` in the config to use per-molecule Z and space group values from the CSV
+- `molecule_path` can point to a single geometry file or a directory containing multiple conformer files (.xyz, .extxyz, .mol)
+- For evaluation, `cif_path` can point to a single CIF file or a directory containing multiple CIF files
 
 ## Getting Started
 
@@ -147,7 +187,7 @@ fastcsp --config config.yaml --stages generate process_generated relax filter
 
 | Stage | Description | Output |
 |-------|-------------|--------|
-| `generate` | Generate crystal structures using Genarris | `genarris/` directory |
+| `generate` | Generate crystal structures using Genarris | `generated_structures/` directory |
 | `process_generated` | Process and deduplicate Genarris outputs | `raw_structures/` directory |
 | `relax` | Perform UMA-based structure relaxation | `relaxed/` directory |
 | `filter` | Energy filtering and duplicate removal | `filtered_structures/` directory |
