@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 from typing import TYPE_CHECKING
@@ -77,21 +78,15 @@ def get_hydra_config_from_yaml(
     return get_canonical_config(cfg)
 
 
-# def main(
-#     args: argparse.Namespace | None = None, override_args: list[str] | None = None
-# ):
-# if args is None:
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("-c", "--config", type=str, required=True)
-#     args, override_args = parser.parse_known_args()
-# cfg = get_hydra_config_from_yaml(args.config, override_args)
+def main(
+    args: argparse.Namespace | None = None, override_args: list[str] | None = None
+):
+    if args is None:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-c", "--config", type=str, required=True)
+        args, override_args = parser.parse_known_args()
 
-
-@hydra.main(version_base=None, config_path=".", config_name="config")
-def main(cfg: DictConfig):
-    cfg = OmegaConf.merge({"job": OmegaConf.structured(JobConfig)}, cfg)
-    cfg = get_canonical_config(cfg)
-
+    cfg = get_hydra_config_from_yaml(args.config, override_args)
     log_dir = cfg.job.metadata.log_dir
     os.makedirs(cfg.job.run_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
