@@ -419,16 +419,20 @@ class AtomicData:
         # TODO another way to specify this is to spcify a key. maybe total_charge
         charge = torch.LongTensor(
             [
-                atoms.info.get("charge", 0)
-                if r_data_keys is not None and "charge" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("charge", 0)
+                    if r_data_keys is not None and "charge" in r_data_keys
+                    else 0
+                )
             ]
         )
         spin = torch.LongTensor(
             [
-                atoms.info.get("spin", 0)
-                if r_data_keys is not None and "spin" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("spin", 0)
+                    if r_data_keys is not None and "spin" in r_data_keys
+                    else 0
+                )
             ]
         )
 

@@ -13,6 +13,7 @@ job:
   device_type: ${cluster.device}
   scheduler:
     use_ray: true
+    recursive_instantiate_runner: False
     mode: ${cluster.mode}
     ranks_per_node: ${cluster.ranks_per_node}
     num_nodes: 1

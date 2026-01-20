@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import argparse
 import logging
 import os
 from typing import TYPE_CHECKING
@@ -78,15 +77,21 @@ def get_hydra_config_from_yaml(
     return get_canonical_config(cfg)
 
 
-def main(
-    args: argparse.Namespace | None = None, override_args: list[str] | None = None
-):
-    if args is None:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-c", "--config", type=str, required=True)
-        args, override_args = parser.parse_known_args()
+# def main(
+#     args: argparse.Namespace | None = None, override_args: list[str] | None = None
+# ):
+# if args is None:
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("-c", "--config", type=str, required=True)
+#     args, override_args = parser.parse_known_args()
+# cfg = get_hydra_config_from_yaml(args.config, override_args)
 
-    cfg = get_hydra_config_from_yaml(args.config, override_args)
+
+@hydra.main(version_base=None, config_path=".", config_name="config")
+def main(cfg: DictConfig):
+    cfg = OmegaConf.merge({"job": OmegaConf.structured(JobConfig)}, cfg)
+    cfg = get_canonical_config(cfg)
+
     log_dir = cfg.job.metadata.log_dir
     os.makedirs(cfg.job.run_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
@@ -119,10 +124,13 @@ def main(
             )
         # if using ray, then launch ray cluster locally
         if scheduler_cfg.use_ray:
-            logging.info("Running in local mode with local ray cluster")
-            # don't recursively instantiate the runner here to allow lazy instantiations in the runner
-            # the hands all responsibility the user, ie they must initialize ray
-            runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
+            logging.info(
+                f"Running in local mode with local ray cluster with recursive_instantiate_runner={cfg.job.recursive_instantiate_runner}"
+            )
+            # disable recursively instantiate the runner here to allow lazy instantiations in the runner
+            runner: Runner = hydra.utils.instantiate(
+                cfg.runner, _recursive_=cfg.job.recursive_instantiate_runner
+            )
             runner.run()
         else:
             from fairchem.core.launchers.slurm_launch import local_launch
