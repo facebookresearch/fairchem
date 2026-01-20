@@ -182,7 +182,7 @@ triplet.get_potential_energy() - singlet.get_potential_energy()
 ```
 
 #### Multi-GPU Inference and LAMMPs
-If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). For example, you can run the following 8000 atom md simulation with ~10 qps (8x H100 GPU), ~10x faster than single-gpu inference! This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://fair-chem.github.io/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
+If you have multiple gpus (or multiple nodes), we handle all the parallelism for you under the hood by a single flag (workers=N). For example, you can run the following 8000 atom md simulation with ~10 qps (8x H100 GPU), ~10x faster than single-gpu inference! Current benchmarks show we can run uma-s @ ~1 ns/per day with 100k+ atoms systems in real MD scenarios (more on this to come!). This is also compatible with LAMMPs to perform large scale MD. See our [docs](https://fair-chem.github.io/core/common_tasks/summary.html) for more details. This requires the Ray package to be installed and comes with the extras bundle.
 ```
 pip install fairchem-core[extras]
 ```

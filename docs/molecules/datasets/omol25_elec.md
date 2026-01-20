@@ -72,10 +72,8 @@ for idx in indices:
 ## How to Access the Data
 
 The data are stored and accessible via storage on the Eagle cluster at Argonne National Laboratory. For free access to the data, you will need to do the following:
-1. Fill in the [access form](https://forms.gle/RyGGmbMkDSQ57wS2A). Use institutional credentials where possible with Globus.
-2. After acceptance (this step requires human validation, so may take some time), navigate to the collection with the following link: [Globus OMol25 Collection](https://app.globus.org/file-manager?origin_id=0b73865a-ff20-4f57-a1d7-573d86b54624&origin_path=%2F).
-    * Acceptance will trigger an email to be sent to the address used in the form.
-3. To download the data, you can access via HTTPS calls (slower) or by downloading the [Globus Connect Personal client](https://www.globus.org/globus-connect-personal) (preferred method) and creating a local endpoint.
+1. Follow the access instructions here: [OMol25 Electronic Structure Spotlight Dataset](https://www.materialsdatafacility.org/spotlight/omol25). After group approval (this step requires human validation, so may take some time), you will be able to access the data via the same page. 
+2. To download the data, you can access via HTTPS calls (slower) or by downloading the [Globus Connect Personal client](https://www.globus.org/globus-connect-personal) (preferred method) and creating a local endpoint.
 
 
 ## Contact Us
