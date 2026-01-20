@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import ase
 from ase import units
@@ -21,7 +21,7 @@ class ASELangevinUMARunner(Runner):
         self,
         atoms_list: list[ase.Atoms],  # Changed to list of atoms
         model_name: str = "uma-s-1p1",
-        settings: InferenceSettings | str = "default",
+        settings: InferenceSettings | Literal["default", "other options"] = "default",
         task_name: str = "omat",
         timestep_fs: float = 1.0,
         temp_k: float = 300.0,
