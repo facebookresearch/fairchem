@@ -83,7 +83,7 @@ Module Contents
    Get a backend to run ASE calculations concurrently.
 
 
-.. py:class:: InferenceBatcher(predict_unit: fairchem.core.units.mlip_unit.predict.MLIPPredictUnit, max_batch_size: int = 16, batch_wait_timeout_s: float = 0.1, num_replicas: int = 1, concurrency_backend: Literal['threads'] = 'threads', concurrency_backend_options: dict | None = None, ray_actor_options: dict | None = None)
+.. py:class:: InferenceBatcher(predict_unit: fairchem.core.units.mlip_unit.predict.MLIPPredictUnit, max_batch_size: int = 512, batch_wait_timeout_s: float = 0.1, num_replicas: int = 1, concurrency_backend: Literal['threads'] = 'threads', concurrency_backend_options: dict | None = None, ray_actor_options: dict | None = None)
 
    Batches incoming inference requests.
 
@@ -114,11 +114,15 @@ Module Contents
 
 
    .. py:property:: batch_predict_unit
+      :type: fairchem.core.units.mlip_unit.predict.BatchServerPredictUnit
 
 
-   .. py:method:: shutdown(wait: bool = True)
+
+   .. py:method:: shutdown(wait: bool = True) -> None
 
       Shutdown the executor.
+
+      :param wait: If True, wait for pending tasks to complete before returning.
 
 
 

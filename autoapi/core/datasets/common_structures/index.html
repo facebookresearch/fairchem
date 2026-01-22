@@ -30,7 +30,7 @@
 
     <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
-    <link rel="stylesheet" type="text/css" href="../../../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/togglebutton.css?v=9c3e77be" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-thebe.css?v=4fa983c6" />
@@ -51,7 +51,7 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../../../_static/togglebutton.js?v=1ae7504c"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
@@ -635,7 +635,8 @@ document.write(`
                 <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.common_structures.get_fcc_carbon_xtal"><code class="docutils literal notranslate"><span class="pre">get_fcc_carbon_xtal()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.common_structures.get_fcc_crystal_by_num_atoms"><code class="docutils literal notranslate"><span class="pre">get_fcc_crystal_by_num_atoms()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.common_structures.get_fcc_crystal_by_num_cells"><code class="docutils literal notranslate"><span class="pre">get_fcc_crystal_by_num_cells()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -655,7 +656,10 @@ document.write(`
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.common_structures.get_fcc_carbon_xtal" title="core.datasets.common_structures.get_fcc_carbon_xtal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fcc_carbon_xtal</span></code></a>(num_atoms[, lattice_constant])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.common_structures.get_fcc_crystal_by_num_atoms" title="core.datasets.common_structures.get_fcc_crystal_by_num_atoms"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fcc_crystal_by_num_atoms</span></code></a>(num_atoms[, ...])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.datasets.common_structures.get_fcc_crystal_by_num_cells" title="core.datasets.common_structures.get_fcc_crystal_by_num_cells"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_fcc_crystal_by_num_cells</span></code></a>(n_cells[, atom_type, ...])</p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -665,8 +669,13 @@ document.write(`
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py function">
-<dt class="sig sig-object py" id="core.datasets.common_structures.get_fcc_carbon_xtal">
-<span class="sig-prename descclassname"><span class="pre">core.datasets.common_structures.</span></span><span class="sig-name descname"><span class="pre">get_fcc_carbon_xtal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lattice_constant</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3.8</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.common_structures.get_fcc_carbon_xtal" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="core.datasets.common_structures.get_fcc_crystal_by_num_atoms">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.common_structures.</span></span><span class="sig-name descname"><span class="pre">get_fcc_crystal_by_num_atoms</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">num_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lattice_constant</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'C'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.common_structures.get_fcc_crystal_by_num_atoms" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.datasets.common_structures.get_fcc_crystal_by_num_cells">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.common_structures.</span></span><span class="sig-name descname"><span class="pre">get_fcc_crystal_by_num_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_cells</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atom_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'Cu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lattice_constant</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3.61</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.common_structures.get_fcc_crystal_by_num_cells" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 </section>
@@ -738,7 +747,8 @@ document.write(`
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.common_structures.get_fcc_carbon_xtal"><code class="docutils literal notranslate"><span class="pre">get_fcc_carbon_xtal()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.common_structures.get_fcc_crystal_by_num_atoms"><code class="docutils literal notranslate"><span class="pre">get_fcc_crystal_by_num_atoms()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.common_structures.get_fcc_crystal_by_num_cells"><code class="docutils literal notranslate"><span class="pre">get_fcc_crystal_by_num_cells()</span></code></a></li>
 </ul>
 </li>
 </ul>

@@ -30,7 +30,7 @@
 
     <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
-    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=9c3e77be" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
@@ -51,7 +51,7 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="../../_static/togglebutton.js?v=1ae7504c"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
@@ -812,14 +812,14 @@ document.write(`
 <span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">pretrained_mlip</span><span class="p">,</span> <span class="n">FAIRChemCalculator</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets.common_structures</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_fcc_carbon_xtal</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.datasets.common_structures</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_fcc_crystal_by_num_atoms</span>
 
 <span class="n">predictor</span> <span class="o">=</span> <span class="n">pretrained_mlip</span><span class="o">.</span><span class="n">get_predict_unit</span><span class="p">(</span>
     <span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">,</span> <span class="n">inference_settings</span><span class="o">=</span><span class="s2">&quot;turbo&quot;</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="n">workers</span><span class="o">=</span><span class="mi">1</span>
 <span class="p">)</span>
 <span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">)</span>
 
-<span class="n">atoms</span> <span class="o">=</span> <span class="n">get_fcc_carbon_xtal</span><span class="p">(</span><span class="mi">8000</span><span class="p">)</span>
+<span class="n">atoms</span> <span class="o">=</span> <span class="n">get_fcc_crystal_by_num_atoms</span><span class="p">(</span><span class="mi">8000</span><span class="p">)</span>
 <span class="n">atoms</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
 
 <span class="n">dyn</span> <span class="o">=</span> <span class="n">Langevin</span><span class="p">(</span>

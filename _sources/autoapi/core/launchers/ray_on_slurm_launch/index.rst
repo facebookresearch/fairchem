@@ -119,7 +119,7 @@ Module Contents
    .. py:method:: load_state(checkpoint_location: str | None) -> None
 
 
-.. py:function:: ray_entrypoint(runner_config: omegaconf.DictConfig)
+.. py:function:: ray_entrypoint(runner_config: omegaconf.DictConfig, recursive_instantiate_runner: bool)
 
 .. py:function:: ray_on_slurm_launch(config: omegaconf.DictConfig, log_dir: str)
 

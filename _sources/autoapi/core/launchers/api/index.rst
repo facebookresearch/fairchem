@@ -369,6 +369,12 @@ Module Contents
 
 
 
+   .. py:attribute:: recursive_instantiate_runner
+      :type:  bool
+      :value: True
+
+
+
    .. py:method:: __post_init__() -> None
 
 

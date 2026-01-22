@@ -42,7 +42,7 @@ Module Contents
    .. py:attribute:: split_oom_batch
 
 
-   .. py:method:: configure_batching(max_batch_size: int = 32, batch_wait_timeout_s: float = 0.05)
+   .. py:method:: configure_batching(max_batch_size: int, batch_wait_timeout_s: float)
 
 
    .. py:method:: get_predict_unit_attribute(attribute_name: str) -> Any
@@ -55,6 +55,7 @@ Module Contents
       Process a batch of AtomicData objects.
 
       :param data_list: List of AtomicData objects (automatically batched by Ray Serve)
+      :param undo_element_references: Whether to undo element references in predictions
 
       :returns: List of prediction dictionaries, one per input
 
@@ -67,6 +68,7 @@ Module Contents
       Main entry point for inference requests.
 
       :param data: Single AtomicData object
+      :param undo_element_references: Whether to undo element references in predictions
 
       :returns: Prediction dictionary for this system
 
@@ -76,19 +78,21 @@ Module Contents
 
       Split batched predictions back into individual system predictions.
 
-      :param batch_predictions: Dictionary of batched prediction tensors
+      :param predictions: Dictionary of batched prediction tensors
       :param batch: The batched AtomicData used for inference
 
       :returns: List of prediction dictionaries, one per system
 
 
 
-.. py:function:: setup_batch_predict_server(predict_unit: fairchem.core.units.mlip_unit.MLIPPredictUnit, max_batch_size: int = 32, batch_wait_timeout_s: float = 0.1, split_oom_batch: bool = True, num_replicas: int = 1, ray_actor_options: dict | None = None, deployment_name: str = 'predict-server', route_prefix: str = '/predict') -> ray.serve.handle.DeploymentHandle
+.. py:function:: setup_batch_predict_server(predict_unit: fairchem.core.units.mlip_unit.MLIPPredictUnit, max_batch_size: int = 512, batch_wait_timeout_s: float = 0.1, split_oom_batch: bool = True, num_replicas: int = 1, ray_actor_options: dict | None = None, deployment_name: str = 'predict-server', route_prefix: str = '/predict') -> ray.serve.handle.DeploymentHandle
 
    Set up and deploy a BatchPredictServer for batched inference.
 
    :param predict_unit: An MLIPPredictUnit instance to use for batched inference
-   :param max_batch_size: Maximum number of systems per batch.
+   :param max_batch_size: Maximum number of atoms in a batch.
+                          The actual number of atoms will likely be larger than this as batches
+                          are split when num atoms exceeds this value.
    :param batch_wait_timeout_s: Maximum wait time before processing partial batch.
    :param split_oom_batch: Whether to split batches that cause OOM errors.
    :param num_replicas: Number of deployment replicas for scaling.

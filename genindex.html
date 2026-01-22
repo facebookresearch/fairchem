@@ -29,7 +29,7 @@
 
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="_static/styles/sphinx-book-theme.css?v=eba8b062" />
-    <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="_static/togglebutton.css?v=9c3e77be" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-thebe.css?v=4fa983c6" />
@@ -50,21 +50,23 @@
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="_static/togglebutton.js?v=4a39c7ea"></script>
+    <script src="_static/togglebutton.js?v=1ae7504c"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="_static/design-tabs.js?v=f930bc37"></script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
     <script async="async" src="_static/sphinx-thebe.js?v=c100c467"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs"></script>
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.2.0/dist/mermaid-layout-elk.esm.min.mjs"></script>
-    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";import elkLayouts from "https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.2.0/dist/mermaid-layout-elk.esm.min.mjs";mermaid.registerLayoutLoaders(elkLayouts);mermaid.initialize({startOnLoad:false});</script>
     <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
     <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
 
-const defaultStyle = document.createElement('style');
-defaultStyle.textContent = `pre.mermaid {
+
+
+
+
+const initStyles = () => {
+    const defaultStyle = document.createElement('style');
+    defaultStyle.textContent = `pre.mermaid {
     /* Same as .mermaid-container > pre */
     display: block;
     width: 100%;
@@ -75,12 +77,11 @@ pre.mermaid > svg {
     height: 500px;
     width: 100%;
     max-width: 100% !important;
-}
-`;
-document.head.appendChild(defaultStyle);
+}`;
+    document.head.appendChild(defaultStyle);
 
-const fullscreenStyle = document.createElement('style');
-fullscreenStyle.textContent = `.mermaid-container {
+    const fullscreenStyle = document.createElement('style');
+    fullscreenStyle.textContent = `.mermaid-container {
     display: flex;
     flex-direction: row;
     width: 100%;
@@ -232,10 +233,32 @@ fullscreenStyle.textContent = `.mermaid-container {
 .mermaid-fullscreen-modal .mermaid-fullscreen-btn {
     display: none !important;
 }`;
-document.head.appendChild(fullscreenStyle);
+    document.head.appendChild(fullscreenStyle);
+}
 
 // Detect if page has dark background
 const isDarkTheme = () => {
+    // We use a set of heuristics:
+    // 1. Check for common dark mode classes or attributes
+    // 2. Check computed background color brightness
+    if (document.documentElement.classList.contains('dark') ||
+        document.documentElement.getAttribute('data-theme') === 'dark' ||
+        document.body.classList.contains('dark') ||
+        document.body.getAttribute('data-theme') === 'dark') {
+        // console.log("Dark theme detected via class/attribute");
+        return true;
+    }
+    if (document.documentElement.classList.contains('light') ||
+        document.documentElement.getAttribute('data-theme') === 'light' ||
+        document.body.classList.contains('light') ||
+        document.body.getAttribute('data-theme') === 'light') {
+        // console.log("Light theme detected via class/attribute");
+        return false;
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // console.log("Dark theme detected via prefers-color-scheme");
+        return true;
+    }
     const bgColor = window.getComputedStyle(document.body).backgroundColor;
     const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
     if (match) {
@@ -243,15 +266,45 @@ const isDarkTheme = () => {
         const g = parseInt(match[2]);
         const b = parseInt(match[3]);
         const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        // console.log("Background color brightness:", brightness);
         return brightness < 128;
     }
+    // console.log("No dark or light theme detected, defaulting to light theme");
     return false;
 };
 
-const load = async () => {
-    await mermaid.run();
+let darkTheme = isDarkTheme();
+let modal = null;
+let modalContent = null;
+let previousScrollOffset = [window.scrollX, window.scrollY];
 
-    const all_mermaids = document.querySelectorAll(".mermaid");
+const runMermaid = async (rerun) => {
+    console.log("Running mermaid diagrams, rerun =", rerun);
+    // clear all existing mermaid charts
+    let all_mermaids = document.querySelectorAll(".mermaid");
+
+    if (rerun) {
+        all_mermaids.forEach((el) => {
+            if(!el.hasAttribute("data-original-code")) {
+                // store original code
+                // console.log(`Storing original code for first run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+            if(el.getAttribute("data-processed") === "true") {
+                // remove and restore original
+                el.removeAttribute("data-processed");
+                // console.log(`Restoring original code for re-run: `, el.getAttribute('data-original-code'));
+                el.innerHTML = el.getAttribute('data-original-code');
+            } else {
+                // store original code
+                // console.log(`Storing original code for re-run: `, el.innerHTML);
+                el.setAttribute('data-original-code', el.innerHTML);
+            }
+        });
+        await mermaid.run();
+    }
+
+    all_mermaids = document.querySelectorAll(".mermaid");
     const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
 
     if ("False" === "True") {
@@ -259,10 +312,10 @@ const load = async () => {
         if(mermaids_to_add_zoom > 0) {
             var svgs = d3.selectAll("");
             if(all_mermaids.length !== mermaids_processed.length) {
-                setTimeout(load, 200);
+                setTimeout(() => runMermaid(false), 200);
                 return;
             } else if(svgs.size() !== mermaids_to_add_zoom) {
-                setTimeout(load, 200);
+                setTimeout(() => runMermaid(false), 200);
                 return;
             } else {
                 svgs.each(function() {
@@ -278,16 +331,21 @@ const load = async () => {
         }
     } else if(all_mermaids.length !== mermaids_processed.length) {
         // Wait for mermaid to process all diagrams
-        setTimeout(load, 200);
+        setTimeout(() => runMermaid(false), 200);
         return;
     }
-
-    const darkTheme = isDarkTheme();
 
     // Stop here if not adding fullscreen capability
     if ("True" !== "True") return;
 
-    const modal = document.createElement('div');
+    if (modal !== null ) {
+        // Destroy existing modal
+        modal.remove();
+        modal = null;
+        modalContent = null;
+    }
+
+    modal = document.createElement('div');
     modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
@@ -298,10 +356,8 @@ const load = async () => {
     `;
     document.body.appendChild(modal);
 
-    const modalContent = modal.querySelector('.mermaid-container-fullscreen');
+    modalContent = modal.querySelector('.mermaid-container-fullscreen');
     const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
-
-    let previousScrollOffset = [window.scrollX, window.scrollY];
 
     const closeModal = () => {
         modal.classList.remove('active');
@@ -320,11 +376,14 @@ const load = async () => {
         }
     });
 
-    const allButtons = [];
-
     document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
         if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
             mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            // Already processed, adjust button class if needed
+            const existingBtn = mermaidDiv.parentNode.querySelector('.mermaid-fullscreen-btn');
+            if (existingBtn) {
+                existingBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+            }
             return;
         }
 
@@ -382,46 +441,57 @@ const load = async () => {
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
         });
-
         container.appendChild(fullscreenBtn);
-        allButtons.push(fullscreenBtn);
-    });
-
-    // Update theme classes when theme changes
-    const updateTheme = () => {
-        const dark = isDarkTheme();
-        allButtons.forEach(btn => {
-            if (dark) {
-                btn.classList.add('dark-theme');
-            } else {
-                btn.classList.remove('dark-theme');
-            }
-        });
-        if (dark) {
-            modal.classList.add('dark-theme');
-            modalContent.classList.add('dark-theme');
-            closeBtn.classList.add('dark-theme');
-        } else {
-            modal.classList.remove('dark-theme');
-            modalContent.classList.remove('dark-theme');
-            closeBtn.classList.remove('dark-theme');
-        }
-    };
-
-    // Watch for theme changes
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['class', 'style', 'data-theme']
-    });
-    observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ['class', 'style']
     });
 };
 
-window.addEventListener("load", load);
-</script>
+const load = async () => {
+    initStyles();
+
+    await runMermaid(true);
+
+    const reRunIfThemeChanges = async () => {
+        const newDarkTheme = isDarkTheme();
+        if (newDarkTheme !== darkTheme) {
+            darkTheme = newDarkTheme;
+            console.log("Theme change detected, re-running mermaid with", darkTheme ? "dark" : "default", "theme");
+            await mermaid.initialize(
+                {...JSON.parse(
+                    `{"startOnLoad": false}`
+                ),
+                ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+                }
+            );
+            await runMermaid(true);
+        }
+    };
+
+    // Update theme classes when theme changes
+    const themeObserver = new MutationObserver(reRunIfThemeChanges);
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+};
+
+
+
+
+
+console.log("Initializing mermaid with", darkTheme ? "dark" : "default", "theme");
+mermaid.initialize(
+    {...JSON.parse(
+        `{"startOnLoad": false}`
+    ),
+    ...{ darkMode: darkTheme, theme: darkTheme ? 'dark' : 'default' },
+    }
+);
+
+window.addEventListener("load", load);</script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'genindex';</script>
     <link rel="index" title="Index" href="#" />
     <link rel="search" title="Search" href="search.html" />
@@ -1337,10 +1407,10 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._DEFAULT_ADSLAB_FILTER">_DEFAULT_ADSLAB_FILTER (in module ocpapi.workflows.adsorbates)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/ocpapi/workflows/retry/index.html#ocpapi.workflows.retry._wait_check_retry_after._default_wait">_default_wait (ocpapi.workflows.retry._wait_check_retry_after attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="autoapi/ocpapi/workflows/adsorbates/index.html#ocpapi.workflows.adsorbates._delete_system">_delete_system() (in module ocpapi.workflows.adsorbates)</a>
 </li>
       <li><a href="autoapi/core/common/data_parallel/index.html#core.common.data_parallel.BalancedBatchSampler._dist_enabled">_dist_enabled() (core.common.data_parallel.BalancedBatchSampler static method)</a>
@@ -1578,6 +1648,8 @@ document.write(`
       <li><a href="autoapi/core/modules/scaling/fit/index.html#core.modules.scaling.fit._prefilled_input">_prefilled_input() (in module core.modules.scaling.fit)</a>
 </li>
       <li><a href="autoapi/core/datasets/samplers/max_atom_distributed_sampler/index.html#core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler._prepare_batches">_prepare_batches() (core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler method)</a>
+</li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner._print_summary">_print_summary() (core.components.dynamics.ase_md_runner.ASELangevinUMARunner method)</a>
 </li>
       <li><a href="autoapi/ocpapi/workflows/retry/index.html#ocpapi.workflows.retry._wait_check_retry_after._rate_limit_logging">_rate_limit_logging (ocpapi.workflows.retry._wait_check_retry_after attribute)</a>
 </li>
@@ -2110,6 +2182,8 @@ document.write(`
         <li><a href="autoapi/core/datasets/ase_datasets/index.html#core.datasets.ase_datasets.AseDBDataset">(class in core.datasets.ase_datasets)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner">ASELangevinUMARunner (class in core.components.dynamics.ase_md_runner)</a>
+</li>
       <li><a href="autoapi/core/datasets/index.html#core.datasets.AseReadDataset">AseReadDataset (class in core.datasets)</a>
 
       <ul>
@@ -2178,6 +2252,8 @@ document.write(`
         <li><a href="autoapi/ocpapi/index.html#ocpapi.Slab.atoms">(ocpapi.Slab attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.atoms_list">atoms_list (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
       <li><a href="autoapi/data/oc/utils/index.html#data.oc.utils.DetectTrajAnomaly.atoms_tag">atoms_tag (data.oc.utils.DetectTrajAnomaly attribute)</a>
 
       <ul>
@@ -3217,8 +3293,6 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/relaxation_runner/index.html#module-core.components.calculate._single.relaxation_runner">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate._single.singlepoint_runner
 
@@ -3226,6 +3300,8 @@ document.write(`
         <li><a href="autoapi/core/components/calculate/_single/singlepoint_runner/index.html#module-core.components.calculate._single.singlepoint_runner">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     core.components.calculate.recipes
 
@@ -3322,6 +3398,13 @@ document.write(`
 
       <ul>
         <li><a href="autoapi/core/components/common/load_dataframe/index.html#module-core.components.common.load_dataframe">module</a>
+</li>
+      </ul></li>
+      <li>
+    core.components.dynamics.ase_md_runner
+
+      <ul>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#module-core.components.dynamics.ase_md_runner">module</a>
 </li>
       </ul></li>
       <li>
@@ -5532,6 +5615,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/models/escaip/custom_types/index.html#core.models.escaip.custom_types.GraphAttentionData.frequency_vectors">frequency_vectors (core.models.escaip.custom_types.GraphAttentionData attribute)</a>
 </li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.friction_ps_inv">friction_ps_inv (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.from_ase">from_ase() (core.datasets.atomic_data.AtomicData class method)</a>
 </li>
       <li><a href="autoapi/data/oc/core/index.html#data.oc.core.Slab.from_atoms">from_atoms() (data.oc.core.Slab class method)</a>
@@ -5782,7 +5867,9 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.get_example">get_example() (core.datasets.atomic_data.AtomicData method)</a>
 </li>
-      <li><a href="autoapi/core/datasets/common_structures/index.html#core.datasets.common_structures.get_fcc_carbon_xtal">get_fcc_carbon_xtal() (in module core.datasets.common_structures)</a>
+      <li><a href="autoapi/core/datasets/common_structures/index.html#core.datasets.common_structures.get_fcc_crystal_by_num_atoms">get_fcc_crystal_by_num_atoms() (in module core.datasets.common_structures)</a>
+</li>
+      <li><a href="autoapi/core/datasets/common_structures/index.html#core.datasets.common_structures.get_fcc_crystal_by_num_cells">get_fcc_crystal_by_num_cells() (in module core.datasets.common_structures)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/utils/nn_utils/index.html#core.models.escaip.utils.nn_utils.get_feedforward">get_feedforward() (in module core.models.escaip.utils.nn_utils)</a>
 </li>
@@ -6477,6 +6564,8 @@ document.write(`
 </li>
         <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner.job_config">(core.components.calculate._calculate_runner.CalculateRunner attribute)</a>
 </li>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.job_config">(core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
         <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.job_config">(core.components.evaluate.eval_runner.EvalRunner attribute)</a>
 </li>
         <li><a href="autoapi/core/components/reducer/index.html#core.components.reducer.Reducer.job_config">(core.components.reducer.Reducer attribute)</a>, <a href="autoapi/core/components/reducer/index.html#id0">[1]</a>
@@ -6756,6 +6845,8 @@ document.write(`
         <li><a href="autoapi/core/components/benchmark/index.html#core.components.benchmark.OMCPolymorphReducer.load_state">(core.components.benchmark.OMCPolymorphReducer method)</a>
 </li>
         <li><a href="autoapi/core/components/calculate/_calculate_runner/index.html#core.components.calculate._calculate_runner.CalculateRunner.load_state">(core.components.calculate._calculate_runner.CalculateRunner method)</a>
+</li>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.load_state">(core.components.dynamics.ase_md_runner.ASELangevinUMARunner method)</a>
 </li>
         <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.load_state">(core.components.evaluate.eval_runner.EvalRunner method)</a>
 </li>
@@ -7384,6 +7475,8 @@ document.write(`
       </ul></li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint.model_config">model_config (core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint attribute)</a>
 </li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.model_name">model_name (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
       <li><a href="autoapi/core/models/uma/nn/mole_utils/index.html#core.models.uma.nn.mole_utils.model_search_and_replace">model_search_and_replace() (in module core.models.uma.nn.mole_utils)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/api/inference/index.html#core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint.model_state_dict">model_state_dict (core.units.mlip_unit.api.inference.MLIPInferenceCheckpoint attribute)</a>
@@ -7543,6 +7636,8 @@ document.write(`
         <li><a href="autoapi/core/components/common/flops_profile/index.html#module-core.components.common.flops_profile">core.components.common.flops_profile</a>
 </li>
         <li><a href="autoapi/core/components/common/load_dataframe/index.html#module-core.components.common.load_dataframe">core.components.common.load_dataframe</a>
+</li>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#module-core.components.dynamics.ase_md_runner">core.components.dynamics.ase_md_runner</a>
 </li>
         <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#module-core.components.evaluate.eval_runner">core.components.evaluate.eval_runner</a>
 </li>
@@ -9027,6 +9122,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/datasets/mt_concat_dataset/index.html#core.datasets.mt_concat_dataset.ConcatDataset.real_sizes">real_sizes (core.datasets.mt_concat_dataset.ConcatDataset attribute)</a>
 </li>
+      <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.JobConfig.recursive_instantiate_runner">recursive_instantiate_runner (core.launchers.api.JobConfig attribute)</a>
+</li>
       <li><a href="autoapi/core/models/uma/nn/mole_utils/index.html#core.models.uma.nn.mole_utils.recursive_replace_all_linear">recursive_replace_all_linear() (in module core.models.uma.nn.mole_utils)</a>
 </li>
       <li><a href="autoapi/core/models/uma/nn/mole_utils/index.html#core.models.uma.nn.mole_utils.recursive_replace_notso2_linear">recursive_replace_notso2_linear() (in module core.models.uma.nn.mole_utils)</a>
@@ -9346,6 +9443,8 @@ document.write(`
 </li>
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.PairwiseCountRunner.run">(core.components.calculate.PairwiseCountRunner method)</a>
 </li>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.run">(core.components.dynamics.ase_md_runner.ASELangevinUMARunner method)</a>
+</li>
         <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.run">(core.components.evaluate.eval_runner.EvalRunner method)</a>
 </li>
         <li><a href="autoapi/core/components/runner/index.html#core.components.runner.MockRunner.run">(core.components.runner.MockRunner method)</a>
@@ -9610,6 +9709,8 @@ document.write(`
 </li>
         <li><a href="autoapi/core/components/calculate/index.html#core.components.calculate.SinglePointRunner.save_state">(core.components.calculate.SinglePointRunner method)</a>
 </li>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.save_state">(core.components.dynamics.ase_md_runner.ASELangevinUMARunner method)</a>
+</li>
         <li><a href="autoapi/core/components/evaluate/eval_runner/index.html#core.components.evaluate.eval_runner.EvalRunner.save_state">(core.components.evaluate.eval_runner.EvalRunner method)</a>
 </li>
         <li><a href="autoapi/core/components/reducer/index.html#core.components.reducer.MockReducer.save_state">(core.components.reducer.MockReducer method)</a>
@@ -9765,6 +9866,8 @@ document.write(`
         <li><a href="autoapi/data/oc/core/bulk/index.html#data.oc.core.bulk.Bulk.set_source_dataset_id">(data.oc.core.bulk.Bulk method)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.settings">settings (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
       <li><a href="autoapi/core/common/distutils/index.html#core.common.distutils.setup">setup() (in module core.common.distutils)</a>
 </li>
       <li><a href="autoapi/core/units/mlip_unit/_batch_serve/index.html#core.units.mlip_unit._batch_serve.setup_batch_predict_server">setup_batch_predict_server() (in module core.units.mlip_unit._batch_serve)</a>
@@ -10223,6 +10326,8 @@ document.write(`
         <li><a href="autoapi/data/omat/vasp/sets/index.html#data.omat.vasp.sets.OMat24AIMDSet.steps">(data.omat.vasp.sets.OMat24AIMDSet attribute)</a>
 </li>
       </ul></li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.steps_total">steps_total (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
       <li><a href="autoapi/core/models/escaip/utils/stochastic_depth/index.html#core.models.escaip.utils.stochastic_depth.stochastic_depth_2d">stochastic_depth_2d() (in module core.models.escaip.utils.stochastic_depth)</a>
 </li>
       <li><a href="autoapi/core/models/escaip/utils/stochastic_depth/index.html#core.models.escaip.utils.stochastic_depth.stochastic_depth_3d">stochastic_depth_3d() (in module core.models.escaip.utils.stochastic_depth)</a>
@@ -10390,6 +10495,8 @@ document.write(`
       <li><a href="autoapi/core/calculate/ase_calculator/index.html#core.calculate.ase_calculator.FAIRChemCalculator.task_name">task_name (core.calculate.ase_calculator.FAIRChemCalculator property)</a>
 
       <ul>
+        <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.task_name">(core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
         <li><a href="autoapi/core/datasets/atomic_data/index.html#core.datasets.atomic_data.AtomicData.task_name">(core.datasets.atomic_data.AtomicData property)</a>
 </li>
       </ul></li>
@@ -10408,6 +10515,8 @@ document.write(`
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.DistributedInitMethod.TCP">TCP (core.launchers.api.DistributedInitMethod attribute)</a>
 </li>
       <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.HeadInfo.temp_dir">temp_dir (core.launchers.cluster.ray_cluster.HeadInfo attribute)</a>
+</li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.temp_k">temp_k (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
 </li>
       <li><a href="autoapi/data/odac/promising_mof/promising_mof_energies/energy/index.html#data.odac.promising_mof.promising_mof_energies.energy.temp_split_string">temp_split_string (in module data.odac.promising_mof.promising_mof_energies.energy)</a>
 </li>
@@ -10462,6 +10571,8 @@ document.write(`
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.SlurmConfig.timeout_hr">timeout_hr (core.launchers.api.SlurmConfig attribute)</a>
 </li>
       <li><a href="autoapi/core/launchers/api/index.html#core.launchers.api.JobConfig.timestamp_id">timestamp_id (core.launchers.api.JobConfig attribute)</a>
+</li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.timestep_fs">timestep_fs (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
 </li>
       <li><a href="autoapi/core/components/calculate/_single/nve_md_runner/index.html#core.components.calculate._single.nve_md_runner.TM23_TEMP">TM23_TEMP (in module core.components.calculate._single.nve_md_runner)</a>
 </li>
@@ -10755,6 +10866,8 @@ document.write(`
 </li>
       <li><a href="autoapi/core/modules/scheduler/index.html#core.modules.scheduler.warmup_lr_lambda">warmup_lr_lambda() (in module core.modules.scheduler)</a>
 </li>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.warmup_steps">warmup_steps (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
+</li>
       <li><a href="autoapi/core/common/logger/index.html#core.common.logger.Logger.watch">watch() (core.common.logger.Logger method)</a>
 
       <ul>
@@ -10785,9 +10898,11 @@ document.write(`
         <li><a href="autoapi/core/launchers/cluster/ray_cluster/index.html#core.launchers.cluster.ray_cluster.RayCluster.worker_wait_timeout_seconds">(core.launchers.cluster.ray_cluster.RayCluster attribute)</a>
 </li>
       </ul></li>
-      <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController.workers">workers (core.launchers.ray_on_slurm_launch.SPMDController attribute)</a>
+      <li><a href="autoapi/core/components/dynamics/ase_md_runner/index.html#core.components.dynamics.ase_md_runner.ASELangevinUMARunner.workers">workers (core.components.dynamics.ase_md_runner.ASELangevinUMARunner attribute)</a>
 
       <ul>
+        <li><a href="autoapi/core/launchers/ray_on_slurm_launch/index.html#core.launchers.ray_on_slurm_launch.SPMDController.workers">(core.launchers.ray_on_slurm_launch.SPMDController attribute)</a>
+</li>
         <li><a href="autoapi/core/units/mlip_unit/predict/index.html#core.units.mlip_unit.predict.ParallelMLIPPredictUnit.workers">(core.units.mlip_unit.predict.ParallelMLIPPredictUnit attribute)</a>
 </li>
       </ul></li>
