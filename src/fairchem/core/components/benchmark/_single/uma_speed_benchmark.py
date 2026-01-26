@@ -24,7 +24,7 @@ from fairchem.core.common import distutils
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -162,7 +162,7 @@ class InferenceBenchRunner(Runner):
             def yield_inputs(max_neighbors=max_neighbors, cutoff=cutoff):
                 if self.natoms_list is not None:
                     for natoms in self.natoms_list:
-                        atoms = get_fcc_carbon_xtal(natoms)
+                        atoms = get_fcc_crystal_by_num_atoms(natoms)
                         data = ase_to_graph(
                             atoms,
                             max_neighbors,
