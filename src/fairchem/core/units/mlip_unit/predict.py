@@ -636,3 +636,164 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
         return self.server_handle.get_predict_unit_attribute.remote(
             "inference_settings"
         ).result()
+
+
+@ray.remote
+class _PredictWorker:
+    """Ray actor that wraps an MLIPPredictUnit for distributed inference.
+
+    This actor maintains its own copy of the predict unit and can be used
+    in a pool for parallel inference tasks. The predict unit is deserialized
+    from a Ray object reference, avoiding redundant disk I/O.
+    """
+
+    def __init__(self, predict_unit_ref: ray.ObjectRef):
+        """
+        Args:
+            predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
+                stored in the object store via ray.put().
+        """
+        self.predict_unit = ray.get(predict_unit_ref)
+        self._dataset_to_tasks = self.predict_unit.dataset_to_tasks
+
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.Tensor]:
+        """Run prediction on the given data.
+
+        Args:
+            data: AtomicData object to predict on.
+            undo_element_references: Whether to undo element references.
+
+        Returns:
+            Prediction dictionary with tensors moved to CPU.
+        """
+        result = self.predict_unit.predict(data, undo_element_references)
+        return move_tensors_to_cpu(result)
+
+    def get_dataset_to_tasks(self) -> dict[str, list]:
+        """Get the dataset to tasks mapping."""
+        return self._dataset_to_tasks
+
+    def get_attribute(self, name: str):
+        """Get an attribute from the underlying predict unit."""
+        return getattr(self.predict_unit, name, None)
+
+
+class MLIPWorkerPredictUnit(MLIPPredictUnitProtocol):
+    """
+    PredictUnit that uses a pool of Ray actors for distributed inference.
+
+    This provides a clean interface compatible with MLIPPredictUnitProtocol
+    while distributing inference across multiple Ray workers. Each worker
+    maintains its own model copy, enabling parallel inference.
+
+    The predict unit is stored once in Ray's object store and each worker
+    deserializes its own copy, avoiding redundant disk I/O for model loading.
+
+    Example:
+        >>> predict_unit = MLIPPredictUnit("model.pt", device="cuda")
+        >>> worker_unit = MLIPWorkerPredictUnit(predict_unit, num_workers=4)
+        >>> result = worker_unit.predict(atomic_data)
+    """
+
+    def __init__(
+        self,
+        predict_unit: MLIPPredictUnit,
+        num_workers: int = 1,
+        ray_actor_options: dict | None = None,
+    ):
+        """
+        Args:
+            predict_unit: An MLIPPredictUnit instance to distribute across workers.
+                The predict unit will be stored in Ray's object store and each
+                worker will deserialize its own copy.
+            num_workers: Number of Ray worker actors to create.
+            ray_actor_options: Options to pass to Ray actor creation
+                (e.g., {"num_gpus": 1, "num_cpus": 2}).
+        """
+        super().__init__()
+
+        if ray_actor_options is None:
+            ray_actor_options = {}
+
+        # Set default GPU allocation for CUDA
+        if "cuda" in predict_unit.device and "num_gpus" not in ray_actor_options:
+            ray_actor_options["num_gpus"] = 1
+
+        # Initialize Ray if needed
+        if not ray.is_initialized():
+            ray.init(
+                log_to_driver=False,
+                logging_config=ray.LoggingConfig(log_level="WARNING"),
+            )
+            logging.info("Ray initialized by MLIPWorkerPredictUnit")
+
+        # Store predict unit in Ray's object store once
+        predict_unit_ref = ray.put(predict_unit)
+        logging.info("Predict unit stored in Ray object store")
+
+        # Create worker pool - each worker deserializes from the object store
+        self._workers = [
+            _PredictWorker.options(**ray_actor_options).remote(predict_unit_ref)
+            for _ in range(num_workers)
+        ]
+        self._num_workers = num_workers
+        self._current_worker_idx = 0
+
+        # Cache dataset_to_tasks from first worker
+        self._dataset_to_tasks = ray.get(self._workers[0].get_dataset_to_tasks.remote())
+
+        logging.info(f"MLIPWorkerPredictUnit initialized with {num_workers} workers")
+
+    def predict(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.Tensor]:
+        """Run prediction using round-robin worker selection.
+
+        Args:
+            data: AtomicData object to predict on.
+            undo_element_references: Whether to undo element references.
+
+        Returns:
+            Prediction dictionary.
+        """
+        # Round-robin worker selection
+        worker = self._workers[self._current_worker_idx]
+        self._current_worker_idx = (self._current_worker_idx + 1) % self._num_workers
+
+        # Submit and wait for result
+        result = ray.get(worker.predict.remote(data, undo_element_references))
+        return result
+
+    def predict_async(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> ray.ObjectRef:
+        """Submit prediction asynchronously, returning a Ray ObjectRef.
+
+        Args:
+            data: AtomicData object to predict on.
+            undo_element_references: Whether to undo element references.
+
+        Returns:
+            Ray ObjectRef that can be awaited with ray.get().
+        """
+        worker = self._workers[self._current_worker_idx]
+        self._current_worker_idx = (self._current_worker_idx + 1) % self._num_workers
+        return worker.predict.remote(data, undo_element_references)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        return self._dataset_to_tasks
+
+    def shutdown(self):
+        """Shutdown all worker actors."""
+        for worker in self._workers:
+            ray.kill(worker)
+        self._workers = []
+        logging.info("MLIPWorkerPredictUnit workers shut down")
+
+    def __del__(self):
+        """Cleanup on deletion."""
+        if hasattr(self, "_workers") and self._workers:
+            self.shutdown()

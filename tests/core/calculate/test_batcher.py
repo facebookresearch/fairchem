@@ -187,3 +187,116 @@ def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
     for r_batch, r_serial in zip(results_batched, results_serial):
         npt.assert_allclose(r_batch["energy"], r_serial["energy"], atol=1e-4)
         npt.assert_allclose(r_batch["forces"], r_serial["forces"], atol=1e-4)
+
+
+def test_initialization_with_processes_backend(uma_predict_unit):
+    """Test initialization with ProcessPoolExecutor backend."""
+    try:
+        from concurrent.futures import ProcessPoolExecutor
+
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=16,
+            batch_wait_timeout_s=0.1,
+            num_replicas=1,
+            concurrency_backend="processes",
+            concurrency_backend_options={"max_workers": 2},
+        )
+
+        assert isinstance(batcher.executor, ProcessPoolExecutor)
+    finally:
+        cleanup_ray()
+
+
+def test_initialization_with_ray_workers_backend(uma_predict_unit):
+    """Test initialization with Ray actor pool backend."""
+    try:
+        from fairchem.core.calculate._batch import RayActorPoolExecutor
+
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=16,
+            batch_wait_timeout_s=0.1,
+            num_replicas=1,
+            concurrency_backend="ray_workers",
+            concurrency_backend_options={"num_workers": 2},
+        )
+
+        assert isinstance(batcher.executor, RayActorPoolExecutor)
+    finally:
+        cleanup_ray()
+
+
+def test_autobatch_config_initialization(uma_predict_unit):
+    """Test initialization and configure_autobatch method."""
+    try:
+        from fairchem.core.calculate._batch import AutobatchConfig
+        from fairchem.core.datasets.atomic_data import AtomicData
+
+        autobatch_config = AutobatchConfig(
+            enabled=True,
+            min_batch_size=64,
+            max_batch_size_cap=1024,
+            probe_steps=2,
+            warmup_steps=1,
+        )
+
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            split_oom_batch=True,
+            num_replicas=1,
+        )
+
+        # Create probe data for autobatch configuration
+        probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
+
+        # Configure autobatch with probe data
+        result = batcher.configure_autobatch(probe_data, config=autobatch_config)
+
+        # Autobatch should return a result with max_batch_size and timeout
+        assert result.max_batch_size >= autobatch_config.min_batch_size
+        assert result.batch_wait_timeout_s > 0
+    finally:
+        cleanup_ray()
+
+
+def test_batcher_with_explicit_values(uma_predict_unit):
+    """Test that explicit batch size and timeout values are used."""
+    try:
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=256,
+            batch_wait_timeout_s=0.2,
+            num_replicas=1,
+        )
+
+        # Batcher should be created successfully with explicit values
+        assert hasattr(batcher, "predict_server_handle")
+        assert hasattr(batcher, "batch_predict_unit")
+    finally:
+        cleanup_ray()
+
+
+def test_probe_optimal_batch_size_cpu():
+    """Test probing on CPU returns defaults."""
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit._batch_serve import (
+        AutobatchConfig,
+        probe_optimal_batch_size,
+    )
+
+    # Create a mock predict unit with CPU device
+    class MockPredictUnit:
+        device = "cpu"
+
+        def predict(self, data, undo_element_references=True):
+            return {"energy": torch.tensor([0.0])}
+
+    config = AutobatchConfig(enabled=True)
+    # Create probe data for the test
+    probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
+    result = probe_optimal_batch_size(MockPredictUnit(), probe_data, config)
+
+    # CPU should return defaults
+    assert result.max_batch_size == config.min_batch_size
+    assert result.batch_wait_timeout_s == config.timeout_ceil_s
