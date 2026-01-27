@@ -386,6 +386,8 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
         )
+        if inference_settings is None:
+            inference_settings = InferenceSettings()
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
