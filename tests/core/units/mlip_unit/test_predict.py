@@ -23,7 +23,7 @@ FORCE_TOL = 1e-4
 ATOL = 5e-4
 
 
-def get_fcc_carbon_xtal(
+def get_fcc_crystal_by_num_atoms(
     num_atoms: int,
     lattice_constant: float = 3.8,
 ):
@@ -151,7 +151,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
         internal_graph_gen_version=2,
         external_graph_gen=False,
     )
-    atoms = get_fcc_carbon_xtal(num_atoms)
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
 
     seed_everywhere(seed)

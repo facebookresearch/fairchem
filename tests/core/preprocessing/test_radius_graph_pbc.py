@@ -20,7 +20,7 @@ from ase.lattice.cubic import FaceCenteredCubic
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 
@@ -412,7 +412,7 @@ def test_partitioned_radius_graph_pbc(
         max_num_neighbors_threshold=max_neighbors,
         pbc=pbc_tensor,
     )
-    atoms = get_fcc_carbon_xtal(num_atoms)
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     data = AtomicData.from_ase(atoms).to(device)
     batch = data_list_collater([data])
     edge_index_no_partition, _, _ = rgbv2(batch)
@@ -531,7 +531,9 @@ def test_generate_graph_batch_partition(
         # pick a random lattice constant, this ensures that we have mixed cells in the batch too
         lattice_constant = np.random.uniform(3.7, 3.9)
         # add i to num_atoms to ensure different sizes
-        atoms = get_fcc_carbon_xtal(num_atoms + i, lattice_constant=lattice_constant)
+        atoms = get_fcc_crystal_by_num_atoms(
+            num_atoms + i, lattice_constant=lattice_constant
+        )
         data_list.append(
             AtomicData.from_ase(
                 atoms,
