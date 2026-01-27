@@ -20,8 +20,11 @@ from typing import Protocol
 
 import hydra
 import numpy as np
+import ray
 import torch
 import torch.distributed as dist
+from ray import remote
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
@@ -38,10 +41,6 @@ from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
 )
-
-import ray
-from ray import remote
-from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 
 def collate_predictions(predict_fn):
@@ -107,7 +106,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         # Build overrides from inference settings
-        final_overrides = self._build_overrides_from_settings(overrides, inference_settings)
+        final_overrides = self._build_overrides_from_settings(
+            overrides, inference_settings
+        )
 
         # Load model once with final overrides
         self.model, checkpoint = load_inference_model(
@@ -156,7 +157,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         self.atom_refs = (
             {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
-            if atom_refs else {}
+            if atom_refs
+            else {}
         )
         self.form_elem_refs = form_elem_refs or {}
 
@@ -175,7 +177,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
-    def _build_overrides_from_settings(self, user: dict | None, settings: InferenceSettings) -> dict:
+    def _build_overrides_from_settings(
+        self, user: dict | None, settings: InferenceSettings
+    ) -> dict:
         """
         Build backbone config overrides from inference settings and user inputs.
 
@@ -184,28 +188,31 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
 
         overrides = {} if user is None else dict(user)
-        if 'backbone' not in overrides:
-            overrides['backbone'] = {}
+        if "backbone" not in overrides:
+            overrides["backbone"] = {}
 
         backbone_overrides = {}
         # Always disable PBC wrapping for inference
         backbone_overrides["always_use_pbc"] = False
 
         if settings.activation_checkpointing is not None:
-            backbone_overrides["activation_checkpointing"] = settings.activation_checkpointing
+            backbone_overrides["activation_checkpointing"] = (
+                settings.activation_checkpointing
+            )
         if settings.edge_chunk_size is not None:
             backbone_overrides["edge_chunk_size"] = settings.edge_chunk_size
         if settings.external_graph_gen is not None:
             backbone_overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
-            backbone_overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+            backbone_overrides["radius_pbc_version"] = (
+                settings.internal_graph_gen_version
+            )
 
-        overrides['backbone'].update(backbone_overrides)
-        if 'backbone' in user:
-            overrides['backbone'].update(user['backbone'])
+        overrides["backbone"].update(backbone_overrides)
+        if "backbone" in user:
+            overrides["backbone"].update(user["backbone"])
 
         return overrides
-
 
     def move_to_device(self):
         self.model.to(self.device)
@@ -271,9 +278,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 output[task_name][task.property]
             )
             if self.assert_on_nans:
-                assert torch.isfinite(
-                    pred_output[task_name]
-                ).all(), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
+                assert (
+                    torch.isfinite(pred_output[task_name]).all()
+                ), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
             if undo_refs and task.element_references is not None:
                 pred_output[task_name] = task.element_references.undo_refs(
                     data, pred_output[task_name]

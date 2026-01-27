@@ -83,12 +83,12 @@ class BackboneInterface(metaclass=ABCMeta):
     @abstractmethod
     def validate_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with this backbone."""
-        pass
+        pass # noqa
 
     @abstractmethod
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """Validate that task datasets are compatible with this backbone."""
-        pass
+        pass # noqa
 
     @abstractmethod
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
@@ -102,8 +102,7 @@ class BackboneInterface(metaclass=ABCMeta):
     @abstractmethod
     def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction for any per-prediction checks."""
-        pass
-
+        pass # noqa
 
 @registry.register_model("hydra")
 class HydraModel(nn.Module):
@@ -239,7 +238,9 @@ class HydraModel(nn.Module):
         """
         self.backbone.validate_inference_settings(settings)
 
-    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings) -> None:
+    def prepare_for_inference(
+        self, data: AtomicData, settings: InferenceSettings
+    ) -> None:
         """
         Prepare model for inference. Called once on first prediction.
 
@@ -285,9 +286,7 @@ class HydraModel(nn.Module):
         Args:
             tasks_config: List of task configurations from checkpoint
         """
-        tasks = [
-            hydra.utils.instantiate(task_config) for task_config in tasks_config
-        ]
+        tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
         self.tasks = {t.name: t for t in tasks}
         self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
 
@@ -300,7 +299,9 @@ class HydraModel(nn.Module):
         Mapping from dataset names to their associated tasks.
         """
         if not hasattr(self, "_dataset_to_tasks"):
-            raise RuntimeError("setup_tasks() must be called before accessing dataset_to_tasks")
+            raise RuntimeError(
+                "setup_tasks() must be called before accessing dataset_to_tasks"
+            )
         return self._dataset_to_tasks
 
 
@@ -353,7 +354,9 @@ class HydraModelV2(nn.Module):
         """
         self.backbone.validate_inference_settings(settings)
 
-    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings) -> None:
+    def prepare_for_inference(
+        self, data: AtomicData, settings: InferenceSettings
+    ) -> None:
         """
         Prepare model for inference. Called once on first prediction.
         """
@@ -396,9 +399,7 @@ class HydraModelV2(nn.Module):
         Args:
             tasks_config: List of task configurations from checkpoint
         """
-        tasks = [
-            hydra.utils.instantiate(task_config) for task_config in tasks_config
-        ]
+        tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
         self.tasks = {t.name: t for t in tasks}
         self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
 
@@ -411,5 +412,7 @@ class HydraModelV2(nn.Module):
         Mapping from dataset names to their associated tasks.
         """
         if not hasattr(self, "_dataset_to_tasks"):
-            raise RuntimeError("setup_tasks() must be called before accessing dataset_to_tasks")
+            raise RuntimeError(
+                "setup_tasks() must be called before accessing dataset_to_tasks"
+            )
         return self._dataset_to_tasks
