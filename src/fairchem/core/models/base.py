@@ -335,11 +335,11 @@ class HydraModelV2(nn.Module):
         """Whether this model uses direct force prediction."""
         return getattr(self.backbone, "direct_forces", False)
 
-    def validate_inference_settings(self, settings) -> None:
+    def validate_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with this model."""
         self.backbone.validate_inference_settings(settings)
 
-    def prepare_for_inference(self, data, settings) -> None:
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings) -> None:
         """Prepare model for inference. Called once on first prediction."""
         need_eval = False
         # Backbone may return a new backbone (e.g., after MOLE merge)
@@ -366,7 +366,7 @@ class HydraModelV2(nn.Module):
         if need_eval:
             self.eval()
 
-    def on_predict_check(self, data) -> None:
+    def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction for any per-prediction checks."""
         self.backbone.on_predict_check(data)
 
