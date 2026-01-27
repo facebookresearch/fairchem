@@ -319,6 +319,147 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         return pred_output
 
+    def get_hessian(self, data: AtomicData, vmap: bool = True) -> torch.Tensor:
+        """
+        Get the Hessian matrix for the given atomic data.
+
+        Args:
+            data (AtomicData): The atomic data to calculate the Hessian for.
+            vmap (bool): Whether to use vectorized mapping for Hessian calculation. Defaults to True.
+
+        Returns:
+            torch.Tensor: The Hessian matrix with shape (n_atoms * 3, n_atoms * 3).
+        """
+
+        if not self.lazy_model_intialized:
+            self.move_to_device()
+            self.lazy_model_intialized = True
+
+        self.model.module.output_heads["energyandforcehead"].head.training = True
+
+        # Batch and prepare data
+        data_device = data.to(self.device)
+
+        # Enable gradients on positions for second derivatives
+        data_device["pos"].requires_grad_(True)
+
+        # Forward pass through model to get energy only
+        output = self.model(data_device)
+
+        # Get the task name from the data and extract energy
+        # The energy is in output[f"{task_name}_energy"]["energy"]
+        task_name = (
+            data.task_name[0] if isinstance(data.task_name, list) else data.task_name
+        )
+        energy_key = f"{task_name}_energy"
+        energy = output[energy_key]["energy"]
+
+        # Compute forces from energy gradient with create_graph=True for Hessian
+        positions = data_device["pos"]
+        forces = torch.autograd.grad(
+            energy,
+            positions,
+            grad_outputs=torch.ones_like(energy),
+            create_graph=True,
+        )[0]
+
+        # Flatten forces (negative gradient of energy)
+        forces_flat = -forces.flatten()
+
+        # Calculate the Hessian using autograd
+        # H = d²E/dx² = -dF/dx (since F = -dE/dx)
+        if vmap:
+            # Vectorized computation of Hessian using vmap
+            def compute_grad_component(vec):
+                return torch.autograd.grad(
+                    -forces_flat,
+                    positions,
+                    grad_outputs=vec,
+                    retain_graph=True,
+                )[0]
+
+            hessian = torch.vmap(compute_grad_component)(
+                torch.eye(forces_flat.numel(), device=forces_flat.device)
+            )
+        else:
+            hessian = torch.zeros(
+                (len(forces_flat), len(forces_flat)),
+                device=self.device,
+                requires_grad=False,
+            )
+            n_forces = len(forces_flat)
+            for i in range(n_forces):
+                hessian[:, i] = torch.autograd.grad(
+                    -forces_flat[i],
+                    positions,
+                    retain_graph=i < n_forces - 1,
+                )[0].flatten()
+
+        self.model.module.output_heads["energyandforcehead"].head.training = False
+
+        n_atoms = (
+            data.natoms.item() if hasattr(data.natoms, "item") else int(data.natoms)
+        )
+        return hessian.reshape(n_atoms * 3, n_atoms * 3)
+
+    def get_numerical_hessian(
+        self, data: AtomicData, eps: float = 1e-4
+    ) -> torch.Tensor:
+        """
+        Get the Hessian matrix for the given atomic data using finite differences.
+
+        Args:
+            data (AtomicData): The atomic data to calculate the Hessian for.
+            eps (float): The finite difference step size. Defaults to 1e-4.
+
+        Returns:
+            torch.Tensor: The Hessian matrix with shape (n_atoms * 3, n_atoms * 3).
+        """
+        from fairchem.core.datasets import data_list_collater
+
+        if not self.lazy_model_intialized:
+            self.move_to_device()
+            self.lazy_model_intialized = True
+
+        n_atoms = (
+            data.natoms.item() if hasattr(data.natoms, "item") else int(data.natoms)
+        )
+
+        # Create displaced data objects in batch
+        data_list = []
+        for i in range(n_atoms):
+            for j in range(3):
+                # Create displaced versions
+                data_plus = data.clone()
+                data_minus = data.clone()
+
+                data_plus.pos[i, j] += eps
+                data_minus.pos[i, j] -= eps
+
+                data_list.append(data_plus)
+                data_list.append(data_minus)
+
+        # Batch and predict
+        batch = data_list_collater(data_list, otf_graph=True)
+        pred = self.predict(batch)
+
+        # Get the forces
+        forces = pred["forces"].reshape(-1, n_atoms, 3)
+
+        # Calculate the Hessian using finite differences
+        # Hessian H = d²E/dx² = -dF/dx, so we need -(F+ - F-) / (2*eps)
+        hessian = torch.zeros(
+            (n_atoms * 3, n_atoms * 3), device=self.device, requires_grad=False
+        )
+        for i in range(n_atoms):
+            for j in range(3):
+                idx = i * 3 + j
+                force_plus = forces[2 * idx].flatten()
+                force_minus = forces[2 * idx + 1].flatten()
+                hessian[:, idx] = -(force_plus - force_minus) / (2 * eps)
+
+        return hessian
+
 
 def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     """Create a mapping from dataset names to their associated tasks.

@@ -258,10 +258,11 @@ def test_parallel_predict_unit_batch(workers, device):
         atol=FORCE_TOL,
     )
 
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "padding",
-    [   
+    [
         (0),
         (1),
         (32),
@@ -272,14 +273,16 @@ def test_batching_consistency(padding):
     # Get the appropriate predict unit
 
     ifsets = InferenceSettings(
-            tf32=False,
-            merge_mole=False,
-            activation_checkpointing=True,
-            internal_graph_gen_version=2,
-            external_graph_gen=False,
-            edge_chunk_size=padding,
-        )
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device='cuda', inference_settings=ifsets)
+        tf32=False,
+        merge_mole=False,
+        activation_checkpointing=True,
+        internal_graph_gen_version=2,
+        external_graph_gen=False,
+        edge_chunk_size=padding,
+    )
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device="cuda", inference_settings=ifsets
+    )
 
     # Create H2O molecule
     h2o = molecule("H2O")
@@ -288,7 +291,8 @@ def test_batching_consistency(padding):
 
     # Create system of two oxygen atoms 100 A apart
     from ase import Atoms
-    o_atom = Atoms('O2', positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
+
+    o_atom = Atoms("O2", positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
     o_atom.info.update({"charge": 0, "spin": 4})  # two triplet oxygens -> quintet
     o_atom.pbc = True
 
@@ -301,7 +305,7 @@ def test_batching_consistency(padding):
     )
     o_data = AtomicData.from_ase(
         o_atom,
-        task_name="omol", 
+        task_name="omol",
         r_data_keys=["spin", "charge"],
         molecule_cell_size=120,
     )
@@ -339,6 +343,7 @@ def test_batching_consistency(padding):
     # Assert stress matches
     assert torch.allclose(preds1["stress"][0], preds2["stress"][0], atol=ATOL)
     assert torch.allclose(preds1["stress"][1], preds3["stress"][0], atol=ATOL)
+
 
 # ---------------------------------------------------------------------------
 # Rotation / out-of-plane force invariance tests (planar molecules)
@@ -482,33 +487,33 @@ def test_merge_mole_composition_check():
 def test_merge_mole_vs_non_merged_consistency():
     """Test that merged and non-merged versions produce identical results."""
     atoms = bulk("MgO", "rocksalt", a=4.213)
-    
+
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit_merged = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device="cuda", inference_settings=settings_merged
     )
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
-    
+
     atoms_merged = atoms.copy()
     atoms_merged.calc = calc_merged
     energy_merged = atoms_merged.get_potential_energy()
     forces_merged = atoms_merged.get_forces()
     stress_merged = atoms_merged.get_stress(voigt=False)
-    
+
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
     predict_unit_non_merged = pretrained_mlip.get_predict_unit(
         "uma-s-1p1", device="cuda", inference_settings=settings_non_merged
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
-    
+
     atoms_non_merged = atoms.copy()
     atoms_non_merged.calc = calc_non_merged
     energy_non_merged = atoms_non_merged.get_potential_energy()
     forces_non_merged = atoms_non_merged.get_forces()
     stress_non_merged = atoms_non_merged.get_stress(voigt=False)
-    
+
     # Assert that results are identical
     npt.assert_allclose(
         energy_merged,
@@ -559,3 +564,112 @@ def test_merge_mole_supercell_energy_forces_consistency():
     npt.assert_allclose(energy1, energy1_again, rtol=1e-6)
     npt.assert_allclose(energy_2x / energy1, 8.0, rtol=0.01)
     npt.assert_allclose(energy_3x / energy1, 27.0, rtol=0.01)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("vmap", [True, False])
+def test_hessian(vmap):
+    """Test Hessian calculation using MLIPPredictUnit directly."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    # Convert to AtomicData
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    hessian = predict_unit.get_hessian(batch, vmap=vmap).detach().cpu().numpy()
+
+    # Check shape (3 atoms * 3 coords = 9x9 matrix)
+    assert hessian.shape == (9, 9)
+    assert np.isfinite(hessian).all()
+
+
+@pytest.mark.gpu()
+def test_numerical_hessian():
+    """Test numerical Hessian calculation using MLIPPredictUnit directly."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    # Convert to AtomicData
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+
+    hessian = predict_unit.get_numerical_hessian(data).detach().cpu().numpy()
+
+    # Check shape (3 atoms * 3 coords = 9x9 matrix)
+    assert hessian.shape == (9, 9)
+    assert np.isfinite(hessian).all()
+
+
+@pytest.mark.gpu()
+def test_hessian_vs_numerical():
+    """Test that analytical and numerical Hessians are close."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    # Convert to AtomicData
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+    hessian_analytical = (
+        predict_unit.get_hessian(batch, vmap=True).detach().cpu().numpy()
+    )
+    hessian_numerical = (
+        predict_unit.get_numerical_hessian(data, eps=1e-4).detach().cpu().numpy()
+    )
+
+    # Analytical and numerical Hessians should be close
+    npt.assert_allclose(
+        hessian_analytical,
+        hessian_numerical,
+        rtol=1e-3,  # 0.1% relative tolerance
+        atol=1e-3,  # Absolute tolerance for small values
+        err_msg="Analytical and numerical Hessians differ significantly",
+    )
+
+
+@pytest.mark.gpu()
+def test_hessian_symmetry():
+    """Test that the Hessian matrix is symmetric."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    # Convert to AtomicData
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+    hessian = predict_unit.get_hessian(batch, vmap=True)
+
+    # Hessian should be symmetric
+    npt.assert_allclose(
+        hessian.detach().cpu().numpy(),
+        hessian.T.detach().cpu().numpy(),
+        rtol=1e-5,
+        atol=1e-5,
+        err_msg="Hessian matrix is not symmetric",
+    )
