@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import typing
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -28,6 +29,11 @@ from fairchem.core.modules.scaling.compat import load_scales_compat
 
 from .initializers import get_initializer
 from .interaction_indices import get_mixed_triplets, get_quadruplets, get_triplets
+
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
 from .layers.atom_update_block import OutputBlock
 from .layers.base_layers import Dense, ResidualLayer
 from .layers.efficient import BasisEmbedding
@@ -1351,7 +1357,7 @@ class GemNetOCBackbone(nn.Module):
             "num_neighbors": main_graph["num_neighbors"],
         }
 
-    def validate_inference_settings(self, settings) -> None:
+    def validate_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with GemNet."""
         if settings.merge_mole:
             raise ValueError("GemNet does not support MOLE merging (merge_mole=True)")
@@ -1360,15 +1366,15 @@ class GemNetOCBackbone(nn.Module):
         if settings.edge_chunk_size is not None:
             logging.warning("GemNet ignores edge_chunk_size setting")
 
-    def validate_tasks(self, dataset_to_tasks: dict) -> None:
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """Validate that task datasets are compatible with this backbone."""
         pass  # GemNet has no dataset_list validation
 
-    def prepare_for_inference(self, data, settings):
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """Prepare model for inference. GemNet has no special preparation."""
         return self
 
-    def on_predict_check(self, data) -> None:
+    def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction. GemNet has no per-prediction checks."""
         pass
 

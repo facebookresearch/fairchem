@@ -45,6 +45,7 @@ from .escn_md_block import eSCNMD_Block
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
@@ -621,16 +622,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return set(no_wd_list)
 
-    def validate_inference_settings(self, settings) -> None:
+    def validate_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with this model. UMA supports all settings."""
         pass
 
-    def validate_tasks(self, dataset_to_tasks: dict) -> None:
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """Validate that task datasets are compatible with this backbone."""
         assert set(dataset_to_tasks.keys()).issubset(set(self.dataset_list)), \
             "Datasets in tasks is not a strict subset of datasets in backbone."
 
-    def prepare_for_inference(self, data, settings):
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """Prepare model for inference. Called once on first prediction.
 
         For UMA: handles MOLE merging if settings.merge_mole is True.
@@ -656,7 +657,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return self
 
-    def on_predict_check(self, data) -> None:
+    def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction. UMA checks MOLE consistency here."""
         if not getattr(self, '_inference_settings', None):
             return  # Not initialized yet

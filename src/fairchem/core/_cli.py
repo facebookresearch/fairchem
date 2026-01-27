@@ -121,7 +121,7 @@ def main(
         if scheduler_cfg.use_ray:
             logging.info("Running in local mode with local ray cluster")
             # don't recursively instantiate the runner here to allow lazy instantiations in the runner
-            # the hands all responsibility the user, ie they must initialize ray
+            # this hands all responsibility to the user, ie they must initialize ray
             runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
             runner.run()
         else:

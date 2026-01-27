@@ -24,6 +24,7 @@ from fairchem.core.common.utils import (
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
     from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 
@@ -78,6 +79,30 @@ class BackboneInterface(metaclass=ABCMeta):
             Return backbone embeddings for the given input
         """
         return
+
+    @abstractmethod
+    def validate_inference_settings(self, settings: InferenceSettings) -> None:
+        """Validate inference settings are compatible with this backbone."""
+        pass
+
+    @abstractmethod
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
+        """Validate that task datasets are compatible with this backbone."""
+        pass
+
+    @abstractmethod
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
+        """Prepare backbone for inference. Called once on first prediction.
+
+        Returns:
+            self or a new backbone if replacement occurred (e.g., after MOLE merge).
+        """
+        return self
+
+    @abstractmethod
+    def on_predict_check(self, data: AtomicData) -> None:
+        """Called before each prediction for any per-prediction checks."""
+        pass
 
 
 @registry.register_model("hydra")
@@ -206,11 +231,11 @@ class HydraModel(nn.Module):
         """Whether this model uses direct force prediction."""
         return getattr(self.backbone, "direct_forces", False)
 
-    def validate_inference_settings(self, settings) -> None:
+    def validate_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with this model."""
         self.backbone.validate_inference_settings(settings)
 
-    def prepare_for_inference(self, data, settings) -> None:
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings) -> None:
         """Prepare model for inference. Called once on first prediction.
 
         Delegates to backbone and each head that implements prepare_for_inference.
@@ -242,7 +267,7 @@ class HydraModel(nn.Module):
         if need_eval:
             self.eval()
 
-    def on_predict_check(self, data) -> None:
+    def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction for any per-prediction checks."""
         self.backbone.on_predict_check(data)
 
@@ -316,15 +341,30 @@ class HydraModelV2(nn.Module):
 
     def prepare_for_inference(self, data, settings) -> None:
         """Prepare model for inference. Called once on first prediction."""
-        self.backbone.prepare_for_inference(data, settings)
+        need_eval = False
+        # Backbone may return a new backbone (e.g., after MOLE merge)
+        new_backbone = self.backbone.prepare_for_inference(data, settings)
+        if new_backbone is not self.backbone:
+            self.backbone = new_backbone
+            need_eval = True
 
         new_output_heads = torch.nn.ModuleDict()
+        heads_changed = False
         for head_name, head in self.output_heads.items():
             if hasattr(head, "prepare_for_inference"):
-                new_output_heads[head_name] = head.prepare_for_inference(data, settings)
+                new_head = head.prepare_for_inference(data, settings)
+                new_output_heads[head_name] = new_head
+                if new_head is not head:
+                    heads_changed = True
             else:
                 new_output_heads[head_name] = head
-        self.output_heads = new_output_heads
+
+        if heads_changed:
+            self.output_heads = new_output_heads
+            need_eval = True
+
+        if need_eval:
+            self.eval()
 
     def on_predict_check(self, data) -> None:
         """Called before each prediction for any per-prediction checks."""
