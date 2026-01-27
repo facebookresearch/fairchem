@@ -209,7 +209,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         overrides["backbone"].update(backbone_overrides)
-        if "backbone" in user:
+        if user is not None and "backbone" in user:
             overrides["backbone"].update(user["backbone"])
 
         return overrides
