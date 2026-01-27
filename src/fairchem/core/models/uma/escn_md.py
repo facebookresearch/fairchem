@@ -621,6 +621,79 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return set(no_wd_list)
 
+    def validate_inference_settings(self, settings) -> None:
+        """Validate inference settings are compatible with this model. UMA supports all settings."""
+        pass
+
+    def validate_tasks(self, dataset_to_tasks: dict) -> None:
+        """Validate that task datasets are compatible with this backbone."""
+        assert set(dataset_to_tasks.keys()).issubset(set(self.dataset_list)), \
+            "Datasets in tasks is not a strict subset of datasets in backbone."
+
+    def prepare_for_inference(self, data, settings):
+        """Prepare model for inference. Called once on first prediction.
+
+        For UMA: handles MOLE merging if settings.merge_mole is True.
+        Stores initial composition for consistency checking.
+
+        Returns:
+            self or a new merged backbone if MOLE merging was performed.
+        """
+        self._inference_settings = settings
+        self._merged_composition = None
+
+        if settings.merge_mole:
+            assert data.natoms.numel() == 1, \
+                "Cannot merge model with multiple systems in batch"
+            # Store composition we merged on
+            self._merged_composition = self._get_composition_info(data)
+            # Merge the model - returns new merged backbone
+            new_backbone = self.merge_MOLE_model(data)
+            # Transfer inference state to new backbone
+            new_backbone._inference_settings = settings
+            new_backbone._merged_composition = self._merged_composition
+            return new_backbone
+
+        return self
+
+    def on_predict_check(self, data) -> None:
+        """Called before each prediction. UMA checks MOLE consistency here."""
+        if not getattr(self, '_inference_settings', None):
+            return  # Not initialized yet
+
+        if self._inference_settings.merge_mole and self._merged_composition is not None:
+            assert data.natoms.numel() == 1, \
+                "Cannot run merged model on batch with multiple systems"
+            current = self._get_composition_info(data)
+            self._assert_composition_matches(current)
+
+    def _get_composition_info(self, data) -> tuple:
+        """Get composition info for MOLE consistency checking."""
+        composition = data.atomic_numbers.new_zeros(
+            self.max_num_elements, dtype=torch.int
+        ).index_add(
+            0, data.atomic_numbers.to(torch.int),
+            data.atomic_numbers.new_ones(len(data.atomic_numbers), dtype=torch.int)
+        )
+        return (
+            composition,
+            getattr(data, "charge", None),
+            getattr(data, "spin", None),
+            getattr(data, "dataset", [None])
+        )
+
+    def _assert_composition_matches(self, current: tuple) -> None:
+        """Assert current composition matches what model was merged on."""
+        merged = self._merged_composition
+        merged_norm = merged[0].float() / merged[0].sum()
+        curr_norm = current[0].float() / current[0].sum()
+
+        assert merged_norm.isclose(curr_norm, rtol=1e-5).all(), \
+            "Compositions differ from merged model"
+        assert merged[1] == current[1], f"Charge differs: {merged[1]} vs {current[1]}"
+        assert merged[2] == current[2], f"Spin differs: {merged[2]} vs {current[2]}"
+        assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
+
 
 class MLP_EFS_Head(nn.Module, HeadInterface):
     def __init__(

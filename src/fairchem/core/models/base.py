@@ -10,8 +10,10 @@ from __future__ import annotations
 import copy
 import logging
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING
+from collections import defaultdict
+from typing import TYPE_CHECKING, Sequence
 
+import hydra
 import torch
 from torch import nn
 
@@ -22,6 +24,16 @@ from fairchem.core.common.utils import (
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+
+def _get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
+    """Create a mapping from dataset names to their associated tasks."""
+    dset_to_tasks_map = defaultdict(list)
+    for task in tasks:
+        for dataset_name in task.datasets:
+            dset_to_tasks_map[dataset_name].append(task)
+    return dict(dset_to_tasks_map)
 
 
 class HeadInterface(metaclass=ABCMeta):
@@ -189,6 +201,73 @@ class HydraModel(nn.Module):
 
         return out
 
+    @property
+    def direct_forces(self) -> bool:
+        """Whether this model uses direct force prediction."""
+        return getattr(self.backbone, "direct_forces", False)
+
+    def validate_inference_settings(self, settings) -> None:
+        """Validate inference settings are compatible with this model."""
+        self.backbone.validate_inference_settings(settings)
+
+    def prepare_for_inference(self, data, settings) -> None:
+        """Prepare model for inference. Called once on first prediction.
+
+        Delegates to backbone and each head that implements prepare_for_inference.
+        """
+        need_eval = False
+        # Backbone may return a new backbone (e.g., after MOLE merge)
+        new_backbone = self.backbone.prepare_for_inference(data, settings)
+        if new_backbone is not self.backbone:
+            self.backbone = new_backbone
+            # Re-set eval mode after backbone replacement
+            need_eval = True
+
+        # Let each head prepare itself if needed (returns new head or self)
+        new_output_heads = torch.nn.ModuleDict()
+        heads_changed = False
+        for head_name, head in self.output_heads.items():
+            if hasattr(head, "prepare_for_inference"):
+                new_head = head.prepare_for_inference(data, settings)
+                new_output_heads[head_name] = new_head
+                if new_head is not head:
+                    heads_changed = True
+            else:
+                new_output_heads[head_name] = head
+
+        if heads_changed:
+            self.output_heads = new_output_heads
+            need_eval = True
+
+        if need_eval:
+            self.eval()
+
+    def on_predict_check(self, data) -> None:
+        """Called before each prediction for any per-prediction checks."""
+        self.backbone.on_predict_check(data)
+
+    def setup_tasks(self, tasks_config: list) -> None:
+        """Setup tasks from checkpoint config.
+
+        Args:
+            tasks_config: List of task configurations from checkpoint
+        """
+        tasks = [
+            hydra.utils.instantiate(task_config) for task_config in tasks_config
+        ]
+        self.tasks = {t.name: t for t in tasks}
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
+
+        # Let backbone validate tasks
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        """Mapping from dataset names to their associated tasks."""
+        if not hasattr(self, "_dataset_to_tasks"):
+            raise RuntimeError("setup_tasks() must be called before accessing dataset_to_tasks")
+        return self._dataset_to_tasks
+
 
 class HydraModelV2(nn.Module):
     def __init__(
@@ -225,3 +304,50 @@ class HydraModelV2(nn.Module):
             ):
                 out[k] = self.output_heads[k](data, emb)
         return out
+
+    @property
+    def direct_forces(self) -> bool:
+        """Whether this model uses direct force prediction."""
+        return getattr(self.backbone, "direct_forces", False)
+
+    def validate_inference_settings(self, settings) -> None:
+        """Validate inference settings are compatible with this model."""
+        self.backbone.validate_inference_settings(settings)
+
+    def prepare_for_inference(self, data, settings) -> None:
+        """Prepare model for inference. Called once on first prediction."""
+        self.backbone.prepare_for_inference(data, settings)
+
+        new_output_heads = torch.nn.ModuleDict()
+        for head_name, head in self.output_heads.items():
+            if hasattr(head, "prepare_for_inference"):
+                new_output_heads[head_name] = head.prepare_for_inference(data, settings)
+            else:
+                new_output_heads[head_name] = head
+        self.output_heads = new_output_heads
+
+    def on_predict_check(self, data) -> None:
+        """Called before each prediction for any per-prediction checks."""
+        self.backbone.on_predict_check(data)
+
+    def setup_tasks(self, tasks_config: list) -> None:
+        """Setup tasks from checkpoint config.
+
+        Args:
+            tasks_config: List of task configurations from checkpoint
+        """
+        tasks = [
+            hydra.utils.instantiate(task_config) for task_config in tasks_config
+        ]
+        self.tasks = {t.name: t for t in tasks}
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
+
+        # Let backbone validate tasks
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        """Mapping from dataset names to their associated tasks."""
+        if not hasattr(self, "_dataset_to_tasks"):
+            raise RuntimeError("setup_tasks() must be called before accessing dataset_to_tasks")
+        return self._dataset_to_tasks
