@@ -622,18 +622,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return set(no_wd_list)
 
 
-class MLP_EFS_Head(nn.Module, HeadInterface):
+class MLP_Energy_Head(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone: eSCNMDBackbone,
+        reduce: str = "sum",
         prefix: str | None = None,
         wrap_property: bool = True,
     ) -> None:
         super().__init__()
-        backbone.energy_block = None
-        backbone.force_block = None
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
+        self.reduce = reduce
         self.prefix = prefix
         self.wrap_property = wrap_property
 
@@ -647,6 +645,80 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             nn.Linear(self.hidden_channels, 1, bias=True),
         )
 
+    def _compute_energy(
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute energy from node embeddings.
+
+        Args:
+            data: AtomicData containing batch information.
+            emb: Dictionary containing node embeddings.
+
+        Returns:
+            A tuple of (energy, energy_part) where:
+            - energy: The reduced energy per system (after GP reduction if applicable).
+            - energy_part: The unreduced energy per system (before GP reduction),
+              useful for autograd-based force/stress computation.
+        """
+        node_energy = self.energy_block(
+            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
+        ).view(-1, 1, 1)
+
+        energy_part = torch.zeros(
+            len(data["natoms"]),
+            device=node_energy.device,
+            dtype=node_energy.dtype,
+        )
+
+        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
+
+        if gp_utils.initialized():
+            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
+        else:
+            energy = energy_part
+
+        return energy, energy_part
+
+    def forward(
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
+
+        energy, _ = self._compute_energy(data, emb)
+
+        if self.reduce == "sum":
+            pass  # energy is already sum
+        elif self.reduce == "mean":
+            energy = energy / data["natoms"]
+        else:
+            raise ValueError(
+                f"reduce can only be sum or mean, user provided: {self.reduce}"
+            )
+
+        return {energy_key: {"energy": energy} if self.wrap_property else energy}
+
+
+class MLP_EFS_Head(MLP_Energy_Head):
+    """MLP head for predicting energy, forces, and stress using autograd derivatives.
+
+    This head extends MLP_Energy_Head to compute forces and stress by taking
+    gradients of the energy with respect to atomic positions and cell displacement.
+    """
+
+    def __init__(
+        self,
+        backbone: eSCNMDBackbone,
+        prefix: str | None = None,
+        wrap_property: bool = True,
+    ) -> None:
+        super().__init__(
+            backbone, reduce="sum", prefix=prefix, wrap_property=wrap_property
+        )
+        backbone.energy_block = None
+        backbone.force_block = None
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+
         # TODO: this is not very clean, bug-prone.
         # but is currently necessary for finetuning pretrained models that did not have
         # the direct_forces flag set to False
@@ -659,28 +731,14 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        if self.prefix:
-            energy_key = f"{self.prefix}_energy"
-            forces_key = f"{self.prefix}_forces"
-            stress_key = f"{self.prefix}_stress"
-        else:
-            energy_key = "energy"
-            forces_key = "forces"
-            stress_key = "stress"
+        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
+        forces_key = f"{self.prefix}_forces" if self.prefix else "forces"
+        stress_key = f"{self.prefix}_stress" if self.prefix else "stress"
 
         outputs = {}
-        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        _output = self.energy_block(_input)
-        node_energy = _output.view(-1, 1, 1)
-        energy_part = torch.zeros(
-            len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
-        )
-        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
 
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
+        # Use shared energy computation from parent class
+        energy, energy_part = self._compute_energy(data, emb)
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
@@ -724,50 +782,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 forces = gp_utils.reduce_from_model_parallel_region(forces)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
         return outputs
-
-
-class MLP_Energy_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone: eSCNMDBackbone, reduce: str = "sum") -> None:
-        super().__init__()
-        self.reduce = reduce
-
-        self.sphere_channels = backbone.sphere_channels
-        self.hidden_channels = backbone.hidden_channels
-        self.energy_block = nn.Sequential(
-            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, 1, bias=True),
-        )
-
-    def forward(
-        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        node_energy = self.energy_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
-
-        energy_part = torch.zeros(
-            len(data_dict["natoms"]),
-            device=node_energy.device,
-            dtype=node_energy.dtype,
-        )
-
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
-
-        if self.reduce == "sum":
-            return {"energy": energy}
-        elif self.reduce == "mean":
-            return {"energy": energy / data_dict["natoms"]}
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
 
 
 class Linear_Energy_Head(nn.Module, HeadInterface):
