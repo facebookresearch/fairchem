@@ -16,7 +16,7 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
-from typing import TYPE_CHECKING, Protocol, Sequence
+from typing import Protocol
 
 import hydra
 import numpy as np
@@ -38,9 +38,6 @@ from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
 )
-
-if TYPE_CHECKING:
-    from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 import ray
 from ray import remote
@@ -82,20 +79,6 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
-def merge_uma_model(model, data):
-    # merge the backbone
-    model.backbone = model.backbone.merge_MOLE_model(data)
-
-    # merge any heads
-    new_output_heads = torch.nn.ModuleDict()
-    for head_name, head in model.output_heads.items():
-        if hasattr(head, "merge_MOLE_model"):
-            new_output_heads[head_name] = head.merge_MOLE_model(data)
-        else:
-            new_output_heads[head_name] = head
-    model.output_heads = new_output_heads
-
-
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -112,91 +95,54 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.set_seed(seed)
-        # note these are different from the element references used for model training
-        self.atom_refs = (
-            {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
-            if atom_refs is not None
-            else {}
-        )
-        self.form_elem_refs = form_elem_refs if form_elem_refs is not None else {}
+        self._setup_refs(atom_refs, form_elem_refs)
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
-        if inference_settings.torch_num_threads is not None:
-            torch.set_num_threads(inference_settings.torch_num_threads)
-            torch.set_num_interop_threads(inference_settings.torch_num_threads)
-
-        if overrides is None:
-            overrides = {}
-        if "backbone" not in overrides:
-            overrides["backbone"] = {}
-        # always disable always_use_pbc for inference
-        overrides["backbone"]["always_use_pbc"] = False
-        if inference_settings.activation_checkpointing is not None:
-            overrides["backbone"]["activation_checkpointing"] = (
-                inference_settings.activation_checkpointing
-            )
-        if inference_settings.edge_chunk_size is not None:
-            overrides["backbone"]["edge_chunk_size"] = (
-                inference_settings.edge_chunk_size
-            )
-        if inference_settings.external_graph_gen is not None:
-            overrides["backbone"][
-                "otf_graph"
-            ] = not inference_settings.external_graph_gen
-
-        if inference_settings.internal_graph_gen_version is not None:
-            overrides["backbone"]["radius_pbc_version"] = (
-                inference_settings.internal_graph_gen_version
-            )
+        self._setup_threads(inference_settings)
 
         if inference_settings.wigner_cuda:
             logging.warning(
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
+        # Build overrides from inference settings
+        final_overrides = self._build_overrides_from_settings(overrides, inference_settings)
+
+        # Load model once with final overrides
         self.model, checkpoint = load_inference_model(
-            inference_model_path, use_ema=True, overrides=overrides
+            inference_model_path, use_ema=True, overrides=final_overrides
         )
-        tasks = [
-            hydra.utils.instantiate(task_config)
-            for task_config in checkpoint.tasks_config
-        ]
-        self.tasks = {t.name: t for t in tasks}
 
-        self._dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
-        assert set(self._dataset_to_tasks.keys()).issubset(
-            set(self.model.module.backbone.dataset_list)
-        ), "Datasets in tasks is not a strict subset of datasets in backbone."
-        assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
+        # Model validates its own settings and sets up tasks
+        self.model.module.validate_inference_settings(inference_settings)
+        self.model.module.setup_tasks(checkpoint.tasks_config)
 
-        self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
+        self._setup_device(device)
 
         self.model.eval()
-
         self.lazy_model_intialized = False
         self.inference_settings = inference_settings
-
-        # store composition embedding of system the model was merged on
-        self.merged_on = None
-
         self.assert_on_nans = assert_on_nans
 
-        if self.direct_forces:
+        if self.model.module.direct_forces:
             logging.warning(
-                "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
-                "energy surface and energy conservation errors."
+                "This is a direct-force model. Direct force predictions may lead to "
+                "discontinuities in the potential energy surface and energy conservation errors."
             )
 
     @property
     def direct_forces(self) -> bool:
-        return self.model.module.backbone.direct_forces
+        return self.model.module.direct_forces
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
-        return self._dataset_to_tasks
+        return self.model.module.dataset_to_tasks
 
-    def set_seed(self, seed: int):
+    def set_seed(self, seed: int) -> None:
+        """
+        Initialize random seeds.
+        """
         logging.debug(f"Setting random seed to {seed}")
         self._seed = seed
         random.seed(seed)
@@ -204,9 +150,66 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+    def _setup_refs(self, atom_refs: dict | None, form_elem_refs: dict | None) -> None:
+        """
+        Setup element references.
+        """
+        self.atom_refs = (
+            {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
+            if atom_refs else {}
+        )
+        self.form_elem_refs = form_elem_refs or {}
+
+    def _setup_threads(self, settings: InferenceSettings) -> None:
+        """
+        Configure thread settings.
+        """
+        if settings.torch_num_threads is not None:
+            torch.set_num_threads(settings.torch_num_threads)
+            torch.set_num_interop_threads(settings.torch_num_threads)
+
+    def _setup_device(self, device: str) -> None:
+        """
+        Setup inference device.
+        """
+        assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
+        self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
+
+    def _build_overrides_from_settings(self, user: dict | None, settings: InferenceSettings) -> dict:
+        """
+        Build backbone config overrides from inference settings and user inputs.
+
+        Models will either ignore overrides they don't support, or we need to
+        port this override setting code into the individual models too.
+        """
+
+        overrides = {} if user is None else dict(user)
+        if 'backbone' not in overrides:
+            overrides['backbone'] = {}
+
+        backbone_overrides = {}
+        # Always disable PBC wrapping for inference
+        backbone_overrides["always_use_pbc"] = False
+
+        if settings.activation_checkpointing is not None:
+            backbone_overrides["activation_checkpointing"] = settings.activation_checkpointing
+        if settings.edge_chunk_size is not None:
+            backbone_overrides["edge_chunk_size"] = settings.edge_chunk_size
+        if settings.external_graph_gen is not None:
+            backbone_overrides["otf_graph"] = not settings.external_graph_gen
+        if settings.internal_graph_gen_version is not None:
+            backbone_overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+
+        overrides['backbone'].update(backbone_overrides)
+        if 'backbone' in user:
+            overrides['backbone'].update(user['backbone'])
+
+        return overrides
+
+
     def move_to_device(self):
         self.model.to(self.device)
-        for task in self.tasks.values():
+        for task in self.model.module.tasks.values():
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)
@@ -214,117 +217,68 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)
 
-    def get_composition_charge_spin_dataset(self, data):
-        composition_sum = data.atomic_numbers.new_zeros(
-            self.model.module.backbone.max_num_elements,
-            dtype=torch.int,
-        ).index_add(
-            0,
-            data.atomic_numbers.to(torch.int),
-            data.atomic_numbers.new_ones(data.atomic_numbers.shape[0], dtype=torch.int),
-        )
-        comp_charge_spin = (
-            composition_sum,
-            getattr(data, "charge", None),
-            getattr(data, "spin", None),
-        )
-        return comp_charge_spin, getattr(data, "dataset", [None])
-
     @collate_predictions
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
-            # merge everything on CPU
-            if self.inference_settings.merge_mole:
-                # replace backbone with non MOE version
-                assert (
-                    data.natoms.numel() == 1
-                ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
+            self._lazy_init(data)
 
-                merge_uma_model(self.model.module, data.clone())
-
-                self.model.eval()
-            # move to device
-            self.move_to_device()
-            if self.inference_settings.compile:
-                logging.warning(
-                    "Model is being compiled this might take a while for the first time"
-                )
-                self.model = torch.compile(self.model, dynamic=True)
-            self.lazy_model_intialized = True
-
-        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
-        if self.inference_settings.merge_mole:
-            if self.merged_on is None:
-                # only get embeddings after moved to final device to get right types
-                self.merged_on = self.get_composition_charge_spin_dataset(data_device)
-            else:
-                this_sys = self.get_composition_charge_spin_dataset(data_device)
-                assert (
-                    data_device.natoms.numel() == 1
-                ), f"Cannot run merged model on batch with multiple systems. Must be exactly 1 system, found {data_device.natoms.numel()}"
+        # Model handles any per-prediction checks (e.g., MOLE consistency)
+        self.model.module.on_predict_check(data_device)
 
-                # Normalize compositions by total number of atoms to allow same reduced composition
-                merged_comp = self.merged_on[0][0].float()
-                this_comp = this_sys[0][0].float()
-                merged_comp_norm = merged_comp / merged_comp.sum()
-                this_comp_norm = this_comp / this_comp.sum()
+        return self._run_inference(data_device, undo_element_references)
 
-                assert merged_comp_norm.isclose(
-                    this_comp_norm, rtol=1e-5
-                ).all(), "Cannot run on merged model on system. Relative compositions seem different..."
-                assert (
-                    self.merged_on[0][1] == this_sys[0][1]
-                ), f"Cannot run on merged model on system. Charge is different {self.merged_on[0][1]} vs {this_sys[0][1]}"
-                assert (
-                    self.merged_on[0][2] == this_sys[0][2]
-                ), f"Cannot run on merged model on system. Spin is different {self.merged_on[0][2]} vs {this_sys[0][2]}"
-                assert (
-                    self.merged_on[1] == this_sys[1]
-                ), f"Cannot run on merged model on system. Dataset is different {self.merged_on[1]} vs {this_sys[1]}"
+    def _lazy_init(self, data: AtomicData) -> None:
+        """
+        Lazy initialization on first predict call.
+        """
+        # Model handles its own preparation (MOLE merge, eval mode, etc.)
+        self.model.module.prepare_for_inference(data, self.inference_settings)
 
+        self.move_to_device()
+
+        if self.inference_settings.compile:
+            logging.warning(
+                "Model is being compiled this might take a while for the first time"
+            )
+            self.model = torch.compile(self.model, dynamic=True)
+
+        self.lazy_model_intialized = True
+
+    def _run_inference(self, data: AtomicData, undo_refs: bool) -> dict:
+        """
+        Execute model inference.
+        """
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
         tf32_context = (
             tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
         )
 
-        pred_output = {}
         with inference_context, tf32_context:
-            output = self.model(data_device)
-            for task_name, task in self.tasks.items():
-                pred_output[task_name] = task.normalizer.denorm(
-                    output[task_name][task.property]
+            output = self.model(data)
+            return self._process_outputs(data, output, undo_refs)
+
+    def _process_outputs(self, data: AtomicData, output: dict, undo_refs: bool) -> dict:
+        """
+        Denormalize and post-process model outputs.
+        """
+        pred_output = {}
+        for task_name, task in self.model.module.tasks.items():
+            pred_output[task_name] = task.normalizer.denorm(
+                output[task_name][task.property]
+            )
+            if self.assert_on_nans:
+                assert torch.isfinite(
+                    pred_output[task_name]
+                ).all(), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
+            if undo_refs and task.element_references is not None:
+                pred_output[task_name] = task.element_references.undo_refs(
+                    data, pred_output[task_name]
                 )
-                if self.assert_on_nans:
-                    assert torch.isfinite(
-                        pred_output[task_name]
-                    ).all(), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
-                if undo_element_references and task.element_references is not None:
-                    pred_output[task_name] = task.element_references.undo_refs(
-                        data_device, pred_output[task_name]
-                    )
-
         return pred_output
-
-
-def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
-    """Create a mapping from dataset names to their associated tasks.
-
-    Args:
-        tasks: A sequence of Task objects to be organized by dataset
-
-    Returns:
-        A dictionary mapping dataset names (str) to lists of Task objects
-        that are associated with that dataset
-    """
-    dset_to_tasks_map = defaultdict(list)
-    for task in tasks:
-        for dataset_name in task.datasets:
-            dset_to_tasks_map[dataset_name].append(task)
-    return dict(dset_to_tasks_map)
 
 
 def move_tensors_to_cpu(data):
@@ -449,6 +403,8 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             atom_refs=atom_refs,
             form_elem_refs=form_elem_refs,
         )
+        if inference_settings is None:
+            inference_settings = InferenceSettings()
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
 
