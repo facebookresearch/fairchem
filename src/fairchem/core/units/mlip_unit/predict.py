@@ -337,42 +337,16 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         self.model.module.output_heads["energyandforcehead"].head.training = True
 
-        # Batch and prepare data
-        data_device = data.to(self.device)
+        preds = self.predict(data)
+        forces = preds["forces"]
+        positions = data["pos"]
 
-        # Enable gradients on positions for second derivatives
-        data_device["pos"].requires_grad_(True)
-
-        # Forward pass through model to get energy only
-        output = self.model(data_device)
-
-        # Get the task name from the data and extract energy
-        # The energy is in output[f"{task_name}_energy"]["energy"]
-        task_name = (
-            data.task_name[0] if isinstance(data.task_name, list) else data.task_name
-        )
-        energy_key = f"{task_name}_energy"
-        energy = output[energy_key]["energy"]
-
-        # Compute forces from energy gradient with create_graph=True for Hessian
-        positions = data_device["pos"]
-        forces = torch.autograd.grad(
-            energy,
-            positions,
-            grad_outputs=torch.ones_like(energy),
-            create_graph=True,
-        )[0]
-
-        # Flatten forces (negative gradient of energy)
-        forces_flat = -forces.flatten()
-
-        # Calculate the Hessian using autograd
-        # H = d²E/dx² = -dF/dx (since F = -dE/dx)
+        forces_flat = forces.flatten()
         if vmap:
-            # Vectorized computation of Hessian using vmap
+
             def compute_grad_component(vec):
                 return torch.autograd.grad(
-                    -forces_flat,
+                    -1 * forces_flat,
                     positions,
                     grad_outputs=vec,
                     retain_graph=True,
@@ -402,6 +376,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         )
         return hessian.reshape(n_atoms * 3, n_atoms * 3)
 
+    # TODO refactor this into a utility function, or just in tests...
     def get_numerical_hessian(
         self, data: AtomicData, eps: float = 1e-4
     ) -> torch.Tensor:
