@@ -1368,7 +1368,8 @@ class GemNetOCBackbone(nn.Module):
 
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """Validate that task datasets are compatible with this backbone."""
-        pass  # GemNet has no dataset_list validation
+        # GemNet has no dataset_list validation
+        pass  # noqa
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """Prepare model for inference. GemNet has no special preparation."""
@@ -1376,7 +1377,11 @@ class GemNetOCBackbone(nn.Module):
 
     def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction. GemNet has no per-prediction checks."""
-        pass
+        pass  # noqa
+
+    def validate_calculator_data(self, atoms, task_name: str) -> None:
+        """GemNet has no special calculator data requirements."""
+        pass  # noqa
 
     @property
     def num_params(self) -> int:
