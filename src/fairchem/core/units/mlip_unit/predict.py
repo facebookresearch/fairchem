@@ -376,65 +376,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         )
         return hessian.reshape(n_atoms * 3, n_atoms * 3)
 
-    # TODO refactor this into a utility function, or just in tests...
-    def get_numerical_hessian(
-        self, data: AtomicData, eps: float = 1e-4
-    ) -> torch.Tensor:
-        """
-        Get the Hessian matrix for the given atomic data using finite differences.
-
-        Args:
-            data (AtomicData): The atomic data to calculate the Hessian for.
-            eps (float): The finite difference step size. Defaults to 1e-4.
-
-        Returns:
-            torch.Tensor: The Hessian matrix with shape (n_atoms * 3, n_atoms * 3).
-        """
-        from fairchem.core.datasets import data_list_collater
-
-        if not self.lazy_model_intialized:
-            self.move_to_device()
-            self.lazy_model_intialized = True
-
-        n_atoms = (
-            data.natoms.item() if hasattr(data.natoms, "item") else int(data.natoms)
-        )
-
-        # Create displaced data objects in batch
-        data_list = []
-        for i in range(n_atoms):
-            for j in range(3):
-                # Create displaced versions
-                data_plus = data.clone()
-                data_minus = data.clone()
-
-                data_plus.pos[i, j] += eps
-                data_minus.pos[i, j] -= eps
-
-                data_list.append(data_plus)
-                data_list.append(data_minus)
-
-        # Batch and predict
-        batch = data_list_collater(data_list, otf_graph=True)
-        pred = self.predict(batch)
-
-        # Get the forces
-        forces = pred["forces"].reshape(-1, n_atoms, 3)
-
-        # Calculate the Hessian using finite differences
-        # Hessian H = d²E/dx² = -dF/dx, so we need -(F+ - F-) / (2*eps)
-        hessian = torch.zeros(
-            (n_atoms * 3, n_atoms * 3), device=self.device, requires_grad=False
-        )
-        for i in range(n_atoms):
-            for j in range(3):
-                idx = i * 3 + j
-                force_plus = forces[2 * idx].flatten()
-                force_minus = forces[2 * idx + 1].flatten()
-                hessian[:, idx] = -(force_plus - force_minus) / (2 * eps)
-
-        return hessian
-
 
 def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     """Create a mapping from dataset names to their associated tasks.
