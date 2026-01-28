@@ -247,7 +247,6 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
         return no_weight_decay(self)
 
 
-
 @registry.register_model("EScAIP_direct_force_head")
 class EScAIPDirectForceHead(EScAIPHeadBase):
     def __init__(self, backbone: EScAIPBackbone):  # type: ignore
