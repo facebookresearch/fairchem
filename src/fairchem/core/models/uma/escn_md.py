@@ -702,17 +702,27 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         Assert current composition matches what model was merged on.
         """
         merged = self._merged_composition
-        merged_norm = merged[0].float() / merged[0].sum()
-        curr_norm = current[0].float() / current[0].sum()
+        # Move current tensors to same device as merged (CPU) for comparison
+        device = merged[0].device
 
-        # Move to same device for comparison (merged is on CPU from prepare_for_inference)
-        curr_norm = curr_norm.to(merged_norm.device)
+        merged_norm = merged[0].float() / merged[0].sum()
+        curr_norm = current[0].float().to(device) / current[0].sum().to(device)
 
         assert merged_norm.isclose(
             curr_norm, rtol=1e-5
         ).all(), "Compositions differ from merged model"
-        assert merged[1] == current[1], f"Charge differs: {merged[1]} vs {current[1]}"
-        assert merged[2] == current[2], f"Spin differs: {merged[2]} vs {current[2]}"
+
+        # Charge and spin are tensors that need device alignment
+        merged_charge = merged[1]
+        curr_charge = current[1].to(device) if isinstance(current[1], torch.Tensor) else current[1]
+        assert (merged_charge == curr_charge).all() if isinstance(merged_charge, torch.Tensor) else merged_charge == curr_charge, \
+            f"Charge differs: {merged_charge} vs {current[1]}"
+
+        merged_spin = merged[2]
+        curr_spin = current[2].to(device) if isinstance(current[2], torch.Tensor) else current[2]
+        assert (merged_spin == curr_spin).all() if isinstance(merged_spin, torch.Tensor) else merged_spin == curr_spin, \
+            f"Spin differs: {merged_spin} vs {current[2]}"
+
         assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
 
 
