@@ -11,6 +11,7 @@ project:
     - format: pdf
       template: plain_latex_book
       output: exports/fairchem.pdf
+  jupyter: true
   toc:
     - file: index.md
     - title: Quickstart
@@ -29,6 +30,7 @@ project:
             - file: core/common_tasks/ase_calculator.md
             - file: core/common_tasks/lammps.md
             - file: core/common_tasks/batch_inference.md
+            - file: core/common_tasks/inference_batcher.md
             - file: core/common_tasks/ase_dataset_creation.md
             - file: core/common_tasks/training.md
             - file: core/common_tasks/evaluation.md
@@ -37,7 +39,8 @@ project:
             - file: core/uma_faq.md
         - file: uma_tutorials/summary.md
           children:
-            - file: uma_tutorials/uma_tutorial
+            - file: uma_tutorials/uma_tutorial.md
+            - file: uma_tutorials/uma_catalysis_tutorial.md
         - file: core/generative_models.md
     - title: Molecules & Molecular Crystals
       children:
@@ -58,10 +61,12 @@ project:
         - file: catalysts/datasets/summary.md
           children:
             - file: catalysts/datasets/oc20.md
+            - file: catalysts/datasets/oc20_mads.md
             - file: catalysts/datasets/oc22.md
             - file: catalysts/datasets/oc20dense.md
             - file: catalysts/datasets/oc20neb.md
             - file: catalysts/datasets/ocx24.md
+            - file: catalysts/datasets/oc25
         - file: catalysts/models.md
         - file: catalysts/examples_tutorials/summary.md
           children:
@@ -80,7 +85,7 @@ project:
         - file: inorganic_materials/models.md
         - file: inorganic_materials/examples_tutorials/summary.md
           children:
-            - file: inorganic_materials/examples_tutorials/bulk_stability.md
+            - file: inorganic_materials/examples_tutorials/formation_energy.md
             - file: inorganic_materials/examples_tutorials/phonons.md
             - file: inorganic_materials/examples_tutorials/elastic.md
         - file: inorganic_materials/FAQ.md

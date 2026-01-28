@@ -144,6 +144,8 @@ class JobConfig:
         None  # omegaconf in python 3.9 does not backport annotations
     )
     graph_parallel_group_size: Optional[int] = None
+    # disable this if you want to lazily instantiate the runner later (for example: have a worker perform the instantiation after distributed env setup in SPMDWorker)
+    recursive_instantiate_runner: bool = True
 
     def __post_init__(self) -> None:
         self.run_dir = os.path.abspath(self.run_dir)

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import clusterscope
 import hydra
 import ray
 import torch.distributed as dist
@@ -183,8 +184,10 @@ class SPMDController(Runner):
         pass
 
 
-def ray_entrypoint(runner_config: DictConfig):
-    runner = hydra.utils.instantiate(runner_config, _recursive_=False)
+def ray_entrypoint(runner_config: DictConfig, recursive_instantiate_runner: bool):
+    runner = hydra.utils.instantiate(
+        runner_config, _recursive_=recursive_instantiate_runner
+    )
     runner.run()
 
 
@@ -197,39 +200,15 @@ def ray_on_slurm_launch(config: DictConfig, log_dir: str):
         "slurm_qos": slurm_config.qos,
         "timeout_min": slurm_config.timeout_hr * 60,
         "mem_gb": slurm_config.mem_gb,
+        "nodes": scheduler_config.num_nodes,
+        "gpus_per_task": scheduler_config.ranks_per_node,
+        "cpus_per_task": clusterscope.cpus(),  # need to request all the cpus on the node
+        "tasks_per_node": 1,
     }
-    worker_nodes = scheduler_config.num_nodes - 1
-
-    all_job_ids = []
-    head_job_id = cluster.start_head(
-        requirements=cluster_reqs
-        | {
-            "nodes": 1,
-            "cpus_per_task": slurm_config.cpus_per_task
-            * scheduler_config.ranks_per_node,
-            "gpus_per_task": scheduler_config.ranks_per_node,
-            "tasks_per_node": 1,
-        },
-        executor="slurm",
+    cluster.start_head_and_workers(
+        name=config.job.run_name,
+        requirements=cluster_reqs,
         payload=ray_entrypoint,
         runner_config=config.runner,
+        recursive_instantiate_runner=config.job.recursive_instantiate_runner,
     )
-    all_job_ids.append(head_job_id)
-    logging.info("Ray head started")
-
-    if worker_nodes > 0:
-        worker_ids = cluster.start_workers(
-            1,
-            requirements=cluster_reqs
-            | {
-                "nodes": worker_nodes,
-                "gpus_per_task": scheduler_config.ranks_per_node,
-                "cpus_per_task": slurm_config.cpus_per_task
-                * scheduler_config.ranks_per_node,
-                "tasks_per_node": 1,
-            },
-        )
-        all_job_ids.extend(worker_ids)
-        logging.info("Ray workers started")
-
-    logging.info(f"To cancel: scancel {' '.join(all_job_ids)}")

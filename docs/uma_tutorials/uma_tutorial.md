@@ -1,14 +1,15 @@
 ---
 jupytext:
+  formats: ipynb,md:myst
   text_representation:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.1
+    jupytext_version: 1.18.1
 kernelspec:
   display_name: Python 3 (ipykernel)
-  name: python3
   language: python
+  name: python3
 ---
 
 UMA Intro Tutorial
@@ -25,7 +26,7 @@ You need a Huggingface account, request access to https://huggingface.co/faceboo
 
 Permissions: Read access to contents of all public gated repos you can access
 
-Then, add the token as an environment variable (using `huggingface-cli login`: 
+Then, add the token as an environment variable (using `huggingface-cli login`:
 
 ```{code-cell}
 :tags: [skip-execution]
@@ -35,6 +36,7 @@ Then, add the token as an environment variable (using `huggingface-cli login`:
 ```
 
 or you can set the token via HF_TOKEN variable:
+
 ```{code-cell}
 :tags: [skip-execution]
 
@@ -66,7 +68,6 @@ import fairchem.core
 fairchem.core.__version__
 ```
 
-
 # Illustrative examples
 
 These should just run, and are here to show some basic uses.
@@ -82,7 +83,6 @@ Critical points:
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
 
 We don't set a device here, so we get a warning about using a CPU device. You can ignore that. If a CUDA environment is available, a GPU may be used to speed up the calculations.
-
 
 ```{code-cell}
 from fairchem.core import FAIRChemCalculator, pretrained_mlip

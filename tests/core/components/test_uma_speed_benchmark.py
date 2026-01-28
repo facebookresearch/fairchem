@@ -42,9 +42,14 @@ def test_uma_speed_benchmark_natoms_list(conserving_mole_checkpoint):
         sys_args = [
             "-c",
             "configs/uma/benchmark/uma-speed.yaml",
-            f"+run_dir_root={run_root}",
+            "job.scheduler.mode=LOCAL",
+            "job.scheduler.num_nodes=1",
+            "job.scheduler.ranks_per_node=1",
+            "job.graph_parallel_group_size=1",
+            f"job.run_dir={run_root}",
             # shorten runtime dramatically
             "runner.timeiters=1",
+            "runner.inference_settings.compile=False",
             # use a tiny atom count
             "runner.natoms_list=[20]",
             model_override,
@@ -69,12 +74,17 @@ def test_uma_speed_benchmark_input_system(conserving_mole_checkpoint, water_xyz_
         sys_args = [
             "-c",
             "configs/uma/benchmark/uma-speed.yaml",
-            f"+run_dir_root={run_root}",
+            "job.scheduler.mode=LOCAL",
+            "job.scheduler.num_nodes=1",
+            "job.scheduler.ranks_per_node=1",
+            "job.graph_parallel_group_size=1",
+            f"job.run_dir={run_root}",
             "runner.timeiters=1",
+            "runner.inference_settings.compile=False",
             input_system_override,
             model_override,
             "+runner.dataset_name=omol",
-            "runner.natoms_list=[]",
+            "runner.natoms_list=null",
         ]
         launch_main(sys_args)
         entries = list(Path(run_root).glob("*/"))
