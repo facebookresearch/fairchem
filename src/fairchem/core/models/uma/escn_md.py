@@ -626,7 +626,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         Validate inference settings are compatible with this model.
         """
-        pass # noqa
+        pass  # noqa
 
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """
@@ -714,14 +714,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # Charge and spin are tensors that need device alignment
         merged_charge = merged[1]
-        curr_charge = current[1].to(device) if isinstance(current[1], torch.Tensor) else current[1]
-        assert (merged_charge == curr_charge).all() if isinstance(merged_charge, torch.Tensor) else merged_charge == curr_charge, \
-            f"Charge differs: {merged_charge} vs {current[1]}"
+        curr_charge = (
+            current[1].to(device)
+            if isinstance(current[1], torch.Tensor)
+            else current[1]
+        )
+        assert (
+            (merged_charge == curr_charge).all()
+            if isinstance(merged_charge, torch.Tensor)
+            else merged_charge == curr_charge
+        ), f"Charge differs: {merged_charge} vs {current[1]}"
 
         merged_spin = merged[2]
-        curr_spin = current[2].to(device) if isinstance(current[2], torch.Tensor) else current[2]
-        assert (merged_spin == curr_spin).all() if isinstance(merged_spin, torch.Tensor) else merged_spin == curr_spin, \
-            f"Spin differs: {merged_spin} vs {current[2]}"
+        curr_spin = (
+            current[2].to(device)
+            if isinstance(current[2], torch.Tensor)
+            else current[2]
+        )
+        assert (
+            (merged_spin == curr_spin).all()
+            if isinstance(merged_spin, torch.Tensor)
+            else merged_spin == curr_spin
+        ), f"Spin differs: {merged_spin} vs {current[2]}"
 
         assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
 

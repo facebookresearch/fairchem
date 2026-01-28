@@ -83,12 +83,12 @@ class BackboneInterface(metaclass=ABCMeta):
     @abstractmethod
     def validate_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with this backbone."""
-        pass # noqa
+        pass  # noqa
 
     @abstractmethod
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """Validate that task datasets are compatible with this backbone."""
-        pass # noqa
+        pass  # noqa
 
     @abstractmethod
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
@@ -102,7 +102,8 @@ class BackboneInterface(metaclass=ABCMeta):
     @abstractmethod
     def on_predict_check(self, data: AtomicData) -> None:
         """Called before each prediction for any per-prediction checks."""
-        pass # noqa
+        pass  # noqa
+
 
 @registry.register_model("hydra")
 class HydraModel(nn.Module):

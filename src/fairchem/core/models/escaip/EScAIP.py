@@ -225,14 +225,14 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
         """
         Validate inference settings are compatible with this model.
         """
-        pass # noqa
+        pass  # noqa
 
     def validate_tasks(self, dataset_to_tasks: dict) -> None:
         """
         Validate that task datasets are compatible with this backbone.
         """
         # EScAIP has no dataset_list validation
-        pass # noqa
+        pass  # noqa
 
     def prepare_for_inference(self, data, settings):
         """
@@ -244,7 +244,7 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
         """
         Called before each prediction. EScAIP has no per-prediction checks.
         """
-        pass # noqa
+        pass  # noqa
 
 
 @registry.register_model("EScAIP_direct_force_head")
