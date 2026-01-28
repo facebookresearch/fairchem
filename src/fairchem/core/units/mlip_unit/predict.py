@@ -16,7 +16,7 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import hydra
 import numpy as np
@@ -41,6 +41,9 @@ from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
 )
+
+if TYPE_CHECKING:
+    from ase import Atoms
 
 
 def collate_predictions(predict_fn):
@@ -224,6 +227,14 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Delegates to the model's backbone for model-specific validation.
+        """
+        self.model.module.validate_atoms_data(atoms, task_name)
 
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)

@@ -182,7 +182,7 @@ def test_no_task_name_single_task():
 
 
 def test_calculator_unknown_task_raises_error():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         FAIRChemCalculator.from_model_checkpoint(
             pretrained_mlip.available_models[0], task_name="ommmmmol"
         )
