@@ -32,7 +32,10 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import (
+    AtomicData,
+    atomicdata_list_to_batch,
+)
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
@@ -45,6 +48,225 @@ if TYPE_CHECKING:
 import ray
 from ray import remote
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
+
+
+def identify_single_atom_systems(data: AtomicData) -> tuple[torch.Tensor, torch.Tensor]:
+    """Identify single isolated atoms (natoms==1 and pbc all False).
+
+    Returns:
+        tuple containing:
+            - single_atom_mask: Boolean tensor indicating which systems are single atoms
+            - regular_mask: Boolean tensor indicating which systems are regular (not single atoms)
+    """
+    is_single_atom = data.natoms == 1
+    has_no_pbc = ~data.pbc.any(dim=1)
+    single_atom_mask = is_single_atom & has_no_pbc
+    return single_atom_mask, ~single_atom_mask
+
+
+def extract_systems_by_mask(data: AtomicData, mask: torch.Tensor) -> AtomicData:
+    """Extract systems from a batch based on a boolean mask.
+
+    Args:
+        data: The batched AtomicData
+        mask: Boolean tensor of length num_graphs indicating which systems to extract
+
+    Returns:
+        A new AtomicData batch containing only the selected systems
+    """
+    indices = torch.where(mask)[0].tolist()
+    if not indices:
+        return None
+    selected_data = [data.get_example(i) for i in indices]
+    return atomicdata_list_to_batch(selected_data)
+
+
+def compute_single_atom_outputs(
+    data: AtomicData,
+    single_atom_indices: list[int],
+    atom_refs: dict[str, dict],
+    tasks: dict[str, Task],
+    dataset_names: list[str],
+    device: torch.device,
+) -> dict[str, torch.Tensor]:
+    """Compute outputs for single-atom systems using precomputed atom references.
+
+    Args:
+        data: The original batched AtomicData (used to get atomic numbers and charges)
+        single_atom_indices: List of indices of single-atom systems in the original batch
+        atom_refs: Dictionary mapping dataset names to their atom reference dictionaries
+        tasks: Dictionary mapping task names to Task objects
+        dataset_names: List of dataset names corresponding to each single-atom system
+        device: Device to place output tensors on
+
+    Returns:
+        Dictionary mapping task names to output tensors
+    """
+    outputs = {}
+
+    # Get atomic numbers and charges for single atoms
+    atomic_numbers = []
+    charges = []
+    for idx in single_atom_indices:
+        # For single atom systems, the atom index equals the batch index position
+        atom_idx = data.natoms[:idx].sum().item() if idx > 0 else 0
+        atomic_numbers.append(int(data.atomic_numbers[atom_idx].item()))
+        charges.append(int(data.charge[idx].item()))
+
+    num_single_atoms = len(single_atom_indices)
+
+    for task_name, task in tasks.items():
+        # Only handle tasks for datasets we're processing
+        task_datasets = set(task.datasets)
+        if not any(ds in task_datasets for ds in dataset_names):
+            continue
+
+        if task.property == "energy":
+            energies = []
+            for at_num, charge, ds_name in zip(
+                atomic_numbers, charges, dataset_names, strict=False
+            ):
+                if ds_name not in atom_refs:
+                    raise ValueError(
+                        f"No atom references available for dataset '{ds_name}'. "
+                        "Cannot compute single-atom energy."
+                    )
+                ds_refs = atom_refs[ds_name]
+                # Handle both charge-dependent and charge-independent references
+                # Same pattern as the original FAIRChemCalculator implementation
+                try:
+                    energy = ds_refs.get(at_num, {}).get(charge)
+                except AttributeError:
+                    energy = ds_refs[at_num]
+
+                if energy is None:
+                    raise ValueError(
+                        f"No atom reference for element {at_num} with charge {charge} "
+                        f"in dataset '{ds_name}'."
+                    )
+                energies.append(float(energy))
+
+            outputs[task_name] = torch.tensor(
+                energies, dtype=torch.float32, device=device
+            )
+
+        elif task.property == "forces":
+            # Forces are zero for isolated single atoms
+            outputs[task_name] = torch.zeros(
+                (num_single_atoms, 3), dtype=torch.float32, device=device
+            )
+
+        elif task.property == "stress":
+            # Stress is zero for isolated single atoms (flattened to 9)
+            outputs[task_name] = torch.zeros(
+                (num_single_atoms, 9), dtype=torch.float32, device=device
+            )
+
+    return outputs
+
+
+def interleave_predictions(
+    single_preds: dict[str, torch.Tensor] | None,
+    regular_preds: dict[str, torch.Tensor] | None,
+    single_atom_mask: torch.Tensor,
+    tasks: dict[str, Task],
+    data: AtomicData,
+) -> dict[str, torch.Tensor]:
+    """Merge single-atom and regular predictions maintaining original order.
+
+    Args:
+        single_preds: Predictions for single-atom systems (or None if no single atoms)
+        regular_preds: Predictions for regular systems (or None if all single atoms)
+        single_atom_mask: Boolean mask indicating which systems are single atoms
+        tasks: Dictionary mapping task names to Task objects
+        data: The original batched AtomicData
+
+    Returns:
+        Dictionary mapping task names to merged output tensors in original order
+    """
+    # Handle edge cases
+    if single_preds is None:
+        return regular_preds
+    if regular_preds is None:
+        return single_preds
+
+    num_systems = single_atom_mask.shape[0]
+    device = single_atom_mask.device
+
+    # Get indices for interleaving
+    single_indices = torch.where(single_atom_mask)[0]
+    regular_indices = torch.where(~single_atom_mask)[0]
+
+    merged = {}
+    for task_name, task in tasks.items():
+        if task_name not in single_preds and task_name not in regular_preds:
+            continue
+
+        single_tensor = single_preds.get(task_name)
+        regular_tensor = regular_preds.get(task_name)
+
+        # Skip if neither has this task
+        if single_tensor is None and regular_tensor is None:
+            continue
+
+        if task.level == "system":
+            # System-level outputs (energy, stress): one per system
+            # Determine output shape and dtype from available tensors
+            # Prefer regular_tensor dtype as it comes from the model
+            if regular_tensor is not None:
+                out_shape = (num_systems,) + regular_tensor.shape[1:]
+                dtype = regular_tensor.dtype
+            else:
+                out_shape = (num_systems,) + single_tensor.shape[1:]
+                dtype = single_tensor.dtype
+
+            merged_tensor = torch.zeros(out_shape, dtype=dtype, device=device)
+
+            if single_tensor is not None:
+                merged_tensor[single_indices] = single_tensor.to(dtype)
+            if regular_tensor is not None:
+                merged_tensor[regular_indices] = regular_tensor
+
+            merged[task_name] = merged_tensor
+
+        elif task.level == "atom":
+            # Atom-level outputs (forces): need to interleave by atom positions
+            # For single atoms, there's one atom per system at the corresponding position
+            total_atoms = data.natoms.sum().item()
+
+            # Determine output shape and dtype - prefer model output dtype
+            if regular_tensor is not None:
+                out_shape = (total_atoms,) + regular_tensor.shape[1:]
+                dtype = regular_tensor.dtype
+            else:
+                out_shape = (total_atoms,) + single_tensor.shape[1:]
+                dtype = single_tensor.dtype
+
+            merged_tensor = torch.zeros(out_shape, dtype=dtype, device=device)
+
+            # Place single atom predictions
+            if single_tensor is not None:
+                single_atom_positions = []
+                for idx in single_indices.tolist():
+                    atom_pos = data.natoms[:idx].sum().item() if idx > 0 else 0
+                    single_atom_positions.append(atom_pos)
+                for pos, val in zip(single_atom_positions, single_tensor, strict=False):
+                    merged_tensor[pos] = val.to(dtype)
+
+            # Place regular predictions
+            if regular_tensor is not None:
+                regular_atom_positions = []
+                for idx in regular_indices.tolist():
+                    start_pos = data.natoms[:idx].sum().item() if idx > 0 else 0
+                    num_atoms_in_sys = data.natoms[idx].item()
+                    regular_atom_positions.extend(
+                        range(start_pos, start_pos + num_atoms_in_sys)
+                    )
+                merged_tensor[regular_atom_positions] = regular_tensor
+
+            merged[task_name] = merged_tensor
+
+    return merged
 
 
 def collate_predictions(predict_fn):
@@ -158,6 +380,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
+
+        # Check if model natively supports single atom predictions
+        self.supports_single_atoms = checkpoint.model_config.get(
+            "supports_single_atoms", False
+        )
+
         tasks = [
             hydra.utils.instantiate(task_config)
             for task_config in checkpoint.tasks_config
@@ -234,6 +462,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
+        # Lazy initialization
         if not self.lazy_model_intialized:
             # merge everything on CPU
             if self.inference_settings.merge_mole:
@@ -254,6 +483,102 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
+        # Identify single-atom systems (natoms==1 and pbc all False)
+        if not self.supports_single_atoms:
+            single_atom_mask, regular_mask = identify_single_atom_systems(data)
+
+        # Check if we need single-atom handling
+        if self.supports_single_atoms or not single_atom_mask.any():
+            # Fast path: no single atoms or model supports them natively
+            result = self._predict_with_model(data, undo_element_references)
+        else:
+            # Handle batch containing single-atom systems
+            result = self._predict_with_single_atoms(
+                data, single_atom_mask, regular_mask, undo_element_references
+            )
+
+        return result
+
+    def _predict_with_single_atoms(
+        self,
+        data: AtomicData,
+        single_atom_mask: torch.Tensor,
+        regular_mask: torch.Tensor,
+        undo_element_references: bool,
+    ) -> dict[str, torch.Tensor]:
+        """Handle prediction for batches containing single-atom systems.
+
+        Single atoms (natoms==1, no PBC) cannot be processed by the model,
+        so we use precomputed DFT reference energies instead.
+
+        Args:
+            data: The full batch of AtomicData
+            single_atom_mask: Boolean mask for single-atom systems
+            regular_mask: Boolean mask for regular (non-single-atom) systems
+            undo_element_references: Whether to undo element references
+
+        Returns:
+            Dictionary mapping task names to prediction tensors
+        """
+        if not self.atom_refs:
+            raise ValueError(
+                "Single atom system encountered but no atom_refs available. "
+                "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
+                "with an appropriate checkpoint name."
+            )
+
+        logging.warning(
+            "Single atom system(s) detected; using precomputed DFT references "
+            "instead of model predictions. Spin multiplicity is ignored for "
+            "monoatomic systems."
+        )
+
+        # Process regular systems through the model
+        regular_preds = None
+        if regular_mask.any():
+            regular_data = extract_systems_by_mask(data, regular_mask)
+            if regular_data is not None:
+                regular_preds = self._predict_with_model(
+                    regular_data, undo_element_references
+                )
+
+        # Process single-atom systems using precomputed references
+        single_atom_indices = torch.where(single_atom_mask)[0].tolist()
+        single_dataset_names = [data.dataset[i] for i in single_atom_indices]
+
+        single_preds = compute_single_atom_outputs(
+            data=data,
+            single_atom_indices=single_atom_indices,
+            atom_refs=self.atom_refs,
+            tasks=self.tasks,
+            dataset_names=single_dataset_names,
+            device=self.device,
+        )
+
+        # Interleave predictions back to original order
+        return interleave_predictions(
+            single_preds=single_preds,
+            regular_preds=regular_preds,
+            single_atom_mask=single_atom_mask.to(self.device),
+            tasks=self.tasks,
+            data=data.to(self.device),
+        )
+
+    def _predict_with_model(
+        self, data: AtomicData, undo_element_references: bool = True
+    ) -> dict[str, torch.tensor]:
+        """Run actual ML model prediction on the data.
+
+        This method contains the core model inference logic, separated from
+        the single-atom handling in predict().
+
+        Args:
+            data: AtomicData batch to run inference on
+            undo_element_references: Whether to undo element references in output
+
+        Returns:
+            Dictionary mapping task names to prediction tensors
+        """
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
