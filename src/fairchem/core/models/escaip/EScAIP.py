@@ -246,23 +246,6 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
     def no_weight_decay(self):
         return no_weight_decay(self)
 
-    def validate_inference_settings(self, settings) -> None:
-        """Validate inference settings are compatible with this model."""
-        if settings.merge_mole:
-            raise ValueError("EScAIP does not support MOLE merging (merge_mole=True)")
-
-    def validate_tasks(self, dataset_to_tasks: dict) -> None:
-        """Validate that task datasets are compatible with this backbone."""
-        pass  # EScAIP has no dataset_list validation
-
-    def prepare_for_inference(self, data, settings):
-        """Prepare model for inference. EScAIP has no special preparation."""
-        return self
-
-    def on_predict_check(self, data) -> None:
-        """Called before each prediction. EScAIP has no per-prediction checks."""
-        pass
-
 
 @registry.register_model("EScAIP_direct_force_head")
 class EScAIPDirectForceHead(EScAIPHeadBase):
