@@ -12,6 +12,7 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.models.utils.outputs import get_numerical_hessian
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
@@ -592,29 +593,6 @@ def test_hessian(vmap):
 
 
 @pytest.mark.gpu()
-def test_numerical_hessian():
-    """Test numerical Hessian calculation using MLIPPredictUnit directly."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-
-    atoms = molecule("H2O")
-    atoms.info.update({"charge": 0, "spin": 1})
-
-    # Convert to AtomicData
-    data = AtomicData.from_ase(
-        atoms,
-        task_name="omol",
-        r_data_keys=["spin", "charge"],
-        molecule_cell_size=120,
-    )
-
-    hessian = predict_unit.get_numerical_hessian(data).detach().cpu().numpy()
-
-    # Check shape (3 atoms * 3 coords = 9x9 matrix)
-    assert hessian.shape == (9, 9)
-    assert np.isfinite(hessian).all()
-
-
-@pytest.mark.gpu()
 def test_hessian_vs_numerical():
     """Test that analytical and numerical Hessians are close."""
     predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
@@ -622,7 +600,6 @@ def test_hessian_vs_numerical():
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
 
-    # Convert to AtomicData
     data = AtomicData.from_ase(
         atoms,
         task_name="omol",
@@ -634,7 +611,10 @@ def test_hessian_vs_numerical():
         predict_unit.get_hessian(batch, vmap=True).detach().cpu().numpy()
     )
     hessian_numerical = (
-        predict_unit.get_numerical_hessian(data, eps=1e-4).detach().cpu().numpy()
+        get_numerical_hessian(data, predict_unit, eps=1e-4, device="cuda")
+        .detach()
+        .cpu()
+        .numpy()
     )
 
     # Analytical and numerical Hessians should be close
