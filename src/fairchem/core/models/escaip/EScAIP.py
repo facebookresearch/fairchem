@@ -126,6 +126,31 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore
 
+    def validate_inference_settings(self, settings) -> None:
+        """
+        Validate inference settings are compatible with this model.
+        """
+        pass # noqa
+
+    def validate_tasks(self, dataset_to_tasks: dict) -> None:
+        """
+        Validate that task datasets are compatible with this backbone.
+        """
+        # EScAIP has no dataset_list validation
+        pass # noqa
+
+    def prepare_for_inference(self, data, settings):
+        """
+        Prepare model for inference. EScAIP has no special preparation.
+        """
+        return self
+
+    def on_predict_check(self, data) -> None:
+        """
+        Called before each prediction. EScAIP has no per-prediction checks.
+        """
+        pass # noqa
+
     def compiled_forward(self, data: GraphAttentionData):
         # input block
         node_features, edge_features = self.input_block(data)
@@ -221,30 +246,6 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
     def no_weight_decay(self):
         return no_weight_decay(self)
 
-    def validate_inference_settings(self, settings) -> None:
-        """
-        Validate inference settings are compatible with this model.
-        """
-        pass # noqa
-
-    def validate_tasks(self, dataset_to_tasks: dict) -> None:
-        """
-        Validate that task datasets are compatible with this backbone.
-        """
-        # EScAIP has no dataset_list validation
-        pass # noqa
-
-    def prepare_for_inference(self, data, settings):
-        """
-        Prepare model for inference. EScAIP has no special preparation.
-        """
-        return self
-
-    def on_predict_check(self, data) -> None:
-        """
-        Called before each prediction. EScAIP has no per-prediction checks.
-        """
-        pass # noqa
 
 
 @registry.register_model("EScAIP_direct_force_head")
