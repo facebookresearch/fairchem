@@ -151,7 +151,7 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         """
         pass  # noqa
 
-    def validate_calculator_data(self, atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms, task_name: str) -> None:
         """EScAIP has no special calculator data requirements."""
         pass  # noqa
 

@@ -228,13 +228,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if task.element_references is not None:
                 task.element_references.to(self.device)
 
-    def validate_calculator_data(self, atoms: Atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
 
         Delegates to the model's backbone for model-specific validation.
         """
-        self.model.module.validate_calculator_data(atoms, task_name)
+        self.model.module.validate_atoms_data(atoms, task_name)
 
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)

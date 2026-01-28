@@ -107,7 +107,7 @@ class BackboneInterface(metaclass=ABCMeta):
         pass  # noqa
 
     @abstractmethod
-    def validate_calculator_data(self, atoms: Atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """Validate and set defaults for calculator input data.
 
         Models should set appropriate defaults for atoms.info (e.g., charge, spin)
@@ -291,11 +291,11 @@ class HydraModel(nn.Module):
         """
         self.backbone.on_predict_check(data)
 
-    def validate_calculator_data(self, atoms: Atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
         """
-        self.backbone.validate_calculator_data(atoms, task_name)
+        self.backbone.validate_atoms_data(atoms, task_name)
 
     def setup_tasks(self, tasks_config: list) -> None:
         """
@@ -410,11 +410,11 @@ class HydraModelV2(nn.Module):
         """
         self.backbone.on_predict_check(data)
 
-    def validate_calculator_data(self, atoms: Atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         Validate and set defaults for calculator input data.
         """
-        self.backbone.validate_calculator_data(atoms, task_name)
+        self.backbone.validate_atoms_data(atoms, task_name)
 
     def setup_tasks(self, tasks_config: list) -> None:
         """

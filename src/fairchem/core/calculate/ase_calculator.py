@@ -203,7 +203,7 @@ class FAIRChemCalculator(Calculator):
         self._check_atoms_pbc(atoms)
 
         # Validate input data
-        self.predictor.validate_calculator_data(atoms, self.task_name)
+        self.predictor.validate_atoms_data(atoms, self.task_name)
 
         # Standard call to check system_changes etc
         Calculator.calculate(self, atoms, properties, system_changes)
@@ -286,7 +286,7 @@ class FormationEnergyCalculator(Calculator):
         correction_type: Literal["MP2020", "OMat24"] = "OMat24",
     ):
         """
-        A calculator wrapper that computes formation energies. Assumes task_naming matches UMA.
+        A calculator wrapper that computes formation energies. Assumes task naming matches UMA.
 
         Args:
             calculator (Calculator): The base calculator to wrap.

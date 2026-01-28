@@ -751,7 +751,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
 
-    def validate_calculator_data(self, atoms: Atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
         """
         UMA-specific validation: handle charge/spin for OMOL task.
 

@@ -1379,7 +1379,7 @@ class GemNetOCBackbone(nn.Module):
         """Called before each prediction. GemNet has no per-prediction checks."""
         pass  # noqa
 
-    def validate_calculator_data(self, atoms, task_name: str) -> None:
+    def validate_atoms_data(self, atoms, task_name: str) -> None:
         """GemNet has no special calculator data requirements."""
         pass  # noqa
 
