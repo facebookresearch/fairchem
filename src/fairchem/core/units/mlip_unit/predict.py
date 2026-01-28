@@ -51,7 +51,8 @@ from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 
 def identify_single_atom_systems(data: AtomicData) -> tuple[torch.Tensor, torch.Tensor]:
-    """Identify single isolated atoms (natoms==1 and pbc all False).
+    """
+    Identify single isolated atoms (natoms==1 and pbc all False).
 
     Returns:
         tuple containing:
@@ -65,7 +66,8 @@ def identify_single_atom_systems(data: AtomicData) -> tuple[torch.Tensor, torch.
 
 
 def extract_systems_by_mask(data: AtomicData, mask: torch.Tensor) -> AtomicData:
-    """Extract systems from a batch based on a boolean mask.
+    """
+    Extract systems from a batch based on a boolean mask.
 
     Args:
         data: The batched AtomicData
@@ -89,7 +91,8 @@ def compute_single_atom_outputs(
     dataset_names: list[str],
     device: torch.device,
 ) -> dict[str, torch.Tensor]:
-    """Compute outputs for single-atom systems using precomputed atom references.
+    """
+    Compute outputs for single-atom systems using precomputed atom references.
 
     Args:
         data: The original batched AtomicData (used to get atomic numbers and charges)
@@ -132,8 +135,6 @@ def compute_single_atom_outputs(
                         "Cannot compute single-atom energy."
                     )
                 ds_refs = atom_refs[ds_name]
-                # Handle both charge-dependent and charge-independent references
-                # Same pattern as the original FAIRChemCalculator implementation
                 try:
                     energy = ds_refs.get(at_num, {}).get(charge)
                 except AttributeError:
@@ -172,7 +173,8 @@ def interleave_predictions(
     tasks: dict[str, Task],
     data: AtomicData,
 ) -> dict[str, torch.Tensor]:
-    """Merge single-atom and regular predictions maintaining original order.
+    """
+    Merge single-atom and regular predictions maintaining original order.
 
     Args:
         single_preds: Predictions for single-atom systems (or None if no single atoms)
@@ -489,7 +491,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Check if we need single-atom handling
         if self.supports_single_atoms or not single_atom_mask.any():
-            # Fast path: no single atoms or model supports them natively
             result = self._predict_with_model(data, undo_element_references)
         else:
             # Handle batch containing single-atom systems
@@ -506,7 +507,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         regular_mask: torch.Tensor,
         undo_element_references: bool,
     ) -> dict[str, torch.Tensor]:
-        """Handle prediction for batches containing single-atom systems.
+        """
+        Handle prediction for batches containing single-atom systems.
 
         Single atoms (natoms==1, no PBC) cannot be processed by the model,
         so we use precomputed DFT reference energies instead.
@@ -537,10 +539,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         regular_preds = None
         if regular_mask.any():
             regular_data = extract_systems_by_mask(data, regular_mask)
-            if regular_data is not None:
-                regular_preds = self._predict_with_model(
-                    regular_data, undo_element_references
-                )
+            regular_preds = self._predict_with_model(
+                regular_data, undo_element_references
+            )
 
         # Process single-atom systems using precomputed references
         single_atom_indices = torch.where(single_atom_mask)[0].tolist()
@@ -567,7 +568,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def _predict_with_model(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
-        """Run actual ML model prediction on the data.
+        """
+        Run actual ML model prediction on the data.
 
         This method contains the core model inference logic, separated from
         the single-atom handling in predict().
