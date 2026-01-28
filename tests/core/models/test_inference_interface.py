@@ -15,7 +15,7 @@ import pytest
 import torch
 from torch import nn
 
-from fairchem.core.models.base import HydraModel, HydraModelV2
+from fairchem.core.models.base import HydraModelV2
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
@@ -78,7 +78,7 @@ class MockHead(nn.Module):
 class TestHydraModelInferenceInterface:
     """Tests for HydraModel inference interface methods."""
 
-    @pytest.fixture
+    @pytest.fixture()
     def mock_hydra_model(self):
         """Create a HydraModel with mock backbone and heads."""
         backbone = MockBackbone()
@@ -153,9 +153,10 @@ class TestHydraModelInferenceInterface:
         mock_task.name = "unknown_energy"
         mock_task.datasets = ["unknown_dataset"]
 
-        with patch("hydra.utils.instantiate", return_value=mock_task):
-            with pytest.raises(AssertionError):
-                mock_hydra_model.setup_tasks([{"_target_": "Task"}])
+        with patch("hydra.utils.instantiate", return_value=mock_task), pytest.raises(
+            AssertionError
+        ):
+            mock_hydra_model.setup_tasks([{"_target_": "Task"}])
 
     def test_dataset_to_tasks_raises_before_setup(self, mock_hydra_model):
         """Test that accessing dataset_to_tasks before setup_tasks raises."""

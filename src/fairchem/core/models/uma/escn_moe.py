@@ -309,7 +309,9 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         return self
 
     def prepare_for_inference(self, data, settings):
-        """Prepare head for inference. Handles MOLE merging if needed."""
+        """
+        Prepare head for inference. Handles MOLE merging if needed.
+        """
         if settings.merge_mole:
             return self.merge_MOLE_model(data)
         return self

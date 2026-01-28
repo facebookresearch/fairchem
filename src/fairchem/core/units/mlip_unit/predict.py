@@ -20,8 +20,11 @@ from typing import Protocol
 
 import hydra
 import numpy as np
+import ray
 import torch
 import torch.distributed as dist
+from ray import remote
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
@@ -38,10 +41,6 @@ from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
 )
-
-import ray
-from ray import remote
-from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 
 def collate_predictions(predict_fn):
@@ -107,8 +106,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         # Build overrides from inference settings
-        settings_overrides = self._build_overrides_from_settings(inference_settings)
-        final_overrides = self._merge_overrides(overrides, settings_overrides)
+        final_overrides = self._build_overrides_from_settings(
+            overrides, inference_settings
+        )
 
         # Load model once with final overrides
         self.model, checkpoint = load_inference_model(
@@ -140,8 +140,14 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def dataset_to_tasks(self) -> dict[str, list]:
         return self.model.module.dataset_to_tasks
 
+    @property
+    def tasks(self) -> dict:
+        return self.model.module.tasks
+
     def set_seed(self, seed: int) -> None:
-        """Initialize random seeds."""
+        """
+        Initialize random seeds.
+        """
         logging.debug(f"Setting random seed to {seed}")
         self._seed = seed
         random.seed(seed)
@@ -150,51 +156,67 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         torch.cuda.manual_seed_all(seed)
 
     def _setup_refs(self, atom_refs: dict | None, form_elem_refs: dict | None) -> None:
-        """Setup element references."""
+        """
+        Setup element references.
+        """
         self.atom_refs = (
             {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
-            if atom_refs else {}
+            if atom_refs
+            else {}
         )
         self.form_elem_refs = form_elem_refs or {}
 
     def _setup_threads(self, settings: InferenceSettings) -> None:
-        """Configure thread settings."""
+        """
+        Configure thread settings.
+        """
         if settings.torch_num_threads is not None:
             torch.set_num_threads(settings.torch_num_threads)
             torch.set_num_interop_threads(settings.torch_num_threads)
 
     def _setup_device(self, device: str) -> None:
-        """Setup inference device."""
+        """
+        Setup inference device.
+        """
         assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
-    def _build_overrides_from_settings(self, settings: InferenceSettings) -> dict:
-        """Build backbone config overrides from inference settings.
-
-        Models will ignore overrides they don't support.
+    def _build_overrides_from_settings(
+        self, user: dict | None, settings: InferenceSettings
+    ) -> dict:
         """
-        overrides = {}
+        Build backbone config overrides from inference settings and user inputs.
+
+        Models will either ignore overrides they don't support, or we need to
+        port this override setting code into the individual models too.
+        """
+
+        overrides = {} if user is None else dict(user)
+        if "backbone" not in overrides:
+            overrides["backbone"] = {}
+
+        backbone_overrides = {}
         # Always disable PBC wrapping for inference
-        overrides["always_use_pbc"] = False
+        backbone_overrides["always_use_pbc"] = False
 
         if settings.activation_checkpointing is not None:
-            overrides["activation_checkpointing"] = settings.activation_checkpointing
+            backbone_overrides["activation_checkpointing"] = (
+                settings.activation_checkpointing
+            )
         if settings.edge_chunk_size is not None:
-            overrides["edge_chunk_size"] = settings.edge_chunk_size
+            backbone_overrides["edge_chunk_size"] = settings.edge_chunk_size
         if settings.external_graph_gen is not None:
-            overrides["otf_graph"] = not settings.external_graph_gen
+            backbone_overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
-            overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+            backbone_overrides["radius_pbc_version"] = (
+                settings.internal_graph_gen_version
+            )
+
+        overrides["backbone"].update(backbone_overrides)
+        if user is not None and "backbone" in user:
+            overrides["backbone"].update(user["backbone"])
 
         return overrides
-
-    def _merge_overrides(self, user: dict | None, model: dict) -> dict:
-        """Merge user overrides with model overrides. User takes precedence."""
-        result = {"backbone": {**model}}
-        if user and "backbone" in user:
-            for key, value in user["backbone"].items():
-                result["backbone"][key] = value
-        return result
 
     def move_to_device(self):
         self.model.to(self.device)
@@ -221,9 +243,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         return self._run_inference(data_device, undo_element_references)
 
     def _lazy_init(self, data: AtomicData) -> None:
-        """Lazy initialization on first predict call."""
+        """
+        Lazy initialization on first predict call.
+        """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
-        self.model.module.prepare_for_inference(data.clone(), self.inference_settings)
+        self.model.module.prepare_for_inference(data, self.inference_settings)
 
         self.move_to_device()
 
@@ -236,7 +260,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.lazy_model_intialized = True
 
     def _run_inference(self, data: AtomicData, undo_refs: bool) -> dict:
-        """Execute model inference."""
+        """
+        Execute model inference.
+        """
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
         tf32_context = (
             tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
@@ -247,16 +273,18 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             return self._process_outputs(data, output, undo_refs)
 
     def _process_outputs(self, data: AtomicData, output: dict, undo_refs: bool) -> dict:
-        """Denormalize and post-process model outputs."""
+        """
+        Denormalize and post-process model outputs.
+        """
         pred_output = {}
         for task_name, task in self.model.module.tasks.items():
             pred_output[task_name] = task.normalizer.denorm(
                 output[task_name][task.property]
             )
             if self.assert_on_nans:
-                assert torch.isfinite(
-                    pred_output[task_name]
-                ).all(), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
+                assert (
+                    torch.isfinite(pred_output[task_name]).all()
+                ), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
             if undo_refs and task.element_references is not None:
                 pred_output[task_name] = task.element_references.undo_refs(
                     data, pred_output[task_name]

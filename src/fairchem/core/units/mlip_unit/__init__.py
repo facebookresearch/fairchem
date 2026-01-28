@@ -54,7 +54,6 @@ def load_predict_unit(
         logging.warning(f"device was not explicitly set, using {device=}.")
 
     inference_settings = guess_inference_settings(inference_settings)
-    # Overrides from inference_settings are built by MLIPPredictUnit._build_overrides_from_settings()
     if workers > 1:
         from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 
