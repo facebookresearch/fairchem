@@ -140,6 +140,10 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def dataset_to_tasks(self) -> dict[str, list]:
         return self.model.module.dataset_to_tasks
 
+    @property
+    def tasks(self) -> dict:
+        return self.model.module.tasks
+
     def set_seed(self, seed: int) -> None:
         """
         Initialize random seeds.
