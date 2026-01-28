@@ -705,6 +705,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         merged_norm = merged[0].float() / merged[0].sum()
         curr_norm = current[0].float() / current[0].sum()
 
+        # Move to same device for comparison (merged is on CPU from prepare_for_inference)
+        curr_norm = curr_norm.to(merged_norm.device)
+
         assert merged_norm.isclose(
             curr_norm, rtol=1e-5
         ).all(), "Compositions differ from merged model"
