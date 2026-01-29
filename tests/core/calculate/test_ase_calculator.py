@@ -444,10 +444,15 @@ def test_external_graph_generation_molecular_system():
 
 
 @pytest.mark.gpu()
-def test_external_graph_gen_vs_internal():
+@pytest.mark.parametrize(
+    "external_graph_method", ["pymatgen", "nvidia-cell", "nvidia-naive"]
+)
+def test_external_graph_gen_vs_internal(external_graph_method):
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-    inference_settings_external = InferenceSettings(external_graph_gen=True)
+    inference_settings_external = InferenceSettings(
+        external_graph_gen=True, external_graph_method=external_graph_method
+    )
     predict_unit_external = pretrained_mlip.get_predict_unit(
         "uma-s-1", device="cuda", inference_settings=inference_settings_external
     )

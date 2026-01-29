@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Sequence
-from typing import List, Optional, Union
+from typing import Union
 
 import ase
 import ase.db.sqlite
@@ -31,6 +31,13 @@ try:
 except ImportError:
     AseAtomsAdaptor = None
     pmg_installed = False
+
+try:
+    from nvalchemiops.neighborlist import neighbor_list
+
+    nvidia_installed = True
+except ImportError:
+    nvidia_installed = False
 
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
@@ -64,7 +71,7 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
         out = item.item()
     elif torch.is_tensor(item):
         out = str(list(item.size()))
-    elif isinstance(item, (List, tuple)):
+    elif isinstance(item, (list, tuple)):
         out = str([len(item)])
     elif isinstance(item, dict):
         lines = [indent_str + size_repr(k, v, 2) for k, v in item.items()]
@@ -99,6 +106,111 @@ def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
     _n_index = _n_index[_nonmax_idx]
     n_distance = n_distance[_nonmax_idx]
     _offsets = _offsets[_nonmax_idx]
+
+    return _c_index, _n_index, n_distance, _offsets
+
+
+@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+def get_neighbors_nvidia(
+    atoms: ase.Atoms, cutoff: float, max_neigh: int, method: str = "cell_list"
+):
+    """Performs nearest neighbor search using NVIDIA nvalchemiops and returns edge index, distances,
+    and cell offsets.
+
+    Args:
+        atoms: ASE Atoms object
+        cutoff: Cutoff radius in Angstroms
+        max_neigh: Maximum number of neighbors per atom
+        method: NVIDIA method to use ("naive" or "cell_list")
+
+    Returns:
+        _c_index: Center atom indices (numpy array)
+        _n_index: Neighbor atom indices (numpy array)
+        n_distance: Placeholder distances (numpy array) - set to 1.0 for compatibility
+        _offsets: Cell offsets (numpy array)
+    """
+    positions = torch.from_numpy(atoms.get_positions()).float()
+    cell = torch.from_numpy(np.array(atoms.get_cell(complete=True))).float()
+    pbc = torch.from_numpy(np.array(atoms.pbc)).bool()
+
+    total_atoms = positions.shape[0]
+
+    # Pre-allocate output tensors
+    neighbor_matrix = torch.full(
+        (total_atoms, max_neigh),
+        total_atoms,
+        dtype=torch.int32,
+        device=positions.device,
+    )
+    neighbor_matrix_shifts = torch.zeros(
+        (total_atoms, max_neigh, 3),
+        dtype=torch.int32,
+        device=positions.device,
+    )
+    num_neighbors = torch.zeros(total_atoms, dtype=torch.int32, device=positions.device)
+
+    # Run NVIDIA neighbor list
+    # NOTE: NVIDIA uses strict inequality (distance < cutoff) while PyMatGen uses
+    # inclusive inequality (distance <= cutoff). Add small epsilon to match PyMatGen.
+    # Using absolute epsilon to avoid floating point precision issues.
+    nvidia_cutoff = cutoff + 1e-6
+    neighbor_list(
+        positions=positions,
+        cutoff=nvidia_cutoff,
+        cell=cell,
+        pbc=pbc,
+        method=method,
+        neighbor_matrix=neighbor_matrix,
+        neighbor_matrix_shifts=neighbor_matrix_shifts,
+        num_neighbors=num_neighbors,
+        half_fill=False,  # Need full neighbor list to match PyMatGen behavior
+    )
+
+    # Convert to edge list format (c_index, n_index, offsets) - OPTIMIZED: NO DISTANCE COMPUTATION
+    num_neighbors_cpu = num_neighbors.cpu().numpy()
+    neighbor_matrix_cpu = neighbor_matrix.cpu().numpy()
+    neighbor_matrix_shifts_cpu = neighbor_matrix_shifts.cpu().numpy()
+
+    # Check if there are any edges
+    total_edges = num_neighbors_cpu.sum()
+    if total_edges == 0:
+        # No edges found
+        return (
+            np.array([], dtype=np.int64),
+            np.array([], dtype=np.int64),
+            np.array([], dtype=np.float64),
+            np.array([], dtype=np.int64).reshape(0, 3),
+        )
+
+    # Create index arrays for vectorized operations
+    # neighbor_matrix_cpu has shape (total_atoms, max_neigh)
+    atom_indices = np.arange(total_atoms)[:, None]  # Shape: (total_atoms, 1)
+    neigh_indices = np.arange(max_neigh)[None, :]  # Shape: (1, max_neigh)
+    valid_mask = (
+        neigh_indices < num_neighbors_cpu[:, None]
+    )  # Shape: (total_atoms, max_neigh)
+
+    # Extract valid edges
+    _c_index = np.repeat(atom_indices, max_neigh, axis=1)[valid_mask]
+    _n_index = neighbor_matrix_cpu[valid_mask]
+    _offsets = neighbor_matrix_shifts_cpu[valid_mask]
+
+    # Filter out invalid neighbors (fill_value is total_atoms)
+    # NVIDIA uses total_atoms as the fill value for empty slots
+    valid_neighbors = _n_index < total_atoms
+    _c_index = _c_index[valid_neighbors]
+    _n_index = _n_index[valid_neighbors]
+    _offsets = _offsets[valid_neighbors]
+
+    # Sort edges by center atom only (stable sort maintains NVIDIA's order within each atom)
+    sort_idx = np.argsort(_c_index, kind="stable")
+    _c_index = _c_index[sort_idx]
+    _n_index = _n_index[sort_idx]
+    _offsets = _offsets[sort_idx]
+
+    # Placeholder distances (set to 1.0 to pass the distance >= 1e-8 filter in reshape_features)
+    # Actual distances are not needed - they can be computed later if required
+    n_distance = np.ones(len(_c_index), dtype=np.float64)
 
     return _c_index, _n_index, n_distance, _offsets
 
@@ -280,10 +392,8 @@ class AtomicData:
             assert self.forces.dtype == torch.float
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
-            assert (
-                self.stress.dim() == 3
-                and self.stress.shape[1:] == (3, 3)
-                or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
+            assert (self.stress.dim() == 3 and self.stress.shape[1:] == (3, 3)) or (
+                self.stress.dim() == 2 and self.stress.shape[1:] == (9,)
             )
             assert self.stress.shape[0] == self.num_graphs
             assert self.stress.dtype == torch.float
@@ -312,6 +422,7 @@ class AtomicData:
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
         target_dtype: torch.dtype = torch.float32,
+        external_graph_method: str = "pymatgen",
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -353,7 +464,30 @@ class AtomicData:
             assert (
                 max_neigh is not None
             ), "max_neigh must be specified for cpu graph construction."
-            split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+
+            if external_graph_method == "pymatgen":
+                split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+            elif external_graph_method.startswith("nvidia"):
+                # Parse NVIDIA method variant
+                if external_graph_method == "nvidia-cell":
+                    nvidia_variant = "cell_list"
+                elif external_graph_method == "nvidia-naive":
+                    nvidia_variant = "naive"
+                elif external_graph_method == "nvidia":
+                    # Default to cell_list for backwards compatibility
+                    nvidia_variant = "cell_list"
+                else:
+                    raise ValueError(
+                        f"Invalid NVIDIA method variant. Use 'nvidia-cell' or 'nvidia-naive', got {external_graph_method}"
+                    )
+                split_idx_dist = get_neighbors_nvidia(
+                    atoms, radius, max_neigh, method=nvidia_variant
+                )
+            else:
+                raise ValueError(
+                    f"external_graph_method must be 'pymatgen', 'nvidia-cell', or 'nvidia-naive', got {external_graph_method}"
+                )
+
             edge_index, cell_offsets = reshape_features(*split_idx_dist)
             nedges = torch.tensor([edge_index.shape[1]], dtype=torch.long)
         else:
@@ -820,7 +954,7 @@ class AtomicData:
 
 
 def atomicdata_list_to_batch(
-    data_list: list[AtomicData], exclude_keys: Optional[list] = None
+    data_list: list[AtomicData], exclude_keys: list | None = None
 ) -> AtomicData:
     """
     all data points must be single graphs and have the same set of keys.
