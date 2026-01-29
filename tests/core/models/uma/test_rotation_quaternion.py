@@ -825,6 +825,196 @@ class TestQuaternionImplementationAllRegimes:
             "Raw acos would give > 1e5 for the same edge."
 
 
+class TestConcreteH2OScenario:
+    """
+    Concrete tests using H2O-like molecular geometry to demonstrate the
+    y-aligned edge problem with actual fairchem code.
+
+    H2O has O-H bonds at ~104.5 degree angle. We rotate the molecule so
+    that one O-H bond aligns with different axes (x, y, z) and verify:
+    - x-aligned: Both Euler and quaternion approaches work correctly
+    - z-aligned: Both Euler and quaternion approaches work correctly
+    - y-aligned: Only quaternion approach produces correct/stable results
+
+    Note: Since both approaches use random gamma, we cannot directly compare
+    gradients with finite differences. Instead, we verify:
+    1. Orthogonality of Wigner matrices
+    2. Finiteness of gradients
+    3. For y-aligned, the Euler alpha instability (actual fairchem code)
+    """
+
+    def _compute_euler_wigner_and_grad(self, edge_vec, lmax, Jd_matrices):
+        """Compute Wigner matrix and gradient using Euler angle approach."""
+        edge_vec = edge_vec.clone().requires_grad_(True)
+        eulers = init_edge_rot_euler_angles(edge_vec)
+        wigner = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
+        loss = wigner.sum()
+        loss.backward()
+        return wigner.detach(), edge_vec.grad.clone()
+
+    def _compute_quaternion_wigner_and_grad(self, edge_vec, lmax, Jd_matrices):
+        """Compute Wigner matrix and gradient using quaternion approach."""
+        edge_vec = edge_vec.clone().requires_grad_(True)
+        wigner, _ = get_wigner_from_edge_vectors_real(edge_vec, 0, lmax, Jd_matrices)
+        loss = wigner.sum()
+        loss.backward()
+        return wigner.detach(), edge_vec.grad.clone()
+
+    def test_x_aligned_edge_both_approaches_work(self, lmax, Jd_matrices, dtype, device):
+        """
+        For x-aligned edge (away from y-axis), both approaches should work.
+
+        This simulates an H2O O-H bond pointing in the +x direction.
+        """
+        # O-H bond pointing in +x direction (like H2O rotated)
+        edge_vec = torch.tensor([[1.0, 0.0, 0.0]], dtype=dtype, device=device)
+
+        # Both Wigner matrices should be orthogonal
+        wigner_euler, euler_grad = self._compute_euler_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+        wigner_quat, quat_grad = self._compute_quaternion_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+
+        identity = torch.eye(wigner_euler.shape[1], dtype=dtype, device=device)
+        euler_ortho = wigner_euler[0] @ wigner_euler[0].T
+        quat_ortho = wigner_quat[0] @ wigner_quat[0].T
+
+        torch.testing.assert_close(euler_ortho, identity, atol=1e-5, rtol=1e-5)
+        torch.testing.assert_close(quat_ortho, identity, atol=1e-5, rtol=1e-5)
+
+        # Both gradients should be finite
+        assert not torch.isnan(euler_grad).any(), "Euler gradient has NaN for x-aligned"
+        assert not torch.isinf(euler_grad).any(), "Euler gradient has Inf for x-aligned"
+        assert not torch.isnan(quat_grad).any(), "Quaternion gradient has NaN for x-aligned"
+        assert not torch.isinf(quat_grad).any(), "Quaternion gradient has Inf for x-aligned"
+
+    def test_z_aligned_edge_both_approaches_work(self, lmax, Jd_matrices, dtype, device):
+        """
+        For z-aligned edge (away from y-axis), both approaches should work.
+
+        This simulates an H2O O-H bond pointing in the +z direction.
+        """
+        edge_vec = torch.tensor([[0.0, 0.0, 1.0]], dtype=dtype, device=device)
+
+        # Both Wigner matrices should be orthogonal
+        wigner_euler, euler_grad = self._compute_euler_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+        wigner_quat, quat_grad = self._compute_quaternion_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+
+        identity = torch.eye(wigner_euler.shape[1], dtype=dtype, device=device)
+        euler_ortho = wigner_euler[0] @ wigner_euler[0].T
+        quat_ortho = wigner_quat[0] @ wigner_quat[0].T
+
+        torch.testing.assert_close(euler_ortho, identity, atol=1e-5, rtol=1e-5)
+        torch.testing.assert_close(quat_ortho, identity, atol=1e-5, rtol=1e-5)
+
+        # Both gradients should be finite
+        assert not torch.isnan(euler_grad).any(), "Euler gradient has NaN for z-aligned"
+        assert not torch.isinf(euler_grad).any(), "Euler gradient has Inf for z-aligned"
+        assert not torch.isnan(quat_grad).any(), "Quaternion gradient has NaN for z-aligned"
+        assert not torch.isinf(quat_grad).any(), "Quaternion gradient has Inf for z-aligned"
+
+    def test_y_aligned_edge_euler_has_problem_quaternion_works(self, lmax, Jd_matrices, dtype, device):
+        """
+        For y-aligned edge (gimbal lock), Euler approach has a problem,
+        quaternion approach works correctly.
+
+        This simulates an H2O O-H bond pointing in the +y direction.
+        This is the problematic case for Euler angles.
+
+        Observable problems with Euler approach (using actual fairchem code):
+        1. Beta angle is 0, causing gimbal lock (alpha and gamma become coupled)
+        2. Alpha angle is undefined - atan2(0, 0) or atan2(tiny, tiny)
+        3. Tiny perturbations cause huge alpha changes (~pi for sign flip)
+
+        The quaternion approach avoids all these issues.
+        """
+        # Edge pointing in +y direction - this is the gimbal lock case
+        edge_vec = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
+
+        # === Test 1: Euler angles are degenerate at y-aligned ===
+        # This uses actual fairchem code: init_edge_rot_euler_angles
+        eulers = init_edge_rot_euler_angles(edge_vec)
+        gamma, beta, alpha = eulers
+
+        # beta should be 0 (or very close) since y=1 means acos(1)=0
+        assert abs(beta[0]) < 1e-6, f"Expected beta≈0 for y-aligned edge, got {beta[0]}"
+
+        # When beta=0, the rotation is pure y-axis rotation and alpha+gamma is what matters
+        # The individual alpha value is arbitrary/undefined - this is gimbal lock
+
+        # === Test 2: Quaternion approach works for y-aligned ===
+        wigner_quat, quat_grad = self._compute_quaternion_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+
+        # Quaternion Wigner should be orthogonal
+        identity = torch.eye(wigner_quat.shape[1], dtype=dtype, device=device)
+        quat_ortho = wigner_quat[0] @ wigner_quat[0].T
+        torch.testing.assert_close(quat_ortho, identity, atol=1e-5, rtol=1e-5)
+
+        # Quaternion gradients are finite and reasonable
+        assert not torch.isnan(quat_grad).any(), "Quaternion gradient has NaN for y-aligned edge"
+        assert not torch.isinf(quat_grad).any(), "Quaternion gradient has Inf for y-aligned edge"
+        assert quat_grad.abs().max() < 1e4, f"Quaternion gradient {quat_grad.abs().max()} too large"
+
+        # === Test 3: Euler alpha is UNSTABLE to tiny perturbations ===
+        # This is the key demonstration: actual fairchem Euler code has this problem
+        edge_perturbed_pos = torch.tensor([[1e-8, 1.0, 0.0]], dtype=dtype, device=device)
+        edge_perturbed_pos = torch.nn.functional.normalize(edge_perturbed_pos, dim=-1)
+        eulers_pos = init_edge_rot_euler_angles(edge_perturbed_pos)
+        alpha_pos = eulers_pos[2][0]  # alpha is the third returned value
+
+        edge_perturbed_neg = torch.tensor([[-1e-8, 1.0, 0.0]], dtype=dtype, device=device)
+        edge_perturbed_neg = torch.nn.functional.normalize(edge_perturbed_neg, dim=-1)
+        eulers_neg = init_edge_rot_euler_angles(edge_perturbed_neg)
+        alpha_neg = eulers_neg[2][0]
+
+        # Alpha should differ by ~pi for sign flip in tiny x
+        # Because atan2(+tiny, 0) ≈ +pi/2 and atan2(-tiny, 0) ≈ -pi/2
+        alpha_diff = abs(alpha_pos - alpha_neg)
+        assert alpha_diff > 3.0, \
+            f"Expected alpha to jump by ~pi for tiny x sign flip, got {alpha_diff}. " \
+            "This demonstrates the Euler angle instability in actual fairchem code."
+
+        # === Test 4: Euler approach also produces orthogonal Wigner (but unstable) ===
+        wigner_euler, euler_grad = self._compute_euler_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+        euler_ortho = wigner_euler[0] @ wigner_euler[0].T
+        torch.testing.assert_close(euler_ortho, identity, atol=1e-5, rtol=1e-5)
+
+        # Euler gradients are finite (Safeacos prevents explosion)
+        assert not torch.isnan(euler_grad).any(), "Euler gradient has NaN"
+        assert not torch.isinf(euler_grad).any(), "Euler gradient has Inf"
+        # But note: these gradients are clamped/biased, not mathematically correct
+
+    def test_near_y_aligned_edge_gradient_comparison(self, lmax, Jd_matrices, dtype, device):
+        """
+        For nearly y-aligned edge, compare gradient quality between approaches.
+
+        This tests an edge that is very close to +y but not exactly aligned.
+        Both approaches produce finite gradients, but the Euler approach
+        gradients are biased due to Safeacos clamping.
+        """
+        # Edge very close to +y (like an O-H bond almost pointing up)
+        edge_vec = torch.tensor([[1e-6, 1.0, 1e-6]], dtype=dtype, device=device)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+
+        # Quaternion gradient should be finite and reasonable
+        _, quat_grad = self._compute_quaternion_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+
+        assert not torch.isnan(quat_grad).any(), "Quaternion gradient has NaN near y-aligned"
+        assert not torch.isinf(quat_grad).any(), "Quaternion gradient has Inf near y-aligned"
+
+        # Quaternion gradient norm should be reasonable
+        quat_grad_norm = quat_grad.norm()
+        assert quat_grad_norm < 1e4, \
+            f"Quaternion gradient norm {quat_grad_norm} too large for near-y-aligned edge"
+
+        # The Euler gradient should also be finite (Safeacos prevents explosion)
+        _, euler_grad = self._compute_euler_wigner_and_grad(edge_vec, lmax, Jd_matrices)
+
+        assert not torch.isnan(euler_grad).any(), "Euler gradient has NaN (shouldn't happen with Safeacos)"
+        assert not torch.isinf(euler_grad).any(), "Euler gradient has Inf (shouldn't happen with Safeacos)"
+
+        # Both are finite, but quaternion produces correct physics
+        # while Euler produces biased gradients due to clamping
+
+
 class TestEquivalenceInNormalRegime:
     """
     Tests that the quaternion and Euler implementations produce EQUIVALENT

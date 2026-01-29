@@ -3,31 +3,44 @@
 ## Current State
 
 **Branch**: `quaternions`
-**Test Status**: 35 passed, 6 skipped
+**Test Status**: 39 passed, 6 skipped
 
 ## Problem Demonstration
 
-The tests clearly show the problem with Euler angles and how quaternions fix it:
+The tests clearly show the problem with Euler angles (using actual fairchem code) and how quaternions fix it:
 
-### Problem with Euler Angles (y-aligned edges)
+### Problem with Euler Angles (actual fairchem code)
+
 1. **`test_raw_acos_gradient_explosion`** - Raw `acos(y)` gradient explodes when y≈1
    - Gradient magnitude > 1e5 for y-aligned edges
-   - This is the underlying mathematical singularity
+   - This is the underlying mathematical singularity that Safeacos masks
 
 2. **`test_euler_angles_atan2_instability_y_aligned`** - Forward pass instability
+   - Uses actual `init_edge_rot_euler_angles` from fairchem
    - Tiny perturbation (1e-10) causes ~180° alpha jump
    - `atan2(x, z)` is undefined when both x≈0 and z≈0
 
+3. **`test_y_aligned_edge_euler_has_problem_quaternion_works`** - H2O scenario
+   - Simulates O-H bond pointing in +y direction
+   - Shows beta=0 (gimbal lock), alpha is undefined
+   - Shows alpha jumps by ~π for tiny sign flip in x
+
 ### Solution with Quaternions
+
 1. **`test_quaternion_no_acos_singularity`** - Same edge, reasonable gradients
    - Gradient norm < 1e4 (vs > 1e5 for raw acos)
    - Quaternion approach never extracts acos from edge vector directly
 
-2. **`test_quaternion_stable_for_tiny_perturbations`** - Stable for tiny perturbations
-   - Both perturbed edges produce valid orthogonal Wigner matrices
+2. **`test_x_aligned_edge_both_approaches_work`** - H2O scenario, x-aligned O-H bond
+   - Both Euler and quaternion work correctly for x-aligned edges
+   - Both produce orthogonal Wigner matrices with finite gradients
 
-3. **`test_quaternion_gradient_stable_y_aligned`** - Stable gradients at y-aligned edges
-   - No NaN/Inf, gradient norm < 1e4
+3. **`test_z_aligned_edge_both_approaches_work`** - H2O scenario, z-aligned O-H bond
+   - Both Euler and quaternion work correctly for z-aligned edges
+
+4. **`test_y_aligned_edge_euler_has_problem_quaternion_works`** - H2O scenario, y-aligned O-H bond
+   - Euler has alpha instability (actual fairchem code)
+   - Quaternion produces correct orthogonal Wigner with stable gradients
 
 ## What Works
 
