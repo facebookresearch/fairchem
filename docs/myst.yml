@@ -23,8 +23,8 @@ project:
           title: UMA Demo
     - title: AI/ML Models & Usage
       children:
-        - file: core/intro.md
         - file: core/uma.md
+        - file: core/intro.md
         - file: core/common_tasks/summary.md
           children:
             - file: core/common_tasks/ase_calculator.md
