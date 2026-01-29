@@ -12,7 +12,7 @@ Learn how to use FAIRChem models for Direct Air Capture (DAC) applications with 
 ::::{grid} 1 2 2 2
 
 :::{card} Adsorption Energy
-:link: adsorption_energy.html
+:link: adsorption-energy
 
 Calculate CO2 and H2O adsorption energies in MOFs, including flexible framework effects.
 :::

@@ -12,19 +12,19 @@ Learn how to use FAIRChem models for inorganic materials property prediction and
 ::::{grid} 1 2 2 3
 
 :::{card} Formation Energy
-:link: formation_energy.html
+:link: formation-energy
 
 Calculate formation energies for inorganic materials using UMA and MP-compatible corrections.
 :::
 
 :::{card} Phonons
-:link: phonons.html
+:link: phonons
 
 Run phonon calculations to predict thermal conductivity, vibrational modes, and finite-temperature stability.
 :::
 
 :::{card} Elastic Tensors
-:link: elastic.html
+:link: elastic
 
 Calculate elastic constants and bulk modulus using automated strain-based workflows.
 :::

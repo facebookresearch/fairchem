@@ -32,7 +32,7 @@ This page summarizes all the pretrained models released as part of the [Open Cat
 
 * All configurations for these models are available in the [`configs/`](https://github.com/facebookresearch/fairchem/tree/main/configs) directory.
 * All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/facebookresearch/fairchem/blob/main/DATASET.md.
-* All OC20 models are trained on adsorption energies, i.e. the DFT total energies minus the clean surface and gas phase adsorbate energies. For details on how to train models on OC20 total energies, please read the [referencing section here](https://fair-chem.github.io/core/datasets/oc20.html).
+* All OC20 models are trained on adsorption energies, i.e. the DFT total energies minus the clean surface and gas phase adsorbate energies. For details on how to train models on OC20 total energies, please read the [referencing section here](https://fair-chem.github.io/oc20).
 
 ### S2EF models: optimized for EFwT
 
