@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from fairchem.core.calculate._batch import InferenceBatcher
 from fairchem.core.calculate.ase_calculator import (
-                                                    FAIRChemCalculator,
-                                                    FormationEnergyCalculator,
+    FAIRChemCalculator,
+    FormationEnergyCalculator,
 )
 
-__all__ = ["FAIRChemCalculator", "InferenceBatcher", "FormationEnergyCalculator"]
+__all__ = ["FAIRChemCalculator", "FormationEnergyCalculator", "InferenceBatcher"]
