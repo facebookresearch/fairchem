@@ -1,5 +1,0 @@
-# Common tasks
-
-
-```{tableofcontents}
-```
