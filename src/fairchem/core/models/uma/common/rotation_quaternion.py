@@ -339,7 +339,9 @@ def _compute_wigner_d_element_general(
     rb_exp_1 = m - mp + 2 * rho_min_1
 
     # Compute magnitude part safely
-    magnitude_case1 = coeff_case1 * (safe_ra ** ra_exp_1) * (rb ** rb_exp_1)
+    # Include (-1)^rho_min sign factor from the Wigner d-matrix formula
+    sign_case1 = (-1) ** rho_min_1
+    magnitude_case1 = sign_case1 * coeff_case1 * (safe_ra ** ra_exp_1) * (rb ** rb_exp_1)
 
     # ===== Case 2: ra < rb =====
     # Polynomial ratio = -(ra/rb)^2
@@ -356,8 +358,10 @@ def _compute_wigner_d_element_general(
             factor = ratio_case2 * (n1_term * n2_term) / (rho * m_term)
             sum_case2 = 1.0 + sum_case2 * factor
 
-    # Sign factor for Case 2: (-1)^{l-m}
-    sign_case2 = (-1) ** (l - m)
+    # Sign factor for Case 2: (-1)^{l-m} * (-1)^{rho_min}
+    # The (-1)^{l-m} comes from the alternative form of the Wigner d-matrix
+    # The (-1)^{rho_min} comes from the sum index
+    sign_case2 = ((-1) ** (l - m)) * ((-1) ** rho_min_2)
 
     # Magnitude exponents for Case 2
     ra_exp_2 = mp + m + 2 * rho_min_2
@@ -370,8 +374,10 @@ def _compute_wigner_d_element_general(
     polynomial_sum = torch.where(use_case1, sum_case1, sum_case2)
 
     # Combine with phase
-    # D = magnitude * polynomial_sum * exp(i * phase)
-    result = magnitude * polynomial_sum * torch.exp(1j * phase.to(Ra.dtype))
+    # D = magnitude * polynomial_sum * exp(-i * phase)
+    # Note: The standard Wigner D formula uses exp(-i*m'*alpha) * d(beta) * exp(-i*m*gamma)
+    # which gives exp(-i * ((m'+m)*phia + (m-m')*phib))
+    result = magnitude * polynomial_sum * torch.exp(-1j * phase.to(Ra.dtype))
 
     return result
 
@@ -524,20 +530,22 @@ def _wigner_d_block_complex(
 
             # ===== Special case 1: ra ~ 0 (beta ~ pi) =====
             # Only anti-diagonal elements (m' = -m) are non-zero
-            # D^l_{-m,m} = (-1)^{l-m} * Rb^{2m}
+            # D^l_{-m,m} = (-1)^{l-m} * conj(Rb)^{2m}
+            # The conjugate is needed because the Wigner D formula uses exp(-i*m*gamma)
             if mp == -m:
                 sign = (-1) ** (l - m)
-                # Rb^{2m}: computed using polar form, keeping complex result
-                Rb_power = torch.pow(rb, 2 * m) * torch.exp(1j * 2 * m * phib.to(complex_dtype))
+                # conj(Rb)^{2m}: use negative phase for correct Wigner D convention
+                Rb_power = torch.pow(rb, 2 * m) * torch.exp(-1j * 2 * m * phib.to(complex_dtype))
                 special_ra_zero = sign * Rb_power
                 result = torch.where(ra_small, special_ra_zero, result)
             # For m' != -m when ra ~ 0, the element is 0 (already initialized)
 
             # ===== Special case 2: rb ~ 0 (beta ~ 0) =====
             # Only diagonal elements (m' = m) are non-zero
-            # D^l_{m,m} = Ra^{2m}
+            # D^l_{m,m} = conj(Ra)^{2m}
+            # The conjugate is needed because the Wigner D formula uses exp(-i*m*alpha)*exp(-i*m*gamma)
             if mp == m:
-                Ra_power = torch.pow(ra, 2 * m) * torch.exp(1j * 2 * m * phia.to(complex_dtype))
+                Ra_power = torch.pow(ra, 2 * m) * torch.exp(-1j * 2 * m * phia.to(complex_dtype))
                 special_rb_zero = Ra_power
                 result = torch.where(rb_small & ~ra_small, special_rb_zero, result)
             # For m' != m when rb ~ 0, the element is 0 (already initialized)
@@ -725,13 +733,13 @@ def wigner_d_from_quaternion_vectorized_complex(
                 # ===== Special case: ra ~ 0 (beta ~ pi) =====
                 if mp == -m:
                     sign = (-1) ** (l - m)
-                    Rb_power = torch.pow(rb, 2 * m) * torch.exp(1j * 2 * m * phib.to(complex_dtype))
+                    Rb_power = torch.pow(rb, 2 * m) * torch.exp(-1j * 2 * m * phib.to(complex_dtype))
                     special_ra = sign * Rb_power
                     result = torch.where(ra_small, special_ra, result)
 
                 # ===== Special case: rb ~ 0 (beta ~ 0) =====
                 if mp == m:
-                    Ra_power = torch.pow(ra, 2 * m) * torch.exp(1j * 2 * m * phia.to(complex_dtype))
+                    Ra_power = torch.pow(ra, 2 * m) * torch.exp(-1j * 2 * m * phia.to(complex_dtype))
                     special_rb = Ra_power
                     result = torch.where(rb_small & ~ra_small, special_rb, result)
 
@@ -758,10 +766,11 @@ def wigner_d_from_quaternion_vectorized_complex(
                         factor = ratio_case1 * (n1 * n2) / (rho * m_denom)
                         sum_1 = 1.0 + sum_1 * factor
 
-                # Case 1 magnitude exponents
+                # Case 1 magnitude exponents and sign
                 ra_exp_1 = 2 * l + mp - m - 2 * rho_min_1
                 rb_exp_1 = m - mp + 2 * rho_min_1
-                mag_1 = coeff_1 * (safe_ra ** ra_exp_1) * (rb ** rb_exp_1)
+                sign_1 = (-1) ** rho_min_1  # Include (-1)^rho_min sign factor
+                mag_1 = sign_1 * coeff_1 * (safe_ra ** ra_exp_1) * (rb ** rb_exp_1)
 
                 # Case 2 Horner sum
                 sum_2 = torch.ones_like(rb)
@@ -774,7 +783,7 @@ def wigner_d_from_quaternion_vectorized_complex(
                         sum_2 = 1.0 + sum_2 * factor
 
                 # Case 2 magnitude exponents and sign
-                sign_2 = (-1) ** (l - m)
+                sign_2 = ((-1) ** (l - m)) * ((-1) ** rho_min_2)  # Include both sign factors
                 ra_exp_2 = mp + m + 2 * rho_min_2
                 rb_exp_2 = 2 * l - mp - m - 2 * rho_min_2
                 mag_2 = sign_2 * coeff_2 * (ra ** ra_exp_2) * (safe_rb ** rb_exp_2)
@@ -784,7 +793,8 @@ def wigner_d_from_quaternion_vectorized_complex(
                 poly_sum = torch.where(use_case1, sum_1, sum_2)
 
                 # Combine with phase (keep complex result!)
-                phase_factor = torch.exp(1j * phase.to(complex_dtype))
+                # Use exp(-i*phase) for correct Wigner D convention
+                phase_factor = torch.exp(-1j * phase.to(complex_dtype))
                 general_result = magnitude * poly_sum * phase_factor
 
                 # Apply general case where appropriate
@@ -1279,7 +1289,9 @@ def _z_rot_mat_batched(
         cos_val = torch.cos(f * angle)
         sin_val = torch.sin(f * angle)
         M[:, i, i] = cos_val
-        M[:, i, block_size - 1 - i] = sin_val
+        anti_diag_idx = block_size - 1 - i
+        if anti_diag_idx != i:  # Don't overwrite diagonal with sin when at center
+            M[:, i, anti_diag_idx] = sin_val
 
     return M
 
