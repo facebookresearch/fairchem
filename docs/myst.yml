@@ -11,11 +11,6 @@ project:
     - format: pdf
       template: plain_latex_book
       output: exports/fairchem.pdf
-  plugins:
-    - src/xref.mjs
-    - src/landing-page.mjs
-    - src/directives.mjs
-    - src/admonition.mjs
   jupyter: true
   toc:
     - file: index.md
@@ -26,7 +21,7 @@ project:
         - file: core/fairchemv1_v2.md
         - url: https://facebook-fairchem-uma-demo.hf.space/
           title: UMA Demo
-    - title: AI/ML Interatomic Potentials
+    - title: AI/ML Models & Usage
       children:
         - file: core/intro.md
         - file: core/uma.md
@@ -47,7 +42,8 @@ project:
             - file: uma_tutorials/uma_tutorial.md
             - file: uma_tutorials/uma_catalysis_tutorial.md
         - file: core/generative_models.md
-    - title: Molecules & Molecular Crystals
+    - file: core/fair_chemistry_papers.md
+    - title: Organic Molecules
       children:
         - file: molecules/datasets/summary.md
           children:
@@ -59,10 +55,6 @@ project:
         - file: molecules/FAQ.md
     - title: Heterogeneous Catalysis
       children:
-        - url: https://opencatalystproject.org
-          title: OCP Leaderboard
-        - url: https://open-catalyst.metademolab.com/
-          title: OCP Demo (no install required!)
         - file: catalysts/datasets/summary.md
           children:
             - file: catalysts/datasets/oc20.md
@@ -82,6 +74,10 @@ project:
             - file: catalysts/examples_tutorials/cattsunami_tutorial.md
             - file: catalysts/examples_tutorials/ocpapi.md
         - file: catalysts/FAQ.md
+        - url: https://opencatalystproject.org
+          title: OCP Leaderboard
+        - url: https://open-catalyst.metademolab.com/
+          title: OCP Demo (no install required!)
     - title: Inorganic Materials
       children:
         - file: inorganic_materials/datasets/summary.md
@@ -108,7 +104,6 @@ project:
       children:
         - file: core/intro_series.md
         - file: videos/technical_talks.md
-        - file: core/papers_using_models.md
 site:
   title: FAIR Chemistry Documentation
   options:
@@ -118,13 +113,17 @@ site:
   nav:
     - title: Quickstart
       url: /core/quickstart
-    - title: UMA Demo
+    - title: Docs
+      url: /core/install
+    - title: Tutorial
+      url: /uma-tutorial
+    - title: Demo
       url: https://facebook-fairchem-uma-demo.hf.space/
     - title: Github
       url: https://github.com/facebookresearch/fairchem
     - title: Help
       children:
       - title: Ask a question ❓
-        url: https://github.com/ facebookresearch/fairchem/discussions
+        url: https://github.com/facebookresearch/fairchem/discussions
       - title: Report a bug 🐛
         url: https://github.com/facebookresearch/fairchem/issues

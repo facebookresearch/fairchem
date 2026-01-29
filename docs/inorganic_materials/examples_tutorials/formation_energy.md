@@ -11,8 +11,11 @@ kernelspec:
   name: python3
 ---
 
-Formation energies
-------------------
+# Formation Energy
+
+:::{tip} What You Will Learn
+Calculate formation energies for inorganic materials using UMA with Materials Project-compatible corrections.
+:::
 
 We're going to start simple here - let's run a local relaxation (optimize the unit cell and positions) using a pre-trained UMA model to compute formation energies for inorganic materials.
 

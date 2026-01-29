@@ -12,6 +12,15 @@ jupytext:
 
 # ocpapi
 
+:::{card} API Overview
+
+| Property | Value |
+|----------|-------|
+| **Purpose** | Programmatic access to Open Catalyst Demo |
+| **Interface** | Python async/await |
+| **License** | [MIT](https://github.com/facebookresearch/fairchem/blob/main/LICENSE.md) |
+:::
+
 Python library for programmatic use of the [Open Catalyst Demo](https://open-catalyst.metademolab.com/). Users unfamiliar with the Open Catalyst Demo are encouraged to read more about it before continuing.
 
 ## Installation
@@ -279,7 +288,7 @@ write("POSCAR", ase_atoms, "vasp")
 
 ## License
 
-`ocpapi` is released under the [MIT License](LICENSE).
+`ocpapi` is released under the [MIT License](https://github.com/facebookresearch/fairchem/blob/main/LICENSE.md).
 
 ## Citing `ocpapi`
 

@@ -12,8 +12,20 @@ kernelspec:
   name: python3
 ---
 
-UMA Intro Tutorial
--------------------------------------------------------------
+# UMA Intro Tutorial
+
+:::{note} Learning Objectives
+By the end of this tutorial, you will be able to:
+- Set up and configure UMA models with HuggingFace authentication
+- Use the FAIRChemCalculator with different task names (omol, oc20, omat)
+- Perform molecular energy calculations including spin states
+- Run adsorbate relaxations on catalyst surfaces
+- Execute bulk relaxations with cell optimization
+- Conduct molecular dynamics simulations
+- Calculate adsorption energies with proper reference energies
+- Compute molecular vibrations and phonon spectra
+- Set up and run transition state calculations (NEBs)
+:::
 
 This tutorial will walk you through a few examples of how you can use UMA. Each step is covered in more detail elsewhere in the documentation, but this is well suited to a ~1-2 hour tutorial session for researchers new to UMA but with some background in ASE and molecular simulations. 
 
@@ -72,15 +84,24 @@ fairchem.core.__version__
 
 These should just run, and are here to show some basic uses.
 
-Critical points:
-
-1. Create a calculator
-2. Specify the **task_name**
-3. Use calculator like other ASE calculators
+:::{tip} Critical Points
+When using UMA, remember these key steps:
+1. Create a calculator using `pretrained_mlip.get_predict_unit()`
+2. Specify the appropriate **task_name** for your system (omol, oc20, omat, odac, omc)
+3. Use the calculator like any other ASE calculator
+:::
 
 ## Spin gap energy - OMOL
 
 This is the difference in energy between a triplet and single ground state for a CH2 radical. This downloads a ~1GB checkpoint the first time you run it.
+
+:::{tip} OMOL Task Requirements
+For molecular calculations with the `omol` task, you must set spin and charge in `atoms.info`:
+```python
+atoms.info.update({"spin": 1, "charge": 0})
+```
+Spin is the multiplicity (1 for singlet, 2 for doublet, 3 for triplet, etc.).
+:::
 
 We don't set a device here, so we get a warning about using a CPU device. You can ignore that. If a CUDA environment is available, a GPU may be used to speed up the calculations.
 
@@ -110,7 +131,9 @@ print(triplet.get_potential_energy() - singlet.get_potential_energy())
 
 Here we just setup a Cu(100) slab with a CO on it and relax it.
 
-This is an OC20 task because it is a slab with an adsorbate.
+:::{note}
+This is an OC20 task because it involves a slab with an adsorbate. The OC20 task is trained specifically for heterogeneous catalysis systems and understands the surface-adsorbate interaction.
+:::
 
 We specify an explicit device in the predictor here, and avoid the warning.
 
@@ -136,6 +159,10 @@ print(slab.get_potential_energy())
 ```
 
 # Example bulk relaxation - OMAT
+
+:::{tip} OMAT Task for Bulk Materials
+The `omat` task is trained on bulk inorganic materials and supports stress tensor predictions, enabling cell optimization with filters like `FrechetCellFilter`. This is essential for finding equilibrium lattice constants.
+:::
 
 ```{code-cell}
 from ase.build import bulk
@@ -490,11 +517,14 @@ dosax.set_xlabel("DOS", fontsize=18);
 
 Nudged elastic band calculations are among the most costly calculations we do. UMA makes these quicker!
 
-1. Get initial state
-2. Get final state
+:::{note} NEB Workflow
+The standard workflow for transition state calculations:
+1. Get and relax the initial state
+2. Get and relax the final state
 3. Construct band and interpolate the images
 4. Relax the band
-5. Analyze and plot the band.
+5. Analyze and plot the band
+:::
 
 
 We explore diffusion of an O adatom from an hcp to an fcc site on Pt(111).
@@ -571,27 +601,24 @@ This could be a good initial guess to initialize an NEB in DFT.
 
 # Ideas for things you can do with UMA
 
-1. FineTuna - use it for initial geometry optimizations then do DFT
+:::{seealso} Further Reading
+Here are some research papers demonstrating advanced UMA applications:
+1. **FineTuna** - Use it for initial geometry optimizations then do DFT
+   - [DOI: 10.1088/2632-2153/ac8fe0](http://doi.org/10.1088/2632-2153/ac8fe0)
+   - [DOI: 10.1088/2632-2153/ad37f0](http://doi.org/10.1088/2632-2153/ad37f0)
 
-  a. http://doi.org/10.1088/2632-2153/ac8fe0
+2. **AdsorbML** - Prescreen adsorption sites to find relevant ones
+   - [Nature Computational Science (2023)](https://www.nature.com/articles/s41524-023-01121-5)
 
-  b. http://doi.org/10.1088/2632-2153/ad37f0
+3. **CatTsunami** - Screen NEBs more thoroughly
+   - [ACS Catalysis (2024)](https://pubs.acs.org/doi/10.1021/acscatal.4c04272)
 
-2. AdsorbML - prescreen adsorption sites to find relevant ones
+4. **Free energy estimations** - Compute vibrational modes for entropy
+   - [J. Phys. Chem. C (2024)](https://pubs.acs.org/doi/10.1021/acs.jpcc.4c07477)
 
-  a. https://www.nature.com/articles/s41524-023-01121-5
-
-3. CatTsunami - screen NEBs more thoroughly
-
-  a. https://pubs.acs.org/doi/10.1021/acscatal.4c04272
-
-4. Free energy estimations - compute vibrational modes and use them to estimate vibrational entropy
-
-  a. https://pubs.acs.org/doi/10.1021/acs.jpcc.4c07477
-
-5. Massive screening of catalyst surface properties (685M relaxations)
-
-  a. https://arxiv.org/abs/2411.11783
+5. **Massive screening** - 685M relaxations of catalyst surfaces
+   - [arXiv:2411.11783](https://arxiv.org/abs/2411.11783)
+:::
 
 
 # Advanced applications
