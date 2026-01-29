@@ -14,10 +14,10 @@
     <loc>http://localhost:3000/fairchemv1-v2</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/intro</loc>
+    <loc>http://localhost:3000/uma</loc>
   </url>
   <url>
-    <loc>http://localhost:3000/uma</loc>
+    <loc>http://localhost:3000/intro</loc>
   </url>
   <url>
     <loc>http://localhost:3000/summary</loc>
