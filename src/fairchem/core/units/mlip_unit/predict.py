@@ -109,11 +109,16 @@ def compute_single_atom_outputs(
     outputs = {}
 
     # Get atomic numbers and charges for single atoms
+    # Precompute cumsum to find atom positions efficiently
+    cumsum = torch.zeros(
+        len(data) + 1, dtype=data.natoms.dtype, device=data.natoms.device
+    )
+    cumsum[1:] = data.natoms.cumsum(dim=0)
+
     atomic_numbers = []
     charges = []
     for idx in single_atom_indices:
-        # For single atom systems, the atom index equals the batch index position
-        atom_idx = data.natoms[:idx].sum().item() if idx > 0 else 0
+        atom_idx = cumsum[idx].item()
         atomic_numbers.append(int(data.atomic_numbers[atom_idx].item()))
         charges.append(int(data.charge[idx].item()))
 
