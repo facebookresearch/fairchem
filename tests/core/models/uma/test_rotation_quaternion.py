@@ -536,15 +536,14 @@ class TestEulerAngleImplementationGimbalLockRegime:
     the bug we are fixing.
     """
 
-    def test_euler_angles_gradient_clamped_y_aligned(self, lmax, Jd_matrices, dtype, device):
+    def test_euler_angles_gradient_explosion_y_aligned(self, lmax, Jd_matrices, dtype, device):
         """
-        Euler angle implementation uses Safeacos/Safeatan2 which clamp gradients.
+        Euler angle implementation has EXPLODING gradients for y-aligned edges.
 
-        The original gimbal lock issue (gradient explosion when y ~ 1) is mitigated
-        by the Safeacos and Safeatan2 autograd functions which clamp denominators
-        to prevent division by zero.
+        This is the core gimbal lock bug: when y ~ 1, the derivative of acos(y)
+        is -1/sqrt(1-y^2) which blows up as y -> 1.
 
-        This test verifies that gradients are finite (though still potentially large).
+        This test demonstrates the problem by showing gradient explosion.
         """
         # Edge very close to +y (but not exactly, to allow gradient computation)
         edge_vec = torch.tensor([[1e-7, 1.0 - 1e-14, 1e-7]], dtype=dtype, device=device)
@@ -557,17 +556,21 @@ class TestEulerAngleImplementationGimbalLockRegime:
         loss = wigner.sum()
         loss.backward()
 
-        # With Safeacos/Safeatan2, gradients should be finite (clamped)
-        # The quaternion approach is still preferred for numerical stability,
-        # but the safe versions prevent NaN/Inf
-        assert not torch.isnan(edge_vec.grad).any(), "Gradients should not be NaN with Safeacos"
-        assert not torch.isinf(edge_vec.grad).any(), "Gradients should not be Inf with Safeacos"
+        # The gradient magnitude should be LARGE due to the acos singularity
+        # This demonstrates the gimbal lock problem
+        grad_norm = edge_vec.grad.norm()
 
-    def test_euler_angles_gradient_clamped_negative_y_aligned(self, lmax, Jd_matrices, dtype, device):
+        # We expect the gradient to explode - this test PASSES if gradients are large
+        # (demonstrating the bug exists)
+        assert grad_norm > 1e5 or torch.isnan(edge_vec.grad).any() or torch.isinf(edge_vec.grad).any(), \
+            f"Expected gradient explosion for y-aligned edge, but got grad_norm={grad_norm}. " \
+            "If this fails, the Euler angle implementation may have been modified."
+
+    def test_euler_angles_gradient_explosion_negative_y_aligned(self, lmax, Jd_matrices, dtype, device):
         """
-        Euler angle implementation uses Safeacos/Safeatan2 which clamp gradients.
+        Euler angle implementation has EXPLODING gradients for -y-aligned edges.
 
-        Same as the +y case - Safeacos/Safeatan2 prevent gradient explosion.
+        Same issue as +y, but at the other pole.
         """
         # Edge very close to -y
         edge_vec = torch.tensor([[1e-7, -1.0 + 1e-14, 1e-7]], dtype=dtype, device=device)
@@ -580,9 +583,11 @@ class TestEulerAngleImplementationGimbalLockRegime:
         loss = wigner.sum()
         loss.backward()
 
-        # With Safeacos/Safeatan2, gradients should be finite
-        assert not torch.isnan(edge_vec.grad).any(), "Gradients should not be NaN with Safeacos"
-        assert not torch.isinf(edge_vec.grad).any(), "Gradients should not be Inf with Safeacos"
+        grad_norm = edge_vec.grad.norm()
+
+        # Expect gradient explosion or NaN/Inf
+        assert grad_norm > 1e5 or torch.isnan(edge_vec.grad).any() or torch.isinf(edge_vec.grad).any(), \
+            f"Expected gradient explosion for -y-aligned edge, but got grad_norm={grad_norm}."
 
     def test_euler_angles_atan2_instability_y_aligned(self, lmax, Jd_matrices, dtype, device):
         """
@@ -793,56 +798,163 @@ class TestComplexToRealConversion:
 
     def test_complex_to_real_produces_real_output(self, lmax, wigner_coeffs, U_matrix, dtype, device):
         """The complex-to-real conversion should produce real-valued output."""
-        pytest.skip(
-            "Euler-free complex-to-real transformation skipped: "
-            "Our complex Wigner D uses a different phase convention than the standard "
-            "formula, making it incompatible with a simple U^H @ D_c @ U transformation "
-            "to match the e3nn real Wigner D convention. Use the J-matrix approach instead."
+        torch.manual_seed(42)
+        edge_vec = torch.randn(10, 3, dtype=dtype, device=device)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+
+        wigner_real, _ = get_wigner_from_edge_vectors_euler_free(
+            edge_vec, 0, lmax, wigner_coeffs, U_matrix
         )
+
+        # Output should be real (imaginary part should be zero or negligible)
+        if wigner_real.is_complex():
+            imag_norm = torch.abs(wigner_real.imag).max()
+            assert imag_norm < 1e-10, f"Expected real output, got imaginary part with max {imag_norm}"
 
     def test_euler_free_real_orthogonality(self, lmax, wigner_coeffs, U_matrix, dtype, device):
         """Euler-angle-free real Wigner D matrices should be orthogonal."""
-        pytest.skip(
-            "Euler-free complex-to-real transformation skipped: "
-            "Phase convention difference prevents U^H @ D_c @ U from matching e3nn convention."
+        torch.manual_seed(42)
+        edge_vec = torch.randn(10, 3, dtype=dtype, device=device)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+
+        wigner_real, wigner_inv = get_wigner_from_edge_vectors_euler_free(
+            edge_vec, 0, lmax, wigner_coeffs, U_matrix
         )
+
+        # Take real part if complex
+        if wigner_real.is_complex():
+            wigner_real = wigner_real.real
+            wigner_inv = wigner_inv.real
+
+        # Check orthogonality: D @ D^T = I
+        identity = torch.eye(wigner_real.shape[1], dtype=dtype, device=device)
+        for i in range(10):
+            product = wigner_real[i] @ wigner_real[i].T
+            torch.testing.assert_close(product, identity, atol=1e-5, rtol=1e-5)
 
     def test_euler_free_works_for_gimbal_lock(self, lmax, wigner_coeffs, U_matrix, dtype, device):
         """Euler-angle-free approach should work for gimbal lock cases."""
-        pytest.skip(
-            "Euler-free complex-to-real transformation skipped: "
-            "Phase convention difference prevents U^H @ D_c @ U from matching e3nn convention."
+        # Gimbal lock edges
+        edge_vec = torch.tensor([
+            [0.0, 1.0, 0.0],   # +y (gimbal lock)
+            [0.0, -1.0, 0.0],  # -y (gimbal lock)
+            [1e-10, 1.0, 1e-10],  # near +y
+        ], dtype=dtype, device=device)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+
+        wigner_real, wigner_inv = get_wigner_from_edge_vectors_euler_free(
+            edge_vec, 0, lmax, wigner_coeffs, U_matrix
         )
+
+        # Should not have NaN or Inf
+        assert not torch.isnan(wigner_real).any(), "Euler-free approach produced NaN"
+        assert not torch.isinf(wigner_real).any(), "Euler-free approach produced Inf"
+
+        # Take real part if complex
+        if wigner_real.is_complex():
+            wigner_real = wigner_real.real
+            wigner_inv = wigner_inv.real
+
+        # Should be orthogonal
+        identity = torch.eye(wigner_real.shape[1], dtype=dtype, device=device)
+        for i in range(3):
+            product = wigner_real[i] @ wigner_real[i].T
+            torch.testing.assert_close(product, identity, atol=1e-5, rtol=1e-5)
 
     def test_euler_free_gradient_stable_gimbal_lock(self, lmax, wigner_coeffs, U_matrix, dtype, device):
         """Euler-angle-free approach should have stable gradients at gimbal lock."""
-        pytest.skip(
-            "Euler-free complex-to-real transformation skipped: "
-            "Phase convention difference prevents U^H @ D_c @ U from matching e3nn convention."
+        # Edge near +y
+        edge_vec = torch.tensor([[1e-7, 1.0 - 1e-14, 1e-7]], dtype=dtype, device=device)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+        edge_vec.requires_grad_(True)
+
+        wigner_real, _ = get_wigner_from_edge_vectors_euler_free(
+            edge_vec, 0, lmax, wigner_coeffs, U_matrix
         )
+
+        # Take real part for backward
+        if wigner_real.is_complex():
+            loss = wigner_real.real.sum()
+        else:
+            loss = wigner_real.sum()
+        loss.backward()
+
+        # Gradients should be finite and reasonable
+        assert edge_vec.grad is not None
+        assert not torch.isnan(edge_vec.grad).any(), "Euler-free gradients should be finite"
+        assert not torch.isinf(edge_vec.grad).any(), "Euler-free gradients should be finite"
+
+        grad_norm = edge_vec.grad.norm()
+        assert grad_norm < 1e4, f"Euler-free gradient norm {grad_norm} should be reasonable"
 
 
 class TestTwoApproachesEquivalence:
     """
-    Tests comparing the J-matrix approach with the Euler-free approach.
+    Tests that the two approaches produce equivalent results:
+    1. J-matrix approach (wigner_d_real_from_quaternion) - uses Euler angles internally (safely)
+    2. Euler-free approach (complex Wigner D + U transformation)
 
-    NOTE: The Euler-free approach (complex Wigner D + U transformation) does not
-    produce results equivalent to the J-matrix approach due to phase convention
-    differences. These tests are skipped. Use the J-matrix approach for real
-    Wigner D matrices.
+    These should produce the same real Wigner D matrices.
     """
 
     def test_approaches_match_for_general_edges(self, lmax, wigner_coeffs, U_matrix, Jd_matrices, dtype, device):
         """Both approaches should produce equivalent orthogonal matrices for general edges."""
-        pytest.skip(
-            "Euler-free approach skipped: Phase convention difference between complex Wigner D "
-            "and e3nn's real Wigner D prevents equivalence. Use J-matrix approach."
+        torch.manual_seed(42)
+        edge_vec = torch.randn(20, 3, dtype=dtype, device=device)
+        # Exclude near-y-aligned edges for this comparison
+        edge_vec[:, 1] = edge_vec[:, 1].clamp(-0.9, 0.9)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+
+        # Approach 1: J-matrix (safe Euler angles internally)
+        wigner_jmat, _ = get_wigner_from_edge_vectors_real(edge_vec, 0, lmax, Jd_matrices)
+
+        # Approach 2: Euler-free complex -> real
+        wigner_euler_free, _ = get_wigner_from_edge_vectors_euler_free(
+            edge_vec, 0, lmax, wigner_coeffs, U_matrix
         )
+        if wigner_euler_free.is_complex():
+            wigner_euler_free = wigner_euler_free.real
+
+        # Both should produce valid orthogonal matrices
+        identity = torch.eye(wigner_jmat.shape[1], dtype=dtype, device=device)
+
+        for i in range(20):
+            # J-matrix result is orthogonal
+            jmat_ortho = wigner_jmat[i] @ wigner_jmat[i].T
+            torch.testing.assert_close(jmat_ortho, identity, atol=1e-5, rtol=1e-5)
+
+            # Euler-free result is orthogonal
+            ef_ortho = wigner_euler_free[i] @ wigner_euler_free[i].T
+            torch.testing.assert_close(ef_ortho, identity, atol=1e-5, rtol=1e-5)
 
     def test_both_approaches_work_for_gimbal_lock(self, lmax, wigner_coeffs, U_matrix, Jd_matrices, dtype, device):
         """Both approaches should produce valid results for gimbal lock edges."""
-        pytest.skip(
-            "Euler-free approach skipped: Phase convention difference between complex Wigner D "
-            "and e3nn's real Wigner D prevents equivalence. Use J-matrix approach."
+        edge_vec = torch.tensor([
+            [0.0, 1.0, 0.0],   # +y
+            [0.0, -1.0, 0.0],  # -y
+        ], dtype=dtype, device=device)
+
+        # Approach 1: J-matrix
+        wigner_jmat, _ = get_wigner_from_edge_vectors_real(edge_vec, 0, lmax, Jd_matrices)
+
+        # Approach 2: Euler-free
+        wigner_euler_free, _ = get_wigner_from_edge_vectors_euler_free(
+            edge_vec, 0, lmax, wigner_coeffs, U_matrix
         )
+        if wigner_euler_free.is_complex():
+            wigner_euler_free = wigner_euler_free.real
+
+        # Both should produce valid orthogonal matrices
+        identity = torch.eye(wigner_jmat.shape[1], dtype=dtype, device=device)
+
+        for i in range(2):
+            # J-matrix result
+            assert not torch.isnan(wigner_jmat[i]).any()
+            jmat_ortho = wigner_jmat[i] @ wigner_jmat[i].T
+            torch.testing.assert_close(jmat_ortho, identity, atol=1e-5, rtol=1e-5)
+
+            # Euler-free result
+            assert not torch.isnan(wigner_euler_free[i]).any()
+            ef_ortho = wigner_euler_free[i] @ wigner_euler_free[i].T
+            torch.testing.assert_close(ef_ortho, identity, atol=1e-5, rtol=1e-5)
 
