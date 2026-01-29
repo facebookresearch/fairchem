@@ -3,9 +3,36 @@
 ## Current State
 
 **Branch**: `quaternions`
-**Last Commit**: `09924b32` - "Add quaternion-based Wigner D matrix computation to avoid gimbal lock"
+**Last Commit**: `a4c45063` - "Add math expert review identifying bugs in J-matrix approach"
 
-**Test Status**: 17 failed, 22 passed (need to debug failures)
+**Test Status**: 17 failed, 22 passed (bugs identified - see MATH_REVIEW.md)
+
+## Math Expert Review Findings
+
+Two bugs were identified in the J-matrix approach:
+
+### Bug 1: `_z_rot_mat_batched` is WRONG
+- Places cos on diagonal, sin on anti-diagonal
+- Should use 2x2 rotation blocks for real spherical harmonics
+- **Fix:** Rewrite with proper block structure
+
+### Bug 2: `_compute_special_case_ra_small` is WRONG
+- Uses simplified approximation that doesn't do proper complex-to-real transformation
+- **Fix:** Derive correct formula or remove
+
+### Confirmed CORRECT:
+- Edge-to-quaternion (half-angle formula)
+- Ra/Rb decomposition
+- All special cases for complex Wigner D
+- Phase formula, sign factors, exponents
+- Horner recurrence
+- Complex-to-real conversion formula `D_real = U^H @ D_complex @ U`
+
+### Recommended Fix Strategy
+**Use Euler-angle-free approach only:**
+- `wigner_d_from_quaternion_vectorized_complex()` is correct
+- `wigner_d_complex_to_real()` is correct
+- Remove or fix the buggy J-matrix functions
 
 ## What Was Built
 
