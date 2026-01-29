@@ -9,7 +9,7 @@ description = "Bridging Experiments to Computational Models"
 license = {text = "MIT License"}
 dependencies = [
     "scipy",
-    "numpy",
+    "numpy>=1.26,<2.4",
     "scikit-learn",
     "pandas",
     "matminer",
