@@ -65,7 +65,7 @@ def identify_single_atom_systems(data: AtomicData) -> tuple[torch.Tensor, torch.
     return single_atom_mask, ~single_atom_mask
 
 
-def extract_systems_by_mask(data: AtomicData, mask: torch.Tensor) -> AtomicData:
+def extract_systems_by_mask(data: AtomicData, mask: torch.Tensor) -> AtomicData | None:
     """
     Extract systems from a batch based on a boolean mask.
 
@@ -75,6 +75,7 @@ def extract_systems_by_mask(data: AtomicData, mask: torch.Tensor) -> AtomicData:
 
     Returns:
         A new AtomicData batch containing only the selected systems
+
     """
     indices = torch.where(mask)[0].tolist()
     if not indices:
@@ -167,7 +168,7 @@ def compute_single_atom_outputs(
 
 
 def interleave_predictions(
-    single_preds: dict[str, torch.Tensor] | None,
+    single_preds: dict[str, torch.Tensor],
     regular_preds: dict[str, torch.Tensor] | None,
     single_atom_mask: torch.Tensor,
     tasks: dict[str, Task],
@@ -177,7 +178,7 @@ def interleave_predictions(
     Merge single-atom and regular predictions maintaining original order.
 
     Args:
-        single_preds: Predictions for single-atom systems (or None if no single atoms)
+        single_preds: Predictions for single-atom systems
         regular_preds: Predictions for regular systems (or None if all single atoms)
         single_atom_mask: Boolean mask indicating which systems are single atoms
         tasks: Dictionary mapping task names to Task objects
@@ -186,9 +187,7 @@ def interleave_predictions(
     Returns:
         Dictionary mapping task names to merged output tensors in original order
     """
-    # Handle edge cases
-    if single_preds is None:
-        return regular_preds
+    # If all systems are single atoms, just return single predictions
     if regular_preds is None:
         return single_preds
 
@@ -246,20 +245,23 @@ def interleave_predictions(
 
             merged_tensor = torch.zeros(out_shape, dtype=dtype, device=device)
 
-            # Place single atom predictions
-            if single_tensor is not None:
-                single_atom_positions = []
-                for idx in single_indices.tolist():
-                    atom_pos = data.natoms[:idx].sum().item() if idx > 0 else 0
-                    single_atom_positions.append(atom_pos)
-                for pos, val in zip(single_atom_positions, single_tensor, strict=False):
-                    merged_tensor[pos] = val.to(dtype)
+            # Precompute cumulative sum for atom start positions
+            # cumsum[i] gives the starting atom index for system i
+            cumsum = torch.zeros(
+                num_systems + 1, dtype=data.natoms.dtype, device=device
+            )
+            cumsum[1:] = data.natoms.cumsum(dim=0)
 
-            # Place regular predictions
+            # Place single atom predictions (one atom per single-atom system)
+            if single_tensor is not None:
+                single_atom_positions = cumsum[single_indices]
+                merged_tensor[single_atom_positions] = single_tensor.to(dtype)
+
+            # Place regular predictions (multiple atoms per regular system)
             if regular_tensor is not None:
                 regular_atom_positions = []
                 for idx in regular_indices.tolist():
-                    start_pos = data.natoms[:idx].sum().item() if idx > 0 else 0
+                    start_pos = cumsum[idx].item()
                     num_atoms_in_sys = data.natoms[idx].item()
                     regular_atom_positions.extend(
                         range(start_pos, start_pos + num_atoms_in_sys)
