@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import pytest
-import torch
 from ase import build
 
 from fairchem.core.datasets.atomic_data import AtomicData
@@ -24,61 +23,61 @@ def test_radius_graph_1d(radius_pbc_version):
 
     # case with number of neighbors within max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=10, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=10,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 4
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=10, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=10,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 4
 
     # case with number of neighbors exceeding max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=1, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=1,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 2
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=1, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=1,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 1
 
     # case without max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=-1, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=-1,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 4
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=-1, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=-1,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 4
 
@@ -92,61 +91,61 @@ def test_radius_graph_2d(radius_pbc_version):
 
     # case with number of neighbors within max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=20, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=20,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 18
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=20, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=20,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 18
 
     # case with number of neighbors exceeding max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=2, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=2,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 6
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=2, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=2,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 2
 
     # case without max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=-1, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=-1,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 18
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=-1, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=-1,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 18
 
@@ -160,51 +159,51 @@ def test_radius_graph_3d(radius_pbc_version):
 
     # case with number of neighbors within max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=100, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=100,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 78
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=100, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=100,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 78
 
     # case with number of neighbors exceeding max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=10, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=10,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 12
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=10, 
-        enforce_max_neighbors_strictly=True, 
-        radius_pbc_version=radius_pbc_version, 
-        pbc=data_dict["pbc"]
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=10,
+        enforce_max_neighbors_strictly=True,
+        radius_pbc_version=radius_pbc_version,
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 10
 
     # case without max_neighbors
     graph_dict = generate_graph(
-        data_dict, 
-        cutoff=cutoff, 
-        max_neighbors=-1, 
-        enforce_max_neighbors_strictly=False, 
-        radius_pbc_version=radius_pbc_version, 
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=-1,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=radius_pbc_version,
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 78
@@ -214,7 +213,7 @@ def test_radius_graph_3d(radius_pbc_version):
         max_neighbors=-1,
         enforce_max_neighbors_strictly=True,
         radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"]
+        pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 78
 
@@ -283,12 +282,14 @@ def test_nvidia_graph_1d(external_graph_method):
     )
 
     # Verify edge counts match
-    assert data.nedges.item() == data_ref.nedges.item(), \
-        f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
+    assert (
+        data.nedges.item() == data_ref.nedges.item()
+    ), f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
 
     # Verify edges match
-    assert _validate_edges_match(data, data_ref), \
-        f"{external_graph_method} produced different edges than pymatgen"
+    assert _validate_edges_match(
+        data, data_ref
+    ), f"{external_graph_method} produced different edges than pymatgen"
 
 
 @pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
@@ -324,12 +325,14 @@ def test_nvidia_graph_2d(external_graph_method):
     )
 
     # Verify edge counts match
-    assert data.nedges.item() == data_ref.nedges.item(), \
-        f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
+    assert (
+        data.nedges.item() == data_ref.nedges.item()
+    ), f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
 
     # Verify edges match
-    assert _validate_edges_match(data, data_ref), \
-        f"{external_graph_method} produced different edges than pymatgen"
+    assert _validate_edges_match(
+        data, data_ref
+    ), f"{external_graph_method} produced different edges than pymatgen"
 
 
 @pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
@@ -365,12 +368,14 @@ def test_nvidia_graph_3d(external_graph_method):
     )
 
     # Verify edge counts match
-    assert data.nedges.item() == data_ref.nedges.item(), \
-        f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
+    assert (
+        data.nedges.item() == data_ref.nedges.item()
+    ), f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
 
     # Verify edges match
-    assert _validate_edges_match(data, data_ref), \
-        f"{external_graph_method} produced different edges than pymatgen"
+    assert _validate_edges_match(
+        data, data_ref
+    ), f"{external_graph_method} produced different edges than pymatgen"
 
 
 def test_nvidia_methods_consistency():
@@ -398,12 +403,14 @@ def test_nvidia_methods_consistency():
     )
 
     # Verify both methods produce identical edge counts
-    assert data_cell.nedges.item() == data_naive.nedges.item(), \
-        f"nvidia-cell produced {data_cell.nedges.item()} edges, nvidia-naive produced {data_naive.nedges.item()}"
+    assert (
+        data_cell.nedges.item() == data_naive.nedges.item()
+    ), f"nvidia-cell produced {data_cell.nedges.item()} edges, nvidia-naive produced {data_naive.nedges.item()}"
 
     # Verify edges match exactly
-    assert _validate_edges_match(data_cell, data_naive), \
-        "nvidia-cell and nvidia-naive produced different edge sets"
+    assert _validate_edges_match(
+        data_cell, data_naive
+    ), "nvidia-cell and nvidia-naive produced different edge sets"
 
 
 @pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
@@ -432,12 +439,14 @@ def test_nvidia_graph_max_neighbors(external_graph_method):
     )
 
     # The limited version should have fewer or equal edges
-    assert data_small.nedges.item() <= data_large.nedges.item(), \
-        f"Limited max_neigh produced more edges than unlimited"
+    assert (
+        data_small.nedges.item() <= data_large.nedges.item()
+    ), "Limited max_neigh produced more edges than unlimited"
 
     # Verify that limited version actually limits the edges
-    assert data_small.nedges.item() < data_large.nedges.item(), \
-        f"max_neigh=10 should produce fewer edges than max_neigh=100"
+    assert (
+        data_small.nedges.item() < data_large.nedges.item()
+    ), "max_neigh=10 should produce fewer edges than max_neigh=100"
 
 
 @pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
@@ -470,9 +479,11 @@ def test_nvidia_graph_larger_system(external_graph_method):
     )
 
     # Verify edge counts match
-    assert data.nedges.item() == data_ref.nedges.item(), \
-        f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
+    assert (
+        data.nedges.item() == data_ref.nedges.item()
+    ), f"{external_graph_method} produced {data.nedges.item()} edges, expected {data_ref.nedges.item()}"
 
     # Verify edges match
-    assert _validate_edges_match(data, data_ref), \
-        f"{external_graph_method} produced different edges than pymatgen for larger system"
+    assert _validate_edges_match(
+        data, data_ref
+    ), f"{external_graph_method} produced different edges than pymatgen for larger system"

@@ -97,7 +97,9 @@ class FAIRChemCalculator(Calculator):
             r_edges = True
             max_neigh = 300
             radius = 6.0  # Default radius for edge generation
-            external_graph_method = predict_unit.inference_settings.external_graph_method
+            external_graph_method = (
+                predict_unit.inference_settings.external_graph_method
+            )
             logging.warning(
                 f"External graph generation is enabled using method '{external_graph_method}', limiting neighbors to 300."
             )

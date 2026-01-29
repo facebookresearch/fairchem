@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Sequence
-from typing import List, Optional, Union
+from typing import Union
 
 import ase
 import ase.db.sqlite
@@ -71,7 +71,7 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
         out = item.item()
     elif torch.is_tensor(item):
         out = str(list(item.size()))
-    elif isinstance(item, (List, tuple)):
+    elif isinstance(item, (list, tuple)):
         out = str([len(item)])
     elif isinstance(item, dict):
         lines = [indent_str + size_repr(k, v, 2) for k, v in item.items()]
@@ -186,7 +186,9 @@ def get_neighbors_nvidia(
     # neighbor_matrix_cpu has shape (total_atoms, max_neigh)
     atom_indices = np.arange(total_atoms)[:, None]  # Shape: (total_atoms, 1)
     neigh_indices = np.arange(max_neigh)[None, :]  # Shape: (1, max_neigh)
-    valid_mask = neigh_indices < num_neighbors_cpu[:, None]  # Shape: (total_atoms, max_neigh)
+    valid_mask = (
+        neigh_indices < num_neighbors_cpu[:, None]
+    )  # Shape: (total_atoms, max_neigh)
 
     # Extract valid edges
     _c_index = np.repeat(atom_indices, max_neigh, axis=1)[valid_mask]
@@ -201,7 +203,7 @@ def get_neighbors_nvidia(
     _offsets = _offsets[valid_neighbors]
 
     # Sort edges by center atom only (stable sort maintains NVIDIA's order within each atom)
-    sort_idx = np.argsort(_c_index, kind='stable')
+    sort_idx = np.argsort(_c_index, kind="stable")
     _c_index = _c_index[sort_idx]
     _n_index = _n_index[sort_idx]
     _offsets = _offsets[sort_idx]
@@ -390,10 +392,8 @@ class AtomicData:
             assert self.forces.dtype == torch.float
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
-            assert (
-                self.stress.dim() == 3
-                and self.stress.shape[1:] == (3, 3)
-                or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
+            assert (self.stress.dim() == 3 and self.stress.shape[1:] == (3, 3)) or (
+                self.stress.dim() == 2 and self.stress.shape[1:] == (9,)
             )
             assert self.stress.shape[0] == self.num_graphs
             assert self.stress.dtype == torch.float
@@ -480,7 +480,9 @@ class AtomicData:
                     raise ValueError(
                         f"Invalid NVIDIA method variant. Use 'nvidia-cell' or 'nvidia-naive', got {external_graph_method}"
                     )
-                split_idx_dist = get_neighbors_nvidia(atoms, radius, max_neigh, method=nvidia_variant)
+                split_idx_dist = get_neighbors_nvidia(
+                    atoms, radius, max_neigh, method=nvidia_variant
+                )
             else:
                 raise ValueError(
                     f"external_graph_method must be 'pymatgen', 'nvidia-cell', or 'nvidia-naive', got {external_graph_method}"
@@ -952,7 +954,7 @@ class AtomicData:
 
 
 def atomicdata_list_to_batch(
-    data_list: list[AtomicData], exclude_keys: Optional[list] = None
+    data_list: list[AtomicData], exclude_keys: list | None = None
 ) -> AtomicData:
     """
     all data points must be single graphs and have the same set of keys.
