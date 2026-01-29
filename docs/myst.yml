@@ -11,6 +11,11 @@ project:
     - format: pdf
       template: plain_latex_book
       output: exports/fairchem.pdf
+  plugins:
+    - src/xref.mjs
+    - src/landing-page.mjs
+    - src/directives.mjs
+    - src/admonition.mjs
   jupyter: true
   toc:
     - file: index.md
@@ -66,7 +71,7 @@ project:
             - file: catalysts/datasets/oc20dense.md
             - file: catalysts/datasets/oc20neb.md
             - file: catalysts/datasets/ocx24.md
-            - file: catalysts/datasets/oc25
+            - file: catalysts/datasets/oc25.md
         - file: catalysts/models.md
         - file: catalysts/examples_tutorials/summary.md
           children:
@@ -105,6 +110,21 @@ project:
         - file: videos/technical_talks.md
         - file: core/papers_using_models.md
 site:
+  title: FAIR Chemistry Documentation
   options:
-    folders: true
+    folders: false
+    logo: assets/fair_chem_logo_v2.png
   template: book-theme
+  nav:
+    - title: Quickstart
+      url: /core/quickstart
+    - title: UMA Demo
+      url: https://facebook-fairchem-uma-demo.hf.space/
+    - title: Github
+      url: https://github.com/facebookresearch/fairchem
+    - title: Help
+      children:
+      - title: Ask a question ❓
+        url: https://github.com/ facebookresearch/fairchem/discussions
+      - title: Report a bug 🐛
+        url: https://github.com/facebookresearch/fairchem/issues

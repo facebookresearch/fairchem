@@ -56,6 +56,7 @@ from ase.build import bulk
 from ase.optimize import FIRE
 from quacc.recipes.mlp.core import relax_job
 from quacc import flow
+from fairchem.core.calculate import FAIRChemCalculator, FormationEnergyCalculator
 
 # Make an Atoms object of a bulk Cu structure
 atoms = bulk("Cu")
