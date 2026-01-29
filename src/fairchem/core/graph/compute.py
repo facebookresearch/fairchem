@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
+from fairchem.core.graph.radius_graph_pbc import (
+    radius_graph_pbc,
+    radius_graph_pbc_v2,
+)
 
 
 def get_pbc_distances(
@@ -74,7 +77,7 @@ def generate_graph(
         cutoff (float): The maximum distance between atoms to consider them as neighbors.
         max_neighbors (int): The maximum number of neighbors to consider for each atom.
         enforce_max_neighbors_strictly (bool): Whether to strictly enforce the maximum number of neighbors.
-        radius_pbc_version: the version of radius_pbc impl
+        radius_pbc_version: the version of radius_pbc impl (1 or 2)
         pbc (list[bool]): The periodic boundary conditions in 3 dimensions, defaults to [True,True,True] for 3D pbc
 
     Returns:
