@@ -87,7 +87,7 @@ jobs:
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
         jupytext --to ipynb ./docs/uma_tutorials/*.md
         find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
-        jupyter-book build docs/myst.yml --html --execute --execute-concurrency 1
+        jupyter-book build docs/myst.yml --html --execute --execute-parallel 1
 
     - name: Upload documentation artifact
       uses: actions/upload-artifact@v6
