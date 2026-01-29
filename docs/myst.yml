@@ -112,9 +112,9 @@ site:
   template: book-theme
   nav:
     - title: Quickstart
-      url: /core/quickstart
+      url: /quickstart
     - title: Docs
-      url: /core/install
+      url: /install
     - title: Tutorial
       url: /uma-tutorial
     - title: Demo
