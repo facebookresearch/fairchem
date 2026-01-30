@@ -305,8 +305,10 @@ def wigner_d_element_complex(
     # Case masks
     ra_small = ra <= EPSILON
     rb_small = rb <= EPSILON
-    use_case1 = (ra >= rb) & ~ra_small
-    use_case2 = (ra < rb) & ~rb_small
+    # For general cases, BOTH magnitudes must be significant to avoid gradient issues
+    # with torch.angle() at zero
+    use_case1 = (ra >= rb) & ~ra_small & ~rb_small  # General case, branch 1
+    use_case2 = (ra < rb) & ~ra_small & ~rb_small   # General case, branch 2
 
     # ==========================================================================
     # Case 1: |Ra| ≈ 0 (β ≈ π)
@@ -314,8 +316,11 @@ def wigner_d_element_complex(
     # ==========================================================================
     if mp == -m:
         sign = (-1) ** (ell - m)
-        # Rb^{2m} = |Rb|^{2m} · exp(i·2m·arg(Rb))
-        val = sign * torch.pow(Rb, 2 * m)
+        # Use safe Rb to avoid Rb^{negative} = NaN when Rb = 0
+        # This is safe because we only use the result when ra_small is True,
+        # which implies |Rb| ≈ 1 (since |Ra|^2 + |Rb|^2 = 1)
+        safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
+        val = sign * torch.pow(safe_Rb, 2 * m)
         result = torch.where(ra_small, val, result)
 
     # ==========================================================================
@@ -323,7 +328,11 @@ def wigner_d_element_complex(
     # Only diagonal elements: D^ℓ_{m,m} = Ra^{2m}
     # ==========================================================================
     if mp == m:
-        val = torch.pow(Ra, 2 * m)
+        # Use safe Ra to avoid Ra^{negative} = NaN when Ra = 0
+        # This is safe because we only use the result when rb_small & ~ra_small,
+        # which implies |Ra| ≈ 1
+        safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
+        val = torch.pow(safe_Ra, 2 * m)
         result = torch.where(rb_small & ~ra_small, val, result)
 
     # ==========================================================================
@@ -584,6 +593,7 @@ def get_wigner_from_edge_vectors(
     lmax: int,
     coeffs: dict[str, torch.Tensor],
     U: torch.Tensor,
+    gamma: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Complete pipeline: edge vectors → real Wigner D matrices.
@@ -595,12 +605,14 @@ def get_wigner_from_edge_vectors(
         lmax: Maximum angular momentum
         coeffs: Precomputed Wigner coefficients
         U: Precomputed complex-to-real transformation matrix
+        gamma: Optional rotation angles around edge axis, shape (N,).
+               If None, random angles in [0, 2π) are generated.
 
     Returns:
         Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
         and size = (lmax+1)²
     """
-    q = edge_to_quaternion(edge_distance_vec, gamma=None)
+    q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
     wigner = compute_wigner_d_from_quaternion(q, lmax, coeffs, U)
 
     # Inverse is transpose (Wigner D matrices are orthogonal)
