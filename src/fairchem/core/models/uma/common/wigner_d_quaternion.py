@@ -1841,6 +1841,7 @@ def precompute_complex_to_real_matrix(
     lmax: int,
     dtype: torch.dtype = torch.complex128,
     device: torch.device = torch.device("cpu"),
+    convention: str = "e3nn",
 ) -> torch.Tensor:
     """
     Compute the unitary matrix U that transforms complex → real spherical harmonics.
@@ -1850,12 +1851,12 @@ def precompute_complex_to_real_matrix(
         m = 0: Y^0_ℓ(real) = Y^0_ℓ(complex)
         m < 0: Y^m_ℓ(real) = (i/√2) · [Y^{-|m|}_ℓ(complex) - (-1)^{|m|} · Y^{|m|}_ℓ(complex)]
 
-    Note: Different sources use different conventions. This follows e3nn.
-
     Args:
         lmax: Maximum angular momentum
         dtype: Complex data type
         device: Device for output
+        convention: Either "e3nn" (m = -l to +l) or "fairchem" (m = +1, -1, 0 for l=1)
+                   fairchem uses y as polar axis with ordering (x, y, z) at indices (0, 1, 2)
 
     Returns:
         Block-diagonal unitary matrix of shape (size, size) where size = (lmax+1)²
@@ -1869,30 +1870,48 @@ def precompute_complex_to_real_matrix(
     for ell in range(lmax + 1):
         block_size = 2 * ell + 1
 
-        for m in range(-ell, ell + 1):
-            row = block_start + (m + ell)  # Real harmonic index
+        if convention == "fairchem" and ell == 1:
+            # fairchem l=1 ordering: (m=+1, m=-1, m=0) at indices (0, 1, 2)
+            # This corresponds to Cartesian (x, y, z) with y as polar axis
 
-            if m > 0:
-                # Y^m(real) = (1/√2) · [(-1)^m · Y^m(complex) + Y^{-m}(complex)]
-                col_pos = block_start + (m + ell)   # Y^m(complex)
-                col_neg = block_start + (-m + ell)  # Y^{-m}(complex)
-                sign = (-1) ** m
-                U[row, col_pos] = sign * sqrt2_inv
-                U[row, col_neg] = sqrt2_inv
+            # Row 0: m=+1 (x-direction)
+            # Y^{+1}(real) = (1/√2)[(-1)^1 Y^{+1} + Y^{-1}] = (1/√2)[-Y^{+1} + Y^{-1}]
+            U[block_start + 0, block_start + 2] = -sqrt2_inv  # Y^{+1}(complex) at col 2
+            U[block_start + 0, block_start + 0] = sqrt2_inv   # Y^{-1}(complex) at col 0
 
-            elif m == 0:
-                # Y^0(real) = Y^0(complex)
-                col = block_start + ell
-                U[row, col] = 1.0
+            # Row 1: m=-1 (y-direction, the polar axis)
+            # Y^{-1}(real) = (i/√2)[Y^{+1} - (-1)^1 Y^{-1}] = (i/√2)[Y^{+1} + Y^{-1}]
+            U[block_start + 1, block_start + 0] = 1j * sqrt2_inv   # Y^{-1}(complex)
+            U[block_start + 1, block_start + 2] = 1j * sqrt2_inv   # Y^{+1}(complex)
 
-            else:  # m < 0
-                # Y^m(real) = (i/√2) · [Y^{-|m|}(complex) - (-1)^{|m|} · Y^{|m|}(complex)]
-                abs_m = abs(m)
-                col_pos = block_start + (abs_m + ell)   # Y^{|m|}(complex)
-                col_neg = block_start + (-abs_m + ell)  # Y^{-|m|}(complex)
-                sign = (-1) ** abs_m
-                U[row, col_neg] = 1j * sqrt2_inv
-                U[row, col_pos] = -sign * 1j * sqrt2_inv
+            # Row 2: m=0 (z-direction)
+            U[block_start + 2, block_start + 1] = 1.0
+        else:
+            # e3nn ordering: m = -l, ..., +l
+            for m in range(-ell, ell + 1):
+                row = block_start + (m + ell)  # Real harmonic index
+
+                if m > 0:
+                    # Y^m(real) = (1/√2) · [(-1)^m · Y^m(complex) + Y^{-m}(complex)]
+                    col_pos = block_start + (m + ell)   # Y^m(complex)
+                    col_neg = block_start + (-m + ell)  # Y^{-m}(complex)
+                    sign = (-1) ** m
+                    U[row, col_pos] = sign * sqrt2_inv
+                    U[row, col_neg] = sqrt2_inv
+
+                elif m == 0:
+                    # Y^0(real) = Y^0(complex)
+                    col = block_start + ell
+                    U[row, col] = 1.0
+
+                else:  # m < 0
+                    # Y^m(real) = (i/√2) · [Y^{-|m|}(complex) - (-1)^{|m|} · Y^{|m|}(complex)]
+                    abs_m = abs(m)
+                    col_pos = block_start + (abs_m + ell)   # Y^{|m|}(complex)
+                    col_neg = block_start + (-abs_m + ell)  # Y^{-|m|}(complex)
+                    sign = (-1) ** abs_m
+                    U[row, col_neg] = 1j * sqrt2_inv
+                    U[row, col_pos] = -sign * 1j * sqrt2_inv
 
         block_start += block_size
 
@@ -1984,6 +2003,7 @@ def precompute_U_blocks(
     lmax: int,
     dtype: torch.dtype = torch.float64,
     device: torch.device = torch.device("cpu"),
+    convention: str = "fairchem",
 ) -> list[torch.Tensor]:
     """
     Precompute U transformation matrices for each ell block.
@@ -1992,6 +2012,7 @@ def precompute_U_blocks(
         lmax: Maximum angular momentum
         dtype: Real dtype (float32 or float64) - will use corresponding complex type
         device: Torch device
+        convention: "fairchem" (default) or "e3nn" for m-ordering convention
 
     Returns:
         List of U matrices where U_blocks[ell] has shape (2*ell+1, 2*ell+1)
@@ -2012,25 +2033,37 @@ def precompute_U_blocks(
         block_size = 2 * ell + 1
         U_ell = torch.zeros(block_size, block_size, dtype=complex_dtype, device=device)
 
-        for m in range(-ell, ell + 1):
-            row = m + ell  # Real harmonic index within block
+        # fairchem l=1 uses different m-ordering: (m=+1, m=-1, m=0) -> (x, y, z)
+        if convention == "fairchem" and ell == 1:
+            # Row 0: m=+1 (x-direction)
+            U_ell[0, 2] = -sqrt2_inv  # col for m=+1 in complex basis
+            U_ell[0, 0] = sqrt2_inv   # col for m=-1 in complex basis
+            # Row 1: m=-1 (y-direction, the polar axis)
+            U_ell[1, 0] = 1j * sqrt2_inv
+            U_ell[1, 2] = 1j * sqrt2_inv
+            # Row 2: m=0 (z-direction)
+            U_ell[2, 1] = 1.0
+        else:
+            # e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell)
+            for m in range(-ell, ell + 1):
+                row = m + ell  # Real harmonic index within block
 
-            if m > 0:
-                col_pos = m + ell
-                col_neg = -m + ell
-                sign = (-1) ** m
-                U_ell[row, col_pos] = sign * sqrt2_inv
-                U_ell[row, col_neg] = sqrt2_inv
-            elif m == 0:
-                col = ell
-                U_ell[row, col] = 1.0
-            else:  # m < 0
-                abs_m = abs(m)
-                col_pos = abs_m + ell
-                col_neg = -abs_m + ell
-                sign = (-1) ** abs_m
-                U_ell[row, col_neg] = 1j * sqrt2_inv
-                U_ell[row, col_pos] = -sign * 1j * sqrt2_inv
+                if m > 0:
+                    col_pos = m + ell
+                    col_neg = -m + ell
+                    sign = (-1) ** m
+                    U_ell[row, col_pos] = sign * sqrt2_inv
+                    U_ell[row, col_neg] = sqrt2_inv
+                elif m == 0:
+                    col = ell
+                    U_ell[row, col] = 1.0
+                else:  # m < 0
+                    abs_m = abs(m)
+                    col_pos = abs_m + ell
+                    col_neg = -abs_m + ell
+                    sign = (-1) ** abs_m
+                    U_ell[row, col_neg] = 1j * sqrt2_inv
+                    U_ell[row, col_pos] = -sign * 1j * sqrt2_inv
 
         U_blocks.append(U_ell)
 
@@ -2223,6 +2256,7 @@ def get_complex_to_real_matrix(
     device: torch.device = torch.device("cpu"),
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
+    convention: str = "fairchem",
 ) -> torch.Tensor:
     """
     Get precomputed complex-to-real transformation matrix, loading from cache if available.
@@ -2233,11 +2267,13 @@ def get_complex_to_real_matrix(
         device: Device for the tensor
         cache_dir: Directory for cache files
         use_cache: Whether to use disk caching
+        convention: Either "e3nn" or "fairchem" (default). Use "fairchem" to match
+                   the rotation.py convention used in the rest of fairchem.
 
     Returns:
         Unitary transformation matrix of shape (size, size) where size = (lmax+1)²
     """
-    cache_path = _get_cache_path(lmax, "U_matrix", cache_dir)
+    cache_path = _get_cache_path(lmax, f"U_matrix_{convention}", cache_dir)
 
     if use_cache:
         coeffs = _load_coefficients(cache_path, device)
@@ -2248,7 +2284,7 @@ def get_complex_to_real_matrix(
             return U
 
     # Compute
-    U = precompute_complex_to_real_matrix(lmax, dtype, device)
+    U = precompute_complex_to_real_matrix(lmax, dtype, device, convention=convention)
 
     # Save to cache
     if use_cache:
@@ -2267,6 +2303,7 @@ def precompute_all_wigner_tables(
     variant: str = "symmetric",
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
+    convention: str = "fairchem",
 ) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
     """
     Convenience function to get both coefficient tables and U matrix.
@@ -2280,6 +2317,8 @@ def precompute_all_wigner_tables(
         variant: Coefficient variant ("original", "vectorized", or "symmetric")
         cache_dir: Directory for cache files
         use_cache: Whether to use disk caching
+        convention: Either "e3nn" or "fairchem" (default). Use "fairchem" to match
+                   the rotation.py convention used in the rest of fairchem.
 
     Returns:
         Tuple of (coeffs, U) ready for use with the corresponding get_wigner_from_edge_vectors_* function
@@ -2292,7 +2331,7 @@ def precompute_all_wigner_tables(
 
     # U matrix uses complex128 for precision
     complex_dtype = torch.complex128 if dtype == torch.float64 else torch.complex64
-    U = get_complex_to_real_matrix(lmax, complex_dtype, device, cache_dir, use_cache)
+    U = get_complex_to_real_matrix(lmax, complex_dtype, device, cache_dir, use_cache, convention)
 
     return coeffs, U
 
