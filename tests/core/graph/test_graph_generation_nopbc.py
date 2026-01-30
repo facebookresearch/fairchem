@@ -33,7 +33,7 @@ def check_features_match(
     then compares as sets to handle edge ordering differences.
     """
     features_1 = torch.cat((edge_index_1, cell_offsets_1.T), dim=0).T
-    features_2 = torch.cat((edge_index_2, cell_offsets_2.T), dim=0).T.long()
+    features_2 = torch.cat((edge_index_2, cell_offsets_2.T), dim=0).T
 
     features_1_set = {tuple(x.tolist()) for x in features_1}
     features_2_set = {tuple(x.tolist()) for x in features_2}
