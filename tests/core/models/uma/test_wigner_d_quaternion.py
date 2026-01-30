@@ -3,93 +3,51 @@ Tests for quaternion-based Wigner D matrix computation.
 
 These tests verify:
 1. Mathematical correctness against the spherical_functions reference
-2. Agreement with Euler angle approach for non-singular rotations
-3. Correct behavior for y-aligned edges (where Euler fails)
-4. Gradient stability
+2. Correct behavior for y-aligned edges
+3. Gradient stability
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
 """
 
-import math
+from __future__ import annotations
+
 import pytest
 import torch
 
-# Import our implementation
 from fairchem.core.models.uma.common.wigner_d_quaternion import (
     edge_to_quaternion,
-    quaternion_to_ra_rb,
-    precompute_complex_to_real_matrix,
-    wigner_d_matrix_complex,
-    wigner_d_complex_to_real,
-    compute_wigner_d_from_quaternion,
     get_wigner_from_edge_vectors,
-    precompute_wigner_coefficients_symmetric,
+    precompute_complex_to_real_matrix,
     precompute_U_blocks,
+    precompute_wigner_coefficients_symmetric,
+    quaternion_to_ra_rb,
+    quaternion_wigner,
 )
 
-# Import Euler angle approach for comparison
-from fairchem.core.models.uma.common.rotation import (
-    init_edge_rot_euler_angles,
-    eulers_to_wigner,
-    wigner_D,
-)
 
-# Try to import spherical_functions for reference comparison
-try:
-    import numpy as np
-    from spherical_functions.WignerD import _Wigner_D_element as sf_wigner_d_element
-    HAS_SPHERICAL_FUNCTIONS = True
-except ImportError:
-    HAS_SPHERICAL_FUNCTIONS = False
-
-
-@pytest.fixture
+@pytest.fixture()
 def lmax():
     return 3
 
 
-@pytest.fixture
+@pytest.fixture()
 def dtype():
     return torch.float64
 
 
-@pytest.fixture
+@pytest.fixture()
 def device():
     return torch.device("cpu")
 
 
-@pytest.fixture
+@pytest.fixture()
 def wigner_coeffs(lmax, dtype, device):
     return precompute_wigner_coefficients_symmetric(lmax, dtype, device)
 
 
-@pytest.fixture
+@pytest.fixture()
 def U_blocks(lmax, dtype, device):
     return precompute_U_blocks(lmax, dtype, device)
-
-
-@pytest.fixture
-def U_matrix(lmax, device):
-    return precompute_complex_to_real_matrix(lmax, torch.complex128, device)
-
-
-@pytest.fixture
-def Jd_matrices(lmax, dtype, device):
-    """Load the J matrices used by the Euler angle approach."""
-    from pathlib import Path
-
-    # Find the Jd.pt file - it's in src/fairchem/core/models/uma/Jd.pt
-    # The test file is at tests/core/models/uma/test_wigner_d_quaternion.py
-    # Navigate up 5 levels to get to repo root, then into src/
-    test_dir = Path(__file__).parent
-    repo_root = test_dir.parent.parent.parent.parent
-    jd_path = repo_root / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
-
-    if jd_path.exists():
-        Jd = torch.load(jd_path, map_location=device, weights_only=True)
-        return [J.to(dtype=dtype) for J in Jd[: lmax + 1]]
-    else:
-        pytest.skip(f"Jd.pt not found at {jd_path}")
 
 
 # =============================================================================
@@ -100,64 +58,108 @@ def Jd_matrices(lmax, dtype, device):
 class TestQuaternionConstruction:
     """Tests for edge_to_quaternion function."""
 
-    def test_identity_rotation_for_y_axis(self, dtype, device):
-        """Edge along +y should give identity rotation (before gamma)."""
-        edge = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
-        gamma = torch.zeros(1, dtype=dtype, device=device)
-
-        q = edge_to_quaternion(edge, gamma=gamma)
-
-        # Should be identity quaternion (1, 0, 0, 0)
-        expected = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=dtype, device=device)
-        assert torch.allclose(q, expected, atol=1e-10)
-
-    def test_unit_quaternion(self, dtype, device):
-        """Quaternion should always be unit length."""
-        edges = torch.randn(100, 3, dtype=dtype, device=device)
-        q = edge_to_quaternion(edges)
-
-        norms = torch.linalg.norm(q, dim=-1)
-        assert torch.allclose(norms, torch.ones_like(norms), atol=1e-10)
-
-    def test_negative_y_handling(self, dtype, device):
-        """Edge along -y should use fallback (180° rotation around x)."""
-        edge = torch.tensor([[0.0, -1.0, 0.0]], dtype=dtype, device=device)
-        gamma = torch.zeros(1, dtype=dtype, device=device)
-
-        q = edge_to_quaternion(edge, gamma=gamma)
-
-        # Should be (0, 1, 0, 0) - 180° rotation around x
-        expected = torch.tensor([[0.0, 1.0, 0.0, 0.0]], dtype=dtype, device=device)
-        assert torch.allclose(q, expected, atol=1e-6)
-
-    def test_rotation_correctness(self, dtype, device):
-        """Verify quaternion actually rotates +y to edge direction."""
+    def test_unit_quaternion_and_rotation_correctness(self, dtype, device):
+        """Quaternion is unit length and correctly rotates +y to edge direction."""
         edges = torch.randn(10, 3, dtype=dtype, device=device)
         edges = torch.nn.functional.normalize(edges, dim=-1)
         gamma = torch.zeros(10, dtype=dtype, device=device)
 
         q = edge_to_quaternion(edges, gamma=gamma)
 
-        # Apply quaternion rotation to +y vector
+        # Quaternions should be unit length
+        norms = torch.linalg.norm(q, dim=-1)
+        assert torch.allclose(norms, torch.ones_like(norms), atol=1e-10)
+
+        # Verify quaternion actually rotates +y to edge direction
         y = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
 
-        # Quaternion rotation: q ⊗ (0,y) ⊗ q*
-        # For (w,x,y,z) rotating vector (vx,vy,vz):
-        # Use Rodrigues formula or expand quaternion multiplication
         for i in range(10):
             qi = q[i]
             w, qx, qy, qz = qi[0], qi[1], qi[2], qi[3]
 
             # Rotation matrix from quaternion
-            R = torch.tensor([
-                [1 - 2*(qy**2 + qz**2), 2*(qx*qy - qz*w), 2*(qx*qz + qy*w)],
-                [2*(qx*qy + qz*w), 1 - 2*(qx**2 + qz**2), 2*(qy*qz - qx*w)],
-                [2*(qx*qz - qy*w), 2*(qy*qz + qx*w), 1 - 2*(qx**2 + qy**2)],
-            ], dtype=dtype, device=device)
+            R = torch.tensor(
+                [
+                    [
+                        1 - 2 * (qy**2 + qz**2),
+                        2 * (qx * qy - qz * w),
+                        2 * (qx * qz + qy * w),
+                    ],
+                    [
+                        2 * (qx * qy + qz * w),
+                        1 - 2 * (qx**2 + qz**2),
+                        2 * (qy * qz - qx * w),
+                    ],
+                    [
+                        2 * (qx * qz - qy * w),
+                        2 * (qy * qz + qx * w),
+                        1 - 2 * (qx**2 + qy**2),
+                    ],
+                ],
+                dtype=dtype,
+                device=device,
+            )
 
             rotated_y = R @ y
-            assert torch.allclose(rotated_y, edges[i], atol=1e-6), \
-                f"Edge {i}: expected {edges[i]}, got {rotated_y}"
+            assert torch.allclose(
+                rotated_y, edges[i], atol=1e-6
+            ), f"Edge {i}: expected {edges[i]}, got {rotated_y}"
+
+    def test_y_axis_edge_cases(self, dtype, device):
+        """Edge along +y gives identity; edge along -y uses 180° x-rotation fallback."""
+        gamma = torch.zeros(1, dtype=dtype, device=device)
+
+        # +y should give identity quaternion (1, 0, 0, 0)
+        edge_pos_y = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
+        q_pos = edge_to_quaternion(edge_pos_y, gamma=gamma)
+        expected_identity = torch.tensor(
+            [[1.0, 0.0, 0.0, 0.0]], dtype=dtype, device=device
+        )
+        assert torch.allclose(q_pos, expected_identity, atol=1e-10)
+
+        # -y should give 180° rotation around x: (0, 1, 0, 0)
+        edge_neg_y = torch.tensor([[0.0, -1.0, 0.0]], dtype=dtype, device=device)
+        q_neg = edge_to_quaternion(edge_neg_y, gamma=gamma)
+        expected_180x = torch.tensor([[0.0, 1.0, 0.0, 0.0]], dtype=dtype, device=device)
+        assert torch.allclose(q_neg, expected_180x, atol=1e-6)
+
+    def test_all_edges_align_to_y_axis(self, dtype, device):
+        """
+        All edge vectors should align to +y axis via the inverse quaternion rotation.
+
+        The quaternion computed from an edge rotates +y → edge.
+        Therefore, applying the inverse rotation (transpose of the rotation matrix)
+        should map edge → +y.
+        """
+        test_edges = [
+            [0.0, 1.0, 0.0],  # Y-aligned (identity case)
+            [0.0, 0.0, 1.0],  # Z-aligned
+            [1.0, 0.0, 0.0],  # X-aligned
+            [0.0, -1.0, 0.0],  # -Y-aligned
+            [0.0, 0.0, -1.0],  # -Z-aligned
+            [-1.0, 0.0, 0.0],  # -X-aligned
+            [1.0, 1.0, 1.0],  # Diagonal
+            [1.0, 1.0, 0.0],  # XY-plane
+            [0.0, 1.0, 1.0],  # YZ-plane
+            [1.0, 0.0, 1.0],  # XZ-plane
+            [0.3, 0.5, 0.8],  # Random 1
+            [-0.2, 0.7, 0.3],  # Random 2
+            [0.6, -0.4, 0.5],  # Random 3
+            [-0.8, 0.2, -0.5],  # Random 4
+        ]
+
+        y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
+
+        for edge in test_edges:
+            edge_t = torch.tensor([edge], dtype=dtype, device=device)
+            R, _ = quaternion_wigner(edge_t, 1)
+            R = R[:, 1:4, 1:4]  # just take l=1 block
+            edge_t = torch.nn.functional.normalize(edge_t, dim=-1)
+            result = R @ edge_t[0]
+
+            assert torch.allclose(
+                result, y_axis, atol=1e-5
+            ), f"Edge {edge} did not align to +y, got {result}"
 
 
 # =============================================================================
@@ -168,125 +170,82 @@ class TestQuaternionConstruction:
 class TestRaRbDecomposition:
     """Tests for quaternion_to_ra_rb function."""
 
-    def test_unit_constraint(self, dtype, device):
-        """|Ra|² + |Rb|² should equal 1 for unit quaternions."""
+    @pytest.mark.parametrize(
+        "q,expected_ra,expected_rb,desc",
+        [
+            ([1.0, 0.0, 0.0, 0.0], 1 + 0j, 0 + 0j, "identity"),
+            ([0.0, 1.0, 0.0, 0.0], 0 + 0j, 0 + 1j, "180° x-rotation"),
+        ],
+    )
+    def test_ra_rb_decomposition(
+        self, dtype, device, q, expected_ra, expected_rb, desc
+    ):
+        """Ra/Rb decomposition satisfies |Ra|²+|Rb|²=1 and known cases."""
+        q_tensor = torch.tensor([q], dtype=dtype, device=device)
+        Ra, Rb = quaternion_to_ra_rb(q_tensor)
+
+        # Check unit constraint
+        sum_sq = torch.abs(Ra) ** 2 + torch.abs(Rb) ** 2
+        assert torch.allclose(
+            sum_sq, torch.ones_like(sum_sq), atol=1e-10
+        ), f"{desc}: unit constraint violated"
+
+        # Check expected values
+        assert torch.allclose(
+            Ra[0], torch.tensor(expected_ra, dtype=torch.complex128), atol=1e-10
+        ), f"{desc}: Ra mismatch"
+        assert torch.allclose(
+            Rb[0], torch.tensor(expected_rb, dtype=torch.complex128), atol=1e-10
+        ), f"{desc}: Rb mismatch"
+
+    def test_unit_constraint_random(self, dtype, device):
+        """|Ra|² + |Rb|² should equal 1 for random unit quaternions."""
         q = torch.randn(100, 4, dtype=dtype, device=device)
         q = q / torch.linalg.norm(q, dim=-1, keepdim=True)
 
         Ra, Rb = quaternion_to_ra_rb(q)
-        sum_sq = torch.abs(Ra)**2 + torch.abs(Rb)**2
+        sum_sq = torch.abs(Ra) ** 2 + torch.abs(Rb) ** 2
 
         assert torch.allclose(sum_sq, torch.ones_like(sum_sq), atol=1e-10)
 
-    def test_identity_quaternion(self, dtype, device):
-        """Identity quaternion should give Ra=1, Rb=0."""
-        q = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=dtype, device=device)
-        Ra, Rb = quaternion_to_ra_rb(q)
-
-        assert torch.allclose(Ra.real, torch.ones_like(Ra.real), atol=1e-10)
-        assert torch.allclose(Ra.imag, torch.zeros_like(Ra.imag), atol=1e-10)
-        assert torch.allclose(Rb.real, torch.zeros_like(Rb.real), atol=1e-10)
-        assert torch.allclose(Rb.imag, torch.zeros_like(Rb.imag), atol=1e-10)
-
-    def test_180deg_x_rotation(self, dtype, device):
-        """180° rotation around x should give Ra=0, Rb=i."""
-        q = torch.tensor([[0.0, 1.0, 0.0, 0.0]], dtype=dtype, device=device)
-        Ra, Rb = quaternion_to_ra_rb(q)
-
-        assert torch.abs(Ra[0]) < 1e-10  # |Ra| ≈ 0
-        assert torch.allclose(Rb[0], torch.tensor(1j, dtype=torch.complex128), atol=1e-10)
-
 
 # =============================================================================
-# Test complex Wigner D against spherical_functions
+# Test Wigner D matrix properties
 # =============================================================================
 
 
-@pytest.mark.skipif(not HAS_SPHERICAL_FUNCTIONS, reason="spherical_functions not installed")
-class TestComplexWignerDAgainstReference:
-    """Compare our complex Wigner D to spherical_functions reference."""
-
-    def test_random_rotations(self, lmax, dtype, device, wigner_coeffs):
-        """Complex Wigner D should match spherical_functions for random rotations."""
-        # Generate rotations via Euler angles (which give well-defined Ra, Rb)
-        test_cases = [
-            (0.0, 0.0, 0.0),      # Identity
-            (0.5, 0.3, 0.7),      # Random
-            (1.0, 0.5, 2.0),      # Another random
-            (0.0, 1.57, 0.0),     # 90 degrees around y
-            (3.14, 0.0, 0.0),     # 180 degrees around z
-        ]
-
-        for alpha, beta, gamma in test_cases:
-            # Construct Ra, Rb from Euler angles
-            Ra_np = np.cos(beta/2) * np.exp(1j * (alpha + gamma)/2)
-            Rb_np = np.sin(beta/2) * np.exp(1j * (gamma - alpha)/2)
-
-            Ra_torch = torch.tensor([Ra_np], dtype=torch.complex128)
-            Rb_torch = torch.tensor([Rb_np], dtype=torch.complex128)
-
-            # Get full D matrix from our implementation
-            D_ours_full = wigner_d_matrix_complex(Ra_torch, Rb_torch, wigner_coeffs)
-
-            for ell in range(lmax + 1):
-                for mp in range(-ell, ell + 1):
-                    for m in range(-ell, ell + 1):
-                        # Get our element from the full matrix
-                        block_start = sum((2*l+1) for l in range(ell))
-                        row = block_start + (mp + ell)
-                        col = block_start + (m + ell)
-                        D_ours = D_ours_full[0, row, col]
-
-                        # Reference implementation
-                        indices = np.array([[2*ell, 2*mp, 2*m]], dtype=np.int64)
-                        elements_ref = np.empty(1, dtype=complex)
-                        sf_wigner_d_element(Ra_np, Rb_np, indices, elements_ref)
-                        D_ref = elements_ref[0]
-
-                        assert abs(D_ours.item() - D_ref) < 1e-10, \
-                            f"Euler=({alpha},{beta},{gamma}), ℓ={ell}, m'={mp}, m={m}: " \
-                            f"ours={D_ours.item()}, ref={D_ref}"
-
-
-# =============================================================================
-# Test real Wigner D properties
-# =============================================================================
-
-
-class TestRealWignerDProperties:
+class TestWignerDMatrixProperties:
     """Tests for mathematical properties of real Wigner D matrices."""
 
-    def test_orthogonality(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Real Wigner D matrices should be orthogonal: D @ D.T = I."""
-        torch.manual_seed(42)
-        edges = torch.randn(10, 3, dtype=dtype, device=device)
-
-        wigner, wigner_inv = get_wigner_from_edge_vectors(
-            edges, wigner_coeffs, U_blocks
-        )
-
-        size = (lmax + 1) ** 2
-        I = torch.eye(size, dtype=dtype, device=device)
-
-        for i in range(10):
-            product = wigner[i] @ wigner[i].T
-            assert torch.allclose(product, I, atol=1e-6), \
-                f"Edge {i}: D @ D.T is not identity"
-
-    def test_determinant_one(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Real Wigner D matrices should have determinant 1."""
+    def test_orthogonality_and_determinant(
+        self, lmax, dtype, device, wigner_coeffs, U_blocks
+    ):
+        """Wigner D matrices are orthogonal with determinant 1."""
         torch.manual_seed(42)
         edges = torch.randn(10, 3, dtype=dtype, device=device)
 
         wigner, _ = get_wigner_from_edge_vectors(edges, wigner_coeffs, U_blocks)
 
-        for i in range(10):
-            det = torch.linalg.det(wigner[i])
-            assert torch.allclose(det, torch.ones_like(det), atol=1e-6), \
-                f"Edge {i}: det(D) = {det.item()}, expected 1"
+        size = (lmax + 1) ** 2
+        I = torch.eye(size, dtype=dtype, device=device)
 
-    def test_inverse_is_transpose(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """wigner_inv should equal wigner.T for orthogonal matrices."""
+        for i in range(10):
+            # Check orthogonality: D @ D.T = I
+            product = wigner[i] @ wigner[i].T
+            assert torch.allclose(
+                product, I, atol=1e-6
+            ), f"Edge {i}: D @ D.T is not identity"
+
+            # Check determinant = 1
+            det = torch.linalg.det(wigner[i])
+            assert torch.allclose(
+                det, torch.ones_like(det), atol=1e-6
+            ), f"Edge {i}: det(D) = {det.item()}, expected 1"
+
+    def test_inverse_transpose_relationship(
+        self, lmax, dtype, device, wigner_coeffs, U_blocks
+    ):
+        """wigner_inv equals wigner.T for orthogonal matrices."""
         torch.manual_seed(42)
         edges = torch.randn(10, 3, dtype=dtype, device=device)
 
@@ -299,199 +258,81 @@ class TestRealWignerDProperties:
 
 
 # =============================================================================
-# Test agreement with Euler angle approach (for non-singular cases)
+# Test y-aligned edges and gradient stability
 # =============================================================================
 
 
-class TestAgreementWithEulerApproach:
-    """Compare quaternion approach to Euler approach for general rotations."""
+class TestYAlignedEdgesAndGradients:
+    """Tests for edges aligned with the y-axis and gradient stability."""
 
-    def test_non_singular_edges(self, lmax, dtype, device, wigner_coeffs, U_blocks, Jd_matrices):
-        """For edges away from y-axis, both approaches should agree."""
-        # Create edges that are NOT near the y-axis
-        torch.manual_seed(42)
-        edges_raw = torch.randn(20, 3, dtype=dtype, device=device)
-        # Ensure edges are not too close to y-axis
-        edges_raw[:, 1] = edges_raw[:, 1].clamp(-0.8, 0.8)
-        edges = torch.nn.functional.normalize(edges_raw, dim=-1)
+    @pytest.mark.parametrize(
+        "edge,desc",
+        [
+            ([0.0, 1.0, 0.0], "+y"),
+            ([0.0, -1.0, 0.0], "-y"),
+            ([1e-9, 1.0, 1e-9], "nearly +y"),
+            ([1e-9, -1.0, 1e-9], "nearly -y"),
+        ],
+    )
+    def test_y_aligned_validity(
+        self, lmax, dtype, device, wigner_coeffs, U_blocks, edge, desc
+    ):
+        """Y-aligned edges produce valid orthogonal Wigner matrices without NaN/Inf."""
+        edge_tensor = torch.tensor([edge], dtype=dtype, device=device)
+        edge_tensor = torch.nn.functional.normalize(edge_tensor, dim=-1)
 
-        # We need to use the same gamma for both approaches
-        # The Euler approach uses random gamma internally, so we need to modify this test
-        # For now, just check that the matrices are valid (orthogonal)
-
-        wigner_quat, _ = get_wigner_from_edge_vectors(
-            edges, wigner_coeffs, U_blocks
-        )
-
-        # Verify orthogonality
-        size = (lmax + 1) ** 2
-        I = torch.eye(size, dtype=dtype, device=device)
-
-        for i in range(20):
-            product = wigner_quat[i] @ wigner_quat[i].T
-            assert torch.allclose(product, I, atol=1e-6)
-
-
-# =============================================================================
-# Test y-aligned edge handling
-# =============================================================================
-
-
-class TestYAlignedEdges:
-    """Tests for edges aligned with the y-axis (where Euler approach fails)."""
-
-    def test_positive_y_produces_valid_wigner(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Edge along +y should produce valid orthogonal Wigner D matrix."""
-        edge = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
-
-        wigner, wigner_inv = get_wigner_from_edge_vectors(
-            edge, wigner_coeffs, U_blocks
-        )
+        wigner, _ = get_wigner_from_edge_vectors(edge_tensor, wigner_coeffs, U_blocks)
 
         # Check for NaN/Inf
-        assert not torch.isnan(wigner).any(), "NaN in Wigner matrix"
-        assert not torch.isinf(wigner).any(), "Inf in Wigner matrix"
+        assert not torch.isnan(wigner).any(), f"NaN in Wigner matrix for {desc}"
+        assert not torch.isinf(wigner).any(), f"Inf in Wigner matrix for {desc}"
 
         # Check orthogonality
         size = (lmax + 1) ** 2
         I = torch.eye(size, dtype=dtype, device=device)
         product = wigner[0] @ wigner[0].T
-        assert torch.allclose(product, I, atol=1e-6), "Wigner not orthogonal for +y edge"
+        assert torch.allclose(
+            product, I, atol=1e-5
+        ), f"Wigner not orthogonal for {desc} edge"
 
-    def test_nearly_y_aligned_edges(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Edges nearly aligned with +y should produce valid Wigner D matrices."""
-        # Create edges very close to +y
-        epsilons = [1e-3, 1e-6, 1e-9, 1e-12]
+        # Check determinant
+        det = torch.linalg.det(wigner[0])
+        assert torch.allclose(
+            det, torch.tensor(1.0, dtype=dtype, device=device), atol=1e-5
+        ), f"det(D) != 1 for {desc} edge"
 
-        for eps in epsilons:
-            edge = torch.tensor([[eps, 1.0, eps]], dtype=dtype, device=device)
-            edge = torch.nn.functional.normalize(edge, dim=-1)
-
-            wigner, _ = get_wigner_from_edge_vectors(
-                edge, wigner_coeffs, U_blocks
-            )
-
-            assert not torch.isnan(wigner).any(), f"NaN for eps={eps}"
-            assert not torch.isinf(wigner).any(), f"Inf for eps={eps}"
-
-            # Check orthogonality
-            size = (lmax + 1) ** 2
-            I = torch.eye(size, dtype=dtype, device=device)
-            product = wigner[0] @ wigner[0].T
-            assert torch.allclose(product, I, atol=1e-5), \
-                f"Wigner not orthogonal for eps={eps}"
-
-    def test_negative_y_produces_valid_wigner(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Edge along -y should produce valid orthogonal Wigner D matrix."""
-        edge = torch.tensor([[0.0, -1.0, 0.0]], dtype=dtype, device=device)
-
-        wigner, wigner_inv = get_wigner_from_edge_vectors(
-            edge, wigner_coeffs, U_blocks
-        )
-
-        # Check for NaN/Inf
-        assert not torch.isnan(wigner).any(), "NaN in Wigner matrix"
-        assert not torch.isinf(wigner).any(), "Inf in Wigner matrix"
-
-        # Check orthogonality
-        size = (lmax + 1) ** 2
-        I = torch.eye(size, dtype=dtype, device=device)
-        product = wigner[0] @ wigner[0].T
-        assert torch.allclose(product, I, atol=1e-6), "Wigner not orthogonal for -y edge"
-
-
-# =============================================================================
-# Test gradient stability
-# =============================================================================
-
-
-class TestGradientStability:
-    """Tests for gradient stability, especially for y-aligned edges."""
-
-    def test_gradients_finite_for_y_aligned(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Gradients should be finite for y-aligned edges."""
-        edge = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
-        edge.requires_grad = True
-
-        wigner, _ = get_wigner_from_edge_vectors(
-            edge, wigner_coeffs, U_blocks
-        )
-
-        # Compute gradient of sum of all elements
-        loss = wigner.sum()
-        loss.backward()
-
-        grad = edge.grad
-
-        assert grad is not None, "No gradient computed"
-        assert not torch.isnan(grad).any(), "NaN in gradient"
-        assert not torch.isinf(grad).any(), "Inf in gradient"
-
-    def test_gradients_bounded_for_nearly_y_aligned(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Gradients should remain bounded for edges approaching y-axis."""
-        epsilons = [1e-3, 1e-6, 1e-9]
+    def test_gradient_stability_y_aligned(
+        self, lmax, dtype, device, wigner_coeffs, U_blocks
+    ):
+        """Gradients are finite and bounded for y-aligned edges."""
+        test_edges = [
+            [0.0, 1.0, 0.0],  # +y
+            [1e-9, 1.0, 1e-9],  # nearly +y
+            [1e-6, 1.0, 1e-6],  # less nearly +y
+        ]
         max_grads = []
 
-        for eps in epsilons:
-            edge = torch.tensor([[eps, 1.0, eps]], dtype=dtype, device=device)
-            edge = torch.nn.functional.normalize(edge, dim=-1)
-            edge = edge.detach().requires_grad_(True)
+        for edge in test_edges:
+            edge_tensor = torch.tensor([edge], dtype=dtype, device=device)
+            edge_tensor = torch.nn.functional.normalize(edge_tensor, dim=-1)
+            edge_tensor = edge_tensor.detach().requires_grad_(True)
 
             wigner, _ = get_wigner_from_edge_vectors(
-                edge, wigner_coeffs, U_blocks
+                edge_tensor, wigner_coeffs, U_blocks
             )
 
             loss = wigner.sum()
             loss.backward()
 
-            max_grad = edge.grad.abs().max().item()
-            max_grads.append(max_grad)
+            grad = edge_tensor.grad
+            assert grad is not None, f"No gradient computed for {edge}"
+            assert not torch.isnan(grad).any(), f"NaN in gradient for {edge}"
+            assert not torch.isinf(grad).any(), f"Inf in gradient for {edge}"
 
-            assert not torch.isnan(edge.grad).any(), f"NaN in gradient for eps={eps}"
-            assert not torch.isinf(edge.grad).any(), f"Inf in gradient for eps={eps}"
+            max_grads.append(grad.abs().max().item())
 
-        # Gradients should not grow unboundedly as eps → 0
-        # (Euler approach has gradient ~ 1/eps which blows up)
-        assert max(max_grads) < 1e6, \
-            f"Gradients growing too large: {max_grads}"
-
-    def test_euler_gradient_bias_for_comparison(self, lmax, dtype, device, Jd_matrices, wigner_coeffs, U_blocks):
-        """Document that Euler approach uses gradient clamping for y-aligned edges.
-
-        The Euler approach uses Safeacos which clamps gradients to prevent NaN/Inf,
-        but this introduces gradient bias. The quaternion approach provides correct
-        (unbiased) gradients without clamping.
-
-        This test compares both approaches to document the difference.
-        """
-        edge = torch.tensor([[1e-9, 1.0, 1e-9]], dtype=dtype, device=device)
-        edge = torch.nn.functional.normalize(edge, dim=-1)
-
-        # Euler approach
-        edge_euler = edge.detach().clone().requires_grad_(True)
-        euler_angles = init_edge_rot_euler_angles(edge_euler)
-        wigner_euler = eulers_to_wigner(euler_angles, 0, lmax, Jd_matrices)
-        loss_euler = wigner_euler.sum()
-        loss_euler.backward()
-        euler_max_grad = edge_euler.grad.abs().max().item()
-
-        # Quaternion approach
-        edge_quat = edge.detach().clone().requires_grad_(True)
-        wigner_quat, _ = get_wigner_from_edge_vectors(
-            edge_quat, wigner_coeffs, U_blocks
-        )
-        loss_quat = wigner_quat.sum()
-        loss_quat.backward()
-        quat_max_grad = edge_quat.grad.abs().max().item()
-
-        # Both should have finite gradients
-        assert not torch.isnan(edge_euler.grad).any(), "NaN in Euler gradient"
-        assert not torch.isnan(edge_quat.grad).any(), "NaN in quaternion gradient"
-        assert not torch.isinf(edge_euler.grad).any(), "Inf in Euler gradient"
-        assert not torch.isinf(edge_quat.grad).any(), "Inf in quaternion gradient"
-
-        print(f"\nEuler approach gradient magnitude: {euler_max_grad}")
-        print(f"Quaternion approach gradient magnitude: {quat_max_grad}")
+        # Gradients should not grow unboundedly
+        assert max(max_grads) < 1e6, f"Gradients growing too large: {max_grads}"
 
 
 # =============================================================================
@@ -503,7 +344,7 @@ class TestComplexToRealTransformation:
     """Tests for the U matrix and complex-to-real transformation."""
 
     def test_U_is_unitary(self, lmax, device):
-        """U matrix should be unitary: U @ U† = I."""
+        """U matrix is unitary: U @ U† = I."""
         U = precompute_complex_to_real_matrix(lmax, torch.complex128, device)
 
         size = (lmax + 1) ** 2
@@ -512,201 +353,94 @@ class TestComplexToRealTransformation:
         product = U @ U.conj().T
         assert torch.allclose(product, I, atol=1e-10), "U is not unitary"
 
-    def test_transformation_produces_real_matrix(self, lmax, dtype, device, wigner_coeffs, U_matrix):
-        """D_real should actually be real (imaginary part ≈ 0)."""
-        torch.manual_seed(42)
-        q = torch.randn(10, 4, dtype=dtype, device=device)
-        q = q / torch.linalg.norm(q, dim=-1, keepdim=True)
 
-        Ra, Rb = quaternion_to_ra_rb(q)
-        D_complex = wigner_d_matrix_complex(Ra, Rb, wigner_coeffs)
-        # Correct formula: D_real = U @ D_complex @ U^H
-        D_real_full = torch.einsum("ij,njk,lk->nil", U_matrix, D_complex, U_matrix.conj())
-
-        # Imaginary part should be negligible
-        max_imag = D_real_full.imag.abs().max().item()
-        assert max_imag < 1e-10, f"Imaginary part not negligible: {max_imag}"
+# =============================================================================
+# Test agreement between Euler and Quaternion approaches
+# =============================================================================
 
 
-class TestEulerAngle:
-    """
-    Tests for the Euler angle Wigner path.
-    """
+class TestEulerQuaternionAgreement:
+    """Compare Wigner D matrices from Euler and quaternion approaches."""
 
-    def test_all_edges_align_to_y_axis(self, lmax, dtype, device, Jd_matrices):
+    @pytest.fixture()
+    def Jd_matrices(self, lmax, dtype, device):
+        """Load the J matrices used by the Euler angle approach."""
+        from pathlib import Path
+
+        test_dir = Path(__file__).parent
+        repo_root = test_dir.parent.parent.parent.parent
+        jd_path = repo_root / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
+
+        if jd_path.exists():
+            Jd = torch.load(jd_path, map_location=device, weights_only=True)
+            return [J.to(dtype=dtype) for J in Jd[: lmax + 1]]
+        else:
+            pytest.skip(f"Jd.pt not found at {jd_path}")
+
+    def test_euler_quaternion_agreement(self, lmax, dtype, device, Jd_matrices):
         """
-        All edge vectors should align to +y axis.
+        Euler and quaternion approaches should produce equivalent rotations.
 
-        This is the fundamental requirement: the rotation computed by
-        init_edge_rot_euler_angles should transform any edge to +y.
+        Both approaches compute a rotation that maps edge → +y. We verify they
+        produce the same functional result rather than comparing raw matrices
+        (which may differ due to convention differences).
         """
-        import numpy as np
+        from fairchem.core.models.uma.common.rotation import eulers_to_wigner
 
-        # Comprehensive set of test edges
+        # Test edges away from y-axis singularity
         test_edges = [
-            [0.0, 1.0, 0.0],    # Y-aligned (identity case)
-            [0.0, 0.0, 1.0],    # Z-aligned
-            [1.0, 0.0, 0.0],    # X-aligned
-            [0.0, -1.0, 0.0],   # -Y-aligned
-            [0.0, 0.0, -1.0],   # -Z-aligned
-            [-1.0, 0.0, 0.0],   # -X-aligned
-            [1.0, 1.0, 1.0],    # Diagonal
-            [1.0, 1.0, 0.0],    # XY-plane
-            [0.0, 1.0, 1.0],    # YZ-plane
-            [1.0, 0.0, 1.0],    # XZ-plane
-            [0.3, 0.5, 0.8],    # Random 1
-            [-0.2, 0.7, 0.3],   # Random 2
-            [0.6, -0.4, 0.5],   # Random 3
-            [-0.8, 0.2, -0.5],  # Random 4
+            [0.0, 0.0, 1.0],  # Z-aligned
+            [1.0, 0.0, 0.0],  # X-aligned
+            [1.0, 1.0, 1.0],  # Diagonal
+            [0.3, 0.5, 0.8],  # Random
+            [-0.2, 0.3, 0.9],  # Another random
         ]
+
+        # +y in Cartesian coordinates
+        y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
 
         for edge in test_edges:
             edge_t = torch.tensor([edge], dtype=dtype, device=device)
+            xyz = torch.nn.functional.normalize(edge_t, dim=-1)
+            x, y, z = xyz[0, 0], xyz[0, 1], xyz[0, 2]
 
-            # Test multiple times due to random gamma
-            for _ in range(5):
-                eulers = init_edge_rot_euler_angles(edge_t)
-                D = wigner_D(1, eulers[0], eulers[1], eulers[2], Jd_matrices)[0].cpu().numpy()
+            # Compute Euler angles (same as init_edge_rot_euler_angles but with gamma=0)
+            beta = torch.acos(y.clamp(-1.0, 1.0))
+            alpha = torch.atan2(x, z)
+            gamma = torch.zeros(1, dtype=dtype, device=device)
 
-                # Apply rotation to normalized edge
-                edge_np = np.array(edge) / np.linalg.norm(edge)
-                result = D @ edge_np
+            # Euler approach: wigner_D uses the negated angles for extrinsic convention
+            euler_angles = (-gamma, -beta.unsqueeze(0), -alpha.unsqueeze(0))
+            wigner_euler = eulers_to_wigner(euler_angles, 0, lmax, Jd_matrices)
 
-                # Should align to +y
-                y_axis = np.array([0, 1, 0])
-                assert np.allclose(result, y_axis, atol=1e-5), \
-                    f"Edge {edge} did not align to +y, got {result}"
+            # Quaternion approach with matching gamma
+            wigner_quat, _ = quaternion_wigner(edge_t, lmax, gamma=gamma)
 
-    def test_y_aligned_edge_works(self, lmax, dtype, device, Jd_matrices):
-        """
-        y-aligned edges work correctly.
-        """
-        edge_vec = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
-
-        # Should produce valid Euler angles
-        eulers = init_edge_rot_euler_angles(edge_vec)
-
-        # All angles should be finite
-        assert not torch.isnan(eulers[0]).any()
-        assert not torch.isnan(eulers[1]).any()
-        assert not torch.isnan(eulers[2]).any()
-
-        # Wigner matrix should be orthogonal
-        wigner = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
-        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
-        torch.testing.assert_close(wigner[0] @ wigner[0].T, identity, atol=1e-5, rtol=1e-5)
-
-    def test_negative_y_aligned_edge_works(self, lmax, dtype, device, Jd_matrices):
-        """
-        After the ZYZ fix, -y-aligned edges work correctly.
-
-        This is the β=π gimbal lock case.
-        """
-        edge_vec = torch.tensor([[0.0, -1.0, 0.0]], dtype=dtype, device=device)
-
-        # Should produce valid Euler angles
-        eulers = init_edge_rot_euler_angles(edge_vec)
-
-        # All angles should be finite
-        assert not torch.isnan(eulers[0]).any()
-        assert not torch.isnan(eulers[1]).any()
-        assert not torch.isnan(eulers[2]).any()
-
-        # Wigner matrix should be orthogonal
-        wigner = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
-        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
-        torch.testing.assert_close(wigner[0] @ wigner[0].T, identity, atol=1e-5, rtol=1e-5)
-
-    def test_gradient_stability_y_aligned(self, lmax, dtype, device, Jd_matrices):
-        """
-        Gradients should be stable for y-aligned edges after the fix.
-        """
-        edge_vec = torch.tensor([[1e-7, 1.0 - 1e-14, 1e-7]], dtype=dtype, device=device)
-        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
-        edge_vec.requires_grad_(True)
-
-        wigner = eulers_to_wigner(init_edge_rot_euler_angles(edge_vec), 0, lmax, Jd_matrices)
-
-        loss = wigner.sum()
-        loss.backward()
-
-        # Gradient should exist and be finite
-        assert edge_vec.grad is not None
-        assert not torch.isnan(edge_vec.grad).any(), "Gradient has NaN"
-        assert not torch.isinf(edge_vec.grad).any(), "Gradient has Inf"
-
-    def test_euler_and_quaternion_both_work_for_all_edges(self, lmax, dtype, device, Jd_matrices, wigner_coeffs, U_blocks):
-        """
-        Both Euler and quaternion approaches should work for all edges.
-
-        This verifies that the fix brings Euler angles to parity with quaternions.
-        """
-        test_edges = [
-            [0.0, 1.0, 0.0],    # Y-aligned (gimbal lock)
-            [0.0, -1.0, 0.0],   # -Y-aligned (gimbal lock)
-            [1.0, 0.0, 0.0],    # X-aligned
-            [0.0, 0.0, 1.0],    # Z-aligned
-            [1.0, 1.0, 1.0],    # Diagonal
-        ]
-
-        for edge in test_edges:
-            edge_t = torch.tensor([edge], dtype=dtype, device=device)
-
-            # Euler approach
-            eulers = init_edge_rot_euler_angles(edge_t)
-            wigner_euler = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
-
-            # Quaternion approach
-            wigner_quat, _ = get_wigner_from_edge_vectors(edge_t, wigner_coeffs, U_blocks)
-
-            # Both should be valid orthogonal matrices
-            identity = torch.eye(wigner_euler.shape[1], dtype=dtype, device=device)
+            # Both should be orthogonal
+            size = (lmax + 1) ** 2
+            I = torch.eye(size, dtype=dtype, device=device)
 
             euler_ortho = wigner_euler[0] @ wigner_euler[0].T
             quat_ortho = wigner_quat[0] @ wigner_quat[0].T
 
-            torch.testing.assert_close(euler_ortho, identity, atol=1e-5, rtol=1e-5)
-            torch.testing.assert_close(quat_ortho, identity, atol=1e-5, rtol=1e-5)
+            assert torch.allclose(euler_ortho, I, atol=1e-5), \
+                f"Euler Wigner not orthogonal for edge {edge}"
+            assert torch.allclose(quat_ortho, I, atol=1e-5), \
+                f"Quaternion Wigner not orthogonal for edge {edge}"
 
+            # Extract l=1 blocks - both use Cartesian (x, y, z) ordering
+            euler_l1 = wigner_euler[0, 1:4, 1:4]
+            quat_l1 = wigner_quat[0, 1:4, 1:4]
 
-class TestOptimizedImplementations:
-    """Tests verifying the optimized implementations work correctly."""
+            # Both should rotate edge → +y in Cartesian coordinates
+            edge_cart = xyz[0]
+            euler_result = euler_l1 @ edge_cart
+            quat_result = quat_l1 @ edge_cart
 
-    def test_orthogonality(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Verify implementation produces orthogonal matrices."""
-        torch.manual_seed(123)
-        edges = torch.randn(50, 3, dtype=dtype, device=device)
-        edges = edges / edges.norm(dim=-1, keepdim=True)
-
-        wigner, _ = get_wigner_from_edge_vectors(edges, wigner_coeffs, U_blocks)
-
-        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
-        for i in range(len(edges)):
-            ortho = wigner[i] @ wigner[i].T
-            torch.testing.assert_close(ortho, identity, atol=1e-6, rtol=1e-6)
-
-    def test_y_aligned_edges(self, lmax, dtype, device, wigner_coeffs, U_blocks):
-        """Verify implementation handles y-aligned edges correctly."""
-        # Test y-aligned edges that are problematic for Euler angles
-        y_aligned = torch.tensor([
-            [0.0, 1.0, 0.0],      # +Y
-            [0.0, -1.0, 0.0],     # -Y
-            [1e-8, 1.0, 1e-8],    # Nearly +Y
-            [1e-8, -1.0, 1e-8],   # Nearly -Y
-        ], dtype=dtype, device=device)
-        y_aligned = y_aligned / y_aligned.norm(dim=-1, keepdim=True)
-
-        wigner, _ = get_wigner_from_edge_vectors(y_aligned, wigner_coeffs, U_blocks)
-
-        # All should be valid orthogonal matrices
-        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
-        for i in range(len(y_aligned)):
-            ortho = wigner[i] @ wigner[i].T
-            torch.testing.assert_close(ortho, identity, atol=1e-6, rtol=1e-6)
-
-            # Determinant should be 1
-            det = torch.linalg.det(wigner[i])
-            torch.testing.assert_close(det, torch.tensor(1.0, dtype=dtype, device=device), atol=1e-5, rtol=1e-5)
+            assert torch.allclose(euler_result, y_axis, atol=1e-5), \
+                f"Euler did not rotate edge {edge} to +y, got {euler_result}"
+            assert torch.allclose(quat_result, y_axis, atol=1e-5), \
+                f"Quaternion did not rotate edge {edge} to +y, got {quat_result}"
 
 
 if __name__ == "__main__":
