@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
@@ -120,27 +121,58 @@ class InferenceBatcher:
         # Update all replicas with the new predict unit
         self.predict_server_handle.update_predict_unit.remote(predict_unit_ref)
 
-    def shutdown(self, wait: bool = True) -> None:
-        """Shutdown the executor and Ray server.
+    def delete(self) -> None:
+        """Delete the Ray Serve deployment without shutting down Ray or the executor.
+        
+        This allows the InferenceBatcher to be removed while keeping Ray running
+        for other batchers or applications.
+        """
+        if hasattr(self, "predict_server_handle") and self.predict_server_handle is not None:
+            import ray
+            from ray import serve
+            
+            # Check if Ray is still initialized before trying to delete
+            if ray.is_initialized():
+                with contextlib.suppress(Exception):
+                    serve.delete(self.deployment_name)
+            
+            self.predict_server_handle = None
+
+    def shutdown(self, wait: bool = True, shutdown_ray: bool = False) -> None:
+        """Shutdown the executor, Ray Serve deployment, and optionally Ray itself.
 
         Args:
             wait: If True, wait for pending tasks to complete before returning.
+            shutdown_ray: If True, shutdown Ray Serve and Ray completely. If False,
+                only delete this deployment and shutdown the executor.
+                DEFAULT: False for safety with concurrent Ray usage.
         """
+        # Shutdown the executor
         if hasattr(self, "executor"):
-            self.executor.shutdown(wait=wait)
+            with contextlib.suppress(Exception):
+                self.executor.shutdown(wait=wait)
 
-        # Shutdown the Ray Serve deployment
-        if hasattr(self, "predict_server_handle") and self.predict_server_handle is not None:
-            try:
-                from ray import serve
-                # Use the stored deployment name to delete it
-                serve.delete(self.deployment_name)
-            except Exception:
-                # Silently ignore shutdown errors as the deployment may already be down
-                pass
-            finally:
-                self.predict_server_handle = None
+        # Delete the deployment (safe for concurrent usage)
+        self.delete()
+        
+        # Optionally shutdown Ray Serve and Ray completely
+        # This should only be used when you're SURE no other batchers are running
+        if shutdown_ray:
+            import ray
+            from ray import serve
+            
+            with contextlib.suppress(Exception):
+                serve.shutdown()
+            
+            with contextlib.suppress(Exception):
+                if ray.is_initialized():
+                    ray.shutdown()
 
     def __del__(self):
         """Cleanup on deletion."""
-        self.shutdown(wait=False)
+        # Only delete deployment, don't shutdown Ray in __del__
+        with contextlib.suppress(Exception):
+            self.delete()
+        with contextlib.suppress(Exception):
+            if hasattr(self, "executor"):
+                self.executor.shutdown(wait=False)

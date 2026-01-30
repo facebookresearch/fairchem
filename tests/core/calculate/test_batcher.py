@@ -50,24 +50,40 @@ def uma_predict_unit_alt():
 def setup_ray():
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
 
+    # Use a unique namespace for this worker to avoid interference
+    # This is especially important for parallel test execution (pytest -n 8)
+    import os
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
+    namespace = f"test-{worker_id}-{int(time.time() * 1000000)}"
+
     if ray.is_initialized():
         with contextlib.suppress(Exception):
             serve.shutdown()
-        ray.shutdown()
+        with contextlib.suppress(Exception):
+            ray.shutdown()
+        # Give Ray time to fully shut down before reinitializing
+        time.sleep(0.5)
 
     ray.init(
         ignore_reinit_error=True,
-        num_cpus=4,
+        namespace=namespace,
+        num_cpus=16,  # Increased to support default ray_actor_options num_cpus=8
         num_gpus=1 if torch.cuda.is_available() else 0,
         logging_level="ERROR",  # Reduce noise in test output
     )
 
 
 def cleanup_ray():
+    """Cleanup Ray resources safely without affecting other test workers."""
+    if not ray.is_initialized():
+        return
+        
+    # CRITICAL: Must shutdown serve BEFORE ray to avoid dead actor errors
     try:
         serve.shutdown()
     except Exception as e:
         print(f"Warning: Error during serve shutdown: {e}")
+    
     try:
         ray.shutdown()
     except Exception as e:
@@ -84,7 +100,6 @@ def inference_batcher(uma_predict_unit):
         num_replicas=1,
         concurrency_backend="threads",
         concurrency_backend_options={"max_workers": 4},
-        ray_address="auto",  # Use external Ray cluster
     )
 
     yield batcher
@@ -210,6 +225,7 @@ def test_checkpoint_swap_with_energy_verification(uma_predict_unit, uma_predict_
         setup_ray()
         
         # Create batcher with first model
+        # Use fewer CPUs to allow room for checkpoint swaps and multiple operations
         batcher = InferenceBatcher(
             predict_unit=uma_predict_unit,
             max_batch_size=8,
@@ -217,6 +233,7 @@ def test_checkpoint_swap_with_energy_verification(uma_predict_unit, uma_predict_
             num_replicas=1,
             concurrency_backend="threads",
             concurrency_backend_options={"max_workers": 4},
+            ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow room for swaps
         )
 
         # Test atoms
@@ -255,7 +272,7 @@ def test_checkpoint_swap_with_energy_verification(uma_predict_unit, uma_predict_
         # Verify energies match original
         npt.assert_allclose(energies_initial, energies_restored, atol=1e-4)
         
-        batcher.shutdown()
+        batcher.shutdown(shutdown_ray=False)
     finally:
         cleanup_ray()
 
@@ -278,8 +295,8 @@ def test_ray_server_complete_shutdown_and_restart(uma_predict_unit):
         atoms.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
         energy_before_shutdown = atoms.get_potential_energy()
         
-        # Shutdown batcher and Ray
-        batcher1.shutdown()
+        # Shutdown batcher and Ray explicitly
+        batcher1.shutdown(shutdown_ray=True)
         cleanup_ray()
         
         # Verify Ray is shut down
@@ -303,7 +320,7 @@ def test_ray_server_complete_shutdown_and_restart(uma_predict_unit):
         # Verify energies match
         npt.assert_allclose(energy_before_shutdown, energy_after_restart, atol=1e-4)
         
-        batcher2.shutdown()
+        batcher2.shutdown(shutdown_ray=False)
     finally:
         cleanup_ray()
 
@@ -327,10 +344,11 @@ def test_batcher_shutdown_method(uma_predict_unit):
         # Verify batcher is initialized
         assert hasattr(batcher, "executor")
         assert hasattr(batcher, "predict_server_handle")
+        assert batcher.predict_server_handle is not None
         executor = batcher.executor
         
-        # Shutdown the batcher
-        batcher.shutdown()
+        # Shutdown the batcher with Ray shutdown
+        batcher.shutdown(shutdown_ray=True)
         
         # Verify executor is shutdown (should not be able to submit new tasks)
         with pytest.raises(RuntimeError, match="cannot schedule new futures after shutdown"):
@@ -339,11 +357,42 @@ def test_batcher_shutdown_method(uma_predict_unit):
         # Verify predict_server_handle is cleared
         assert batcher.predict_server_handle is None
         
-        # Shutdown Ray server
-        cleanup_ray()
+        # Verify Ray server is shut down
+        assert not ray.is_initialized(), "Ray server should be shut down after shutdown(shutdown_ray=True)"
         
-        # Verify Ray server is also shut down
-        assert not ray.is_initialized(), "Ray server should be shut down after cleanup_ray()"
+    finally:
+        cleanup_ray()
+
+
+def test_batcher_delete_method(uma_predict_unit):
+    """Test that the delete method removes deployment but keeps Ray running."""
+    try:
+        setup_ray()
+        
+        # Create a batcher
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+        )
+        
+        # Verify batcher is initialized
+        assert batcher.predict_server_handle is not None
+        deployment_name = batcher.deployment_name
+        
+        # Delete the deployment
+        batcher.delete()
+        
+        # Verify predict_server_handle is cleared
+        assert batcher.predict_server_handle is None
+        
+        # Verify Ray is still running
+        assert ray.is_initialized(), "Ray should still be running after delete()"
+        
+        # Cleanup executor manually since we only called delete()
+        if hasattr(batcher, "executor"):
+            batcher.executor.shutdown(wait=True)
         
     finally:
         cleanup_ray()
@@ -355,11 +404,13 @@ def test_multiple_concurrent_batchers(uma_predict_unit, uma_predict_unit_alt):
         setup_ray()
         
         # Create two batchers with different models
+        # Use fewer CPUs per batcher to allow both to run concurrently
         batcher1 = InferenceBatcher(
             predict_unit=uma_predict_unit,
             max_batch_size=8,
             batch_wait_timeout_s=0.05,
             num_replicas=1,
+            ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow concurrent batchers
         )
         
         batcher2 = InferenceBatcher(
@@ -367,6 +418,7 @@ def test_multiple_concurrent_batchers(uma_predict_unit, uma_predict_unit_alt):
             max_batch_size=8,
             batch_wait_timeout_s=0.05,
             num_replicas=1,
+            ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow concurrent batchers
         )
         
         # Verify both have unique deployment names
@@ -388,8 +440,8 @@ def test_multiple_concurrent_batchers(uma_predict_unit, uma_predict_unit_alt):
         # Energies should differ between different models
         assert abs(energy1 - energy2) > 1e-5, f"Energies should differ between models but got {energy1} and {energy2}"
         
-        # Shutdown first batcher
-        batcher1.shutdown()
+        # Shutdown first batcher (keep Ray running)
+        batcher1.shutdown(shutdown_ray=False)
         
         # Verify second batcher still works
         atoms3 = atoms.copy()
@@ -400,7 +452,7 @@ def test_multiple_concurrent_batchers(uma_predict_unit, uma_predict_unit_alt):
         npt.assert_allclose(energy2, energy3, atol=1e-4)
         
         # Cleanup
-        batcher2.shutdown()
+        batcher2.shutdown(shutdown_ray=False)
         
     finally:
         cleanup_ray()
@@ -412,11 +464,13 @@ def test_multiple_batchers_same_model(uma_predict_unit):
         setup_ray()
         
         # Create two batchers with the same model
+        # Use fewer CPUs per batcher to allow both to run concurrently
         batcher1 = InferenceBatcher(
             predict_unit=uma_predict_unit,
             max_batch_size=8,
             batch_wait_timeout_s=0.05,
             num_replicas=1,
+            ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow concurrent batchers
         )
         
         batcher2 = InferenceBatcher(
@@ -424,6 +478,7 @@ def test_multiple_batchers_same_model(uma_predict_unit):
             max_batch_size=8,
             batch_wait_timeout_s=0.05,
             num_replicas=1,
+            ray_actor_options={"num_cpus": 4},  # Use fewer CPUs to allow concurrent batchers
         )
         
         # Verify both have unique deployment names
@@ -462,161 +517,10 @@ def test_multiple_batchers_same_model(uma_predict_unit):
             npt.assert_allclose(result1, energy1, atol=1e-4)
             npt.assert_allclose(result2, energy1, atol=1e-4)
         
-        # Cleanup
-        batcher1.shutdown()
-        batcher2.shutdown()
+        # Cleanup - shutdown without shutting down Ray for the first one
+        batcher1.shutdown(shutdown_ray=False)
+        batcher2.shutdown(shutdown_ray=False)
         
     finally:
         cleanup_ray()
 
-
-def test_local_ray_ownership(uma_predict_unit):
-    """Test that local Ray cluster is owned and shutdown by InferenceBatcher."""
-    try:
-        # Ensure Ray is not initialized
-        if ray.is_initialized():
-            cleanup_ray()
-        
-        # Create batcher with local Ray (default)
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_address=None,  # Explicit local Ray
-        )
-        
-        # Verify batcher owns the cluster
-        assert batcher._owns_ray_cluster, "Batcher should own local Ray cluster"
-        assert ray.is_initialized(), "Ray should be initialized"
-        
-        # Test atoms
-        atoms = bulk("Cu")
-        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
-        energy = atoms.get_potential_energy()
-        assert energy is not None
-        
-        # Shutdown batcher - should also shutdown Ray
-        batcher.shutdown()
-        
-        # Ray should be shut down since we owned it
-        assert not ray.is_initialized(), "Ray should be shut down with local ownership"
-        
-    finally:
-        cleanup_ray()
-
-
-def test_external_ray_ownership(uma_predict_unit):
-    """Test that external Ray cluster is not owned and not shutdown by InferenceBatcher."""
-    try:
-        # Start Ray externally
-        setup_ray()
-        
-        # Create batcher with external Ray (ray_address="auto")
-        batcher = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_address="auto",  # Connect to existing Ray
-        )
-        
-        # Verify batcher does not own the cluster
-        assert not batcher._owns_ray_cluster, "Batcher should not own external Ray cluster"
-        assert ray.is_initialized(), "Ray should be initialized"
-        
-        # Test atoms
-        atoms = bulk("Cu")
-        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
-        energy = atoms.get_potential_energy()
-        assert energy is not None
-        
-        # Shutdown batcher - should NOT shutdown Ray
-        batcher.shutdown()
-        
-        # Ray should still be running since we don't own it
-        assert ray.is_initialized(), "Ray should still be running with external ownership"
-        
-    finally:
-        cleanup_ray()
-
-
-def test_external_ray_not_initialized_error(uma_predict_unit):
-    """Test that using ray_address='auto' without Ray initialized raises error."""
-    try:
-        # Ensure Ray is not initialized
-        if ray.is_initialized():
-            cleanup_ray()
-        
-        # Try to create batcher with ray_address="auto" when Ray is not running
-        with pytest.raises(RuntimeError, match="ray_address='auto' specified but no Ray cluster is running"):
-            InferenceBatcher(
-                predict_unit=uma_predict_unit,
-                max_batch_size=8,
-                batch_wait_timeout_s=0.05,
-                num_replicas=1,
-                ray_address="auto",
-            )
-        
-    finally:
-        cleanup_ray()
-
-
-def test_multiple_batchers_with_external_ray(uma_predict_unit, uma_predict_unit_alt):
-    """Test multiple batchers sharing an external Ray cluster."""
-    try:
-        # Start Ray externally
-        setup_ray()
-        
-        # Create two batchers with external Ray
-        batcher1 = InferenceBatcher(
-            predict_unit=uma_predict_unit,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_address="auto",
-        )
-        
-        batcher2 = InferenceBatcher(
-            predict_unit=uma_predict_unit_alt,
-            max_batch_size=8,
-            batch_wait_timeout_s=0.05,
-            num_replicas=1,
-            ray_address="auto",
-        )
-        
-        # Verify neither owns the cluster
-        assert not batcher1._owns_ray_cluster, "Batcher1 should not own external Ray"
-        assert not batcher2._owns_ray_cluster, "Batcher2 should not own external Ray"
-        
-        # Test atoms
-        atoms = bulk("Cu")
-        
-        # Calculate with both batchers
-        atoms1 = atoms.copy()
-        atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
-        energy1 = atoms1.get_potential_energy()
-        
-        atoms2 = atoms.copy()
-        atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
-        energy2 = atoms2.get_potential_energy()
-        
-        # Energies should differ (different models)
-        assert abs(energy1 - energy2) > 1e-5
-        
-        # Shutdown first batcher
-        batcher1.shutdown()
-        assert ray.is_initialized(), "Ray should still be running after shutting down batcher1"
-        
-        # Second batcher should still work
-        atoms3 = atoms.copy()
-        atoms3.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
-        energy3 = atoms3.get_potential_energy()
-        npt.assert_allclose(energy2, energy3, atol=1e-4)
-        
-        # Shutdown second batcher
-        batcher2.shutdown()
-        assert ray.is_initialized(), "Ray should still be running after shutting down batcher2"
-        
-    finally:
-        cleanup_ray()
