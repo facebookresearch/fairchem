@@ -25,6 +25,10 @@ from fairchem.core.models.uma.common.wigner_d_quaternion import (
     wigner_d_complex_to_real,
     compute_wigner_d_from_quaternion,
     get_wigner_from_edge_vectors,
+    # Optimized implementations
+    precompute_wigner_coefficients_symmetric,
+    precompute_U_blocks,
+    get_wigner_from_edge_vectors_fast,
 )
 
 # Import Euler angle approach for comparison
@@ -517,6 +521,313 @@ class TestComplexToRealTransformation:
         # Imaginary part should be negligible
         max_imag = D_real_full.imag.abs().max().item()
         assert max_imag < 1e-10, f"Imaginary part not negligible: {max_imag}"
+
+
+# =============================================================================
+# Test ZYZ Euler angle fix
+# =============================================================================
+
+
+class TestEulerAngleZYZFix:
+    """
+    Tests for the ZYZ Euler angle fix in init_edge_rot_euler_angles.
+
+    The original implementation had a bug where it used the wrong rotation
+    composition, causing incorrect edge alignment for all non-Y-aligned edges.
+
+    The fix:
+    1. Computes correct base rotation: R_base = Rx(-β_edge) @ Ry(-α_edge)
+    2. Adds random gamma correctly: R_total = Ry(γ_random) @ R_base
+    3. Decomposes into ZYZ Euler angles with gimbal lock handling
+
+    These tests verify the fix works correctly.
+    """
+
+    def test_all_edges_align_to_y_axis(self, lmax, dtype, device, Jd_matrices):
+        """
+        After the ZYZ fix, all edge vectors should align to +y axis.
+
+        This is the fundamental requirement: the rotation computed by
+        init_edge_rot_euler_angles should transform any edge to +y.
+        """
+        import numpy as np
+
+        # Comprehensive set of test edges
+        test_edges = [
+            [0.0, 1.0, 0.0],    # Y-aligned (identity case)
+            [0.0, 0.0, 1.0],    # Z-aligned
+            [1.0, 0.0, 0.0],    # X-aligned
+            [0.0, -1.0, 0.0],   # -Y-aligned
+            [0.0, 0.0, -1.0],   # -Z-aligned
+            [-1.0, 0.0, 0.0],   # -X-aligned
+            [1.0, 1.0, 1.0],    # Diagonal
+            [1.0, 1.0, 0.0],    # XY-plane
+            [0.0, 1.0, 1.0],    # YZ-plane
+            [1.0, 0.0, 1.0],    # XZ-plane
+            [0.3, 0.5, 0.8],    # Random 1
+            [-0.2, 0.7, 0.3],   # Random 2
+            [0.6, -0.4, 0.5],   # Random 3
+            [-0.8, 0.2, -0.5],  # Random 4
+        ]
+
+        # Permutation between (x,y,z) and (y,z,x) spherical harmonic basis
+        P = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], dtype=float)
+
+        for edge in test_edges:
+            edge_t = torch.tensor([edge], dtype=dtype, device=device)
+
+            # Test multiple times due to random gamma
+            for _ in range(5):
+                eulers = init_edge_rot_euler_angles(edge_t)
+                D = wigner_D(1, eulers[0], eulers[1], eulers[2], Jd_matrices)[0].cpu().numpy()
+
+                # Convert from spherical harmonic basis to Cartesian
+                R = P.T @ D @ P
+
+                # Apply rotation to normalized edge
+                edge_np = np.array(edge) / np.linalg.norm(edge)
+                result = R @ edge_np
+
+                # Should align to +y
+                y_axis = np.array([0, 1, 0])
+                assert np.allclose(result, y_axis, atol=1e-5), \
+                    f"Edge {edge} did not align to +y, got {result}"
+
+    def test_gimbal_lock_stability(self, lmax, dtype, device, Jd_matrices):
+        """
+        After the ZYZ fix, Euler angles are stable near y-aligned edges.
+
+        The gimbal lock handling ensures that tiny perturbations near y-axis
+        produce stable, valid Wigner matrices.
+        """
+        # Two nearly identical edges with tiny perturbation
+        edge_vec_1 = torch.tensor([[1e-10, 1.0, 1e-10]], dtype=dtype, device=device)
+        edge_vec_2 = torch.tensor([[-1e-10, 1.0, 1e-10]], dtype=dtype, device=device)
+
+        edge_vec_1 = torch.nn.functional.normalize(edge_vec_1, dim=-1)
+        edge_vec_2 = torch.nn.functional.normalize(edge_vec_2, dim=-1)
+
+        # Compute Wigner matrices
+        wigner_1 = eulers_to_wigner(init_edge_rot_euler_angles(edge_vec_1), 0, lmax, Jd_matrices)
+        wigner_2 = eulers_to_wigner(init_edge_rot_euler_angles(edge_vec_2), 0, lmax, Jd_matrices)
+
+        # Both should be valid orthogonal matrices
+        identity = torch.eye(wigner_1.shape[1], dtype=dtype, device=device)
+        torch.testing.assert_close(wigner_1[0] @ wigner_1[0].T, identity, atol=1e-5, rtol=1e-5)
+        torch.testing.assert_close(wigner_2[0] @ wigner_2[0].T, identity, atol=1e-5, rtol=1e-5)
+
+        # No NaN or Inf values
+        assert not torch.isnan(wigner_1).any()
+        assert not torch.isnan(wigner_2).any()
+
+    def test_y_aligned_edge_works(self, lmax, dtype, device, Jd_matrices):
+        """
+        After the ZYZ fix, y-aligned edges work correctly.
+
+        This was the gimbal lock case in the old implementation.
+        The fix handles this by detecting gimbal lock and using
+        the combined alpha+gamma angle.
+        """
+        edge_vec = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
+
+        # Should produce valid Euler angles
+        eulers = init_edge_rot_euler_angles(edge_vec)
+
+        # All angles should be finite
+        assert not torch.isnan(eulers[0]).any()
+        assert not torch.isnan(eulers[1]).any()
+        assert not torch.isnan(eulers[2]).any()
+
+        # Wigner matrix should be orthogonal
+        wigner = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
+        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
+        torch.testing.assert_close(wigner[0] @ wigner[0].T, identity, atol=1e-5, rtol=1e-5)
+
+    def test_negative_y_aligned_edge_works(self, lmax, dtype, device, Jd_matrices):
+        """
+        After the ZYZ fix, -y-aligned edges work correctly.
+
+        This is the β=π gimbal lock case.
+        """
+        edge_vec = torch.tensor([[0.0, -1.0, 0.0]], dtype=dtype, device=device)
+
+        # Should produce valid Euler angles
+        eulers = init_edge_rot_euler_angles(edge_vec)
+
+        # All angles should be finite
+        assert not torch.isnan(eulers[0]).any()
+        assert not torch.isnan(eulers[1]).any()
+        assert not torch.isnan(eulers[2]).any()
+
+        # Wigner matrix should be orthogonal
+        wigner = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
+        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
+        torch.testing.assert_close(wigner[0] @ wigner[0].T, identity, atol=1e-5, rtol=1e-5)
+
+    def test_random_gamma_applies_y_rotation(self, lmax, dtype, device, Jd_matrices):
+        """
+        The random gamma should apply rotation around the y-axis (not z-axis).
+
+        After aligning edge to +y, the random gamma provides data augmentation
+        by rotating around the y-axis (the new edge direction).
+        """
+        import numpy as np
+
+        edge = [0.0, 0.0, 1.0]  # Z-aligned edge
+        edge_t = torch.tensor([edge], dtype=dtype, device=device)
+
+        P = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], dtype=float)
+
+        # Collect multiple rotations (different random gammas)
+        rotations = []
+        for _ in range(10):
+            eulers = init_edge_rot_euler_angles(edge_t)
+            D = wigner_D(1, eulers[0], eulers[1], eulers[2], Jd_matrices)[0].cpu().numpy()
+            R = P.T @ D @ P
+            rotations.append(R)
+
+        # All rotations should align edge to +y
+        edge_np = np.array(edge) / np.linalg.norm(edge)
+        for R in rotations:
+            result = R @ edge_np
+            assert np.allclose(result, [0, 1, 0], atol=1e-5)
+
+        # But the rotations should differ in how they treat perpendicular directions
+        # (due to different random gamma values)
+        # Check that x-axis gets rotated differently by different gammas
+        x_axis = np.array([1, 0, 0])
+        x_results = [R @ x_axis for R in rotations]
+
+        # Not all x_results should be identical (random gamma varies)
+        all_same = all(np.allclose(x_results[0], x) for x in x_results[1:])
+        assert not all_same, "Random gamma should produce varied rotations"
+
+    def test_gradient_stability_y_aligned(self, lmax, dtype, device, Jd_matrices):
+        """
+        Gradients should be stable for y-aligned edges after the fix.
+        """
+        edge_vec = torch.tensor([[1e-7, 1.0 - 1e-14, 1e-7]], dtype=dtype, device=device)
+        edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
+        edge_vec.requires_grad_(True)
+
+        wigner = eulers_to_wigner(init_edge_rot_euler_angles(edge_vec), 0, lmax, Jd_matrices)
+
+        loss = wigner.sum()
+        loss.backward()
+
+        # Gradient should exist and be finite
+        assert edge_vec.grad is not None
+        assert not torch.isnan(edge_vec.grad).any(), "Gradient has NaN"
+        assert not torch.isinf(edge_vec.grad).any(), "Gradient has Inf"
+
+    def test_euler_and_quaternion_both_work_for_all_edges(self, lmax, dtype, device, Jd_matrices, wigner_coeffs, U_matrix):
+        """
+        Both Euler (with ZYZ fix) and quaternion approaches should work for all edges.
+
+        This verifies that the fix brings Euler angles to parity with quaternions.
+        """
+        test_edges = [
+            [0.0, 1.0, 0.0],    # Y-aligned (gimbal lock)
+            [0.0, -1.0, 0.0],   # -Y-aligned (gimbal lock)
+            [1.0, 0.0, 0.0],    # X-aligned
+            [0.0, 0.0, 1.0],    # Z-aligned
+            [1.0, 1.0, 1.0],    # Diagonal
+        ]
+
+        for edge in test_edges:
+            edge_t = torch.tensor([edge], dtype=dtype, device=device)
+
+            # Euler approach (with ZYZ fix)
+            eulers = init_edge_rot_euler_angles(edge_t)
+            wigner_euler = eulers_to_wigner(eulers, 0, lmax, Jd_matrices)
+
+            # Quaternion approach
+            wigner_quat, _ = get_wigner_from_edge_vectors(edge_t, lmax, wigner_coeffs, U_matrix)
+
+            # Both should be valid orthogonal matrices
+            identity = torch.eye(wigner_euler.shape[1], dtype=dtype, device=device)
+
+            euler_ortho = wigner_euler[0] @ wigner_euler[0].T
+            quat_ortho = wigner_quat[0] @ wigner_quat[0].T
+
+            torch.testing.assert_close(euler_ortho, identity, atol=1e-5, rtol=1e-5)
+            torch.testing.assert_close(quat_ortho, identity, atol=1e-5, rtol=1e-5)
+
+
+class TestOptimizedImplementations:
+    """Tests verifying optimized implementations match the original."""
+
+    def test_fast_matches_original(self, lmax, dtype, device, wigner_coeffs, U_matrix):
+        """
+        Verify get_wigner_from_edge_vectors_fast matches get_wigner_from_edge_vectors.
+        """
+        # Precompute optimized tables
+        coeffs_sym = precompute_wigner_coefficients_symmetric(lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
+
+        # Test on various edge vectors
+        torch.manual_seed(42)
+        test_edges = torch.randn(100, 3, dtype=dtype, device=device)
+        test_edges = test_edges / test_edges.norm(dim=-1, keepdim=True)
+
+        # Use a fixed gamma for both to ensure comparable results
+        gamma = torch.rand(100, dtype=dtype, device=device) * 2 * math.pi
+
+        # Original implementation
+        wigner_orig, wigner_inv_orig = get_wigner_from_edge_vectors(
+            test_edges, lmax, wigner_coeffs, U_matrix, gamma=gamma
+        )
+
+        # Optimized implementation
+        wigner_fast, wigner_inv_fast = get_wigner_from_edge_vectors_fast(
+            test_edges, coeffs_sym, U_blocks, gamma=gamma
+        )
+
+        # Should match within numerical tolerance
+        torch.testing.assert_close(wigner_fast, wigner_orig, atol=1e-10, rtol=1e-10)
+        torch.testing.assert_close(wigner_inv_fast, wigner_inv_orig, atol=1e-10, rtol=1e-10)
+
+    def test_fast_orthogonality(self, lmax, dtype, device):
+        """Verify optimized implementation produces orthogonal matrices."""
+        coeffs_sym = precompute_wigner_coefficients_symmetric(lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
+
+        torch.manual_seed(123)
+        edges = torch.randn(50, 3, dtype=dtype, device=device)
+        edges = edges / edges.norm(dim=-1, keepdim=True)
+
+        wigner, _ = get_wigner_from_edge_vectors_fast(edges, coeffs_sym, U_blocks)
+
+        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
+        for i in range(len(edges)):
+            ortho = wigner[i] @ wigner[i].T
+            torch.testing.assert_close(ortho, identity, atol=1e-6, rtol=1e-6)
+
+    def test_fast_y_aligned_edges(self, lmax, dtype, device):
+        """Verify optimized implementation handles y-aligned edges correctly."""
+        coeffs_sym = precompute_wigner_coefficients_symmetric(lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
+
+        # Test y-aligned edges that are problematic for Euler angles
+        y_aligned = torch.tensor([
+            [0.0, 1.0, 0.0],      # +Y
+            [0.0, -1.0, 0.0],     # -Y
+            [1e-8, 1.0, 1e-8],    # Nearly +Y
+            [1e-8, -1.0, 1e-8],   # Nearly -Y
+        ], dtype=dtype, device=device)
+        y_aligned = y_aligned / y_aligned.norm(dim=-1, keepdim=True)
+
+        wigner, _ = get_wigner_from_edge_vectors_fast(y_aligned, coeffs_sym, U_blocks)
+
+        # All should be valid orthogonal matrices
+        identity = torch.eye(wigner.shape[1], dtype=dtype, device=device)
+        for i in range(len(y_aligned)):
+            ortho = wigner[i] @ wigner[i].T
+            torch.testing.assert_close(ortho, identity, atol=1e-6, rtol=1e-6)
+
+            # Determinant should be 1
+            det = torch.linalg.det(wigner[i])
+            torch.testing.assert_close(det, torch.tensor(1.0, dtype=dtype, device=device), atol=1e-5, rtol=1e-5)
 
 
 if __name__ == "__main__":
