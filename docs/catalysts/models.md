@@ -1,19 +1,38 @@
-# Pretrained models
+# Pretrained Models
 
-**2025 recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
-1. It is state-of-the-art in out-of-domain prediction accuracy
-2. It predicts total energies of a system, which are helpful for predicting properties beyond adsorption energies, and removes some ambiguity when your catalyst surface may reconstruct. 
-3. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
-4. The UMA model is most likely to be updated in the future.
+:::{margin}
+```{image} ../assets/icons/catalysis.svg
+:alt: Catalysis
+:width: 100px
+```
+:::
+
+:::{tip}
+**2025 Recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below.
+:::
+
+:::{card} Why UMA?
+
+1. **State-of-the-art accuracy** in out-of-domain prediction
+2. **Total energy predictions** which are helpful for properties beyond adsorption energies and removes ambiguity when catalyst surfaces may reconstruct
+3. **Energy conserving and smooth** (UMA small model) - works much better for vibrational calculations, molecular dynamics, etc.
+4. **Most likely to be updated** in the future
+:::
+
+---
 
 ## Legacy FAIRChemV1 Models Trained on Open Catalyst 2020 (OC20)
 
-This page summarizes all the pretrained models released as part of the [Open Catalyst Project](https://opencatalystproject.org/), and are only available if you install fairchem<=2.0
+:::{warning}
+These models are only available if you install `fairchem<=2.0`. For new projects, we recommend using the UMA model instead.
+:::
+
+This page summarizes all the pretrained models released as part of the [Open Catalyst Project](https://opencatalystproject.org/).
 
 
 * All configurations for these models are available in the [`configs/`](https://github.com/facebookresearch/fairchem/tree/main/configs) directory.
 * All of these models are trained on various splits of the OC20 S2EF / IS2RE datasets. For details, see [https://arxiv.org/abs/2010.09990](https://arxiv.org/abs/2010.09990) and https://github.com/facebookresearch/fairchem/blob/main/DATASET.md.
-* All OC20 models are trained on adsorption energies, i.e. the DFT total energies minus the clean surface and gas phase adsorbate energies. For details on how to train models on OC20 total energies, please read the [referencing section here](https://fair-chem.github.io/core/datasets/oc20.html).
+* All OC20 models are trained on adsorption energies, i.e. the DFT total energies minus the clean surface and gas phase adsorbate energies. For details on how to train models on OC20 total energies, please read the [referencing section here](https://fair-chem.github.io/oc20).
 
 ### S2EF models: optimized for EFwT
 
