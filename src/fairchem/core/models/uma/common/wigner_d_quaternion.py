@@ -20,7 +20,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import hashlib
 import math
 from pathlib import Path
 from typing import Optional
@@ -40,7 +39,7 @@ _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "fairchem" / "wigner_coeffs"
 
 
 # =============================================================================
-# Precomputation of Wigner Coefficients
+# Core Helper Functions
 # =============================================================================
 
 
@@ -60,330 +59,54 @@ def _binomial(n: int, k: int, factorial: torch.Tensor) -> float:
     return float(factorial[n] / (factorial[k] * factorial[n - k]))
 
 
-def precompute_wigner_coefficients(
-    lmax: int,
-    dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
-) -> dict[str, torch.Tensor]:
+def _vectorized_horner(
+    ratio: torch.Tensor,
+    horner_coeffs: torch.Tensor,
+    poly_len: torch.Tensor,
+    max_poly_len: int,
+) -> torch.Tensor:
     """
-    Precompute Wigner D coefficient tables.
+    Vectorized Horner polynomial evaluation for all elements simultaneously.
 
-    The Wigner D element formula involves:
-        coeff(ℓ, m', m) = sqrt[(ℓ+m)!(ℓ-m)! / ((ℓ+m')!(ℓ-m')!)] × C(ℓ+m', ρ_min) × C(ℓ-m', ℓ-m-ρ_min)
-
-    We precompute these for both Case 1 (|Ra| ≥ |Rb|) and Case 2 (|Ra| < |Rb|).
+    Evaluates polynomials of varying lengths using masking.
 
     Args:
-        lmax: Maximum angular momentum
-        dtype: Data type for coefficients
-        device: Device for tensors
+        ratio: The ratio term -(rb/ra)² or -(ra/rb)², shape (N,)
+        horner_coeffs: Horner factors, shape (n_elements, max_poly_len)
+        poly_len: Actual polynomial length per element, shape (n_elements,)
+        max_poly_len: Maximum polynomial length
 
     Returns:
-        Dictionary with coefficient tables and metadata
+        Polynomial values of shape (N, n_elements)
     """
-    factorial = _factorial_table(2 * lmax + 1, dtype, device)
+    N = ratio.shape[0]
+    n_elements = horner_coeffs.shape[0]
+    device = ratio.device
+    dtype = ratio.dtype
 
-    # Storage: [ℓ, m' + lmax, m + lmax]
-    size = 2 * lmax + 1
-    case1_coeffs = torch.zeros((lmax + 1, size, size), dtype=dtype, device=device)
-    case2_coeffs = torch.zeros((lmax + 1, size, size), dtype=dtype, device=device)
-    rho_min_case1 = torch.zeros((lmax + 1, size, size), dtype=torch.int64, device=device)
-    rho_max_case1 = torch.zeros((lmax + 1, size, size), dtype=torch.int64, device=device)
-    rho_min_case2 = torch.zeros((lmax + 1, size, size), dtype=torch.int64, device=device)
-    rho_max_case2 = torch.zeros((lmax + 1, size, size), dtype=torch.int64, device=device)
+    # Initialize result: all elements start with 1.0
+    # Shape: (N, n_elements)
+    result = torch.ones(N, n_elements, dtype=dtype, device=device)
 
-    for ell in range(lmax + 1):
-        for mp in range(-ell, ell + 1):
-            for m in range(-ell, ell + 1):
-                mp_idx = mp + lmax
-                m_idx = m + lmax
+    # ratio broadcasted to (N, n_elements)
+    ratio_expanded = ratio.unsqueeze(1).expand(N, n_elements)
 
-                # Sqrt prefactor: sqrt[(ℓ+m)!(ℓ-m)! / ((ℓ+m')!(ℓ-m')!)]
-                sqrt_factor = math.sqrt(
-                    float(factorial[ell + m] * factorial[ell - m])
-                    / float(factorial[ell + mp] * factorial[ell - mp])
-                )
+    # Iterate through Horner steps (from highest term down)
+    # poly_len-1 is the number of Horner steps needed
+    for i in range(max_poly_len - 1):
+        # Get coefficient for this step: (n_elements,)
+        coeff = horner_coeffs[:, i]
 
-                # Case 1: |Ra| ≥ |Rb|
-                # ρ_min = max(0, m' - m), ρ_max = min(ℓ + m', ℓ - m)
-                rho_min_1 = max(0, mp - m)
-                rho_max_1 = min(ell + mp, ell - m)
-                rho_min_case1[ell, mp_idx, m_idx] = rho_min_1
-                rho_max_case1[ell, mp_idx, m_idx] = rho_max_1
+        # Mask: only apply if i < poly_len - 1 (i.e., this step is needed)
+        # poly_len = rho_max - rho_min + 1, so we need poly_len - 1 Horner steps
+        mask = i < (poly_len - 1)  # (n_elements,)
 
-                if rho_min_1 <= rho_max_1:
-                    binom1 = _binomial(ell + mp, rho_min_1, factorial)
-                    binom2 = _binomial(ell - mp, ell - m - rho_min_1, factorial)
-                    case1_coeffs[ell, mp_idx, m_idx] = sqrt_factor * binom1 * binom2
+        # factor = ratio * coeff
+        factor = ratio_expanded * coeff.unsqueeze(0)  # (N, n_elements)
 
-                # Case 2: |Ra| < |Rb|
-                # ρ_min = max(0, -(m' + m)), ρ_max = min(ℓ - m, ℓ - m')
-                rho_min_2 = max(0, -(mp + m))
-                rho_max_2 = min(ell - m, ell - mp)
-                rho_min_case2[ell, mp_idx, m_idx] = rho_min_2
-                rho_max_case2[ell, mp_idx, m_idx] = rho_max_2
-
-                if rho_min_2 <= rho_max_2:
-                    binom1 = _binomial(ell + mp, ell - m - rho_min_2, factorial)
-                    binom2 = _binomial(ell - mp, rho_min_2, factorial)
-                    case2_coeffs[ell, mp_idx, m_idx] = sqrt_factor * binom1 * binom2
-
-    return {
-        "case1_coeffs": case1_coeffs,
-        "case2_coeffs": case2_coeffs,
-        "rho_min_case1": rho_min_case1,
-        "rho_max_case1": rho_max_case1,
-        "rho_min_case2": rho_min_case2,
-        "rho_max_case2": rho_max_case2,
-        "lmax": lmax,
-    }
-
-
-def precompute_wigner_coefficients_vectorized(
-    lmax: int,
-    dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
-) -> dict[str, torch.Tensor]:
-    """
-    Precompute Wigner D coefficients in vectorized format for batch computation.
-
-    This extends the basic precomputation to include flattened tensors suitable
-    for vectorized Horner polynomial evaluation across all (ell, mp, m) elements.
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Data type for coefficients
-        device: Device for tensors
-
-    Returns:
-        Dictionary with vectorized coefficient tables
-    """
-    factorial = _factorial_table(2 * lmax + 1, dtype, device)
-
-    # Count total number of elements across all blocks
-    # Each block ell has (2*ell+1)² elements
-    n_elements = sum((2 * ell + 1) ** 2 for ell in range(lmax + 1))
-
-    # Determine max polynomial length (occurs for largest ell with m'=m=0)
-    # rho_max - rho_min + 1 where rho_min=0, rho_max=ell
-    max_poly_len = lmax + 1
-
-    # Storage arrays - flattened over all (ell, mp, m) combinations
-    block_indices = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    row_indices = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    col_indices = torch.zeros(n_elements, dtype=torch.int64, device=device)
-
-    # Coefficients for the leading term
-    case1_coeff = torch.zeros(n_elements, dtype=dtype, device=device)
-    case2_coeff = torch.zeros(n_elements, dtype=dtype, device=device)
-
-    # Horner factors: factor[i] = (n1*n2)/(d1*d2) for stepping from rho to rho-1
-    # We store from rho_max down to rho_min+1
-    case1_horner = torch.zeros(n_elements, max_poly_len, dtype=dtype, device=device)
-    case2_horner = torch.zeros(n_elements, max_poly_len, dtype=dtype, device=device)
-
-    # Polynomial lengths
-    case1_poly_len = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    case2_poly_len = torch.zeros(n_elements, dtype=torch.int64, device=device)
-
-    # Exponents for magnitude computation
-    case1_ra_exp = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    case1_rb_exp = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    case2_ra_exp = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    case2_rb_exp = torch.zeros(n_elements, dtype=torch.int64, device=device)
-
-    # Sign factors
-    case1_sign = torch.zeros(n_elements, dtype=dtype, device=device)
-    case2_sign = torch.zeros(n_elements, dtype=dtype, device=device)
-
-    # Phase computation: (m'+m) and (m-m')
-    mp_plus_m = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    m_minus_mp = torch.zeros(n_elements, dtype=torch.int64, device=device)
-
-    # Special case masks
-    diagonal_mask = torch.zeros(n_elements, dtype=torch.bool, device=device)
-    anti_diagonal_mask = torch.zeros(n_elements, dtype=torch.bool, device=device)
-
-    # Power for diagonal/anti-diagonal special cases
-    special_2m = torch.zeros(n_elements, dtype=torch.int64, device=device)
-    anti_diag_sign = torch.zeros(n_elements, dtype=dtype, device=device)
-
-    elem_idx = 0
-    block_start = 0
-
-    for ell in range(lmax + 1):
-        block_size = 2 * ell + 1
-
-        for mp_local in range(block_size):
-            mp = mp_local - ell
-            for m_local in range(block_size):
-                m = m_local - ell
-
-                # Store indices
-                block_indices[elem_idx] = ell
-                row_indices[elem_idx] = block_start + mp_local
-                col_indices[elem_idx] = block_start + m_local
-
-                # Phase terms
-                mp_plus_m[elem_idx] = mp + m
-                m_minus_mp[elem_idx] = m - mp
-
-                # Special case flags
-                diagonal_mask[elem_idx] = mp == m
-                anti_diagonal_mask[elem_idx] = mp == -m
-                special_2m[elem_idx] = 2 * m
-                anti_diag_sign[elem_idx] = (-1) ** (ell - m)
-
-                # Sqrt prefactor: sqrt[(ℓ+m)!(ℓ-m)! / ((ℓ+m')!(ℓ-m')!)]
-                sqrt_factor = math.sqrt(
-                    float(factorial[ell + m] * factorial[ell - m])
-                    / float(factorial[ell + mp] * factorial[ell - mp])
-                )
-
-                # Case 1: |Ra| ≥ |Rb|
-                rho_min_1 = max(0, mp - m)
-                rho_max_1 = min(ell + mp, ell - m)
-
-                if rho_min_1 <= rho_max_1:
-                    binom1 = _binomial(ell + mp, rho_min_1, factorial)
-                    binom2 = _binomial(ell - mp, ell - m - rho_min_1, factorial)
-                    case1_coeff[elem_idx] = sqrt_factor * binom1 * binom2
-
-                    poly_len = rho_max_1 - rho_min_1 + 1
-                    case1_poly_len[elem_idx] = poly_len
-
-                    # Compute Horner factors for rho from rho_max down to rho_min+1
-                    for i, rho in enumerate(range(rho_max_1, rho_min_1, -1)):
-                        n1 = ell + mp - rho + 1
-                        n2 = ell - m - rho + 1
-                        d1 = rho
-                        d2 = m - mp + rho
-                        if d1 != 0 and d2 != 0:
-                            case1_horner[elem_idx, i] = (n1 * n2) / (d1 * d2)
-
-                    case1_ra_exp[elem_idx] = 2 * ell + mp - m - 2 * rho_min_1
-                    case1_rb_exp[elem_idx] = m - mp + 2 * rho_min_1
-                    case1_sign[elem_idx] = (-1) ** rho_min_1
-
-                # Case 2: |Ra| < |Rb|
-                rho_min_2 = max(0, -(mp + m))
-                rho_max_2 = min(ell - m, ell - mp)
-
-                if rho_min_2 <= rho_max_2:
-                    binom1 = _binomial(ell + mp, ell - m - rho_min_2, factorial)
-                    binom2 = _binomial(ell - mp, rho_min_2, factorial)
-                    case2_coeff[elem_idx] = sqrt_factor * binom1 * binom2
-
-                    poly_len = rho_max_2 - rho_min_2 + 1
-                    case2_poly_len[elem_idx] = poly_len
-
-                    # Compute Horner factors for rho from rho_max down to rho_min+1
-                    for i, rho in enumerate(range(rho_max_2, rho_min_2, -1)):
-                        n1 = ell - m - rho + 1
-                        n2 = ell - mp - rho + 1
-                        d1 = rho
-                        d2 = mp + m + rho
-                        if d1 != 0 and d2 != 0:
-                            case2_horner[elem_idx, i] = (n1 * n2) / (d1 * d2)
-
-                    case2_ra_exp[elem_idx] = mp + m + 2 * rho_min_2
-                    case2_rb_exp[elem_idx] = 2 * ell - mp - m - 2 * rho_min_2
-                    case2_sign[elem_idx] = ((-1) ** (ell - m)) * ((-1) ** rho_min_2)
-
-                elem_idx += 1
-
-        block_start += block_size
-
-    return {
-        "n_elements": n_elements,
-        "max_poly_len": max_poly_len,
-        "lmax": lmax,
-        # Indices
-        "block_indices": block_indices,
-        "row_indices": row_indices,
-        "col_indices": col_indices,
-        # Case 1 (|Ra| >= |Rb|)
-        "case1_coeff": case1_coeff,
-        "case1_horner": case1_horner,
-        "case1_poly_len": case1_poly_len,
-        "case1_ra_exp": case1_ra_exp,
-        "case1_rb_exp": case1_rb_exp,
-        "case1_sign": case1_sign,
-        # Case 2 (|Ra| < |Rb|)
-        "case2_coeff": case2_coeff,
-        "case2_horner": case2_horner,
-        "case2_poly_len": case2_poly_len,
-        "case2_ra_exp": case2_ra_exp,
-        "case2_rb_exp": case2_rb_exp,
-        "case2_sign": case2_sign,
-        # Phase
-        "mp_plus_m": mp_plus_m,
-        "m_minus_mp": m_minus_mp,
-        # Special cases
-        "diagonal_mask": diagonal_mask,
-        "anti_diagonal_mask": anti_diagonal_mask,
-        "special_2m": special_2m,
-        "anti_diag_sign": anti_diag_sign,
-    }
-
-
-def cast_coefficients_to_dtype(
-    coeffs_vec: dict[str, torch.Tensor],
-    real_dtype: torch.dtype,
-    device: torch.device = None,
-) -> dict[str, torch.Tensor]:
-    """
-    Cast all coefficient tensors to the target dtype and device.
-
-    Call this once after precomputation to match your input tensor dtype.
-    Avoids repeated dtype conversions at runtime.
-
-    Args:
-        coeffs_vec: Precomputed vectorized coefficients
-        real_dtype: Target real dtype (float32 or float64)
-        device: Target device (if None, keeps original device)
-
-    Returns:
-        New dictionary with all tensors cast to target dtype/device
-    """
-    if real_dtype == torch.float32:
-        complex_dtype = torch.complex64
-    else:
-        complex_dtype = torch.complex128
-
-    result = {
-        "n_elements": coeffs_vec["n_elements"],
-        "max_poly_len": coeffs_vec["max_poly_len"],
-        "lmax": coeffs_vec["lmax"],
-    }
-
-    # Integer tensors - just move device if needed
-    int_keys = [
-        "block_indices", "row_indices", "col_indices",
-        "case1_poly_len", "case2_poly_len",
-    ]
-    for key in int_keys:
-        t = coeffs_vec[key]
-        result[key] = t if device is None else t.to(device=device)
-
-    # Boolean tensors
-    bool_keys = ["diagonal_mask", "anti_diagonal_mask"]
-    for key in bool_keys:
-        t = coeffs_vec[key]
-        result[key] = t if device is None else t.to(device=device)
-
-    # Real-valued tensors
-    real_keys = [
-        "case1_coeff", "case1_horner", "case1_ra_exp", "case1_rb_exp", "case1_sign",
-        "case2_coeff", "case2_horner", "case2_ra_exp", "case2_rb_exp", "case2_sign",
-        "mp_plus_m", "m_minus_mp", "special_2m", "anti_diag_sign",
-    ]
-    for key in real_keys:
-        t = coeffs_vec[key]
-        if device is None:
-            result[key] = t.to(dtype=real_dtype)
-        else:
-            result[key] = t.to(dtype=real_dtype, device=device)
+        # result = 1.0 + result * factor, but only where mask is True
+        new_result = 1.0 + result * factor
+        result = torch.where(mask.unsqueeze(0), new_result, result)
 
     return result
 
@@ -516,812 +239,8 @@ def quaternion_to_ra_rb(q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 # =============================================================================
-# Complex Wigner D Matrix Computation
+# Precomputation of Wigner Coefficients (Symmetric Version)
 # =============================================================================
-
-
-def wigner_d_element_complex(
-    ell: int,
-    mp: int,
-    m: int,
-    Ra: torch.Tensor,
-    Rb: torch.Tensor,
-    coeffs: dict[str, torch.Tensor],
-) -> torch.Tensor:
-    """
-    Compute a single complex Wigner D matrix element D^ℓ_{m',m}(R).
-
-    Implements the four-case algorithm from spherical_functions.
-
-    Args:
-        ell: Angular momentum quantum number
-        mp: m' index
-        m: m index
-        Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
-        coeffs: Precomputed coefficient dictionary
-
-    Returns:
-        Complex tensor of D^ℓ_{m',m} values, shape (N,)
-    """
-    ra = torch.abs(Ra)
-    rb = torch.abs(Rb)
-
-    lmax = coeffs["lmax"]
-    mp_idx = mp + lmax
-    m_idx = m + lmax
-
-    # Get precomputed values
-    coeff1 = coeffs["case1_coeffs"][ell, mp_idx, m_idx]
-    coeff2 = coeffs["case2_coeffs"][ell, mp_idx, m_idx]
-    rho_min_1 = int(coeffs["rho_min_case1"][ell, mp_idx, m_idx].item())
-    rho_max_1 = int(coeffs["rho_max_case1"][ell, mp_idx, m_idx].item())
-    rho_min_2 = int(coeffs["rho_min_case2"][ell, mp_idx, m_idx].item())
-    rho_max_2 = int(coeffs["rho_max_case2"][ell, mp_idx, m_idx].item())
-
-    N = Ra.shape[0]
-    complex_dtype = Ra.dtype
-    device = Ra.device
-
-    result = torch.zeros(N, dtype=complex_dtype, device=device)
-
-    # Case masks
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
-    # For general cases, BOTH magnitudes must be significant to avoid gradient issues
-    # with torch.angle() at zero
-    use_case1 = (ra >= rb) & ~ra_small & ~rb_small  # General case, branch 1
-    use_case2 = (ra < rb) & ~ra_small & ~rb_small   # General case, branch 2
-
-    # ==========================================================================
-    # Case 1: |Ra| ≈ 0 (β ≈ π)
-    # Only anti-diagonal elements: D^ℓ_{-m,m} = (-1)^{ℓ-m} Rb^{2m}
-    # ==========================================================================
-    if mp == -m:
-        sign = (-1) ** (ell - m)
-        # Use safe Rb to avoid Rb^{negative} = NaN when Rb = 0
-        # This is safe because we only use the result when ra_small is True,
-        # which implies |Rb| ≈ 1 (since |Ra|^2 + |Rb|^2 = 1)
-        safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-        val = sign * torch.pow(safe_Rb, 2 * m)
-        result = torch.where(ra_small, val, result)
-
-    # ==========================================================================
-    # Case 2: |Rb| ≈ 0 (β ≈ 0)
-    # Only diagonal elements: D^ℓ_{m,m} = Ra^{2m}
-    # ==========================================================================
-    if mp == m:
-        # Use safe Ra to avoid Ra^{negative} = NaN when Ra = 0
-        # This is safe because we only use the result when rb_small & ~ra_small,
-        # which implies |Ra| ≈ 1
-        safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-        val = torch.pow(safe_Ra, 2 * m)
-        result = torch.where(rb_small & ~ra_small, val, result)
-
-    # ==========================================================================
-    # Case 3: |Ra| ≥ |Rb| (general case, branch 1)
-    # D = coeff · |Ra|^{2ℓ-2m} · Ra^{m'+m} · Rb^{m-m'} · Σ_ρ[...]
-    # ==========================================================================
-    if use_case1.any() and rho_min_1 <= rho_max_1:
-        # Ratio for Horner evaluation: r = -(|Rb|/|Ra|)²
-        safe_ra = torch.clamp(ra, min=EPSILON)
-        ratio = -(rb * rb) / (safe_ra * safe_ra)
-
-        # Horner evaluation of polynomial
-        horner_sum = torch.ones(N, dtype=Ra.real.dtype, device=device)
-        for rho in range(rho_max_1, rho_min_1, -1):
-            n1 = ell + mp - rho + 1
-            n2 = ell - m - rho + 1
-            d1 = rho
-            d2 = m - mp + rho
-            if d1 != 0 and d2 != 0:
-                factor = ratio * (n1 * n2) / (d1 * d2)
-                horner_sum = 1.0 + horner_sum * factor
-
-        # Magnitude: coeff · |Ra|^{2ℓ+m'-m-2ρ_min} · |Rb|^{m-m'+2ρ_min}
-        ra_exp = 2 * ell + mp - m - 2 * rho_min_1
-        rb_exp = m - mp + 2 * rho_min_1
-        magnitude = coeff1 * torch.pow(safe_ra, ra_exp) * torch.pow(rb, rb_exp)
-
-        # Sign factor: (-1)^{ρ_min}
-        sign = (-1) ** rho_min_1
-        magnitude = sign * magnitude
-
-        # Phase: (m'+m)·arg(Ra) + (m-m')·arg(Rb)
-        phia = torch.angle(Ra)
-        phib = torch.angle(Rb)
-        phase = (mp + m) * phia + (m - mp) * phib
-
-        # Combine: D = magnitude · Σ · exp(i·phase)
-        val = magnitude * horner_sum * torch.exp(1j * phase)
-        result = torch.where(use_case1, val, result)
-
-    # ==========================================================================
-    # Case 4: |Ra| < |Rb| (general case, branch 2)
-    # D = (-1)^{ℓ-m} · coeff · Ra^{m'+m} · Rb^{m-m'} · |Rb|^{2ℓ-2m} · Σ_ρ[...]
-    # ==========================================================================
-    if use_case2.any() and rho_min_2 <= rho_max_2:
-        # Ratio for Horner evaluation: r = -(|Ra|/|Rb|)²
-        safe_rb = torch.clamp(rb, min=EPSILON)
-        ratio = -(ra * ra) / (safe_rb * safe_rb)
-
-        # Horner evaluation
-        horner_sum = torch.ones(N, dtype=Ra.real.dtype, device=device)
-        for rho in range(rho_max_2, rho_min_2, -1):
-            n1 = ell - m - rho + 1
-            n2 = ell - mp - rho + 1
-            d1 = rho
-            d2 = mp + m + rho
-            if d1 != 0 and d2 != 0:
-                factor = ratio * (n1 * n2) / (d1 * d2)
-                horner_sum = 1.0 + horner_sum * factor
-
-        # Magnitude: coeff · |Ra|^{m'+m+2ρ_min} · |Rb|^{2ℓ-m'-m-2ρ_min}
-        ra_exp = mp + m + 2 * rho_min_2
-        rb_exp = 2 * ell - mp - m - 2 * rho_min_2
-        magnitude = coeff2 * torch.pow(ra, ra_exp) * torch.pow(safe_rb, rb_exp)
-
-        # Sign factor: (-1)^{ℓ-m} · (-1)^{ρ_min}
-        sign = ((-1) ** (ell - m)) * ((-1) ** rho_min_2)
-        magnitude = sign * magnitude
-
-        # Phase: (m'+m)·arg(Ra) + (m-m')·arg(Rb)
-        phia = torch.angle(Ra)
-        phib = torch.angle(Rb)
-        phase = (mp + m) * phia + (m - mp) * phib
-
-        # Combine
-        val = magnitude * horner_sum * torch.exp(1j * phase)
-        result = torch.where(use_case2, val, result)
-
-    return result
-
-
-def wigner_d_matrix_complex(
-    Ra: torch.Tensor,
-    Rb: torch.Tensor,
-    lmax: int,
-    coeffs: dict[str, torch.Tensor],
-) -> torch.Tensor:
-    """
-    Compute full complex Wigner D matrices for ℓ = 0, 1, ..., lmax.
-
-    Returns block-diagonal matrix where each block is the (2ℓ+1)×(2ℓ+1)
-    Wigner D matrix for that ℓ.
-
-    Args:
-        Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
-        lmax: Maximum angular momentum
-        coeffs: Precomputed coefficient dictionary
-
-    Returns:
-        Complex block-diagonal matrices of shape (N, size, size)
-        where size = (lmax+1)²
-    """
-    N = Ra.shape[0]
-    device = Ra.device
-    complex_dtype = Ra.dtype
-
-    size = (lmax + 1) ** 2
-    D = torch.zeros(N, size, size, dtype=complex_dtype, device=device)
-
-    block_start = 0
-    for ell in range(lmax + 1):
-        block_size = 2 * ell + 1
-
-        # Compute each element of the (2ℓ+1)×(2ℓ+1) block
-        for mp_local in range(block_size):
-            mp = mp_local - ell
-            for m_local in range(block_size):
-                m = m_local - ell
-
-                D[:, block_start + mp_local, block_start + m_local] = \
-                    wigner_d_element_complex(ell, mp, m, Ra, Rb, coeffs)
-
-        block_start += block_size
-
-    return D
-
-
-def _vectorized_horner(
-    ratio: torch.Tensor,
-    horner_coeffs: torch.Tensor,
-    poly_len: torch.Tensor,
-    max_poly_len: int,
-) -> torch.Tensor:
-    """
-    Vectorized Horner polynomial evaluation for all elements simultaneously.
-
-    Evaluates polynomials of varying lengths using masking.
-
-    Args:
-        ratio: The ratio term -(rb/ra)² or -(ra/rb)², shape (N,)
-        horner_coeffs: Horner factors, shape (n_elements, max_poly_len)
-        poly_len: Actual polynomial length per element, shape (n_elements,)
-        max_poly_len: Maximum polynomial length
-
-    Returns:
-        Polynomial values of shape (N, n_elements)
-    """
-    N = ratio.shape[0]
-    n_elements = horner_coeffs.shape[0]
-    device = ratio.device
-    dtype = ratio.dtype
-
-    # Initialize result: all elements start with 1.0
-    # Shape: (N, n_elements)
-    result = torch.ones(N, n_elements, dtype=dtype, device=device)
-
-    # ratio broadcasted to (N, n_elements)
-    ratio_expanded = ratio.unsqueeze(1).expand(N, n_elements)
-
-    # Iterate through Horner steps (from highest term down)
-    # poly_len-1 is the number of Horner steps needed
-    for i in range(max_poly_len - 1):
-        # Get coefficient for this step: (n_elements,)
-        coeff = horner_coeffs[:, i]
-
-        # Mask: only apply if i < poly_len - 1 (i.e., this step is needed)
-        # poly_len = rho_max - rho_min + 1, so we need poly_len - 1 Horner steps
-        mask = i < (poly_len - 1)  # (n_elements,)
-
-        # factor = ratio * coeff
-        factor = ratio_expanded * coeff.unsqueeze(0)  # (N, n_elements)
-
-        # result = 1.0 + result * factor, but only where mask is True
-        new_result = 1.0 + result * factor
-        result = torch.where(mask.unsqueeze(0), new_result, result)
-
-    return result
-
-
-def wigner_d_matrix_complex_vectorized(
-    Ra: torch.Tensor,
-    Rb: torch.Tensor,
-    coeffs_vec: dict[str, torch.Tensor],
-) -> torch.Tensor:
-    """
-    Compute full complex Wigner D matrices using vectorized operations.
-
-    This eliminates the triple nested loop over (ell, mp, m) by computing
-    all elements simultaneously using precomputed vectorized coefficients.
-
-    Args:
-        Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
-        coeffs_vec: Precomputed vectorized coefficient dictionary
-
-    Returns:
-        Complex block-diagonal matrices of shape (N, size, size)
-        where size = (lmax+1)²
-    """
-    N = Ra.shape[0]
-    device = Ra.device
-    complex_dtype = Ra.dtype
-    real_dtype = Ra.real.dtype
-
-    lmax = coeffs_vec["lmax"]
-    n_elements = coeffs_vec["n_elements"]
-    max_poly_len = coeffs_vec["max_poly_len"]
-    size = (lmax + 1) ** 2
-
-    # Extract precomputed arrays
-    row_indices = coeffs_vec["row_indices"]
-    col_indices = coeffs_vec["col_indices"]
-
-    case1_coeff = coeffs_vec["case1_coeff"]
-    case1_horner = coeffs_vec["case1_horner"]
-    case1_poly_len = coeffs_vec["case1_poly_len"]
-    case1_ra_exp = coeffs_vec["case1_ra_exp"]
-    case1_rb_exp = coeffs_vec["case1_rb_exp"]
-    case1_sign = coeffs_vec["case1_sign"]
-
-    case2_coeff = coeffs_vec["case2_coeff"]
-    case2_horner = coeffs_vec["case2_horner"]
-    case2_poly_len = coeffs_vec["case2_poly_len"]
-    case2_ra_exp = coeffs_vec["case2_ra_exp"]
-    case2_rb_exp = coeffs_vec["case2_rb_exp"]
-    case2_sign = coeffs_vec["case2_sign"]
-
-    mp_plus_m = coeffs_vec["mp_plus_m"]
-    m_minus_mp = coeffs_vec["m_minus_mp"]
-
-    diagonal_mask = coeffs_vec["diagonal_mask"]
-    anti_diagonal_mask = coeffs_vec["anti_diagonal_mask"]
-    special_2m = coeffs_vec["special_2m"]
-    anti_diag_sign = coeffs_vec["anti_diag_sign"]
-
-    # Compute magnitudes
-    ra = torch.abs(Ra)  # (N,)
-    rb = torch.abs(Rb)  # (N,)
-
-    # Case masks for each edge: (N,)
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
-    use_case1 = (ra >= rb) & ~ra_small & ~rb_small
-    use_case2 = (ra < rb) & ~ra_small & ~rb_small
-
-    # Initialize result: (N, n_elements)
-    result = torch.zeros(N, n_elements, dtype=complex_dtype, device=device)
-
-    # ==========================================================================
-    # Special Case 1: |Ra| ≈ 0 (β ≈ π) - anti-diagonal elements only
-    # D^ℓ_{-m,m} = (-1)^{ℓ-m} Rb^{2m}
-    # ==========================================================================
-    # Safe Rb for power computation
-    safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-
-    # Compute Rb^{2m} for all elements: (N, n_elements)
-    # special_2m: (n_elements,)
-    rb_power = torch.pow(safe_Rb.unsqueeze(1), special_2m.unsqueeze(0).to(dtype=complex_dtype))
-
-    # Apply sign: (n_elements,) -> (N, n_elements)
-    special_val_antidiag = anti_diag_sign.unsqueeze(0).to(complex_dtype) * rb_power
-
-    # Apply mask: only anti-diagonal elements and only where ra_small
-    mask_antidiag = ra_small.unsqueeze(1) & anti_diagonal_mask.unsqueeze(0)  # (N, n_elements)
-    result = torch.where(mask_antidiag, special_val_antidiag, result)
-
-    # ==========================================================================
-    # Special Case 2: |Rb| ≈ 0 (β ≈ 0) - diagonal elements only
-    # D^ℓ_{m,m} = Ra^{2m}
-    # ==========================================================================
-    safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-
-    # Compute Ra^{2m} for all elements: (N, n_elements)
-    ra_power = torch.pow(safe_Ra.unsqueeze(1), special_2m.unsqueeze(0).to(dtype=complex_dtype))
-
-    # Apply mask: only diagonal elements and only where rb_small & ~ra_small
-    mask_diag = (rb_small & ~ra_small).unsqueeze(1) & diagonal_mask.unsqueeze(0)
-    result = torch.where(mask_diag, ra_power, result)
-
-    # ==========================================================================
-    # General Case 1: |Ra| ≥ |Rb|
-    # ==========================================================================
-    # Safe magnitudes
-    safe_ra = torch.clamp(ra, min=EPSILON)  # (N,)
-
-    # Ratio: -(rb/ra)² for Horner evaluation
-    ratio1 = -(rb * rb) / (safe_ra * safe_ra)  # (N,)
-
-    # Vectorized Horner evaluation: (N, n_elements)
-    horner_sum1 = _vectorized_horner(ratio1, case1_horner, case1_poly_len, max_poly_len)
-
-    # Magnitude computation: coeff * ra^ra_exp * rb^rb_exp
-    # Broadcast and compute powers
-    ra_powers1 = torch.pow(
-        safe_ra.unsqueeze(1),
-        case1_ra_exp.unsqueeze(0).to(dtype=real_dtype)
-    )  # (N, n_elements)
-    rb_powers1 = torch.pow(
-        rb.unsqueeze(1),
-        case1_rb_exp.unsqueeze(0).to(dtype=real_dtype)
-    )  # (N, n_elements)
-
-    magnitude1 = case1_coeff.unsqueeze(0) * ra_powers1 * rb_powers1  # (N, n_elements)
-    magnitude1 = case1_sign.unsqueeze(0) * magnitude1
-
-    # Phase: (m'+m)*arg(Ra) + (m-m')*arg(Rb)
-    phia = torch.angle(Ra)  # (N,)
-    phib = torch.angle(Rb)  # (N,)
-    phase1 = (
-        mp_plus_m.unsqueeze(0).to(dtype=real_dtype) * phia.unsqueeze(1) +
-        m_minus_mp.unsqueeze(0).to(dtype=real_dtype) * phib.unsqueeze(1)
-    )  # (N, n_elements)
-
-    # Combine
-    val1 = magnitude1 * horner_sum1 * torch.exp(1j * phase1)  # (N, n_elements)
-
-    # Apply mask: only valid elements (case1_poly_len > 0) and use_case1 edges
-    valid_case1 = case1_poly_len > 0  # (n_elements,)
-    mask1 = use_case1.unsqueeze(1) & valid_case1.unsqueeze(0)
-    result = torch.where(mask1, val1, result)
-
-    # ==========================================================================
-    # General Case 2: |Ra| < |Rb|
-    # ==========================================================================
-    # Safe magnitudes
-    safe_rb = torch.clamp(rb, min=EPSILON)  # (N,)
-
-    # Ratio: -(ra/rb)² for Horner evaluation
-    ratio2 = -(ra * ra) / (safe_rb * safe_rb)  # (N,)
-
-    # Vectorized Horner evaluation: (N, n_elements)
-    horner_sum2 = _vectorized_horner(ratio2, case2_horner, case2_poly_len, max_poly_len)
-
-    # Magnitude computation
-    ra_powers2 = torch.pow(
-        ra.unsqueeze(1),
-        case2_ra_exp.unsqueeze(0).to(dtype=real_dtype)
-    )  # (N, n_elements)
-    rb_powers2 = torch.pow(
-        safe_rb.unsqueeze(1),
-        case2_rb_exp.unsqueeze(0).to(dtype=real_dtype)
-    )  # (N, n_elements)
-
-    magnitude2 = case2_coeff.unsqueeze(0) * ra_powers2 * rb_powers2  # (N, n_elements)
-    magnitude2 = case2_sign.unsqueeze(0) * magnitude2
-
-    # Phase (reuse phia, phib from case 1)
-    phase2 = (
-        mp_plus_m.unsqueeze(0).to(dtype=real_dtype) * phia.unsqueeze(1) +
-        m_minus_mp.unsqueeze(0).to(dtype=real_dtype) * phib.unsqueeze(1)
-    )  # (N, n_elements)
-
-    # Combine
-    val2 = magnitude2 * horner_sum2 * torch.exp(1j * phase2)  # (N, n_elements)
-
-    # Apply mask: only valid elements and use_case2 edges
-    valid_case2 = case2_poly_len > 0  # (n_elements,)
-    mask2 = use_case2.unsqueeze(1) & valid_case2.unsqueeze(0)
-    result = torch.where(mask2, val2, result)
-
-    # ==========================================================================
-    # Scatter results into output matrix
-    # ==========================================================================
-    D = torch.zeros(N, size, size, dtype=complex_dtype, device=device)
-
-    # Use advanced indexing to scatter results
-    # result: (N, n_elements)
-    # row_indices, col_indices: (n_elements,)
-    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, n_elements)
-    row_expanded = row_indices.unsqueeze(0).expand(N, n_elements)
-    col_expanded = col_indices.unsqueeze(0).expand(N, n_elements)
-
-    D[batch_indices, row_expanded, col_expanded] = result
-
-    return D
-
-
-def wigner_d_matrix_complex_vectorized_v2(
-    Ra: torch.Tensor,
-    Rb: torch.Tensor,
-    coeffs_vec: dict[str, torch.Tensor],
-) -> torch.Tensor:
-    """
-    Optimized vectorized complex Wigner D computation.
-
-    Improvements over v1:
-    - Assumes coefficients are pre-cast to match input dtype (use cast_coefficients_to_dtype)
-    - Computes phase only once (used by both cases)
-    - Single complex exponential computation
-
-    Args:
-        Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
-        coeffs_vec: Pre-cast vectorized coefficient dictionary
-
-    Returns:
-        Complex block-diagonal matrices of shape (N, size, size)
-    """
-    N = Ra.shape[0]
-    device = Ra.device
-    complex_dtype = Ra.dtype
-    real_dtype = Ra.real.dtype
-
-    lmax = coeffs_vec["lmax"]
-    n_elements = coeffs_vec["n_elements"]
-    max_poly_len = coeffs_vec["max_poly_len"]
-    size = (lmax + 1) ** 2
-
-    # Extract precomputed arrays (already cast to correct dtype)
-    row_indices = coeffs_vec["row_indices"]
-    col_indices = coeffs_vec["col_indices"]
-
-    case1_coeff = coeffs_vec["case1_coeff"]
-    case1_horner = coeffs_vec["case1_horner"]
-    case1_poly_len = coeffs_vec["case1_poly_len"]
-    case1_ra_exp = coeffs_vec["case1_ra_exp"]
-    case1_rb_exp = coeffs_vec["case1_rb_exp"]
-    case1_sign = coeffs_vec["case1_sign"]
-
-    case2_coeff = coeffs_vec["case2_coeff"]
-    case2_horner = coeffs_vec["case2_horner"]
-    case2_poly_len = coeffs_vec["case2_poly_len"]
-    case2_ra_exp = coeffs_vec["case2_ra_exp"]
-    case2_rb_exp = coeffs_vec["case2_rb_exp"]
-    case2_sign = coeffs_vec["case2_sign"]
-
-    mp_plus_m = coeffs_vec["mp_plus_m"]
-    m_minus_mp = coeffs_vec["m_minus_mp"]
-
-    diagonal_mask = coeffs_vec["diagonal_mask"]
-    anti_diagonal_mask = coeffs_vec["anti_diagonal_mask"]
-    special_2m = coeffs_vec["special_2m"]
-    anti_diag_sign = coeffs_vec["anti_diag_sign"]
-
-    # Compute magnitudes
-    ra = torch.abs(Ra)
-    rb = torch.abs(Rb)
-
-    # Case masks
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
-    use_case1 = (ra >= rb) & ~ra_small & ~rb_small
-    use_case2 = (ra < rb) & ~ra_small & ~rb_small
-
-    # Initialize result
-    result = torch.zeros(N, n_elements, dtype=complex_dtype, device=device)
-
-    # Phase computation (same for both cases) - compute once
-    phia = torch.angle(Ra)
-    phib = torch.angle(Rb)
-    phase = mp_plus_m.unsqueeze(0) * phia.unsqueeze(1) + m_minus_mp.unsqueeze(0) * phib.unsqueeze(1)
-    exp_phase = torch.exp(1j * phase)
-
-    # ==========================================================================
-    # Special Case 1: |Ra| ≈ 0 - anti-diagonal elements
-    # ==========================================================================
-    safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-    rb_power = torch.pow(safe_Rb.unsqueeze(1), special_2m.unsqueeze(0))
-    special_val_antidiag = anti_diag_sign.unsqueeze(0) * rb_power
-    mask_antidiag = ra_small.unsqueeze(1) & anti_diagonal_mask.unsqueeze(0)
-    result = torch.where(mask_antidiag, special_val_antidiag, result)
-
-    # ==========================================================================
-    # Special Case 2: |Rb| ≈ 0 - diagonal elements
-    # ==========================================================================
-    safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-    ra_power = torch.pow(safe_Ra.unsqueeze(1), special_2m.unsqueeze(0))
-    mask_diag = (rb_small & ~ra_small).unsqueeze(1) & diagonal_mask.unsqueeze(0)
-    result = torch.where(mask_diag, ra_power, result)
-
-    # ==========================================================================
-    # General Case 1: |Ra| >= |Rb|
-    # ==========================================================================
-    safe_ra = torch.clamp(ra, min=EPSILON)
-    ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-
-    horner_sum1 = _vectorized_horner(ratio1, case1_horner, case1_poly_len, max_poly_len)
-
-    ra_powers1 = torch.pow(safe_ra.unsqueeze(1), case1_ra_exp.unsqueeze(0))
-    rb_powers1 = torch.pow(rb.unsqueeze(1), case1_rb_exp.unsqueeze(0))
-
-    magnitude1 = (case1_sign * case1_coeff).unsqueeze(0) * ra_powers1 * rb_powers1
-    val1 = magnitude1 * horner_sum1 * exp_phase
-
-    valid_case1 = case1_poly_len > 0
-    mask1 = use_case1.unsqueeze(1) & valid_case1.unsqueeze(0)
-    result = torch.where(mask1, val1, result)
-
-    # ==========================================================================
-    # General Case 2: |Ra| < |Rb|
-    # ==========================================================================
-    safe_rb = torch.clamp(rb, min=EPSILON)
-    ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-
-    horner_sum2 = _vectorized_horner(ratio2, case2_horner, case2_poly_len, max_poly_len)
-
-    ra_powers2 = torch.pow(ra.unsqueeze(1), case2_ra_exp.unsqueeze(0))
-    rb_powers2 = torch.pow(safe_rb.unsqueeze(1), case2_rb_exp.unsqueeze(0))
-
-    magnitude2 = (case2_sign * case2_coeff).unsqueeze(0) * ra_powers2 * rb_powers2
-    val2 = magnitude2 * horner_sum2 * exp_phase
-
-    valid_case2 = case2_poly_len > 0
-    mask2 = use_case2.unsqueeze(1) & valid_case2.unsqueeze(0)
-    result = torch.where(mask2, val2, result)
-
-    # ==========================================================================
-    # Scatter results into output matrix
-    # ==========================================================================
-    D = torch.zeros(N, size, size, dtype=complex_dtype, device=device)
-
-    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, n_elements)
-    row_expanded = row_indices.unsqueeze(0).expand(N, n_elements)
-    col_expanded = col_indices.unsqueeze(0).expand(N, n_elements)
-
-    D[batch_indices, row_expanded, col_expanded] = result
-
-    return D
-
-
-def wigner_d_matrix_complex_vectorized_v3(
-    Ra: torch.Tensor,
-    Rb: torch.Tensor,
-    coeffs_vec: dict[str, torch.Tensor],
-) -> torch.Tensor:
-    """
-    Most optimized vectorized complex Wigner D computation.
-
-    Further optimizations over v2:
-    - Uses torch.outer for broadcasting
-    - Uses log-exp trick for power computation
-    - Minimal intermediate tensor creation
-
-    Args:
-        Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
-        coeffs_vec: Pre-cast vectorized coefficient dictionary
-
-    Returns:
-        Complex block-diagonal matrices of shape (N, size, size)
-    """
-    N = Ra.shape[0]
-    device = Ra.device
-    complex_dtype = Ra.dtype
-
-    lmax = coeffs_vec["lmax"]
-    n_elements = coeffs_vec["n_elements"]
-    max_poly_len = coeffs_vec["max_poly_len"]
-    size = (lmax + 1) ** 2
-
-    # Get all coefficients
-    row_indices = coeffs_vec["row_indices"]
-    col_indices = coeffs_vec["col_indices"]
-
-    case1_coeff = coeffs_vec["case1_coeff"]
-    case1_horner = coeffs_vec["case1_horner"]
-    case1_poly_len = coeffs_vec["case1_poly_len"]
-    case1_ra_exp = coeffs_vec["case1_ra_exp"]
-    case1_rb_exp = coeffs_vec["case1_rb_exp"]
-    case1_sign = coeffs_vec["case1_sign"]
-
-    case2_coeff = coeffs_vec["case2_coeff"]
-    case2_horner = coeffs_vec["case2_horner"]
-    case2_poly_len = coeffs_vec["case2_poly_len"]
-    case2_ra_exp = coeffs_vec["case2_ra_exp"]
-    case2_rb_exp = coeffs_vec["case2_rb_exp"]
-    case2_sign = coeffs_vec["case2_sign"]
-
-    mp_plus_m = coeffs_vec["mp_plus_m"]
-    m_minus_mp = coeffs_vec["m_minus_mp"]
-
-    diagonal_mask = coeffs_vec["diagonal_mask"]
-    anti_diagonal_mask = coeffs_vec["anti_diagonal_mask"]
-    special_2m = coeffs_vec["special_2m"]
-    anti_diag_sign = coeffs_vec["anti_diag_sign"]
-
-    # Compute magnitudes once
-    ra = torch.abs(Ra)
-    rb = torch.abs(Rb)
-
-    # Case masks
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
-    general_mask = ~ra_small & ~rb_small
-    use_case1 = (ra >= rb) & general_mask
-    use_case2 = (ra < rb) & general_mask
-
-    # Phase - compute once using torch.outer
-    phia = torch.angle(Ra)
-    phib = torch.angle(Rb)
-    phase = torch.outer(phia, mp_plus_m) + torch.outer(phib, m_minus_mp)
-    exp_phase = torch.exp(1j * phase)
-
-    # Safe magnitudes and their logs for power computation
-    safe_ra = torch.clamp(ra, min=EPSILON)
-    safe_rb = torch.clamp(rb, min=EPSILON)
-    log_ra = torch.log(safe_ra)
-    log_rb = torch.log(safe_rb)
-
-    # Initialize result
-    result = torch.zeros(N, n_elements, dtype=complex_dtype, device=device)
-
-    # ==========================================================================
-    # Special cases
-    # ==========================================================================
-    safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-    rb_power = torch.pow(safe_Rb.unsqueeze(1), special_2m.unsqueeze(0))
-    special_val_antidiag = anti_diag_sign * rb_power
-    mask_antidiag = ra_small.unsqueeze(1) & anti_diagonal_mask
-    result = torch.where(mask_antidiag, special_val_antidiag, result)
-
-    safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-    ra_power = torch.pow(safe_Ra.unsqueeze(1), special_2m.unsqueeze(0))
-    mask_diag = (rb_small & ~ra_small).unsqueeze(1) & diagonal_mask
-    result = torch.where(mask_diag, ra_power, result)
-
-    # ==========================================================================
-    # General Case 1: |Ra| >= |Rb|
-    # ==========================================================================
-    ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    horner_sum1 = _vectorized_horner(ratio1, case1_horner, case1_poly_len, max_poly_len)
-
-    # Power computation using log-exp trick with torch.outer
-    ra_powers1 = torch.exp(torch.outer(log_ra, case1_ra_exp))
-    rb_powers1 = torch.exp(torch.outer(log_rb, case1_rb_exp))
-
-    signed_coeff1 = case1_sign * case1_coeff
-    magnitude1 = signed_coeff1 * ra_powers1 * rb_powers1
-    val1 = magnitude1 * horner_sum1 * exp_phase
-
-    valid_case1 = case1_poly_len > 0
-    mask1 = use_case1.unsqueeze(1) & valid_case1
-    result = torch.where(mask1, val1, result)
-
-    # ==========================================================================
-    # General Case 2: |Ra| < |Rb|
-    # ==========================================================================
-    ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    horner_sum2 = _vectorized_horner(ratio2, case2_horner, case2_poly_len, max_poly_len)
-
-    ra_powers2 = torch.exp(torch.outer(log_ra, case2_ra_exp))
-    rb_powers2 = torch.exp(torch.outer(log_rb, case2_rb_exp))
-
-    signed_coeff2 = case2_sign * case2_coeff
-    magnitude2 = signed_coeff2 * ra_powers2 * rb_powers2
-    val2 = magnitude2 * horner_sum2 * exp_phase
-
-    valid_case2 = case2_poly_len > 0
-    mask2 = use_case2.unsqueeze(1) & valid_case2
-    result = torch.where(mask2, val2, result)
-
-    # ==========================================================================
-    # Scatter
-    # ==========================================================================
-    D = torch.zeros(N, size, size, dtype=complex_dtype, device=device)
-    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, n_elements)
-    row_expanded = row_indices.unsqueeze(0).expand(N, n_elements)
-    col_expanded = col_indices.unsqueeze(0).expand(N, n_elements)
-    D[batch_indices, row_expanded, col_expanded] = result
-
-    return D
-
-
-def compute_wigner_d_from_quaternion_vectorized(
-    q: torch.Tensor,
-    coeffs_vec: dict[str, torch.Tensor],
-    U: torch.Tensor,
-) -> torch.Tensor:
-    """
-    Compute real Wigner D matrices from quaternions using vectorized operations.
-
-    This is the vectorized version of compute_wigner_d_from_quaternion that
-    eliminates Python loops over matrix elements.
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-        coeffs_vec: Precomputed vectorized Wigner coefficients
-        U: Precomputed complex-to-real transformation matrix
-
-    Returns:
-        Real block-diagonal Wigner D matrices of shape (N, size, size)
-        where size = (lmax+1)²
-    """
-    Ra, Rb = quaternion_to_ra_rb(q)
-    D_complex = wigner_d_matrix_complex_vectorized(Ra, Rb, coeffs_vec)
-    D_real = wigner_d_complex_to_real(D_complex, U)
-    return D_real
-
-
-def get_wigner_from_edge_vectors_vectorized(
-    edge_distance_vec: torch.Tensor,
-    coeffs_vec: dict[str, torch.Tensor],
-    U: torch.Tensor,
-    gamma: Optional[torch.Tensor] = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Complete pipeline: edge vectors → real Wigner D matrices (vectorized).
-
-    This is the vectorized drop-in replacement for get_wigner_from_edge_vectors.
-
-    Args:
-        edge_distance_vec: Edge distance vectors of shape (N, 3)
-        coeffs_vec: Precomputed vectorized Wigner coefficients
-        U: Precomputed complex-to-real transformation matrix
-        gamma: Optional rotation angles around edge axis, shape (N,).
-               If None, random angles in [0, 2π) are generated.
-
-    Returns:
-        Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
-        and size = (lmax+1)²
-    """
-    q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
-    wigner = compute_wigner_d_from_quaternion_vectorized(q, coeffs_vec, U)
-
-    # The quaternion computes +y → edge, but we want edge → +y
-    # So we swap: return the transpose as wigner (edge → +y)
-    wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
-
-    return wigner_inv, wigner
-
-
-# =============================================================================
-# Symmetry-Exploiting Vectorized Implementation
-# =============================================================================
-#
-# Exploits the conjugate symmetry:
-#   D^ℓ_{-m',-m} = (-1)^{m'-m} × conj(D^ℓ_{m',m})
-#
-# This reduces computation by ~2x by only computing "primary" elements
-# and deriving the rest via conjugation.
 
 
 def precompute_wigner_coefficients_symmetric(
@@ -1559,7 +478,12 @@ def precompute_wigner_coefficients_symmetric(
     }
 
 
-def wigner_d_matrix_complex_symmetric(
+# =============================================================================
+# Complex Wigner D Matrix Computation
+# =============================================================================
+
+
+def wigner_d_matrix_complex(
     Ra: torch.Tensor,
     Rb: torch.Tensor,
     coeffs_sym: dict[str, torch.Tensor],
@@ -1569,6 +493,8 @@ def wigner_d_matrix_complex_symmetric(
 
     Computes only primary elements (~half) and derives the rest via:
         D^ℓ_{-m',-m} = (-1)^{m'-m} × conj(D^ℓ_{m',m})
+
+    Uses optimized vectorized operations with torch.outer and log-exp trick.
 
     Args:
         Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
@@ -1625,8 +551,21 @@ def wigner_d_matrix_complex_symmetric(
     # Case masks
     ra_small = ra <= EPSILON
     rb_small = rb <= EPSILON
-    use_case1 = (ra >= rb) & ~ra_small & ~rb_small
-    use_case2 = (ra < rb) & ~ra_small & ~rb_small
+    general_mask = ~ra_small & ~rb_small
+    use_case1 = (ra >= rb) & general_mask
+    use_case2 = (ra < rb) & general_mask
+
+    # Phase - compute once using torch.outer
+    phia = torch.angle(Ra)
+    phib = torch.angle(Rb)
+    phase = torch.outer(phia, mp_plus_m.to(dtype=real_dtype)) + torch.outer(phib, m_minus_mp.to(dtype=real_dtype))
+    exp_phase = torch.exp(1j * phase)
+
+    # Safe magnitudes and their logs for power computation
+    safe_ra = torch.clamp(ra, min=EPSILON)
+    safe_rb = torch.clamp(rb, min=EPSILON)
+    log_ra = torch.log(safe_ra)
+    log_rb = torch.log(safe_rb)
 
     # Initialize primary results: (N, n_primary)
     result = torch.zeros(N, n_primary, dtype=complex_dtype, device=device)
@@ -1651,25 +590,16 @@ def wigner_d_matrix_complex_symmetric(
     # ==========================================================================
     # General Case 1: |Ra| >= |Rb|
     # ==========================================================================
-    safe_ra = torch.clamp(ra, min=EPSILON)
     ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-
     horner_sum1 = _vectorized_horner(ratio1, case1_horner.to(dtype=real_dtype), case1_poly_len, max_poly_len)
 
-    ra_powers1 = torch.pow(safe_ra.unsqueeze(1), case1_ra_exp.unsqueeze(0).to(dtype=real_dtype))
-    rb_powers1 = torch.pow(rb.unsqueeze(1), case1_rb_exp.unsqueeze(0).to(dtype=real_dtype))
+    # Power computation using log-exp trick with torch.outer
+    ra_powers1 = torch.exp(torch.outer(log_ra, case1_ra_exp.to(dtype=real_dtype)))
+    rb_powers1 = torch.exp(torch.outer(log_rb, case1_rb_exp.to(dtype=real_dtype)))
 
-    magnitude1 = case1_coeff.unsqueeze(0).to(dtype=real_dtype) * ra_powers1 * rb_powers1
-    magnitude1 = case1_sign.unsqueeze(0).to(dtype=real_dtype) * magnitude1
-
-    phia = torch.angle(Ra)
-    phib = torch.angle(Rb)
-    phase1 = (
-        mp_plus_m.unsqueeze(0).to(dtype=real_dtype) * phia.unsqueeze(1) +
-        m_minus_mp.unsqueeze(0).to(dtype=real_dtype) * phib.unsqueeze(1)
-    )
-
-    val1 = magnitude1 * horner_sum1 * torch.exp(1j * phase1)
+    signed_coeff1 = case1_sign.to(dtype=real_dtype) * case1_coeff.to(dtype=real_dtype)
+    magnitude1 = signed_coeff1 * ra_powers1 * rb_powers1
+    val1 = magnitude1 * horner_sum1 * exp_phase
 
     valid_case1 = case1_poly_len > 0
     mask1 = use_case1.unsqueeze(1) & valid_case1.unsqueeze(0)
@@ -1678,23 +608,15 @@ def wigner_d_matrix_complex_symmetric(
     # ==========================================================================
     # General Case 2: |Ra| < |Rb|
     # ==========================================================================
-    safe_rb = torch.clamp(rb, min=EPSILON)
     ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-
     horner_sum2 = _vectorized_horner(ratio2, case2_horner.to(dtype=real_dtype), case2_poly_len, max_poly_len)
 
-    ra_powers2 = torch.pow(ra.unsqueeze(1), case2_ra_exp.unsqueeze(0).to(dtype=real_dtype))
-    rb_powers2 = torch.pow(safe_rb.unsqueeze(1), case2_rb_exp.unsqueeze(0).to(dtype=real_dtype))
+    ra_powers2 = torch.exp(torch.outer(log_ra, case2_ra_exp.to(dtype=real_dtype)))
+    rb_powers2 = torch.exp(torch.outer(log_rb, case2_rb_exp.to(dtype=real_dtype)))
 
-    magnitude2 = case2_coeff.unsqueeze(0).to(dtype=real_dtype) * ra_powers2 * rb_powers2
-    magnitude2 = case2_sign.unsqueeze(0).to(dtype=real_dtype) * magnitude2
-
-    phase2 = (
-        mp_plus_m.unsqueeze(0).to(dtype=real_dtype) * phia.unsqueeze(1) +
-        m_minus_mp.unsqueeze(0).to(dtype=real_dtype) * phib.unsqueeze(1)
-    )
-
-    val2 = magnitude2 * horner_sum2 * torch.exp(1j * phase2)
+    signed_coeff2 = case2_sign.to(dtype=real_dtype) * case2_coeff.to(dtype=real_dtype)
+    magnitude2 = signed_coeff2 * ra_powers2 * rb_powers2
+    val2 = magnitude2 * horner_sum2 * exp_phase
 
     valid_case2 = case2_poly_len > 0
     mask2 = use_case2.unsqueeze(1) & valid_case2.unsqueeze(0)
@@ -1733,108 +655,101 @@ def wigner_d_matrix_complex_symmetric(
     return D
 
 
-def compute_wigner_d_from_quaternion_symmetric(
-    q: torch.Tensor,
-    coeffs_sym: dict[str, torch.Tensor],
-    U: torch.Tensor,
-) -> torch.Tensor:
-    """
-    Compute real Wigner D matrices using symmetry-exploiting algorithm.
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-        coeffs_sym: Precomputed symmetric Wigner coefficients
-        U: Precomputed complex-to-real transformation matrix
-
-    Returns:
-        Real block-diagonal Wigner D matrices of shape (N, size, size)
-    """
-    Ra, Rb = quaternion_to_ra_rb(q)
-    D_complex = wigner_d_matrix_complex_symmetric(Ra, Rb, coeffs_sym)
-    D_real = wigner_d_complex_to_real(D_complex, U)
-    return D_real
-
-
-def get_wigner_from_edge_vectors_symmetric(
-    edge_distance_vec: torch.Tensor,
-    coeffs_sym: dict[str, torch.Tensor],
-    U: torch.Tensor,
-    gamma: Optional[torch.Tensor] = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Edge vectors → Wigner D matrices using symmetry exploitation.
-
-    Args:
-        edge_distance_vec: Edge distance vectors of shape (N, 3)
-        coeffs_sym: Precomputed symmetric Wigner coefficients
-        U: Precomputed complex-to-real transformation matrix
-        gamma: Optional rotation angles around edge axis, shape (N,).
-
-    Returns:
-        Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
-    """
-    q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
-    wigner = compute_wigner_d_from_quaternion_symmetric(q, coeffs_sym, U)
-    wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
-    return wigner_inv, wigner
-
-
-def compute_wigner_d_from_quaternion_fast(
-    q: torch.Tensor,
-    coeffs_sym: dict[str, torch.Tensor],
-    U_blocks: list[torch.Tensor],
-) -> torch.Tensor:
-    """
-    Compute real Wigner D matrices using optimized symmetric algorithm.
-
-    Uses blockwise complex-to-real transformation for better performance.
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-        coeffs_sym: Precomputed symmetric Wigner coefficients
-        U_blocks: Precomputed U blocks for each ell
-
-    Returns:
-        Real block-diagonal Wigner D matrices of shape (N, size, size)
-    """
-    lmax = coeffs_sym["lmax"]
-    Ra, Rb = quaternion_to_ra_rb(q)
-    D_complex = wigner_d_matrix_complex_symmetric(Ra, Rb, coeffs_sym)
-    D_real = wigner_d_complex_to_real_blockwise(D_complex, U_blocks, lmax)
-    return D_real
-
-
-def get_wigner_from_edge_vectors_fast(
-    edge_distance_vec: torch.Tensor,
-    coeffs_sym: dict[str, torch.Tensor],
-    U_blocks: list[torch.Tensor],
-    gamma: Optional[torch.Tensor] = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Edge vectors → Wigner D matrices using fully optimized algorithm.
-
-    This is the fastest quaternion-based implementation, using:
-    - Symmetric coefficients (compute only ~50% of elements)
-    - Blockwise complex-to-real transformation
-
-    Args:
-        edge_distance_vec: Edge distance vectors of shape (N, 3)
-        coeffs_sym: Precomputed symmetric Wigner coefficients
-        U_blocks: Precomputed U blocks for each ell
-        gamma: Optional rotation angles around edge axis, shape (N,).
-
-    Returns:
-        Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
-    """
-    q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
-    wigner = compute_wigner_d_from_quaternion_fast(q, coeffs_sym, U_blocks)
-    wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
-    return wigner_inv, wigner
-
-
 # =============================================================================
 # Complex to Real Spherical Harmonics Transformation
 # =============================================================================
+
+
+def _build_u_block(
+    ell: int,
+    dtype: torch.dtype,
+    device: torch.device,
+    convention: str = "fairchem",
+) -> torch.Tensor:
+    """
+    Build U transformation matrix for a single ell block.
+
+    Args:
+        ell: Angular momentum quantum number
+        dtype: Complex data type for the matrix
+        device: Device for the tensor
+        convention: Either "e3nn" (m = -l to +l) or "fairchem" (m = +1, -1, 0 for l=1)
+
+    Returns:
+        U matrix of shape (2*ell+1, 2*ell+1)
+    """
+    block_size = 2 * ell + 1
+    sqrt2_inv = 1.0 / math.sqrt(2.0)
+
+    U_ell = torch.zeros(block_size, block_size, dtype=dtype, device=device)
+
+    # fairchem l=1 uses different m-ordering: (m=+1, m=-1, m=0) -> (x, y, z)
+    if convention == "fairchem" and ell == 1:
+        # Row 0: m=+1 (x-direction)
+        # Y^{+1}(real) = (1/√2)[(-1)^1 Y^{+1} + Y^{-1}] = (1/√2)[-Y^{+1} + Y^{-1}]
+        U_ell[0, 2] = -sqrt2_inv  # Y^{+1}(complex) at col 2
+        U_ell[0, 0] = sqrt2_inv   # Y^{-1}(complex) at col 0
+
+        # Row 1: m=-1 (y-direction, the polar axis)
+        # Y^{-1}(real) = (i/√2)[Y^{+1} - (-1)^1 Y^{-1}] = (i/√2)[Y^{+1} + Y^{-1}]
+        U_ell[1, 0] = 1j * sqrt2_inv   # Y^{-1}(complex)
+        U_ell[1, 2] = 1j * sqrt2_inv   # Y^{+1}(complex)
+
+        # Row 2: m=0 (z-direction)
+        U_ell[2, 1] = 1.0
+    else:
+        # e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell)
+        for m in range(-ell, ell + 1):
+            row = m + ell  # Real harmonic index within block
+
+            if m > 0:
+                col_pos = m + ell
+                col_neg = -m + ell
+                sign = (-1) ** m
+                U_ell[row, col_pos] = sign * sqrt2_inv
+                U_ell[row, col_neg] = sqrt2_inv
+            elif m == 0:
+                col = ell
+                U_ell[row, col] = 1.0
+            else:  # m < 0
+                abs_m = abs(m)
+                col_pos = abs_m + ell
+                col_neg = -abs_m + ell
+                sign = (-1) ** abs_m
+                U_ell[row, col_neg] = 1j * sqrt2_inv
+                U_ell[row, col_pos] = -sign * 1j * sqrt2_inv
+
+    return U_ell
+
+
+def precompute_U_blocks(
+    lmax: int,
+    dtype: torch.dtype = torch.float64,
+    device: torch.device = torch.device("cpu"),
+    convention: str = "fairchem",
+) -> list[torch.Tensor]:
+    """
+    Precompute U transformation matrices for each ell block.
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Real dtype (float32 or float64) - will use corresponding complex type
+        device: Torch device
+        convention: "fairchem" (default) or "e3nn" for m-ordering convention
+
+    Returns:
+        List of U matrices where U_blocks[ell] has shape (2*ell+1, 2*ell+1)
+    """
+    # Convert real dtype to complex dtype
+    if dtype == torch.float32:
+        complex_dtype = torch.complex64
+    elif dtype == torch.float64:
+        complex_dtype = torch.complex128
+    else:
+        # If already complex, use as-is
+        complex_dtype = dtype
+
+    return [_build_u_block(ell, complex_dtype, device, convention) for ell in range(lmax + 1)]
 
 
 def precompute_complex_to_real_matrix(
@@ -1861,61 +776,8 @@ def precompute_complex_to_real_matrix(
     Returns:
         Block-diagonal unitary matrix of shape (size, size) where size = (lmax+1)²
     """
-    size = (lmax + 1) ** 2
-    U = torch.zeros(size, size, dtype=dtype, device=device)
-
-    sqrt2_inv = 1.0 / math.sqrt(2.0)
-
-    block_start = 0
-    for ell in range(lmax + 1):
-        block_size = 2 * ell + 1
-
-        if convention == "fairchem" and ell == 1:
-            # fairchem l=1 ordering: (m=+1, m=-1, m=0) at indices (0, 1, 2)
-            # This corresponds to Cartesian (x, y, z) with y as polar axis
-
-            # Row 0: m=+1 (x-direction)
-            # Y^{+1}(real) = (1/√2)[(-1)^1 Y^{+1} + Y^{-1}] = (1/√2)[-Y^{+1} + Y^{-1}]
-            U[block_start + 0, block_start + 2] = -sqrt2_inv  # Y^{+1}(complex) at col 2
-            U[block_start + 0, block_start + 0] = sqrt2_inv   # Y^{-1}(complex) at col 0
-
-            # Row 1: m=-1 (y-direction, the polar axis)
-            # Y^{-1}(real) = (i/√2)[Y^{+1} - (-1)^1 Y^{-1}] = (i/√2)[Y^{+1} + Y^{-1}]
-            U[block_start + 1, block_start + 0] = 1j * sqrt2_inv   # Y^{-1}(complex)
-            U[block_start + 1, block_start + 2] = 1j * sqrt2_inv   # Y^{+1}(complex)
-
-            # Row 2: m=0 (z-direction)
-            U[block_start + 2, block_start + 1] = 1.0
-        else:
-            # e3nn ordering: m = -l, ..., +l
-            for m in range(-ell, ell + 1):
-                row = block_start + (m + ell)  # Real harmonic index
-
-                if m > 0:
-                    # Y^m(real) = (1/√2) · [(-1)^m · Y^m(complex) + Y^{-m}(complex)]
-                    col_pos = block_start + (m + ell)   # Y^m(complex)
-                    col_neg = block_start + (-m + ell)  # Y^{-m}(complex)
-                    sign = (-1) ** m
-                    U[row, col_pos] = sign * sqrt2_inv
-                    U[row, col_neg] = sqrt2_inv
-
-                elif m == 0:
-                    # Y^0(real) = Y^0(complex)
-                    col = block_start + ell
-                    U[row, col] = 1.0
-
-                else:  # m < 0
-                    # Y^m(real) = (i/√2) · [Y^{-|m|}(complex) - (-1)^{|m|} · Y^{|m|}(complex)]
-                    abs_m = abs(m)
-                    col_pos = block_start + (abs_m + ell)   # Y^{|m|}(complex)
-                    col_neg = block_start + (-abs_m + ell)  # Y^{-|m|}(complex)
-                    sign = (-1) ** abs_m
-                    U[row, col_neg] = 1j * sqrt2_inv
-                    U[row, col_pos] = -sign * 1j * sqrt2_inv
-
-        block_start += block_size
-
-    return U
+    blocks = precompute_U_blocks(lmax, dtype, device, convention)
+    return torch.block_diag(*blocks)
 
 
 def wigner_d_complex_to_real(
@@ -1999,143 +861,65 @@ def wigner_d_complex_to_real_blockwise(
     return D_real
 
 
-def precompute_U_blocks(
-    lmax: int,
-    dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
-    convention: str = "fairchem",
-) -> list[torch.Tensor]:
-    """
-    Precompute U transformation matrices for each ell block.
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Real dtype (float32 or float64) - will use corresponding complex type
-        device: Torch device
-        convention: "fairchem" (default) or "e3nn" for m-ordering convention
-
-    Returns:
-        List of U matrices where U_blocks[ell] has shape (2*ell+1, 2*ell+1)
-    """
-    # Convert real dtype to complex dtype
-    if dtype == torch.float32:
-        complex_dtype = torch.complex64
-    elif dtype == torch.float64:
-        complex_dtype = torch.complex128
-    else:
-        # If already complex, use as-is
-        complex_dtype = dtype
-
-    sqrt2_inv = 1.0 / math.sqrt(2.0)
-
-    U_blocks = []
-    for ell in range(lmax + 1):
-        block_size = 2 * ell + 1
-        U_ell = torch.zeros(block_size, block_size, dtype=complex_dtype, device=device)
-
-        # fairchem l=1 uses different m-ordering: (m=+1, m=-1, m=0) -> (x, y, z)
-        if convention == "fairchem" and ell == 1:
-            # Row 0: m=+1 (x-direction)
-            U_ell[0, 2] = -sqrt2_inv  # col for m=+1 in complex basis
-            U_ell[0, 0] = sqrt2_inv   # col for m=-1 in complex basis
-            # Row 1: m=-1 (y-direction, the polar axis)
-            U_ell[1, 0] = 1j * sqrt2_inv
-            U_ell[1, 2] = 1j * sqrt2_inv
-            # Row 2: m=0 (z-direction)
-            U_ell[2, 1] = 1.0
-        else:
-            # e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell)
-            for m in range(-ell, ell + 1):
-                row = m + ell  # Real harmonic index within block
-
-                if m > 0:
-                    col_pos = m + ell
-                    col_neg = -m + ell
-                    sign = (-1) ** m
-                    U_ell[row, col_pos] = sign * sqrt2_inv
-                    U_ell[row, col_neg] = sqrt2_inv
-                elif m == 0:
-                    col = ell
-                    U_ell[row, col] = 1.0
-                else:  # m < 0
-                    abs_m = abs(m)
-                    col_pos = abs_m + ell
-                    col_neg = -abs_m + ell
-                    sign = (-1) ** abs_m
-                    U_ell[row, col_neg] = 1j * sqrt2_inv
-                    U_ell[row, col_pos] = -sign * 1j * sqrt2_inv
-
-        U_blocks.append(U_ell)
-
-    return U_blocks
-
-
 # =============================================================================
-# Main Entry Point
+# Main Pipeline Functions
 # =============================================================================
 
 
 def compute_wigner_d_from_quaternion(
     q: torch.Tensor,
-    lmax: int,
-    coeffs: dict[str, torch.Tensor],
-    U: torch.Tensor,
+    coeffs_sym: dict[str, torch.Tensor],
+    U_blocks: list[torch.Tensor],
 ) -> torch.Tensor:
     """
     Compute real Wigner D matrices from quaternions.
 
-    This is the main entry point that:
-    1. Decomposes quaternion into Ra/Rb
-    2. Computes complex Wigner D matrices
-    3. Transforms to real spherical harmonics basis
+    Uses optimized symmetric algorithm with blockwise complex-to-real transformation.
 
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-        lmax: Maximum angular momentum
-        coeffs: Precomputed Wigner coefficients
-        U: Precomputed complex-to-real transformation matrix
+        coeffs_sym: Precomputed symmetric Wigner coefficients
+        U_blocks: Precomputed U blocks for each ell
 
     Returns:
         Real block-diagonal Wigner D matrices of shape (N, size, size)
         where size = (lmax+1)²
     """
+    lmax = coeffs_sym["lmax"]
     Ra, Rb = quaternion_to_ra_rb(q)
-    D_complex = wigner_d_matrix_complex(Ra, Rb, lmax, coeffs)
-    D_real = wigner_d_complex_to_real(D_complex, U)
+    D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs_sym)
+    D_real = wigner_d_complex_to_real_blockwise(D_complex, U_blocks, lmax)
     return D_real
 
 
 def get_wigner_from_edge_vectors(
     edge_distance_vec: torch.Tensor,
-    lmax: int,
-    coeffs: dict[str, torch.Tensor],
-    U: torch.Tensor,
+    coeffs_sym: dict[str, torch.Tensor],
+    U_blocks: list[torch.Tensor],
     gamma: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Complete pipeline: edge vectors → real Wigner D matrices.
 
-    This is the drop-in replacement for the Euler angle-based pipeline.
+    This is the optimized quaternion-based implementation, using:
+    - Symmetric coefficients (compute only ~50% of elements)
+    - Blockwise complex-to-real transformation
 
     Args:
         edge_distance_vec: Edge distance vectors of shape (N, 3)
-        lmax: Maximum angular momentum
-        coeffs: Precomputed Wigner coefficients
-        U: Precomputed complex-to-real transformation matrix
+        coeffs_sym: Precomputed symmetric Wigner coefficients
+        U_blocks: Precomputed U blocks for each ell
         gamma: Optional rotation angles around edge axis, shape (N,).
                If None, random angles in [0, 2π) are generated.
 
     Returns:
         Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
-        and size = (lmax+1)²
+        and size = (lmax+1)². wigner rotates from edge frame to lab frame,
+        wigner_inv rotates from lab frame to edge frame.
     """
     q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
-    wigner = compute_wigner_d_from_quaternion(q, lmax, coeffs, U)
-
-    # The quaternion computes +y → edge, but we want edge → +y
-    # So we swap: return the transpose as wigner (edge → +y)
+    wigner = compute_wigner_d_from_quaternion(q, coeffs_sym, U_blocks)
     wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
-
     return wigner_inv, wigner
 
 
@@ -2187,7 +971,6 @@ def get_wigner_coefficients(
     lmax: int,
     dtype: torch.dtype = torch.float64,
     device: torch.device = torch.device("cpu"),
-    variant: str = "vectorized",
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
 ) -> dict[str, torch.Tensor]:
@@ -2203,17 +986,13 @@ def get_wigner_coefficients(
         lmax: Maximum angular momentum
         dtype: Data type for coefficients
         device: Device for tensors
-        variant: Which coefficient variant to use:
-            - "original": Basic precomputation (for element-by-element computation)
-            - "vectorized": Flattened tensors for vectorized computation
-            - "symmetric": Symmetry-exploiting coefficients (~50% fewer elements)
         cache_dir: Directory for cache files (default: ~/.cache/fairchem/wigner_coeffs)
         use_cache: Whether to use disk caching (default: True)
 
     Returns:
         Dictionary with precomputed coefficient tensors
     """
-    cache_path = _get_cache_path(lmax, variant, cache_dir)
+    cache_path = _get_cache_path(lmax, "symmetric", cache_dir)
 
     # Try to load from cache
     if use_cache:
@@ -2230,14 +1009,7 @@ def get_wigner_coefficients(
                 return coeffs
 
     # Compute coefficients
-    if variant == "original":
-        coeffs = precompute_wigner_coefficients(lmax, dtype, device)
-    elif variant == "vectorized":
-        coeffs = precompute_wigner_coefficients_vectorized(lmax, dtype, device)
-    elif variant == "symmetric":
-        coeffs = precompute_wigner_coefficients_symmetric(lmax, dtype, device)
-    else:
-        raise ValueError(f"Unknown variant: {variant}. Use 'original', 'vectorized', or 'symmetric'.")
+    coeffs = precompute_wigner_coefficients_symmetric(lmax, dtype, device)
 
     # Save to cache
     if use_cache:
@@ -2300,13 +1072,12 @@ def precompute_all_wigner_tables(
     lmax: int,
     dtype: torch.dtype = torch.float64,
     device: torch.device = torch.device("cpu"),
-    variant: str = "symmetric",
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
     convention: str = "fairchem",
-) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
+) -> tuple[dict[str, torch.Tensor], list[torch.Tensor]]:
     """
-    Convenience function to get both coefficient tables and U matrix.
+    Convenience function to get both coefficient tables and U blocks.
 
     This is the recommended single entry point for initialization.
 
@@ -2314,26 +1085,22 @@ def precompute_all_wigner_tables(
         lmax: Maximum angular momentum
         dtype: Data type for real coefficients
         device: Device for tensors
-        variant: Coefficient variant ("original", "vectorized", or "symmetric")
         cache_dir: Directory for cache files
         use_cache: Whether to use disk caching
         convention: Either "e3nn" or "fairchem" (default). Use "fairchem" to match
                    the rotation.py convention used in the rest of fairchem.
 
     Returns:
-        Tuple of (coeffs, U) ready for use with the corresponding get_wigner_from_edge_vectors_* function
+        Tuple of (coeffs, U_blocks) ready for use with get_wigner_from_edge_vectors
 
     Example:
-        >>> coeffs, U = precompute_all_wigner_tables(lmax=6)
-        >>> wigner, wigner_inv = get_wigner_from_edge_vectors_symmetric(edges, coeffs, U)
+        >>> coeffs, U_blocks = precompute_all_wigner_tables(lmax=6)
+        >>> wigner, wigner_inv = get_wigner_from_edge_vectors(edges, coeffs, U_blocks)
     """
-    coeffs = get_wigner_coefficients(lmax, dtype, device, variant, cache_dir, use_cache)
+    coeffs = get_wigner_coefficients(lmax, dtype, device, cache_dir, use_cache)
+    U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device, convention=convention)
 
-    # U matrix uses complex128 for precision
-    complex_dtype = torch.complex128 if dtype == torch.float64 else torch.complex64
-    U = get_complex_to_real_matrix(lmax, complex_dtype, device, cache_dir, use_cache, convention)
-
-    return coeffs, U
+    return coeffs, U_blocks
 
 
 def clear_wigner_cache(cache_dir: Optional[Path] = None) -> int:
@@ -2419,7 +1186,6 @@ def quaternion_wigner(
 
     coeffs, U_blocks = _get_cached_coefficients(lmax, dtype, device)
 
-    return get_wigner_from_edge_vectors_fast(
+    return get_wigner_from_edge_vectors(
         edge_distance_vec, coeffs, U_blocks, gamma=gamma
     )
-
