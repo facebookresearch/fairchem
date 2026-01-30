@@ -76,6 +76,7 @@ def cleanup_ray():
 
 @pytest.fixture()
 def inference_batcher(uma_predict_unit):
+    setup_ray()
     batcher = InferenceBatcher(
         predict_unit=uma_predict_unit,
         max_batch_size=8,
@@ -83,6 +84,7 @@ def inference_batcher(uma_predict_unit):
         num_replicas=1,
         concurrency_backend="threads",
         concurrency_backend_options={"max_workers": 4},
+        ray_address="auto",  # Use external Ray cluster
     )
 
     yield batcher
@@ -342,6 +344,279 @@ def test_batcher_shutdown_method(uma_predict_unit):
         
         # Verify Ray server is also shut down
         assert not ray.is_initialized(), "Ray server should be shut down after cleanup_ray()"
+        
+    finally:
+        cleanup_ray()
+
+
+def test_multiple_concurrent_batchers(uma_predict_unit, uma_predict_unit_alt):
+    """Test that multiple InferenceBatchers can coexist on the same Ray cluster."""
+    try:
+        setup_ray()
+        
+        # Create two batchers with different models
+        batcher1 = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+        )
+        
+        batcher2 = InferenceBatcher(
+            predict_unit=uma_predict_unit_alt,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+        )
+        
+        # Verify both have unique deployment names
+        assert batcher1.deployment_name != batcher2.deployment_name, "Deployment names should be unique"
+        
+        # Test atoms
+        atoms = bulk("Cu")
+        
+        # Get energy from first batcher
+        atoms1 = atoms.copy()
+        atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
+        energy1 = atoms1.get_potential_energy()
+        
+        # Get energy from second batcher - should be different since it's a different model
+        atoms2 = atoms.copy()
+        atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+        energy2 = atoms2.get_potential_energy()
+        
+        # Energies should differ between different models
+        assert abs(energy1 - energy2) > 1e-5, f"Energies should differ between models but got {energy1} and {energy2}"
+        
+        # Shutdown first batcher
+        batcher1.shutdown()
+        
+        # Verify second batcher still works
+        atoms3 = atoms.copy()
+        atoms3.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+        energy3 = atoms3.get_potential_energy()
+        
+        # Energy from second batcher should still match
+        npt.assert_allclose(energy2, energy3, atol=1e-4)
+        
+        # Cleanup
+        batcher2.shutdown()
+        
+    finally:
+        cleanup_ray()
+
+
+def test_multiple_batchers_same_model(uma_predict_unit):
+    """Test that multiple InferenceBatchers with the same model can coexist."""
+    try:
+        setup_ray()
+        
+        # Create two batchers with the same model
+        batcher1 = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+        )
+        
+        batcher2 = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+        )
+        
+        # Verify both have unique deployment names
+        assert batcher1.deployment_name != batcher2.deployment_name, "Deployment names should be unique"
+        
+        # Test atoms
+        atoms = bulk("Cu")
+        
+        # Get energy from first batcher
+        atoms1 = atoms.copy()
+        atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
+        energy1 = atoms1.get_potential_energy()
+        
+        # Get energy from second batcher - should be the same since it's the same model
+        atoms2 = atoms.copy()
+        atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+        energy2 = atoms2.get_potential_energy()
+        
+        # Energies should match for the same model
+        npt.assert_allclose(energy1, energy2, atol=1e-4)
+        
+        # Both batchers can work concurrently
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            def calc_energy(batcher, atoms):
+                atoms_copy = atoms.copy()
+                atoms_copy.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
+                return atoms_copy.get_potential_energy()
+            
+            future1 = executor.submit(calc_energy, batcher1, atoms)
+            future2 = executor.submit(calc_energy, batcher2, atoms)
+            
+            result1 = future1.result()
+            result2 = future2.result()
+            
+            # Both should give consistent results
+            npt.assert_allclose(result1, energy1, atol=1e-4)
+            npt.assert_allclose(result2, energy1, atol=1e-4)
+        
+        # Cleanup
+        batcher1.shutdown()
+        batcher2.shutdown()
+        
+    finally:
+        cleanup_ray()
+
+
+def test_local_ray_ownership(uma_predict_unit):
+    """Test that local Ray cluster is owned and shutdown by InferenceBatcher."""
+    try:
+        # Ensure Ray is not initialized
+        if ray.is_initialized():
+            cleanup_ray()
+        
+        # Create batcher with local Ray (default)
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+            ray_address=None,  # Explicit local Ray
+        )
+        
+        # Verify batcher owns the cluster
+        assert batcher._owns_ray_cluster, "Batcher should own local Ray cluster"
+        assert ray.is_initialized(), "Ray should be initialized"
+        
+        # Test atoms
+        atoms = bulk("Cu")
+        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
+        energy = atoms.get_potential_energy()
+        assert energy is not None
+        
+        # Shutdown batcher - should also shutdown Ray
+        batcher.shutdown()
+        
+        # Ray should be shut down since we owned it
+        assert not ray.is_initialized(), "Ray should be shut down with local ownership"
+        
+    finally:
+        cleanup_ray()
+
+
+def test_external_ray_ownership(uma_predict_unit):
+    """Test that external Ray cluster is not owned and not shutdown by InferenceBatcher."""
+    try:
+        # Start Ray externally
+        setup_ray()
+        
+        # Create batcher with external Ray (ray_address="auto")
+        batcher = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+            ray_address="auto",  # Connect to existing Ray
+        )
+        
+        # Verify batcher does not own the cluster
+        assert not batcher._owns_ray_cluster, "Batcher should not own external Ray cluster"
+        assert ray.is_initialized(), "Ray should be initialized"
+        
+        # Test atoms
+        atoms = bulk("Cu")
+        atoms.calc = FAIRChemCalculator(batcher.batch_predict_unit, task_name="omat")
+        energy = atoms.get_potential_energy()
+        assert energy is not None
+        
+        # Shutdown batcher - should NOT shutdown Ray
+        batcher.shutdown()
+        
+        # Ray should still be running since we don't own it
+        assert ray.is_initialized(), "Ray should still be running with external ownership"
+        
+    finally:
+        cleanup_ray()
+
+
+def test_external_ray_not_initialized_error(uma_predict_unit):
+    """Test that using ray_address='auto' without Ray initialized raises error."""
+    try:
+        # Ensure Ray is not initialized
+        if ray.is_initialized():
+            cleanup_ray()
+        
+        # Try to create batcher with ray_address="auto" when Ray is not running
+        with pytest.raises(RuntimeError, match="ray_address='auto' specified but no Ray cluster is running"):
+            InferenceBatcher(
+                predict_unit=uma_predict_unit,
+                max_batch_size=8,
+                batch_wait_timeout_s=0.05,
+                num_replicas=1,
+                ray_address="auto",
+            )
+        
+    finally:
+        cleanup_ray()
+
+
+def test_multiple_batchers_with_external_ray(uma_predict_unit, uma_predict_unit_alt):
+    """Test multiple batchers sharing an external Ray cluster."""
+    try:
+        # Start Ray externally
+        setup_ray()
+        
+        # Create two batchers with external Ray
+        batcher1 = InferenceBatcher(
+            predict_unit=uma_predict_unit,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+            ray_address="auto",
+        )
+        
+        batcher2 = InferenceBatcher(
+            predict_unit=uma_predict_unit_alt,
+            max_batch_size=8,
+            batch_wait_timeout_s=0.05,
+            num_replicas=1,
+            ray_address="auto",
+        )
+        
+        # Verify neither owns the cluster
+        assert not batcher1._owns_ray_cluster, "Batcher1 should not own external Ray"
+        assert not batcher2._owns_ray_cluster, "Batcher2 should not own external Ray"
+        
+        # Test atoms
+        atoms = bulk("Cu")
+        
+        # Calculate with both batchers
+        atoms1 = atoms.copy()
+        atoms1.calc = FAIRChemCalculator(batcher1.batch_predict_unit, task_name="omat")
+        energy1 = atoms1.get_potential_energy()
+        
+        atoms2 = atoms.copy()
+        atoms2.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+        energy2 = atoms2.get_potential_energy()
+        
+        # Energies should differ (different models)
+        assert abs(energy1 - energy2) > 1e-5
+        
+        # Shutdown first batcher
+        batcher1.shutdown()
+        assert ray.is_initialized(), "Ray should still be running after shutting down batcher1"
+        
+        # Second batcher should still work
+        atoms3 = atoms.copy()
+        atoms3.calc = FAIRChemCalculator(batcher2.batch_predict_unit, task_name="omat")
+        energy3 = atoms3.get_potential_energy()
+        npt.assert_allclose(energy2, energy3, atol=1e-4)
+        
+        # Shutdown second batcher
+        batcher2.shutdown()
+        assert ray.is_initialized(), "Ray should still be running after shutting down batcher2"
         
     finally:
         cleanup_ray()

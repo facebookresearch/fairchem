@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from functools import cached_property
 from multiprocessing import cpu_count
@@ -46,6 +47,7 @@ class InferenceBatcher:
         concurrency_backend: Literal["threads"] = "threads",
         concurrency_backend_options: dict | None = None,
         ray_actor_options: dict | None = None,
+        deployment_name: str | None = None,
     ):
         """
         Args:
@@ -58,11 +60,18 @@ class InferenceBatcher:
             concurrency_backend: The concurrency backend to use for inference.
             concurrency_backend_options: Options to pass to the concurrency backend.
             ray_actor_options: Options to pass to the Ray actor running the batch server.
+            deployment_name: Name for the Ray Serve deployment. If None, generates a unique name.
+                This allows multiple InferenceBatchers to coexist on the same Ray cluster.
         """
         self.predict_unit = predict_unit
         self.max_batch_size = max_batch_size
         self.batch_wait_timeout_s = batch_wait_timeout_s
         self.num_replicas = num_replicas
+
+        # Generate unique deployment name if not provided
+        if deployment_name is None:
+            deployment_name = f"predict-server-{uuid.uuid4().hex[:8]}"
+        self.deployment_name = deployment_name
 
         self.predict_server_handle = setup_batch_predict_server(
             predict_unit=self.predict_unit,
@@ -70,6 +79,8 @@ class InferenceBatcher:
             batch_wait_timeout_s=self.batch_wait_timeout_s,
             num_replicas=self.num_replicas,
             ray_actor_options=ray_actor_options or {},
+            deployment_name=self.deployment_name,
+            route_prefix=f"/{self.deployment_name}",
         )
 
         if concurrency_backend_options is None:
@@ -99,7 +110,7 @@ class InferenceBatcher:
 
     def update_checkpoint(self, new_predict_unit: MLIPPredictUnit) -> None:
         """Update the checkpoint being served without shutting down the deployment.
-        
+
         Args:
             new_predict_unit: A new MLIPPredictUnit instance with the updated checkpoint
         """
@@ -117,13 +128,13 @@ class InferenceBatcher:
         """
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=wait)
-        
+
         # Shutdown the Ray Serve deployment
         if hasattr(self, "predict_server_handle") and self.predict_server_handle is not None:
             try:
                 from ray import serve
-                # Get the deployment name from the handle and delete it
-                serve.delete(self.predict_server_handle._deployment_name)
+                # Use the stored deployment name to delete it
+                serve.delete(self.deployment_name)
             except Exception:
                 # Silently ignore shutdown errors as the deployment may already be down
                 pass
