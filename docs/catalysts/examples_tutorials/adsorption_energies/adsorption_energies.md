@@ -11,9 +11,17 @@ kernelspec:
   name: python3
 ---
 
-Expert adsorption energies
-======================================================
+# Expert Adsorption Energies
 
+:::{card} Tutorial Overview
+
+| Property | Value |
+|----------|-------|
+| **Difficulty** | Advanced |
+| **Time** | 45-60 minutes |
+| **Prerequisites** | Basic catalysis knowledge, Python, ASE |
+| **Goal** | Reproduce NRR/HER selectivity literature results |
+:::
 
 One of the most common tasks in computational catalysis is calculating the binding energies or adsorption energies of small molecules on catalyst surfaces.
 
