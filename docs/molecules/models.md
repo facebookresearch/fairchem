@@ -1,6 +1,17 @@
 # Pretrained models
 
-**2025 recommendation:** We suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
+:::{margin}
+```{image} ../assets/icons/molecules.svg
+:alt: Molecules
+:width: 100px
+```
+:::
+
+:::{tip} Recommended Model
+**2025 recommendation:** We suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets. UMA provides state-of-the-art accuracy, energy conservation, and will continue to receive updates.
+:::
+
+The UMA model has a number of nice features over the previous checkpoints:
 1. It is state-of-the-art in out-of-domain prediction accuracy
 2. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc.
 3. The UMA model is most likely to be updated in the future.

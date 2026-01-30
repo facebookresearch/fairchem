@@ -1,5 +1,9 @@
 # OMol25 Leaderboard
 
+:::{tip} Community Leaderboard
+Submit your model predictions for evaluation on the [fairchem_leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard) hosted on HuggingFace.
+:::
+
 As part of the OMol25 release, we present a community leaderboard for researchers to submit their predictions for evaluation - [fairchem_leaderboard](https://huggingface.co/spaces/facebook/fairchem_leaderboard).
 Below we outline the steps to generate predictions and submit them to the leaderboard.
 
@@ -9,15 +13,16 @@ Evaluations correspond to several chemistry relevant tasks (spin gap, ligand-str
 
 The simplest way to get started is to have an ASE-compatible MLIP calculator that can make energy and force predictions. Input data for the different benchmarks can be downloaded below.
 
-## 💾 Download
+## Download
 
-| Benchmarks | URL | 
+| Benchmarks | URL |
 |----------|----------|
-| S2EF (Val/Test)   | [https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits)     |
-| Evaluations    | [https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data)     | 
+| S2EF (Val/Test)   | [HuggingFace Dataset Splits](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#dataset-splits)     |
+| Evaluations    | [HuggingFace Evaluation Data](https://huggingface.co/facebook/OMol25/blob/main/DATASET.md#evaluation-data)     |
 
 ## Install the necessary packages
-```
+
+```bash
 pip install "fairchem-core>=2.5.0"
 pip install "fairchem-data-omol>=0.1.1"
 ```
@@ -80,7 +85,9 @@ np.savez_compressed(
 )
 ```
 
-> :warning: DISCLAIMER: The above example can be very slow on a single GPU and we encourage users to parallelize this however they like. We provide the example as a means to understand the expected format for the leaderboard.
+:::{warning}
+The above example can be very slow on a single GPU and we encourage users to parallelize this however they like. We provide the example as a means to understand the expected format for the leaderboard.
+:::
 
 Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select "Validation" or "Test" and hit submit. Stay on the page until you see the success message.
 
@@ -129,6 +136,8 @@ results = ligand_pocket(ligand_pocket_data, calc)
 with open("ligand_pocket_results.json") as f:
     json.dump(results, f)
 ```
-> :warning: DISCLAIMER: Conformers, Protonation, Ligand strain, and Distance scaling can be quite slow on a single GPU and we encourage userse to parallelize this however they like.
+:::{warning}
+Conformers, Protonation, Ligand strain, and Distance scaling can be quite slow on a single GPU and we encourage users to parallelize this however they like.
+:::
 
 Once a prediction file is generated, proceed to the leaderboard, fill in the submission form, upload your file, select the corresponding evaluation task and hit submit. Stay on the page until you see the success message.

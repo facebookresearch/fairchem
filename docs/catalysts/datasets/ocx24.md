@@ -1,4 +1,16 @@
 # Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models
+
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Type** | Experimental + Computational |
+| **Reactions** | HER, CO2 electrochemical reduction |
+| **Data** | XRF, XRD, electrochemical testing |
+| **Paper** | [arXiv:2411.11783](http://arxiv.org/abs/2411.11783) |
+| **License** | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+:::
+
 In this work, we seek to directly bridge the gap between computational descriptors and experimental outcomes for heterogeneous catalysis. We consider two important green chemistries: the hydrogen evolution reaction and the electrochemical reduction of carbon dioxide. To do this, we created a curated dataset of experimental results with materials synthesized and tested in a reproducible manner under industrially relevant conditions. We used this data to build models to directly predict experimental outcomes using computational features. For more information, please read the manuscript [paper](http://arxiv.org/abs/2411.11783).
 
 ## Experimental datasets
