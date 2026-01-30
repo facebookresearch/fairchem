@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import torch
 import torch.nn as nn
 
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.models.escaip.configs import EScAIPConfigs, init_configs
@@ -38,7 +37,6 @@ if TYPE_CHECKING:
     from fairchem.core.models.escaip.custom_types import GraphAttentionData
 
 
-@registry.register_model("EScAIP_backbone")
 class EScAIPBackbone(nn.Module, BackboneInterface):
     """
     Efficiently Scaled Attention Interactomic Potential (EScAIP) backbone model.
@@ -222,7 +220,6 @@ class EScAIPHeadBase(nn.Module, HeadInterface):
         return no_weight_decay(self)
 
 
-@registry.register_model("EScAIP_direct_force_head")
 class EScAIPDirectForceHead(EScAIPHeadBase):
     def __init__(self, backbone: EScAIPBackbone):  # type: ignore
         super().__init__(backbone)
@@ -287,7 +284,6 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
         )
 
 
-@registry.register_model("EScAIP_energy_head")
 class EScAIPEnergyHead(EScAIPHeadBase):
     def __init__(self, backbone: EScAIPBackbone):  # type: ignore
         super().__init__(backbone)
@@ -341,7 +337,6 @@ class EScAIPEnergyHead(EScAIPHeadBase):
         )
 
 
-@registry.register_model("EScAIP_grad_energy_force_stress_head")
 class EScAIPGradientEnergyForceStressHead(EScAIPEnergyHead):  # type: ignore
     """
     Do not support torch.compile

@@ -24,6 +24,7 @@ Various decorators for registry different kind of classes with unique keys
 from __future__ import annotations
 
 import importlib
+import warnings
 from typing import Any, Callable, ClassVar, TypeVar, Union
 
 R = TypeVar("R")
@@ -283,15 +284,39 @@ class Registry:
 
     @classmethod
     def get_dataset_class(cls, name: str):
-        return cls.get_class(name, "dataset_name_mapping")
+        warnings.warn(
+            "registry.get_dataset_class() is deprecated. "
+            "Use fairchem.core.datasets.get_dataset_class() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from fairchem.core.datasets import get_dataset_class
+
+        return get_dataset_class(name)
 
     @classmethod
     def get_loss_class(cls, name):
-        return cls.get_class(name, "loss_name_mapping")
+        warnings.warn(
+            "registry.get_loss_class() is deprecated. "
+            "Use fairchem.core.modules.loss.get_loss_class() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from fairchem.core.modules.loss import get_loss_class
+
+        return get_loss_class(name)
 
     @classmethod
     def get_model_class(cls, name: str):
-        return cls.get_class(name, "model_name_mapping")
+        warnings.warn(
+            "registry.get_model_class() is deprecated. "
+            "Use fairchem.core.models.get_model_class() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from fairchem.core.models import get_model_class
+
+        return get_model_class(name)
 
     @classmethod
     def get_logger_class(cls, name: str):
