@@ -97,14 +97,38 @@ class InferenceBatcher:
             server_handle=self.predict_server_handle,
         )
 
+    def update_checkpoint(self, new_predict_unit: MLIPPredictUnit) -> None:
+        """Update the checkpoint being served without shutting down the deployment.
+        
+        Args:
+            new_predict_unit: A new MLIPPredictUnit instance with the updated checkpoint
+        """
+        import ray
+        # Store the new predict unit in Ray's object store
+        predict_unit_ref = ray.put(new_predict_unit)
+        # Update all replicas with the new predict unit
+        self.predict_server_handle.update_predict_unit.remote(predict_unit_ref)
+
     def shutdown(self, wait: bool = True) -> None:
-        """Shutdown the executor.
+        """Shutdown the executor and Ray server.
 
         Args:
             wait: If True, wait for pending tasks to complete before returning.
         """
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=wait)
+        
+        # Shutdown the Ray Serve deployment
+        if hasattr(self, "predict_server_handle") and self.predict_server_handle is not None:
+            try:
+                from ray import serve
+                # Get the deployment name from the handle and delete it
+                serve.delete(self.predict_server_handle._deployment_name)
+            except Exception:
+                # Silently ignore shutdown errors as the deployment may already be down
+                pass
+            finally:
+                self.predict_server_handle = None
 
     def __del__(self):
         """Cleanup on deletion."""
