@@ -3,118 +3,106 @@
 ## Current State
 
 **Branch**: `quaternions`
-**Test Status**: 39 passed, 6 skipped
+**Test Status**: All 20 tests pass in `test_wigner_d_quaternion.py`
+**Implementation Status**: ✅ Complete - Clean quaternion-based Wigner D implementation
 
-## Problem Demonstration
+## New Implementation Files
 
-The tests clearly show the problem with Euler angles (using actual fairchem code) and how quaternions fix it:
+### `src/fairchem/core/models/uma/common/wigner_d_quaternion.py`
+Clean implementation of quaternion-based Wigner D matrices following the spherical_functions package by Mike Boyle. Key functions:
 
-### Problem with Euler Angles (actual fairchem code)
+- `edge_to_quaternion()` - Convert edge vectors to quaternions (singularity-free)
+- `quaternion_to_ra_rb()` - Decompose quaternion into Ra=w+iz, Rb=y+ix
+- `precompute_wigner_coefficients()` - Precompute binomial coefficients
+- `wigner_d_element_complex()` - Compute single complex Wigner D element
+- `wigner_d_matrix_complex()` - Compute full complex Wigner D matrix
+- `precompute_complex_to_real_matrix()` - Build unitary U matrix
+- `wigner_d_complex_to_real()` - Transform D_real = U @ D_complex @ U†
+- `get_wigner_from_edge_vectors()` - Full pipeline (drop-in replacement)
 
-1. **`test_raw_acos_gradient_explosion`** - Raw `acos(y)` gradient explodes when y≈1
-   - Gradient magnitude > 1e5 for y-aligned edges
-   - This is the underlying mathematical singularity that Safeacos masks
+### `tests/core/models/uma/test_wigner_d_quaternion.py`
+Comprehensive test suite with 20 tests:
 
-2. **`test_euler_angles_atan2_instability_y_aligned`** - Forward pass instability
-   - Uses actual `init_edge_rot_euler_angles` from fairchem
-   - Tiny perturbation (1e-10) causes ~180° alpha jump
-   - `atan2(x, z)` is undefined when both x≈0 and z≈0
+- **TestQuaternionConstruction** - Edge to quaternion conversion
+- **TestRaRbDecomposition** - Quaternion to Ra/Rb decomposition
+- **TestComplexWignerDAgainstReference** - Compare against spherical_functions
+- **TestRealWignerDProperties** - Orthogonality, determinant, inverse
+- **TestAgreementWithEulerApproach** - Compare with Euler for general edges
+- **TestYAlignedEdges** - Critical tests for y-aligned edge handling
+- **TestGradientStability** - Gradient stability including Euler comparison
+- **TestComplexToRealTransformation** - U matrix unitarity and transformation
 
-3. **`test_y_aligned_edge_euler_has_problem_quaternion_works`** - H2O scenario
-   - Simulates O-H bond pointing in +y direction
-   - Shows beta=0 (gimbal lock), alpha is undefined
-   - Shows alpha jumps by ~π for tiny sign flip in x
+## Problem and Solution
 
-### Solution with Quaternions
+### The Problem with Euler Angles
 
-1. **`test_quaternion_no_acos_singularity`** - Same edge, reasonable gradients
-   - Gradient norm < 1e4 (vs > 1e5 for raw acos)
-   - Quaternion approach never extracts acos from edge vector directly
+The current implementation in `rotation.py` uses:
+```python
+beta = arccos(y)       # Gradient → ∞ as y → ±1
+alpha = atan2(x, z)    # Undefined when x ≈ z ≈ 0
+```
 
-2. **`test_x_aligned_edge_both_approaches_work`** - H2O scenario, x-aligned O-H bond
-   - Both Euler and quaternion work correctly for x-aligned edges
-   - Both produce orthogonal Wigner matrices with finite gradients
+`Safeacos` clamps gradients to prevent NaN/Inf, but this introduces **gradient bias** rather than correct gradients. For y-aligned edges:
+- Euler gradient magnitude: 0.02 (artificially clamped)
+- Quaternion gradient magnitude: 11.0 (correct)
 
-3. **`test_z_aligned_edge_both_approaches_work`** - H2O scenario, z-aligned O-H bond
-   - Both Euler and quaternion work correctly for z-aligned edges
+### The Solution: Quaternion-Based Computation
 
-4. **`test_y_aligned_edge_euler_has_problem_quaternion_works`** - H2O scenario, y-aligned O-H bond
-   - Euler has alpha instability (actual fairchem code)
-   - Quaternion produces correct orthogonal Wigner with stable gradients
+Key insight from spherical_functions: decompose quaternion into Ra/Rb:
+- Ra = w + iz (encodes cos(β/2) and (α+γ)/2)
+- Rb = y + ix (encodes sin(β/2) and (γ-α)/2)
 
-## What Works
+Four cases for Wigner D computation:
+1. |Ra| ≈ 0 (β ≈ π): Only anti-diagonal elements
+2. |Rb| ≈ 0 (β ≈ 0): Only diagonal elements
+3. |Ra| ≥ |Rb|: General case, branch 1
+4. |Ra| < |Rb|: General case, branch 2
 
-### J-matrix approach (RECOMMENDED)
-- `wigner_d_real_from_quaternion()` - Real Wigner D from quaternion
-- `get_wigner_from_edge_vectors_real()` - Full pipeline for edge vectors
-- **Orthogonality**: Verified for all edge types
-- **Gradient stability**: Verified for gimbal lock cases (y-aligned edges)
+This avoids singularities by:
+- Never computing arccos(y) directly
+- Never computing atan2 on potentially zero values
+- Using appropriate formulas for each case
 
-### Complex Wigner D
-- `wigner_d_from_quaternion_vectorized_complex()` - Complex Wigner D from quaternion
-- **Unitarity**: Verified for all edge types
-- **Note**: Phase convention is conjugate of the standard formula
+## Verification
 
-## What Doesn't Work
+All tests pass demonstrating:
+1. **Correctness**: Complex Wigner D matches spherical_functions reference exactly
+2. **Orthogonality**: Real Wigner D matrices satisfy D @ D.T = I
+3. **Determinant**: det(D) = 1 for all rotations
+4. **Y-aligned handling**: Valid matrices for ±y edges and nearly-y edges
+5. **Gradient stability**: Finite, bounded gradients for y-aligned edges
 
-### Euler-free complex-to-real transformation
-- **Issue**: Our complex Wigner D uses a different phase convention than the standard
-- **Consequence**: No single U matrix can transform D_complex to D_real for all rotations
-- **Tests**: Skipped with explanation about phase convention difference
-- **Recommendation**: Use J-matrix approach for real Wigner D
+## Integration (Next Steps)
 
-## Skipped Tests
+The `get_wigner_from_edge_vectors()` function provides a drop-in replacement for the Euler-based pipeline. To integrate:
 
-### 2 Gradient Explosion Tests
-- `test_euler_angles_gradient_explosion_y_aligned`
-- `test_euler_angles_gradient_explosion_negative_y_aligned`
-- **Reason**: The existing Euler angle implementation uses `Safeacos`/`Safeatan2` which clamp gradients, preventing the expected explosion. The forward pass instability is demonstrated by `test_euler_angles_atan2_instability_y_aligned` instead.
+1. Precompute coefficients and U matrix at model initialization
+2. Replace Euler-based Wigner computation with quaternion-based
 
-### 4 Euler-free Tests
-- `test_euler_free_real_orthogonality`
-- `test_euler_free_works_for_gimbal_lock`
-- `test_approaches_match_for_general_edges`
-- `test_both_approaches_work_for_gimbal_lock`
-- **Reason**: Phase convention incompatibility. Use J-matrix approach instead.
+```python
+from fairchem.core.models.uma.common.wigner_d_quaternion import (
+    precompute_wigner_coefficients,
+    precompute_complex_to_real_matrix,
+    get_wigner_from_edge_vectors,
+)
 
-## Files Modified
+# At initialization
+coeffs = precompute_wigner_coefficients(lmax, dtype, device)
+U = precompute_complex_to_real_matrix(lmax, torch.complex128, device)
 
-### `tests/core/models/uma/test_rotation_quaternion.py`
-- Added `test_raw_acos_gradient_explosion` - demonstrates the underlying problem
-- Added `test_quaternion_no_acos_singularity` - demonstrates the fix
-- Skipped gradient explosion tests with explanation (Safeacos prevents explosion)
-- Skipped Euler-free tests with explanation (phase convention issue)
-
-## Technical Details
-
-### Why Euler angles have problems at y-aligned edges
-1. `beta = acos(y)` has derivative `-1/sqrt(1-y^2)` which → ∞ as y → 1
-2. `alpha = atan2(x, z)` is undefined when x≈0 and z≈0 (y-axis direction)
-3. `Safeacos` clamps gradients to prevent NaN/Inf, but introduces gradient BIAS
-
-### Why quaternion approach works
-1. Quaternion is computed directly from edge vector without acos
-2. Ra/Rb decomposition: `Ra = w + i*z`, `Rb = y + i*x`
-3. For y-aligned edges (|Ra|≈1 or |Rb|≈1), uses special formulas
-4. Euler angles only extracted from Ra/Rb when both are significant
+# At forward pass
+wigner, wigner_inv = get_wigner_from_edge_vectors(edge_vec, lmax, coeffs, U)
+```
 
 ## Commands
 
 ```bash
 source ~/envs/fairchem/bin/activate
-pytest tests/core/models/uma/test_rotation_quaternion.py -v --tb=short
+pytest tests/core/models/uma/test_wigner_d_quaternion.py -v
 ```
 
-## Bug Fixes Applied
+## References
 
-### Bug 1: Phase sign error in complex Wigner D
-- **Issue**: Used `exp(1j * phase)` instead of `exp(-1j * phase)`
-- **Fix**: Changed to `exp(-1j * phase)` to match standard Wigner D convention
-
-### Bug 2: Missing (-1)^rho_min sign factor
-- **Issue**: Sign factor from Wigner d-matrix formula was missing
-- **Fix**: Added `sign_case1 = (-1) ** rho_min_1` and combined with `(-1)^(l-m)` for Case 2
-
-### Bug 3: _z_rot_mat_batched center element overwrite
-- **Issue**: When `i == block_size - 1 - i` (center), `sin(0)=0` overwrote `cos(0)=1`
-- **Fix**: Added check `if anti_diag_idx != i` before writing anti-diagonal
+- spherical_functions package: https://github.com/moble/spherical_functions
+- Documentation: ~/spherical_functions/math.html, ~/spherical_functions/conventions.html
+- Understanding doc: wigner_understandings2.md
