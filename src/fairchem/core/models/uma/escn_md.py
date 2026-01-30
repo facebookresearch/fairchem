@@ -23,6 +23,7 @@ from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
+from fairchem.core.models.uma.common.wigner_d_quaternion import quaternion_wigner
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
@@ -130,6 +131,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
+        use_quaternion_wigner: bool = False,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         edge_chunk_size: int | None = None,
@@ -156,6 +158,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
         self.radius_pbc_version = radius_pbc_version
+        self.use_quaternion_wigner = use_quaternion_wigner
         self.enforce_max_neighbors_strictly = False
 
         activation_checkpoint_chunk_size = None
@@ -304,20 +307,26 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        Jd_buffers = [
-            getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
-            for l in range(self.lmax + 1)
-        ]
+        if self.use_quaternion_wigner:
+            with record_function("obtain rotmat wigner quaternion"):
+                wigner, wigner_inv = quaternion_wigner(
+                    edge_distance_vecs, self.lmax
+                )
+        else:
+            Jd_buffers = [
+                getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
+                for l in range(self.lmax + 1)
+            ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+            with record_function("obtain rotmat wigner original"):
+                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+                wigner = eulers_to_wigner(
+                    euler_angles,
+                    0,
+                    self.lmax,
+                    Jd_buffers,
+                )
+                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
         # select subset of coefficients we are using
         if self.mmax != self.lmax:
