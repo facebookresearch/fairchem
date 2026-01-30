@@ -96,7 +96,6 @@ def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
 def _load_single_structure(cif_path: Path, eval_method: str = "csd", **kwargs):
     """Load a single structure from CIF file for the specified evaluation method."""
     if eval_method == "csd":
-        print(kwargs.get("csd_python_cmd"))
         if kwargs.get("csd_python_cmd", "python") != "python":
             # Use subprocess to load CSD structure when using custom Python executable
             return _load_csd_structure_subprocess(cif_path, kwargs["csd_python_cmd"])
@@ -125,9 +124,10 @@ except ImportError:
     print("Error: CSD Python API not available", file=sys.stderr)
     sys.exit(1)
 
-cif_path = r"{cif_path}"
+cif_path = Path(r"{cif_path}")
 try:
-    crystal = Crystal.from_file(cif_path)
+    cif_content = cif_path.read_text()
+    crystal = Crystal.from_string(cif_content, "cif")
     print(str(crystal))
 except Exception as e:
     print(f"Error loading structure: {{e}}", file=sys.stderr)
@@ -378,12 +378,14 @@ def match_structures(row, target_structures, eval_method="csd", **kwargs):
 
     if eval_method == "csd":
         csd_python_cmd = kwargs.get("csd_python_cmd", "python")
+        # Extract shell_size for CSD matching (exclude csd_python_cmd to avoid duplicate arg)
+        shell_size = kwargs.get("shell_size", 30)
         if csd_python_cmd != "python":
             return _match_csd_subprocess(
-                row, target_structures, csd_python_cmd, **kwargs
+                row, target_structures, csd_python_cmd, shell_size=shell_size
             )
         else:
-            return _match_csd(row, target_structures, **kwargs)
+            return _match_csd(row, target_structures, shell_size=shell_size)
     elif eval_method == "pymatgen":
         return _match_pymatgen(row, target_structures, **kwargs)
     else:
@@ -444,7 +446,7 @@ def load_target_structures(
 
                 try:
                     structure = _load_single_structure(
-                        cif_path, eval_method, kwargs.get("csd_python_cmd", "python")
+                        cif_path, eval_method, **kwargs
                     )
                     target_structures[refcode] = structure
                     logger.debug(f"Loaded structure for {refcode} from {cif_path}")
@@ -468,7 +470,7 @@ def load_target_structures(
                         continue
 
                     try:
-                        structure = _load_single_structure(cif_file, eval_method)
+                        structure = _load_single_structure(cif_file, eval_method, **kwargs)
                         target_structures[refcode] = structure
                         logger.debug(f"Loaded structure for {refcode} from {cif_file}")
                     except Exception as e:
@@ -508,7 +510,7 @@ def load_target_structures(
             cif_filename = cif_filenames[0]
 
             try:
-                structure = _load_single_structure(cif_filename, eval_method)
+                structure = _load_single_structure(cif_filename, eval_method, **kwargs)
                 target_structures[refcode] = structure
                 logger.info(f"Loaded structure for {refcode} from {cif_filename}")
             except Exception as e:
@@ -698,17 +700,18 @@ def compute_structure_matches(
     ]
     random.shuffle(parquet_files)
 
+    logger.info(f"evaluating structure matches: {eval_method}")
+
     # Load target structures
     if eval_method == "csd":
         csd_python_cmd = eval_config.get("csd_python_cmd", "python")
-        if csd_python_cmd != "python":
-            method_params = {"csd_python_cmd": csd_python_cmd}
-            target_structures, refcodes_list = load_target_structures(
-                molecules_file,
-                eval_config.get("target_xtals_dir"),
-                eval_method,
-                **method_params,
-            )
+        method_params = {"csd_python_cmd": csd_python_cmd}
+        target_structures, refcodes_list = load_target_structures(
+            molecules_file,
+            eval_config.get("target_xtals_dir"),
+            eval_method,
+            **method_params,
+        )
     else:
         target_structures, refcodes_list = load_target_structures(
             molecules_file, eval_config.get("target_xtals_dir"), eval_method
