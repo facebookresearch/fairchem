@@ -11,7 +11,17 @@ kernelspec:
   name: python3
 ---
 
-# AdsorbML tutorial
+# AdsorbML Tutorial
+
+:::{card} Tutorial Overview
+
+| Property | Value |
+|----------|-------|
+| **Difficulty** | Intermediate |
+| **Time** | 20-30 minutes |
+| **Prerequisites** | Basic Python, ASE |
+| **Goal** | Find optimal adsorption sites using ML-accelerated relaxations |
+:::
 
 The [AdsorbML](https://arxiv.org/abs/2211.16486) paper showed that pre-trained machine learning potentials were now viable to find and prioritize the best adsorption sites for a given surface. The results were quite impressive, especially if you were willing to do a DFT single-point calculation on the best calculations.
 

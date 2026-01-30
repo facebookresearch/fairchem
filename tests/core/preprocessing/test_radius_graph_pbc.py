@@ -20,7 +20,7 @@ from ase.lattice.cubic import FaceCenteredCubic
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
 
@@ -216,8 +216,6 @@ class TestRadiusGraphPBC:
         assert pbc_xz > max(pbc_x, pbc_z)
         assert pbc_all > max(pbc_xy, pbc_yz, pbc_xz)
 
-        structure = FaceCenteredCubic("Pt", size=[1, 2, 3])
-
         # Ensure radius_graph_pbc matches radius_graph for non-PBC condition
         # torch geometric's RadiusGraph requires torch_scatter
         # RG = RadiusGraph(r=radius, max_num_neighbors=max_neigh)
@@ -335,6 +333,61 @@ def test_simple_systems_nopbc(
         )
 
 
+@pytest.mark.parametrize(
+    "atoms",
+    [FaceCenteredCubic("Cu", size=(2, 2, 2), latticeconstant=5.0), molecule("H2O")],
+)
+def test_pymatgen_vs_internal_graph(atoms):
+    radius = 10
+    max_neigh = 200
+
+    for radius_pbc_version in (1, 2):
+        for pbc in [True, False]:
+            atoms_copy = Atoms(
+                symbols=atoms.get_chemical_symbols(),
+                positions=atoms.get_positions().copy(),
+                cell=atoms.get_cell().copy()
+                if atoms.cell is not None
+                and np.linalg.det(atoms.get_cell().copy()) != 0
+                else np.eye(3) * 5.0,
+                pbc=atoms.get_pbc().copy(),
+            )
+            if pbc:
+                atoms_copy.set_pbc([True, True, True])
+            else:
+                atoms_copy.set_pbc([False, False, False])
+            for unwrap in [True, False]:
+                if unwrap and pbc:
+                    atoms_copy.positions = -atoms_copy.positions
+
+                # Use pymatgen graph generation
+                data = AtomicData.from_ase(
+                    atoms_copy,
+                    max_neigh=max_neigh,
+                    radius=radius,
+                    r_edges=True,
+                    r_data_keys=["spin", "charge"],
+                )
+
+                # Use FairChem internal graph generation (from core/graph/compute.py)
+                batch = data_list_collater([data])
+                graph_dict = generate_graph(
+                    batch,
+                    cutoff=radius,
+                    max_neighbors=max_neigh,
+                    enforce_max_neighbors_strictly=False,
+                    radius_pbc_version=radius_pbc_version,
+                    pbc=data.pbc,
+                )
+
+                assert check_features_match(
+                    batch.edge_index,
+                    batch.cell_offsets,
+                    graph_dict["edge_index"],
+                    graph_dict["cell_offsets"],
+                )
+
+
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
     "num_atoms, num_partitions, pbc, device",
@@ -359,7 +412,7 @@ def test_partitioned_radius_graph_pbc(
         max_num_neighbors_threshold=max_neighbors,
         pbc=pbc_tensor,
     )
-    atoms = get_fcc_carbon_xtal(num_atoms)
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     data = AtomicData.from_ase(atoms).to(device)
     batch = data_list_collater([data])
     edge_index_no_partition, _, _ = rgbv2(batch)
@@ -478,7 +531,9 @@ def test_generate_graph_batch_partition(
         # pick a random lattice constant, this ensures that we have mixed cells in the batch too
         lattice_constant = np.random.uniform(3.7, 3.9)
         # add i to num_atoms to ensure different sizes
-        atoms = get_fcc_carbon_xtal(num_atoms + i, lattice_constant=lattice_constant)
+        atoms = get_fcc_crystal_by_num_atoms(
+            num_atoms + i, lattice_constant=lattice_constant
+        )
         data_list.append(
             AtomicData.from_ase(
                 atoms,
