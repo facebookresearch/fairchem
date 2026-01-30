@@ -14,6 +14,10 @@ from __future__ import annotations
 import pytest
 import torch
 
+from fairchem.core.models.uma.common.rotation import (
+    eulers_to_wigner,
+    init_edge_rot_euler_angles,
+)
 from fairchem.core.models.uma.common.wigner_d_quaternion import (
     edge_to_quaternion,
     get_wigner_from_edge_vectors,
@@ -301,39 +305,6 @@ class TestYAlignedEdgesAndGradients:
             det, torch.tensor(1.0, dtype=dtype, device=device), atol=1e-5
         ), f"det(D) != 1 for {desc} edge"
 
-    def test_gradient_stability_y_aligned(
-        self, lmax, dtype, device, wigner_coeffs, U_blocks
-    ):
-        """Gradients are finite and bounded for y-aligned edges."""
-        test_edges = [
-            [0.0, 1.0, 0.0],  # +y
-            [1e-9, 1.0, 1e-9],  # nearly +y
-            [1e-6, 1.0, 1e-6],  # less nearly +y
-        ]
-        max_grads = []
-
-        for edge in test_edges:
-            edge_tensor = torch.tensor([edge], dtype=dtype, device=device)
-            edge_tensor = torch.nn.functional.normalize(edge_tensor, dim=-1)
-            edge_tensor = edge_tensor.detach().requires_grad_(True)
-
-            wigner, _ = get_wigner_from_edge_vectors(
-                edge_tensor, wigner_coeffs, U_blocks
-            )
-
-            loss = wigner.sum()
-            loss.backward()
-
-            grad = edge_tensor.grad
-            assert grad is not None, f"No gradient computed for {edge}"
-            assert not torch.isnan(grad).any(), f"NaN in gradient for {edge}"
-            assert not torch.isinf(grad).any(), f"Inf in gradient for {edge}"
-
-            max_grads.append(grad.abs().max().item())
-
-        # Gradients should not grow unboundedly
-        assert max(max_grads) < 1e6, f"Gradients growing too large: {max_grads}"
-
 
 # =============================================================================
 # Test complex-to-real transformation
@@ -385,8 +356,6 @@ class TestEulerQuaternionAgreement:
         produce the same functional result rather than comparing raw matrices
         (which may differ due to convention differences).
         """
-        from fairchem.core.models.uma.common.rotation import eulers_to_wigner
-
         # Test edges away from y-axis singularity
         test_edges = [
             [0.0, 0.0, 1.0],  # Z-aligned
@@ -402,19 +371,16 @@ class TestEulerQuaternionAgreement:
         for edge in test_edges:
             edge_t = torch.tensor([edge], dtype=dtype, device=device)
             xyz = torch.nn.functional.normalize(edge_t, dim=-1)
-            x, y, z = xyz[0, 0], xyz[0, 1], xyz[0, 2]
 
             # Compute Euler angles (same as init_edge_rot_euler_angles but with gamma=0)
-            beta = torch.acos(y.clamp(-1.0, 1.0))
-            alpha = torch.atan2(x, z)
-            gamma = torch.zeros(1, dtype=dtype, device=device)
+            euler_angles = init_edge_rot_euler_angles(edge_t)
+            alpha, _, gamma = euler_angles
 
             # Euler approach: wigner_D uses the negated angles for extrinsic convention
-            euler_angles = (-gamma, -beta.unsqueeze(0), -alpha.unsqueeze(0))
             wigner_euler = eulers_to_wigner(euler_angles, 0, lmax, Jd_matrices)
 
             # Quaternion approach with matching gamma
-            wigner_quat, _ = quaternion_wigner(edge_t, lmax, gamma=gamma)
+            wigner_quat, _ = quaternion_wigner(edge_t, lmax, gamma=alpha + gamma)
 
             # Both should be orthogonal
             size = (lmax + 1) ** 2
@@ -423,24 +389,122 @@ class TestEulerQuaternionAgreement:
             euler_ortho = wigner_euler[0] @ wigner_euler[0].T
             quat_ortho = wigner_quat[0] @ wigner_quat[0].T
 
-            assert torch.allclose(euler_ortho, I, atol=1e-5), \
-                f"Euler Wigner not orthogonal for edge {edge}"
-            assert torch.allclose(quat_ortho, I, atol=1e-5), \
-                f"Quaternion Wigner not orthogonal for edge {edge}"
+            assert torch.allclose(
+                euler_ortho, I, atol=1e-5
+            ), f"Euler Wigner not orthogonal for edge {edge}"
+            assert torch.allclose(
+                quat_ortho, I, atol=1e-5
+            ), f"Quaternion Wigner not orthogonal for edge {edge}"
 
             # Extract l=1 blocks - both use Cartesian (x, y, z) ordering
             euler_l1 = wigner_euler[0, 1:4, 1:4]
             quat_l1 = wigner_quat[0, 1:4, 1:4]
+
+            # The l=1 blocks should be identical
+            assert torch.allclose(
+                euler_l1, quat_l1, atol=1e-5
+            ), f"l=1 blocks differ for edge {edge}:\nEuler:\n{euler_l1}\nQuaternion:\n{quat_l1}"
 
             # Both should rotate edge → +y in Cartesian coordinates
             edge_cart = xyz[0]
             euler_result = euler_l1 @ edge_cart
             quat_result = quat_l1 @ edge_cart
 
-            assert torch.allclose(euler_result, y_axis, atol=1e-5), \
-                f"Euler did not rotate edge {edge} to +y, got {euler_result}"
-            assert torch.allclose(quat_result, y_axis, atol=1e-5), \
-                f"Quaternion did not rotate edge {edge} to +y, got {quat_result}"
+            assert torch.allclose(
+                euler_result, y_axis, atol=1e-5
+            ), f"Euler did not rotate edge {edge} to +y, got {euler_result}"
+            assert torch.allclose(
+                quat_result, y_axis, atol=1e-5
+            ), f"Quaternion did not rotate edge {edge} to +y, got {quat_result}"
+
+    def test_gradient_accuracy_near_y_axis(self, lmax, dtype, device, Jd_matrices):
+        """
+        Compare finite difference vs analytic gradients for y-aligned edges.
+
+        Near y-axis:
+        - Euler finite diff blows up (true gradient is huge)
+        - Euler analytic is clamped by Safeacos (hides true gradient)
+        - Quaternion finite diff and analytic match (no clamping)
+        """
+
+        def compute_finite_diff_gradient(fn, x, h):
+            """Compute gradient via central finite differences."""
+            grad = torch.zeros_like(x)
+            for i in range(x.shape[1]):  # For each dimension (x, y, z)
+                x_plus = x.clone()
+                x_minus = x.clone()
+                x_plus[0, i] += h
+                x_minus[0, i] -= h
+                grad[0, i] = (fn(x_plus) - fn(x_minus)) / (2 * h)
+            return grad
+
+        # Nearly y-aligned edge
+        eps_offset = 1e-7
+        edge = torch.tensor([[eps_offset, 1.0, eps_offset]], dtype=dtype, device=device)
+        edge = torch.nn.functional.normalize(edge, dim=-1)
+
+        # Get Euler angles for consistent gamma
+        euler_angles = init_edge_rot_euler_angles(edge)
+        gamma_euler = -euler_angles[0]  # Extract gamma
+        alpha_euler = -euler_angles[2]  # Extract alpha
+        gamma_quat = gamma_euler + alpha_euler  # Matching gamma for quaternion
+
+        h = 1e-6  # Finite difference step size
+
+        # === EULER APPROACH ===
+        # Analytic gradient
+        edge_euler = edge.clone().requires_grad_(True)
+        euler_angles_grad = init_edge_rot_euler_angles(edge_euler)
+        wigner_euler = eulers_to_wigner(euler_angles_grad, 0, lmax, Jd_matrices)
+        loss_euler = wigner_euler.sum()
+        loss_euler.backward()
+        euler_analytic_grad = edge_euler.grad.clone()
+
+        # Finite difference gradient
+        euler_fd_grad = compute_finite_diff_gradient(
+            lambda e: eulers_to_wigner(
+                init_edge_rot_euler_angles(e), 0, lmax, Jd_matrices
+            ).sum(),
+            edge,
+            h,
+        )
+
+        # === QUATERNION APPROACH ===
+        # Analytic gradient
+        edge_quat = edge.clone().requires_grad_(True)
+        wigner_quat, _ = quaternion_wigner(edge_quat, lmax, gamma=gamma_quat)
+        loss_quat = wigner_quat.sum()
+        loss_quat.backward()
+        quat_analytic_grad = edge_quat.grad.clone()
+
+        # Finite difference gradient
+        quat_fd_grad = compute_finite_diff_gradient(
+            lambda e: quaternion_wigner(e, lmax, gamma=gamma_quat)[0].sum(),
+            edge,
+            h,
+        )
+
+        # === ASSERTIONS ===
+        # 1. Euler finite diff should be much larger than analytic (clamping effect)
+        euler_fd_mag = euler_fd_grad.abs().max().item()
+        euler_analytic_mag = euler_analytic_grad.abs().max().item()
+        # print(euler_fd_mag, euler_analytic_mag)
+        assert euler_fd_mag > 10 * euler_analytic_mag, (
+            f"Expected Euler FD >> analytic, got FD={euler_fd_mag}, "
+            f"analytic={euler_analytic_mag}"
+        )
+
+        # 2. Quaternion finite diff and analytic should match
+        assert torch.allclose(quat_fd_grad, quat_analytic_grad, rtol=0.1), (
+            f"Quaternion FD and analytic should match:\n"
+            f"FD={quat_fd_grad}\nAnalytic={quat_analytic_grad}"
+        )
+
+        # 3. Quaternion gradients should be reasonable (not blowing up)
+        quat_mag = quat_analytic_grad.abs().max().item()
+        # quat_fd_mag = quat_fd_grad.abs().max().item()
+        # print(quat_mag, quat_fd_mag)
+        assert quat_mag < 1e6, f"Quaternion gradient too large: {quat_mag}"
 
 
 if __name__ == "__main__":
