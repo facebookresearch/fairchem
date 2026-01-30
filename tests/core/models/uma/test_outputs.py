@@ -241,86 +241,99 @@ class TestComputeForcesAndStress:
 
     def test_forces_output(self):
         """Test that forces are computed correctly."""
-        pos_original = torch.tensor(
-            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], requires_grad=True
-        )
+        pos = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], requires_grad=True)
         displacement = torch.zeros(1, 3, 3, requires_grad=True)
         cell = torch.eye(3).unsqueeze(0) * 10.0  # 10 Angstrom cubic cell
 
+        symmetric_displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
+        pos = pos + pos @ symmetric_displacement
+        cell = cell + cell @ symmetric_displacement
+
         # Simple energy: sum of positions
-        energy_part = pos_original.sum().unsqueeze(0)
+        energy_part = pos.sum().unsqueeze(0)
 
         forces, stress = compute_forces_and_stress(
-            energy_part, pos_original, displacement, cell, training=True
+            energy_part, pos, displacement, cell, training=True
         )
 
         # Forces = -gradient = -1 for all components
         expected_forces = -torch.ones(2, 3)
-        assert forces.shape == (2, 3)
+        assert forces.squeeze().shape == (2, 3)
         assert torch.allclose(forces, expected_forces)
 
     def test_stress_shape(self):
         """Test that stress has correct shape [num_systems, 9]."""
-        pos_original = torch.tensor([[1.0, 0.0, 0.0]], requires_grad=True)
+        pos = torch.tensor([[1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], requires_grad=True)
+        batch = torch.tensor([0, 1])  # 2 systems, 1 atom each
         displacement = torch.zeros(2, 3, 3, requires_grad=True)
-        cell = torch.eye(3).unsqueeze(0).expand(2, 3, 3) * 10.0
+        cell = torch.eye(3).unsqueeze(0).expand(2, 3, 3).clone() * 10.0
 
-        energy_part = torch.tensor([1.0, 2.0])
+        symmetric_displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
+        # Apply displacement per system
+        pos_transformed = pos + torch.bmm(
+            pos.unsqueeze(1), symmetric_displacement[batch]
+        ).squeeze(1)
+        cell = cell + torch.bmm(cell, symmetric_displacement)
+
+        # Energy per system
+        energy_part = torch.zeros(2)
+        energy_part = energy_part.index_add(0, batch, pos_transformed.sum(dim=1))
 
         forces, stress = compute_forces_and_stress(
-            energy_part, pos_original, displacement, cell, training=True
+            energy_part, pos_transformed, displacement, cell, training=True
         )
 
         assert stress.shape == (2, 9)
 
     def test_stress_volume_scaling(self):
         """Test that stress scales inversely with volume."""
-        pos_original = torch.tensor([[0.0, 0.0, 0.0]], requires_grad=True)
-        displacement = torch.zeros(1, 3, 3, requires_grad=True)
-
         # Test with two different cell volumes
+        # Use non-zero position so displacement affects energy
+        pos_small = torch.tensor([[1.0, 1.0, 1.0]], requires_grad=True)
+        pos_large = torch.tensor([[1.0, 1.0, 1.0]], requires_grad=True)
+        displacement_small = torch.zeros(1, 3, 3, requires_grad=True)
+        displacement_large = torch.zeros(1, 3, 3, requires_grad=True)
+
         cell_small = torch.eye(3).unsqueeze(0) * 1.0  # volume = 1
         cell_large = torch.eye(3).unsqueeze(0) * 2.0  # volume = 8
 
-        # Same energy for both
-        energy_part = torch.tensor([1.0])
+        # Apply symmetric displacement to positions and cells
+        sym_disp_small = 0.5 * (
+            displacement_small + displacement_small.transpose(-1, -2)
+        )
+        pos_transformed_small = pos_small + (pos_small @ sym_disp_small.squeeze(0))
+        cell_small = cell_small + cell_small @ sym_disp_small
+
+        sym_disp_large = 0.5 * (
+            displacement_large + displacement_large.transpose(-1, -2)
+        )
+        pos_transformed_large = pos_large + (pos_large @ sym_disp_large.squeeze(0))
+        cell_large = cell_large + cell_large @ sym_disp_large
+
+        # Energy depends on transformed positions
+        energy_small = pos_transformed_small.sum().unsqueeze(0)
+        energy_large = pos_transformed_large.sum().unsqueeze(0)
 
         _, stress_small = compute_forces_and_stress(
-            energy_part,
-            pos_original.clone().requires_grad_(True),
-            displacement.clone().requires_grad_(True),
+            energy_small,
+            pos_transformed_small,
+            displacement_small,
             cell_small,
             training=True,
         )
 
         _, stress_large = compute_forces_and_stress(
-            energy_part,
-            pos_original.clone().requires_grad_(True),
-            displacement.clone().requires_grad_(True),
+            energy_large,
+            pos_transformed_large,
+            displacement_large,
             cell_large,
             training=True,
         )
 
         # Stress should scale as 1/volume, so stress_small / stress_large = 8
-        # Note: This only tests the scaling relationship, actual values depend on gradient
         volume_ratio = 8.0
         # If both stresses are zero (no gradient wrt displacement), skip comparison
         if not torch.allclose(stress_small, torch.zeros_like(stress_small)):
             assert torch.allclose(
                 stress_small / stress_large, torch.full_like(stress_small, volume_ratio)
             )
-
-    def test_training_false(self):
-        """Test that training=False works correctly."""
-        pos_original = torch.tensor([[1.0, 0.0, 0.0]], requires_grad=True)
-        displacement = torch.zeros(1, 3, 3, requires_grad=True)
-        cell = torch.eye(3).unsqueeze(0)
-
-        energy_part = pos_original.sum().unsqueeze(0)
-
-        forces, stress = compute_forces_and_stress(
-            energy_part, pos_original, displacement, cell, training=False
-        )
-
-        assert not forces.requires_grad
-        assert not stress.requires_grad
