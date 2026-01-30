@@ -7,7 +7,7 @@ file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from fairchem.core.common.class_resolver import resolve_class
+from fairchem.core.common.utils import resolve_class
 from fairchem.core.models.base import BackboneInterface, HeadInterface, HydraModel
 from fairchem.core.models.escaip.EScAIP import (
     EScAIPBackbone,

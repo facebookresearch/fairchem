@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 from fairchem.core.common import distutils, gp_utils
-from fairchem.core.common.class_resolver import resolve_class
+from fairchem.core.common.utils import resolve_class
 
 
 class DDPMTLoss(nn.Module):
