@@ -1,0 +1,1365 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>core.datasets.atomic_data &#8212; fairchem</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=fd3f3429" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../../../../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/core/datasets/atomic_data/index';</script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link rel="next" title="core.datasets.atoms_sequence" href="../atoms_sequence/index.html" />
+    <link rel="prev" title="core.datasets.ase_datasets" href="../ase_datasets/index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">fairchem</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../../../../index.html">
+                    fairchem by FAIR Chemistry
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/install.html">Installation &amp; License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/intro.html">GNNs for Chemistry</a></li>
+
+
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/uma.html">UMA Models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/lammps.html">LAMMPs Integration</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/inference_batcher.html">Batched atomic simulations with an <code class="docutils literal notranslate"><span class="pre">InferenceBatcher</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../core/uma_faq.html">FAQ</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../uma_tutorials/uma_tutorial.html">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../../../uma_tutorials/uma_catalysis_tutorial.html">UMA Catalysis Tutorial</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../molecules/datasets/omol25_elec.html">OMol25 Electronic Structures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../molecules/datasets/omc25.html">OMC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../molecules/models.html">Pretrained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../molecules/leaderboard.html">OMol25 Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../molecules/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference external" href="https://opencatalystproject.org">OCP Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://open-catalyst.metademolab.com/">OCP Demo (no install required!)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../catalysts/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
+
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/datasets/oc25.html">OC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../catalysts/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../catalysts/examples_tutorials/ocpapi.html">ocpapi</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../catalysts/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Inorganic Materials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../inorganic_materials/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/datasets/omat24.html">OMat24</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../inorganic_materials/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../inorganic_materials/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../dac/datasets/odac25.html">ODAC25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../../dac/datasets/odac23.html">Open Direct Air Capture 2023 (ODAC23) [Deprecated]</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../dac/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../../dac/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../../dac/examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Learn More</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/intro_series.html">Why model atoms for climate?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../videos/technical_talks.html">Technical presentations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../core/papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">fairchem documentation</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../../../index.html">API Reference</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active has-children"><a class="reference internal" href="../../index.html">core</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../../_cli/index.html">core._cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../_config/index.html">core._config</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../calculate/_batch/index.html">core.calculate._batch</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../common/index.html">core.common</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../common/data_parallel/index.html">core.common.data_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/distutils/index.html">core.common.distutils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/gp_utils/index.html">core.common.gp_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/logger/index.html">core.common.logger</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/profiler_utils/index.html">core.common.profiler_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/registry/index.html">core.common.registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/test_utils/index.html">core.common.test_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/typing/index.html">core.common.typing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../common/utils/index.html">core.common.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 current active has-children"><a class="reference internal" href="../index.html">core.datasets</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="../_utils/index.html">core.datasets._utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../ase_datasets/index.html">core.datasets.ase_datasets</a></li>
+<li class="toctree-l4 current active"><a class="current reference internal" href="#">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../base_dataset/index.html">core.datasets.base_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../common_structures/index.html">core.datasets.common_structures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../embeddings/index.html">core.datasets.embeddings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../mt_concat_dataset/index.html">core.datasets.mt_concat_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../target_metadata_guesser/index.html">core.datasets.target_metadata_guesser</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../models/index.html">core.models</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../models/base/index.html">core.models.base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../models/escaip/index.html">core.models.escaip</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../models/uma/index.html">core.models.uma</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../models/utils/index.html">core.models.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../modules/index.html">core.modules</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/evaluator/index.html">core.modules.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/exponential_moving_average/index.html">core.modules.exponential_moving_average</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/loss/index.html">core.modules.loss</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/normalization/index.html">core.modules.normalization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/scaling/index.html">core.modules.scaling</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/scheduler/index.html">core.modules.scheduler</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../modules/transforms/index.html">core.modules.transforms</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../scripts/index.html">core.scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/download_data/index.html">core.scripts.download_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/fit_normalizers/index.html">core.scripts.fit_normalizers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/fit_references/index.html">core.scripts.fit_references</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/gif_maker_parallelized/index.html">core.scripts.gif_maker_parallelized</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/make_challenge_submission_file/index.html">core.scripts.make_challenge_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/make_lmdb_sizes/index.html">core.scripts.make_lmdb_sizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/make_submission_file/index.html">core.scripts.make_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/migrate_checkpoint/index.html">core.scripts.migrate_checkpoint</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/migrate_imports/index.html">core.scripts.migrate_imports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/preprocess_ef/index.html">core.scripts.preprocess_ef</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/preprocess_relaxed/index.html">core.scripts.preprocess_relaxed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../scripts/uncompress/index.html">core.scripts.uncompress</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../units/index.html">core.units</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../units/mlip_unit/index.html">core.units.mlip_unit</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/omat/entries/index.html">data.omat.entries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../../cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../../cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../../cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../cattsunami/databases/index.html">cattsunami.databases</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebook execution times</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../../../execution_time.html">Notebook execution times</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fautoapi/core/datasets/atomic_data/index.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../../../_sources/autoapi/core/datasets/atomic_data/index.rst" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.rst</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>core.datasets.atomic_data</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.pmg_installed"><code class="docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.IndexType"><code class="docutils literal notranslate"><span class="pre">IndexType</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data._REQUIRED_KEYS"><code class="docutils literal notranslate"><span class="pre">_REQUIRED_KEYS</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data._OPTIONAL_KEYS"><code class="docutils literal notranslate"><span class="pre">_OPTIONAL_KEYS</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.size_repr"><code class="docutils literal notranslate"><span class="pre">size_repr()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.get_neighbors_pymatgen"><code class="docutils literal notranslate"><span class="pre">get_neighbors_pymatgen()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.reshape_features"><code class="docutils literal notranslate"><span class="pre">reshape_features()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData"><code class="docutils literal notranslate"><span class="pre">AtomicData</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__keys__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__keys__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.pos"><code class="docutils literal notranslate"><span class="pre">AtomicData.pos</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.atomic_numbers"><code class="docutils literal notranslate"><span class="pre">AtomicData.atomic_numbers</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cell"><code class="docutils literal notranslate"><span class="pre">AtomicData.cell</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.pbc"><code class="docutils literal notranslate"><span class="pre">AtomicData.pbc</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.natoms"><code class="docutils literal notranslate"><span class="pre">AtomicData.natoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.edge_index"><code class="docutils literal notranslate"><span class="pre">AtomicData.edge_index</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cell_offsets"><code class="docutils literal notranslate"><span class="pre">AtomicData.cell_offsets</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.nedges"><code class="docutils literal notranslate"><span class="pre">AtomicData.nedges</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.charge"><code class="docutils literal notranslate"><span class="pre">AtomicData.charge</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.spin"><code class="docutils literal notranslate"><span class="pre">AtomicData.spin</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.fixed"><code class="docutils literal notranslate"><span class="pre">AtomicData.fixed</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.tags"><code class="docutils literal notranslate"><span class="pre">AtomicData.tags</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.sid"><code class="docutils literal notranslate"><span class="pre">AtomicData.sid</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__slices__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__slices__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__cumsum__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__cumsum__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__cat_dims__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__cat_dims__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__natoms_list__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__natoms_list__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.task_name"><code class="docutils literal notranslate"><span class="pre">AtomicData.task_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.assign_batch_stats"><code class="docutils literal notranslate"><span class="pre">AtomicData.assign_batch_stats()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.get_batch_stats"><code class="docutils literal notranslate"><span class="pre">AtomicData.get_batch_stats()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.validate"><code class="docutils literal notranslate"><span class="pre">AtomicData.validate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.from_ase"><code class="docutils literal notranslate"><span class="pre">AtomicData.from_ase()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to_ase_single"><code class="docutils literal notranslate"><span class="pre">AtomicData.to_ase_single()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to_ase"><code class="docutils literal notranslate"><span class="pre">AtomicData.to_ase()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.from_dict"><code class="docutils literal notranslate"><span class="pre">AtomicData.from_dict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to_dict"><code class="docutils literal notranslate"><span class="pre">AtomicData.to_dict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.values"><code class="docutils literal notranslate"><span class="pre">AtomicData.values()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.num_nodes"><code class="docutils literal notranslate"><span class="pre">AtomicData.num_nodes</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.num_edges"><code class="docutils literal notranslate"><span class="pre">AtomicData.num_edges</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.num_graphs"><code class="docutils literal notranslate"><span class="pre">AtomicData.num_graphs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__len__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__len__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.get"><code class="docutils literal notranslate"><span class="pre">AtomicData.get()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__getitem__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__getitem__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__setitem__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__setitem__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__setattr__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__setattr__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__delitem__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__delitem__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.keys"><code class="docutils literal notranslate"><span class="pre">AtomicData.keys()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__contains__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__contains__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__iter__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__iter__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__call__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__call__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__cat_dim__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__cat_dim__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__inc__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__inc__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__apply__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__apply__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.apply"><code class="docutils literal notranslate"><span class="pre">AtomicData.apply()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.contiguous"><code class="docutils literal notranslate"><span class="pre">AtomicData.contiguous()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to"><code class="docutils literal notranslate"><span class="pre">AtomicData.to()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cpu"><code class="docutils literal notranslate"><span class="pre">AtomicData.cpu()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cuda"><code class="docutils literal notranslate"><span class="pre">AtomicData.cuda()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.clone"><code class="docutils literal notranslate"><span class="pre">AtomicData.clone()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__repr__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__repr__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.get_example"><code class="docutils literal notranslate"><span class="pre">AtomicData.get_example()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.index_select"><code class="docutils literal notranslate"><span class="pre">AtomicData.index_select()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.batch_to_atomicdata_list"><code class="docutils literal notranslate"><span class="pre">AtomicData.batch_to_atomicdata_list()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.update_batch_edges"><code class="docutils literal notranslate"><span class="pre">AtomicData.update_batch_edges()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.atomicdata_list_to_batch"><code class="docutils literal notranslate"><span class="pre">atomicdata_list_to_batch()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.tensor_or_int_to_tensor"><code class="docutils literal notranslate"><span class="pre">tensor_or_int_to_tensor()</span></code></a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-core.datasets.atomic_data">
+<span id="core-datasets-atomic-data"></span><h1>core.datasets.atomic_data<a class="headerlink" href="#module-core.datasets.atomic_data" title="Link to this heading">#</a></h1>
+<p>Copyright (c) Meta Platforms, Inc. and affiliates.</p>
+<p>This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.</p>
+<p>modified from troch_geometric Data class</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.atomic_data.pmg_installed" title="core.datasets.atomic_data.pmg_installed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.datasets.atomic_data.IndexType" title="core.datasets.atomic_data.IndexType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">IndexType</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.atomic_data._REQUIRED_KEYS" title="core.datasets.atomic_data._REQUIRED_KEYS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_REQUIRED_KEYS</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.datasets.atomic_data._OPTIONAL_KEYS" title="core.datasets.atomic_data._OPTIONAL_KEYS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_OPTIONAL_KEYS</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AtomicData</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.atomic_data.size_repr" title="core.datasets.atomic_data.size_repr"><code class="xref py py-obj docutils literal notranslate"><span class="pre">size_repr</span></code></a>(→ str)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.datasets.atomic_data.get_neighbors_pymatgen" title="core.datasets.atomic_data.get_neighbors_pymatgen"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_neighbors_pymatgen</span></code></a>(atoms, cutoff, max_neigh)</p></td>
+<td><p>Performs nearest neighbor search and returns edge index, distances,</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.atomic_data.reshape_features" title="core.datasets.atomic_data.reshape_features"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reshape_features</span></code></a>(c_index, n_index, n_distance, offsets)</p></td>
+<td><p>Stack center and neighbor index and reshapes distances,</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#core.datasets.atomic_data.atomicdata_list_to_batch" title="core.datasets.atomic_data.atomicdata_list_to_batch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">atomicdata_list_to_batch</span></code></a>(→ AtomicData)</p></td>
+<td><p>all data points must be single graphs and have the same set of keys.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#core.datasets.atomic_data.tensor_or_int_to_tensor" title="core.datasets.atomic_data.tensor_or_int_to_tensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tensor_or_int_to_tensor</span></code></a>(x[, dtype])</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.pmg_installed">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">pmg_installed</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#core.datasets.atomic_data.pmg_installed" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.IndexType">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">IndexType</span></span><a class="headerlink" href="#core.datasets.atomic_data.IndexType" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="core.datasets.atomic_data._REQUIRED_KEYS">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">_REQUIRED_KEYS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['pos',</span> <span class="pre">'atomic_numbers',</span> <span class="pre">'cell',</span> <span class="pre">'pbc',</span> <span class="pre">'natoms',</span> <span class="pre">'edge_index',</span> <span class="pre">'cell_offsets',</span> <span class="pre">'nedges',...</span></em><a class="headerlink" href="#core.datasets.atomic_data._REQUIRED_KEYS" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="core.datasets.atomic_data._OPTIONAL_KEYS">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">_OPTIONAL_KEYS</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['energy',</span> <span class="pre">'forces',</span> <span class="pre">'stress',</span> <span class="pre">'dataset']</span></em><a class="headerlink" href="#core.datasets.atomic_data._OPTIONAL_KEYS" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.size_repr">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">size_repr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">item</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#core.datasets.atomic_data.size_repr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.get_neighbors_pymatgen">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">get_neighbors_pymatgen</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.Atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cutoff</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_neigh</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.get_neighbors_pymatgen" title="Link to this definition">#</a></dt>
+<dd><p>Performs nearest neighbor search and returns edge index, distances,
+and cell offsets</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.reshape_features">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">reshape_features</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">c_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_distance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offsets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.reshape_features" title="Link to this definition">#</a></dt>
+<dd><p>Stack center and neighbor index and reshapes distances,
+takes in np.arrays and returns torch tensors</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">AtomicData</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atomic_numbers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pbc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">natoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">edge_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell_offsets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nedges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">charge</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">spin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fixed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tags</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">energy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">forces</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sid</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData" title="Link to this definition">#</a></dt>
+<dd><dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__keys__">
+<span class="sig-name descname"><span class="pre">__keys__</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__keys__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.pos">
+<span class="sig-name descname"><span class="pre">pos</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.pos" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.atomic_numbers">
+<span class="sig-name descname"><span class="pre">atomic_numbers</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.atomic_numbers" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.cell">
+<span class="sig-name descname"><span class="pre">cell</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.cell" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.pbc">
+<span class="sig-name descname"><span class="pre">pbc</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.pbc" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.natoms">
+<span class="sig-name descname"><span class="pre">natoms</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.natoms" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.edge_index">
+<span class="sig-name descname"><span class="pre">edge_index</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.edge_index" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.cell_offsets">
+<span class="sig-name descname"><span class="pre">cell_offsets</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.cell_offsets" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.nedges">
+<span class="sig-name descname"><span class="pre">nedges</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.nedges" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.charge">
+<span class="sig-name descname"><span class="pre">charge</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.charge" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.spin">
+<span class="sig-name descname"><span class="pre">spin</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.spin" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.fixed">
+<span class="sig-name descname"><span class="pre">fixed</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.fixed" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.tags">
+<span class="sig-name descname"><span class="pre">tags</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.tags" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.sid">
+<span class="sig-name descname"><span class="pre">sid</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.sid" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__slices__">
+<span class="sig-name descname"><span class="pre">__slices__</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__slices__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__cumsum__">
+<span class="sig-name descname"><span class="pre">__cumsum__</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__cumsum__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__cat_dims__">
+<span class="sig-name descname"><span class="pre">__cat_dims__</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__cat_dims__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__natoms_list__">
+<span class="sig-name descname"><span class="pre">__natoms_list__</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__natoms_list__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.task_name">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">task_name</span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.task_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.assign_batch_stats">
+<span class="sig-name descname"><span class="pre">assign_batch_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">slices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cumsum</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cat_dims</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">natoms_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.assign_batch_stats" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.get_batch_stats">
+<span class="sig-name descname"><span class="pre">get_batch_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.get_batch_stats" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.validate">
+<span class="sig-name descname"><span class="pre">validate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.validate" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.from_ase">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_ase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_atoms</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ase.Atoms</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_edges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radius</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">6.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_neigh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sid</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">molecule_cell_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_energy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_forces</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_stress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r_data_keys</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.dtype</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">torch.float32</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.from_ase" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.to_ase_single">
+<span class="sig-name descname"><span class="pre">to_ase_single</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ase.Atoms</span></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.to_ase_single" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.to_ase">
+<span class="sig-name descname"><span class="pre">to_ase</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">ase.Atoms</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.to_ase" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.from_dict">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dictionary</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.from_dict" title="Link to this definition">#</a></dt>
+<dd><p>Creates a data object from a python dictionary.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.to_dict">
+<span class="sig-name descname"><span class="pre">to_dict</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.to_dict" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.values">
+<span class="sig-name descname"><span class="pre">values</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.values" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.num_nodes">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">num_nodes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.num_nodes" title="Link to this definition">#</a></dt>
+<dd><p>Returns or sets the number of nodes in the graph.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.num_edges">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">num_edges</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.num_edges" title="Link to this definition">#</a></dt>
+<dd><p>Returns the number of edges in the graph.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.num_graphs">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">num_graphs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.num_graphs" title="Link to this definition">#</a></dt>
+<dd><p>Returns the number of graphs in the batch.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__len__">
+<span class="sig-name descname"><span class="pre">__len__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__len__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.get" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__getitem__">
+<span class="sig-name descname"><span class="pre">__getitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__getitem__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__setitem__">
+<span class="sig-name descname"><span class="pre">__setitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__setitem__" title="Link to this definition">#</a></dt>
+<dd><p>Sets the attribute <code class="xref py py-obj docutils literal notranslate"><span class="pre">key</span></code> to <code class="xref py py-obj docutils literal notranslate"><span class="pre">value</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__setattr__">
+<span class="sig-name descname"><span class="pre">__setattr__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__setattr__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__delitem__">
+<span class="sig-name descname"><span class="pre">__delitem__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__delitem__" title="Link to this definition">#</a></dt>
+<dd><p>Deletes the attribute <code class="xref py py-obj docutils literal notranslate"><span class="pre">key</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.keys">
+<span class="sig-name descname"><span class="pre">keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.keys" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__contains__">
+<span class="sig-name descname"><span class="pre">__contains__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__contains__" title="Link to this definition">#</a></dt>
+<dd><p>Returns <code class="xref py py-obj docutils literal notranslate"><span class="pre">True</span></code>, if the attribute <code class="xref py py-obj docutils literal notranslate"><span class="pre">key</span></code> is present in the
+data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__iter__">
+<span class="sig-name descname"><span class="pre">__iter__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__iter__" title="Link to this definition">#</a></dt>
+<dd><p>Iterates over all present attributes in the data, yielding their
+attribute names and content.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">keys</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__call__" title="Link to this definition">#</a></dt>
+<dd><p>Iterates over all attributes <code class="xref py py-obj docutils literal notranslate"><span class="pre">*keys</span></code> in the data, yielding
+their attribute names and content.
+If <code class="xref py py-obj docutils literal notranslate"><span class="pre">*keys</span></code> is not given this method will iterative over all
+present attributes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__cat_dim__">
+<span class="sig-name descname"><span class="pre">__cat_dim__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__cat_dim__" title="Link to this definition">#</a></dt>
+<dd><p>Returns the dimension for which <code class="xref py py-obj docutils literal notranslate"><span class="pre">value</span></code> of attribute
+<code class="xref py py-obj docutils literal notranslate"><span class="pre">key</span></code> will get concatenated when creating batches.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is for internal use only, and should only be overridden
+if the batch concatenation process is corrupted for a specific data
+attribute.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__inc__">
+<span class="sig-name descname"><span class="pre">__inc__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__inc__" title="Link to this definition">#</a></dt>
+<dd><p>Returns the incremental count to cumulatively increase the value
+of the next attribute of <code class="xref py py-obj docutils literal notranslate"><span class="pre">key</span></code> when creating batches.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method is for internal use only, and should only be overridden
+if the batch concatenation process is corrupted for a specific data
+attribute.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__apply__">
+<span class="sig-name descname"><span class="pre">__apply__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">item</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__apply__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.apply">
+<span class="sig-name descname"><span class="pre">apply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.apply" title="Link to this definition">#</a></dt>
+<dd><p>Applies the function <code class="xref py py-obj docutils literal notranslate"><span class="pre">func</span></code> to all tensor attributes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.contiguous">
+<span class="sig-name descname"><span class="pre">contiguous</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.contiguous" title="Link to this definition">#</a></dt>
+<dd><p>Ensures a contiguous memory layout for all tensor attributes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.to">
+<span class="sig-name descname"><span class="pre">to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.to" title="Link to this definition">#</a></dt>
+<dd><p>Performs tensor dtype and/or device conversion for all tensor attributes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.cpu">
+<span class="sig-name descname"><span class="pre">cpu</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.cpu" title="Link to this definition">#</a></dt>
+<dd><p>Copies all tensor attributes to CPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.cuda">
+<span class="sig-name descname"><span class="pre">cuda</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">non_blocking</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.cuda" title="Link to this definition">#</a></dt>
+<dd><p>Copies all tensor attributes to GPU memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.clone">
+<span class="sig-name descname"><span class="pre">clone</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.clone" title="Link to this definition">#</a></dt>
+<dd><p>Performs a deep-copy of the data object.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.__repr__">
+<span class="sig-name descname"><span class="pre">__repr__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.__repr__" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.get_example">
+<span class="sig-name descname"><span class="pre">get_example</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.get_example" title="Link to this definition">#</a></dt>
+<dd><p>Reconstructs the <a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><code class="xref py py-class docutils literal notranslate"><span class="pre">AtomicData</span></code></a> object at index
+<code class="xref py py-obj docutils literal notranslate"><span class="pre">idx</span></code> from a batched AtomicData object.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.index_select">
+<span class="sig-name descname"><span class="pre">index_select</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">IndexType</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.index_select" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.batch_to_atomicdata_list">
+<span class="sig-name descname"><span class="pre">batch_to_atomicdata_list</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.batch_to_atomicdata_list" title="Link to this definition">#</a></dt>
+<dd><p>Reconstructs the list of <code class="xref py py-class docutils literal notranslate"><span class="pre">torch_geometric.data.Data</span></code> objects
+from the batch object.
+The batch object must have been created via <code class="xref py py-meth docutils literal notranslate"><span class="pre">from_data_list()</span></code> in
+order to be able to reconstruct the initial objects.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.AtomicData.update_batch_edges">
+<span class="sig-name descname"><span class="pre">update_batch_edges</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">edge_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell_offsets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nedges</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a></span></span><a class="headerlink" href="#core.datasets.atomic_data.AtomicData.update_batch_edges" title="Link to this definition">#</a></dt>
+<dd><p>Update the connectivity of each batched AtomicData sample.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>edge_index</strong> (<em>torch.Tensor</em>) – New batch edge_index (shape [2, total_edges]).</p></li>
+<li><p><strong>cell_offsets</strong> (<em>torch.Tensor</em>) – Cell offsets per edge (shape [total_edges, 3]).</p></li>
+<li><p><strong>nedges</strong> (<em>torch.Tensor</em>) – Number of edges per system (shape [num_systems]).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The updated batch object.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData">AtomicData</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.atomicdata_list_to_batch">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">atomicdata_list_to_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_keys</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#core.datasets.atomic_data.AtomicData" title="core.datasets.atomic_data.AtomicData"><span class="pre">AtomicData</span></a></span></span><a class="headerlink" href="#core.datasets.atomic_data.atomicdata_list_to_batch" title="Link to this definition">#</a></dt>
+<dd><p>all data points must be single graphs and have the same set of keys.
+TODO: exclude keys?</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="core.datasets.atomic_data.tensor_or_int_to_tensor">
+<span class="sig-prename descclassname"><span class="pre">core.datasets.atomic_data.</span></span><span class="sig-name descname"><span class="pre">tensor_or_int_to_tensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#core.datasets.atomic_data.tensor_or_int_to_tensor" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</section>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./autoapi/core/datasets/atomic_data"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="../ase_datasets/index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">core.datasets.ase_datasets</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../atoms_sequence/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">core.datasets.atoms_sequence</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attributes">Attributes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.pmg_installed"><code class="docutils literal notranslate"><span class="pre">pmg_installed</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.IndexType"><code class="docutils literal notranslate"><span class="pre">IndexType</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data._REQUIRED_KEYS"><code class="docutils literal notranslate"><span class="pre">_REQUIRED_KEYS</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data._OPTIONAL_KEYS"><code class="docutils literal notranslate"><span class="pre">_OPTIONAL_KEYS</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.size_repr"><code class="docutils literal notranslate"><span class="pre">size_repr()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.get_neighbors_pymatgen"><code class="docutils literal notranslate"><span class="pre">get_neighbors_pymatgen()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.reshape_features"><code class="docutils literal notranslate"><span class="pre">reshape_features()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData"><code class="docutils literal notranslate"><span class="pre">AtomicData</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__keys__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__keys__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.pos"><code class="docutils literal notranslate"><span class="pre">AtomicData.pos</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.atomic_numbers"><code class="docutils literal notranslate"><span class="pre">AtomicData.atomic_numbers</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cell"><code class="docutils literal notranslate"><span class="pre">AtomicData.cell</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.pbc"><code class="docutils literal notranslate"><span class="pre">AtomicData.pbc</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.natoms"><code class="docutils literal notranslate"><span class="pre">AtomicData.natoms</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.edge_index"><code class="docutils literal notranslate"><span class="pre">AtomicData.edge_index</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cell_offsets"><code class="docutils literal notranslate"><span class="pre">AtomicData.cell_offsets</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.nedges"><code class="docutils literal notranslate"><span class="pre">AtomicData.nedges</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.charge"><code class="docutils literal notranslate"><span class="pre">AtomicData.charge</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.spin"><code class="docutils literal notranslate"><span class="pre">AtomicData.spin</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.fixed"><code class="docutils literal notranslate"><span class="pre">AtomicData.fixed</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.tags"><code class="docutils literal notranslate"><span class="pre">AtomicData.tags</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.sid"><code class="docutils literal notranslate"><span class="pre">AtomicData.sid</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__slices__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__slices__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__cumsum__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__cumsum__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__cat_dims__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__cat_dims__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__natoms_list__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__natoms_list__</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.task_name"><code class="docutils literal notranslate"><span class="pre">AtomicData.task_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.assign_batch_stats"><code class="docutils literal notranslate"><span class="pre">AtomicData.assign_batch_stats()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.get_batch_stats"><code class="docutils literal notranslate"><span class="pre">AtomicData.get_batch_stats()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.validate"><code class="docutils literal notranslate"><span class="pre">AtomicData.validate()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.from_ase"><code class="docutils literal notranslate"><span class="pre">AtomicData.from_ase()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to_ase_single"><code class="docutils literal notranslate"><span class="pre">AtomicData.to_ase_single()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to_ase"><code class="docutils literal notranslate"><span class="pre">AtomicData.to_ase()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.from_dict"><code class="docutils literal notranslate"><span class="pre">AtomicData.from_dict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to_dict"><code class="docutils literal notranslate"><span class="pre">AtomicData.to_dict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.values"><code class="docutils literal notranslate"><span class="pre">AtomicData.values()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.num_nodes"><code class="docutils literal notranslate"><span class="pre">AtomicData.num_nodes</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.num_edges"><code class="docutils literal notranslate"><span class="pre">AtomicData.num_edges</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.num_graphs"><code class="docutils literal notranslate"><span class="pre">AtomicData.num_graphs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__len__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__len__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.get"><code class="docutils literal notranslate"><span class="pre">AtomicData.get()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__getitem__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__getitem__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__setitem__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__setitem__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__setattr__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__setattr__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__delitem__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__delitem__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.keys"><code class="docutils literal notranslate"><span class="pre">AtomicData.keys()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__contains__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__contains__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__iter__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__iter__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__call__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__call__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__cat_dim__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__cat_dim__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__inc__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__inc__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__apply__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__apply__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.apply"><code class="docutils literal notranslate"><span class="pre">AtomicData.apply()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.contiguous"><code class="docutils literal notranslate"><span class="pre">AtomicData.contiguous()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.to"><code class="docutils literal notranslate"><span class="pre">AtomicData.to()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cpu"><code class="docutils literal notranslate"><span class="pre">AtomicData.cpu()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.cuda"><code class="docutils literal notranslate"><span class="pre">AtomicData.cuda()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.clone"><code class="docutils literal notranslate"><span class="pre">AtomicData.clone()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.__repr__"><code class="docutils literal notranslate"><span class="pre">AtomicData.__repr__()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.get_example"><code class="docutils literal notranslate"><span class="pre">AtomicData.get_example()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.index_select"><code class="docutils literal notranslate"><span class="pre">AtomicData.index_select()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.batch_to_atomicdata_list"><code class="docutils literal notranslate"><span class="pre">AtomicData.batch_to_atomicdata_list()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.AtomicData.update_batch_edges"><code class="docutils literal notranslate"><span class="pre">AtomicData.update_batch_edges()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.atomicdata_list_to_batch"><code class="docutils literal notranslate"><span class="pre">atomicdata_list_to_batch()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#core.datasets.atomic_data.tensor_or_int_to_tensor"><code class="docutils literal notranslate"><span class="pre">tensor_or_int_to_tensor()</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By FAIR Chemistry & Collaborators
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright Meta Platforms, Inc.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

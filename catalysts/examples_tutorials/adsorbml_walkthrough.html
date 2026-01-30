@@ -1,0 +1,1465 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>AdsorbML tutorial &#8212; fairchem</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'catalysts/examples_tutorials/adsorbml_walkthrough';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Transition State Search (NEBs)" href="cattsunami_tutorial.html" />
+    <link rel="prev" title="Expert adsorption energies" href="adsorption_energies/adsorption_energies.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">fairchem</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../../index.html">
+                    fairchem by FAIR Chemistry
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/install.html">Installation &amp; License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro.html">GNNs for Chemistry</a></li>
+
+
+<li class="toctree-l1"><a class="reference internal" href="../../core/uma.html">UMA Models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/lammps.html">LAMMPs Integration</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/inference_batcher.html">Batched atomic simulations with an <code class="docutils literal notranslate"><span class="pre">InferenceBatcher</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/uma_faq.html">FAQ</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_tutorial.html">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_catalysis_tutorial.html">UMA Catalysis Tutorial</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25_elec.html">OMol25 Electronic Structures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">Pretrained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/leaderboard.html">OMol25 Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference external" href="https://opencatalystproject.org">OCP Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://open-catalyst.metademolab.com/">OCP Demo (no install required!)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
+
+<li class="toctree-l2"><a class="reference internal" href="../datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/oc25.html">OC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../models.html">Pretrained models</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Examples &amp; Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
+
+
+
+
+
+
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">AdsorbML tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ocpapi.html">ocpapi</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Inorganic Materials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/datasets/omat24.html">OMat24</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac25.html">ODAC25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac23.html">Open Direct Air Capture 2023 (ODAC23) [Deprecated]</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../dac/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Learn More</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro_series.html">Why model atoms for climate?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../videos/technical_talks.html">Technical presentations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">fairchem documentation</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/index.html">API Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/core/index.html">core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_cli/index.html">core._cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_config/index.html">core._config</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/_batch/index.html">core.calculate._batch</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/common/index.html">core.common</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/data_parallel/index.html">core.common.data_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/distutils/index.html">core.common.distutils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/gp_utils/index.html">core.common.gp_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/logger/index.html">core.common.logger</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/profiler_utils/index.html">core.common.profiler_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/registry/index.html">core.common.registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/test_utils/index.html">core.common.test_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/typing/index.html">core.common.typing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/utils/index.html">core.common.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/datasets/index.html">core.datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/_utils/index.html">core.datasets._utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/common_structures/index.html">core.datasets.common_structures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/embeddings/index.html">core.datasets.embeddings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/mt_concat_dataset/index.html">core.datasets.mt_concat_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/target_metadata_guesser/index.html">core.datasets.target_metadata_guesser</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/models/index.html">core.models</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/base/index.html">core.models.base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/escaip/index.html">core.models.escaip</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/uma/index.html">core.models.uma</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/utils/index.html">core.models.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/modules/index.html">core.modules</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/evaluator/index.html">core.modules.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/exponential_moving_average/index.html">core.modules.exponential_moving_average</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/loss/index.html">core.modules.loss</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/normalization/index.html">core.modules.normalization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scaling/index.html">core.modules.scaling</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scheduler/index.html">core.modules.scheduler</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/transforms/index.html">core.modules.transforms</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/scripts/index.html">core.scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_normalizers/index.html">core.scripts.fit_normalizers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_references/index.html">core.scripts.fit_references</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/gif_maker_parallelized/index.html">core.scripts.gif_maker_parallelized</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_challenge_submission_file/index.html">core.scripts.make_challenge_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_lmdb_sizes/index.html">core.scripts.make_lmdb_sizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_submission_file/index.html">core.scripts.make_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_checkpoint/index.html">core.scripts.migrate_checkpoint</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_imports/index.html">core.scripts.migrate_imports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_ef/index.html">core.scripts.preprocess_ef</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_relaxed/index.html">core.scripts.preprocess_relaxed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/uncompress/index.html">core.scripts.uncompress</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/units/index.html">core.units</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/units/mlip_unit/index.html">core.units.mlip_unit</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/entries/index.html">data.omat.entries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cattsunami/databases/index.html">cattsunami.databases</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebook execution times</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../execution_time.html">Notebook execution times</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-launch-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Launch interactive content">
+    <i class="fas fa-rocket"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://colab.research.google.com/github/facebookresearch/fairchem/blob/main/docs/catalysts/examples_tutorials/adsorbml_walkthrough.md" target="_blank"
+   class="btn btn-sm dropdown-item"
+   title="Launch on Colab"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  
+    <img alt="Colab logo" src="../../_static/images/logo_colab.png">
+  </span>
+<span class="btn__text-container">Colab</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fcatalysts/examples_tutorials/adsorbml_walkthrough.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/catalysts/examples_tutorials/adsorbml_walkthrough.ipynb" target="_blank"
+   class="btn btn-sm btn-download-notebook-button dropdown-item"
+   title="Download notebook file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">.ipynb</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="../../_sources/catalysts/examples_tutorials/adsorbml_walkthrough.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>AdsorbML tutorial</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#define-desired-adsorbate-slab-system">Define desired adsorbate+slab system</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-heuristic-random-adsorbate-placement-and-ml-relaxations">Run heuristic/random adsorbate placement and ML relaxations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#write-vasp-input-files">Write VASP input files</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="adsorbml-tutorial">
+<h1>AdsorbML tutorial<a class="headerlink" href="#adsorbml-tutorial" title="Link to this heading">#</a></h1>
+<p>The <a class="reference external" href="https://arxiv.org/abs/2211.16486">AdsorbML</a> paper showed that pre-trained machine learning potentials were now viable to find and prioritize the best adsorption sites for a given surface. The results were quite impressive, especially if you were willing to do a DFT single-point calculation on the best calculations.</p>
+<p>The latest UMA models are now total-energy models, and the results for the adsorption energy are even more impressive (<a class="reference external" href="https://ai.meta.com/research/publications/uma-a-family-of-universal-models-for-atoms/">see the paper for details and benchmarks</a>). The AdsorbML package helps you with automated multi-adsorbate placement, and will automatically run calculations using the ML models to find the best sites to sample.</p>
+<div class="dropdown admonition">
+<p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
+<ol class="arabic simple">
+<li><p>Install the necessary packages using pip, uv etc</p></li>
+</ol>
+<ol class="arabic simple" start="2">
+<li><p>Get access to any necessary huggingface gated models</p>
+<ul class="simple">
+<li><p>Get and login to your Huggingface account</p></li>
+<li><p>Request access to https://huggingface.co/facebook/UMA</p></li>
+<li><p>Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission “Permissions: Read access to contents of all public gated repos you can access”</p></li>
+<li><p>Add the token as an environment variable using <code class="docutils literal notranslate"><span class="pre">huggingface-cli</span> <span class="pre">login</span></code> or by setting the HF_TOKEN environment variable.</p></li>
+</ul>
+</li>
+</ol>
+</div>
+<section id="define-desired-adsorbate-slab-system">
+<h2>Define desired adsorbate+slab system<a class="headerlink" href="#define-desired-adsorbate-slab-system" title="Link to this heading">#</a></h2>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.data.oc.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">Adsorbate</span><span class="p">,</span> <span class="n">Bulk</span><span class="p">,</span> <span class="n">Slab</span>
+
+<span class="n">bulk_src_id</span> <span class="o">=</span> <span class="s2">&quot;mp-30&quot;</span>
+<span class="n">adsorbate_smiles</span> <span class="o">=</span> <span class="s2">&quot;*CO&quot;</span>
+
+<span class="n">bulk</span> <span class="o">=</span> <span class="n">Bulk</span><span class="p">(</span><span class="n">bulk_src_id_from_db</span><span class="o">=</span><span class="n">bulk_src_id</span><span class="p">)</span>
+<span class="n">adsorbate</span> <span class="o">=</span> <span class="n">Adsorbate</span><span class="p">(</span><span class="n">adsorbate_smiles_from_db</span><span class="o">=</span><span class="n">adsorbate_smiles</span><span class="p">)</span>
+<span class="n">slabs</span> <span class="o">=</span> <span class="n">Slab</span><span class="o">.</span><span class="n">from_bulk_get_specific_millers</span><span class="p">(</span><span class="n">bulk</span><span class="o">=</span><span class="n">bulk</span><span class="p">,</span> <span class="n">specific_millers</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="c1"># There may be multiple slabs with this miller index.</span>
+<span class="c1"># For demonstrative purposes we will take the first entry.</span>
+<span class="n">slab</span> <span class="o">=</span> <span class="n">slabs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Downloading /home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/fairchem/data/oc/databases/pkls/bulks.pkl...
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="run-heuristic-random-adsorbate-placement-and-ml-relaxations">
+<h2>Run heuristic/random adsorbate placement and ML relaxations<a class="headerlink" href="#run-heuristic-random-adsorbate-placement-and-ml-relaxations" title="Link to this heading">#</a></h2>
+<p>Now that we’ve defined the bulk, slab, and adsorbates of interest, we can quickly use the pre-trained UMA model as a calculator and the helper script <code class="docutils literal notranslate"><span class="pre">fairchem.core.components.calculate.recipes.adsorbml.run_adsorbml</span></code>. More details on the automated pipeline can be found at https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/calculate/recipes/adsorbml.py#L316.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">LBFGS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">FAIRChemCalculator</span><span class="p">,</span> <span class="n">pretrained_mlip</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.components.calculate.recipes.adsorbml</span><span class="w"> </span><span class="kn">import</span> <span class="n">run_adsorbml</span>
+
+<span class="n">predictor</span> <span class="o">=</span> <span class="n">pretrained_mlip</span><span class="o">.</span><span class="n">get_predict_unit</span><span class="p">(</span><span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">)</span>
+<span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;oc20&quot;</span><span class="p">)</span>
+
+<span class="n">outputs</span> <span class="o">=</span> <span class="n">run_adsorbml</span><span class="p">(</span>
+    <span class="n">slab</span><span class="o">=</span><span class="n">slab</span><span class="p">,</span>
+    <span class="n">adsorbate</span><span class="o">=</span><span class="n">adsorbate</span><span class="p">,</span>
+    <span class="n">calculator</span><span class="o">=</span><span class="n">calc</span><span class="p">,</span>
+    <span class="n">optimizer_cls</span><span class="o">=</span><span class="n">LBFGS</span><span class="p">,</span>
+    <span class="n">fmax</span><span class="o">=</span><span class="mf">0.02</span><span class="p">,</span>
+    <span class="n">steps</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>  <span class="c1"># Increase to 200 for practical application, 20 is used for demonstrations</span>
+    <span class="n">num_placements</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>  <span class="c1"># Increase to 100 for practical application, 10 is used for demonstrations</span>
+    <span class="n">reference_ml_energies</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># True if using a total energy model (i.e. UMA)</span>
+    <span class="n">relaxed_slab_atoms</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">place_on_relaxed_slab</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 00:58:17     -300.219297        0.047121
+LBFGS:    1 00:58:17     -300.219789        0.045100
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 00:58:17     -300.225582        0.004432
+</pre></div>
+</div>
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/fairchem/data/oc/core/adsorbate.py:89: UserWarning: An adsorbate with that SMILES string was not found. Choosing one at random instead.
+  warnings.warn(
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 00:58:18     -329.009718        2.969513
+LBFGS:    1 00:58:18     -329.262829        1.461636
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 00:58:18     -329.394583        0.970980
+LBFGS:    3 00:58:18     -329.437779        0.865683
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 00:58:19     -329.510418        0.710859
+LBFGS:    5 00:58:19     -329.535746        0.527356
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 00:58:19     -329.547667        0.368441
+LBFGS:    7 00:58:19     -329.559611        0.412709
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 00:58:19     -329.577612        0.612591
+LBFGS:    9 00:58:19     -329.603837        0.625863
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 00:58:20     -329.627188        0.542670
+LBFGS:   11 00:58:20     -329.650082        0.598585
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 00:58:20     -329.681864        0.556513
+LBFGS:   13 00:58:20     -329.724488        0.898912
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 00:58:20     -329.774594        1.075257
+LBFGS:   15 00:58:21     -329.824795        0.864830
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 00:58:21     -329.859662        0.402755
+LBFGS:   17 00:58:21     -329.880387        0.496865
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 00:58:21     -329.913315        0.741583
+LBFGS:   19 00:58:21     -329.952439        0.843978
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 00:58:21     -329.978150        0.518035
+       Step     Time          Energy          fmax
+LBFGS:    0 00:58:22     -328.863083        3.004484
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 00:58:22     -329.128964        1.449172
+LBFGS:    2 00:58:22     -329.297530        1.136905
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 00:58:22     -329.349669        1.035495
+LBFGS:    4 00:58:22     -329.442998        0.754110
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 00:58:23     -329.470624        0.464094
+LBFGS:    6 00:58:23     -329.485611        0.474614
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 00:58:23     -329.507035        0.504776
+LBFGS:    8 00:58:23     -329.534365        0.710377
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 00:58:23     -329.564244        0.611103
+LBFGS:   10 00:58:23     -329.587147        0.594276
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 00:58:24     -329.618096        0.757953
+LBFGS:   12 00:58:24     -329.666062        0.844085
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 00:58:24     -329.731728        0.960194
+LBFGS:   14 00:58:24     -329.812537        1.099793
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 00:58:24     -329.892544        0.743142
+LBFGS:   16 00:58:25     -329.941865        0.452439
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 00:58:25     -329.968739        0.471613
+LBFGS:   18 00:58:25     -329.997164        0.399964
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 00:58:25     -330.011485        0.931386
+LBFGS:   20 00:58:25     -330.021832        0.582570
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 00:58:25     -329.256667        2.819492
+LBFGS:    1 00:58:26     -329.460398        1.434214
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 00:58:26     -329.578000        0.942242
+LBFGS:    3 00:58:26     -329.612786        0.876026
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 00:58:26     -329.669688        0.456018
+LBFGS:    5 00:58:26     -329.683714        0.335062
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 00:58:27     -329.692030        0.361890
+LBFGS:    7 00:58:27     -329.702538        0.349879
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 00:58:27     -329.719111        0.538368
+LBFGS:    9 00:58:27     -329.736924        0.499483
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 00:58:27     -329.751368        0.440141
+LBFGS:   11 00:58:27     -329.768118        0.522305
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 00:58:28     -329.793061        0.593061
+LBFGS:   13 00:58:28     -329.825989        0.699287
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 00:58:28     -329.863440        0.737252
+LBFGS:   15 00:58:28     -329.897250        0.451702
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 00:58:28     -329.919163        0.308363
+LBFGS:   17 00:58:28     -329.939772        0.458389
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 00:58:29     -329.970372        0.587837
+LBFGS:   19 00:58:29     -329.996241        0.462180
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 00:58:29     -330.011389        0.347119
+       Step     Time          Energy          fmax
+LBFGS:    0 00:58:29     -329.205531        2.770492
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 00:58:29     -329.425761        1.349018
+LBFGS:    2 00:58:30     -329.544644        0.934491
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 00:58:30     -329.576287        0.841549
+LBFGS:    4 00:58:30     -329.634007        0.618345
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 00:58:30     -329.649127        0.403414
+LBFGS:    6 00:58:30     -329.658310        0.343094
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 00:58:30     -329.670214        0.412085
+LBFGS:    8 00:58:31     -329.686514        0.494476
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 00:58:31     -329.702441        0.360537
+LBFGS:   10 00:58:31     -329.715127        0.422159
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 00:58:31     -329.731501        0.524076
+LBFGS:   12 00:58:31     -329.758107        0.593297
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 00:58:32     -329.797150        0.846410
+LBFGS:   14 00:58:32     -329.845614        0.867909
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 00:58:32     -329.893462        0.532865
+LBFGS:   16 00:58:32     -329.922970        0.297056
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 00:58:32     -329.944392        0.413079
+LBFGS:   18 00:58:32     -329.975649        0.534631
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 00:58:33     -330.004639        0.487936
+LBFGS:   20 00:58:33     -330.024415        0.447021
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 00:58:33     -329.211251        2.539021
+LBFGS:    1 00:58:33     -329.424614        1.304845
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 00:58:33     -329.546061        0.967964
+LBFGS:    3 00:58:34     -329.582848        0.843348
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 00:58:34     -329.649563        0.715534
+LBFGS:    5 00:58:34     -329.668448        0.470573
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 00:58:34     -329.680213        0.335375
+LBFGS:    7 00:58:34     -329.694863        0.424284
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 00:58:34     -329.717118        0.593592
+LBFGS:    9 00:58:35     -329.741149        0.510363
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 00:58:35     -329.759755        0.553016
+LBFGS:   11 00:58:35     -329.783667        0.671082
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 00:58:35     -329.818923        0.717807
+LBFGS:   13 00:58:35     -329.866856        0.852145
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 00:58:36     -329.926053        0.900622
+LBFGS:   15 00:58:36     -329.983864        0.579022
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 00:58:36     -330.014617        0.273322
+LBFGS:   17 00:58:36     -330.030865        0.295796
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 00:58:36     -330.050538        0.347122
+LBFGS:   19 00:58:36     -330.073626        0.689071
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 00:58:37     -330.085471        0.525707
+       Step     Time          Energy          fmax
+LBFGS:    0 00:58:37     -329.135085        2.582889
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 00:58:37     -329.367688        1.265373
+LBFGS:    2 00:58:37     -329.494572        1.086841
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 00:58:37     -329.540066        0.986831
+LBFGS:    4 00:58:38     -329.625922        0.962412
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 00:58:38     -329.667473        0.662272
+LBFGS:    6 00:58:38     -329.689778        0.509078
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 00:58:38     -329.717734        0.575068
+LBFGS:    8 00:58:38     -329.760647        0.708999
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 00:58:38     -329.811255        0.742550
+LBFGS:   10 00:58:39     -329.849522        0.627491
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 00:58:39     -329.893952        0.795573
+LBFGS:   12 00:58:39     -329.935402        0.857902
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 00:58:39     -329.992932        0.844271
+LBFGS:   14 00:58:39     -330.053818        0.867252
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 00:58:40     -330.108363        0.605213
+LBFGS:   16 00:58:40     -330.132186        0.435804
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 00:58:40     -330.136309        0.500712
+LBFGS:   18 00:58:40     -330.148596        0.282065
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 00:58:40     -330.156373        0.200765
+LBFGS:   20 00:58:40     -330.171879        0.239611
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 00:58:41     -328.733912        3.200605
+LBFGS:    1 00:58:41     -328.991669        1.490291
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 00:58:41     -329.154740        1.069548
+LBFGS:    3 00:58:41     -329.214303        1.158683
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 00:58:41     -329.306168        0.880184
+LBFGS:    5 00:58:42     -329.354765        0.521463
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 00:58:42     -329.373816        0.406390
+LBFGS:    7 00:58:42     -329.392214        0.423459
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 00:58:42     -329.424120        0.793745
+LBFGS:    9 00:58:42     -329.471213        0.983962
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 00:58:42     -329.517493        0.720471
+LBFGS:   11 00:58:43     -329.554764        0.678938
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 00:58:43     -329.605502        0.670651
+LBFGS:   13 00:58:43     -329.668784        1.013302
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 00:58:43     -329.743598        1.208131
+LBFGS:   15 00:58:43     -329.825646        1.019905
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 00:58:44     -329.894019        0.502839
+LBFGS:   17 00:58:44     -329.929640        0.549780
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 00:58:44     -329.969439        0.774943
+LBFGS:   19 00:58:44     -330.012404        0.637304
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 00:58:44     -330.041668        0.636628
+       Step     Time          Energy          fmax
+LBFGS:    0 00:58:44     -328.812855        3.139528
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 00:58:45     -329.104134        1.659777
+LBFGS:    2 00:58:45     -329.261296        1.063189
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 00:58:45     -329.315392        0.941087
+LBFGS:    4 00:58:45     -329.401925        0.762244
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 00:58:45     -329.432639        0.585085
+LBFGS:    6 00:58:46     -329.447827        0.387263
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 00:58:46     -329.464140        0.482929
+LBFGS:    8 00:58:46     -329.488940        0.753898
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 00:58:46     -329.530213        0.830498
+LBFGS:   10 00:58:46     -329.567843        0.643471
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 00:58:46     -329.601151        0.690277
+LBFGS:   12 00:58:47     -329.642046        0.614266
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 00:58:47     -329.693694        0.974757
+LBFGS:   14 00:58:47     -329.754910        1.237420
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 00:58:47     -329.820445        1.103381
+LBFGS:   16 00:58:47     -329.870163        0.439133
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 00:58:48     -329.893590        0.480348
+LBFGS:   18 00:58:48     -329.922288        0.646372
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 00:58:48     -329.961443        0.807289
+LBFGS:   20 00:58:48     -329.985350        0.502155
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>       Step     Time          Energy          fmax
+LBFGS:    0 00:58:48     -329.314454        2.736768
+LBFGS:    1 00:58:48     -329.518340        1.399365
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    2 00:58:49     -329.630574        0.889362
+LBFGS:    3 00:58:49     -329.660498        0.798830
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    4 00:58:49     -329.712323        0.471947
+LBFGS:    5 00:58:49     -329.722416        0.285259
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    6 00:58:49     -329.729027        0.291239
+LBFGS:    7 00:58:50     -329.737362        0.353116
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    8 00:58:50     -329.748877        0.425781
+LBFGS:    9 00:58:50     -329.759110        0.313392
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   10 00:58:50     -329.767611        0.363703
+LBFGS:   11 00:58:50     -329.779278        0.441917
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   12 00:58:50     -329.798655        0.552632
+LBFGS:   13 00:58:51     -329.826346        0.683698
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   14 00:58:51     -329.857182        0.620620
+LBFGS:   15 00:58:51     -329.881239        0.312431
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   16 00:58:51     -329.894888        0.283809
+LBFGS:   17 00:58:51     -329.911227        0.489743
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   18 00:58:52     -329.941626        0.716189
+LBFGS:   19 00:58:52     -329.974209        0.678522
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   20 00:58:52     -329.992056        0.306052
+       Step     Time          Energy          fmax
+LBFGS:    0 00:58:52     -329.228390        2.918154
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    1 00:58:52     -329.437794        1.484230
+LBFGS:    2 00:58:52     -329.555563        0.932671
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    3 00:58:53     -329.590762        0.872376
+LBFGS:    4 00:58:53     -329.650160        0.486893
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    5 00:58:53     -329.665322        0.335022
+LBFGS:    6 00:58:53     -329.674775        0.327778
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    7 00:58:53     -329.686379        0.376761
+LBFGS:    8 00:58:54     -329.703898        0.557294
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:    9 00:58:54     -329.722823        0.502436
+LBFGS:   10 00:58:54     -329.738272        0.468265
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   11 00:58:54     -329.756325        0.529016
+LBFGS:   12 00:58:54     -329.783688        0.643150
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   13 00:58:54     -329.821881        0.804416
+LBFGS:   14 00:58:55     -329.866311        0.804850
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   15 00:58:55     -329.906357        0.506053
+LBFGS:   16 00:58:55     -329.928643        0.354984
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   17 00:58:55     -329.945221        0.405442
+LBFGS:   18 00:58:55     -329.975022        0.566591
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>LBFGS:   19 00:58:56     -330.004452        0.510608
+LBFGS:   20 00:58:56     -330.020985        0.304478
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">top_candidates</span> <span class="o">=</span> <span class="n">outputs</span><span class="p">[</span><span class="s2">&quot;adslabs&quot;</span><span class="p">]</span>
+<span class="n">global_min_candidate</span> <span class="o">=</span> <span class="n">top_candidates</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">top_candidates</span> <span class="o">=</span> <span class="n">outputs</span><span class="p">[</span><span class="s2">&quot;adslabs&quot;</span><span class="p">]</span>
+<span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">top_candidates</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output text_html"><div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>input_atoms</th>
+      <th>atoms</th>
+      <th>results</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -330.17187933939624, 'forces': [[0....</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -330.085470724284, 'forces': [[0.0,...</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -330.024414587199, 'forces': [[0.0,...</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -330.02183203715015, 'forces': [[0....</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -330.0209851743572, 'forces': [[0.0...</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -330.01138930338556, 'forces': [[0....</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -329.99205641764337, 'forces': [[0....</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -329.98535017985034, 'forces': [[0....</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>{'atoms': (Atom('Cu', [np.float64(-1.300046521...</td>
+      <td>(Atom('Cu', [np.float64(-1.3000465215529715), ...</td>
+      <td>{'energy': -329.97814993876153, 'forces': [[0....</td>
+    </tr>
+  </tbody>
+</table>
+</div></div></div>
+</div>
+</section>
+<section id="write-vasp-input-files">
+<h2>Write VASP input files<a class="headerlink" href="#write-vasp-input-files" title="Link to this heading">#</a></h2>
+<p>If you want to verify the results, you should run VASP. This assumes you have access to VASP pseudopotentials. The default VASP flags (which are equivalent to those used to make OC20) are located in <code class="docutils literal notranslate"><span class="pre">ocdata.utils.vasp</span></code>. Alternatively, you may pass your own vasp flags to the <code class="docutils literal notranslate"><span class="pre">write_vasp_input_files</span></code> function as <code class="docutils literal notranslate"><span class="pre">vasp_flags</span></code>. Note that to run this you need access to the VASP pseudopotentials and need to have those set up in ASE.</p>
+<div class="cell tag_skip-execution docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.data.oc.utils.vasp</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_vasp_input_files</span>
+
+<span class="c1"># Grab the 5 systems with the lowest energy</span>
+<span class="n">top_5_candidates</span> <span class="o">=</span> <span class="n">top_candidates</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
+
+<span class="c1"># Write the inputs</span>
+<span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">config</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">top_5_candidates</span><span class="p">):</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;data/</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">write_vasp_input_files</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;atoms&quot;</span><span class="p">],</span> <span class="n">outdir</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;data/</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">/&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./catalysts/examples_tutorials"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="adsorption_energies/adsorption_energies.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Expert adsorption energies</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="cattsunami_tutorial.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Transition State Search (NEBs)</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#define-desired-adsorbate-slab-system">Define desired adsorbate+slab system</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#run-heuristic-random-adsorbate-placement-and-ml-relaxations">Run heuristic/random adsorbate placement and ML relaxations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#write-vasp-input-files">Write VASP input files</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By FAIR Chemistry & Collaborators
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright Meta Platforms, Inc.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

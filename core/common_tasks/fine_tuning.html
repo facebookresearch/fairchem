@@ -1,0 +1,1252 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Fine-tuning &#8212; fairchem</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'core/common_tasks/fine_tuning';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Calculation workflows with FAIRChem models" href="workflows.html" />
+    <link rel="prev" title="Evaluating pretrained models" href="evaluation.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">fairchem</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../../index.html">
+                    fairchem by FAIR Chemistry
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../install.html">Installation &amp; License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../intro.html">GNNs for Chemistry</a></li>
+
+
+<li class="toctree-l1"><a class="reference internal" href="../uma.html">UMA Models</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Common tasks</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="ase_calculator.html">Inference using ASE and Predictor interface</a></li>
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="lammps.html">LAMMPs Integration</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="batch_inference.html">Batch inference with UMA models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="inference_batcher.html">Batched atomic simulations with an <code class="docutils literal notranslate"><span class="pre">InferenceBatcher</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="evaluation.html">Evaluating pretrained models</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="workflows.html">Calculation workflows with FAIRChem models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../uma_faq.html">FAQ</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_tutorial.html">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_catalysis_tutorial.html">UMA Catalysis Tutorial</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25_elec.html">OMol25 Electronic Structures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">Pretrained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/leaderboard.html">OMol25 Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference external" href="https://opencatalystproject.org">OCP Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://open-catalyst.metademolab.com/">OCP Demo (no install required!)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../catalysts/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
+
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc25.html">OC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../catalysts/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/ocpapi.html">ocpapi</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../catalysts/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Inorganic Materials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/datasets/omat24.html">OMat24</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac25.html">ODAC25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/datasets/odac23.html">Open Direct Air Capture 2023 (ODAC23) [Deprecated]</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../dac/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../dac/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../dac/examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Learn More</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../intro_series.html">Why model atoms for climate?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../videos/technical_talks.html">Technical presentations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">fairchem documentation</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/index.html">API Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/core/index.html">core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_cli/index.html">core._cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_config/index.html">core._config</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/_batch/index.html">core.calculate._batch</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/common/index.html">core.common</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/data_parallel/index.html">core.common.data_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/distutils/index.html">core.common.distutils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/gp_utils/index.html">core.common.gp_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/logger/index.html">core.common.logger</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/profiler_utils/index.html">core.common.profiler_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/registry/index.html">core.common.registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/test_utils/index.html">core.common.test_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/typing/index.html">core.common.typing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/utils/index.html">core.common.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/datasets/index.html">core.datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/_utils/index.html">core.datasets._utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/common_structures/index.html">core.datasets.common_structures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/embeddings/index.html">core.datasets.embeddings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/mt_concat_dataset/index.html">core.datasets.mt_concat_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/target_metadata_guesser/index.html">core.datasets.target_metadata_guesser</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/models/index.html">core.models</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/base/index.html">core.models.base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/escaip/index.html">core.models.escaip</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/uma/index.html">core.models.uma</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/utils/index.html">core.models.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/modules/index.html">core.modules</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/evaluator/index.html">core.modules.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/exponential_moving_average/index.html">core.modules.exponential_moving_average</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/loss/index.html">core.modules.loss</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/normalization/index.html">core.modules.normalization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scaling/index.html">core.modules.scaling</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scheduler/index.html">core.modules.scheduler</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/transforms/index.html">core.modules.transforms</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/scripts/index.html">core.scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_normalizers/index.html">core.scripts.fit_normalizers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_references/index.html">core.scripts.fit_references</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/gif_maker_parallelized/index.html">core.scripts.gif_maker_parallelized</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_challenge_submission_file/index.html">core.scripts.make_challenge_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_lmdb_sizes/index.html">core.scripts.make_lmdb_sizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_submission_file/index.html">core.scripts.make_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_checkpoint/index.html">core.scripts.migrate_checkpoint</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_imports/index.html">core.scripts.migrate_imports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_ef/index.html">core.scripts.preprocess_ef</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_relaxed/index.html">core.scripts.preprocess_relaxed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/uncompress/index.html">core.scripts.uncompress</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/units/index.html">core.units</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/units/mlip_unit/index.html">core.units.mlip_unit</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/entries/index.html">data.omat.entries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cattsunami/databases/index.html">cattsunami.databases</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebook execution times</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../execution_time.html">Notebook execution times</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-launch-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Launch interactive content">
+    <i class="fas fa-rocket"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://colab.research.google.com/github/facebookresearch/fairchem/blob/main/docs/core/common_tasks/fine_tuning.md" target="_blank"
+   class="btn btn-sm dropdown-item"
+   title="Launch on Colab"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  
+    <img alt="Colab logo" src="../../_static/images/logo_colab.png">
+  </span>
+<span class="btn__text-container">Colab</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fcore/common_tasks/fine_tuning.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/core/common_tasks/fine_tuning.ipynb" target="_blank"
+   class="btn btn-sm btn-download-notebook-button dropdown-item"
+   title="Download notebook file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">.ipynb</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="../../_sources/core/common_tasks/fine_tuning.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Fine-tuning</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#generating-training-fine-tuning-datasets">Generating training/fine-tuning datasets</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#model-fine-tuning-default-settings">Model fine-tuning (default settings)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-configuration">Advanced configuration</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#logging-and-artifacts">Logging and Artifacts</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#distributed-training">Distributed training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resuming-runs">Resuming runs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-inference-on-the-finetuned-model">Running inference on the finetuned model</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="fine-tuning">
+<h1>Fine-tuning<a class="headerlink" href="#fine-tuning" title="Link to this heading">#</a></h1>
+<p>This repo provides a number of scripts to quickly fine-tune a model using a custom ASE LMDB dataset. These scripts are merely for convenience and finetuning uses the exact same tooling and infra as our standard training (See Training section). Training in the fairchem repo uses the fairchem cli tool and configs are in <a class="reference external" href="https://hydra.cc/">Hydra yaml</a> format. Training dataset must be in the <a class="reference external" href="https://wiki.fysik.dtu.dk/ase/ase/db/db.html#ase.db.core.connect">ASE-lmdb format</a>. For UMA models, we provide a simple script to help generate ASE-lmdb datasets from a variety of input formats as such (cifs, traj, extxyz etc) as well as a finetuning yaml config that can be directly used for finetuning.</p>
+<section id="generating-training-fine-tuning-datasets">
+<h2>Generating training/fine-tuning datasets<a class="headerlink" href="#generating-training-fine-tuning-datasets" title="Link to this heading">#</a></h2>
+<p>First we need to generate a dataset in the aselmdb format for finetuning. The only requirement is you need to have input files that can be read as ASE atoms object by the ase.io.read routine and that they contain energy (forces, stress) in the correct format. For concrete examples refer to this to the test at <code class="docutils literal notranslate"><span class="pre">tests/core/scripts/test_create_finetune_dataset.py</span></code>.</p>
+<p>First you should checkout the fairchem repo and install it to access the scripts</p>
+<div class="cell tag_skip-execution docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">git</span><span class="nd">@github</span><span class="o">.</span><span class="n">com</span><span class="p">:</span><span class="n">facebookresearch</span><span class="o">/</span><span class="n">fairchem</span><span class="o">.</span><span class="n">git</span>
+
+<span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="n">fairchem</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">packages</span><span class="o">/</span><span class="n">fairchem</span><span class="o">-</span><span class="n">core</span><span class="p">[</span><span class="n">dev</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+</div>
+<p>Run this script to create the aselmdbs as well as a set of templated yamls for finetuning, we will use a few dummy structures for demonstration purposes</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="s1">&#39;../../../../fairchem&#39;</span><span class="p">)</span>
+<span class="o">!</span><span class="w"> </span>python<span class="w"> </span>src/fairchem/core/scripts/create_uma_finetune_dataset.py<span class="w"> </span>--train-dir<span class="w"> </span>docs/core/common_tasks/finetune_assets/train/<span class="w"> </span>--val-dir<span class="w"> </span>docs/core/common_tasks/finetune_assets/val<span class="w"> </span>--output-dir<span class="w"> </span>/tmp/bulk<span class="w"> </span>--uma-task<span class="o">=</span>omat<span class="w"> </span>--regression-task<span class="w"> </span>e
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+0it [00:00, ?it/s]
+
+
+  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+0it [00:00, ?it/s]
+
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 105.56it/s]
+
+100%|█████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 95.99it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Computing normalizer values.:   0%|                       | 0/2 [00:00&lt;?, ?it/s]
+Computing normalizer values.: 100%|██████████████| 2/2 [00:00&lt;00:00, 853.45it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+
+0it [00:00, ?it/s]
+
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+
+
+
+
+
+0it [00:00, ?it/s]
+0it [00:00, ?it/s]
+
+
+
+
+
+
+0it [00:00, ?it/s]
+
+  0%|                                                     | 0/1 [00:00&lt;?, ?it/s]
+0it [00:00, ?it/s]
+
+0it [00:00, ?it/s]
+
+100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 114.69it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>100%|████████████████████████████████████████████| 1/1 [00:00&lt;00:00, 120.42it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Generated dataset and data config yaml in /tmp/bulk
+INFO:root:To run finetuning, run fairchem -c /tmp/bulk/uma_sm_finetune_template.yaml
+</pre></div>
+</div>
+</div>
+</div>
+<ul class="simple">
+<li><p>The <code class="docutils literal notranslate"><span class="pre">uma-task</span></code> can be one of the uma tasks: ie: <code class="docutils literal notranslate"><span class="pre">omol</span></code>, <code class="docutils literal notranslate"><span class="pre">odac</span></code>, <code class="docutils literal notranslate"><span class="pre">oc20</span></code>, <code class="docutils literal notranslate"><span class="pre">omat</span></code>, <code class="docutils literal notranslate"><span class="pre">omc</span></code>. While UMA was trained in the multi-task fashion, we ONLY support finetuning on a single UMA task at a time. Multi-task training can become very complicated! Feel free to contact us on github if you have a special use-case for multi-task finetuning or refer to the training configs in /training_release to mimic the original UMA training configs.</p></li>
+<li><p>The <code class="docutils literal notranslate"><span class="pre">regression-task</span></code> can be one of e, ef, efs (energy, energy+force, energy+force+stress), depending on the data you have available in the ASE db. For example, some aperiodic DFT codes only support energy/forces and not gradients, and some very fancy codes like QMC only produce energies. Note that even if you train on just energy or energy/forces, all gradients (forces/stresses) will be computable via the model gradients.</p></li>
+</ul>
+<p>This will generate a folder of lmdbs and the a <code class="docutils literal notranslate"><span class="pre">uma_sm_finetune_template.yaml</span></code> that you can run directly with the fairchem cli to start training.</p>
+<p>If you want to only create the aselmdbs, you can use <code class="docutils literal notranslate"><span class="pre">src/fairchem/core/scripts/create_finetune_dataset.py</span></code> which is called by <code class="docutils literal notranslate"><span class="pre">create_uma_finetune_dataset.py</span></code>.</p>
+</section>
+<section id="model-fine-tuning-default-settings">
+<h2>Model fine-tuning (default settings)<a class="headerlink" href="#model-fine-tuning-default-settings" title="Link to this heading">#</a></h2>
+<p>The previous step should have generated some yaml files to get you started on finetuning. You can simply run this with the <code class="docutils literal notranslate"><span class="pre">fairchem</span></code> cli. The default is configured to run locally on a 1 GPU.</p>
+<div class="cell tag_skip-execution docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span><span class="w"> </span>fairchem<span class="w"> </span>-c<span class="w"> </span>/tmp/bulk/uma_sm_finetune_template.yaml
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="advanced-configuration">
+<h2>Advanced configuration<a class="headerlink" href="#advanced-configuration" title="Link to this heading">#</a></h2>
+<p>The scripts provide a simple way to get started on finetuning, but likely for your own use cases you will need to modify the parameters. The configuration uses <a class="reference external" href="https://hydra.cc/">hydra-style yamls</a>.</p>
+<p>To modify the generated yamls, you can either edit the files directly or use <a class="reference external" href="https://hydra.cc/docs/advanced/override_grammar/basic/">hydra override notation</a>. For example, changing a few parameters is very simple to do on the command line</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span><span class="w"> </span>fairchem<span class="w"> </span>-c<span class="w"> </span>/tmp/bulk/uma_sm_finetune_template.yaml<span class="w"> </span><span class="nv">epochs</span><span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="nv">lr</span><span class="o">=</span>2e-4<span class="w"> </span>job.run_dir<span class="o">=</span>/tmp/finetune_dir<span class="w"> </span>+job.timestamp_id<span class="o">=</span>some_id
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:saved canonical config to /tmp/finetune_dir/some_id/canonical_config.yaml
+INFO:root:Running fairchemv2 cli with {&#39;job&#39;: {&#39;run_name&#39;: &#39;uma_finetune&#39;, &#39;timestamp_id&#39;: &#39;some_id&#39;, &#39;run_dir&#39;: &#39;/tmp/finetune_dir&#39;, &#39;device_type&#39;: &lt;DeviceType.CUDA: &#39;cuda&#39;&gt;, &#39;debug&#39;: True, &#39;scheduler&#39;: {&#39;mode&#39;: &lt;SchedulerType.LOCAL: &#39;local&#39;&gt;, &#39;distributed_init_method&#39;: &lt;DistributedInitMethod.TCP: &#39;tcp&#39;&gt;, &#39;ranks_per_node&#39;: 1, &#39;num_nodes&#39;: 1, &#39;num_array_jobs&#39;: 1, &#39;slurm&#39;: {&#39;mem_gb&#39;: 80, &#39;timeout_hr&#39;: 168, &#39;cpus_per_task&#39;: 8, &#39;partition&#39;: None, &#39;qos&#39;: None, &#39;account&#39;: None, &#39;additional_parameters&#39;: None}, &#39;use_ray&#39;: False, &#39;ray_cluster&#39;: {&#39;head_gpus&#39;: 0}}, &#39;logger&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.logger.WandBSingletonLogger.init_wandb&#39;, &#39;_partial_&#39;: True, &#39;entity&#39;: &#39;example&#39;, &#39;project&#39;: &#39;uma_finetune&#39;}, &#39;seed&#39;: 0, &#39;deterministic&#39;: False, &#39;runner_state_path&#39;: None, &#39;metadata&#39;: {&#39;commit&#39;: &#39;core:None,experimental:NA&#39;, &#39;log_dir&#39;: &#39;/tmp/finetune_dir/some_id/logs&#39;, &#39;checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints&#39;, &#39;results_dir&#39;: &#39;/tmp/finetune_dir/some_id/results&#39;, &#39;config_path&#39;: &#39;/tmp/finetune_dir/some_id/canonical_config.yaml&#39;, &#39;preemption_checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints/preemption_state&#39;, &#39;cluster_name&#39;: &#39;github&#39;, &#39;array_job_num&#39;: 0, &#39;slurm_env&#39;: {&#39;job_id&#39;: None, &#39;raw_job_id&#39;: None, &#39;array_job_id&#39;: None, &#39;array_task_id&#39;: None, &#39;restart_count&#39;: None}}, &#39;graph_parallel_group_size&#39;: None, &#39;recursive_instantiate_runner&#39;: True}, &#39;runner&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.train.train_runner.TrainEvalRunner&#39;, &#39;train_dataloader&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.common.dataloader_builder.get_dataloader&#39;, &#39;dataset&#39;: {&#39;_target_&#39;: &#39;fairchem.core.datasets.mt_concat_dataset.create_concat_dataset&#39;, &#39;dataset_configs&#39;: {&#39;omat&#39;: {&#39;splits&#39;: {&#39;train&#39;: {&#39;src&#39;: &#39;/tmp/bulk/train&#39;}}, &#39;format&#39;: &#39;ase_db&#39;, &#39;transforms&#39;: {&#39;common_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}, &#39;stress_reshape_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}}}}, &#39;combined_dataset_config&#39;: {&#39;sampling&#39;: {&#39;type&#39;: &#39;temperature&#39;, &#39;temperature&#39;: 1.0}}}, &#39;batch_sampler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;, &#39;_partial_&#39;: True, &#39;batch_size&#39;: 2, &#39;shuffle&#39;: True, &#39;seed&#39;: 0}, &#39;num_workers&#39;: 0, &#39;collate_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter&#39;, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}]}}, &#39;eval_dataloader&#39;: {&#39;_target_&#39;: &#39;fairchem.core.components.common.dataloader_builder.get_dataloader&#39;, &#39;dataset&#39;: {&#39;_target_&#39;: &#39;fairchem.core.datasets.mt_concat_dataset.create_concat_dataset&#39;, &#39;dataset_configs&#39;: {&#39;omat&#39;: {&#39;splits&#39;: {&#39;val&#39;: {&#39;src&#39;: &#39;/tmp/bulk/val&#39;}}, &#39;format&#39;: &#39;ase_db&#39;, &#39;transforms&#39;: {&#39;common_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}, &#39;stress_reshape_transform&#39;: {&#39;dataset_name&#39;: &#39;omat&#39;}}}}, &#39;combined_dataset_config&#39;: {&#39;sampling&#39;: {&#39;type&#39;: &#39;temperature&#39;, &#39;temperature&#39;: 1.0}}}, &#39;batch_sampler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;, &#39;_partial_&#39;: True, &#39;batch_size&#39;: 2, &#39;shuffle&#39;: False, &#39;seed&#39;: 0}, &#39;num_workers&#39;: 0, &#39;collate_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter&#39;, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}]}}, &#39;train_eval_unit&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.MLIPTrainEvalUnit&#39;, &#39;job_config&#39;: {&#39;run_name&#39;: &#39;uma_finetune&#39;, &#39;timestamp_id&#39;: &#39;some_id&#39;, &#39;run_dir&#39;: &#39;/tmp/finetune_dir&#39;, &#39;device_type&#39;: &lt;DeviceType.CUDA: &#39;cuda&#39;&gt;, &#39;debug&#39;: True, &#39;scheduler&#39;: {&#39;mode&#39;: &lt;SchedulerType.LOCAL: &#39;local&#39;&gt;, &#39;distributed_init_method&#39;: &lt;DistributedInitMethod.TCP: &#39;tcp&#39;&gt;, &#39;ranks_per_node&#39;: 1, &#39;num_nodes&#39;: 1, &#39;num_array_jobs&#39;: 1, &#39;slurm&#39;: {&#39;mem_gb&#39;: 80, &#39;timeout_hr&#39;: 168, &#39;cpus_per_task&#39;: 8, &#39;partition&#39;: None, &#39;qos&#39;: None, &#39;account&#39;: None, &#39;additional_parameters&#39;: None}, &#39;use_ray&#39;: False, &#39;ray_cluster&#39;: {&#39;head_gpus&#39;: 0}}, &#39;logger&#39;: {&#39;_target_&#39;: &#39;fairchem.core.common.logger.WandBSingletonLogger.init_wandb&#39;, &#39;_partial_&#39;: True, &#39;entity&#39;: &#39;example&#39;, &#39;project&#39;: &#39;uma_finetune&#39;}, &#39;seed&#39;: 0, &#39;deterministic&#39;: False, &#39;runner_state_path&#39;: None, &#39;metadata&#39;: {&#39;commit&#39;: &#39;core:None,experimental:NA&#39;, &#39;log_dir&#39;: &#39;/tmp/finetune_dir/some_id/logs&#39;, &#39;checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints&#39;, &#39;results_dir&#39;: &#39;/tmp/finetune_dir/some_id/results&#39;, &#39;config_path&#39;: &#39;/tmp/finetune_dir/some_id/canonical_config.yaml&#39;, &#39;preemption_checkpoint_dir&#39;: &#39;/tmp/finetune_dir/some_id/checkpoints/preemption_state&#39;, &#39;cluster_name&#39;: &#39;github&#39;, &#39;array_job_num&#39;: 0, &#39;slurm_env&#39;: {&#39;job_id&#39;: None, &#39;raw_job_id&#39;: None, &#39;array_job_id&#39;: None, &#39;array_task_id&#39;: None, &#39;restart_count&#39;: None}}, &#39;graph_parallel_group_size&#39;: None, &#39;recursive_instantiate_runner&#39;: True}, &#39;tasks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;energy&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;energy&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.DDPMTLoss&#39;, &#39;loss_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.loss.PerAtomMAELoss&#39;}, &#39;coefficient&#39;: 20}, &#39;out_spec&#39;: {&#39;dim&#39;: [1], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.element_references.ElementReferences&#39;, &#39;element_references&#39;: {&#39;_target_&#39;: &#39;torch.DoubleTensor&#39;, &#39;_args_&#39;: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -2.082805460035017, 0.0, 0.0, 0.0, -3.256404920200298, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]}}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;metrics&#39;: [&#39;mae&#39;, &#39;per_atom_mae&#39;]}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;forces&#39;, &#39;level&#39;: &#39;atom&#39;, &#39;property&#39;: &#39;forces&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [3], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}, {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.Task&#39;, &#39;name&#39;: &#39;stress&#39;, &#39;level&#39;: &#39;system&#39;, &#39;property&#39;: &#39;stress&#39;, &#39;out_spec&#39;: {&#39;dim&#39;: [1, 9], &#39;dtype&#39;: &#39;float32&#39;}, &#39;normalizer&#39;: {&#39;_target_&#39;: &#39;fairchem.core.modules.normalization.normalizer.Normalizer&#39;, &#39;mean&#39;: 0.0, &#39;rmsd&#39;: 1.0}, &#39;datasets&#39;: [&#39;omat&#39;], &#39;inference_only&#39;: True}], &#39;model&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit.initialize_finetuning_model&#39;, &#39;checkpoint_location&#39;: {&#39;_target_&#39;: &#39;fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name&#39;, &#39;model_name&#39;: &#39;uma-s-1&#39;}, &#39;overrides&#39;: {&#39;backbone&#39;: {&#39;otf_graph&#39;: True, &#39;max_neighbors&#39;: 300, &#39;regress_stress&#39;: True, &#39;always_use_pbc&#39;: False}, &#39;pass_through_head_outputs&#39;: True}, &#39;heads&#39;: {&#39;efs&#39;: {&#39;module&#39;: &#39;fairchem.core.models.uma.escn_md.MLP_EFS_Head&#39;}}}, &#39;optimizer_fn&#39;: {&#39;_target_&#39;: &#39;torch.optim.AdamW&#39;, &#39;_partial_&#39;: True, &#39;lr&#39;: 0.0002, &#39;weight_decay&#39;: 0.001}, &#39;cosine_lr_scheduler_fn&#39;: {&#39;_target_&#39;: &#39;fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler&#39;, &#39;_partial_&#39;: True, &#39;warmup_factor&#39;: 0.2, &#39;warmup_epochs&#39;: 0.01, &#39;lr_min_factor&#39;: 0.01, &#39;epochs&#39;: 2, &#39;steps&#39;: None}, &#39;print_every&#39;: 10, &#39;clip_grad_norm&#39;: 100}, &#39;max_epochs&#39;: 2, &#39;max_steps&#39;: None, &#39;evaluate_every_n_steps&#39;: 100, &#39;callbacks&#39;: [{&#39;_target_&#39;: &#39;fairchem.core.components.train.train_runner.TrainCheckpointCallback&#39;, &#39;checkpoint_every_n_steps&#39;: 1000, &#39;max_saved_checkpoints&#39;: 5}, {&#39;_target_&#39;: &#39;torchtnt.framework.callbacks.TQDMProgressBar&#39;}]}}
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Running in local mode with 1 ranks using device_type:cuda
+INFO:root:Running in local mode without elastic launch
+INFO:root:Setting env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+INFO:root:Setting up distributed backend...
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Calling runner.run() ...
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=True, seed=0)...
+WARNING:root:Disabled BalancedBatchSampler because num_replicas=1.
+INFO:root:rank: 0: Sampler created...
+INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x7f43b44067b0&gt;, batch_size=2, drop_last=False
+INFO:root:get_dataloader::Calling Dataloader...
+INFO:root:get_dataloader::Done!
+INFO:root:get_dataloader::Calling batch_sampler_fn=functools.partial(&lt;class &#39;fairchem.core.common.data_parallel.BalancedBatchSampler&#39;&gt;, batch_size=2, shuffle=False, seed=0)...
+WARNING:root:Disabled BalancedBatchSampler because num_replicas=1.
+INFO:root:rank: 0: Sampler created...
+INFO:root:Created BalancedBatchSampler with sampler=&lt;fairchem.core.common.data_parallel.StatefulDistributedSampler object at 0x7f43b4130470&gt;, batch_size=2, drop_last=False
+INFO:root:get_dataloader::Calling Dataloader...
+INFO:root:get_dataloader::Done!
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: HEAD https://huggingface.co/facebook/UMA/resolve/main/checkpoints/uma-s-1.pt &quot;HTTP/1.1 302 Found&quot;
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:httpx:HTTP Request: GET https://huggingface.co/api/models/facebook/UMA/xet-read-token/38529caa2c51a9a8a0d71f0b56b79ac33bc9eceb &quot;HTTP/1.1 200 OK&quot;
+
+checkpoints/uma-s-1.pt:   0%|                       | 0.00/1.17G [00:00&lt;?, ?B/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   0%|                | 615k/1.17G [00:01&lt;45:41, 428kB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:   6%|▊             | 67.7M/1.17G [00:01&lt;00:23, 47.0MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  11%|█▊              | 135M/1.17G [00:01&lt;00:10, 101MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  20%|███▏            | 235M/1.17G [00:02&lt;00:04, 198MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  31%|█████           | 370M/1.17G [00:02&lt;00:02, 345MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  43%|██████▊         | 504M/1.17G [00:02&lt;00:01, 497MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  54%|████████▋       | 638M/1.17G [00:02&lt;00:00, 644MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  66%|██████████▌     | 772M/1.17G [00:02&lt;00:00, 781MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  77%|████████████▎   | 906M/1.17G [00:02&lt;00:00, 892MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt:  89%|█████████████▎ | 1.04G/1.17G [00:02&lt;00:00, 996MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>checkpoints/uma-s-1.pt: 100%|███████████████| 1.17G/1.17G [00:02&lt;00:00, 411MB/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:initialize_finetuning_model starting from checkpoint_location: /home/runner/.cache/fairchem/models--facebook--UMA/snapshots/38529caa2c51a9a8a0d71f0b56b79ac33bc9eceb/checkpoints/uma-s-1.pt
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Train Dataloader size 1
+INFO:root:Eval Dataloader size 1
+INFO:root:No existing checkpoints found, starting from scratch
+INFO:torchtnt.framework.fit:Started fit with max_epochs=2 max_steps=None max_train_steps_per_epoch=None max_eval_steps_per_epoch=None evaluate_every_n_steps=100 evaluate_every_n_epochs=1 
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:torchtnt.framework.train:Started train with max_epochs=2, max_steps=None, max_steps_per_epoch=None
+INFO:root:on_train_start: setting sampler state to 0, 0
+INFO:root:at beginning of epoch 0, setting sampler start step to 0
+INFO:torchtnt.framework.train:Started train epoch
+INFO:root:at beginning of epoch 0, setting sampler start step to 0
+
+Train Epoch 0:   0%|                                     | 0/1 [00:00&lt;?, ?it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Saved dcp checkpoint to /tmp/finetune_dir/some_id/checkpoints/step_0
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:0: Expert variance: 3.60e-07,1.19e-02,7.17e-07,3.88e-07,4.74e-04,7.71e-07,4.15e-07,1.53e-02,8.34e-07,2.89e-05,1.65e-02,7.07e-07,7.77e-07,1.01e-06,2.53e-07,2.40e-07,3.66e-07,5.95e-04,1.57e-05,9.03e-04,1.30e-06,1.34e-04,4.34e-07,5.28e-07,9.35e-07,3.97e-07,9.43e-07,5.13e-05,4.00e-03,6.28e-07,6.77e-06,4.84e-05
+INFO:root:0: Expert mean: 6.88e-03,1.02e-01,6.92e-03,6.72e-03,2.17e-02,6.83e-03,6.69e-03,1.28e-01,7.05e-03,1.22e-02,9.99e-02,7.17e-03,6.82e-03,7.00e-03,6.73e-03,6.83e-03,7.01e-03,3.28e-01,1.25e-02,5.07e-02,6.99e-03,1.45e-02,6.66e-03,7.03e-03,6.87e-03,7.00e-03,7.11e-03,1.17e-02,2.01e-01,6.74e-03,8.92e-03,3.75e-02
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>/home/runner/work/_tool/Python/3.12.12/x64/lib/python3.12/site-packages/torch/optim/lr_scheduler.py:367: UserWarning: To get the last learning rate computed by the scheduler, please use `get_last_lr()`.
+  _warn_get_lr_called_within_step(self)
+INFO:root:{&#39;train/loss&#39;: 1.2937600874006705, &#39;train/lr&#39;: 4e-05, &#39;train/step&#39;: 0, &#39;train/epoch&#39;: 0.0, &#39;train/samples_per_second(approx)&#39;: 0.06896202703806083, &#39;train/atoms_per_second(approx)&#39;: 1.6550886489134597, &#39;train/num_atoms_on_rank&#39;: 48, &#39;train/num_samples_on_rank&#39;: 2}
+
+Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:29&lt;00:00, 29.04s/it]
+INFO:torchtnt.framework.train:Reached end of train dataloader
+
+Train Epoch 0: 100%|█████████████████████████████| 1/1 [00:29&lt;00:00, 29.04s/it]
+
+INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
+
+Eval Epoch 0:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.02it/s]
+INFO:root:Done eval epoch, aggregating metrics
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Finished aggregating metrics: 
+  val/atoms_per_second: 842.1135
+  val/epoch: 0.0000
+  val/loss: 61.0236
+  val/omat.val,energy,mae: 97.6377
+  val/omat.val,energy,per_atom_mae: 3.0512
+
+
+Eval Epoch 0: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  8.96it/s]
+
+INFO:torchtnt.framework.train:Ended train epoch
+INFO:torchtnt.framework.train:After train epoch, train progress: num_epochs_completed = 1, num_steps_completed = 1
+INFO:torchtnt.framework.train:Started train epoch
+INFO:root:at beginning of epoch 1, setting sampler start step to 0
+
+Train Epoch 1:   0%|                                     | 0/1 [00:00&lt;?, ?it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.41it/s]
+INFO:torchtnt.framework.train:Reached end of train dataloader
+
+Train Epoch 1: 100%|█████████████████████████████| 1/1 [00:00&lt;00:00,  4.40it/s]
+
+INFO:torchtnt.framework.evaluate:Started evaluate with max_steps_per_epoch=None
+
+Eval Epoch 1:   0%|                                      | 0/1 [00:00&lt;?, ?it/s]
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.96it/s]
+INFO:root:Done eval epoch, aggregating metrics
+INFO:root:Finished aggregating metrics: 
+  val/atoms_per_second: 965.6230
+  val/epoch: 0.0000
+  val/loss: 61.0235
+  val/omat.val,energy,mae: 97.6376
+  val/omat.val,energy,per_atom_mae: 3.0512
+
+
+Eval Epoch 1: 100%|██████████████████████████████| 1/1 [00:00&lt;00:00,  9.88it/s]
+
+INFO:torchtnt.framework.train:Ended train epoch
+INFO:torchtnt.framework.train:After train epoch, train progress: num_epochs_completed = 2, num_steps_completed = 2
+INFO:root:Training Completed 2 steps
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>INFO:root:Saved dcp checkpoint to /tmp/finetune_dir/some_id/checkpoints/final
+INFO:torchtnt.framework.fit:Finished fit
+</pre></div>
+</div>
+</div>
+</div>
+<p>The basic yaml configuration looks like the following:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">job</span><span class="p">:</span>
+  <span class="n">device_type</span><span class="p">:</span> <span class="n">CUDA</span>
+  <span class="n">scheduler</span><span class="p">:</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="n">LOCAL</span>
+    <span class="n">ranks_per_node</span><span class="p">:</span> <span class="mi">1</span>
+    <span class="n">num_nodes</span><span class="p">:</span> <span class="mi">1</span>
+  <span class="n">debug</span><span class="p">:</span> <span class="kc">True</span>
+  <span class="n">run_dir</span><span class="p">:</span> <span class="o">/</span><span class="n">tmp</span><span class="o">/</span><span class="n">uma_finetune_runs</span><span class="o">/</span>
+  <span class="n">run_name</span><span class="p">:</span> <span class="n">uma_finetune</span>
+  <span class="n">logger</span><span class="p">:</span>
+    <span class="n">_target_</span><span class="p">:</span> <span class="n">fairchem</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">common</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">WandBSingletonLogger</span><span class="o">.</span><span class="n">init_wandb</span>
+    <span class="n">_partial_</span><span class="p">:</span> <span class="n">true</span>
+    <span class="n">entity</span><span class="p">:</span> <span class="n">example</span>
+    <span class="n">project</span><span class="p">:</span> <span class="n">uma_finetune</span>
+
+
+<span class="n">base_model_name</span><span class="p">:</span> <span class="n">uma</span><span class="o">-</span><span class="n">s</span><span class="o">-</span><span class="mi">1</span><span class="n">p1</span>
+<span class="n">max_neighbors</span><span class="p">:</span> <span class="mi">300</span>
+<span class="n">epochs</span><span class="p">:</span> <span class="mi">1</span>
+<span class="n">steps</span><span class="p">:</span> <span class="n">null</span>
+<span class="n">batch_size</span><span class="p">:</span> <span class="mi">2</span>
+<span class="n">lr</span><span class="p">:</span> <span class="mf">4e-4</span>
+
+<span class="n">train_dataloader</span> <span class="o">...</span>
+<span class="n">eval_dataloader</span> <span class="o">...</span>
+<span class="n">runner</span> <span class="o">...</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">base_model_name</span></code>: refers to a model name that can be retrieved from <a class="reference external" href="https://huggingface.co/facebook/UMA">huggingface</a>. If you want to use your custom uma checkpoint. You need to provide the path directly in the runner:</p></li>
+</ul>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="n">model</span><span class="p">:</span>
+      <span class="n">_target_</span><span class="p">:</span> <span class="n">fairchem</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">mlip_unit</span><span class="o">.</span><span class="n">mlip_unit</span><span class="o">.</span><span class="n">initialize_finetuning_model</span>
+      <span class="n">checkpoint_location</span><span class="p">:</span> <span class="o">/</span><span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">your</span><span class="o">/</span><span class="n">checkpoint</span><span class="o">.</span><span class="n">pt</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">max_neighbors</span></code>: the number of neighbors used for the equivariant SO2 convolutions. 300 is the default used in uma training but if you don’t have alot of memory, 100 is usually fine to ensure smoothness of the potential (see the <a class="reference external" href="https://arxiv.org/abs/2502.12147">ESEN paper</a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">epochs</span></code>, <code class="docutils literal notranslate"><span class="pre">steps</span></code>: choose to either run for integer number of epochs or steps, only 1 can be specified, the other must be null</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>: in this configuration we use the batch sampler, you can start with choosing the largest batch size that can fit on your system without running out of memory. However, you don’t want to use a batch size so large such that you complete training in very few training steps. The optimal batch size is usually the one that minimizes the final validation loss for a fixed compute budget.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lr</span></code>, <code class="docutils literal notranslate"><span class="pre">weight_decay</span></code>: these are standard learning parameters, the recommended values we use are the defaults</p></li>
+</ul>
+<section id="logging-and-artifacts">
+<h3>Logging and Artifacts<a class="headerlink" href="#logging-and-artifacts" title="Link to this heading">#</a></h3>
+<p>For logging and checkpoints, all artifacts are stored in the location specified in <code class="docutils literal notranslate"><span class="pre">job.run_dir</span></code>. The visual logger we support is <a class="reference external" href="https://wandb.ai/site/">Weights and Biases</a>. Tensorboard is no longer supported. You must set up your W&amp;B account separately and <code class="docutils literal notranslate"><span class="pre">job.debug</span></code> must be set to <code class="docutils literal notranslate"><span class="pre">False</span></code> for W&amp;B logging to work.</p>
+</section>
+<section id="distributed-training">
+<h3>Distributed training<a class="headerlink" href="#distributed-training" title="Link to this heading">#</a></h3>
+<p>We support multi-gpu distributed training without additional infra and multi-node distributed training on <a class="reference external" href="https://slurm.schedmd.com/documentation.html">SLURM</a> only.</p>
+<p>To train with multi-gpu locally, simply set <code class="docutils literal notranslate"><span class="pre">job.scheduler.ranks_per_node=N</span></code> where N is the number of GPUs you like to train on.</p>
+<p>To train with multi-node on an SLURM cluster, you need to change <code class="docutils literal notranslate"><span class="pre">job.scheduler.mode=SLURM</span></code> and set both <code class="docutils literal notranslate"><span class="pre">job.scheduler.ranks_per_node</span></code> and <code class="docutils literal notranslate"><span class="pre">job.scheduler.num_nodes</span></code> to the desired values. The run_dir must be in a shared network accessible mount for this to work.</p>
+</section>
+<section id="resuming-runs">
+<h3>Resuming runs<a class="headerlink" href="#resuming-runs" title="Link to this heading">#</a></h3>
+<p>To resume from a checkpoint in the middle of a run, find the checkpoint folder at the step you want and use the same fairchem command, eg:</p>
+<div class="cell tag_skip-execution docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">!</span><span class="w"> </span>fairchem<span class="w"> </span>-c<span class="w"> </span>/tmp/finetune_dir/some_id/checkpoints/final/resume.yaml
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="running-inference-on-the-finetuned-model">
+<h3>Running inference on the finetuned model<a class="headerlink" href="#running-inference-on-the-finetuned-model" title="Link to this heading">#</a></h3>
+<p>Inference is run in the same way as the UMA models, except you need to load the checkpoint from a local path. You must also use the same task that you used for finetuning:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core.units.mlip_unit</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_predict_unit</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">FAIRChemCalculator</span>
+
+<span class="n">predictor</span> <span class="o">=</span> <span class="n">load_predict_unit</span><span class="p">(</span><span class="s2">&quot;/tmp/finetune_dir/some_id/checkpoints/final/inference_ckpt.pt&quot;</span><span class="p">)</span>
+<span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;omat&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+</section>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./core/common_tasks"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="evaluation.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Evaluating pretrained models</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="workflows.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Calculation workflows with FAIRChem models</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#generating-training-fine-tuning-datasets">Generating training/fine-tuning datasets</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#model-fine-tuning-default-settings">Model fine-tuning (default settings)</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-configuration">Advanced configuration</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#logging-and-artifacts">Logging and Artifacts</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#distributed-training">Distributed training</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resuming-runs">Resuming runs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#running-inference-on-the-finetuned-model">Running inference on the finetuned model</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By FAIR Chemistry & Collaborators
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright Meta Platforms, Inc.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

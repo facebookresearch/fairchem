@@ -1,0 +1,893 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Open Direct Air Capture 2023 (ODAC23) [Deprecated] &#8212; fairchem</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'dac/datasets/odac23';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Pretrained models" href="../models.html" />
+    <link rel="prev" title="ODAC25" href="odac25.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">fairchem</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../../index.html">
+                    fairchem by FAIR Chemistry
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/install.html">Installation &amp; License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro.html">GNNs for Chemistry</a></li>
+
+
+<li class="toctree-l1"><a class="reference internal" href="../../core/uma.html">UMA Models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/lammps.html">LAMMPs Integration</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/inference_batcher.html">Batched atomic simulations with an <code class="docutils literal notranslate"><span class="pre">InferenceBatcher</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/uma_faq.html">FAQ</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_tutorial.html">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_catalysis_tutorial.html">UMA Catalysis Tutorial</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25_elec.html">OMol25 Electronic Structures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">Pretrained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/leaderboard.html">OMol25 Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference external" href="https://opencatalystproject.org">OCP Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://open-catalyst.metademolab.com/">OCP Demo (no install required!)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../catalysts/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
+
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc25.html">OC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../catalysts/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/ocpapi.html">ocpapi</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../catalysts/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Inorganic Materials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/datasets/omat24.html">OMat24</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Datasets</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="odac25.html">ODAC25</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Open Direct Air Capture 2023 (ODAC23) [Deprecated]</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../examples_tutorials/adsorption_energy.html">Adsorption Energies</a></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Learn More</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro_series.html">Why model atoms for climate?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../videos/technical_talks.html">Technical presentations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">fairchem documentation</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/index.html">API Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/core/index.html">core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_cli/index.html">core._cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_config/index.html">core._config</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/_batch/index.html">core.calculate._batch</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/common/index.html">core.common</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/data_parallel/index.html">core.common.data_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/distutils/index.html">core.common.distutils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/gp_utils/index.html">core.common.gp_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/logger/index.html">core.common.logger</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/profiler_utils/index.html">core.common.profiler_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/registry/index.html">core.common.registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/test_utils/index.html">core.common.test_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/typing/index.html">core.common.typing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/utils/index.html">core.common.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/datasets/index.html">core.datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/_utils/index.html">core.datasets._utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/common_structures/index.html">core.datasets.common_structures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/embeddings/index.html">core.datasets.embeddings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/mt_concat_dataset/index.html">core.datasets.mt_concat_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/target_metadata_guesser/index.html">core.datasets.target_metadata_guesser</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/models/index.html">core.models</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/base/index.html">core.models.base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/escaip/index.html">core.models.escaip</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/uma/index.html">core.models.uma</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/utils/index.html">core.models.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/modules/index.html">core.modules</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/evaluator/index.html">core.modules.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/exponential_moving_average/index.html">core.modules.exponential_moving_average</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/loss/index.html">core.modules.loss</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/normalization/index.html">core.modules.normalization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scaling/index.html">core.modules.scaling</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scheduler/index.html">core.modules.scheduler</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/transforms/index.html">core.modules.transforms</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/scripts/index.html">core.scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_normalizers/index.html">core.scripts.fit_normalizers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_references/index.html">core.scripts.fit_references</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/gif_maker_parallelized/index.html">core.scripts.gif_maker_parallelized</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_challenge_submission_file/index.html">core.scripts.make_challenge_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_lmdb_sizes/index.html">core.scripts.make_lmdb_sizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_submission_file/index.html">core.scripts.make_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_checkpoint/index.html">core.scripts.migrate_checkpoint</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_imports/index.html">core.scripts.migrate_imports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_ef/index.html">core.scripts.preprocess_ef</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_relaxed/index.html">core.scripts.preprocess_relaxed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/uncompress/index.html">core.scripts.uncompress</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/units/index.html">core.units</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/units/mlip_unit/index.html">core.units.mlip_unit</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/entries/index.html">data.omat.entries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cattsunami/databases/index.html">cattsunami.databases</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebook execution times</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../execution_time.html">Notebook execution times</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fdac/datasets/odac23.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/dac/datasets/odac23.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Open Direct Air Capture 2023 (ODAC23) [Deprecated]</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-to-energy-and-forces-s2ef-task">Structure to Energy and Forces (S2EF) task</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initial-structure-to-relaxed-structure-is2rs-relaxed-energy-is2re-tasks">Initial Structure to Relaxed Structure (IS2RS) / Relaxed Energy (IS2RE) tasks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ddec-charges">DDEC Charges</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#citing-odac23">Citing ODAC23</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="open-direct-air-capture-2023-odac23-deprecated">
+<h1>Open Direct Air Capture 2023 (ODAC23) [Deprecated]<a class="headerlink" href="#open-direct-air-capture-2023-odac23-deprecated" title="Link to this heading">#</a></h1>
+<section id="structure-to-energy-and-forces-s2ef-task">
+<h2>Structure to Energy and Forces (S2EF) task<a class="headerlink" href="#structure-to-energy-and-forces-s2ef-task" title="Link to this heading">#</a></h2>
+<p>We provide precomputed LMDBs for train, validation, and the various test sets that can be used directly with the dataloaders provided in our code. The LMDBs contain input structures from all points in relaxation trajectories along with the energy of the structure and the atomic forces. The dataset contains an in-domain test set and 4 out-of-domain test sets (ood-large, ood-linker, ood-topology, and ood-linker &amp; topology). All LMDbs  are compressed into a single <code class="docutils literal notranslate"><span class="pre">.tar.gz</span></code> file.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Splits</p></th>
+<th class="head"><p>Size of compressed version (in bytes)</p></th>
+<th class="head"><p>Size of uncompressed version (in bytes)</p></th>
+<th class="head"><p>MD5 checksum (download link)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Train + Validation + Test (all splits)</p></td>
+<td><p>172G</p></td>
+<td><p>476G</p></td>
+<td><p><a class="reference external" href="https://dl.fbaipublicfiles.com/large_objects/dac/datasets/odac23_s2ef.tar.gz">162f0660b2f1c9209c5b57f7b9e545a7</a></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The train and val splits are also available in <code class="docutils literal notranslate"><span class="pre">extxyz</span></code> formats. Each trajectory is in stored in a different <code class="docutils literal notranslate"><span class="pre">extxyz</span></code> file.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Splits</p></th>
+<th class="head"><p>Size of compressed version (in bytes)</p></th>
+<th class="head"><p>Size of uncompressed version (in bytes)</p></th>
+<th class="head"><p>MD5 checksum (download link)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Train</p></td>
+<td><p>232G</p></td>
+<td><p>781G</p></td>
+<td><p><a class="reference external" href="https://dl.fbaipublicfiles.com/large_objects/dac/datasets/extxyz_train.tar.gz">381e72fd8b9c055065fd3afff6b0945b</a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Val</p></td>
+<td><p>5.1G</p></td>
+<td><p>18G</p></td>
+<td><p><a class="reference external" href="https://dl.fbaipublicfiles.com/dac/datasets/extxyz_val.tar.gz">09913759c6e0f8d649f7ec9dff9e0e8b</a></p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="initial-structure-to-relaxed-structure-is2rs-relaxed-energy-is2re-tasks">
+<h2>Initial Structure to Relaxed Structure (IS2RS) / Relaxed Energy (IS2RE) tasks<a class="headerlink" href="#initial-structure-to-relaxed-structure-is2rs-relaxed-energy-is2re-tasks" title="Link to this heading">#</a></h2>
+<p>For IS2RE / IS2RS training, validation and test sets, we provide precomputed LMDBs that can be directly used with dataloaders provided in our code. The LMDBs contain input initial structures and the output relaxed structures and energies. The dataset contains an in-domain test set and 4 out-of-domain test sets (ood-large, ood-linker, ood-topology, and ood-linker &amp; topology). All LMDBs are compressed into a single <code class="docutils literal notranslate"><span class="pre">.tar.gz</span></code> file.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Splits</p></th>
+<th class="head"><p>Size of compressed version (in bytes)</p></th>
+<th class="head"><p>Size of uncompressed version (in bytes)</p></th>
+<th class="head"><p>MD5 checksum (download link)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Train + Validation + Test (all splits)</p></td>
+<td><p>809M</p></td>
+<td><p>2.2G</p></td>
+<td><p><a class="reference external" href="https://dl.fbaipublicfiles.com/dac/datasets/odac23_is2r.tar.gz">f7f2f58669a30abae8cb9ba1b7f2bcd2</a></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="ddec-charges">
+<h2>DDEC Charges<a class="headerlink" href="#ddec-charges" title="Link to this heading">#</a></h2>
+<p>We provide DDEC charges computed for all MOFs in the ODAC23 dataset. A small number of MOFs (~2%) are missing these charges because the DDEC calcuations failed for them.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Size of compressed version (in bytes)</p></th>
+<th class="head"><p>Size of uncompressed version (in bytes)</p></th>
+<th class="head"><p>MD5 checksum (download link)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>147M</p></td>
+<td><p>534M</p></td>
+<td><p><a class="reference external" href="https://dl.fbaipublicfiles.com/dac/datasets/ddec.tar.gz">81927b78d9e4184cc3c398e79760126a</a></p></td>
+</tr>
+<tr class="row-odd"><td><p></p></td>
+<td><p></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="citing-odac23">
+<h2>Citing ODAC23<a class="headerlink" href="#citing-odac23" title="Link to this heading">#</a></h2>
+<p>The OpenDAC 2023 (ODAC23) dataset is licensed under a <a class="reference external" href="https://creativecommons.org/licenses/by/4.0/legalcode">Creative Commons Attribution 4.0 License</a>.</p>
+<p>Please consider citing the following paper in any research manuscript using the ODAC23 dataset:</p>
+<div class="highlight-bibtex notranslate"><div class="highlight"><pre><span></span><span class="nc">@article</span><span class="p">{</span><span class="nl">odac23_dataset</span><span class="p">,</span>
+<span class="w">    </span><span class="na">author</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{Anuroop Sriram and Sihoon Choi and Xiaohan Yu and Logan M. Brabson and Abhishek Das and Zachary Ulissi and Matt Uyttendaele and Andrew J. Medford and David S. Sholl}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">title</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{The Open DAC 2023 Dataset and Challenges for Sorbent Discovery in Direct Air Capture}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">year</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">{2023}</span><span class="p">,</span>
+<span class="w">    </span><span class="na">journal</span><span class="p">=</span><span class="s">{arXiv preprint arXiv:2311.00341}</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./dac/datasets"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="odac25.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">ODAC25</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../models.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Pretrained models</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#structure-to-energy-and-forces-s2ef-task">Structure to Energy and Forces (S2EF) task</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#initial-structure-to-relaxed-structure-is2rs-relaxed-energy-is2re-tasks">Initial Structure to Relaxed Structure (IS2RS) / Relaxed Energy (IS2RE) tasks</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ddec-charges">DDEC Charges</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#citing-odac23">Citing ODAC23</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By FAIR Chemistry & Collaborators
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright Meta Platforms, Inc.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

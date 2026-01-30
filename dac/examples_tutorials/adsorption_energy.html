@@ -1,0 +1,1629 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Adsorption Energies &#8212; fairchem</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.8ecb98da25f57f5357bf6f572d296f466b2cfe2517ffebfabe82451661e28f02.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=fd3f3429" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=1ae7504c"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'dac/examples_tutorials/adsorption_energy';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Why model atoms for climate?" href="../../core/intro_series.html" />
+    <link rel="prev" title="Examples &amp; Tutorials" href="summary.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">fairchem</p>
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../../index.html">
+                    fairchem by FAIR Chemistry
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/install.html">Installation &amp; License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/quickstart.html">UMA Quick Start w/ ASE</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/fairchemv1_v2.html"><code class="docutils literal notranslate"><span class="pre">fairchem&gt;=2.0</span></code></a></li>
+<li class="toctree-l1"><a class="reference external" href="https://facebook-fairchem-uma-demo.hf.space/">UMA Demo</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">AI/ML Interatomic Potentials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro.html">GNNs for Chemistry</a></li>
+
+
+<li class="toctree-l1"><a class="reference internal" href="../../core/uma.html">UMA Models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../core/common_tasks/summary.html">Common tasks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_calculator.html">Inference using ASE and Predictor interface</a></li>
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/lammps.html">LAMMPs Integration</a></li>
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/batch_inference.html">Batch inference with UMA models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/inference_batcher.html">Batched atomic simulations with an <code class="docutils literal notranslate"><span class="pre">InferenceBatcher</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/ase_dataset_creation.html">FAIRChem &amp; custom datasets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/training.html">Training models from scratch</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/evaluation.html">Evaluating pretrained models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/fine_tuning.html">Fine-tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/common_tasks/workflows.html">Calculation workflows with FAIRChem models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../core/uma_faq.html">FAQ</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../uma_tutorials/summary.html">UMA tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_tutorial.html">UMA Intro Tutorial</a></li>
+
+
+
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../uma_tutorials/uma_catalysis_tutorial.html">UMA Catalysis Tutorial</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/generative_models.html">Generative Models</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Molecules &amp; Molecular Crystals</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../molecules/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25.html">OMol25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omol25_elec.html">OMol25 Electronic Structures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../molecules/datasets/omc25.html">OMC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/models.html">Pretrained models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/leaderboard.html">OMol25 Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../molecules/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Heterogeneous Catalysis</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference external" href="https://opencatalystproject.org">OCP Leaderboard</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://open-catalyst.metademolab.com/">OCP Demo (no install required!)</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../catalysts/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20.html">Open Catalyst 2020 (OC20)</a></li>
+
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20_mads.html">Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc22.html">Open Catalyst 2022 (OC22)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20dense.html">Open Catalyst 2020 Dense (OC20Dense)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc20neb.html">Open Catalyst 2020 Nudged Elastic Band (OC20NEB)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/ocx24.html">Open Catalyst Experiments 2024 (OCx24): Bridging Experiments and Computational Models</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/datasets/oc25.html">OC25</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../catalysts/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../catalysts/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/OCP-introduction.html">Intro to  adsorption energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/adsorption_energies/adsorption_energies.html">Expert adsorption energies</a></li>
+
+
+
+
+
+
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/adsorbml_walkthrough.html">AdsorbML tutorial</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/cattsunami_tutorial.html">Transition State Search (NEBs)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../catalysts/examples_tutorials/ocpapi.html">ocpapi</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../catalysts/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Inorganic Materials</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/datasets/omat24.html">OMat24</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/models.html">Pretrained models</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/summary.html">Examples &amp; Tutorials</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/formation_energy.html">Formation energies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/phonons.html">Phonons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../inorganic_materials/examples_tutorials/elastic.html">Elastic Tensors</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../../inorganic_materials/FAQ.html">FAQ</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">MOFs for Direct Air Capture</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../datasets/summary.html">Datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/odac25.html">ODAC25</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../datasets/odac23.html">Open Direct Air Capture 2023 (ODAC23) [Deprecated]</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../models.html">Pretrained models</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="summary.html">Examples &amp; Tutorials</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Adsorption Energies</a></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Learn More</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../core/intro_series.html">Why model atoms for climate?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../videos/technical_talks.html">Technical presentations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../core/papers_using_models.html">Studies leveraging FAIR-Chem</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">fairchem documentation</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/index.html">API Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/core/index.html">core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_cli/index.html">core._cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/core/_config/index.html">core._config</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/calculate/index.html">core.calculate</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/_batch/index.html">core.calculate._batch</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/ase_calculator/index.html">core.calculate.ase_calculator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/calculate/pretrained_mlip/index.html">core.calculate.pretrained_mlip</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/common/index.html">core.common</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/data_parallel/index.html">core.common.data_parallel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/distutils/index.html">core.common.distutils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/gp_utils/index.html">core.common.gp_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/logger/index.html">core.common.logger</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/profiler_utils/index.html">core.common.profiler_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/registry/index.html">core.common.registry</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/test_utils/index.html">core.common.test_utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/typing/index.html">core.common.typing</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/common/utils/index.html">core.common.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/datasets/index.html">core.datasets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/_utils/index.html">core.datasets._utils</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/ase_datasets/index.html">core.datasets.ase_datasets</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atomic_data/index.html">core.datasets.atomic_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/atoms_sequence/index.html">core.datasets.atoms_sequence</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/base_dataset/index.html">core.datasets.base_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/common_structures/index.html">core.datasets.common_structures</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/embeddings/index.html">core.datasets.embeddings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/mt_concat_dataset/index.html">core.datasets.mt_concat_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/datasets/target_metadata_guesser/index.html">core.datasets.target_metadata_guesser</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/models/index.html">core.models</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/base/index.html">core.models.base</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/escaip/index.html">core.models.escaip</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/uma/index.html">core.models.uma</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/models/utils/index.html">core.models.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/modules/index.html">core.modules</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/evaluator/index.html">core.modules.evaluator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/exponential_moving_average/index.html">core.modules.exponential_moving_average</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/loss/index.html">core.modules.loss</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/normalization/index.html">core.modules.normalization</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scaling/index.html">core.modules.scaling</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/scheduler/index.html">core.modules.scheduler</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/modules/transforms/index.html">core.modules.transforms</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/scripts/index.html">core.scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/convert_hydra_to_release/index.html">core.scripts.convert_hydra_to_release</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_finetune_dataset/index.html">core.scripts.create_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/create_uma_finetune_dataset/index.html">core.scripts.create_uma_finetune_dataset</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/diatomic_tests/index.html">core.scripts.diatomic_tests</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_data/index.html">core.scripts.download_data</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/download_large_files/index.html">core.scripts.download_large_files</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/eqv2_to_hydra_eqv2/index.html">core.scripts.eqv2_to_hydra_eqv2</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_normalizers/index.html">core.scripts.fit_normalizers</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/fit_references/index.html">core.scripts.fit_references</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/gif_maker_parallelized/index.html">core.scripts.gif_maker_parallelized</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_challenge_submission_file/index.html">core.scripts.make_challenge_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_lmdb_sizes/index.html">core.scripts.make_lmdb_sizes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/make_submission_file/index.html">core.scripts.make_submission_file</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_checkpoint/index.html">core.scripts.migrate_checkpoint</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/migrate_imports/index.html">core.scripts.migrate_imports</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_ef/index.html">core.scripts.preprocess_ef</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/preprocess_relaxed/index.html">core.scripts.preprocess_relaxed</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/scripts/uncompress/index.html">core.scripts.uncompress</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/core/units/index.html">core.units</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/core/units/mlip_unit/index.html">core.units.mlip_unit</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/data/index.html">data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/oc/index.html">data.oc</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/core/index.html">data.oc.core</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/databases/index.html">data.oc.databases</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/structure_generator/index.html">data.oc.structure_generator</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/oc/utils/index.html">data.oc.utils</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/odac/index.html">data.odac</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/odac/setup_vasp/index.html">data.odac.setup_vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omat/index.html">data.omat</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/entries/index.html">data.omat.entries</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omat/vasp/index.html">data.omat.vasp</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/data/omc/index.html">data.omc</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/data/omol/index.html">data.omol</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/data/omol/orca/index.html">data.omol.orca</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ocpapi/index.html">ocpapi</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/client/index.html">ocpapi.client</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/client/index.html">ocpapi.client.client</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/models/index.html">ocpapi.client.models</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/client/ui/index.html">ocpapi.client.ui</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ocpapi/version/index.html">ocpapi.version</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/ocpapi/workflows/index.html">ocpapi.workflows</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/adsorbates/index.html">ocpapi.workflows.adsorbates</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/context/index.html">ocpapi.workflows.context</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/filter/index.html">ocpapi.workflows.filter</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/log/index.html">ocpapi.workflows.log</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/ocpapi/workflows/retry/index.html">ocpapi.workflows.retry</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/cattsunami/index.html">cattsunami</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../autoapi/cattsunami/core/index.html">cattsunami.core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/autoframe/index.html">cattsunami.core.autoframe</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../autoapi/cattsunami/core/reaction/index.html">cattsunami.core.reaction</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/cattsunami/databases/index.html">cattsunami.databases</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Notebook execution times</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../../execution_time.html">Notebook execution times</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-launch-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Launch interactive content">
+    <i class="fas fa-rocket"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://colab.research.google.com/github/facebookresearch/fairchem/blob/main/docs/dac/examples_tutorials/adsorption_energy.md" target="_blank"
+   class="btn btn-sm dropdown-item"
+   title="Launch on Colab"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  
+    <img alt="Colab logo" src="../../_static/images/logo_colab.png">
+  </span>
+<span class="btn__text-container">Colab</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/facebookresearch/fairchem/issues/new?title=Issue%20on%20page%20%2Fdac/examples_tutorials/adsorption_energy.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/dac/examples_tutorials/adsorption_energy.ipynb" target="_blank"
+   class="btn btn-sm btn-download-notebook-button dropdown-item"
+   title="Download notebook file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-code"></i>
+  </span>
+<span class="btn__text-container">.ipynb</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="../../_sources/dac/examples_tutorials/adsorption_energy.md" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.md</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Adsorption Energies</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#loading-pre-trained-models">Loading Pre-trained Models</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adsorption-in-rigid-mofs-co2-adsorption-energy-in-mg-mof-74">Adsorption in rigid MOFs: CO<sub>2</sub> Adsorption Energy in Mg-MOF-74</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adsorption-in-flexible-mofs">Adsorption in flexible MOFs</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#h2o-adsorption-energy-in-flexible-wobheb-with-uma">H<sub>2</sub>O Adsorption Energy in Flexible WOBHEB with UMA</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#acknowledgements-authors">Acknowledgements &amp; Authors</a></li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="adsorption-energies">
+<h1>Adsorption Energies<a class="headerlink" href="#adsorption-energies" title="Link to this heading">#</a></h1>
+<p>Pre-trained ODAC models are versatile across various MOF-related tasks. To begin, we’ll start with a fundamental application: calculating the adsorption energy for a single CO<sub>2</sub> molecule. This serves as an excellent and simple demonstration of what you can achieve with these datasets and models.</p>
+<p>For predicting the adsorption energy of a single CO<sub>2</sub> molecule within a MOF structure, the adsorption energy (<span class="math notranslate nohighlight">\(E_{\mathrm{ads}}\)</span>) is defined as:</p>
+<div class="math notranslate nohighlight">
+\[ E_{\mathrm{ads}} = E_{\mathrm{MOF+CO2}} - E_{\mathrm{MOF}} - E_{\mathrm{CO2}} \tag{1}\]</div>
+<p>Each term on the right-hand side represents the energy of the relaxed state of the indicated chemical system. For a comprehensive understanding of our methodology for computing these adsorption energies, please refer to our <a class="reference external" href="https://doi.org/10.1021/acscentsci.3c01629">paper</a>.</p>
+<section id="loading-pre-trained-models">
+<h2>Loading Pre-trained Models<a class="headerlink" href="#loading-pre-trained-models" title="Link to this heading">#</a></h2>
+<div class="dropdown admonition">
+<p class="admonition-title">Need to install fairchem-core or get UMA access or getting permissions/401 errors?</p>
+<ol class="arabic simple">
+<li><p>Install the necessary packages using pip, uv etc</p></li>
+</ol>
+<ol class="arabic simple" start="2">
+<li><p>Get access to any necessary huggingface gated models</p>
+<ul class="simple">
+<li><p>Get and login to your Huggingface account</p></li>
+<li><p>Request access to https://huggingface.co/facebook/UMA</p></li>
+<li><p>Create a Huggingface token at https://huggingface.co/settings/tokens/ with the permission “Permissions: Read access to contents of all public gated repos you can access”</p></li>
+<li><p>Add the token as an environment variable using <code class="docutils literal notranslate"><span class="pre">huggingface-cli</span> <span class="pre">login</span></code> or by setting the HF_TOKEN environment variable.</p></li>
+</ul>
+</li>
+</ol>
+</div>
+<p>A pre-trained model can be loaded using <code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator</span></code>. In this example, we’ll employ UMA to determine the CO<sub>2</sub> adsorption energies.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">fairchem.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">FAIRChemCalculator</span><span class="p">,</span> <span class="n">pretrained_mlip</span>
+
+<span class="n">predictor</span> <span class="o">=</span> <span class="n">pretrained_mlip</span><span class="o">.</span><span class="n">get_predict_unit</span><span class="p">(</span><span class="s2">&quot;uma-s-1p1&quot;</span><span class="p">)</span>
+<span class="n">calc</span> <span class="o">=</span> <span class="n">FAIRChemCalculator</span><span class="p">(</span><span class="n">predictor</span><span class="p">,</span> <span class="n">task_name</span><span class="o">=</span><span class="s2">&quot;odac&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stderr highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>WARNING:root:device was not explicitly set, using device=&#39;cuda&#39;.
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="adsorption-in-rigid-mofs-co2-adsorption-energy-in-mg-mof-74">
+<h2>Adsorption in rigid MOFs: CO<sub>2</sub> Adsorption Energy in Mg-MOF-74<a class="headerlink" href="#adsorption-in-rigid-mofs-co2-adsorption-energy-in-mg-mof-74" title="Link to this heading">#</a></h2>
+<p>Let’s apply our knowledge to Mg-MOF-74, a widely studied MOF known for its excellent CO<sub>2</sub> adsorption properties. Its structure comprises magnesium atomic complexes connected by a carboxylated and oxidized benzene ring, serving as an organic linker. Previous studies consistently report the CO<sub>2</sub> adsorption energy for Mg-MOF-74 to be around -0.40 eV <a class="reference external" href="https://doi.org/10.1039/C4SC02064B">[1]</a> <a class="reference external" href="https://doi.org/10.1039/C3SC51319J">[2]</a> <a class="reference external" href="https://doi.org/10.1021/acs.jpcc.8b00938">[3]</a>.</p>
+<p>Our goal is to verify if we can achieve a similar value by performing a simple single-point calculation using UMA. In the ODAC23 dataset, all MOF structures are identified by their CSD (Cambridge Structural Database) code. For Mg-MOF-74, this code is <strong>OPAGIX</strong>. We’ve extracted a specific <code class="docutils literal notranslate"><span class="pre">OPAGIX+CO2</span></code> configuration from the dataset, which exhibits the lowest adsorption energy among its counterparts.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.io</span><span class="w"> </span><span class="kn">import</span> <span class="n">read</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.visualize.plot</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_atoms</span>
+
+<span class="n">mof_co2</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="s2">&quot;structures/OPAGIX_w_CO2.cif&quot;</span><span class="p">)</span>
+<span class="n">mof</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="s2">&quot;structures/OPAGIX.cif&quot;</span><span class="p">)</span>
+<span class="n">co2</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="s2">&quot;structures/co2.xyz&quot;</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mf">4.5</span><span class="p">),</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">250</span><span class="p">)</span>
+<span class="n">plot_atoms</span><span class="p">(</span><span class="n">mof_co2</span><span class="p">,</span> <span class="n">ax</span><span class="p">)</span>
+<span class="n">ax</span><span class="o">.</span><span class="n">set_axis_off</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../../_images/5d0d87751a2c838512e931cd479c6f60fcca902f43fa061961a3f469282cb6c0.png" src="../../_images/5d0d87751a2c838512e931cd479c6f60fcca902f43fa061961a3f469282cb6c0.png" />
+</div>
+</div>
+<p>The final step in calculating the adsorption energy involves connecting the <code class="docutils literal notranslate"><span class="pre">FAIRChemCalculator</span></code> to each relaxed structure: <code class="docutils literal notranslate"><span class="pre">OPAGIX+CO2</span></code>, <code class="docutils literal notranslate"><span class="pre">OPAGIX</span></code>, and <code class="docutils literal notranslate"><span class="pre">CO2</span></code>. The structures used here are already relaxed from ODAC23. For simplicity, we assume here that further relaxations can be neglected. We will show how to go beyond this assumption in the next section.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">mof_co2</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+<span class="n">mof</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+<span class="n">co2</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+
+<span class="n">E_ads</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">mof_co2</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+    <span class="o">-</span> <span class="n">mof</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+    <span class="o">-</span> <span class="n">co2</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Adsorption energy of CO2 in Mg-MOF-74: </span><span class="si">{</span><span class="n">E_ads</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Adsorption energy of CO2 in Mg-MOF-74: -0.459 eV
+</pre></div>
+</div>
+</div>
+</div>
+</section>
+<section id="adsorption-in-flexible-mofs">
+<h2>Adsorption in flexible MOFs<a class="headerlink" href="#adsorption-in-flexible-mofs" title="Link to this heading">#</a></h2>
+<p>The adsorption energy calculation method outlined above is typically performed with rigid MOFs for simplicity. Both experimental and modeling literature have shown, however, that MOF flexibility can be important in accurately capturing the underlying chemistry of adsorption <a class="reference external" href="https://arxiv.org/abs/2506.09256">[1]</a> <a class="reference external" href="https://pubs.acs.org/doi/10.1021/jacs.7b01688">[2]</a> <a class="reference external" href="https://www.nature.com/articles/nature15732">[3]</a>. In particular, uptake can be improved by treating MOFs as flexible. Two types of MOF flexibility can be considered: intrinsic flexibility and deformation induced by guest molecules. In the Open DAC Project, we consider the latter MOF deformation by allowing the atomic positions of the MOF to relax during geometry optimization <a class="reference external" href="https://pubs.acs.org/doi/10.1021/acscentsci.3c01629">[4]</a>. The addition of additional degrees of freedoms can complicate the computation of the adsorption energy and necessitates an extra step in the calculation procedure.</p>
+<p>The figure below shows water adsorption in the MOF with CSD code WOBHEB with added defects (<code class="docutils literal notranslate"><span class="pre">WOBHEB_0.11_0</span></code>) from a DFT simulation. A typical adsorption energy calculation would only seek to capture the effects shaded in purple, which include both chemisorption and non-bonded interactions between the host and guest molecule. When allowing the MOF to relax, however, the adsorption energy also includes the energetic effect of the MOF deformation highlighted in green.</p>
+<p><img alt="" src="../../_images/WOBHEB_flexible.png" /></p>
+<p>To account for this deformation, it is vital to use the most energetically favorable MOF geometry for the empty MOF term in Eqn. 1. Including MOF atomic coordinates as degrees of freedom can result in three possible outcomes:</p>
+<ol class="arabic simple">
+<li><p>The MOF does not deform, so the energies of the relaxed empty MOF and the MOF in the adsorbed state are the same</p></li>
+<li><p>The MOF deforms to a less energetically favorable geometry than its ground state</p></li>
+<li><p>The MOF locates a new energetically favorable geoemtry relative to the empty MOF relaxation</p></li>
+</ol>
+<p>The first outcome requires no additional computation because the MOF rigidity assumption is valid. The second outcome represents physical and reversible deformation where the MOF returns to its empty ground state upon removal of the guest molecule. The third outcome is often the result of the guest molecule breaking local symmetry. We also found cases in ODAC in which both outcomes 2 and 3 occur within the same MOF.</p>
+<p>To ensure the most energetically favorable empty MOF geometry is found, an addition empty MOF relaxation should be performed after MOF + adsorbate relaxation. The guest molecule should be removed, and the MOF should be relaxed starting from its geometry in the adsorbed state. If all deformation is reversible, the MOF will return to its original empty geometry. Otherwise, the lowest energy (most favorable) MOF geometry should be taken as the reference energy, <span class="math notranslate nohighlight">\(E_{\mathrm{MOF}}\)</span>, in Eqn. 1.</p>
+<section id="h2o-adsorption-energy-in-flexible-wobheb-with-uma">
+<h3>H<sub>2</sub>O Adsorption Energy in Flexible WOBHEB with UMA<a class="headerlink" href="#h2o-adsorption-energy-in-flexible-wobheb-with-uma" title="Link to this heading">#</a></h3>
+<p>The first part of this tutorial demonstrates how to perform a single point adsorption energy calculation using UMA. To treat MOFs as flexible, we perform all calculations on geometries determined by geometry optimization. The following example corresponds to the figure shown above (H<sub>2</sub>O adsorption in <code class="docutils literal notranslate"><span class="pre">WOBHEB_0.11_0</span></code>).</p>
+<p><strong>In this tutorial, <span class="math notranslate nohighlight">\(E_{x}(r_{y})\)</span> corresponds to the energy of <span class="math notranslate nohighlight">\(x\)</span> determined from geometry optimization of <span class="math notranslate nohighlight">\(y\)</span>.</strong></p>
+<p>First, we obtain the energy of the empty MOF from relaxation of only the MOF: <span class="math notranslate nohighlight">\(E_{\mathrm{MOF}}(r_{\mathrm{MOF}})\)</span></p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">ase.io</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ase.optimize</span><span class="w"> </span><span class="kn">import</span> <span class="n">BFGS</span>
+
+<span class="n">mof</span> <span class="o">=</span> <span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;structures/WOBHEB_0.11.cif&quot;</span><span class="p">)</span>
+<span class="n">mof</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+<span class="n">relax</span> <span class="o">=</span> <span class="n">BFGS</span><span class="p">(</span><span class="n">mof</span><span class="p">)</span>
+<span class="n">relax</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+<span class="n">E_mof_empty</span> <span class="o">=</span> <span class="n">mof</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Energy of empty MOF: </span><span class="si">{</span><span class="n">E_mof_empty</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
+BFGS:    0 01:04:25    -1077.274063        0.206406
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 01:04:25    -1077.276780        0.152729
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 01:04:25    -1077.281941        0.169932
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 01:04:26    -1077.284770        0.155758
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 01:04:26    -1077.288836        0.108770
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 01:04:26    -1077.291022        0.086437
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 01:04:26    -1077.293358        0.093442
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 01:04:27    -1077.295412        0.100109
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 01:04:27    -1077.297830        0.102523
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 01:04:27    -1077.300017        0.091599
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 01:04:27    -1077.302008        0.079012
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 01:04:27    -1077.304135        0.105563
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 01:04:28    -1077.306721        0.087958
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   13 01:04:28    -1077.309514        0.086352
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   14 01:04:28    -1077.312263        0.086841
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   15 01:04:28    -1077.314700        0.106285
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   16 01:04:29    -1077.316989        0.106202
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   17 01:04:29    -1077.319485        0.085520
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   18 01:04:29    -1077.322261        0.109635
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   19 01:04:29    -1077.325134        0.148702
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   20 01:04:29    -1077.327766        0.125931
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   21 01:04:30    -1077.329919        0.069109
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   22 01:04:30    -1077.331952        0.087281
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   23 01:04:30    -1077.334273        0.125239
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   24 01:04:30    -1077.336834        0.166696
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   25 01:04:31    -1077.339539        0.145554
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   26 01:04:31    -1077.342148        0.087698
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   27 01:04:31    -1077.344541        0.076153
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   28 01:04:31    -1077.346894        0.148962
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   29 01:04:32    -1077.349783        0.170215
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   30 01:04:32    -1077.352532        0.109283
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   31 01:04:32    -1077.354746        0.070304
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   32 01:04:32    -1077.356779        0.089710
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   33 01:04:32    -1077.358656        0.124277
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   34 01:04:33    -1077.360599        0.108023
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   35 01:04:33    -1077.362466        0.068640
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   36 01:04:33    -1077.364163        0.070236
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   37 01:04:33    -1077.365713        0.105423
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   38 01:04:34    -1077.367262        0.104331
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   39 01:04:34    -1077.368767        0.062679
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   40 01:04:34    -1077.370132        0.057594
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   41 01:04:34    -1077.371351        0.063208
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   42 01:04:34    -1077.372400        0.066338
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   43 01:04:35    -1077.373375        0.058170
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   44 01:04:35    -1077.374369        0.042558
+Energy of empty MOF: -1077.374 eV
+</pre></div>
+</div>
+</div>
+</div>
+<p>Next, we add the H<sub>2</sub>O guest molecule and relax the MOF + adsorbate to obtain <span class="math notranslate nohighlight">\(E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}})\)</span>.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">mof_h2o</span> <span class="o">=</span> <span class="n">ase</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;structures/WOBHEB_H2O.cif&quot;</span><span class="p">)</span>
+<span class="n">mof_h2o</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+<span class="n">relax</span> <span class="o">=</span> <span class="n">BFGS</span><span class="p">(</span><span class="n">mof_h2o</span><span class="p">)</span>
+<span class="n">relax</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+<span class="n">E_combo</span> <span class="o">=</span> <span class="n">mof_h2o</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Energy of MOF + H2O: </span><span class="si">{</span><span class="n">E_combo</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
+BFGS:    0 01:04:35    -1091.565589        1.145035
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 01:04:36    -1091.585062        0.314149
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 01:04:36    -1091.590211        0.243429
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 01:04:36    -1091.608166        0.237258
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 01:04:36    -1091.614635        0.227935
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 01:04:36    -1091.625221        0.186784
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 01:04:37    -1091.632354        0.178915
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 01:04:37    -1091.640629        0.175097
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 01:04:37    -1091.648040        0.184530
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 01:04:37    -1091.656144        0.160897
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 01:04:38    -1091.663842        0.178428
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 01:04:38    -1091.672296        0.188664
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 01:04:38    -1091.682088        0.157518
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   13 01:04:38    -1091.692980        0.177249
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   14 01:04:39    -1091.704436        0.158145
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   15 01:04:39    -1091.715510        0.191578
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   16 01:04:39    -1091.725708        0.197917
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   17 01:04:39    -1091.735329        0.163707
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   18 01:04:39    -1091.745539        0.151507
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   19 01:04:40    -1091.754025        0.170791
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   20 01:04:40    -1091.761501        0.153481
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   21 01:04:40    -1091.767896        0.152964
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   22 01:04:40    -1091.774204        0.166105
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   23 01:04:41    -1091.780881        0.135311
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   24 01:04:41    -1091.788357        0.180955
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   25 01:04:41    -1091.794276        0.204546
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   26 01:04:41    -1091.800638        0.131428
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   27 01:04:42    -1091.806518        0.190246
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   28 01:04:42    -1091.812301        0.199168
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   29 01:04:42    -1091.817175        0.151707
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   30 01:04:42    -1091.822211        0.100095
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   31 01:04:42    -1091.826303        0.125354
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   32 01:04:43    -1091.832526        0.177278
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   33 01:04:43    -1091.837115        0.246554
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   34 01:04:43    -1091.842046        0.112795
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   35 01:04:43    -1091.845771        0.330359
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   36 01:04:44    -1091.850858        0.174373
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   37 01:04:44    -1091.858477        0.159571
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   38 01:04:44    -1091.865278        0.141406
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   39 01:04:44    -1091.872013        0.140723
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   40 01:04:45    -1091.878289        0.256261
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   41 01:04:45    -1091.880359        0.573935
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   42 01:04:45    -1091.886689        0.598300
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   43 01:04:45    -1091.893840        0.233992
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   44 01:04:45    -1091.899714        0.165898
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   45 01:04:46    -1091.916474        0.233811
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   46 01:04:46    -1091.924607        0.392517
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   47 01:04:46    -1091.938669        0.285455
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   48 01:04:46    -1091.954637        0.380339
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   49 01:04:47    -1091.976325        0.567486
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   50 01:04:47    -1091.968402        1.447761
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   51 01:04:47    -1092.005191        0.296166
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   52 01:04:47    -1092.021562        0.282093
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   53 01:04:48    -1092.069826        0.320528
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   54 01:04:48    -1092.086256        0.279802
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   55 01:04:48    -1092.119633        0.392001
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   56 01:04:48    -1092.128203        0.524737
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   57 01:04:48    -1092.142428        0.240410
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   58 01:04:49    -1092.156705        0.251282
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   59 01:04:49    -1092.172064        0.281163
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   60 01:04:49    -1092.180932        0.299147
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   61 01:04:49    -1092.194212        0.375060
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   62 01:04:50    -1092.204687        0.392457
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   63 01:04:50    -1092.216302        0.321046
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   64 01:04:50    -1092.225593        0.219276
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   65 01:04:50    -1092.233067        0.113352
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   66 01:04:51    -1092.238972        0.109057
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   67 01:04:51    -1092.244556        0.130557
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   68 01:04:51    -1092.250149        0.137394
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   69 01:04:51    -1092.255160        0.115577
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   70 01:04:52    -1092.260370        0.077526
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   71 01:04:52    -1092.264859        0.092164
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   72 01:04:52    -1092.268785        0.117080
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   73 01:04:52    -1092.272441        0.148454
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   74 01:04:52    -1092.275889        0.171040
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   75 01:04:53    -1092.279152        0.168133
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   76 01:04:53    -1092.282710        0.121859
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   77 01:04:53    -1092.285368        0.092823
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   78 01:04:53    -1092.287917        0.091796
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   79 01:04:54    -1092.290296        0.088252
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   80 01:04:54    -1092.292212        0.097478
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   81 01:04:54    -1092.293978        0.069326
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   82 01:04:54    -1092.295327        0.079321
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   83 01:04:55    -1092.296744        0.067608
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   84 01:04:55    -1092.298136        0.079335
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   85 01:04:55    -1092.299811        0.068047
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   86 01:04:55    -1092.301462        0.087849
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   87 01:04:55    -1092.303193        0.091868
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   88 01:04:56    -1092.304955        0.072845
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   89 01:04:56    -1092.306425        0.059202
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   90 01:04:56    -1092.307840        0.048124
+Energy of MOF + H2O: -1092.308 eV
+</pre></div>
+</div>
+</div>
+</div>
+<p>We can now isolate the MOF atoms from the relaxed MOF + H<sub>2</sub>O geometry and see that the MOF has adopted a geometry that is less energetically favorable than the empty MOF by ~0.2 eV. The energy of the MOF in the adsorbed state corresponds to <span class="math notranslate nohighlight">\(E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}})\)</span>.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">mof_adsorbed_state</span> <span class="o">=</span> <span class="n">mof_h2o</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span>
+<span class="n">mof_adsorbed_state</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+<span class="n">E_mof_adsorbed_state</span> <span class="o">=</span> <span class="n">mof_adsorbed_state</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Energy of MOF in the adsorbed state: </span><span class="si">{</span><span class="n">E_mof_adsorbed_state</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Energy of MOF in the adsorbed state: -1077.091 eV
+</pre></div>
+</div>
+</div>
+</div>
+<p>H<sub>2</sub>O adsorption in this MOF appears to correspond to Case #2 as outlined above. We can now perform re-relaxation of the empty MOF starting from the <span class="math notranslate nohighlight">\(r_{\mathrm{MOF+H2O}}\)</span> geometry.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">relax</span> <span class="o">=</span> <span class="n">BFGS</span><span class="p">(</span><span class="n">mof_adsorbed_state</span><span class="p">)</span>
+<span class="n">relax</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">fmax</span><span class="o">=</span><span class="mf">0.05</span><span class="p">)</span>
+<span class="n">E_mof_rerelax</span> <span class="o">=</span> <span class="n">mof_adsorbed_state</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Energy of re-relaxed empty MOF: </span><span class="si">{</span><span class="n">E_mof_rerelax</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>      Step     Time          Energy          fmax
+BFGS:    0 01:04:56    -1077.090543        0.983064
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    1 01:04:57    -1077.122933        0.871592
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    2 01:04:57    -1077.172657        0.804411
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    3 01:04:57    -1077.212383        0.501899
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    4 01:04:57    -1077.232091        0.437998
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    5 01:04:58    -1077.249996        0.283337
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    6 01:04:58    -1077.260788        0.260156
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    7 01:04:58    -1077.270253        0.246364
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    8 01:04:58    -1077.279580        0.211165
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:    9 01:04:58    -1077.286627        0.184081
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   10 01:04:59    -1077.291797        0.150346
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   11 01:04:59    -1077.295877        0.139581
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   12 01:04:59    -1077.299506        0.146104
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   13 01:04:59    -1077.304175        0.186004
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   14 01:05:00    -1077.308922        0.174195
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   15 01:05:00    -1077.313511        0.134374
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   16 01:05:00    -1077.317622        0.164361
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   17 01:05:00    -1077.321827        0.151382
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   18 01:05:00    -1077.326196        0.145894
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   19 01:05:01    -1077.329754        0.113721
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   20 01:05:01    -1077.332376        0.108615
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   21 01:05:01    -1077.334623        0.100219
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   22 01:05:01    -1077.336910        0.122771
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   23 01:05:02    -1077.339616        0.119022
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   24 01:05:02    -1077.342237        0.089192
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   25 01:05:02    -1077.344566        0.091094
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   26 01:05:02    -1077.346477        0.068069
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   27 01:05:03    -1077.348031        0.068180
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   28 01:05:03    -1077.349736        0.090414
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   29 01:05:03    -1077.351286        0.095445
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   30 01:05:03    -1077.352896        0.063985
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   31 01:05:03    -1077.354077        0.050641
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   32 01:05:04    -1077.355386        0.054131
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   33 01:05:04    -1077.356746        0.083935
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   34 01:05:04    -1077.358141        0.078658
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   35 01:05:04    -1077.359669        0.068525
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   36 01:05:05    -1077.361074        0.070997
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   37 01:05:05    -1077.362351        0.073804
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   38 01:05:05    -1077.363524        0.084000
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   39 01:05:05    -1077.364853        0.080880
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   40 01:05:06    -1077.365839        0.067205
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   41 01:05:06    -1077.366863        0.058414
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   42 01:05:06    -1077.367945        0.060002
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   43 01:05:06    -1077.368982        0.070058
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   44 01:05:06    -1077.370235        0.076270
+</pre></div>
+</div>
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>BFGS:   45 01:05:07    -1077.371393        0.048681
+Energy of re-relaxed empty MOF: -1077.371 eV
+</pre></div>
+</div>
+</div>
+</div>
+<p>The MOF returns to its original empty reference energy upon re-relaxation, confirming that this deformation is physically relevant and is induced by the adsorbate molecule. In Case #3, this re-relaxed energy will be more negative (more favorable) than the original empty MOF relaxation. Thus, we take the reference empty MOF energy (<span class="math notranslate nohighlight">\(E_{\mathrm{MOF}}\)</span> in Eqn. 1) to be the minimum of the original empty MOF energy and the re-relaxed MOf energy:</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">E_mof</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">E_mof_empty</span><span class="p">,</span> <span class="n">E_mof_rerelax</span><span class="p">)</span>
+
+<span class="c1"># get adsorbate reference energy</span>
+<span class="n">h2o</span> <span class="o">=</span> <span class="n">mof_h2o</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]</span>
+<span class="n">h2o</span><span class="o">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+<span class="n">E_h2o</span> <span class="o">=</span> <span class="n">h2o</span><span class="o">.</span><span class="n">get_potential_energy</span><span class="p">()</span>
+
+<span class="c1"># compute adsorption energy</span>
+<span class="n">E_ads</span> <span class="o">=</span> <span class="n">E_combo</span> <span class="o">-</span> <span class="n">E_mof</span> <span class="o">-</span> <span class="n">E_h2o</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Adsorption energy of H2O in WOBHEB_0.11_0: </span><span class="si">{</span><span class="n">E_ads</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> eV&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Adsorption energy of H2O in WOBHEB_0.11_0: -0.685 eV
+</pre></div>
+</div>
+</div>
+</div>
+<p>This adsorption energy closely matches that from DFT (–0.699 eV) <a class="reference external" href="https://arxiv.org/abs/2506.09256">[1]</a>. The strong adsorption energy is a consequence of both H<sub>2</sub>O chemisorption and MOF deformation. We can decompose the adsorption energy into contributions from these two factors. Assuming rigid H<sub>2</sub>O molecules, we define <span class="math notranslate nohighlight">\(E_{\mathrm{int}}\)</span> and <span class="math notranslate nohighlight">\(E_{\mathrm{MOF,deform}}\)</span>, respectively, as</p>
+<div class="math notranslate nohighlight">
+\[ E_{\mathrm{int}} = E_{\mathrm{MOF+H2O}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{H2O}}(r_{\mathrm{MOF+H2O}}) \tag{2}\]</div>
+<div class="math notranslate nohighlight">
+\[ E_{\mathrm{MOF,deform}} = E_{\mathrm{MOF}}(r_{\mathrm{MOF+H2O}}) - E_{\mathrm{MOF}}(r_{\mathrm{MOF}}) \tag{3}\]</div>
+<p><span class="math notranslate nohighlight">\(E_{\mathrm{int}}\)</span> describes host host–guest interactions for the MOF in the adsorbed state only. <span class="math notranslate nohighlight">\(E_{\mathrm{MOF,deform}}\)</span> quantifies the magnitude of deformation between the MOF in the adsorbed state and the most energetically favorable empty MOF geometry determined from the workflow presented here. It can be shown that</p>
+<div class="math notranslate nohighlight">
+\[ E_{\mathrm{ads}} = E_{\mathrm{int}} + E_{\mathrm{MOF,deform}} \tag{4}\]</div>
+<p>For H<sub>2</sub>O adsorption in <code class="docutils literal notranslate"><span class="pre">WOBHEB_0.11</span></code>, we have</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">E_int</span> <span class="o">=</span> <span class="n">E_combo</span> <span class="o">-</span> <span class="n">E_mof_adsorbed_state</span> <span class="o">-</span> <span class="n">E_h2o</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;E_int: </span><span class="si">{</span><span class="n">E_int</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>E_int: -0.9692673683162365
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">E_mof_deform</span> <span class="o">=</span> <span class="n">E_mof_adsorbed_state</span> <span class="o">-</span> <span class="n">E_mof_empty</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;E_mof_deform: </span><span class="si">{</span><span class="n">E_mof_deform</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>E_mof_deform: 0.2838258743286133
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">E_ads</span> <span class="o">=</span> <span class="n">E_int</span> <span class="o">+</span> <span class="n">E_mof_deform</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;E_ads: </span><span class="si">{</span><span class="n">E_ads</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>E_ads: -0.6854414939876232
+</pre></div>
+</div>
+</div>
+</div>
+<p><span class="math notranslate nohighlight">\(E_{\mathrm{int}}\)</span> is equivalent to <span class="math notranslate nohighlight">\(E_{\mathrm{ads}}\)</span> when the MOF is assumed to be rigid. In this case, failure to consider adsorbate-induced deformation would result in an overestimation of the adsorption energy magnitude.</p>
+</section>
+</section>
+<section id="acknowledgements-authors">
+<h2>Acknowledgements &amp; Authors<a class="headerlink" href="#acknowledgements-authors" title="Link to this heading">#</a></h2>
+<p>Logan Brabson and Sihoon Choi (Georgia Tech) and the OpenDAC project.</p>
+</section>
+</section>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./dac/examples_tutorials"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="summary.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Examples &amp; Tutorials</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../../core/intro_series.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Why model atoms for climate?</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#loading-pre-trained-models">Loading Pre-trained Models</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adsorption-in-rigid-mofs-co2-adsorption-energy-in-mg-mof-74">Adsorption in rigid MOFs: CO<sub>2</sub> Adsorption Energy in Mg-MOF-74</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adsorption-in-flexible-mofs">Adsorption in flexible MOFs</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#h2o-adsorption-energy-in-flexible-wobheb-with-uma">H<sub>2</sub>O Adsorption Energy in Flexible WOBHEB with UMA</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#acknowledgements-authors">Acknowledgements &amp; Authors</a></li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By FAIR Chemistry & Collaborators
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright Meta Platforms, Inc.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
