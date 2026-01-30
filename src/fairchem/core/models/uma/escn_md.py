@@ -635,7 +635,7 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
         backbone: eSCNMDBackbone,
         reduce: str = "sum",
         prefix: str | None = None,
-        wrap_property: bool = True,
+        wrap_property: bool = False,
     ) -> None:
         super().__init__()
         self.reduce = reduce
