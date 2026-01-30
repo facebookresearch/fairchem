@@ -123,19 +123,19 @@ class InferenceBatcher:
 
     def delete(self) -> None:
         """Delete the Ray Serve deployment without shutting down Ray or the executor.
-        
+
         This allows the InferenceBatcher to be removed while keeping Ray running
         for other batchers or applications.
         """
         if hasattr(self, "predict_server_handle") and self.predict_server_handle is not None:
             import ray
             from ray import serve
-            
+
             # Check if Ray is still initialized before trying to delete
             if ray.is_initialized():
                 with contextlib.suppress(Exception):
                     serve.delete(self.deployment_name)
-            
+
             self.predict_server_handle = None
 
     def shutdown(self, wait: bool = True, shutdown_ray: bool = False) -> None:
@@ -154,16 +154,16 @@ class InferenceBatcher:
 
         # Delete the deployment (safe for concurrent usage)
         self.delete()
-        
+
         # Optionally shutdown Ray Serve and Ray completely
         # This should only be used when you're SURE no other batchers are running
         if shutdown_ray:
             import ray
             from ray import serve
-            
+
             with contextlib.suppress(Exception):
                 serve.shutdown()
-            
+
             with contextlib.suppress(Exception):
                 if ray.is_initialized():
                     ray.shutdown()
