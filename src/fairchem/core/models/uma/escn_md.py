@@ -652,33 +652,13 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             nn.Linear(self.hidden_channels, 1, bias=True),
         )
 
-    def _compute_energy(
-        self, data: AtomicData, emb: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Compute energy from node embeddings.
-
-        Args:
-            data: AtomicData containing batch information.
-            emb: Dictionary containing node embeddings.
-
-        Returns:
-            A tuple of (energy, energy_part) where:
-            - energy: The reduced energy per system (after GP reduction if applicable).
-            - energy_part: The unreduced energy per system (before GP reduction),
-              useful for autograd-based force/stress computation.
-        """
-        # Extract L=0 (scalar) component and compute per-node energy
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
-
-        return compute_energy(node_energy, data["batch"], len(data["natoms"]))
-
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
-
-        energy, _ = self._compute_energy(data, emb)
+        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        node_energy = self.energy_block(scalar_embedding)
+        energy, _ = compute_energy(node_energy, data["batch"], len(data["natoms"]))
 
         if self.reduce == "sum":
             pass  # energy is already sum
@@ -702,11 +682,12 @@ class MLP_EFS_Head(MLP_Energy_Head):
     def __init__(
         self,
         backbone: eSCNMDBackbone,
+        reduce: str = "sum",
         prefix: str | None = None,
         wrap_property: bool = True,
     ) -> None:
         super().__init__(
-            backbone, reduce="sum", prefix=prefix, wrap_property=wrap_property
+            backbone, reduce=reduce, prefix=prefix, wrap_property=wrap_property
         )
         backbone.energy_block = None
         backbone.force_block = None
@@ -732,7 +713,11 @@ class MLP_EFS_Head(MLP_Energy_Head):
         outputs = {}
 
         # Use shared energy computation from parent class
-        energy, energy_part = self._compute_energy(data, emb)
+        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        node_energy = self.energy_block(scalar_embedding)
+        energy, energy_part = compute_energy(
+            node_energy, data["batch"], len(data["natoms"])
+        )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
