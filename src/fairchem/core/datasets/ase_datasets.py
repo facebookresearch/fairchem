@@ -22,7 +22,6 @@ import ase
 import numpy as np
 from tqdm import tqdm
 
-from fairchem.core.common.registry import registry
 from fairchem.core.datasets._utils import rename_data_object_keys
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.base_dataset import BaseDataset
@@ -165,7 +164,6 @@ class AseAtomsDataset(BaseDataset, ABC):
         return len(self.get_atoms(idx))
 
 
-@registry.register_dataset("ase_read")
 class AseReadDataset(AseAtomsDataset):
     """
     This Dataset uses ase.io.read to load data from a directory on disk.
@@ -251,7 +249,6 @@ class AseReadDataset(AseAtomsDataset):
         return relaxed_atoms.get_potential_energy(apply_constraint=False)
 
 
-@registry.register_dataset("ase_read_multi")
 class AseReadMultiStructureDataset(AseAtomsDataset):
     """
     This Dataset can read multiple structures from each file using ase.io.read.
@@ -378,7 +375,6 @@ class AseReadMultiStructureDataset(AseAtomsDataset):
         return relaxed_atoms.get_potential_energy(apply_constraint=False)
 
 
-@registry.register_dataset("ase_db")
 class AseDBDataset(AseAtomsDataset):
     """
     This Dataset connects to an ASE Database, allowing the storage of atoms objects

@@ -13,8 +13,8 @@ from pathlib import Path
 
 from fairchem.experimental.legacy.utils import load_config
 
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import save_checkpoint
+from fairchem.core.datasets import get_dataset_class
 from fairchem.core.modules.normalization.element_references import (
     create_element_references,
 )
@@ -44,8 +44,8 @@ def fit_norms(
 
     try:
         # load the training dataset
-        train_dataset = registry.get_dataset_class(
-            config["dataset"]["train"].get("format", "lmdb")
+        train_dataset = get_dataset_class(
+            config["dataset"]["train"].get("format", "ase_db")
         )(config["dataset"]["train"])
     except KeyError as err:
         raise ValueError("Train dataset is not specified in config!") from err
