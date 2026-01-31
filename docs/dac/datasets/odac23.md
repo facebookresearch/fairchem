@@ -1,5 +1,21 @@
 
-# Open Direct Air Capture 2023 (ODAC23) [Deprecated]
+# Open Direct Air Capture 2023 (ODAC23)
+
+:::{warning}
+**Deprecated**: ODAC23 has been superseded by [ODAC25](odac25.md), which contains nearly 70 million DFT calculations across 4 adsorbates (CO2, H2O, N2, O2) in nearly 15,000 MOFs. We recommend using ODAC25 for new projects.
+:::
+
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | ~1M structures (S2EF), ~10K structures (IS2RE) |
+| **Domain** | Metal-organic frameworks (MOFs) with CO2 |
+| **Labels** | Total energy (eV), forces (eV/A) |
+| **Level of Theory** | PBE+D3 (VASP) |
+| **License** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+| **Status** | Deprecated - use ODAC25 |
+:::
 
 ## Structure to Energy and Forces (S2EF) task
 

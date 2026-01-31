@@ -12,6 +12,11 @@ on:
       - "contributor check"
     types:
       - completed
+env:
+  # `BASE_URL` determines, relative to the root of the domain, the URL that your site is served from.
+  # E.g., if your site lives at `https://mydomain.org/myproject`, set `BASE_URL=/myproject`.
+  # If, instead, your site lives at the root of the domain, at `https://mydomain.org`, set `BASE_URL=''`.
+  BASE_URL: ''
 
 jobs:
   build:
@@ -45,8 +50,15 @@ jobs:
       with:
           status-context: '${{ github.job }}'
 
-    - name: Install pandoc and ffmpeg
-      run: sudo apt-get update && sudo apt-get -y install pandoc ffmpeg
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 18.x
+
+    - name: Install Jupyter Book (via myst)
+      run: npm install -g jupyter-book
+
+    - name: Install latexmk
+      run: sudo apt-get update && sudo apt-get -y install latexmk pandoc ffmpeg imagemagick texlive-xetex
 
     # Install dependencies
     - name: Set up Python
@@ -74,8 +86,8 @@ jobs:
       run: |
         # Convert MyST markdown files to Jupyter notebooks if needed to get download as ipynb buttons
         jupytext --to ipynb ./docs/uma_tutorials/*.md
-        # find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
-        jupyter-book build docs
+        find ./docs/ -name "*.md" -exec grep -q "format_name: myst" {} \; -print0 | xargs -0 jupytext --to ipynb
+        cd docs && jupyter-book build --html --execute --execute-parallel 1
 
     - name: Upload documentation artifact
       uses: actions/upload-artifact@v6
