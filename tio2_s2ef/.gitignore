@@ -1,10 +1,8 @@
 .conda/
 
 # data files
-data/raw/*
-data/processed/*
-data/tio2/train/*
-data/tio2/val/*
+oc22_data/*
+oc20_data/*
 *.lmdb
 *.lmdb-lock
 *.pkl
