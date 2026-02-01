@@ -83,7 +83,7 @@ class TestBulk:
             seen.append(slab)
 
         # pymatgen bug see https://github.com/materialsproject/pymatgen/issues/3747
-        if len(slabs) == 15:
+        if len(slabs) in [15, 16]:
             pytest.xfail(
                 f"Number of generated slabs {len(slabs)} is off due to pymatgen bug!"
             )
