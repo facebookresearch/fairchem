@@ -121,20 +121,19 @@ def edge_to_quaternion(
     gamma: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
-    Convert edge vectors to quaternions for the ZYZ Euler INVERSE rotation.
+    Convert edge vectors to quaternions that rotate +y to the edge direction.
 
-    This constructs a quaternion representing the rotation that takes the edge
-    direction to +y (the inverse rotation). The ZYZ Euler angles for this
-    rotation are (-gamma, -beta, -alpha) where:
-    - alpha = atan2(x, z) is the azimuthal angle in the XZ plane
-    - beta = acos(y) is the polar angle from the Y axis
-    - gamma is the twist angle around the edge direction
+    Uses the half-angle formula which is singularity-free except at edge = -y.
 
-    Uses half-angle formulas to avoid acos/atan2 for numerical stability.
+    For edge = (x, y, z), we want quaternion q such that q⊗(0,1,0)⊗q* = edge.
+    Using q = normalize(1 + a·b, a×b) with a = +y:
+        a·b = y
+        a×b = (z, 0, -x)
+    So q = normalize(1+y, z, 0, -x)
 
     Args:
         edge_vec: Edge vectors of shape (N, 3), need not be normalized
-        gamma: Optional rotation angles around edge axis, shape (N,).
+        gamma: Optional rotation angles around y-axis, shape (N,).
                If None, random angles in [0, 2π) are generated.
 
     Returns:
@@ -151,65 +150,56 @@ def edge_to_quaternion(
     if gamma is None:
         gamma = torch.rand_like(ex) * 2 * math.pi
 
-    # For the INVERSE rotation (edge → +Y), we use ZYZ angles (-gamma, -beta, -alpha)
-    # where beta = acos(y) and alpha = atan2(x, z).
+    # Half-angle formula: q = normalize(1+ey, ez, 0, -ex)
+    one_plus_ey = 1.0 + ey
+
+    # Handle singularity at ey = -1 (edge pointing to -y)
+    singular = one_plus_ey < 1e-7
+
+    # For non-singular case:
+    # norm = sqrt((1+ey)² + ez² + ex²) = sqrt(2(1+ey))
+    safe_one_plus_ey = torch.where(singular, torch.ones_like(one_plus_ey), one_plus_ey)
+    inv_norm = 1.0 / torch.sqrt(2.0 * safe_one_plus_ey)
+
+    w_base = torch.sqrt(safe_one_plus_ey / 2.0)
+    x_base = ez * inv_norm
+    y_base = torch.zeros_like(ex)
+    z_base = -ex * inv_norm
+
+    # Fallback for singular case: 180° rotation around x-axis → q = (0, 1, 0, 0)
+    w_base = torch.where(singular, torch.zeros_like(w_base), w_base)
+    x_base = torch.where(singular, torch.ones_like(x_base), x_base)
+    y_base = torch.where(singular, torch.zeros_like(y_base), y_base)
+    z_base = torch.where(singular, torch.zeros_like(z_base), z_base)
+
+    # Apply gamma rotation around y-axis: q_final = q_gamma ⊗ q_base
+    # q_gamma = (cos(γ/2), 0, sin(γ/2), 0)
     #
-    # Half-angles for -beta:
-    # cos(-beta/2) = cos(beta/2) = sqrt((1+y)/2)
-    # sin(-beta/2) = -sin(beta/2) = -sqrt((1-y)/2)
-    cos_neg_hb = torch.sqrt((1 + ey).clamp(min=0) / 2)
-    sin_neg_hb = -torch.sqrt((1 - ey).clamp(min=0) / 2)
-
-    # Half-angles for -alpha using half-angle formulas (no atan2):
-    # alpha = atan2(x, z)
-    # r = sqrt(x² + z²) = sin(beta)
-    # cos(alpha/2) = sqrt((r+z)/(2r))
-    # sin(alpha/2) = x / sqrt(2r(r+z))
-    r = torch.sqrt(ex**2 + ez**2)
-    r_safe = r.clamp(min=EPSILON)
-    r_plus_z = r + ez
-    r_plus_z_safe = r_plus_z.clamp(min=EPSILON)
-
-    cos_ha = torch.sqrt(r_plus_z_safe / (2 * r_safe))
-    sin_ha = ex / torch.sqrt(2 * r_safe * r_plus_z_safe)
-
-    # Handle singularity when r+z ≈ 0 (alpha ≈ ±π):
-    # cos(alpha/2) ≈ 0, sin(alpha/2) ≈ sign(x)
-    near_pi = r_plus_z < EPSILON
-    cos_ha = torch.where(near_pi, torch.zeros_like(cos_ha), cos_ha)
-    sin_ha = torch.where(near_pi, torch.sign(ex + EPSILON), sin_ha)
-
-    # Handle singularity when r ≈ 0 (edge along ±Y, alpha undefined → use 0):
-    y_aligned = r < EPSILON
-    cos_ha = torch.where(y_aligned, torch.ones_like(cos_ha), cos_ha)
-    sin_ha = torch.where(y_aligned, torch.zeros_like(sin_ha), sin_ha)
-
-    # For -alpha: cos(-alpha/2) = cos(alpha/2), sin(-alpha/2) = -sin(alpha/2)
-    cos_neg_ha = cos_ha
-    sin_neg_ha = -sin_ha
-
-    # Half-angles for -gamma:
-    cos_neg_hg = torch.cos(-gamma / 2)
-    sin_neg_hg = torch.sin(-gamma / 2)
-
-    # Construct q = q_Z(-gamma) ⊗ q_Y(-beta) ⊗ q_Z(-alpha)
-    # where q_Z(θ) = (cos(θ/2), 0, 0, sin(θ/2))
-    #       q_Y(θ) = (cos(θ/2), 0, sin(θ/2), 0)
+    # Quaternion multiplication q1 ⊗ q2 means "first apply q2, then q1".
+    # We want the gamma rotation applied AFTER the base rotation, so the
+    # combined rotation is: first +y→edge (q_base), then Ry(γ) (q_gamma).
+    # This means q_final = q_gamma ⊗ q_base.
     #
-    # First: q_Y(-beta) ⊗ q_Z(-alpha)
-    # q_Y(-beta) = (cos_neg_hb, 0, sin_neg_hb, 0)
-    # q_Z(-alpha) = (cos_neg_ha, 0, 0, sin_neg_ha)
-    q1_w = cos_neg_hb * cos_neg_ha
-    q1_x = -sin_neg_hb * sin_neg_ha
-    q1_y = sin_neg_hb * cos_neg_ha
-    q1_z = cos_neg_hb * sin_neg_ha
+    # Note: We negate gamma because the Wigner D is transposed to get edge→+y,
+    # which inverts the gamma rotation.
+    cos_hg = torch.cos(-gamma / 2.0)
+    sin_hg = torch.sin(-gamma / 2.0)
 
-    # Now: q_Z(-gamma) ⊗ q1
-    # q_Z(-gamma) = (cos_neg_hg, 0, 0, sin_neg_hg)
-    w = cos_neg_hg * q1_w - sin_neg_hg * q1_z
-    x = cos_neg_hg * q1_x + sin_neg_hg * q1_y
-    y = cos_neg_hg * q1_y - sin_neg_hg * q1_x
-    z = cos_neg_hg * q1_z + sin_neg_hg * q1_w
+    # Quaternion multiplication: q_gamma ⊗ q_base
+    # q_gamma = (cos_hg, 0, sin_hg, 0)
+    # q_base = (w_base, x_base, y_base, z_base)
+    #
+    # (w1,x1,y1,z1) ⊗ (w2,x2,y2,z2) =
+    #   (w1w2 - x1x2 - y1y2 - z1z2,
+    #    w1x2 + x1w2 + y1z2 - z1y2,
+    #    w1y2 - x1z2 + y1w2 + z1x2,
+    #    w1z2 + x1y2 - y1x2 + z1w2)
+    #
+    # With q1 = q_gamma = (cos_hg, 0, sin_hg, 0), q2 = q_base:
+    w = cos_hg * w_base - sin_hg * y_base
+    x = cos_hg * x_base - sin_hg * z_base
+    y = cos_hg * y_base + sin_hg * w_base
+    z = cos_hg * z_base + sin_hg * x_base
 
     return torch.stack([w, x, y, z], dim=-1)
 
@@ -221,13 +211,13 @@ def edge_to_quaternion(
 
 def quaternion_to_ra_rb(q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Decompose quaternion into complex numbers Ra and Rb (Cayley-Klein parameters).
+    Decompose quaternion into complex numbers Ra and Rb.
 
-    For q = (w, x, y, z) representing a ZYZ Euler rotation:
+    For q = (w, x, y, z):
         Ra = w + i·z
-        Rb = y - i·x
+        Rb = y + i·x
 
-    These encode the ZYZ Euler angles (α, β, γ) as:
+    These encode the rotation as:
         |Ra| = cos(β/2), |Rb| = sin(β/2)
         arg(Ra) = (α+γ)/2, arg(Rb) = (γ-α)/2
 
@@ -243,7 +233,7 @@ def quaternion_to_ra_rb(q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     z = q[..., 3]
 
     Ra = torch.complex(w, z)
-    Rb = torch.complex(y, -x)  # Note: minus sign for ZYZ convention
+    Rb = torch.complex(y, x)
 
     return Ra, Rb
 
@@ -674,7 +664,7 @@ def _build_u_block(
     ell: int,
     dtype: torch.dtype,
     device: torch.device,
-    convention: str = "e3nn",
+    convention: str = "fairchem",
 ) -> torch.Tensor:
     """
     Build U transformation matrix for a single ell block.
@@ -736,7 +726,7 @@ def precompute_U_blocks(
     lmax: int,
     dtype: torch.dtype = torch.float64,
     device: torch.device = torch.device("cpu"),
-    convention: str = "e3nn",
+    convention: str = "fairchem",
 ) -> list[torch.Tensor]:
     """
     Precompute U transformation matrices for each ell block.
@@ -923,16 +913,13 @@ def get_wigner_from_edge_vectors(
                If None, random angles in [0, 2π) are generated.
 
     Returns:
-        Tuple of (wigner_inv, wigner) where each has shape (N, size, size)
-        and size = (lmax+1)². wigner_inv rotates from lab frame to edge frame
-        (edge → +Y), wigner rotates from edge frame to lab frame (+Y → edge).
+        Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
+        and size = (lmax+1)². wigner rotates from edge frame to lab frame,
+        wigner_inv rotates from lab frame to edge frame.
     """
-    # The quaternion represents the inverse rotation (edge → +Y)
     q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
-    # Wigner D from this quaternion is for edge → +Y
-    wigner_inv = compute_wigner_d_from_quaternion(q, coeffs_sym, U_blocks)
-    # Transpose gives the forward rotation (+Y → edge)
-    wigner = torch.transpose(wigner_inv, 1, 2).contiguous()
+    wigner = compute_wigner_d_from_quaternion(q, coeffs_sym, U_blocks)
+    wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
     return wigner_inv, wigner
 
 
@@ -1041,7 +1028,7 @@ def get_complex_to_real_matrix(
     device: torch.device = torch.device("cpu"),
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
-    convention: str = "e3nn",
+    convention: str = "fairchem",
 ) -> torch.Tensor:
     """
     Get precomputed complex-to-real transformation matrix, loading from cache if available.
@@ -1087,7 +1074,7 @@ def precompute_all_wigner_tables(
     device: torch.device = torch.device("cpu"),
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
-    convention: str = "e3nn",
+    convention: str = "fairchem",
 ) -> tuple[dict[str, torch.Tensor], list[torch.Tensor]]:
     """
     Convenience function to get both coefficient tables and U blocks.
