@@ -49,6 +49,7 @@ class InferenceBatcher:
         concurrency_backend_options: dict | None = None,
         ray_actor_options: dict | None = None,
         deployment_name: str | None = None,
+        autoscaling_config: dict | None = None,
     ):
         """
         Args:
@@ -57,17 +58,27 @@ class InferenceBatcher:
                 The actual number of atoms will likely be larger than this as batches
                 are split when num atoms exceeds this value.
             batch_wait_timeout_s: The maximum time to wait for a batch to be ready.
-            num_replicas: The number of replicas to use for inference.
+            num_replicas: The number of replicas to use for inference. Ignored if autoscaling_config is provided.
             concurrency_backend: The concurrency backend to use for inference.
             concurrency_backend_options: Options to pass to the concurrency backend.
             ray_actor_options: Options to pass to the Ray actor running the batch server.
             deployment_name: Name for the Ray Serve deployment. If None, generates a unique name.
                 This allows multiple InferenceBatchers to coexist on the same Ray cluster.
+            autoscaling_config: Optional autoscaling configuration. If provided, enables
+                autoscaling and num_replicas is ignored. Example:
+                {
+                    "min_replicas": 0,  # Scale to zero when idle
+                    "max_replicas": 4,
+                    "target_ongoing_requests": 2,
+                    "downscale_delay_s": 60,  # Wait 60s before scaling down
+                    "upscale_delay_s": 5,  # Scale up quickly
+                }
         """
         self.predict_unit = predict_unit
         self.max_batch_size = max_batch_size
         self.batch_wait_timeout_s = batch_wait_timeout_s
         self.num_replicas = num_replicas
+        self.autoscaling_config = autoscaling_config
 
         # Generate unique deployment name if not provided
         if deployment_name is None:
@@ -82,6 +93,7 @@ class InferenceBatcher:
             ray_actor_options=ray_actor_options or {},
             deployment_name=self.deployment_name,
             route_prefix=f"/{self.deployment_name}",
+            autoscaling_config=self.autoscaling_config,
         )
 
         if concurrency_backend_options is None:

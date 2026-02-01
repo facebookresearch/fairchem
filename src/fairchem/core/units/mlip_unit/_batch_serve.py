@@ -192,6 +192,7 @@ def setup_batch_predict_server(
     ray_actor_options: dict | None = None,
     deployment_name: str = "predict-server",
     route_prefix: str = "/predict",
+    autoscaling_config: dict | None = None,
 ) -> serve.handle.DeploymentHandle:
     """
     Set up and deploy a BatchPredictServer for batched inference.
@@ -203,10 +204,19 @@ def setup_batch_predict_server(
             are split when num atoms exceeds this value.
         batch_wait_timeout_s: Maximum wait time before processing partial batch.
         split_oom_batch: Whether to split batches that cause OOM errors.
-        num_replicas: Number of deployment replicas for scaling.
+        num_replicas: Number of deployment replicas for scaling. Ignored if autoscaling_config is provided.
         ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})
         deployment_name: Name for the Ray Serve deployment.
         route_prefix: HTTP route prefix for the deployment.
+        autoscaling_config: Optional autoscaling configuration dict. If provided, enables
+            autoscaling and num_replicas is ignored. Example:
+            {
+                "min_replicas": 0,  # Scale to zero when idle
+                "max_replicas": 4,
+                "target_ongoing_requests": 2,
+                "downscale_delay_s": 60,  # Wait 60s before scaling down
+                "upscale_delay_s": 5,  # Scale up quickly
+            }
 
     Returns:
         Ray Serve deployment handle that can be used to initialize BatchServerPredictUnit
@@ -242,10 +252,19 @@ def setup_batch_predict_server(
     predict_unit_ref = ray.put(predict_unit)
     logging.info("Predict unit stored in Ray object store")
 
-    deployment = BatchPredictServer.options(
-        num_replicas=num_replicas,
-        ray_actor_options=ray_actor_options,
-    ).bind(
+    # Configure deployment options
+    deployment_options = {"ray_actor_options": ray_actor_options}
+    
+    if autoscaling_config is not None:
+        # Use autoscaling - num_replicas is ignored
+        deployment_options["autoscaling_config"] = autoscaling_config
+        replicas_info = f"autoscaling (min={autoscaling_config.get('min_replicas', 1)}, max={autoscaling_config.get('max_replicas', 1)})"
+    else:
+        # Fixed number of replicas
+        deployment_options["num_replicas"] = num_replicas
+        replicas_info = f"num_replicas={num_replicas}"
+
+    deployment = BatchPredictServer.options(**deployment_options).bind(
         predict_unit_ref,
         max_batch_size=max_batch_size,
         batch_wait_timeout_s=batch_wait_timeout_s,
@@ -256,7 +275,7 @@ def setup_batch_predict_server(
 
     logging.info(
         f"BatchPredictServer deployed with max_batch_size={max_batch_size}, "
-        f"batch_wait_timeout_s={batch_wait_timeout_s}, num_replicas={num_replicas}, "
+        f"batch_wait_timeout_s={batch_wait_timeout_s}, {replicas_info}, "
         f"name={deployment_name}"
     )
 
