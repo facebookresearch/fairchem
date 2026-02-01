@@ -62,8 +62,8 @@ def U_blocks(lmax, dtype, device):
 class TestQuaternionConstruction:
     """Tests for edge_to_quaternion function."""
 
-    def test_unit_quaternion_and_rotation_correctness(self, dtype, device):
-        """Quaternion is unit length and correctly rotates +y to edge direction."""
+    def test_unit_quaternion(self, dtype, device):
+        """Quaternion is unit length."""
         edges = torch.randn(10, 3, dtype=dtype, device=device)
         edges = torch.nn.functional.normalize(edges, dim=-1)
         gamma = torch.zeros(10, dtype=dtype, device=device)
@@ -74,46 +74,22 @@ class TestQuaternionConstruction:
         norms = torch.linalg.norm(q, dim=-1)
         assert torch.allclose(norms, torch.ones_like(norms), atol=1e-10)
 
-        # Verify quaternion actually rotates +y to edge direction
-        y = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
+    def test_quaternion_is_unit_norm(self, dtype, device):
+        """All constructed quaternions should be unit length."""
+        edges = torch.randn(10, 3, dtype=dtype, device=device)
+        edges = torch.nn.functional.normalize(edges, dim=-1)
+        gamma = torch.zeros(10, dtype=dtype, device=device)
 
-        for i in range(10):
-            qi = q[i]
-            w, qx, qy, qz = qi[0], qi[1], qi[2], qi[3]
+        q = edge_to_quaternion(edges, gamma=gamma)
 
-            # Rotation matrix from quaternion
-            R = torch.tensor(
-                [
-                    [
-                        1 - 2 * (qy**2 + qz**2),
-                        2 * (qx * qy - qz * w),
-                        2 * (qx * qz + qy * w),
-                    ],
-                    [
-                        2 * (qx * qy + qz * w),
-                        1 - 2 * (qx**2 + qz**2),
-                        2 * (qy * qz - qx * w),
-                    ],
-                    [
-                        2 * (qx * qz - qy * w),
-                        2 * (qy * qz + qx * w),
-                        1 - 2 * (qx**2 + qy**2),
-                    ],
-                ],
-                dtype=dtype,
-                device=device,
-            )
-
-            rotated_y = R @ y
-            assert torch.allclose(
-                rotated_y, edges[i], atol=1e-6
-            ), f"Edge {i}: expected {edges[i]}, got {rotated_y}"
+        norms = torch.linalg.norm(q, dim=-1)
+        assert torch.allclose(norms, torch.ones_like(norms), atol=1e-10)
 
     def test_y_axis_edge_cases(self, dtype, device):
-        """Edge along +y gives identity; edge along -y uses 180° x-rotation fallback."""
+        """Edge along ±y produces unit quaternion and correct Wigner D."""
         gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        # +y should give identity quaternion (1, 0, 0, 0)
+        # +y should give identity quaternion (since +Y → +Y is identity)
         edge_pos_y = torch.tensor([[0.0, 1.0, 0.0]], dtype=dtype, device=device)
         q_pos = edge_to_quaternion(edge_pos_y, gamma=gamma)
         expected_identity = torch.tensor(
@@ -121,11 +97,23 @@ class TestQuaternionConstruction:
         )
         assert torch.allclose(q_pos, expected_identity, atol=1e-10)
 
-        # -y should give 180° rotation around x: (0, 1, 0, 0)
+        # -y should give a unit quaternion
         edge_neg_y = torch.tensor([[0.0, -1.0, 0.0]], dtype=dtype, device=device)
         q_neg = edge_to_quaternion(edge_neg_y, gamma=gamma)
-        expected_180x = torch.tensor([[0.0, 1.0, 0.0, 0.0]], dtype=dtype, device=device)
-        assert torch.allclose(q_neg, expected_180x, atol=1e-6)
+        assert torch.allclose(
+            torch.linalg.norm(q_neg), torch.ones(1, dtype=dtype, device=device), atol=1e-10
+        )
+
+        # Both edges should produce Wigner D that rotates edge → +Y
+        y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
+        for edge in [edge_pos_y, edge_neg_y]:
+            wigner, _ = quaternion_wigner(edge, lmax=1, gamma=gamma)
+            D = wigner[0, 1:4, 1:4]
+            edge_norm = torch.nn.functional.normalize(edge, dim=-1)
+            result = D @ edge_norm[0]
+            assert torch.allclose(result, y_axis, atol=1e-6), (
+                f"Wigner D did not rotate edge {edge[0].tolist()} to +Y, got {result.tolist()}"
+            )
 
     def test_all_edges_align_to_y_axis(self, dtype, device):
         """
@@ -178,7 +166,7 @@ class TestRaRbDecomposition:
         "q,expected_ra,expected_rb,desc",
         [
             ([1.0, 0.0, 0.0, 0.0], 1 + 0j, 0 + 0j, "identity"),
-            ([0.0, 1.0, 0.0, 0.0], 0 + 0j, 0 + 1j, "180° x-rotation"),
+            ([0.0, 1.0, 0.0, 0.0], 0 + 0j, 0 - 1j, "180° x-rotation"),
         ],
     )
     def test_ra_rb_decomposition(
@@ -380,7 +368,10 @@ class TestEulerQuaternionAgreement:
             wigner_euler = eulers_to_wigner(euler_angles, 0, lmax, Jd_matrices)
 
             # Quaternion approach with matching gamma
-            wigner_quat, _ = quaternion_wigner(edge_t, lmax, gamma=alpha + gamma)
+            # The quaternion now builds the inverse rotation directly, so we pass
+            # the forward gamma (which is -euler_angles[0])
+            gamma_fwd = -alpha
+            wigner_quat, _ = quaternion_wigner(edge_t, lmax, gamma=gamma_fwd)
 
             # Both should be orthogonal
             size = (lmax + 1) ** 2
@@ -419,48 +410,45 @@ class TestEulerQuaternionAgreement:
 
     def test_gradient_accuracy_near_y_axis(self, lmax, dtype, device, Jd_matrices):
         """
-        Compare finite difference vs analytic gradients for y-aligned edges.
+        Compare gradient behavior near y-axis for Euler vs quaternion approaches.
 
         Near y-axis:
-        - Euler finite diff blows up (true gradient is huge)
-        - Euler analytic is clamped by Safeacos (hides true gradient)
-        - Quaternion finite diff and analytic match (no clamping)
+        - Euler analytic gradients are clamped by Safeacos (underestimate true gradient)
+        - Quaternion analytic gradients correctly track finite differences
         """
-
-        def compute_finite_diff_gradient(fn, x, h):
-            """Compute gradient via central finite differences."""
-            grad = torch.zeros_like(x)
-            for i in range(x.shape[1]):  # For each dimension (x, y, z)
-                x_plus = x.clone()
-                x_minus = x.clone()
-                x_plus[0, i] += h
-                x_minus[0, i] -= h
-                grad[0, i] = (fn(x_plus) - fn(x_minus)) / (2 * h)
-            return grad
-
-        # Nearly y-aligned edge
-        eps_offset = 1e-7
-        edge = torch.tensor([[eps_offset, 1.0, eps_offset]], dtype=dtype, device=device)
+        # Nearly y-aligned edge (but not so close that FD becomes unstable)
+        eps_offset = 1e-5
+        edge = torch.tensor(
+            [[eps_offset, 1.0, eps_offset]], dtype=dtype, device=device
+        )
         edge = torch.nn.functional.normalize(edge, dim=-1)
 
         # Get Euler angles for consistent gamma
         euler_angles = init_edge_rot_euler_angles(edge)
-        gamma_euler = -euler_angles[0]  # Extract gamma
-        alpha_euler = -euler_angles[2]  # Extract alpha
-        gamma_quat = gamma_euler + alpha_euler  # Matching gamma for quaternion
+        gamma_euler = -euler_angles[0]  # Extract gamma (forward rotation gamma)
+        gamma_quat = gamma_euler
 
-        h = 1e-6  # Finite difference step size
+        # Use adaptive FD step size for numerical stability
+        h = eps_offset * 0.01
+
+        def compute_finite_diff_gradient(fn, x, step):
+            """Compute gradient via central finite differences."""
+            grad = torch.zeros_like(x)
+            for i in range(x.shape[1]):
+                x_plus = x.clone()
+                x_minus = x.clone()
+                x_plus[0, i] += step
+                x_minus[0, i] -= step
+                grad[0, i] = (fn(x_plus) - fn(x_minus)) / (2 * step)
+            return grad
 
         # === EULER APPROACH ===
-        # Analytic gradient
         edge_euler = edge.clone().requires_grad_(True)
         euler_angles_grad = init_edge_rot_euler_angles(edge_euler)
         wigner_euler = eulers_to_wigner(euler_angles_grad, 0, lmax, Jd_matrices)
-        loss_euler = wigner_euler.sum()
-        loss_euler.backward()
+        wigner_euler.sum().backward()
         euler_analytic_grad = edge_euler.grad.clone()
 
-        # Finite difference gradient
         euler_fd_grad = compute_finite_diff_gradient(
             lambda e: eulers_to_wigner(
                 init_edge_rot_euler_angles(e), 0, lmax, Jd_matrices
@@ -470,14 +458,11 @@ class TestEulerQuaternionAgreement:
         )
 
         # === QUATERNION APPROACH ===
-        # Analytic gradient
         edge_quat = edge.clone().requires_grad_(True)
         wigner_quat, _ = quaternion_wigner(edge_quat, lmax, gamma=gamma_quat)
-        loss_quat = wigner_quat.sum()
-        loss_quat.backward()
+        wigner_quat.sum().backward()
         quat_analytic_grad = edge_quat.grad.clone()
 
-        # Finite difference gradient
         quat_fd_grad = compute_finite_diff_gradient(
             lambda e: quaternion_wigner(e, lmax, gamma=gamma_quat)[0].sum(),
             edge,
@@ -485,26 +470,39 @@ class TestEulerQuaternionAgreement:
         )
 
         # === ASSERTIONS ===
-        # 1. Euler finite diff should be much larger than analytic (clamping effect)
-        euler_fd_mag = euler_fd_grad.abs().max().item()
-        euler_analytic_mag = euler_analytic_grad.abs().max().item()
-        # print(euler_fd_mag, euler_analytic_mag)
-        assert euler_fd_mag > 10 * euler_analytic_mag, (
-            f"Expected Euler FD >> analytic, got FD={euler_fd_mag}, "
-            f"analytic={euler_analytic_mag}"
+        # 1. Both gradients should be finite
+        assert torch.isfinite(euler_analytic_grad).all()
+        assert torch.isfinite(quat_analytic_grad).all()
+        assert torch.isfinite(euler_fd_grad).all()
+        assert torch.isfinite(quat_fd_grad).all()
+
+        # 2. Euler analytic should significantly underestimate the true gradient
+        # (compare to FD which gives the true gradient)
+        euler_x_rel_err = (
+            (euler_analytic_grad[0, 0] - euler_fd_grad[0, 0]).abs()
+            / euler_fd_grad[0, 0].abs()
+        )
+        assert euler_x_rel_err > 0.5, (
+            f"Expected Euler to underestimate gradient, "
+            f"got rel_err={euler_x_rel_err.item():.2f}"
         )
 
-        # 2. Quaternion finite diff and analytic should match
-        assert torch.allclose(quat_fd_grad, quat_analytic_grad, rtol=0.1), (
-            f"Quaternion FD and analytic should match:\n"
-            f"FD={quat_fd_grad}\nAnalytic={quat_analytic_grad}"
+        # 3. Quaternion analytic should closely match FD (no clamping)
+        # Check x and z components (y is ~0 so we skip it)
+        quat_x_rel_err = (
+            (quat_analytic_grad[0, 0] - quat_fd_grad[0, 0]).abs()
+            / quat_fd_grad[0, 0].abs()
         )
-
-        # 3. Quaternion gradients should be reasonable (not blowing up)
-        quat_mag = quat_analytic_grad.abs().max().item()
-        # quat_fd_mag = quat_fd_grad.abs().max().item()
-        # print(quat_mag, quat_fd_mag)
-        assert quat_mag < 1e6, f"Quaternion gradient too large: {quat_mag}"
+        quat_z_rel_err = (
+            (quat_analytic_grad[0, 2] - quat_fd_grad[0, 2]).abs()
+            / quat_fd_grad[0, 2].abs()
+        )
+        assert quat_x_rel_err < 0.01, (
+            f"Quaternion x gradient rel_err too large: {quat_x_rel_err.item():.4f}"
+        )
+        assert quat_z_rel_err < 0.01, (
+            f"Quaternion z gradient rel_err too large: {quat_z_rel_err.item():.4f}"
+        )
 
 
 if __name__ == "__main__":
