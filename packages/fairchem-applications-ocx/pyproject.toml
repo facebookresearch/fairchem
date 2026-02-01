@@ -8,7 +8,7 @@ dynamic = ["version", "readme"]
 description = "Bridging Experiments to Computational Models"
 license = {text = "MIT License"}
 dependencies = [
-    "scipy",
+    "scipy>=1.15.0",
     "numpy",
     "scikit-learn",
     "pandas",
