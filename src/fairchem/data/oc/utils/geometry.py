@@ -220,6 +220,8 @@ class BoxGeometry(Geometry):
         self.ll_corner, self.ur_corner, self.length_half, self.center = props
         self.params = list(self.ll_corner) + list(self.ur_corner)
         self.length = self.length_half * 2
+        # Create orthorhombic cell from box dimensions
+        self.cell = np.diag(self.length)
 
     def __repr__(self):
         return "box"
