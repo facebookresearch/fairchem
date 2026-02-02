@@ -116,6 +116,77 @@ def _vectorized_horner(
 # =============================================================================
 
 
+def _quat_y_to_edge_standard(
+    ex: torch.Tensor,
+    ey: torch.Tensor,
+    ez: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Standard quaternion formula: rotate +Y to edge. Singular at edge = -Y.
+
+    Uses q = normalize(1+ey, ez, 0, -ex).
+    """
+    one_plus_ey = 1.0 + ey
+
+    # Handle singularity at ey = -1
+    singular = one_plus_ey < 1e-7
+    safe_one_plus_ey = torch.where(singular, torch.ones_like(one_plus_ey), one_plus_ey)
+    inv_norm = 1.0 / torch.sqrt(2.0 * safe_one_plus_ey)
+
+    w = torch.sqrt(safe_one_plus_ey / 2.0)
+    x = ez * inv_norm
+    y = torch.zeros_like(ex)
+    z = -ex * inv_norm
+
+    # Fallback for singular case: 180° rotation around x-axis
+    w = torch.where(singular, torch.zeros_like(w), w)
+    x = torch.where(singular, torch.ones_like(x), x)
+    y = torch.where(singular, torch.zeros_like(y), y)
+    z = torch.where(singular, torch.zeros_like(z), z)
+
+    return torch.stack([w, x, y, z], dim=-1)
+
+
+def _quat_y_to_edge_via_z(
+    ex: torch.Tensor,
+    ey: torch.Tensor,
+    ez: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Alternative quaternion formula: rotate +Y to edge via +Z. Singular at edge = -Z.
+
+    First rotates +Y to +Z, then +Z to edge.
+    """
+    one_plus_ez = 1.0 + ez
+
+    # Handle singularity at ez = -1
+    singular = one_plus_ez < 1e-7
+    safe_one_plus_ez = torch.where(singular, torch.ones_like(one_plus_ez), one_plus_ez)
+    inv_norm = 1.0 / torch.sqrt(2.0 * safe_one_plus_ez)
+
+    # Quaternion for +Z to edge: q = normalize(1+ez, -ey, ex, 0)
+    w2 = torch.sqrt(safe_one_plus_ez / 2.0)
+    x2 = -ey * inv_norm
+    y2 = ex * inv_norm
+    z2 = torch.zeros_like(ex)
+
+    # Fallback for singular case
+    w2 = torch.where(singular, torch.zeros_like(w2), w2)
+    x2 = torch.where(singular, torch.ones_like(x2), x2)
+    y2 = torch.where(singular, torch.zeros_like(y2), y2)
+
+    # Compose with +Y to +Z rotation: q_yz = (√2/2, √2/2, 0, 0)
+    # q_total = q_ze ⊗ q_yz (apply q_yz first, then q_ze)
+    s2 = math.sqrt(0.5)
+
+    w = s2 * w2 - s2 * x2
+    x = s2 * w2 + s2 * x2
+    y = s2 * y2 + s2 * z2
+    z = s2 * z2 - s2 * y2
+
+    return torch.stack([w, x, y, z], dim=-1)
+
+
 def edge_to_quaternion(
     edge_vec: torch.Tensor,
     gamma: Optional[torch.Tensor] = None,
@@ -123,13 +194,12 @@ def edge_to_quaternion(
     """
     Convert edge vectors to quaternions that rotate +y to the edge direction.
 
-    Uses the half-angle formula which is singularity-free except at edge = -y.
+    Uses an adaptive approach with two formulas to avoid singularities:
+    - Standard formula (singular at -Y): used when ey > -0.7
+    - Via-Z formula (singular at -Z): used when ey < -0.9
+    - Smooth blend in between for C1 continuity
 
-    For edge = (x, y, z), we want quaternion q such that q⊗(0,1,0)⊗q* = edge.
-    Using q = normalize(1 + a·b, a×b) with a = +y:
-        a·b = y
-        a×b = (z, 0, -x)
-    So q = normalize(1+y, z, 0, -x)
+    This ensures bounded gradients for all edge directions.
 
     Args:
         edge_vec: Edge vectors of shape (N, 3), need not be normalized
@@ -150,52 +220,42 @@ def edge_to_quaternion(
     if gamma is None:
         gamma = torch.rand_like(ex) * 2 * math.pi
 
-    # Half-angle formula: q = normalize(1+ey, ez, 0, -ex)
-    one_plus_ey = 1.0 + ey
+    # Compute both quaternion formulas
+    q_std = _quat_y_to_edge_standard(ex, ey, ez)
+    q_via_z = _quat_y_to_edge_via_z(ex, ey, ez)
 
-    # Handle singularity at ey = -1 (edge pointing to -y)
-    singular = one_plus_ey < 1e-7
+    # Smooth blend: use standard when ey > -0.7, via-Z when ey < -0.9
+    # C3 smoothstep (septic polynomial) for C3 continuity at boundaries
+    # h(t) = 35t^4 - 84t^5 + 70t^6 - 20t^7
+    # Has h(0)=0, h(1)=1, and h', h'', h''' all zero at both endpoints
+    blend_start = -0.9
+    blend_width = 0.2
+    t = (ey - blend_start) / blend_width  # 0 at ey=-0.9, 1 at ey=-0.7
+    t = t.clamp(0, 1)
+    t2 = t * t
+    t4 = t2 * t2
+    blend = t4 * (35 - 84 * t + 70 * t2 - 20 * t2 * t)  # C3 smoothstep
 
-    # For non-singular case:
-    # norm = sqrt((1+ey)² + ez² + ex²) = sqrt(2(1+ey))
-    safe_one_plus_ey = torch.where(singular, torch.ones_like(one_plus_ey), one_plus_ey)
-    inv_norm = 1.0 / torch.sqrt(2.0 * safe_one_plus_ey)
+    # Align quaternions (q and -q represent same rotation)
+    dot = (q_std * q_via_z).sum(dim=-1, keepdim=True)
+    q_via_z_aligned = torch.where(dot < 0, -q_via_z, q_via_z)
 
-    w_base = torch.sqrt(safe_one_plus_ey / 2.0)
-    x_base = ez * inv_norm
-    y_base = torch.zeros_like(ex)
-    z_base = -ex * inv_norm
+    # Blend quaternions and renormalize
+    q_base = blend.unsqueeze(-1) * q_std + (1 - blend.unsqueeze(-1)) * q_via_z_aligned
+    q_base = torch.nn.functional.normalize(q_base, dim=-1)
 
-    # Fallback for singular case: 180° rotation around x-axis → q = (0, 1, 0, 0)
-    w_base = torch.where(singular, torch.zeros_like(w_base), w_base)
-    x_base = torch.where(singular, torch.ones_like(x_base), x_base)
-    y_base = torch.where(singular, torch.zeros_like(y_base), y_base)
-    z_base = torch.where(singular, torch.zeros_like(z_base), z_base)
+    w_base = q_base[..., 0]
+    x_base = q_base[..., 1]
+    y_base = q_base[..., 2]
+    z_base = q_base[..., 3]
 
     # Apply gamma rotation around y-axis: q_final = q_gamma ⊗ q_base
-    # q_gamma = (cos(γ/2), 0, sin(γ/2), 0)
-    #
-    # Quaternion multiplication q1 ⊗ q2 means "first apply q2, then q1".
-    # We want the gamma rotation applied AFTER the base rotation, so the
-    # combined rotation is: first +y→edge (q_base), then Ry(γ) (q_gamma).
-    # This means q_final = q_gamma ⊗ q_base.
-    #
-    # Note: We negate gamma because the Wigner D is transposed to get edge→+y,
-    # which inverts the gamma rotation.
+    # Note: We negate gamma because the Wigner D is transposed to get edge→+y
     cos_hg = torch.cos(-gamma / 2.0)
     sin_hg = torch.sin(-gamma / 2.0)
 
     # Quaternion multiplication: q_gamma ⊗ q_base
     # q_gamma = (cos_hg, 0, sin_hg, 0)
-    # q_base = (w_base, x_base, y_base, z_base)
-    #
-    # (w1,x1,y1,z1) ⊗ (w2,x2,y2,z2) =
-    #   (w1w2 - x1x2 - y1y2 - z1z2,
-    #    w1x2 + x1w2 + y1z2 - z1y2,
-    #    w1y2 - x1z2 + y1w2 + z1x2,
-    #    w1z2 + x1y2 - y1x2 + z1w2)
-    #
-    # With q1 = q_gamma = (cos_hg, 0, sin_hg, 0), q2 = q_base:
     w = cos_hg * w_base - sin_hg * y_base
     x = cos_hg * x_base - sin_hg * z_base
     y = cos_hg * y_base + sin_hg * w_base
