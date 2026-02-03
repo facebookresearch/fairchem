@@ -82,7 +82,7 @@ def _inverse_rotate_output(
     """Back-rotate model outputs to original reference frame.
 
     For vectors (forces): f = R^T @ f' which is f' @ R for row vectors
-    For rank-2 tensors (stress): σ = R^T @ σ' @ R
+    For rank-2 tensors (stress): S = R^T @ S' @ R
 
     Args:
         output: Model output tensor
@@ -103,7 +103,7 @@ def _inverse_rotate_output(
 
     # Rank-2 tensor (stress) - stored as (batch, 9)
     if task_property == "stress":
-        # σ = R^T @ σ' @ R
+        # S = R^T @ S' @ R
         batch_size = output.shape[0]
         stress_3x3 = output.view(batch_size, 3, 3)
         rotated = R.T @ stress_3x3 @ R
