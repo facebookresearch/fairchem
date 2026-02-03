@@ -8,8 +8,10 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import math
+import threading
 from contextlib import suppress
 from dataclasses import dataclass
+from functools import partial
 
 import torch
 import torch.nn as nn
@@ -68,6 +70,51 @@ class MOLEGlobals:
     # the MolE interface to maintain functional equivalence to the Linear layer interface, this extra info
     # needs to be added here instead. (TODO: is there a cleaner way to do this?)
     ac_start_idx: int = 0
+
+
+class ThreadSafeMOLEGlobals:
+    def __init__(
+        self, expert_mixing_coefficients=None, mole_sizes=None, ac_start_idx=0
+    ):
+        self.MOLEGlobalsByThread = {}
+        self._expert_mixing_coefficients = expert_mixing_coefficients
+        self._mole_sizes = mole_sizes
+        self._ac_start_idx = ac_start_idx
+
+    def _getattr(self, name):
+        thread_id = threading.get_ident()
+        if thread_id not in self.MOLEGlobalsByThread:
+            raise ValueError(f"MOLEGlobals for thread {thread_id} not set")
+        return getattr(self.MOLEGlobalsByThread[thread_id], name)
+
+    def _setattr(self, value, name):
+        thread_id = threading.get_ident()
+        if thread_id not in self.MOLEGlobalsByThread:
+            self.MOLEGlobalsByThread[thread_id] = MOLEGlobals(
+                expert_mixing_coefficients=self._expert_mixing_coefficients,
+                mole_sizes=self._mole_sizes,
+                ac_start_idx=self._ac_start_idx,
+            )
+        setattr(self.MOLEGlobalsByThread[thread_id], name, value)
+
+    expert_mixing_coefficients = property(
+        fget=partial(_getattr, name="expert_mixing_coefficients"),
+        fset=partial(_setattr, name="expert_mixing_coefficients"),
+        fdel=None,
+        doc=None,
+    )
+    mole_sizes = property(
+        fget=partial(_getattr, name="mole_sizes"),
+        fset=partial(_setattr, name="mole_sizes"),
+        fdel=None,
+        doc=None,
+    )
+    ac_start_idx = property(
+        fget=partial(_getattr, name="ac_start_idx"),
+        fset=partial(_setattr, name="ac_start_idx"),
+        fdel=None,
+        doc=None,
+    )
 
 
 def init_linear(num_experts, use_bias, out_features, in_features):

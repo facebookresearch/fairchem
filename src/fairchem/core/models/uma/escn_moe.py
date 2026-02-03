@@ -20,9 +20,7 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone
-from fairchem.core.models.uma.nn.mole import (
-    MOLEGlobals,
-)
+from fairchem.core.models.uma.nn.mole import ThreadSafeMOLEGlobals
 from fairchem.core.models.uma.nn.mole_utils import (
     MOLEInterface,
     convert_model_to_MOLE_model,
@@ -215,7 +213,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         }
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
-        self.global_mole_tensors = MOLEGlobals(
+        self.global_mole_tensors = ThreadSafeMOLEGlobals(
             expert_mixing_coefficients=None, mole_sizes=None
         )
         replacement_factory = functools.partial(
