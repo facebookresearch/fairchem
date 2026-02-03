@@ -1,0 +1,256 @@
+# Knowledge Distillation configuration for training a smaller UMA model
+# from a larger teacher model (e.g., uma_sm_conserve_finetune)
+#
+# Usage:
+#   fairchem -c configs/uma/training_release/uma_distillation.yaml \
+#     teacher_checkpoint="/path/to/your/uma_sm_conserve_finetune/inference_ckpt.pt" \
+#     cluster=h100_local dataset=uma_debug
+#
+# Required:
+#   - teacher_checkpoint: Path to the trained teacher model checkpoint
+#
+# Optional overrides:
+#   - distillation_coefficient: Weight for distillation loss (default: 1.0)
+#   - ground_truth_coefficient: Weight for ground truth loss (default: 1.0)
+#   - student_backbone: Path to student backbone config (default: K4L2 - smallest)
+
+defaults:
+  - cluster: h100
+  - backbone: K4L2  # Student model uses smaller backbone
+  - dataset: uma
+  - element_refs: uma_v1_hof_lin_refs
+  - tasks: uma_conserving_stress
+  - _self_
+
+job:
+  device_type: ${cluster.device}
+  scheduler:
+    mode: ${cluster.mode}
+    ranks_per_node: ${cluster.ranks_per_node}
+    num_nodes: 16
+    slurm:
+      account: ${cluster.account}
+      qos: ${cluster.qos}
+      mem_gb: ${cluster.mem_gb}
+      cpus_per_task: ${cluster.cpus_per_task}
+  debug: ${cluster.debug}
+  run_dir: ${cluster.run_dir}
+  run_name: uma_distillation
+  logger:
+    _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
+    _partial_: true
+    entity: fairchem
+    project: uma_distillation
+
+# REQUIRED: Path to the trained teacher model checkpoint
+# This should be the inference checkpoint from your uma_sm_conserve_finetune training
+teacher_checkpoint: ???  # Must be provided at runtime
+
+# Distillation hyperparameters
+distillation_coefficient: 1.0  # Weight for soft labels from teacher
+ground_truth_coefficient: 1.0  # Weight for ground truth labels
+distillation_loss_type: mse  # Options: mse, mae, huber
+
+# Which outputs to distill
+distill_energy: True
+distill_forces: True
+distill_stress: True
+
+# Student model configuration (using smaller backbone by default)
+moe_layer_type: pytorch
+num_moe_experts: 32
+max_neighbors: 300
+cutoff_radius: 6
+epochs: null
+steps: 500000
+max_atoms: 350
+min_atoms: 0
+bf16: False
+cpu_graph: True
+otf_graph: False
+normalizer_rmsd: 1.423
+
+energy_coef: 20
+force_coef: 2
+stress_coef: 1
+
+regress_stress: True
+direct_forces: False
+
+oc20_forces_key: oc20_forces
+omat_forces_key: omat_forces
+omol_forces_key: omol_forces
+odac_forces_key: odac_forces
+omc_forces_key: omc_forces
+
+dataset_list: ["oc20", "omol", "omat", "odac", "omc"]
+
+exclude_keys: [
+  "id",
+  "fid",
+  "absolute_idx",
+  "target_pos",
+  "ref_energy",
+  "pbc",
+  "nads",
+  "oc22",
+  "formation_energy",
+  "total_charge",
+]
+
+train_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omc: ${dataset.omc_train}
+    omol: ${dataset.omol_train}
+    odac: ${dataset.odac_train}
+    omat: ${dataset.omat_train}
+    oc20: ${dataset.oc20_train}
+  combined_dataset_config:
+    sampling:
+      type: explicit
+      ratios:
+        omol.train: 4.0
+        oc20.train: 1.0
+        omc.train: 2.0
+        odac.train: 1.0
+        omat.train: 2.0
+
+val_dataset:
+  _target_: fairchem.core.datasets.mt_concat_dataset.create_concat_dataset
+  dataset_configs:
+    omc: ${dataset.omc_val}
+    omol: ${dataset.omol_val}
+    odac: ${dataset.odac_val}
+    omat: ${dataset.omat_val}
+    oc20: ${dataset.oc20_val}
+  combined_dataset_config: { sampling: {type: temperature, temperature: 1.0} }
+
+train_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${train_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    min_atoms: ${min_atoms}
+    shuffle: True
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+eval_dataloader:
+  _target_: fairchem.core.components.common.dataloader_builder.get_dataloader
+  dataset: ${val_dataset}
+  batch_sampler_fn:
+    _target_: fairchem.core.datasets.samplers.max_atom_distributed_sampler.MaxAtomDistributedBatchSampler
+    _partial_: True
+    max_atoms: ${max_atoms}
+    min_atoms: ${min_atoms}
+    shuffle: False
+    seed: 0
+  num_workers: ${cluster.dataloader_workers}
+  collate_fn:
+    _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
+    tasks: ${tasks}
+    exclude_keys: ${exclude_keys}
+
+# Student model heads (same structure as teacher)
+heads:
+  energyandforcehead:
+    module: fairchem.core.models.uma.escn_moe.DatasetSpecificSingleHeadWrapper
+    head_cls: fairchem.core.models.uma.escn_md.MLP_EFS_Head
+    head_kwargs:
+      wrap_property: False
+    dataset_names:
+      - omol
+      - omat
+      - oc20
+      - omc
+      - odac
+
+# Student model backbone configuration
+student_backbone:
+  _target_: fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone
+  model: fairchem.core.models.uma.escn_moe.eSCNMDMoeBackbone
+  moe_dropout: 0.05
+  moe_layer_type: ${moe_layer_type}
+  num_experts: ${num_moe_experts}
+  use_composition_embedding: true
+  use_global_embedding: false
+  max_num_elements: 100
+  sphere_channels: 128
+  lmax: 2  # Smaller than teacher
+  mmax: 2
+  otf_graph: ${otf_graph}
+  max_neighbors: ${max_neighbors}
+  use_pbc: True
+  use_pbc_single: True
+  cutoff: ${cutoff_radius}
+  edge_channels: 128
+  distance_function: gaussian
+  num_distance_basis: 64
+  regress_forces: True
+  regress_stress: ${regress_stress}
+  direct_forces: ${direct_forces}
+  num_layers: 4  # Fewer layers than teacher
+  hidden_channels: 128
+  norm_type: rms_norm_sh
+  act_type: gate
+  ff_type: spectral
+  chg_spin_emb_type: "rand_emb"
+  cs_emb_grad: True
+  dataset_list: ${dataset_list}
+
+runner:
+  _target_: fairchem.core.components.train.train_runner.TrainEvalRunner
+  train_dataloader: ${train_dataloader}
+  eval_dataloader: ${eval_dataloader}
+  train_eval_unit:
+    _target_: fairchem.core.units.mlip_unit.distillation_unit.MLIPDistillationUnit
+    job_config: ${job}
+    tasks: ${tasks}
+    teacher_checkpoint_location: ${teacher_checkpoint}
+    distillation_coefficient: ${distillation_coefficient}
+    ground_truth_coefficient: ${ground_truth_coefficient}
+    distillation_loss_type: ${distillation_loss_type}
+    distill_energy: ${distill_energy}
+    distill_forces: ${distill_forces}
+    distill_stress: ${distill_stress}
+    teacher_overrides:
+      backbone:
+        max_neighbors: ${max_neighbors}
+        otf_graph: ${otf_graph}
+    model:
+      _target_: fairchem.core.units.mlip_unit.distillation_unit.initialize_student_model
+      backbone_config: ${student_backbone}
+      heads_config: ${heads}
+      pass_through_head_outputs: True
+    optimizer_fn:
+      _target_: torch.optim.AdamW
+      _partial_: true
+      lr: 4e-4
+      weight_decay: 1e-3
+    cosine_lr_scheduler_fn:
+      _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
+      _partial_: true
+      warmup_factor: 0.2
+      warmup_epochs: 0.01
+      lr_min_factor: 0.01
+      epochs: ${epochs}
+      steps: ${steps}
+    print_every: 10
+    clip_grad_norm: 100
+    bf16: ${bf16}
+  max_epochs: ${epochs}
+  max_steps: ${steps}
+  evaluate_every_n_steps: 10000
+  callbacks:
+    - _target_: fairchem.core.common.profiler_utils.ProfilerCallback
+      job_config: ${job}
+    - _target_: fairchem.core.components.train.train_runner.TrainCheckpointCallback
+      checkpoint_every_n_steps: 5000
+      max_saved_checkpoints: 5
