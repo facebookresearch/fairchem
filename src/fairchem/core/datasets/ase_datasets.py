@@ -98,7 +98,28 @@ class AseAtomsDataset(BaseDataset, ABC):
                 f"Double check that the src path and/or glob search pattern gives ASE compatible data: {config['src']}"
             )
 
+        self._close_dbs()
+
+    def _close_dbs(self):
+        """Close all database connections if they exist."""
+        if hasattr(self, "dbs"):
+            for db in self.dbs:
+                if hasattr(db, "close"):
+                    db.close()
+            self.dbs = []
+
     def __getitem__(self, idx):
+        if len(self.dbs) == 0:
+            logging.info("Lazily reloading dataset ...")
+            self.ids = self._load_dataset_get_ids(self.config)
+            self.num_samples = len(self.ids)
+
+            if len(self.ids) == 0:
+                raise ValueError(
+                    rf"No valid ase data found! \n"
+                    f"Double check that the src path and/or glob search pattern gives ASE compatible data: {self.config['src']}"
+                )
+
         # Handle slicing
         if isinstance(idx, slice):
             return [self[i] for i in range(*idx.indices(len(self)))]
@@ -538,6 +559,4 @@ class AseDBDataset(AseAtomsDataset):
         return ase.db.connect(address, **connect_args)
 
     def __del__(self):
-        for db in self.dbs:
-            if hasattr(db, "close"):
-                db.close()
+        self._close_dbs()

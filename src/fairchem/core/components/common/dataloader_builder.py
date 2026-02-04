@@ -37,6 +37,7 @@ def get_dataloader(
         num_workers=num_workers,
         pin_memory=True,
         batch_sampler=batch_sampler,
+        multiprocessing_context="forkserver",
     )
     logging.info("get_dataloader::Done!")
     return dataloader
