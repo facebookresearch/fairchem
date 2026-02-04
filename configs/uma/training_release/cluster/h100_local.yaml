@@ -9,3 +9,4 @@ dataloader_workers: 0
 debug: True
 mem_gb: 0
 cpus_per_task: 24
+mp_start_method: null

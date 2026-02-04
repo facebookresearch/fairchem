@@ -105,7 +105,7 @@ class AseAtomsDataset(BaseDataset, ABC):
 
     def _close_dbs(self):
         """Close all database connections if they exist."""
-        if self.dbs is not None:
+        if hasattr(self, "dbs") and self.dbs is not None:
             for db in self.dbs:
                 if hasattr(db, "close"):
                     db.close()
@@ -450,7 +450,7 @@ class AseDBDataset(AseAtomsDataset):
     """
 
     def _load_dataset_get_ids(self, config: dict) -> list[int]:
-        self.dbs = self._maybe_load_dbs(config)
+        self._maybe_load_dbs(config)
 
         self.select_args = config.get("select_args", {})
         if self.select_args is None:
@@ -474,7 +474,13 @@ class AseDBDataset(AseAtomsDataset):
 
         return list(range(sum(idlens)))
 
-    def _maybe_load_dbs(self, config: dict) -> list[ase.db.core.Database]:
+    def _maybe_load_dbs(self, config: dict):
+        if self.dbs is not None:
+            return
+
+        logging.info(
+            "Lazily loading databases ... these calls are expensive so we shouldn't be doing this often!"
+        )
         if isinstance(config["src"], list):
             filepaths = []
             for path in sorted(config["src"]):
@@ -491,10 +497,10 @@ class AseDBDataset(AseAtomsDataset):
         else:
             filepaths = sorted(glob(config["src"]))
 
-        dbs = []
+        self.dbs = []
         for path in filepaths:
             try:
-                dbs.append(
+                self.dbs.append(
                     self.connect_db(
                         path,
                         config.get("connect_args", {}),
@@ -504,7 +510,6 @@ class AseDBDataset(AseAtomsDataset):
                 logging.debug(
                     f"Tried to connect to {path} but it's not an ASE database!"
                 )
-        return dbs
 
     def get_atoms(self, idx: int) -> ase.Atoms:
         """Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
@@ -519,10 +524,7 @@ class AseDBDataset(AseAtomsDataset):
             atoms: ASE atoms corresponding to datapoint idx
         """
         # this requires dbs to be loaded lazily
-        if self.dbs is None:
-            assert self.config is not None
-            logging.info("Lazily loading databases ...")
-            self.dbs = self._maybe_load_dbs(self.config)
+        self._maybe_load_dbs(self.config)
 
         # Figure out which db this should be indexed from.
         db_idx = bisect.bisect(self._idlen_cumulative, idx)
