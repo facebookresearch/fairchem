@@ -89,6 +89,9 @@ class AseAtomsDataset(BaseDataset, ABC):
         if self.config.get("keep_in_memory", False):
             self.__getitem__ = cache(self.__getitem__)
 
+        self.config = config
+        # this is eithe first loaded by _load_dataset_get_ids and later lazily loaded by _maybe_load_dbs
+        self.dbs = None
         self.ids = self._load_dataset_get_ids(config)
         self.num_samples = len(self.ids)
 
@@ -102,24 +105,13 @@ class AseAtomsDataset(BaseDataset, ABC):
 
     def _close_dbs(self):
         """Close all database connections if they exist."""
-        if hasattr(self, "dbs"):
+        if self.dbs is not None:
             for db in self.dbs:
                 if hasattr(db, "close"):
                     db.close()
-            self.dbs = []
+            self.dbs = None
 
     def __getitem__(self, idx):
-        if len(self.dbs) == 0:
-            logging.info("Lazily reloading dataset ...")
-            self.ids = self._load_dataset_get_ids(self.config)
-            self.num_samples = len(self.ids)
-
-            if len(self.ids) == 0:
-                raise ValueError(
-                    rf"No valid ase data found! \n"
-                    f"Double check that the src path and/or glob search pattern gives ASE compatible data: {self.config['src']}"
-                )
-
         # Handle slicing
         if isinstance(idx, slice):
             return [self[i] for i in range(*idx.indices(len(self)))]
@@ -458,36 +450,7 @@ class AseDBDataset(AseAtomsDataset):
     """
 
     def _load_dataset_get_ids(self, config: dict) -> list[int]:
-        if isinstance(config["src"], list):
-            filepaths = []
-            for path in sorted(config["src"]):
-                if os.path.isdir(path):
-                    filepaths.extend(sorted(glob(f"{path}/*")))
-                elif os.path.isfile(path):
-                    filepaths.append(path)
-                else:
-                    raise RuntimeError(f"Error reading dataset in {path}!")
-        elif os.path.isfile(config["src"]):
-            filepaths = [config["src"]]
-        elif os.path.isdir(config["src"]):
-            filepaths = sorted(glob(f'{config["src"]}/*'))
-        else:
-            filepaths = sorted(glob(config["src"]))
-
-        self.dbs = []
-
-        for path in filepaths:
-            try:
-                self.dbs.append(
-                    self.connect_db(
-                        path,
-                        config.get("connect_args", {}),
-                    )
-                )
-            except ValueError:
-                logging.debug(
-                    f"Tried to connect to {path} but it's not an ASE database!"
-                )
+        self.dbs = self._maybe_load_dbs(config)
 
         self.select_args = config.get("select_args", {})
         if self.select_args is None:
@@ -511,6 +474,38 @@ class AseDBDataset(AseAtomsDataset):
 
         return list(range(sum(idlens)))
 
+    def _maybe_load_dbs(self, config: dict) -> list[ase.db.core.Database]:
+        if isinstance(config["src"], list):
+            filepaths = []
+            for path in sorted(config["src"]):
+                if os.path.isdir(path):
+                    filepaths.extend(sorted(glob(f"{path}/*")))
+                elif os.path.isfile(path):
+                    filepaths.append(path)
+                else:
+                    raise RuntimeError(f"Error reading dataset in {path}!")
+        elif os.path.isfile(config["src"]):
+            filepaths = [config["src"]]
+        elif os.path.isdir(config["src"]):
+            filepaths = sorted(glob(f'{config["src"]}/*'))
+        else:
+            filepaths = sorted(glob(config["src"]))
+
+        dbs = []
+        for path in filepaths:
+            try:
+                dbs.append(
+                    self.connect_db(
+                        path,
+                        config.get("connect_args", {}),
+                    )
+                )
+            except ValueError:
+                logging.debug(
+                    f"Tried to connect to {path} but it's not an ASE database!"
+                )
+        return dbs
+
     def get_atoms(self, idx: int) -> ase.Atoms:
         """Get atoms object corresponding to datapoint idx. Useful to read other properties not in data object.
 
@@ -523,6 +518,12 @@ class AseDBDataset(AseAtomsDataset):
         Returns:
             atoms: ASE atoms corresponding to datapoint idx
         """
+        # this requires dbs to be loaded lazily
+        if self.dbs is None:
+            assert self.config is not None
+            logging.info("Lazily loading databases ...")
+            self.dbs = self._maybe_load_dbs(self.config)
+
         # Figure out which db this should be indexed from.
         db_idx = bisect.bisect(self._idlen_cumulative, idx)
 
