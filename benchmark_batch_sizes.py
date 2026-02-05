@@ -19,6 +19,7 @@ Jd = [J.to(dtype=dtype) for J in Jd]
 coeffs, U_blocks = precompute_all_wigner_tables(lmax, dtype=dtype, device=device)
 
 batch_sizes = [2, 5, 10, 20, 50, 100, 200, 500, 1000, 10000, 100000]
+batch_sizes = list(range(10000,100000,10000))
 n_warmup = 5
 n_runs = 20
 
