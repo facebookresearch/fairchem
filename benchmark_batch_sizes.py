@@ -9,9 +9,9 @@ from pathlib import Path
 from fairchem.core.models.uma.common.rotation import init_edge_rot_euler_angles, eulers_to_wigner
 from fairchem.core.models.uma.common.wigner_d_quaternion import precompute_all_wigner_tables, get_wigner_from_edge_vectors
 
-jd_path = Path("/Users/levineds/fairchem/src/fairchem/core/models/uma/Jd.pt")
+jd_path = Path(__file__).parent.resolve() / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
 dtype = torch.float64
-device = torch.device("cpu")
+device = torch.device("cuda")
 lmax = 6
 
 Jd = torch.load(jd_path, map_location=device, weights_only=True)
