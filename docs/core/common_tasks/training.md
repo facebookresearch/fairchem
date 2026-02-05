@@ -1,36 +1,50 @@
-# Training models from scratch
+# Training Models from Scratch
 
-This repo is uses to train large state-of-the-art graph neural networks from scratch on datasets like OC20, OMol25, or OMat24, among others. We now provide a simple CLI to handle this using your own custom datasets, but we suggest fine-tuning one of the existing checkpoints first before trying a from-scratch training.
+This repo is used to train large state-of-the-art graph neural networks from scratch on datasets like OC20, OMol25, or OMat24, among others.
 
-## Fairchem training framework overview
+:::{tip}
+We now provide a simple CLI to handle this using your own custom datasets, but we suggest fine-tuning one of the existing checkpoints first before trying a from-scratch training.
+:::
 
-Fairchem training framework currently is a simple SPMD (Single Program Multiple Data) paradigm training framework. It is made of several components:
+## FAIRChem Training Framework Overview
 
-1. A user cli (`fairchem`) and launcher - can run jobs locally using [torch distributed elastic](https://docs.pytorch.org/docs/stable/distributed.elastic.html) or on [Slurm](https://slurm.schedmd.com/documentation.html). More environments may be supported in the future.
+The FAIRChem training framework currently uses a simple SPMD (Single Program Multiple Data) paradigm. It is made of several components:
 
-2. Configuration - we strictly use [Hydra yamls](https://hydra.cc/docs/intro/) for configuration.
+1. **User CLI and Launcher** - The `fairchem` CLI can run jobs locally using [torch distributed elastic](https://docs.pytorch.org/docs/stable/distributed.elastic.html) or on [SLURM](https://slurm.schedmd.com/documentation.html). More environments may be supported in the future.
 
-3. A Runner interface - the core program code that is replicated to run on all ranks. An optional Reducer is also available for evaluation jobs.
-Runners are distinct user functions are that run on a single rank (ie: GPU). They describe separate high level tasks such as Train, Eval, Predict, Relaxations, MD etc. Anyone can write a new runner if its functionality is sufficiently different than the ones that already exist.
+2. **Configuration** - We strictly use [Hydra YAMLs](https://hydra.cc/docs/intro/) for configuration.
 
-4. Trainer - we use [TorchTNT](https://docs.pytorch.org/tnt/stable/) as a light-weight training loop. This allow us to cleanly separate the dataloading loading from the training loop. TNT is Pytorch's replacement for Pytorch Lightning - which has become severely bloated and difficult to use over the years; so we opt'd for the simpler option. Units are concepts in TorchTNT that provide a basic interface for training, evaluation and predict. These replace trainers in fairchemv1. You should write a new unit when the model paradigm is significantly different, ie: Training a Multitask-MLIP is one unit, training a diffusion model should be another Unit.
+3. **Runner Interface** - The core program code that is replicated to run on all ranks. An optional Reducer is also available for evaluation jobs. Runners are distinct user functions that run on a single rank (i.e., GPU). They describe separate high-level tasks such as Train, Eval, Predict, Relaxations, MD, etc. Anyone can write a new runner if its functionality is sufficiently different than the ones that already exist.
+
+4. **Trainer** - We use [TorchTNT](https://docs.pytorch.org/tnt/stable/) as a light-weight training loop. This allows us to cleanly separate the data loading from the training loop.
+
+:::{note}
+TNT is PyTorch's replacement for PyTorch Lightning - which has become severely bloated and difficult to use over the years; so we opted for the simpler option. Units are concepts in TorchTNT that provide a basic interface for training, evaluation, and prediction. These replace trainers in fairchemv1. You should write a new unit when the model paradigm is significantly different, e.g., training a Multitask-MLIP is one unit, training a diffusion model should be another unit.
+:::
 
 
-## Fairchemv2
+## FAIRChem v2 CLI
 
-Fairchem uses a single [cli](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/_cli.py) for running jobs. It accepts a single argument, the location of the Hydra yaml. This is intentional to make sure all configuration is fully captured and avoid bloating of the command line interface. Because of the flexibility of Hydra yamls, use can still provide additional parameters and overrides using the [hydra override syntax](https://hydra.cc/docs/advanced/override_grammar/basic/).
+FAIRChem uses a single [CLI](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/_cli.py) for running jobs. It accepts a single argument, the location of the Hydra YAML.
 
-The cli can launch jobs locally using [torch distributed elastic](https://docs.pytorch.org/docs/stable/distributed.elastic.html) OR on [Slurm](https://slurm.schedmd.com/documentation.html).
+:::{warning}
+This is intentional to make sure all configuration is fully captured and avoid bloating of the command line interface. Because of the flexibility of Hydra YAMLs, you can still provide additional parameters and overrides using the [Hydra override syntax](https://hydra.cc/docs/advanced/override_grammar/basic/).
+:::
 
-### Fairchemv2 config structure
+The CLI can launch jobs locally using [torch distributed elastic](https://docs.pytorch.org/docs/stable/distributed.elastic.html) OR on [SLURM](https://slurm.schedmd.com/documentation.html).
 
-A fairchem config is composed of only 2 valid top level keys: "job" (Job Config) and "runner" (Runner Config). Additionally you can add key/values that are used by the OmegaConf interpolation syntax to replace fields. Other than these, no other top-level keys are permitted.
-JobConfig represents configuration parameters that describe the overall job (mostly infra parameters) such as number of nodes, log locations, loggers etc. This is a structured config and must strictly adhere to the JobConfig class.
-Runner Config describe the user code. This part of config is recursively instantiated at the start of a job using hydra instantiation framework.
+### FAIRChem v2 Config Structure
 
-### Example configurations for a local run:
+A FAIRChem config is composed of only 2 valid top-level keys: **job** (Job Config) and **runner** (Runner Config). Additionally, you can add key/values that are used by the OmegaConf interpolation syntax to replace fields. Other than these, no other top-level keys are permitted.
 
-```
+- **JobConfig** represents configuration parameters that describe the overall job (mostly infra parameters) such as number of nodes, log locations, loggers, etc. This is a structured config and must strictly adhere to the JobConfig class.
+- **Runner Config** describes the user code. This part of config is recursively instantiated at the start of a job using Hydra instantiation framework.
+
+### Example Configurations
+
+**Local run:**
+
+```yaml
 job:
   device_type: CUDA
   scheduler:
@@ -39,9 +53,9 @@ job:
   run_name: local_training_run
 ```
 
-Example configurations for a slurm run:
+**SLURM run:**
 
-```
+```yaml
 job:
   device_type: CUDA
   scheduler:
@@ -58,30 +72,35 @@ job:
 ```
 
 ### Config Object Instantiation
-To keep our configs explict (configs should be thought of as extension of code), we prefer to use the hydra instantiation framework throughout; the config is always fully described by a corresponding python class and should never be a standalone dictionary.
 
-```
-# this is bad
-# because we have no idea what where to find the code
-# that uses runner or where variables x and y are actually used
-runner:
-	x: 5
-	y: 6
+To keep our configs explicit (configs should be thought of as an extension of code), we prefer to use the Hydra instantiation framework throughout; the config is always fully described by a corresponding Python class and should never be a standalone dictionary.
 
-# this is good
-# now we know which class runner corresponds to and that x,y are
-# just initializer variables of runner. If we need to check the defintion
-# or understand the code, we can simply goto runner.py
+:::{admonition} Good vs Bad Config Patterns
+:class: dropdown
+
+**Bad pattern** - We have no idea where to find the code that uses runner or where variables x and y are actually used:
+
+```yaml
 runner:
-  _target_: fairchem.core.componets.runner.Runner
   x: 5
   y: 6
 ```
 
-### Runtime instantiation with partial functions
-While we want to use static instantiation as much as possible, there will be lots of cases where certain objects require runtime inputs to create. For example, if we want to create a pytorch optimizer, we can give it all the arguments except the model parameters (because its only known at runtime).
+**Good pattern** - Now we know which class runner corresponds to and that x, y are just initializer variables of runner. If we need to check the definition or understand the code, we can simply go to runner.py:
 
+```yaml
+runner:
+  _target_: fairchem.core.components.runner.Runner
+  x: 5
+  y: 6
 ```
+:::
+
+### Runtime Instantiation with Partial Functions
+
+While we want to use static instantiation as much as possible, there will be many cases where certain objects require runtime inputs to create. For example, if we want to create a PyTorch optimizer, we can give it all the arguments except the model parameters (because it's only known at runtime).
+
+```yaml
 optimizer:
   _target_: torch.optim.AdamW
   params: ?? # this is only known at runtime
@@ -89,44 +108,53 @@ optimizer:
   weight_decay: 1e-3
 ```
 
-In this case we can use a partial function, now instead of creating an optimizer object, we create a python partial function that can then be used to instantiate the optimizer in code later
+:::{tip}
+In this case we can use a partial function. Instead of creating an optimizer object, we create a Python partial function that can then be used to instantiate the optimizer in code later:
+:::
 
-```
+```yaml
 optimizer_fn:
   _target_: torch.optim.AdamW
   _partial_: true
   lr: 8e-4
   weight_decay: 1e-3
- # later in the runner
- optimizer = optimizer_fn(model.parameters())
+```
+
+```python
+# later in the runner
+optimizer = optimizer_fn(model.parameters())
 ```
 
 ## Training UMA
 
 The UMA model is completely defined [here](https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/core/models/uma). It is also called "escn_md" during internal development since it was based on the eSEN architecture.
 
-Training, eval and inference are all defined in the [mlip unit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py).
+Training, evaluation, and inference are all defined in the [mlip unit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py).
 
 To train a model, we need to initialize a [TrainRunner](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/components/train/train_runner.py) with a [MLIPTrainEvalUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py).
 
 Due to the complexity of UMA and training a multi-architecture, multi-dataset, multi-task model, we leverage [config groups](https://hydra.cc/docs/tutorials/basic/your_first_app/config_groups/) syntax in Hydra to organize UMA training into the [following sections](https://github.com/facebookresearch/fairchem/tree/main/configs/uma/training_release):
 
-* backbone - selects the specific backbone architecture, ie: uma-sm, uma-md, uma-large etc.
-* cluster - quickly switch settings between different slurm clusters or local env
-* dataset - select the dataset to train on
-* element_refs - select the element references
-* tasks - select the task set, ie: for direct or conservative training
+- **backbone** - selects the specific backbone architecture (e.g., uma-sm, uma-md, uma-large)
+- **cluster** - quickly switch settings between different SLURM clusters or local environment
+- **dataset** - select the dataset to train on
+- **element_refs** - select the element references
+- **tasks** - select the task set (e.g., for direct or conservative training)
 
-We can switch between different combinations of configs easily this way, for example:
+:::{tip}
+We can switch between different combinations of configs easily this way!
+:::
 
-Getting training started locally using local settings and the debug dataset
+### Example Commands
 
+**Get training started locally using local settings and the debug dataset:**
+
+```bash
+fairchem -c configs/uma/training_release/uma_sm_direct_pretrain.yaml cluster=h100_local dataset=uma_debug
 ```
-fairchem -c configs/uma/training_release/uma_sm_direct_pretrain.yaml  cluster=h100_local dataset=uma_debug
-```
 
-Training UMA conservative with 16 nodes on slurm
+**Train UMA conservative with 16 nodes on SLURM:**
 
-```
-fairchem -c configs/uma/training_release/uma_sm_conserve_finetune.yaml  cluster=h100 job.scheduler.num_nodes=16 run_name="uma_conserve_train"
+```bash
+fairchem -c configs/uma/training_release/uma_sm_conserve_finetune.yaml cluster=h100 job.scheduler.num_nodes=16 run_name="uma_conserve_train"
 ```

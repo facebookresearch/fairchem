@@ -1994,17 +1994,13 @@ Limitations:
 
 ### Recommended Workflow for New Systems
 
-```{mermaid}
-graph TD
-    A[Optimize Bulk] --> B[Calculate Surface Energies]
-    B --> C[Wulff Construction]
-    C --> D[Low-Coverage Adsorption]
-    D --> E{Coverage Important?}
-    E -->|Yes| F[Coverage Study]
-    E -->|No| G[Reaction Barriers]
-    F --> G
-    G --> H[Microkinetic Modeling]
-```
+1. **Optimize Bulk** - Determine equilibrium lattice constant
+2. **Calculate Surface Energies** - Identify stable facets
+3. **Wulff Construction** - Predict nanoparticle morphology
+4. **Low-Coverage Adsorption** - Find binding sites and energies
+5. **Coverage Study** (if coverage-dependent effects are important) - Determine lateral interactions
+6. **Reaction Barriers** - Calculate activation energies using NEB
+7. **Microkinetic Modeling** - Predict overall catalytic performance
 
 ### Accuracy Considerations
 
