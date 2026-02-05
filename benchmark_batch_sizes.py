@@ -177,7 +177,7 @@ for n_edges in batch_sizes:
         edges = edges_base.clone().requires_grad_(True)
         angles = init_edge_rot_euler_angles(edges)
         W = eulers_to_wigner(angles, 0, lmax, Jd)
-        W.sum().backward()
+        torch.autograd.grad(W.sum(), edges)
 
     # Euler timed
     start = time.perf_counter()
@@ -185,21 +185,21 @@ for n_edges in batch_sizes:
         edges = edges_base.clone().requires_grad_(True)
         angles = init_edge_rot_euler_angles(edges)
         W = eulers_to_wigner(angles, 0, lmax, Jd)
-        W.sum().backward()
+        torch.autograd.grad(W.sum(), edges)
     t_euler = (time.perf_counter() - start) / n_runs * 1000
 
     # Quaternion warmup
     for _ in range(n_warmup):
         edges = edges_base.clone().requires_grad_(True)
         _, W = get_wigner_from_edge_vectors(edges, coeffs, U_blocks)
-        W.sum().backward()
+        torch.autograd.grad(W.sum(), edges)
 
     # Quaternion timed
     start = time.perf_counter()
     for _ in range(n_runs):
         edges = edges_base.clone().requires_grad_(True)
         _, W = get_wigner_from_edge_vectors(edges, coeffs, U_blocks)
-        W.sum().backward()
+        torch.autograd.grad(W.sum(), edges)
     t_quat = (time.perf_counter() - start) / n_runs * 1000
 
     ratio = t_quat / t_euler
