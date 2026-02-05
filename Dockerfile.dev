@@ -1,0 +1,11 @@
+# Minimal Dockerfile for fairchem development with bind mounts
+# Uses PyTorch base image for fastest first run with GPU support
+
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+# Install git (required for setuptools-scm version detection)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+CMD ["bash"]
