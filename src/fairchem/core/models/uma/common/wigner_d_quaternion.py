@@ -634,7 +634,12 @@ def wigner_d_matrix_complex(
     # Special Case 1: |Ra| ≈ 0 - anti-diagonal elements
     # ==========================================================================
     safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-    rb_power = torch.pow(safe_Rb.unsqueeze(1), special_2m.unsqueeze(0).to(dtype=complex_dtype))
+    # Replace torch.pow with log-exp trick for complex powers: z^n = exp(n*log|z| + i*n*arg(z))
+    log_abs_Rb = torch.log(torch.abs(safe_Rb))  # log|Rb|, shape (N,)
+    arg_Rb = torch.angle(safe_Rb)  # arg(Rb), shape (N,)
+    # Compute n*log|Rb| + i*n*arg(Rb) using outer products
+    exponent = torch.outer(log_abs_Rb, special_2m.to(dtype=real_dtype)) + 1j * torch.outer(arg_Rb, special_2m.to(dtype=real_dtype))
+    rb_power = torch.exp(exponent.to(dtype=complex_dtype))
     special_val_antidiag = anti_diag_sign.unsqueeze(0).to(complex_dtype) * rb_power
     mask_antidiag = ra_small.unsqueeze(1) & anti_diagonal_mask.unsqueeze(0)
     result = torch.where(mask_antidiag, special_val_antidiag, result)
@@ -643,7 +648,12 @@ def wigner_d_matrix_complex(
     # Special Case 2: |Rb| ≈ 0 - diagonal elements
     # ==========================================================================
     safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-    ra_power = torch.pow(safe_Ra.unsqueeze(1), special_2m.unsqueeze(0).to(dtype=complex_dtype))
+    # Replace torch.pow with log-exp trick for complex powers: z^n = exp(n*log|z| + i*n*arg(z))
+    log_abs_Ra = torch.log(torch.abs(safe_Ra))  # log|Ra|, shape (N,)
+    arg_Ra = torch.angle(safe_Ra)  # arg(Ra), shape (N,)
+    # Compute n*log|Ra| + i*n*arg(Ra) using outer products
+    exponent = torch.outer(log_abs_Ra, special_2m.to(dtype=real_dtype)) + 1j * torch.outer(arg_Ra, special_2m.to(dtype=real_dtype))
+    ra_power = torch.exp(exponent.to(dtype=complex_dtype))
     mask_diag = (rb_small & ~ra_small).unsqueeze(1) & diagonal_mask.unsqueeze(0)
     result = torch.where(mask_diag, ra_power, result)
 
@@ -874,6 +884,7 @@ def wigner_d_complex_to_real_blockwise(
     D_complex: torch.Tensor,
     U_blocks: list[torch.Tensor],
     lmax: int,
+    use_einsum: bool = False,
 ) -> torch.Tensor:
     """
     Transform Wigner D matrix from complex to real, exploiting block structure.
@@ -885,6 +896,7 @@ def wigner_d_complex_to_real_blockwise(
         D_complex: Complex Wigner D matrices of shape (N, size, size)
         U_blocks: List of U matrices for each ell, U_blocks[ell] has shape (2*ell+1, 2*ell+1)
         lmax: Maximum angular momentum
+        use_einsum: If True, use einsum instead of two matmuls (may be faster on CPU for large batches)
 
     Returns:
         Real Wigner D matrices of shape (N, size, size)
@@ -910,8 +922,13 @@ def wigner_d_complex_to_real_blockwise(
         U_ell_H = U_ell.conj().T
 
         # Transform: U @ D @ U^H
-        temp = torch.matmul(D_block, U_ell_H)
-        D_block_real = torch.matmul(U_ell, temp)
+        if use_einsum:
+            # Single einsum operation: may be faster on CPU for large batches
+            D_block_real = torch.einsum("ij,njk,kl->nil", U_ell, D_block, U_ell_H)
+        else:
+            # Two separate matmuls: generally faster on GPU
+            temp = torch.matmul(D_block, U_ell_H)
+            D_block_real = torch.matmul(U_ell, temp)
 
         # Store result
         D_real[:, block_start:block_end, block_start:block_end] = D_block_real.real
