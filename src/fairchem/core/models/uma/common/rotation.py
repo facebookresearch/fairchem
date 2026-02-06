@@ -11,38 +11,51 @@ import logging
 
 import torch
 
+EPS = 1e-7
+
+
+class Safeacos(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        x_clamped = x.clamp(-1 + EPS, 1 - EPS)
+        ctx.save_for_backward(x_clamped)
+        return torch.acos(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x_clamped,) = ctx.saved_tensors
+        denom = torch.sqrt(1 - x_clamped.pow(2)).clamp(min=EPS)
+        return -grad_output / denom
+
+
+class Safeatan2(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, y, x):
+        ctx.save_for_backward(y, x)
+        return torch.atan2(y, x)
+
+    @staticmethod
+    @torch.compiler.disable
+    def backward(ctx, grad_output):
+        y, x = ctx.saved_tensors
+        denom = (x.pow(2) + y.pow(2)).clamp(min=EPS)
+        return (x / denom) * grad_output, (-y / denom) * grad_output
+
 
 def init_edge_rot_euler_angles(edge_distance_vec):
-    edge_vec_0 = edge_distance_vec
-    edge_vec_0_distance = torch.sqrt(torch.sum(edge_vec_0**2, dim=1))
-
-    # Make sure the atoms are far enough apart
-    # assert torch.min(edge_vec_0_distance) < 0.0001
-    if len(edge_vec_0_distance) > 0 and torch.min(edge_vec_0_distance) < 0.0001:
-        logging.error(f"Error edge_vec_0_distance: {torch.min(edge_vec_0_distance)}")
-
-    # make unit vectors
-    xyz = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
-
-    # are we standing at the north pole
-    mask = xyz[:, 1].abs().isclose(xyz.new_ones(1))
-
-    # compute alpha and beta
+    # we need to clamp the output here because if using compile
+    # normalize can return >1.0 , pytorch #163082
+    xyz = torch.nn.functional.normalize(edge_distance_vec).clamp(-1.0, 1.0)
+    x, y, z = torch.split(xyz, 1, dim=1)
 
     # latitude (beta)
-    beta = xyz.new_zeros(xyz.shape[0])
-    beta[~mask] = torch.acos(xyz[~mask, 1])
-    beta[mask] = torch.acos(xyz[mask, 1]).detach()
+    beta = Safeacos.apply(y.squeeze(-1))
 
     # longitude (alpha)
-    alpha = torch.zeros_like(beta)
-    alpha[~mask] = torch.atan2(xyz[~mask, 0], xyz[~mask, 2])
-    alpha[mask] = torch.atan2(xyz[mask, 0], xyz[mask, 2]).detach()
+    alpha = Safeatan2.apply(x.squeeze(-1), z.squeeze(-1))
 
     # random gamma (roll)
     gamma = torch.rand_like(alpha) * 2 * torch.pi
-    # gamma = torch.zeros_like(alpha)
-
     # intrinsic to extrinsic swap
     return -gamma, -beta, -alpha
 

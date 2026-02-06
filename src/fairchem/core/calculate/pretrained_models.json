@@ -6,6 +6,10 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        },
+        "form_elem_refs": {
+            "subfolder": "references",
+            "filename": "form_elem_refs.yaml"
         }
     },
     "uma-s-1p1": {
@@ -15,6 +19,10 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        },
+        "form_elem_refs": {
+            "subfolder": "references",
+            "filename": "form_elem_refs.yaml"
         }
     },
     "uma-m-1p1": {
@@ -24,6 +32,10 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        },
+        "form_elem_refs": {
+            "subfolder": "references",
+            "filename": "form_elem_refs.yaml"
         }
     },
     "esen-md-direct-all-omol": {
@@ -69,6 +81,24 @@
         "atom_refs": {
             "subfolder": "references",
             "filename": "iso_atom_elem_refs.yaml"
+        }
+    },
+    "esen-sm-filtered-odac25": {
+        "filename": "esen_sm_odac25_filtered.pt",
+        "repo_id": "facebook/ODAC25",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "odac_elem_refs.yaml"
+        }
+    },
+    "esen-sm-full-odac25": {
+        "filename": "esen_sm_odac25_full.pt",
+        "repo_id": "facebook/ODAC25",
+        "subfolder": "checkpoints",
+        "atom_refs": {
+            "subfolder": "references",
+            "filename": "odac_elem_refs.yaml"
         }
     }
 }
