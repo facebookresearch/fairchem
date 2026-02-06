@@ -111,6 +111,57 @@ def _vectorized_horner(
     return result
 
 
+def _smooth_step_cinf(t: torch.Tensor) -> torch.Tensor:
+    """
+    C-infinity smooth step function based on the classic bump function.
+
+    Uses f(x) = exp(-1/x) for x > 0 (0 otherwise), then:
+    step(t) = f(t) / (f(t) + f(1-t)) = sigmoid((2t-1)/(t*(1-t)))
+
+    Properties:
+    - C-infinity smooth everywhere
+    - All derivatives are exactly zero at t=0 and t=1
+    - Values: f(0)=0, f(1)=1
+    - Symmetric: f(t) + f(1-t) = 1
+
+    This provides true C-infinity continuity at the blend region boundaries,
+    unlike polynomial smoothstep functions which only have finite-order continuity.
+
+    Args:
+        t: Input tensor, will be clamped to [0, 1]
+
+    Returns:
+        Smooth step values in [0, 1]
+    """
+    t_clamped = t.clamp(0, 1)
+
+    # Use a safe epsilon that works for both float32 and float64
+    eps = 1e-7
+
+    # Compute (2t-1)/(t*(1-t)) in a numerically stable way
+    # Near t=0: this goes to -infinity -> sigmoid = 0
+    # Near t=1: this goes to +infinity -> sigmoid = 1
+    # At t=0.5: this is 0 -> sigmoid = 0.5
+    numerator = 2.0 * t_clamped - 1.0
+    denominator = t_clamped * (1.0 - t_clamped)
+
+    # Clamp denominator to avoid division by zero
+    denom_safe = denominator.clamp(min=eps)
+
+    # Compute the argument for sigmoid
+    arg = numerator / denom_safe
+
+    # Apply sigmoid
+    result = torch.sigmoid(arg)
+
+    # Near boundaries, sigmoid will saturate naturally, but we ensure
+    # exact 0 and 1 for very small/large t to avoid numerical issues
+    result = torch.where(t_clamped < eps, torch.zeros_like(result), result)
+    result = torch.where(t_clamped > 1 - eps, torch.ones_like(result), result)
+
+    return result
+
+
 # =============================================================================
 # Edge Vector to Quaternion
 # =============================================================================
@@ -197,9 +248,10 @@ def edge_to_quaternion(
     Uses an adaptive approach with two formulas to avoid singularities:
     - Standard formula (singular at -Y): used when ey > -0.7
     - Via-Z formula (singular at -Z): used when ey < -0.9
-    - Smooth blend in between for C1 continuity
+    - C-infinity smooth blend in between
 
-    This ensures bounded gradients for all edge directions.
+    This ensures bounded gradients for all edge directions with continuous
+    derivatives of all orders across the blend region boundaries.
 
     Args:
         edge_vec: Edge vectors of shape (N, 3), need not be normalized
@@ -225,16 +277,15 @@ def edge_to_quaternion(
     q_via_z = _quat_y_to_edge_via_z(ex, ey, ez)
 
     # Smooth blend: use standard when ey > -0.7, via-Z when ey < -0.9
-    # C3 smoothstep (septic polynomial) for C3 continuity at boundaries
-    # h(t) = 35t^4 - 84t^5 + 70t^6 - 20t^7
-    # Has h(0)=0, h(1)=1, and h', h'', h''' all zero at both endpoints
+    # C-infinity smooth step based on the classic bump function:
+    # f(x) = exp(-1/x) for x > 0, 0 otherwise
+    # step(t) = f(t) / (f(t) + f(1-t)) = sigmoid((2t-1)/(t*(1-t)))
+    # All derivatives are exactly zero at t=0 and t=1, giving C-infinity
+    # continuity across the blend region boundaries.
     blend_start = -0.9
     blend_width = 0.2
     t = (ey - blend_start) / blend_width  # 0 at ey=-0.9, 1 at ey=-0.7
-    t = t.clamp(0, 1)
-    t2 = t * t
-    t4 = t2 * t2
-    blend = t4 * (35 - 84 * t + 70 * t2 - 20 * t2 * t)  # C3 smoothstep
+    blend = _smooth_step_cinf(t)
 
     # Align quaternions (q and -q represent same rotation)
     dot = (q_std * q_via_z).sum(dim=-1, keepdim=True)
@@ -348,19 +399,19 @@ def precompute_wigner_coefficients_symmetric(
     case2_horner = torch.zeros(n_primary, max_poly_len, dtype=dtype, device=device)
     case1_poly_len = torch.zeros(n_primary, dtype=torch.int64, device=device)
     case2_poly_len = torch.zeros(n_primary, dtype=torch.int64, device=device)
-    case1_ra_exp = torch.zeros(n_primary, dtype=torch.int64, device=device)
-    case1_rb_exp = torch.zeros(n_primary, dtype=torch.int64, device=device)
-    case2_ra_exp = torch.zeros(n_primary, dtype=torch.int64, device=device)
-    case2_rb_exp = torch.zeros(n_primary, dtype=torch.int64, device=device)
+    case1_ra_exp = torch.zeros(n_primary, dtype=dtype, device=device)
+    case1_rb_exp = torch.zeros(n_primary, dtype=dtype, device=device)
+    case2_ra_exp = torch.zeros(n_primary, dtype=dtype, device=device)
+    case2_rb_exp = torch.zeros(n_primary, dtype=dtype, device=device)
     case1_sign = torch.zeros(n_primary, dtype=dtype, device=device)
     case2_sign = torch.zeros(n_primary, dtype=dtype, device=device)
-    mp_plus_m = torch.zeros(n_primary, dtype=torch.int64, device=device)
-    m_minus_mp = torch.zeros(n_primary, dtype=torch.int64, device=device)
+    mp_plus_m = torch.zeros(n_primary, dtype=dtype, device=device)
+    m_minus_mp = torch.zeros(n_primary, dtype=dtype, device=device)
 
     # Special case info
     diagonal_mask = torch.zeros(n_primary, dtype=torch.bool, device=device)
     anti_diagonal_mask = torch.zeros(n_primary, dtype=torch.bool, device=device)
-    special_2m = torch.zeros(n_primary, dtype=torch.int64, device=device)
+    special_2m = torch.zeros(n_primary, dtype=dtype, device=device)
     anti_diag_sign = torch.zeros(n_primary, dtype=dtype, device=device)
 
     # Derived element info: for each derived element, store:
@@ -618,7 +669,7 @@ def wigner_d_matrix_complex(
     # Phase - compute once using torch.outer
     phia = torch.angle(Ra)
     phib = torch.angle(Rb)
-    phase = torch.outer(phia, mp_plus_m.to(dtype=real_dtype)) + torch.outer(phib, m_minus_mp.to(dtype=real_dtype))
+    phase = torch.outer(phia, mp_plus_m) + torch.outer(phib, m_minus_mp)
     exp_phase = torch.exp(1j * phase)
 
     # Safe magnitudes and their logs for power computation
@@ -638,7 +689,7 @@ def wigner_d_matrix_complex(
     log_abs_Rb = torch.log(torch.abs(safe_Rb))  # log|Rb|, shape (N,)
     arg_Rb = torch.angle(safe_Rb)  # arg(Rb), shape (N,)
     # Compute n*log|Rb| + i*n*arg(Rb) using outer products
-    exponent = torch.outer(log_abs_Rb, special_2m.to(dtype=real_dtype)) + 1j * torch.outer(arg_Rb, special_2m.to(dtype=real_dtype))
+    exponent = torch.outer(log_abs_Rb, special_2m) + 1j * torch.outer(arg_Rb, special_2m)
     rb_power = torch.exp(exponent.to(dtype=complex_dtype))
     special_val_antidiag = anti_diag_sign.unsqueeze(0).to(complex_dtype) * rb_power
     mask_antidiag = ra_small.unsqueeze(1) & anti_diagonal_mask.unsqueeze(0)
@@ -652,7 +703,7 @@ def wigner_d_matrix_complex(
     log_abs_Ra = torch.log(torch.abs(safe_Ra))  # log|Ra|, shape (N,)
     arg_Ra = torch.angle(safe_Ra)  # arg(Ra), shape (N,)
     # Compute n*log|Ra| + i*n*arg(Ra) using outer products
-    exponent = torch.outer(log_abs_Ra, special_2m.to(dtype=real_dtype)) + 1j * torch.outer(arg_Ra, special_2m.to(dtype=real_dtype))
+    exponent = torch.outer(log_abs_Ra, special_2m) + 1j * torch.outer(arg_Ra, special_2m)
     ra_power = torch.exp(exponent.to(dtype=complex_dtype))
     mask_diag = (rb_small & ~ra_small).unsqueeze(1) & diagonal_mask.unsqueeze(0)
     result = torch.where(mask_diag, ra_power, result)
@@ -661,14 +712,13 @@ def wigner_d_matrix_complex(
     # General Case 1: |Ra| >= |Rb|
     # ==========================================================================
     ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    horner_sum1 = _vectorized_horner(ratio1, case1_horner.to(dtype=real_dtype), case1_poly_len, max_poly_len)
+    horner_sum1 = _vectorized_horner(ratio1, case1_horner, case1_poly_len, max_poly_len)
 
     # Power computation using log-exp trick with torch.outer
-    ra_powers1 = torch.exp(torch.outer(log_ra, case1_ra_exp.to(dtype=real_dtype)))
-    rb_powers1 = torch.exp(torch.outer(log_rb, case1_rb_exp.to(dtype=real_dtype)))
+    ra_powers1 = torch.exp(torch.outer(log_ra, case1_ra_exp))
+    rb_powers1 = torch.exp(torch.outer(log_rb, case1_rb_exp))
 
-    signed_coeff1 = case1_sign.to(dtype=real_dtype) * case1_coeff.to(dtype=real_dtype)
-    magnitude1 = signed_coeff1 * ra_powers1 * rb_powers1
+    magnitude1 = (case1_sign * case1_coeff) * ra_powers1 * rb_powers1
     val1 = magnitude1 * horner_sum1 * exp_phase
 
     valid_case1 = case1_poly_len > 0
@@ -679,13 +729,12 @@ def wigner_d_matrix_complex(
     # General Case 2: |Ra| < |Rb|
     # ==========================================================================
     ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    horner_sum2 = _vectorized_horner(ratio2, case2_horner.to(dtype=real_dtype), case2_poly_len, max_poly_len)
+    horner_sum2 = _vectorized_horner(ratio2, case2_horner, case2_poly_len, max_poly_len)
 
-    ra_powers2 = torch.exp(torch.outer(log_ra, case2_ra_exp.to(dtype=real_dtype)))
-    rb_powers2 = torch.exp(torch.outer(log_rb, case2_rb_exp.to(dtype=real_dtype)))
+    ra_powers2 = torch.exp(torch.outer(log_ra, case2_ra_exp))
+    rb_powers2 = torch.exp(torch.outer(log_rb, case2_rb_exp))
 
-    signed_coeff2 = case2_sign.to(dtype=real_dtype) * case2_coeff.to(dtype=real_dtype)
-    magnitude2 = signed_coeff2 * ra_powers2 * rb_powers2
+    magnitude2 = (case2_sign * case2_coeff) * ra_powers2 * rb_powers2
     val2 = magnitude2 * horner_sum2 * exp_phase
 
     valid_case2 = case2_poly_len > 0
