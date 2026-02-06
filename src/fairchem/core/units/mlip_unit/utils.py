@@ -30,7 +30,7 @@ def load_inference_model(
     strict: bool = True,
 ) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint] | torch.nn.Module:
     checkpoint: MLIPInferenceCheckpoint = torch.load(
-        checkpoint_location, map_location="cpu", weights_only=False
+        checkpoint_location, map_location="cpu", weights_only=False, mmap=True
     )
 
     if overrides is not None:
@@ -68,7 +68,7 @@ def load_tasks(checkpoint_location: str) -> list[Task]:
         list[Task]: A list of instantiated Task objects from the checkpoint's tasks_config.
     """
     checkpoint: MLIPInferenceCheckpoint = torch.load(
-        checkpoint_location, map_location="cpu", weights_only=False
+        checkpoint_location, map_location="cpu", weights_only=False, mmap=True
     )
     return [
         hydra.utils.instantiate(task_config) for task_config in checkpoint.tasks_config
