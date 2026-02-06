@@ -89,6 +89,12 @@ class InferenceSettings:
 
     edge_chunk_size: int | None = None
 
+    # Seed for deterministic random rotation to avoid Wigner singularities
+    # when edges are y-aligned. If None, no rotation is applied. If set,
+    # positions/cell are rotated before inference and outputs (forces, stress)
+    # are rotated back to the original reference frame.
+    rotation_seed: int | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed

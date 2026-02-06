@@ -47,6 +47,75 @@ from ray import remote
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 
 
+def _generate_rotation_matrix(
+    seed: int, device: torch.device, dtype: torch.dtype
+) -> torch.Tensor:
+    """Generate a deterministic random 3x3 rotation matrix using Euler angles.
+
+    Args:
+        seed: Random seed for reproducibility
+        device: Device to place the rotation matrix on
+        dtype: Data type for the rotation matrix
+
+    Returns:
+        A 3x3 orthogonal rotation matrix with det(R) = +1
+    """
+    rng = torch.Generator().manual_seed(seed)
+    alpha, beta, gamma = torch.rand(3, generator=rng) * 2 * torch.pi
+
+    # Rotation matrices for each axis
+    ca, sa = torch.cos(alpha), torch.sin(alpha)
+    cb, sb = torch.cos(beta), torch.sin(beta)
+    cg, sg = torch.cos(gamma), torch.sin(gamma)
+
+    # Rz @ Ry @ Rx composition
+    Rz = torch.tensor([[ca, -sa, 0], [sa, ca, 0], [0, 0, 1]], dtype=dtype)
+    Ry = torch.tensor([[cb, 0, sb], [0, 1, 0], [-sb, 0, cb]], dtype=dtype)
+    Rx = torch.tensor([[1, 0, 0], [0, cg, -sg], [0, sg, cg]], dtype=dtype)
+
+    return (Rz @ Ry @ Rx).to(device=device)
+
+
+def _inverse_rotate_output(
+    output: torch.Tensor, task_property: str, R: torch.Tensor
+) -> torch.Tensor:
+    """Back-rotate model outputs to original reference frame.
+
+    For vectors (forces): f = R^T @ f' which is f' @ R for row vectors
+    For rank-2 tensors (stress): S = R^T @ S' @ R
+
+    Args:
+        output: Model output tensor
+        task_property: Property name ('energy', 'forces', 'stress')
+        R: Rotation matrix used for forward rotation
+
+    Returns:
+        Output tensor rotated back to original reference frame
+    """
+    # Scalar (energy) - invariant under rotation
+    if task_property == "energy":
+        return output
+
+    # Vector (forces) - rank 1 tensor
+    if task_property == "forces":
+        # f = R^T @ f' => for row vectors: f = f' @ R
+        return output @ R
+
+    # Rank-2 tensor (stress) - stored as (batch, 9)
+    if task_property == "stress":
+        # S = R^T @ S' @ R
+        batch_size = output.shape[0]
+        stress_3x3 = output.view(batch_size, 3, 3)
+        rotated = R.T @ stress_3x3 @ R
+        return rotated.view(batch_size, 9)
+
+    # Unknown property - return unchanged with warning
+    logging.warning(
+        f"Unknown property '{task_property}' for rotation back-transform, returning unchanged"
+    )
+    return output
+
+
 def collate_predictions(predict_fn):
     @wraps(predict_fn)
     def collated_predict(
@@ -257,6 +326,19 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
+        # Apply rotation augmentation to avoid Wigner singularities from y-aligned edges
+        rotation_matrix = None
+        if self.inference_settings.rotation_seed is not None:
+            rotation_matrix = _generate_rotation_matrix(
+                self.inference_settings.rotation_seed,
+                device=self.device,
+                dtype=data_device.pos.dtype,
+            )
+            # Forward rotation: r' = R @ r => for row vectors: r' = r @ R.T
+            data_device.pos = data_device.pos @ rotation_matrix.T
+            if hasattr(data_device, "cell") and data_device.cell is not None:
+                data_device.cell = data_device.cell @ rotation_matrix.T
+
         if self.inference_settings.merge_mole:
             if self.merged_on is None:
                 # only get embeddings after moved to final device to get right types
@@ -298,6 +380,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 pred_output[task_name] = task.normalizer.denorm(
                     output[task_name][task.property]
                 )
+
+                # Back-rotate outputs to original reference frame
+                if rotation_matrix is not None:
+                    pred_output[task_name] = _inverse_rotate_output(
+                        pred_output[task_name], task.property, rotation_matrix
+                    )
+
                 if self.assert_on_nans:
                     assert torch.isfinite(
                         pred_output[task_name]
