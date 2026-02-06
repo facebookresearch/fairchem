@@ -16,7 +16,6 @@ import torch
 import wandb
 
 from fairchem.core.common import distutils
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import tensor_stats
 
 if TYPE_CHECKING:
@@ -66,7 +65,6 @@ class Logger(ABC):
         pass
 
 
-@registry.register_logger("wandb")
 class WandBLogger(Logger):
     def __init__(self, config) -> None:
         super().__init__(config)
@@ -145,7 +143,6 @@ class WandBLogger(Logger):
         art.save()
 
 
-@registry.register_logger("tensorboard")
 class TensorboardLogger(Logger):
     def __init__(self, config) -> None:
         try:

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from fairchem.experimental.legacy.utils import load_config
 
-from fairchem.core.common.registry import registry
+from fairchem.core.datasets import get_dataset_class
 from fairchem.core.modules.normalization._load_utils import save_checkpoint
 from fairchem.core.modules.normalization.element_references import fit_linear_references
 
@@ -30,8 +30,8 @@ def fit_linref(config: dict, output_path: str | Path) -> None:
 
     try:
         # load the training dataset
-        train_dataset = registry.get_dataset_class(
-            config["dataset"]["train"].get("format", "lmdb")
+        train_dataset = get_dataset_class(
+            config["dataset"]["train"].get("format", "ase_db")
         )(config["dataset"]["train"])
     except KeyError as err:
         raise ValueError("Train dataset is not specified in config!") from err

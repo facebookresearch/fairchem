@@ -22,8 +22,6 @@ from torch import randperm
 from torch.utils.data import Dataset
 from torch.utils.data import Subset as Subset_
 
-from fairchem.core.common.registry import registry
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -148,7 +146,9 @@ def create_dataset(config: dict[str, Any], split: str) -> Subset:
         Subset: dataset subset class
     """
     # Initialize the dataset
-    dataset_cls = registry.get_dataset_class(config.get("format", "lmdb"))
+    from fairchem.core.datasets import get_dataset_class
+
+    dataset_cls = get_dataset_class(config.get("format", "ase_db"))
     assert issubclass(dataset_cls, Dataset), f"{dataset_cls} is not a Dataset"
 
     # remove information about other splits, only keep specified split

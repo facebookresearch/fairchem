@@ -16,7 +16,6 @@ import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
 
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone
@@ -42,7 +41,6 @@ warnings.filterwarnings(
 )
 
 
-@registry.register_model("escnmd_moe_backbone")
 class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
     def __init__(
         self,
@@ -213,7 +211,9 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.dataset_name_to_exp = {
             value: idx for idx, value in enumerate(self.dataset_names)
         }
-        self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
+        from fairchem.core.models import get_model_class
+
+        self.head = get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
         self.global_mole_tensors = MOLEGlobals(
             expert_mixing_coefficients=None, mole_sizes=None
@@ -296,7 +296,9 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         self.wrap_property = wrap_property
 
         self.dataset_names = sorted(dataset_names)
-        self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
+        from fairchem.core.models import get_model_class
+
+        self.head = get_model_class(head_cls)(backbone, **head_kwargs)
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
