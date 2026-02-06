@@ -37,7 +37,11 @@ from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
-from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
+from fairchem.core.models.uma.nn.radial import (
+    EnvelopedBesselBasis,
+    GaussianSmearing,
+    PolynomialEnvelope,
+)
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
@@ -95,6 +99,41 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int 
         add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
+def get_balanced_attribute(
+    data_dict,
+    emb: dict[str, torch.Tensor],
+    balance_attribute="charge",
+    balance_attribute_offset=0,
+    balance_channel_idx=0,
+):
+    out_emb = emb.clone()
+
+    charge_unbalanced = emb[:, 0, balance_channel_idx]  # n x 2
+
+    system_scalars_part = torch.zeros(
+        len(data_dict["natoms"]),
+        device=emb.device,
+        dtype=emb.dtype,
+    )
+
+    system_scalars_part.index_add_(0, data_dict["batch"], charge_unbalanced.view(-1))
+
+    assert not gp_utils.initialized()
+    system_scalar = system_scalars_part
+
+    correction = (
+        system_scalar - (data_dict[balance_attribute] - balance_attribute_offset)
+    ) / data_dict.natoms
+
+    balanced_node_scalar = charge_unbalanced - correction[data_dict.batch]
+
+    out_emb[:, 0, balance_channel_idx] = (
+        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
+    )
+
+    return out_emb, balanced_node_scalar
+
+
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
     def __init__(
@@ -128,10 +167,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
+        dataset_mapping: dict[str, str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
+        charge_balanced_channels: list[int] | None = None,
+        spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
@@ -152,6 +194,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
 
+        # which channels to balance
+        self.charge_balanced_channels = (
+            charge_balanced_channels if charge_balanced_channels is not None else []
+        )
+        self.spin_balanced_channels = (
+            spin_balanced_channels if spin_balanced_channels is not None else []
+        )
+
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
@@ -171,6 +221,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
+        self.dataset_mapping = dataset_mapping
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
             assert (
@@ -218,6 +269,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.sphere_channels,
                 grad=self.dataset_emb_grad,
                 dataset_list=self.dataset_list,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
@@ -237,6 +289,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.cutoff,
                 self.num_distance_basis,
                 2.0,
+            )
+        elif self.distance_function == "enveloped_bessel":
+            self.distance_expansion = EnvelopedBesselBasis(
+                self.num_distance_basis,
+                self.cutoff,
             )
         else:
             raise ValueError("Unknown distance function")
@@ -301,6 +358,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    def balance_channels(
+        self,
+        x_message_prime,
+        data_dict,
+    ):
+        for channel_idx in self.charge_balanced_channels:
+            x_message_prime, _ = get_balanced_attribute(
+                data_dict,
+                x_message_prime,
+                balance_channel_idx=channel_idx,
+                balance_attribute="charge",
+            )
+        for channel_idx in self.spin_balanced_channels:
+            x_message_prime, _ = get_balanced_attribute(
+                data_dict,
+                x_message_prime,
+                balance_channel_idx=channel_idx,
+                balance_attribute="spin",
+                balance_attribute_offset=1,
+            )
+        return x_message_prime
+
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -331,6 +410,23 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
         )
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
+
+    def _safety_edge(self, data_dict, graph_dict):
+        graph_dict["edge_index"] = torch.cat(
+            (graph_dict["edge_index"], graph_dict["edge_index"].new_zeros(2, 1)), dim=1
+        )
+
+        self_edge_distance_vec = (
+            data_dict["pos"][0] - data_dict["pos"][0] + self.cutoff
+        ).unsqueeze(0)  # [1, 3]
+        graph_dict["edge_distance_vec"] = torch.cat(
+            (graph_dict["edge_distance_vec"], self_edge_distance_vec), dim=0
+        )
+
+        edge_distance = torch.linalg.norm(self_edge_distance_vec, dim=-1, keepdim=False)
+        graph_dict["edge_distance"] = torch.cat(
+            (graph_dict["edge_distance"], edge_distance), dim=0
+        )
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -452,6 +548,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance_vec": edge_distance_vec,
             }
 
+        if graph_dict["edge_index"].numel() == 0:
+            self._safety_edge(data_dict, graph_dict)
+
         if gp_utils.initialized():
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
                 node_partition
@@ -557,7 +656,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 edge_envelope,
                 data_dict["gp_node_offset"],
             )
-
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
@@ -576,6 +674,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    data_dict,
                 )
 
         # Final layer norm

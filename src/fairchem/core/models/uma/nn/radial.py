@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -56,6 +57,58 @@ class GaussianSmearing(torch.nn.Module):
     def forward(self, dist) -> torch.Tensor:
         dist = dist.view(-1, 1) - self.offset.view(1, -1)
         return torch.exp(self.coeff * torch.pow(dist, 2))
+
+
+class SphericalBesselBasis(torch.nn.Module):
+    """
+    1D spherical Bessel basis
+
+    Parameters
+    ----------
+    num_radial: int
+        Controls maximum frequency.
+    cutoff: float
+        Cutoff distance in Angstrom.
+    """
+
+    def __init__(
+        self,
+        num_radial: int,
+        cutoff: float,
+    ) -> None:
+        super().__init__()
+        self.norm_const = math.sqrt(2 / (cutoff**3))
+        # cutoff ** 3 to counteract dividing by d_scaled = d / cutoff
+
+        # Initialize frequencies at canonical positions
+        self.frequencies = torch.nn.Parameter(
+            data=torch.tensor(np.pi * np.arange(1, num_radial + 1, dtype=np.float32)),
+            requires_grad=True,
+        )
+
+    def forward(self, d_scaled: torch.Tensor) -> torch.Tensor:
+        return (
+            self.norm_const
+            / d_scaled[:, None]
+            * torch.sin(self.frequencies * d_scaled[:, None])
+        )  # (num_edges, num_radial)
+
+
+class EnvelopedBesselBasis(torch.nn.Module):
+    def __init__(
+        self,
+        num_radial: int,
+        cutoff: float,
+    ) -> None:
+        super().__init__()
+        self.inv_cutoff = 1 / cutoff
+        self.envelope = PolynomialEnvelope()
+        self.rbf = SphericalBesselBasis(num_radial=num_radial, cutoff=cutoff)
+
+    def forward(self, d):
+        d_scaled = d * self.inv_cutoff
+        env = self.envelope(d_scaled)
+        return env[:, None] * self.rbf(d_scaled)
 
 
 class RadialMLP(nn.Module):
