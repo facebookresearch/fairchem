@@ -112,7 +112,7 @@ def create_gnrs_config(
         mol_name: Identifier for the molecule being processed
         geometry_path: Path to the molecular geometry file (XYZ, SDF, etc.)
         num_structures: Number of crystal structures to generate
-        spg_info: Space group specification (number or symbol)
+        spg_info: Space group specification (number or list or "standard")
         Z: Number of molecules per unit cell (Z-value)
 
     Side Effects:
@@ -162,11 +162,22 @@ def create_genarris_jobs(
     spg_info = gnrs_vars.get("spg_info", "standard")
 
     # molecule specific spg and z_list info from csv file if provided
-    if gnrs_vars.get("read_spg_from_file", False):
-        spg_info = str(ast.literal_eval(mol_info["spg"]))
+    # mol_info["z"] is a list of z_values
+    # mol_info["spg"] is a list of lists of spg values that correspond to each z_value
     if gnrs_vars.get("read_z_from_file", False):
         z_list = [str(z) for z in ast.literal_eval(mol_info["z"])]
-
+    if gnrs_vars.get("read_spg_from_file", False):
+        spg_info = ast.literal_eval(mol_info["spg"])
+    if spg_info == "standard":
+        spg_info = ["standard"] * len(z_list)
+    if isinstance(spg_info[0], int):
+        spg_info = [spg_info]
+    if len(spg_info) == 1 and len(z_list) > 1:
+        spg_info = spg_info * len(z_list)
+    if len(spg_info) != len(z_list):
+        raise ValueError(
+            f"Length of spg_info {spg_info} does not match length of z_list {z_list} for molecule {mol_info['name']}."
+        )
     mol = mol_info["name"]  # System name
 
     # conf_path can be a geometry file or
@@ -194,7 +205,7 @@ def create_genarris_jobs(
 
     jobs = []
     for conf, conf_path in conf_name_list.items():  # for each conformer
-        for z in z_list:
+        for i, z in enumerate(z_list):
             single_gnrs_folder = output_dir / mol / conf / z
             single_gnrs_folder.mkdir(parents=True, exist_ok=True)
 
@@ -211,7 +222,7 @@ def create_genarris_jobs(
                     geometry_path=new_conf_path,
                     Z=z,
                     num_structures=num_structures_per_spg,
-                    spg_info=spg_info,
+                    spg_info=str(spg_info[i]),
                 )
 
             # Create SLURM submission script if it doesn't exist
@@ -225,7 +236,6 @@ def create_genarris_jobs(
             # Create submitit command function to execute the SLURM script
             shell = shutil.which("bash") or shutil.which("zsh") or "/bin/sh"
             gnrs_function = submitit.helpers.CommandFunction(
-                # f"zsh {single_gnrs_folder / 'slurm.sh'}".split(),
                 [shell, f"{single_gnrs_folder}/slurm.sh"],
                 cwd=single_gnrs_folder,
             )
@@ -273,7 +283,7 @@ def run_genarris_jobs(
             )
 
     logger.info(
-        f"Submitted {len(jobs)} Genarris jobs: {jobs[0].job_id.split('_')[0] if jobs else ''}"
+        f"Submitted {len(jobs)} Genarris array jobs with job-id: {jobs[0].job_id.split('_')[0] if jobs else ''}"
     )
     return jobs
 
