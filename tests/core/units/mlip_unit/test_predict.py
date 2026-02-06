@@ -489,7 +489,7 @@ def test_merge_mole_composition_check():
 
     with pytest.raises(
         AssertionError,
-        match="Cannot run on merged model on system. Relative compositions seem different",
+        match="Compositions differ from merged model",
     ):
         _ = atoms_al.get_potential_energy()
 
