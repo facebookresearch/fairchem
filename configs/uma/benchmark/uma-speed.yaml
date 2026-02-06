@@ -1,11 +1,11 @@
 #fairchem -c uma-speed.yaml
 
-# job:
-#   device_type: CUDA
-#   scheduler:
-#     mode: LOCAL
-#     ranks_per_node: 1
-#   run_dir: /checkpoint/ocp/rgao/speed
+job:
+  device_type: CUDA
+  scheduler:
+    mode: LOCAL
+    ranks_per_node: 1
+  run_dir: /checkpoint/ocp/rgao/speed
 
 # job:
 #   device_type: CUDA
@@ -15,26 +15,26 @@
 #   graph_parallel_group_size: 8
 #   run_dir: /checkpoint/ocp/rgao/speed
 
-job:
-  device_type: CUDA
-  run_dir: /checkpoint/ocp/rgao/speed
-  run_name: test_speed
-  scheduler:
-    mode: SLURM
-    num_nodes: 16
-    ranks_per_node: 8
-    slurm:
-      account: ocp
-      qos: h200_alignment_shared
-      mem_gb: 0
-      cpus_per_task: 24
-  graph_parallel_group_size: 128
+# job:
+#   device_type: CUDA
+#   run_dir: /checkpoint/ocp/rgao/speed
+#   run_name: test_speed
+#   scheduler:
+#     mode: SLURM
+#     num_nodes: 16
+#     ranks_per_node: 8
+#     slurm:
+#       account: ocp
+#       qos: h200_alignment_shared
+#       mem_gb: 0
+#       cpus_per_task: 24
+#   graph_parallel_group_size: 128
 
 runner:
   _target_: fairchem.core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner
   timeiters: 100
   repeats: 5
-  natoms_list: [128000]
+  natoms_list: [1000]
   model_checkpoints: {
     "uma_sm_cons": "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt",
     # "uma_sm_direct": "/checkpoint/ocp/shared/run_dir/202510-3123-1909-5e5a/checkpoints/final/inference_ckpt.pt",
@@ -46,7 +46,7 @@ runner:
     tf32: True
     activation_checkpointing: False
     merge_mole: True
-    compile: True
+    compile: False
     external_graph_gen: False
     internal_graph_gen_version: 2
   generate_traces: True

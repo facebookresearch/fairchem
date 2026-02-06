@@ -10,6 +10,10 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
+from fairchem.core.common.profiler_utils import (
+    record_backward,
+    record_function_with_backward,
+)
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
@@ -116,6 +120,7 @@ class Edgewise(torch.nn.Module):
             self.lmax, self.mmax
         )
 
+    @record_backward("Edgewise")
     def forward(
         self,
         x,
@@ -209,36 +214,67 @@ class Edgewise(torch.nn.Module):
         # work properly with MoLE together
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
-        x_source = x_full[edge_index[0]]
-        x_target = x_full[edge_index[1]]
+        with record_function_with_backward("index_cat") as ctx:
+            ctx.mark_input(edge_index)
+            ctx.mark_input(x_full)
+            x_source = x_full[edge_index[0]]
+            x_target = x_full[edge_index[1]]
+            x_message = torch.cat((x_source, x_target), dim=2)
+            ctx.mark_output(x_message)
 
-        x_message = torch.cat((x_source, x_target), dim=2)
-
-        with record_function("SO2Conv"):
-            # Rotate the irreps to align with the edge
+        # Rotate the irreps to align with the edge
+        with record_function_with_backward("Wigner_and_M_mapping") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(wigner_and_M_mapping)
             x_message = torch.bmm(wigner_and_M_mapping, x_message)
+            ctx.mark_output(x_message)
 
-            # SO2 convolution
+        # SO2 convolution
+        with record_function_with_backward("SO2_1") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(x_edge)
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
+            ctx.mark_output(x_message)
+            ctx.mark_output(x_0_gating)
 
-            # M-prime...
+        # M-prime...
+        with record_function_with_backward("activation") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(x_0_gating)
             x_message = self.act(x_0_gating, x_message)
+            ctx.mark_output(x_message)
 
+        with record_function_with_backward("SO2_2") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(x_edge)
             x_message = self.so2_conv_2(x_message, x_edge)
+            ctx.mark_output(x_message)
 
+        with record_function_with_backward("edge_envelope") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(edge_envelope)
             x_message = x_message * edge_envelope
+            ctx.mark_output(x_message)
 
-            # Rotate back the irreps
+        # Rotate back the irreps
+        with record_function_with_backward("Wigner_and_M_mapping_inv") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(wigner_and_M_mapping_inv)
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
+            ctx.mark_output(x_message)
 
         # Compute the sum of the incoming neighboring messages for each target node
-        new_embedding = torch.zeros(
-            (x_original_shape,) + x_message.shape[1:],
-            dtype=x_message.dtype,
-            device=x_message.device,
-        )
+        with record_function_with_backward("index_add") as ctx:
+            ctx.mark_input(x_message)
+            ctx.mark_input(edge_index)
+            new_embedding = torch.zeros(
+                (x_original_shape,) + x_message.shape[1:],
+                dtype=x_message.dtype,
+                device=x_message.device,
+            )
 
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
+            new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
+            ctx.mark_output(new_embedding)
         # reset ac start index
         set_mole_ac_start_index(self, 0)
         return new_embedding

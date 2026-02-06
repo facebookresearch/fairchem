@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Literal
 
+from fairchem.core.common.profiler_utils import record_function_with_backward
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
@@ -535,11 +536,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # edge degree embedding
         with record_function("edge embedding"):
-            dist_scaled = graph_dict["edge_distance"] / self.cutoff
+            edge_distance = graph_dict["edge_distance"]
+            dist_scaled = edge_distance / self.cutoff
             edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
-            edge_distance_embedding = self.distance_expansion(
-                graph_dict["edge_distance"]
-            )
+            edge_distance_embedding = self.distance_expansion(edge_distance)
             source_embedding = self.source_embedding(
                 data_dict["atomic_numbers_full"][graph_dict["edge_index"][0]]
             )
