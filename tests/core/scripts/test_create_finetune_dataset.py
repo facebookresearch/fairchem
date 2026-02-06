@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 import subprocess
+import sys
 import tempfile
 
 import numpy as np
@@ -213,7 +214,7 @@ def test_create_finetune_dataset(type, random_state):
             random_state=random_state,
         )
         create_dataset_command = [
-            "python",
+            sys.executable,
             "src/fairchem/core/scripts/create_uma_finetune_dataset.py",
             "--train-dir",
             f"{tmpdirname}/train",
@@ -268,7 +269,7 @@ def test_e2e_finetuning_bulks(reg_task, type):
         # create the ase dataset and yaml
         generated_dataset_dir = os.path.join(tmpdirname, "dataset")
         create_dataset_command = [
-            "python",
+            sys.executable,
             "src/fairchem/core/scripts/create_uma_finetune_dataset.py",
             "--train-dir",
             f"{tmpdirname}/train",
