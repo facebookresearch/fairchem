@@ -58,3 +58,21 @@ docker run --rm --gpus all \
       -e '/app/fairchem/packages/fairchem-demo-ocpapi[dev]' \
       -r /app/fairchem/tests/requirements.txt
   "
+### command for running tests
+docker run --rm --gpus all \
+  --user $(id -u):$(id -g) \
+  -e HOME=/tmp \
+  -e USER=$(whoami) \
+  -e HF_TOKEN \
+  --mount type=bind,src=$(pwd),dst=/app/fairchem \
+  --mount type=bind,src=$(pwd)/.docker-venv,dst=/opt/venv \
+  -w /app/fairchem \
+  fairchem-dev \
+  /opt/venv/bin/pytest tests \
+    -m "not gpu" \
+    --ignore=tests/demo/ocpapi/tests/integration/ \
+    --ignore=tests/applications/ \
+    --ignore=tests/perf \
+    --ignore=tests/lammps \
+    --ignore=tests/data/oc/tests/test_interface_config.py \
+    -v -o cache_dir=/tmp/pytest_cache
