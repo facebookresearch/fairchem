@@ -36,6 +36,7 @@ docker run --rm --gpus all \
   --user $(id -u):$(id -g) \
   -e HOME=/tmp \
   -e PIP_CACHE_DIR=/tmp/pip-cache \
+  -e HF_TOKEN \
   --mount type=bind,src="${SCRIPT_DIR}",dst=/app/fairchem \
   --mount type=bind,src="${PIP_CACHE_DIR}",dst=/tmp/pip-cache \
   --mount type=bind,src="${VENV_DIR}",dst=/opt/venv \
@@ -47,7 +48,13 @@ docker run --rm --gpus all \
       python -m venv /opt/venv
     fi
 
-    # Install/update fairchem-core with dev and extras dependencies
-    echo '>>> Installing fairchem-core[dev,extras]...'
-    /opt/venv/bin/pip install -e '/app/fairchem/packages/fairchem-core[dev,extras]'
+    # Install/update all packages (matching CI)
+    echo '>>> Installing fairchem packages (matching CI)...'
+    /opt/venv/bin/pip install \
+      -e '/app/fairchem/packages/fairchem-core[dev,extras]' \
+      -e '/app/fairchem/packages/fairchem-data-oc[dev]' \
+      -e '/app/fairchem/packages/fairchem-data-omat' \
+      -e '/app/fairchem/packages/fairchem-data-omol[dev]' \
+      -e '/app/fairchem/packages/fairchem-demo-ocpapi[dev]' \
+      -r /app/fairchem/tests/requirements.txt
   "
