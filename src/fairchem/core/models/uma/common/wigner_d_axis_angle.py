@@ -278,16 +278,41 @@ def _build_so3_generators(ell: int) -> tuple[torch.Tensor, torch.Tensor, torch.T
     return K_x, K_y, K_z
 
 
+def _eigendecompose_antisymmetric(K: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Eigendecompose an antisymmetric matrix K.
+
+    For antisymmetric K, eigenvalues are purely imaginary: ±i*λ where λ >= 0.
+    We return the imaginary parts and the unitary eigenvector matrix V.
+
+    Since K is real antisymmetric, K = V @ diag(i*λ) @ V^H where V is unitary.
+    So exp(θK) = V @ diag(exp(i*θ*λ)) @ V^H
+
+    Args:
+        K: Real antisymmetric matrix
+
+    Returns:
+        eigenvalues: Shape (n,) - the imaginary parts (can be positive/negative/zero)
+        V: Shape (n, n) - unitary eigenvector matrix (complex)
+    """
+    eigenvalues_complex, V = torch.linalg.eig(K.to(torch.complex128))
+    eigenvalues_imag = eigenvalues_complex.imag
+    return eigenvalues_imag.to(K.dtype), V
+
+
 def get_so3_generators(
     lmax: int,
     dtype: torch.dtype,
     device: torch.device,
 ) -> dict[str, list[torch.Tensor]]:
     """
-    Return cached K_x, K_y, K_z lists for l=0..lmax.
+    Return cached K_x, K_y, K_z lists for l=0..lmax with precomputed eigendecomposition.
 
     The generators are stored in m-ordered basis. For l=1, a permutation
     matrix P is also cached to convert to Cartesian basis when needed.
+
+    Also precomputes eigendecomposition of K_y for each l, enabling fast
+    Y-rotation computation via: exp(γK_y) = V @ diag(exp(i*γ*λ)) @ V^H
 
     Args:
         lmax: Maximum angular momentum
@@ -295,7 +320,8 @@ def get_so3_generators(
         device: Device for the generators
 
     Returns:
-        Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
+        Dictionary with 'K_x', 'K_y', 'K_z' lists, 'P' for l=1 permutation,
+        and 'Ky_eigenvalues', 'Ky_V' for fast Y-rotation
     """
     key = (lmax, dtype, device)
 
@@ -303,12 +329,24 @@ def get_so3_generators(
         K_x_list = []
         K_y_list = []
         K_z_list = []
+        Ky_eigenvalues_list = []
+        Ky_V_list = []
 
         for ell in range(lmax + 1):
             K_x, K_y, K_z = _build_so3_generators(ell)
             K_x_list.append(K_x.to(device=device, dtype=dtype))
             K_y_list.append(K_y.to(device=device, dtype=dtype))
             K_z_list.append(K_z.to(device=device, dtype=dtype))
+
+            # Precompute eigendecomposition of K_y for fast Y-rotation
+            if ell == 0:
+                # Trivial 1x1 case
+                Ky_eigenvalues_list.append(torch.zeros(1, dtype=dtype, device=device))
+                Ky_V_list.append(torch.ones(1, 1, dtype=torch.complex128, device=device))
+            else:
+                eigenvalues, V = _eigendecompose_antisymmetric(K_y)
+                Ky_eigenvalues_list.append(eigenvalues.to(device=device, dtype=dtype))
+                Ky_V_list.append(V.to(device=device))
 
         # Permutation matrix for l=1: (y,z,x) -> (x,y,z)
         P = torch.tensor([
@@ -321,6 +359,8 @@ def get_so3_generators(
             'K_x': K_x_list,
             'K_y': K_y_list,
             'K_z': K_z_list,
+            'Ky_eigenvalues': Ky_eigenvalues_list,
+            'Ky_V': Ky_V_list,
             'P': P,
         }
 
@@ -687,12 +727,14 @@ def wigner_d_y_rotation_batched(
     """
     Compute Wigner D matrices for rotations about the Y-axis.
 
-    D_y(gamma) = exp(gamma * K_y) for roll correction.
+    Uses precomputed eigendecomposition for O(n²) computation instead of O(n³)
+    matrix exponential: exp(γK_y) = V @ diag(exp(i*γ*λ)) @ V^H
+
     The l=1 block is transformed to Cartesian basis for compatibility.
 
     Args:
         gamma: Rotation angles of shape (N,)
-        generators: Dictionary with 'K_y' list and 'P'
+        generators: Dictionary with 'Ky_eigenvalues', 'Ky_V', and 'P'
         lmax: Maximum angular momentum
 
     Returns:
@@ -703,7 +745,8 @@ def wigner_d_y_rotation_batched(
     dtype = gamma.dtype
     size = (lmax + 1) ** 2
 
-    K_y_list = generators['K_y']
+    Ky_eigenvalues = generators['Ky_eigenvalues']
+    Ky_V = generators['Ky_V']
     P = generators['P']
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
@@ -713,10 +756,22 @@ def wigner_d_y_rotation_batched(
         block_size = 2 * ell + 1
         block_end = block_start + block_size
 
-        K_y = K_y_list[ell]
+        if ell == 0:
+            D[:, 0, 0] = 1.0
+            block_start = block_end
+            continue
 
-        # D^l = exp(gamma * K_y)
-        D_ell = torch.linalg.matrix_exp(gamma[:, None, None] * K_y)
+        eigenvalues = Ky_eigenvalues[ell]  # (block_size,)
+        V = Ky_V[ell]  # (block_size, block_size), complex
+
+        # exp(i * gamma * eigenvalues): shape (N, block_size)
+        exp_diag = torch.exp(1j * gamma[:, None] * eigenvalues[None, :])
+
+        V_H = V.conj().T  # (block_size, block_size)
+
+        # D_ell = V @ diag(exp_diag) @ V^H using einsum
+        D_ell_complex = torch.einsum('ij,nj,jk->nik', V, exp_diag, V_H)
+        D_ell = D_ell_complex.real.to(dtype=dtype)
 
         # For l=1, transform to Cartesian basis
         if ell == 1:
