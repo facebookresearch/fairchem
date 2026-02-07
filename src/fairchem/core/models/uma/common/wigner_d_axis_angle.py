@@ -10,6 +10,7 @@ Key features:
 - Two quaternion charts with SLERP blending: no singularities anywhere
 - Avoids the ZYZ Euler angle singularities at ±Y
 - Output exactly matches Euler-based code (rotation.py) - drop-in replacement
+- Optional Ra/Rb polynomial mode for faster GPU computation
 
 The output uses the same real spherical harmonic basis as the Euler-based
 implementation, achieved via an automatic basis transformation for l >= 2.
@@ -44,6 +45,8 @@ import torch
 
 _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _EULER_TRANSFORM_CACHE: dict[tuple[int, torch.dtype, torch.device], list[torch.Tensor]] = {}
+_RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
+_RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
 
 
 # =============================================================================
@@ -646,6 +649,288 @@ def quaternion_to_axis_angle(
 
 
 # =============================================================================
+# Cayley-Hamilton for l=2 (5x5 antisymmetric matrices)
+# =============================================================================
+
+
+def _cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor:
+    """
+    Compute exp(θK) for 5×5 antisymmetric K using Cayley-Hamilton.
+
+    For antisymmetric K with eigenvalues 0, ±iλ₁, ±iλ₂:
+        exp(θK) = I + c₁K + c₂K² + c₃K³ + c₄K⁴
+
+    The coefficients are derived via Lagrange interpolation on the eigenvalues.
+    This is ~1.4x faster than matrix_exp for l=2 blocks.
+
+    Args:
+        K: Antisymmetric matrices of shape (N, 5, 5)
+        angle: Rotation angles of shape (N,)
+
+    Returns:
+        Rotation matrices exp(θK) of shape (N, 5, 5)
+    """
+    device = K.device
+    dtype = K.dtype
+
+    I = torch.eye(5, device=device, dtype=dtype).unsqueeze(0)
+
+    # Compute powers of K
+    K2 = torch.bmm(K, K)
+    K3 = torch.bmm(K2, K)
+    K4 = torch.bmm(K2, K2)
+
+    # Extract eigenvalue info from traces
+    # For antisymmetric K: eigenvalues are 0, ±iλ₁, ±iλ₂
+    # tr(K²) = -2(λ₁² + λ₂²)
+    # tr(K⁴) = 2(λ₁⁴ + λ₂⁴)
+    tr_K2 = torch.einsum('nii->n', K2)
+    tr_K4 = torch.einsum('nii->n', K4)
+
+    s1 = -tr_K2 / 2  # λ₁² + λ₂²
+    s2 = tr_K4 / 2   # λ₁⁴ + λ₂⁴
+
+    # Solve for σ₁ = λ₁², σ₂ = λ₂²
+    # Product p = σ₁ * σ₂ = (s1² - s2) / 2
+    p = (s1 * s1 - s2) / 2
+
+    # σ₁, σ₂ are roots of t² - s1*t + p = 0
+    discriminant = (s1 * s1 - 4 * p).clamp(min=0)
+    sqrt_disc = torch.sqrt(discriminant)
+
+    sigma1 = ((s1 + sqrt_disc) / 2).clamp(min=0)
+    sigma2 = ((s1 - sqrt_disc) / 2).clamp(min=0)
+
+    lambda1 = torch.sqrt(sigma1)
+    lambda2 = torch.sqrt(sigma2)
+
+    theta = angle
+    eps = 1e-12
+
+    # Compute sinc-like functions:
+    # A = (cos(θλ₁) - 1) / σ₁
+    # B = (cos(θλ₂) - 1) / σ₂
+    # C = sin(θλ₁) / λ₁
+    # D = sin(θλ₂) / λ₂
+
+    theta_l1 = theta * lambda1
+    theta_l2 = theta * lambda2
+
+    cos_l1 = torch.cos(theta_l1)
+    cos_l2 = torch.cos(theta_l2)
+    sin_l1 = torch.sin(theta_l1)
+    sin_l2 = torch.sin(theta_l2)
+
+    # Safe division for A = (cos(θλ) - 1) / σ
+    sigma1_safe = torch.where(sigma1 < eps, torch.ones_like(sigma1), sigma1)
+    sigma2_safe = torch.where(sigma2 < eps, torch.ones_like(sigma2), sigma2)
+    A = torch.where(sigma1 < eps, -theta * theta / 2, (cos_l1 - 1) / sigma1_safe)
+    B = torch.where(sigma2 < eps, -theta * theta / 2, (cos_l2 - 1) / sigma2_safe)
+
+    # Safe division for C = sin(θλ) / λ
+    lambda1_safe = torch.where(lambda1 < eps, torch.ones_like(lambda1), lambda1)
+    lambda2_safe = torch.where(lambda2 < eps, torch.ones_like(lambda2), lambda2)
+    C = torch.where(lambda1 < eps, theta, sin_l1 / lambda1_safe)
+    D = torch.where(lambda2 < eps, theta, sin_l2 / lambda2_safe)
+
+    # Coefficients via Lagrange interpolation:
+    #   c₁ = (σ₂C - σ₁D) / (σ₂ - σ₁)
+    #   c₂ = (σ₁B - σ₂A) / (σ₂ - σ₁)
+    #   c₃ = (C - D) / (σ₂ - σ₁)
+    #   c₄ = (B - A) / (σ₂ - σ₁)
+
+    sigma_diff = sigma2 - sigma1
+    degenerate = sigma_diff.abs() < eps
+    sigma_diff_safe = torch.where(degenerate, torch.ones_like(sigma_diff), sigma_diff)
+
+    # Non-degenerate case
+    c1_nondeg = (sigma2 * C - sigma1 * D) / sigma_diff_safe
+    c2_nondeg = (sigma1 * B - sigma2 * A) / sigma_diff_safe
+    c3_nondeg = (C - D) / sigma_diff_safe
+    c4_nondeg = (B - A) / sigma_diff_safe
+
+    # Degenerate case (σ₁ = σ₂ = σ): Rodrigues-like formula
+    sigma_common = (sigma1 + sigma2) / 2
+    lambda_common = torch.sqrt(sigma_common.clamp(min=0))
+    theta_lc = theta * lambda_common
+    cos_lc = torch.cos(theta_lc)
+    sin_lc = torch.sin(theta_lc)
+
+    lambda_common_safe = torch.where(
+        lambda_common < eps, torch.ones_like(lambda_common), lambda_common
+    )
+    sigma_common_safe = torch.where(
+        sigma_common < eps, torch.ones_like(sigma_common), sigma_common
+    )
+
+    c1_deg = torch.where(lambda_common < eps, theta, sin_lc / lambda_common_safe)
+    c2_deg = torch.where(
+        sigma_common < eps, -theta * theta / 2, (cos_lc - 1) / sigma_common_safe
+    )
+    c3_deg = torch.zeros_like(theta)
+    c4_deg = torch.zeros_like(theta)
+
+    # Select based on degeneracy
+    c1 = torch.where(degenerate, c1_deg, c1_nondeg)
+    c2 = torch.where(degenerate, c2_deg, c2_nondeg)
+    c3 = torch.where(degenerate, c3_deg, c3_nondeg)
+    c4 = torch.where(degenerate, c4_deg, c4_nondeg)
+
+    # Reshape for broadcasting
+    c1 = c1[:, None, None]
+    c2 = c2[:, None, None]
+    c3 = c3[:, None, None]
+    c4 = c4[:, None, None]
+
+    # exp(θK) = I + c₁K + c₂K² + c₃K³ + c₄K⁴
+    return I + c1 * K + c2 * K2 + c3 * K3 + c4 * K4
+
+
+# =============================================================================
+# Ra/Rb Polynomial-based Wigner D (GPU-optimized)
+# =============================================================================
+
+
+def _get_ra_rb_coefficients(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> tuple[dict, list]:
+    """Get cached Ra/Rb polynomial coefficients, computing if necessary."""
+    key = (lmax, dtype, device)
+
+    if key not in _RA_RB_COEFF_CACHE:
+        from fairchem.core.models.uma.common.wigner_d_quaternion import (
+            precompute_wigner_coefficients_symmetric,
+            precompute_U_blocks,
+        )
+        coeffs = precompute_wigner_coefficients_symmetric(lmax, dtype=dtype, device=device)
+        _RA_RB_COEFF_CACHE[key] = coeffs
+
+    if key not in _RA_RB_U_CACHE:
+        from fairchem.core.models.uma.common.wigner_d_quaternion import precompute_U_blocks
+        U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
+        _RA_RB_U_CACHE[key] = U_blocks
+
+    return _RA_RB_COEFF_CACHE[key], _RA_RB_U_CACHE[key]
+
+
+def wigner_d_from_quaternion_polynomial(
+    q: torch.Tensor,
+    lmax: int,
+) -> torch.Tensor:
+    """
+    Compute Wigner D matrices from quaternions using Ra/Rb polynomial.
+
+    This is faster than matrix_exp on GPU, especially for higher lmax.
+    Uses the same algorithm as wigner_d_quaternion.py but takes the quaternion
+    directly (computed by axis_angle's SLERP-blended two-chart approach).
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+        lmax: Maximum angular momentum
+
+    Returns:
+        Real Wigner D matrices of shape (N, size, size) in e3nn convention
+    """
+    from fairchem.core.models.uma.common.wigner_d_quaternion import (
+        quaternion_to_ra_rb,
+        wigner_d_matrix_complex,
+        wigner_d_complex_to_real_blockwise,
+    )
+
+    dtype = q.dtype
+    device = q.device
+
+    coeffs, U_blocks = _get_ra_rb_coefficients(lmax, dtype, device)
+
+    Ra, Rb = quaternion_to_ra_rb(q)
+    D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
+    D_real = wigner_d_complex_to_real_blockwise(D_complex, U_blocks, lmax)
+
+    return D_real
+
+
+def axis_angle_wigner_polynomial(
+    edge_distance_vec: torch.Tensor,
+    lmax: int,
+    gamma: Optional[torch.Tensor] = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute Wigner D using Ra/Rb polynomial (GPU-optimized version).
+
+    This is a GPU-optimized alternative to axis_angle_wigner that uses
+    the Ra/Rb polynomial formula instead of matrix_exp. It's ~1.5-2x faster
+    on GPU for lmax >= 4.
+
+    Uses the same SLERP-blended two-chart quaternion approach as axis_angle_wigner
+    to handle singularities correctly.
+
+    Args:
+        edge_distance_vec: Edge vectors of shape (N, 3)
+        lmax: Maximum angular momentum
+        gamma: Optional roll angles of shape (N,).
+               If None, uses random gamma (for SO(2) equivariance during training).
+
+    Returns:
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
+    """
+    # Handle single vector input
+    if edge_distance_vec.dim() == 1:
+        edge_distance_vec = edge_distance_vec.unsqueeze(0)
+
+    device = edge_distance_vec.device
+    dtype = edge_distance_vec.dtype
+    N = edge_distance_vec.shape[0]
+
+    # Normalize edges
+    edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
+
+    # Compute quaternion (edge → +Y) using SLERP-blended two-chart approach
+    q = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Compute Wigner D using Ra/Rb polynomial (without gamma)
+    D = wigner_d_from_quaternion_polynomial(q, lmax)
+
+    # Transform l=1 block from m-ordering (y,z,x) to Cartesian (x,y,z)
+    # This matches the convention used by wigner_d_from_axis_angle_batched
+    if lmax >= 1:
+        # P transforms from m-ordering to Cartesian basis
+        P = torch.tensor([
+            [0., 0., 1.],  # x from position 2
+            [1., 0., 0.],  # y from position 0
+            [0., 1., 0.]   # z from position 1
+        ], dtype=dtype, device=device)
+
+        # Extract l=1 block (indices 1:4), transform, and put back
+        D_l1 = D[:, 1:4, 1:4]
+        D_l1_cartesian = torch.einsum('ij,njk,kl->nil', P, D_l1, P.T)
+        D = D.clone()  # Avoid modifying the original
+        D[:, 1:4, 1:4] = D_l1_cartesian
+
+    # Compute gamma if not provided
+    if gamma is None:
+        gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+
+    # Apply gamma Y-rotation BEFORE the Euler transform
+    # This matches axis_angle_wigner: D = euler_transform(D_y(gamma) @ D_rodrigues)
+    generators = get_so3_generators(lmax, dtype, device)
+    D_y_gamma = wigner_d_y_rotation_batched(gamma, generators, lmax)
+    D = torch.bmm(D_y_gamma, D)
+
+    # Apply Euler-matching basis transformation for l >= 2 AFTER gamma
+    if lmax >= 2:
+        U_list = get_euler_transforms(lmax, dtype, device)
+        D = apply_euler_transform(D, lmax, U_list)
+
+    # Return D and its inverse (transpose for orthogonal matrices)
+    D_inv = D.transpose(1, 2).contiguous()
+
+    return D, D_inv
+
+
+# =============================================================================
 # Wigner D from Axis-Angle (Batched)
 # =============================================================================
 
@@ -720,8 +1005,8 @@ def wigner_d_from_axis_angle_batched(
             D_ell = torch.einsum('ij,njk,kl->nil', P, D_ell, P.T)
             D[:, block_start:block_end, block_start:block_end] = D_ell
         else:
-            # l>=2: Use matrix_exp
-            # Note: Cayley-Hamilton was tested but is slower for l>=5
+            # l>=2: Use Cayley-Hamilton for l=2, matrix_exp for l>=3
+            # Note: Cayley-Hamilton is ~1.4x faster for l=2 but slower for l>=5
             K_x = K_x_list[ell]
             K_y = K_y_list[ell]
             K_z = K_z_list[ell]
@@ -732,7 +1017,12 @@ def wigner_d_from_axis_angle_batched(
                 axis[:, 2:3, None, None] * K_z
             ).squeeze(1)
 
-            D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
+            if ell == 2:
+                # Use Cayley-Hamilton formula for l=2 (5x5 matrices)
+                D_ell = _cayley_hamilton_exp_l2(K, angle)
+            else:
+                # Use matrix_exp for l>=3
+                D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
             D[:, block_start:block_end, block_start:block_end] = D_ell
 
         block_start = block_end
