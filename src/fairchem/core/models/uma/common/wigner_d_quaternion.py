@@ -1,16 +1,31 @@
 """
-Quaternion-based Wigner D Matrix Construction (Clean Implementation)
+Quaternion-based Wigner D Matrix Construction
 
 This module implements Wigner D matrix computation using quaternions, following
 the spherical_functions package by Mike Boyle (https://github.com/moble/spherical_functions).
 
-The algorithm computes complex Wigner D matrices directly from the quaternion's
-Ra/Rb decomposition, then transforms to real spherical harmonics.
+Convention
+----------
+Throughout this module, the fundamental operation is computing a Wigner D matrix
+that rotates spherical harmonics so that a given edge direction aligns with
+the +Y axis. This is denoted as the "edge → +Y" rotation.
+
+For l=1 spherical harmonics in Cartesian basis (x, y, z), this Wigner D matrix
+acts like a 3x3 rotation matrix R such that R @ edge_direction = [0, 1, 0].
+For higher l values, the Wigner D extends this rotation to the full spherical
+harmonic basis.
+
+The internal functions (_quat_edge_to_y_euler, _quat_edge_to_y_euler_alt,
+edge_to_quaternion, get_wigner_from_edge_vectors) all follow this edge → +Y
+convention consistently.
+
+The public function `quaternion_wigner` returns (wigner_edge_to_y, wigner_y_to_edge)
+matching the convention used by the Euler-angle-based rotation.py module in fairchem.
 
 Key properties:
 - NO arccos or atan2 on edge vector components
 - NO Euler angle computation
-- Numerically stable for all edge orientations including y-aligned
+- Numerically stable for all edge orientations including ±Y aligned
 - Correct gradients for backpropagation
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
@@ -255,11 +270,12 @@ def edge_to_quaternion(
 
     Args:
         edge_vec: Edge vectors of shape (N, 3), need not be normalized
-        gamma: Optional rotation angles around y-axis, shape (N,).
+        gamma: Optional rotation angles for Z-rotation component, shape (N,).
                If None, random angles in [0, 2π) are generated.
+               To match Euler code with gamma_orig, pass gamma = -gamma_orig.
 
     Returns:
-        Quaternions of shape (N, 4) in (w, x, y, z) convention
+        Quaternions of shape (N, 4) in (w, x, y, z) convention for edge → +Y
     """
     # Normalize edge vectors
     edge_vec = torch.nn.functional.normalize(edge_vec, dim=-1)
@@ -783,16 +799,16 @@ def _build_u_block(
     ell: int,
     dtype: torch.dtype,
     device: torch.device,
-    convention: str = "fairchem",
 ) -> torch.Tensor:
     """
     Build U transformation matrix for a single ell block.
+
+    Uses e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell).
 
     Args:
         ell: Angular momentum quantum number
         dtype: Complex data type for the matrix
         device: Device for the tensor
-        convention: Either "e3nn" (m = -l to +l) or "fairchem" (m = +1, -1, 0 for l=1)
 
     Returns:
         U matrix of shape (2*ell+1, 2*ell+1)
@@ -802,41 +818,26 @@ def _build_u_block(
 
     U_ell = torch.zeros(block_size, block_size, dtype=dtype, device=device)
 
-    # fairchem l=1 uses different m-ordering: (m=+1, m=-1, m=0) -> (x, y, z)
-    if convention == "fairchem" and ell == 1:
-        # Row 0: m=+1 (x-direction)
-        # Y^{+1}(real) = (1/√2)[(-1)^1 Y^{+1} + Y^{-1}] = (1/√2)[-Y^{+1} + Y^{-1}]
-        U_ell[0, 2] = -sqrt2_inv  # Y^{+1}(complex) at col 2
-        U_ell[0, 0] = sqrt2_inv   # Y^{-1}(complex) at col 0
+    # e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell)
+    for m in range(-ell, ell + 1):
+        row = m + ell  # Real harmonic index within block
 
-        # Row 1: m=-1 (y-direction, the polar axis)
-        # Y^{-1}(real) = (i/√2)[Y^{+1} - (-1)^1 Y^{-1}] = (i/√2)[Y^{+1} + Y^{-1}]
-        U_ell[1, 0] = 1j * sqrt2_inv   # Y^{-1}(complex)
-        U_ell[1, 2] = 1j * sqrt2_inv   # Y^{+1}(complex)
-
-        # Row 2: m=0 (z-direction)
-        U_ell[2, 1] = 1.0
-    else:
-        # e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell)
-        for m in range(-ell, ell + 1):
-            row = m + ell  # Real harmonic index within block
-
-            if m > 0:
-                col_pos = m + ell
-                col_neg = -m + ell
-                sign = (-1) ** m
-                U_ell[row, col_pos] = sign * sqrt2_inv
-                U_ell[row, col_neg] = sqrt2_inv
-            elif m == 0:
-                col = ell
-                U_ell[row, col] = 1.0
-            else:  # m < 0
-                abs_m = abs(m)
-                col_pos = abs_m + ell
-                col_neg = -abs_m + ell
-                sign = (-1) ** abs_m
-                U_ell[row, col_neg] = 1j * sqrt2_inv
-                U_ell[row, col_pos] = -sign * 1j * sqrt2_inv
+        if m > 0:
+            col_pos = m + ell
+            col_neg = -m + ell
+            sign = (-1) ** m
+            U_ell[row, col_pos] = sign * sqrt2_inv
+            U_ell[row, col_neg] = sqrt2_inv
+        elif m == 0:
+            col = ell
+            U_ell[row, col] = 1.0
+        else:  # m < 0
+            abs_m = abs(m)
+            col_pos = abs_m + ell
+            col_neg = -abs_m + ell
+            sign = (-1) ** abs_m
+            U_ell[row, col_neg] = 1j * sqrt2_inv
+            U_ell[row, col_pos] = -sign * 1j * sqrt2_inv
 
     return U_ell
 
@@ -845,16 +846,16 @@ def precompute_U_blocks(
     lmax: int,
     dtype: torch.dtype = torch.float64,
     device: torch.device = torch.device("cpu"),
-    convention: str = "fairchem",
 ) -> list[torch.Tensor]:
     """
     Precompute U transformation matrices for each ell block.
+
+    Uses e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell).
 
     Args:
         lmax: Maximum angular momentum
         dtype: Real dtype (float32 or float64) - will use corresponding complex type
         device: Torch device
-        convention: "fairchem" (default) or "e3nn" for m-ordering convention
 
     Returns:
         List of U matrices where U_blocks[ell] has shape (2*ell+1, 2*ell+1)
@@ -868,17 +869,18 @@ def precompute_U_blocks(
         # If already complex, use as-is
         complex_dtype = dtype
 
-    return [_build_u_block(ell, complex_dtype, device, convention) for ell in range(lmax + 1)]
+    return [_build_u_block(ell, complex_dtype, device) for ell in range(lmax + 1)]
 
 
 def precompute_complex_to_real_matrix(
     lmax: int,
     dtype: torch.dtype = torch.complex128,
     device: torch.device = torch.device("cpu"),
-    convention: str = "e3nn",
 ) -> torch.Tensor:
     """
     Compute the unitary matrix U that transforms complex → real spherical harmonics.
+
+    Uses e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell).
 
     Real spherical harmonics convention (matching e3nn):
         m > 0: Y^m_ℓ(real) = (1/√2) · [(-1)^m · Y^m_ℓ(complex) + Y^{-m}_ℓ(complex)]
@@ -889,13 +891,11 @@ def precompute_complex_to_real_matrix(
         lmax: Maximum angular momentum
         dtype: Complex data type
         device: Device for output
-        convention: Either "e3nn" (m = -l to +l) or "fairchem" (m = +1, -1, 0 for l=1)
-                   fairchem uses y as polar axis with ordering (x, y, z) at indices (0, 1, 2)
 
     Returns:
         Block-diagonal unitary matrix of shape (size, size) where size = (lmax+1)²
     """
-    blocks = precompute_U_blocks(lmax, dtype, device, convention)
+    blocks = precompute_U_blocks(lmax, dtype, device)
     return torch.block_diag(*blocks)
 
 
@@ -1025,28 +1025,31 @@ def get_wigner_from_edge_vectors(
     gamma: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Complete pipeline: edge vectors → real Wigner D matrices.
+    Complete pipeline: edge vectors → real Wigner D matrices (edge → +Y).
 
-    This is the optimized quaternion-based implementation, using:
-    - Symmetric coefficients (compute only ~50% of elements)
-    - Blockwise complex-to-real transformation
+    Computes the Wigner D matrix that rotates spherical harmonics so that the
+    edge direction aligns with +Y. For l=1, this is equivalent to a
+    rotation matrix R where R @ edge_direction = [0, 1, 0].
 
     Args:
         edge_distance_vec: Edge distance vectors of shape (N, 3)
         coeffs_sym: Precomputed symmetric Wigner coefficients
         U_blocks: Precomputed U blocks for each ell
-        gamma: Optional rotation angles around edge axis, shape (N,).
+        gamma: Optional rotation angles around the initial Y axis, shape (N,).
                If None, random angles in [0, 2π) are generated.
 
     Returns:
-        Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
-        and size = (lmax+1)². wigner rotates from edge frame to lab frame,
-        wigner_inv rotates from lab frame to edge frame.
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
+        - wigner_edge_to_y: the edge → +Y rotation (R @ edge = +Y for l=1)
+        - wigner_y_to_edge: the +Y → edge rotation (R @ +Y = edge for l=1)
     """
     q = edge_to_quaternion(edge_distance_vec, gamma=gamma)
-    wigner = compute_wigner_d_from_quaternion(q, coeffs_sym, U_blocks)
-    wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
-    return wigner_inv, wigner
+    # edge_to_quaternion returns quaternion for edge → +Y rotation
+    wigner_edge_to_y = compute_wigner_d_from_quaternion(q, coeffs_sym, U_blocks)
+    wigner_y_to_edge = torch.transpose(wigner_edge_to_y, 1, 2).contiguous()
+    return wigner_edge_to_y, wigner_y_to_edge
+
 
 
 # =============================================================================
@@ -1154,10 +1157,11 @@ def get_complex_to_real_matrix(
     device: torch.device = torch.device("cpu"),
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
-    convention: str = "fairchem",
 ) -> torch.Tensor:
     """
     Get precomputed complex-to-real transformation matrix, loading from cache if available.
+
+    Uses e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell).
 
     Args:
         lmax: Maximum angular momentum
@@ -1165,13 +1169,11 @@ def get_complex_to_real_matrix(
         device: Device for the tensor
         cache_dir: Directory for cache files
         use_cache: Whether to use disk caching
-        convention: Either "e3nn" or "fairchem" (default). Use "fairchem" to match
-                   the rotation.py convention used in the rest of fairchem.
 
     Returns:
         Unitary transformation matrix of shape (size, size) where size = (lmax+1)²
     """
-    cache_path = _get_cache_path(lmax, f"U_matrix_{convention}", cache_dir)
+    cache_path = _get_cache_path(lmax, "U_matrix_e3nn", cache_dir)
 
     if use_cache:
         coeffs = _load_coefficients(cache_path, device)
@@ -1182,7 +1184,7 @@ def get_complex_to_real_matrix(
             return U
 
     # Compute
-    U = precompute_complex_to_real_matrix(lmax, dtype, device, convention=convention)
+    U = precompute_complex_to_real_matrix(lmax, dtype, device)
 
     # Save to cache
     if use_cache:
@@ -1200,12 +1202,12 @@ def precompute_all_wigner_tables(
     device: torch.device = torch.device("cpu"),
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
-    convention: str = "fairchem",
 ) -> tuple[dict[str, torch.Tensor], list[torch.Tensor]]:
     """
     Convenience function to get both coefficient tables and U blocks.
 
     This is the recommended single entry point for initialization.
+    Uses e3nn convention: m = (-ell, ..., +ell) at indices (0, ..., 2*ell).
 
     Args:
         lmax: Maximum angular momentum
@@ -1213,8 +1215,6 @@ def precompute_all_wigner_tables(
         device: Device for tensors
         cache_dir: Directory for cache files
         use_cache: Whether to use disk caching
-        convention: Either "e3nn" or "fairchem" (default). Use "fairchem" to match
-                   the rotation.py convention used in the rest of fairchem.
 
     Returns:
         Tuple of (coeffs, U_blocks) ready for use with get_wigner_from_edge_vectors
@@ -1224,7 +1224,7 @@ def precompute_all_wigner_tables(
         >>> wigner, wigner_inv = get_wigner_from_edge_vectors(edges, coeffs, U_blocks)
     """
     coeffs = get_wigner_coefficients(lmax, dtype, device, cache_dir, use_cache)
-    U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device, convention=convention)
+    U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
 
     return coeffs, U_blocks
 
@@ -1299,13 +1299,16 @@ def quaternion_wigner(
     Args:
         edge_distance_vec: Edge distance vectors of shape (N, 3)
         lmax: Maximum angular momentum
-        gamma: Optional rotation angles around edge axis, shape (N,).
+        gamma: Optional rotation angles around the initial Y axis, shape (N,).
                If None, random angles in [0, 2π) are generated.
 
     Returns:
-        Tuple of (wigner, wigner_inv) where each has shape (N, size, size)
-        and size = (lmax+1)². wigner rotates from edge frame to lab frame,
-        wigner_inv rotates from lab frame to edge frame.
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
+        - wigner_edge_to_y: rotates edge → +Y (R @ edge = +Y for l=1)
+        - wigner_y_to_edge: rotates +Y → edge (R @ +Y = edge for l=1)
+
+        This matches the return convention of the Euler-based rotation.py.
     """
     dtype = edge_distance_vec.dtype
     device = edge_distance_vec.device
