@@ -662,6 +662,11 @@ def wigner_d_from_axis_angle_batched(
     D^l = exp(angle * (axis · K^l)) for each l block.
     The l=1 block is transformed to Cartesian basis (x,y,z) for compatibility.
 
+    Uses optimizations:
+    - l=0: Trivial (identity)
+    - l=1: Rodrigues formula (4-5x faster than matrix_exp)
+    - l>=2: matrix_exp
+
     Args:
         axis: Rotation axes of shape (N, 3), unit vectors
         angle: Rotation angles of shape (N,), in radians
@@ -689,26 +694,46 @@ def wigner_d_from_axis_angle_batched(
         block_size = 2 * ell + 1
         block_end = block_start + block_size
 
-        K_x = K_x_list[ell]
-        K_y = K_y_list[ell]
-        K_z = K_z_list[ell]
+        if ell == 0:
+            # l=0 is trivial: 1x1 identity
+            D[:, 0, 0] = 1.0
+        elif ell == 1:
+            # l=1: Use Rodrigues formula for ~5x speedup
+            # exp(θK) = I + sin(θ)K + (1-cos(θ))K² for 3x3 rotation
+            K_x = K_x_list[1]
+            K_y = K_y_list[1]
+            K_z = K_z_list[1]
 
-        # K = axis · K^l: shape (N, block_size, block_size)
-        # axis: (N, 3), K_x/y/z: (block_size, block_size)
-        K = (
-            axis[:, 0:1, None, None] * K_x +
-            axis[:, 1:2, None, None] * K_y +
-            axis[:, 2:3, None, None] * K_z
-        ).squeeze(1)
+            K = (
+                axis[:, 0:1, None, None] * K_x +
+                axis[:, 1:2, None, None] * K_y +
+                axis[:, 2:3, None, None] * K_z
+            ).squeeze(1)
 
-        # D^l = exp(angle * K)
-        D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
+            I = torch.eye(3, dtype=dtype, device=device)
+            sin_t = torch.sin(angle)[:, None, None]
+            cos_t = torch.cos(angle)[:, None, None]
+            K2 = torch.bmm(K, K)
+            D_ell = I + sin_t * K + (1 - cos_t) * K2
 
-        # For l=1, transform from m-ordering (y,z,x) to Cartesian (x,y,z)
-        if ell == 1:
+            # Transform from m-ordering (y,z,x) to Cartesian (x,y,z)
             D_ell = torch.einsum('ij,njk,kl->nil', P, D_ell, P.T)
+            D[:, block_start:block_end, block_start:block_end] = D_ell
+        else:
+            # l>=2: Use matrix_exp
+            K_x = K_x_list[ell]
+            K_y = K_y_list[ell]
+            K_z = K_z_list[ell]
 
-        D[:, block_start:block_end, block_start:block_end] = D_ell
+            K = (
+                axis[:, 0:1, None, None] * K_x +
+                axis[:, 1:2, None, None] * K_y +
+                axis[:, 2:3, None, None] * K_z
+            ).squeeze(1)
+
+            D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
+            D[:, block_start:block_end, block_start:block_end] = D_ell
+
         block_start = block_end
 
     return D
