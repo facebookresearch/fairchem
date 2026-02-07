@@ -588,24 +588,24 @@ def axis_angle_wigner(
     edge_distance_vec: torch.Tensor,
     lmax: int,
     gamma: Optional[torch.Tensor] = None,
+    use_euler_gamma: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D from edge vectors using axis-angle representation.
 
     This approach uses the Rodrigues (minimal-arc) rotation to map edge → +Y,
     which only has a singularity at edge = -Y (180° rotation ambiguity).
-    This avoids the ZYZ Euler angle singularities that occur at ±Y.
+    This avoids the ZYZ Euler angle singularities at ±Y.
 
-    The output exactly matches the Euler-based implementation (rotation.py)
-    via an automatic basis transformation for l >= 2. This makes axis-angle
-    a drop-in replacement for the Euler code.
+    The output uses the same real spherical harmonic basis as the Euler-based
+    implementation (rotation.py), making this a drop-in replacement.
 
     Pipeline:
     1. Normalize edges
     2. Compute Rodrigues quaternion (edge → +Y)
     3. Extract axis-angle
     4. Compute D_rodrigues via matrix_exp
-    5. Compute gamma correction (defaults to -atan2(ex, ez))
+    5. Compute gamma (random by default, or -atan2(ex, ez) for Euler matching)
     6. Apply D_y(gamma) roll correction
     7. Apply Euler-matching basis transformation for l >= 2
     8. Return D = D_y(gamma) @ D_rodrigues (transformed)
@@ -614,7 +614,10 @@ def axis_angle_wigner(
         edge_distance_vec: Edge vectors of shape (N, 3)
         lmax: Maximum angular momentum
         gamma: Optional roll angles of shape (N,).
-               If None, uses -atan2(ex, ez) to match Euler convention.
+               If None, uses random gamma (for SO(2) equivariance during training).
+        use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
+               of random gamma. This makes output exactly match Euler code.
+               Note: this introduces gradient singularity at edge = +Y.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
@@ -647,7 +650,14 @@ def axis_angle_wigner(
 
     # Step 6: Compute gamma if not provided
     if gamma is None:
-        gamma = compute_euler_matching_gamma(edge_normalized)
+        if use_euler_gamma:
+            # Use atan2-based gamma to exactly match Euler code output
+            # Note: has gradient singularity at edge = +Y
+            gamma = compute_euler_matching_gamma(edge_normalized)
+        else:
+            # Random gamma for SO(2) equivariance (default for training)
+            N = edge_normalized.shape[0]
+            gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
 
     # Step 7: Compute D_y(gamma) roll correction
     D_y_gamma = wigner_d_y_rotation_batched(gamma, generators, lmax)
