@@ -47,6 +47,7 @@ _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _EULER_TRANSFORM_CACHE: dict[tuple[int, torch.dtype, torch.device], list[torch.Tensor]] = {}
 _RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
+_RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
 
 
 # =============================================================================
@@ -164,6 +165,7 @@ def apply_euler_transform(
     D: torch.Tensor,
     lmax: int,
     U_list: list[torch.Tensor],
+    inplace: bool = True,
 ) -> torch.Tensor:
     """
     Apply Euler-matching transformation to a block-diagonal Wigner D matrix.
@@ -174,11 +176,12 @@ def apply_euler_transform(
         D: Wigner D matrix of shape (N, size, size) where size = (lmax+1)^2
         lmax: Maximum angular momentum
         U_list: List of transformation matrices from get_euler_transforms
+        inplace: If True, modify D in-place; if False, return a new tensor
 
     Returns:
         Transformed Wigner D matrix of shape (N, size, size)
     """
-    D_out = D.clone()
+    D_out = D if inplace else D.clone()
 
     for ell in range(2, lmax + 1):  # Skip l=0,1 (identity transform)
         start = ell * ell
@@ -186,7 +189,8 @@ def apply_euler_transform(
         U = U_list[ell]
 
         # D_out[:, start:end, start:end] = U @ D[:, start:end, start:end] @ U.T
-        block = D[:, start:end, start:end]
+        # Read block, transform, write back (safe because blocks are independent)
+        block = D_out[:, start:end, start:end].clone()  # Need clone for read-before-write
         transformed = torch.einsum("ij,njk,lk->nil", U, block, U)
         D_out[:, start:end, start:end] = transformed
 
@@ -815,6 +819,27 @@ def _get_ra_rb_coefficients(
     return _RA_RB_COEFF_CACHE[key], _RA_RB_U_CACHE[key]
 
 
+def _get_ra_rb_coefficients_range(
+    lmin: int,
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> tuple[dict, list]:
+    """Get cached Ra/Rb polynomial coefficients for l in [lmin, lmax] only."""
+    key = (lmin, lmax, dtype, device)
+
+    if key not in _RA_RB_RANGE_CACHE:
+        from fairchem.core.models.uma.common.wigner_d_quaternion import (
+            precompute_wigner_coefficients_range,
+            precompute_U_blocks_range,
+        )
+        coeffs = precompute_wigner_coefficients_range(lmin, lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks_range(lmin, lmax, dtype=dtype, device=device)
+        _RA_RB_RANGE_CACHE[key] = (coeffs, U_blocks)
+
+    return _RA_RB_RANGE_CACHE[key]
+
+
 def wigner_d_from_quaternion_polynomial(
     q: torch.Tensor,
     lmax: int,
@@ -917,7 +942,7 @@ def axis_angle_wigner_polynomial(
     # This matches axis_angle_wigner: D = euler_transform(D_y(gamma) @ D_rodrigues)
     generators = get_so3_generators(lmax, dtype, device)
     D_y_gamma = wigner_d_y_rotation_batched(gamma, generators, lmax)
-    D = torch.bmm(D_y_gamma, D)
+    D = bmm_block_diagonal(D_y_gamma, D, lmax)
 
     # Apply Euler-matching basis transformation for l >= 2 AFTER gamma
     if lmax >= 2:
@@ -1030,6 +1055,113 @@ def wigner_d_from_axis_angle_batched(
     return D
 
 
+def wigner_d_from_axis_angle_hybrid(
+    axis: torch.Tensor,
+    angle: torch.Tensor,
+    q: torch.Tensor,
+    generators: dict[str, list[torch.Tensor]],
+    lmax: int,
+) -> torch.Tensor:
+    """
+    Compute Wigner D matrices using hybrid approach.
+
+    Uses the fastest method for each l:
+    - l=0: Trivial (identity)
+    - l=1: Rodrigues formula (fastest for 3x3)
+    - l=2: Cayley-Hamilton (fastest for 5x5)
+    - l>=3: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
+
+    Args:
+        axis: Rotation axes of shape (N, 3), unit vectors
+        angle: Rotation angles of shape (N,), in radians
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+        generators: Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P'
+        lmax: Maximum angular momentum
+
+    Returns:
+        Block-diagonal Wigner D matrices of shape (N, size, size)
+        where size = (lmax+1)²
+    """
+    from fairchem.core.models.uma.common.wigner_d_quaternion import (
+        quaternion_to_ra_rb,
+        wigner_d_matrix_complex_range,
+        wigner_d_complex_to_real_range,
+    )
+
+    N = axis.shape[0]
+    device = axis.device
+    dtype = axis.dtype
+    size = (lmax + 1) ** 2
+
+    K_x_list = generators['K_x']
+    K_y_list = generators['K_y']
+    K_z_list = generators['K_z']
+    P = generators['P']
+
+    D = torch.zeros(N, size, size, dtype=dtype, device=device)
+
+    # Compute l=0, l=1, l=2 using axis-angle (Rodrigues + Cayley-Hamilton)
+    block_start = 0
+    for ell in range(min(lmax + 1, 3)):  # Only l=0,1,2
+        block_size = 2 * ell + 1
+        block_end = block_start + block_size
+
+        if ell == 0:
+            D[:, 0, 0] = 1.0
+        elif ell == 1:
+            # Rodrigues formula for l=1
+            K_x = K_x_list[1]
+            K_y = K_y_list[1]
+            K_z = K_z_list[1]
+
+            K = (
+                axis[:, 0:1, None, None] * K_x +
+                axis[:, 1:2, None, None] * K_y +
+                axis[:, 2:3, None, None] * K_z
+            ).squeeze(1)
+
+            I = torch.eye(3, dtype=dtype, device=device)
+            sin_t = torch.sin(angle)[:, None, None]
+            cos_t = torch.cos(angle)[:, None, None]
+            K2 = torch.bmm(K, K)
+            D_ell = I + sin_t * K + (1 - cos_t) * K2
+
+            # Transform from m-ordering (y,z,x) to Cartesian (x,y,z)
+            D_ell = torch.einsum('ij,njk,kl->nil', P, D_ell, P.T)
+            D[:, block_start:block_end, block_start:block_end] = D_ell
+        elif ell == 2:
+            # Cayley-Hamilton for l=2
+            K_x = K_x_list[2]
+            K_y = K_y_list[2]
+            K_z = K_z_list[2]
+
+            K = (
+                axis[:, 0:1, None, None] * K_x +
+                axis[:, 1:2, None, None] * K_y +
+                axis[:, 2:3, None, None] * K_z
+            ).squeeze(1)
+
+            D_ell = _cayley_hamilton_exp_l2(K, angle)
+            D[:, block_start:block_end, block_start:block_end] = D_ell
+
+        block_start = block_end
+
+    # Compute l>=3 using Ra/Rb polynomial from quaternion (range version)
+    if lmax >= 3:
+        # Get Ra/Rb coefficients for l>=3 only (more efficient)
+        coeffs_range, U_blocks_range = _get_ra_rb_coefficients_range(3, lmax, dtype, device)
+        Ra, Rb = quaternion_to_ra_rb(q)
+        D_complex_range = wigner_d_matrix_complex_range(Ra, Rb, coeffs_range)
+        D_ra_rb_range = wigner_d_complex_to_real_range(D_complex_range, U_blocks_range, 3, lmax)
+
+        # Copy l>=3 blocks directly from the range result
+        # D_ra_rb_range is already just the l>=3 blocks
+        block_offset = 9  # Skip l=0,1,2 in full matrix (1 + 3 + 5 = 9)
+        D[:, block_offset:, block_offset:] = D_ra_rb_range
+
+    return D
+
+
 # =============================================================================
 # Y-Rotation (Roll Correction)
 # =============================================================================
@@ -1104,6 +1236,48 @@ def wigner_d_y_rotation_batched(
 # =============================================================================
 
 
+def quaternion_multiply(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    """
+    Multiply two quaternions: q1 * q2.
+
+    Uses Hamilton product convention: (w, x, y, z).
+
+    Args:
+        q1: First quaternion of shape (N, 4) or (4,)
+        q2: Second quaternion of shape (N, 4) or (4,)
+
+    Returns:
+        Product quaternion of shape (N, 4)
+    """
+    w1, x1, y1, z1 = q1[..., 0], q1[..., 1], q1[..., 2], q1[..., 3]
+    w2, x2, y2, z2 = q2[..., 0], q2[..., 1], q2[..., 2], q2[..., 3]
+
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+    z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+
+    return torch.stack([w, x, y, z], dim=-1)
+
+
+def quaternion_y_rotation(gamma: torch.Tensor) -> torch.Tensor:
+    """
+    Create quaternion for rotation about Y-axis by angle gamma.
+
+    Args:
+        gamma: Rotation angles of shape (N,)
+
+    Returns:
+        Quaternions of shape (N, 4) in (w, x, y, z) convention
+    """
+    half_gamma = gamma / 2
+    w = torch.cos(half_gamma)
+    x = torch.zeros_like(gamma)
+    y = torch.sin(half_gamma)
+    z = torch.zeros_like(gamma)
+    return torch.stack([w, x, y, z], dim=-1)
+
+
 def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
     """
     Compute gamma to match the Euler convention.
@@ -1125,6 +1299,53 @@ def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
     gamma = -torch.atan2(ex, ez)
 
     return gamma
+
+
+def bmm_block_diagonal(
+    A: torch.Tensor,
+    B: torch.Tensor,
+    lmax: int,
+) -> torch.Tensor:
+    """
+    Block-wise matrix multiplication for block-diagonal matrices.
+
+    Both A and B are assumed to be block-diagonal with blocks of sizes
+    1, 3, 5, 7, ... (2*l+1 for l=0,1,2,...,lmax).
+
+    This is much faster than full bmm because:
+    - Full bmm: O(N * size³) where size = (lmax+1)²
+    - Block-wise: O(N * sum((2*l+1)³)) which is much smaller
+
+    For lmax=6: full = 49³ = 117,649 vs block = 4,753 (25x fewer ops)
+
+    Args:
+        A: Block-diagonal matrices of shape (N, size, size)
+        B: Block-diagonal matrices of shape (N, size, size)
+        lmax: Maximum angular momentum
+
+    Returns:
+        C = A @ B, block-diagonal matrices of shape (N, size, size)
+    """
+    N = A.shape[0]
+    size = A.shape[1]
+    device = A.device
+    dtype = A.dtype
+
+    C = torch.zeros(N, size, size, dtype=dtype, device=device)
+
+    block_start = 0
+    for ell in range(lmax + 1):
+        block_size = 2 * ell + 1
+        block_end = block_start + block_size
+
+        A_block = A[:, block_start:block_end, block_start:block_end]
+        B_block = B[:, block_start:block_end, block_start:block_end]
+
+        C[:, block_start:block_end, block_start:block_end] = torch.bmm(A_block, B_block)
+
+        block_start = block_end
+
+    return C
 
 
 # =============================================================================
@@ -1211,8 +1432,8 @@ def axis_angle_wigner(
     # Step 7: Compute D_y(gamma) roll correction
     D_y_gamma = wigner_d_y_rotation_batched(gamma, generators, lmax)
 
-    # Step 8: Combine: D = D_y(gamma) @ D_rodrigues
-    D = torch.bmm(D_y_gamma, D_rodrigues)
+    # Step 8: Combine: D = D_y(gamma) @ D_rodrigues (block-wise for efficiency)
+    D = bmm_block_diagonal(D_y_gamma, D_rodrigues, lmax)
 
     # Step 9: Apply Euler-matching basis transformation for l >= 2
     if lmax >= 2:
@@ -1220,6 +1441,84 @@ def axis_angle_wigner(
         D = apply_euler_transform(D, lmax, U_list)
 
     # Step 10: Inverse is transpose (orthogonal matrix)
+    D_inv = D.transpose(1, 2).contiguous()
+
+    return D, D_inv
+
+
+def axis_angle_wigner_hybrid(
+    edge_distance_vec: torch.Tensor,
+    lmax: int,
+    gamma: Optional[torch.Tensor] = None,
+    use_euler_gamma: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute Wigner D using hybrid approach (Rodrigues/Cayley-Hamilton + Ra/Rb).
+
+    Uses the fastest method for each l:
+    - l=0: Trivial (identity)
+    - l=1: Rodrigues formula from axis-angle (fastest for 3x3)
+    - l=2: Cayley-Hamilton from axis-angle (fastest for 5x5)
+    - l>=3: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
+
+    Combines the edge→Y and gamma rotations into a single quaternion before
+    computing the Wigner D, avoiding the overhead of computing two separate
+    Wigner D matrices and multiplying them.
+
+    Args:
+        edge_distance_vec: Edge vectors of shape (N, 3)
+        lmax: Maximum angular momentum
+        gamma: Optional roll angles of shape (N,).
+               If None, uses random gamma (for SO(2) equivariance during training).
+        use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
+               of random gamma. This makes output exactly match Euler code.
+
+    Returns:
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
+    """
+    # Handle single vector input
+    if edge_distance_vec.dim() == 1:
+        edge_distance_vec = edge_distance_vec.unsqueeze(0)
+
+    N = edge_distance_vec.shape[0]
+    device = edge_distance_vec.device
+    dtype = edge_distance_vec.dtype
+
+    # Step 1: Normalize edges
+    edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
+
+    # Step 2: Compute gamma if not provided
+    if gamma is None:
+        if use_euler_gamma:
+            gamma = compute_euler_matching_gamma(edge_normalized)
+        else:
+            gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+
+    # Step 3: Compute quaternion (edge → +Y)
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Step 4: Create Y-rotation quaternion and combine with edge→Y
+    # Combined rotation: first edge→Y, then rotate about Y by gamma
+    # q_combined = q_gamma * q_edge_to_y
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    # Step 5: Extract axis-angle from combined quaternion (needed for l=1,2)
+    axis, angle = quaternion_to_axis_angle(q_combined)
+
+    # Step 6: Get generators (cached)
+    generators = get_so3_generators(lmax, dtype, device)
+
+    # Step 7: Compute single Wigner D from combined rotation
+    D = wigner_d_from_axis_angle_hybrid(axis, angle, q_combined, generators, lmax)
+
+    # Step 8: Apply Euler-matching basis transformation for l >= 2
+    if lmax >= 2:
+        U_list = get_euler_transforms(lmax, dtype, device)
+        D = apply_euler_transform(D, lmax, U_list)
+
+    # Step 9: Inverse is transpose (orthogonal matrix)
     D_inv = D.transpose(1, 2).contiguous()
 
     return D, D_inv
