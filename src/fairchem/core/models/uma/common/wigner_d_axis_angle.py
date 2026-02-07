@@ -9,26 +9,18 @@ Key features:
 - Uses torch.linalg.matrix_exp for stable computation
 - Only has a singularity at edge = -Y (180° rotation ambiguity)
 - Avoids the ZYZ Euler angle singularities at ±Y
-- Can optionally match Euler-based output exactly via basis transformation
+- Output exactly matches Euler-based code (rotation.py) - drop-in replacement
 
-By default, this implementation produces DIFFERENT Wigner D matrices than the
-Euler-based and quaternion-based approaches for l >= 2. Both are mathematically
-correct rotations that map edge → +Y, but they orient the frame differently.
-This is expected and acceptable because:
-1. Both produce valid SO(3) representations (orthogonal, det=1)
-2. Both correctly rotate edge → +Y
-3. Training uses random gamma for SO(2) equivariance
-
-When match_euler=True is passed to axis_angle_wigner(), a basis transformation
-is applied that makes the output exactly match the Euler-based implementation.
-This is useful for inference or when exact compatibility is required.
+The output uses the same real spherical harmonic basis as the Euler-based
+implementation, achieved via an automatic basis transformation for l >= 2.
+This makes axis_angle_wigner() a drop-in replacement for the Euler code.
 
 The implementation:
 1. Computes the Rodrigues (minimal-arc) quaternion for the edge → +Y rotation
 2. Converts the quaternion to axis-angle representation
 3. Computes Wigner D via D^l = exp(θ * (n · K^l)) where K are SO(3) generators
 4. Applies an optional gamma roll correction about the Y-axis
-5. Optionally applies Euler-matching basis transformation for l >= 2
+5. Applies Euler-matching basis transformation for l >= 2
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
@@ -596,7 +588,6 @@ def axis_angle_wigner(
     edge_distance_vec: torch.Tensor,
     lmax: int,
     gamma: Optional[torch.Tensor] = None,
-    match_euler: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D from edge vectors using axis-angle representation.
@@ -605,13 +596,9 @@ def axis_angle_wigner(
     which only has a singularity at edge = -Y (180° rotation ambiguity).
     This avoids the ZYZ Euler angle singularities that occur at ±Y.
 
-    With match_euler=False (default):
-        Produces Wigner D matrices that may differ from Euler-based code for l>=2.
-        Both are mathematically correct rotations that map edge → +Y.
-
-    With match_euler=True:
-        Applies a basis transformation so output exactly matches Euler-based code.
-        D_euler[l] = U[l] @ D_axis[l] @ U[l].T for l >= 2
+    The output exactly matches the Euler-based implementation (rotation.py)
+    via an automatic basis transformation for l >= 2. This makes axis-angle
+    a drop-in replacement for the Euler code.
 
     Pipeline:
     1. Normalize edges
@@ -620,15 +607,14 @@ def axis_angle_wigner(
     4. Compute D_rodrigues via matrix_exp
     5. Compute gamma correction (defaults to -atan2(ex, ez))
     6. Apply D_y(gamma) roll correction
-    7. Optionally apply Euler-matching basis transformation
-    8. Return D = D_y(gamma) @ D_rodrigues
+    7. Apply Euler-matching basis transformation for l >= 2
+    8. Return D = D_y(gamma) @ D_rodrigues (transformed)
 
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
         lmax: Maximum angular momentum
         gamma: Optional roll angles of shape (N,).
-               If None, uses -atan2(ex, ez).
-        match_euler: If True, apply basis transformation to match Euler output.
+               If None, uses -atan2(ex, ez) to match Euler convention.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
@@ -669,8 +655,8 @@ def axis_angle_wigner(
     # Step 8: Combine: D = D_y(gamma) @ D_rodrigues
     D = torch.bmm(D_y_gamma, D_rodrigues)
 
-    # Step 9: Optionally apply Euler-matching transformation
-    if match_euler and lmax >= 2:
+    # Step 9: Apply Euler-matching basis transformation for l >= 2
+    if lmax >= 2:
         U_list = get_euler_transforms(lmax, dtype, device)
         D = apply_euler_transform(D, lmax, U_list)
 
@@ -688,18 +674,17 @@ def axis_angle_wigner(
 def axis_angle_wigner_random_gamma(
     edge_distance_vec: torch.Tensor,
     lmax: int,
-    match_euler: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D with random gamma (matching training behavior).
 
     This matches the behavior of the Euler-based code which uses random gamma
-    for SO(2) equivariance during training.
+    for SO(2) equivariance during training. The output uses the same basis
+    as the Euler code, making this a drop-in replacement.
 
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
         lmax: Maximum angular momentum
-        match_euler: If True, apply basis transformation to match Euler output.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge)
@@ -710,4 +695,4 @@ def axis_angle_wigner_random_gamma(
 
     gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
 
-    return axis_angle_wigner(edge_distance_vec, lmax, gamma=gamma, match_euler=match_euler)
+    return axis_angle_wigner(edge_distance_vec, lmax, gamma=gamma)

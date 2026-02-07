@@ -301,10 +301,10 @@ class TestEulerAgreement:
 
     def test_match_euler_produces_identical_output(self, lmax, dtype, device, Jd_matrices):
         """
-        With match_euler=True, axis-angle output exactly matches Euler output.
+        Axis-angle output exactly matches Euler output.
 
-        This tests the basis transformation that converts axis-angle Wigner D
-        matrices to match the Euler-based implementation.
+        This tests that the basis transformation automatically applied for l >= 2
+        makes axis-angle a drop-in replacement for the Euler-based implementation.
         """
         from fairchem.core.models.uma.common.rotation import wigner_D
 
@@ -328,9 +328,9 @@ class TestEulerAgreement:
             # Gamma for axis-angle that matches Euler with alpha_arg=0
             gamma_rod = -torch.atan2(edge_norm[0, 0], edge_norm[0, 2])
 
-            # Compute with axis-angle and match_euler=True
+            # Compute with axis-angle (now always matches Euler)
             D_axis, _ = axis_angle_wigner(
-                edge_norm, lmax, gamma=gamma_rod.unsqueeze(0), match_euler=True
+                edge_norm, lmax, gamma=gamma_rod.unsqueeze(0)
             )
 
             # Compare each l block with Euler
