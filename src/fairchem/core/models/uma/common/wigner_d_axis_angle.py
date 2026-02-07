@@ -7,7 +7,7 @@ Ra/Rb polynomial formula used by the quaternion module.
 
 Key features:
 - Uses torch.linalg.matrix_exp for stable computation
-- Only has a singularity at edge = -Y (180° rotation ambiguity)
+- Two quaternion charts with SLERP blending: no singularities anywhere
 - Avoids the ZYZ Euler angle singularities at ±Y
 - Output exactly matches Euler-based code (rotation.py) - drop-in replacement
 
@@ -16,7 +16,10 @@ implementation, achieved via an automatic basis transformation for l >= 2.
 This makes axis_angle_wigner() a drop-in replacement for the Euler code.
 
 The implementation:
-1. Computes the Rodrigues (minimal-arc) quaternion for the edge → +Y rotation
+1. Computes the edge → +Y quaternion using two charts with SLERP blending:
+   - Chart 1: singular at -Y (used when ey > -0.7)
+   - Chart 2: singular at +Y (used when ey < -0.9)
+   - SLERP blend in ey ∈ [-0.9, -0.7] for C-infinity continuity
 2. Converts the quaternion to axis-angle representation
 3. Computes Wigner D via D^l = exp(θ * (n · K^l)) where K are SO(3) generators
 4. Applies an optional gamma roll correction about the Y-axis
@@ -325,13 +328,68 @@ def get_so3_generators(
 
 
 # =============================================================================
-# Quaternion Edge → +Y (Stable Rodrigues Formula)
+# Quaternion Edge → +Y (Two Charts with SLERP Blending)
 # =============================================================================
 
 
-def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
+def _smooth_step_cinf(t: torch.Tensor) -> torch.Tensor:
     """
-    Compute quaternion for minimal-arc (Rodrigues) rotation edge → +Y.
+    C-infinity smooth step function based on the classic bump function.
+
+    Uses f(x) = exp(-1/x) for x > 0 (0 otherwise), then:
+    step(t) = f(t) / (f(t) + f(1-t)) = sigmoid((2t-1)/(t*(1-t)))
+
+    Properties:
+    - C-infinity smooth everywhere
+    - All derivatives are exactly zero at t=0 and t=1
+    - Values: f(0)=0, f(1)=1
+    - Symmetric: f(t) + f(1-t) = 1
+
+    This provides true C-infinity continuity at the blend region boundaries,
+    unlike polynomial smoothstep functions which only have finite-order continuity.
+
+    Args:
+        t: Input tensor, will be clamped to [0, 1]
+
+    Returns:
+        Smooth step values in [0, 1]
+    """
+    t_clamped = t.clamp(0, 1)
+
+    # Use a safe epsilon that works for both float32 and float64
+    eps = 1e-7
+
+    # Compute (2t-1)/(t*(1-t)) in a numerically stable way
+    # Near t=0: this goes to -infinity -> sigmoid = 0
+    # Near t=1: this goes to +infinity -> sigmoid = 1
+    # At t=0.5: this is 0 -> sigmoid = 0.5
+    numerator = 2.0 * t_clamped - 1.0
+    denominator = t_clamped * (1.0 - t_clamped)
+
+    # Clamp denominator to avoid division by zero
+    denom_safe = denominator.clamp(min=eps)
+
+    # Compute the argument for sigmoid
+    arg = numerator / denom_safe
+
+    # Apply sigmoid
+    result = torch.sigmoid(arg)
+
+    # Near boundaries, sigmoid will saturate naturally, but we ensure
+    # exact 0 and 1 for very small/large t to avoid numerical issues
+    result = torch.where(t_clamped < eps, torch.zeros_like(result), result)
+    result = torch.where(t_clamped > 1 - eps, torch.ones_like(result), result)
+
+    return result
+
+
+def _quaternion_chart1_standard(
+    ex: torch.Tensor,
+    ey: torch.Tensor,
+    ez: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Standard quaternion: edge → +Y directly. Singular at edge = -Y.
 
     Uses the half-vector formula:
         q = normalize(1 + ey, -ez, 0, ex)
@@ -341,10 +399,138 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
 
     With v1 = edge = (ex, ey, ez) and v2 = (0, 1, 0):
         v1·v2 = ey
-        v1 × v2 = (ez*0 - ey*0, ex*0 - ez*1, ey*0 - ex*0) = (-ez, 0, ex)
+        v1 × v2 = (-ez, 0, ex)
 
-    Stable everywhere except edge = -Y (180° ambiguity).
-    At -Y: 180° rotation about X-axis is used.
+    Magnitude: |q|² = 2(1+ey), so norm → 0 as ey → -1
+
+    Args:
+        ex, ey, ez: Edge vector components
+
+    Returns:
+        Quaternions of shape (..., 4) in (w, x, y, z) convention
+    """
+    w = 1.0 + ey
+    x = -ez
+    y = torch.zeros_like(ex)
+    z = ex
+
+    q = torch.stack([w, x, y, z], dim=-1)
+
+    # Handle singularity at -Y: norm ≈ 0 when ey ≈ -1
+    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
+    safe_norm = norm.clamp(min=1e-12)
+
+    return q / safe_norm
+
+
+def _quaternion_chart2_via_minus_y(
+    ex: torch.Tensor,
+    ey: torch.Tensor,
+    ez: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Alternative quaternion: edge → +Y via -Y. Singular at edge = +Y.
+
+    Path: edge → -Y → +Y (compose with 180° about X)
+
+    Derivation:
+    - q_{edge→-Y} = normalize(1-ey, ez, 0, -ex)  (standard formula with target=-Y)
+    - q_{-Y→+Y} = (0, 1, 0, 0)  (180° rotation about X)
+    - q_{edge→+Y} = q_{-Y→+Y} ⊗ q_{edge→-Y}
+
+    Quaternion multiplication (0, 1, 0, 0) ⊗ (w, x, y, z):
+        w' = 0*w - 1*x - 0*y - 0*z = -x
+        x' = 0*x + 1*w + 0*z - 0*y = w
+        y' = 0*y + 1*z + 0*w - 0*x = z
+        z' = 0*z - 1*y + 0*x + 0*w = -y
+
+    With q_{edge→-Y} = normalize(1-ey, ez, 0, -ex):
+        q_{composed} = normalize(-ez, 1-ey, -ex, 0)
+
+    But we can negate (same rotation): normalize(-ez, 1-ey, ex, 0)
+
+    Formula: q = normalize(-ez, 1-ey, ex, 0)
+    Magnitude: |q|² = 2(1-ey), so norm → 0 as ey → +1
+
+    Args:
+        ex, ey, ez: Edge vector components
+
+    Returns:
+        Quaternions of shape (..., 4) in (w, x, y, z) convention
+    """
+    w = -ez
+    x = 1.0 - ey
+    y = ex
+    z = torch.zeros_like(ex)
+
+    q = torch.stack([w, x, y, z], dim=-1)
+
+    # Handle singularity at +Y: norm ≈ 0 when ey ≈ 1
+    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
+    safe_norm = norm.clamp(min=1e-12)
+
+    return q / safe_norm
+
+
+def quaternion_slerp(
+    q1: torch.Tensor,
+    q2: torch.Tensor,
+    t: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Spherical linear interpolation between quaternions.
+
+    slerp(q1, q2, t) = (sin((1-t)θ) * q1 + sin(tθ) * q2) / sin(θ)
+    where θ = arccos(|q1 · q2|)
+
+    Args:
+        q1: First quaternion, shape (..., 4)
+        q2: Second quaternion, shape (..., 4)
+        t: Interpolation parameter, shape (...)
+
+    Returns:
+        Interpolated quaternion, shape (..., 4)
+    """
+    # Ensure shortest path by aligning q1 to q2 (negate q1 if dot < 0)
+    # This ensures that at t=1, we get exactly q2 (not -q2)
+    dot = (q1 * q2).sum(dim=-1, keepdim=True)
+    q1_aligned = torch.where(dot < 0, -q1, q1)
+    dot = torch.abs(dot).clamp(max=1.0 - 1e-7)  # Clamp for numerical stability
+
+    # Compute angle between quaternions
+    theta = torch.acos(dot)
+    sin_theta = torch.sin(theta)
+
+    # SLERP weights
+    t_expanded = t.unsqueeze(-1) if t.dim() < q1.dim() else t
+    w1 = torch.sin((1.0 - t_expanded) * theta) / sin_theta.clamp(min=1e-8)
+    w2 = torch.sin(t_expanded * theta) / sin_theta.clamp(min=1e-8)
+
+    result = w1 * q1_aligned + w2 * q2
+
+    # Fall back to NLERP for small angles (theta ≈ 0, quaternions nearly equal)
+    small_angle = sin_theta.squeeze(-1) < 1e-6
+    result_nlerp = torch.nn.functional.normalize(
+        (1.0 - t_expanded) * q1_aligned + t_expanded * q2, dim=-1
+    )
+
+    return torch.where(small_angle.unsqueeze(-1), result_nlerp, result)
+
+
+def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
+    """
+    Compute quaternion for edge → +Y using two charts with SLERP blending.
+
+    Uses two quaternion charts to avoid singularities:
+    - Chart 1: q = normalize(1+ey, -ez, 0, ex) - singular at -Y
+    - Chart 2: q = normalize(-ez, 1-ey, ex, 0) - singular at +Y
+
+    SLERP blend in ey ∈ [-0.9, -0.7]:
+    - Uses Chart 2 when near -Y (stable there)
+    - Uses Chart 1 elsewhere (stable away from -Y)
+
+    This ensures numerically stable computation for all edge directions
+    with C-infinity smooth blending between charts.
 
     Args:
         edge_vec: Edge vectors of shape (N, 3), assumed normalized
@@ -356,32 +542,23 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
     ey = edge_vec[..., 1]
     ez = edge_vec[..., 2]
 
-    # q = (1 + ey, -ez, 0, ex) then normalize
-    # This is the half-vector formula
-    w = 1.0 + ey
-    x = -ez
-    y = torch.zeros_like(ex)
-    z = ex
+    # Chart 1: singular at -Y, stable at +Y
+    q_chart1 = _quaternion_chart1_standard(ex, ey, ez)
 
-    q = torch.stack([w, x, y, z], dim=-1)
+    # Chart 2: singular at +Y, stable at -Y
+    q_chart2 = _quaternion_chart2_via_minus_y(ex, ey, ez)
 
-    # Compute norm for normalization
-    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
+    # Blend region: ey ∈ [-0.9, -0.7]
+    # t=0 at ey=-0.9 (use Chart 2), t=1 at ey=-0.7 (use Chart 1)
+    blend_start = -0.9
+    blend_width = 0.2
+    t = (ey - blend_start) / blend_width
+    t_smooth = _smooth_step_cinf(t)
 
-    # Handle edge near -Y: norm ≈ 0 when ey ≈ -1
-    # Use 180° rotation about X: (0, 1, 0, 0)
-    near_minus_y = norm.squeeze(-1) < 1e-6
-    q_180x = torch.tensor([0.0, 1.0, 0.0, 0.0], dtype=q.dtype, device=q.device)
-    q_180x = q_180x.expand_as(q)
+    # SLERP: interpolate from Chart 2 (t=0) to Chart 1 (t=1)
+    q = quaternion_slerp(q_chart2, q_chart1, t_smooth)
 
-    # Safe normalization
-    safe_norm = norm.clamp(min=1e-12)
-    q_normalized = q / safe_norm
-
-    # Select based on singularity
-    q_out = torch.where(near_minus_y.unsqueeze(-1), q_180x, q_normalized)
-
-    return q_out
+    return q
 
 
 # =============================================================================
@@ -593,16 +770,17 @@ def axis_angle_wigner(
     """
     Compute Wigner D from edge vectors using axis-angle representation.
 
-    This approach uses the Rodrigues (minimal-arc) rotation to map edge → +Y,
-    which only has a singularity at edge = -Y (180° rotation ambiguity).
-    This avoids the ZYZ Euler angle singularities at ±Y.
+    This approach uses two quaternion charts with SLERP blending to map edge → +Y,
+    which eliminates all singularities (the two charts have complementary singular
+    points at +Y and -Y respectively). This avoids both the single-chart Rodrigues
+    singularity at -Y and the ZYZ Euler angle singularities at ±Y.
 
     The output uses the same real spherical harmonic basis as the Euler-based
     implementation (rotation.py), making this a drop-in replacement.
 
     Pipeline:
     1. Normalize edges
-    2. Compute Rodrigues quaternion (edge → +Y)
+    2. Compute quaternion (edge → +Y) using two charts with SLERP blending
     3. Extract axis-angle
     4. Compute D_rodrigues via matrix_exp
     5. Compute gamma (random by default, or -atan2(ex, ez) for Euler matching)
