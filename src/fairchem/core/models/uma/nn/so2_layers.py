@@ -11,6 +11,7 @@ import copy
 import math
 from typing import TYPE_CHECKING
 
+from fairchem.core.common.profiler_utils import record_backward
 import torch
 import torch.nn as nn
 from torch.nn import Linear
@@ -63,6 +64,7 @@ class SO2_m_Conv(torch.nn.Module):
         )
         self.fc.weight.data.mul_(1 / math.sqrt(2))
 
+    @record_backward("SO2_m_Conv")
     def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         x_m = self.fc(x_m)
         x_r_0, x_i_0, x_r_1, x_i_1 = x_m.reshape(
@@ -152,6 +154,7 @@ class SO2_Convolution(torch.nn.Module):
             mod.fc.in_features for mod in self.so2_m_conv
         ]
 
+    @record_backward("SO2_Convolution")
     def forward(
         self,
         x: torch.Tensor,
