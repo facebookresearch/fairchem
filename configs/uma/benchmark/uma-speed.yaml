@@ -4,6 +4,7 @@ job:
   device_type: CUDA
   scheduler:
     mode: LOCAL
+    num_nodes: 1
     ranks_per_node: 1
   run_dir: /checkpoint/ocp/rgao/speed
 
@@ -46,7 +47,7 @@ runner:
     tf32: True
     activation_checkpointing: False
     merge_mole: True
-    compile: False
+    compile: True
     external_graph_gen: False
     internal_graph_gen_version: 2
   generate_traces: True
