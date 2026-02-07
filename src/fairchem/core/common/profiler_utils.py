@@ -51,6 +51,43 @@ def _get_label_dict() -> dict:
     return _backward_label_contexts.contexts
 
 
+def _is_profiler_active() -> bool:
+    """Check if the PyTorch profiler is currently active."""
+    try:
+        # Try the internal API first (available in some PyTorch versions)
+        return torch.profiler._utils._is_profiler_enabled()
+    except AttributeError:
+        # Fallback: check if there's an active profiler by checking kineto availability
+        # This is a reasonable heuristic - if kineto is not available, profiler won't work anyway
+        try:
+            return torch.autograd.profiler._is_profiler_enabled
+        except AttributeError:
+            # If we can't determine, assume profiler is active to be safe
+            return True
+
+
+class _NoOpContextManager:
+    """A no-op context manager that returns tensors unchanged."""
+
+    def mark_input(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
+
+    def mark_output(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
+
+    def mark(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+
+_NO_OP_CTX = _NoOpContextManager()
+
+
 class _BackwardLabelStart(Function):
     """Inserted at block OUTPUT. In backward, this runs FIRST and OPENS the label context."""
 
@@ -168,6 +205,10 @@ def record_backward(name: str):
 
     def decorator(fn):
         def wrapper(*args, **kwargs):
+            # Skip profiling overhead if profiler is not active
+            if not _is_profiler_active():
+                return fn(*args, **kwargs)
+
             block_id = _get_next_block_id()
             # Mark input tensors with END markers (they close the backward label)
             marked_args = _apply_end_marker(args, name, block_id)
@@ -310,6 +351,11 @@ def record_function_with_backward(name: str):
     Yields:
         Context with `mark(tensor)` method.
     """
+    # Skip profiling overhead if profiler is not active
+    if not _is_profiler_active():
+        yield _NO_OP_CTX
+        return
+
     ctx = RecordFunctionWithBackward(name)
     with ctx:
         yield ctx

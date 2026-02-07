@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Literal
 
-from fairchem.core.common.profiler_utils import record_function_with_backward
+from fairchem.core.common.profiler_utils import record_backward
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
@@ -302,6 +302,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    @record_backward("get_rotmat_and_wigner")
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -310,15 +311,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             for l in range(self.lmax + 1)
         ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+        # with record_function("obtain rotmat wigner original"):
+        euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+        wigner = eulers_to_wigner(
+            euler_angles,
+            0,
+            self.lmax,
+            Jd_buffers,
+        )
+        wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
         # select subset of coefficients we are using
         if self.mmax != self.lmax:
