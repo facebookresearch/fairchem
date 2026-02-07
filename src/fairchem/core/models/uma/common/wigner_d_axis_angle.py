@@ -721,6 +721,7 @@ def wigner_d_from_axis_angle_batched(
             D[:, block_start:block_end, block_start:block_end] = D_ell
         else:
             # l>=2: Use matrix_exp
+            # Note: Cayley-Hamilton was tested but is slower for l>=5
             K_x = K_x_list[ell]
             K_y = K_y_list[ell]
             K_z = K_z_list[ell]
