@@ -419,6 +419,39 @@ class TestQuaternionToWignerDL2:
         )
         assert result
 
+    def test_einsum_matches_stack(self, dtype, device):
+        """Einsum version matches stack-based version."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2,
+            quaternion_to_wigner_d_l2_einsum,
+        )
+
+        torch.manual_seed(789)
+        n_samples = 500
+        q = torch.randn(n_samples, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+
+        D_stack = quaternion_to_wigner_d_l2(q)
+        D_einsum = quaternion_to_wigner_d_l2_einsum(q)
+
+        max_err = (D_stack - D_einsum).abs().max().item()
+        assert max_err < 1e-10, f"Einsum differs from stack by {max_err}"
+
+    def test_einsum_gradcheck(self, dtype, device):
+        """Gradcheck passes for the einsum function."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2_einsum,
+        )
+
+        q = torch.randn(5, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+        q = q.detach().requires_grad_(True)
+
+        result = torch.autograd.gradcheck(
+            quaternion_to_wigner_d_l2_einsum, q, eps=1e-6, atol=1e-4
+        )
+        assert result
+
     def test_identity_quaternion(self, dtype, device):
         """Identity quaternion produces identity matrix."""
         from fairchem.core.models.uma.common.wigner_d_axis_angle import (

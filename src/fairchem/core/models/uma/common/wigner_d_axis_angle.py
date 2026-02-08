@@ -61,6 +61,7 @@ _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
 _RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
+_L2_COEFF_TENSOR_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
 
 
 def clear_memory_caches() -> None:
@@ -74,6 +75,7 @@ def clear_memory_caches() -> None:
     _RA_RB_COEFF_CACHE.clear()
     _RA_RB_U_CACHE.clear()
     _RA_RB_RANGE_CACHE.clear()
+    _L2_COEFF_TENSOR_CACHE.clear()
 
 
 # =============================================================================
@@ -714,6 +716,304 @@ def quaternion_to_wigner_d_l2(q: torch.Tensor) -> torch.Tensor:
         torch.stack([d30, d31, d32, d33, d34], dim=-1),
         torch.stack([d40, d41, d42, d43, d44], dim=-1),
     ], dim=-2)
+
+    return D
+
+
+def _build_l2_coefficient_tensor() -> torch.Tensor:
+    """
+    Build the (5, 5, 4, 4, 4, 4) coefficient tensor for einsum-based l=2 computation.
+
+    The tensor C satisfies: D[i,j] = sum_{a,b,c,d} C[i,j,a,b,c,d] * q[a] * q[b] * q[c] * q[d]
+    where q = (w, x, y, z) at indices (0, 1, 2, 3).
+
+    Coefficients are symmetrized over all permutations of (a, b, c, d).
+    """
+    from itertools import permutations
+
+    sqrt3 = math.sqrt(3)
+    C = torch.zeros(5, 5, 4, 4, 4, 4, dtype=torch.float64)
+
+    def add_term(i, j, coeff, a, b, c, d):
+        """Add coefficient for monomial q[a]*q[b]*q[c]*q[d], symmetrized."""
+        perms = set(permutations([a, b, c, d]))
+        c_per_perm = coeff / len(perms)
+        for p in perms:
+            C[i, j, p[0], p[1], p[2], p[3]] += c_per_perm
+
+    W, X, Y, Z = 0, 1, 2, 3
+
+    # D[0,0] = w4 + y4 - x4 - z4 - 6*w2y2 + 6*x2z2
+    add_term(0, 0, 1, W, W, W, W)
+    add_term(0, 0, 1, Y, Y, Y, Y)
+    add_term(0, 0, -1, X, X, X, X)
+    add_term(0, 0, -1, Z, Z, Z, Z)
+    add_term(0, 0, -6, W, W, Y, Y)
+    add_term(0, 0, 6, X, X, Z, Z)
+
+    # D[0,1]
+    add_term(0, 1, 2, W, W, W, X)
+    add_term(0, 1, 2, W, X, X, X)
+    add_term(0, 1, -2, Y, Y, Y, Z)
+    add_term(0, 1, -2, Y, Z, Z, Z)
+    add_term(0, 1, -6, W, X, Y, Y)
+    add_term(0, 1, -6, W, X, Z, Z)
+    add_term(0, 1, 6, W, W, Y, Z)
+    add_term(0, 1, 6, X, X, Y, Z)
+
+    # D[0,2]
+    add_term(0, 2, 4*sqrt3, X, Y, Y, Z)
+    add_term(0, 2, 4*sqrt3, W, X, X, Y)
+    add_term(0, 2, -4*sqrt3, W, Y, Z, Z)
+    add_term(0, 2, -4*sqrt3, W, W, X, Z)
+
+    # D[0,3]
+    add_term(0, 3, -2, W, W, W, Z)
+    add_term(0, 3, -2, W, Z, Z, Z)
+    add_term(0, 3, -2, X, X, X, Y)
+    add_term(0, 3, -2, X, Y, Y, Y)
+    add_term(0, 3, 6, W, W, X, Y)
+    add_term(0, 3, 6, W, X, X, Z)
+    add_term(0, 3, 6, W, Y, Y, Z)
+    add_term(0, 3, 6, X, Y, Z, Z)
+
+    # D[0,4]
+    add_term(0, 4, 4, W, W, W, Y)
+    add_term(0, 4, -4, W, Y, Y, Y)
+    add_term(0, 4, -4, X, X, X, Z)
+    add_term(0, 4, 4, X, Z, Z, Z)
+
+    # D[1,0]
+    add_term(1, 0, -2, W, W, W, X)
+    add_term(1, 0, -2, W, X, X, X)
+    add_term(1, 0, -2, Y, Y, Y, Z)
+    add_term(1, 0, -2, Y, Z, Z, Z)
+    add_term(1, 0, 6, W, X, Y, Y)
+    add_term(1, 0, 6, W, X, Z, Z)
+    add_term(1, 0, 6, W, W, Y, Z)
+    add_term(1, 0, 6, X, X, Y, Z)
+
+    # D[1,1]
+    add_term(1, 1, 1, W, W, W, W)
+    add_term(1, 1, -1, Y, Y, Y, Y)
+    add_term(1, 1, -1, X, X, X, X)
+    add_term(1, 1, 1, Z, Z, Z, Z)
+    add_term(1, 1, 6, X, X, Y, Y)
+    add_term(1, 1, -6, W, W, Z, Z)
+
+    # D[1,2]
+    add_term(1, 2, -2*sqrt3, W, W, W, Z)
+    add_term(1, 2, 2*sqrt3, W, Z, Z, Z)
+    add_term(1, 2, -2*sqrt3, X, X, X, Y)
+    add_term(1, 2, 2*sqrt3, X, Y, Y, Y)
+    add_term(1, 2, 2*sqrt3, W, W, X, Y)
+    add_term(1, 2, 2*sqrt3, W, X, X, Z)
+    add_term(1, 2, -2*sqrt3, W, Y, Y, Z)
+    add_term(1, 2, -2*sqrt3, X, Y, Z, Z)
+
+    # D[1,3]
+    add_term(1, 3, 2, W, W, W, Y)
+    add_term(1, 3, 2, W, Y, Y, Y)
+    add_term(1, 3, -2, X, X, X, Z)
+    add_term(1, 3, -2, X, Z, Z, Z)
+    add_term(1, 3, 6, W, W, X, Z)
+    add_term(1, 3, -6, W, X, X, Y)
+    add_term(1, 3, 6, X, Y, Y, Z)
+    add_term(1, 3, -6, W, Y, Z, Z)
+
+    # D[1,4]
+    add_term(1, 4, -2, W, W, W, Z)
+    add_term(1, 4, 2, W, Z, Z, Z)
+    add_term(1, 4, -2, X, X, X, Y)
+    add_term(1, 4, 2, X, Y, Y, Y)
+    add_term(1, 4, -6, W, W, X, Y)
+    add_term(1, 4, -6, W, X, X, Z)
+    add_term(1, 4, 6, W, Y, Y, Z)
+    add_term(1, 4, 6, X, Y, Z, Z)
+
+    # D[2,0]
+    add_term(2, 0, 4*sqrt3, X, Y, Y, Z)
+    add_term(2, 0, -4*sqrt3, W, X, X, Y)
+    add_term(2, 0, 4*sqrt3, W, Y, Z, Z)
+    add_term(2, 0, -4*sqrt3, W, W, X, Z)
+
+    # D[2,1]
+    add_term(2, 1, 2*sqrt3, W, W, W, Z)
+    add_term(2, 1, -2*sqrt3, W, Z, Z, Z)
+    add_term(2, 1, -2*sqrt3, X, X, X, Y)
+    add_term(2, 1, 2*sqrt3, X, Y, Y, Y)
+    add_term(2, 1, 2*sqrt3, W, W, X, Y)
+    add_term(2, 1, -2*sqrt3, W, X, X, Z)
+    add_term(2, 1, 2*sqrt3, W, Y, Y, Z)
+    add_term(2, 1, -2*sqrt3, X, Y, Z, Z)
+
+    # D[2,2]
+    add_term(2, 2, 1, W, W, W, W)
+    add_term(2, 2, 1, X, X, X, X)
+    add_term(2, 2, 1, Y, Y, Y, Y)
+    add_term(2, 2, 1, Z, Z, Z, Z)
+    add_term(2, 2, -4, W, W, X, X)
+    add_term(2, 2, 2, W, W, Y, Y)
+    add_term(2, 2, -4, W, W, Z, Z)
+    add_term(2, 2, -4, X, X, Y, Y)
+    add_term(2, 2, 2, X, X, Z, Z)
+    add_term(2, 2, -4, Y, Y, Z, Z)
+
+    # D[2,3]
+    add_term(2, 3, -2*sqrt3, W, W, W, X)
+    add_term(2, 3, 2*sqrt3, W, X, X, X)
+    add_term(2, 3, 2*sqrt3, Y, Y, Y, Z)
+    add_term(2, 3, -2*sqrt3, Y, Z, Z, Z)
+    add_term(2, 3, -2*sqrt3, X, X, Y, Z)
+    add_term(2, 3, 2*sqrt3, W, W, Y, Z)
+    add_term(2, 3, -2*sqrt3, W, X, Y, Y)
+    add_term(2, 3, 2*sqrt3, W, X, Z, Z)
+
+    # D[2,4]
+    add_term(2, 4, 2*sqrt3, W, W, X, X)
+    add_term(2, 4, -2*sqrt3, W, W, Z, Z)
+    add_term(2, 4, -2*sqrt3, X, X, Y, Y)
+    add_term(2, 4, 2*sqrt3, Y, Y, Z, Z)
+    add_term(2, 4, -8*sqrt3, W, X, Y, Z)
+
+    # D[3,0]
+    add_term(3, 0, 2, W, W, W, Z)
+    add_term(3, 0, 2, W, Z, Z, Z)
+    add_term(3, 0, -2, X, X, X, Y)
+    add_term(3, 0, -2, X, Y, Y, Y)
+    add_term(3, 0, 6, W, W, X, Y)
+    add_term(3, 0, -6, W, X, X, Z)
+    add_term(3, 0, -6, W, Y, Y, Z)
+    add_term(3, 0, 6, X, Y, Z, Z)
+
+    # D[3,1]
+    add_term(3, 1, -2, W, W, W, Y)
+    add_term(3, 1, -2, W, Y, Y, Y)
+    add_term(3, 1, -2, X, X, X, Z)
+    add_term(3, 1, -2, X, Z, Z, Z)
+    add_term(3, 1, 6, W, W, X, Z)
+    add_term(3, 1, 6, W, X, X, Y)
+    add_term(3, 1, 6, X, Y, Y, Z)
+    add_term(3, 1, 6, W, Y, Z, Z)
+
+    # D[3,2]
+    add_term(3, 2, 2*sqrt3, W, W, W, X)
+    add_term(3, 2, -2*sqrt3, W, X, X, X)
+    add_term(3, 2, 2*sqrt3, Y, Y, Y, Z)
+    add_term(3, 2, -2*sqrt3, Y, Z, Z, Z)
+    add_term(3, 2, -2*sqrt3, X, X, Y, Z)
+    add_term(3, 2, 2*sqrt3, W, W, Y, Z)
+    add_term(3, 2, 2*sqrt3, W, X, Y, Y)
+    add_term(3, 2, -2*sqrt3, W, X, Z, Z)
+
+    # D[3,3]
+    add_term(3, 3, 1, W, W, W, W)
+    add_term(3, 3, 1, X, X, X, X)
+    add_term(3, 3, -1, Y, Y, Y, Y)
+    add_term(3, 3, -1, Z, Z, Z, Z)
+    add_term(3, 3, -6, W, W, X, X)
+    add_term(3, 3, 6, Y, Y, Z, Z)
+
+    # D[3,4]
+    add_term(3, 4, -2, W, W, W, X)
+    add_term(3, 4, 2, W, X, X, X)
+    add_term(3, 4, -2, Y, Y, Y, Z)
+    add_term(3, 4, 2, Y, Z, Z, Z)
+    add_term(3, 4, 6, W, X, Y, Y)
+    add_term(3, 4, -6, W, X, Z, Z)
+    add_term(3, 4, 6, W, W, Y, Z)
+    add_term(3, 4, -6, X, X, Y, Z)
+
+    # D[4,0]
+    add_term(4, 0, -4, W, W, W, Y)
+    add_term(4, 0, 4, W, Y, Y, Y)
+    add_term(4, 0, -4, X, X, X, Z)
+    add_term(4, 0, 4, X, Z, Z, Z)
+
+    # D[4,1]
+    add_term(4, 1, 2, W, W, W, Z)
+    add_term(4, 1, -2, W, Z, Z, Z)
+    add_term(4, 1, -2, X, X, X, Y)
+    add_term(4, 1, 2, X, Y, Y, Y)
+    add_term(4, 1, -6, W, W, X, Y)
+    add_term(4, 1, -6, W, Y, Y, Z)
+    add_term(4, 1, 6, W, X, X, Z)
+    add_term(4, 1, 6, X, Y, Z, Z)
+
+    # D[4,2]
+    add_term(4, 2, 2*sqrt3, W, W, X, X)
+    add_term(4, 2, -2*sqrt3, W, W, Z, Z)
+    add_term(4, 2, -2*sqrt3, X, X, Y, Y)
+    add_term(4, 2, 2*sqrt3, Y, Y, Z, Z)
+    add_term(4, 2, 8*sqrt3, W, X, Y, Z)
+
+    # D[4,3]
+    add_term(4, 3, 2, W, W, W, X)
+    add_term(4, 3, -2, W, X, X, X)
+    add_term(4, 3, -2, Y, Y, Y, Z)
+    add_term(4, 3, 2, Y, Z, Z, Z)
+    add_term(4, 3, 6, W, X, Z, Z)
+    add_term(4, 3, -6, W, X, Y, Y)
+    add_term(4, 3, 6, W, W, Y, Z)
+    add_term(4, 3, -6, X, X, Y, Z)
+
+    # D[4,4]
+    add_term(4, 4, 1, W, W, W, W)
+    add_term(4, 4, 1, X, X, X, X)
+    add_term(4, 4, 1, Y, Y, Y, Y)
+    add_term(4, 4, 1, Z, Z, Z, Z)
+    add_term(4, 4, -6, W, W, Y, Y)
+    add_term(4, 4, -6, X, X, Z, Z)
+
+    return C
+
+
+def _get_l2_coefficient_tensor(dtype: torch.dtype, device: torch.device) -> torch.Tensor:
+    """Get cached l=2 coefficient tensor for einsum computation."""
+    key = (dtype, device)
+    if key not in _L2_COEFF_TENSOR_CACHE:
+        _L2_COEFF_TENSOR_CACHE[key] = _build_l2_coefficient_tensor().to(dtype=dtype, device=device)
+    return _L2_COEFF_TENSOR_CACHE[key]
+
+
+def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion to 5x5 l=2 Wigner D matrix using einsum tensor contraction.
+
+    Expresses D as a tensor contraction:
+        D[i,j] = C[i,j,a,b,c,d] * q[a] * q[b] * q[c] * q[d]
+
+    where C is a precomputed (5,5,4,4,4,4) coefficient tensor.
+
+    Performance characteristics:
+    - **GPU without torch.compile**: ~20x faster than stack-based approach
+      (0.32ms vs 6.97ms at N=1000)
+    - **GPU with torch.compile**: Roughly equal to stack-based (~0.3ms)
+    - **CPU without torch.compile**: ~2x faster than stack-based
+    - **CPU with torch.compile**: ~7x slower than stack-based (0.22ms vs 1.8ms)
+
+    Use this method when:
+    - Running on GPU without torch.compile (development, debugging)
+    - torch.compile is not available or causing issues
+
+    Use quaternion_to_wigner_d_l2 (stack-based) when:
+    - Running with torch.compile on either CPU or GPU
+    - Memory is constrained (stack-based has smaller coefficient cache)
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Wigner D matrices of shape (N, 5, 5) for l=2
+    """
+    C = _get_l2_coefficient_tensor(q.dtype, q.device)
+
+    # Build q⊗q, then (q⊗q)⊗(q⊗q) = q⊗q⊗q⊗q
+    q2 = q.unsqueeze(-1) * q.unsqueeze(-2)  # (N, 4, 4)
+    q4 = q2.unsqueeze(-1).unsqueeze(-1) * q2.unsqueeze(-3).unsqueeze(-3)  # (N, 4, 4, 4, 4)
+
+    # Contract with coefficient tensor
+    D = torch.einsum('nabcd,ijabcd->nij', q4, C)
 
     return D
 
