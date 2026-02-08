@@ -629,9 +629,10 @@ def quaternion_to_wigner_d_l2(q: torch.Tensor) -> torch.Tensor:
     """
     Convert quaternion directly to 5x5 l=2 Wigner D matrix.
 
-    Uses degree-4 polynomial formulas in quaternion components (w,x,y,z),
-    avoiding the Cayley-Hamilton overhead (bmm, sqrt, torch.where, sin/cos).
-    This provides faster backward pass since polynomials have simple gradients.
+    Uses degree-4 polynomial formulas in quaternion components (w,x,y,z).
+    The matrix is built using torch.stack to minimize autograd graph nodes,
+    which significantly speeds up the backward pass compared to indexed
+    assignment (D[:, i, j] = ...).
 
     Output matches the Euler-aligned basis of _cayley_hamilton_exp_l2.
 
@@ -642,117 +643,77 @@ def quaternion_to_wigner_d_l2(q: torch.Tensor) -> torch.Tensor:
         Wigner D matrices of shape (N, 5, 5) for l=2
     """
     w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
-    N = q.shape[0]
-    dtype = q.dtype
-    device = q.device
 
     # Precompute powers
-    w2, x2, y2, z2 = w * w, x * x, y * y, z * z
-    w3, x3, y3, z3 = w2 * w, x2 * x, y2 * y, z2 * z
-    w4, x4, y4, z4 = w2 * w2, x2 * x2, y2 * y2, z2 * z2
+    w2, x2, y2, z2 = w*w, x*x, y*y, z*z
+    w4, x4, y4, z4 = w2*w2, x2*x2, y2*y2, z2*z2
 
-    # Precompute mixed terms (degree 4)
-    w2x2 = w2 * x2
-    w2y2 = w2 * y2
-    w2z2 = w2 * z2
-    x2y2 = x2 * y2
-    x2z2 = x2 * z2
-    y2z2 = y2 * z2
+    # Degree-2 mixed
+    w2x2, w2y2, w2z2 = w2*x2, w2*y2, w2*z2
+    x2y2, x2z2, y2z2 = x2*y2, x2*z2, y2*z2
 
-    # Precompute degree-3 terms with single factors
-    w3x, w3y, w3z = w3 * x, w3 * y, w3 * z
-    wx3, wy3, wz3 = w * x3, w * y3, w * z3
-    x3y, x3z = x3 * y, x3 * z
-    xy3, xz3 = x * y3, x * z3
-    y3z, yz3 = y3 * z, y * z3
+    # Degree-3 terms
+    w3, x3, y3, z3 = w2*w, x2*x, y2*y, z2*z
+    w3x, w3y, w3z = w3*x, w3*y, w3*z
+    wx3, wy3, wz3 = w*x3, w*y3, w*z3
+    x3y, x3z, xy3, xz3 = x3*y, x3*z, x*y3, x*z3
+    y3z, yz3 = y3*z, y*z3
 
-    # Precompute degree-2 mixed terms for degree-4 products
-    w2xy, w2xz, w2yz = w2 * x * y, w2 * x * z, w2 * y * z
-    wx2y, wx2z = w * x2 * y, w * x2 * z
-    wxy2, wxz2 = w * x * y2, w * x * z2
-    wy2z, wyz2 = w * y2 * z, w * y * z2
-    x2yz, xy2z, xyz2 = x2 * y * z, x * y2 * z, x * y * z2
-    wxyz = w * x * y * z
+    # Degree-4 mixed terms
+    w2xy, w2xz, w2yz = w2*x*y, w2*x*z, w2*y*z
+    wx2y, wx2z = w*x2*y, w*x2*z
+    wxy2, wxz2 = w*x*y2, w*x*z2
+    wy2z, wyz2 = w*y2*z, w*y*z2
+    x2yz, xy2z, xyz2 = x2*y*z, x*y2*z, x*y*z2
+    wxyz = w*x*y*z
 
     sqrt3 = 1.7320508075688772  # math.sqrt(3)
 
-    # Build the 5x5 Wigner D matrix using derived polynomial formulas
-    D = torch.zeros(N, 5, 5, dtype=dtype, device=device)
+    # Build all 25 elements as separate tensors
+    # Row 0
+    d00 = w4 + y4 - x4 - z4 - 6*w2y2 + 6*x2z2
+    d01 = 2*w3x + 2*wx3 - 2*y3z - 2*yz3 - 6*wxy2 - 6*wxz2 + 6*w2yz + 6*x2yz
+    d02 = 4*sqrt3 * (xy2z + wx2y - wyz2 - w2xz)
+    d03 = -2*w3z - 2*wz3 - 2*x3y - 2*xy3 + 6*w2xy + 6*wx2z + 6*wy2z + 6*xyz2
+    d04 = 4 * (w3y - wy3 - x3z + xz3)
 
-    # D[0,0] = w4 + y4 - x4 - z4 - 6*w2y2 + 6*x2z2
-    D[:, 0, 0] = w4 + y4 - x4 - z4 - 6 * w2y2 + 6 * x2z2
+    # Row 1
+    d10 = -2*w3x - 2*wx3 - 2*y3z - 2*yz3 + 6*wxy2 + 6*wxz2 + 6*w2yz + 6*x2yz
+    d11 = w4 - y4 - x4 + z4 + 6*x2y2 - 6*w2z2
+    d12 = 2*sqrt3 * (-w3z + wz3 - x3y + xy3 + w2xy + wx2z - wy2z - xyz2)
+    d13 = 2*w3y + 2*wy3 - 2*x3z - 2*xz3 + 6*w2xz - 6*wx2y + 6*xy2z - 6*wyz2
+    d14 = -2*w3z + 2*wz3 - 2*x3y + 2*xy3 - 6*w2xy - 6*wx2z + 6*wy2z + 6*xyz2
 
-    # D[0,1] = 2*w3x + 2*wx3 - 2*y3z - 2*yz3 - 6*wxy2 - 6*wxz2 + 6*w2yz + 6*x2yz
-    D[:, 0, 1] = 2 * w3x + 2 * wx3 - 2 * y3z - 2 * yz3 - 6 * wxy2 - 6 * wxz2 + 6 * w2yz + 6 * x2yz
+    # Row 2
+    d20 = 4*sqrt3 * (xy2z - wx2y + wyz2 - w2xz)
+    d21 = 2*sqrt3 * (w3z - wz3 - x3y + xy3 + w2xy - wx2z + wy2z - xyz2)
+    d22 = w4 + x4 + y4 + z4 - 4*w2x2 + 2*w2y2 - 4*w2z2 - 4*x2y2 + 2*x2z2 - 4*y2z2
+    d23 = 2*sqrt3 * (-w3x + wx3 + y3z - yz3 - x2yz + w2yz - wxy2 + wxz2)
+    d24 = 2*sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 - 4*wxyz)
 
-    # D[0,2] = 4*sqrt3 * (xy2z + wx2y - wyz2 - w2xz)
-    D[:, 0, 2] = 4 * sqrt3 * (xy2z + wx2y - wyz2 - w2xz)
+    # Row 3
+    d30 = 2*w3z + 2*wz3 - 2*x3y - 2*xy3 + 6*w2xy - 6*wx2z - 6*wy2z + 6*xyz2
+    d31 = -2*w3y - 2*wy3 - 2*x3z - 2*xz3 + 6*w2xz + 6*wx2y + 6*xy2z + 6*wyz2
+    d32 = 2*sqrt3 * (w3x - wx3 + y3z - yz3 - x2yz + w2yz + wxy2 - wxz2)
+    d33 = w4 + x4 - y4 - z4 - 6*w2x2 + 6*y2z2
+    d34 = -2*w3x + 2*wx3 - 2*y3z + 2*yz3 + 6*wxy2 - 6*wxz2 + 6*w2yz - 6*x2yz
 
-    # D[0,3] = -2*w3z - 2*wz3 - 2*x3y - 2*xy3 + 6*w2xy + 6*wx2z + 6*wy2z + 6*xyz2
-    D[:, 0, 3] = -2 * w3z - 2 * wz3 - 2 * x3y - 2 * xy3 + 6 * w2xy + 6 * wx2z + 6 * wy2z + 6 * xyz2
+    # Row 4
+    d40 = 4 * (-w3y + wy3 - x3z + xz3)
+    d41 = 2*w3z - 2*wz3 - 2*x3y + 2*xy3 - 6*w2xy - 6*wy2z + 6*wx2z + 6*xyz2
+    d42 = 2*sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 + 4*wxyz)
+    d43 = 2*w3x - 2*wx3 - 2*y3z + 2*yz3 + 6*wxz2 - 6*wxy2 + 6*w2yz - 6*x2yz
+    d44 = w4 + x4 + y4 + z4 - 6*w2y2 - 6*x2z2
 
-    # D[0,4] = 4 * (w3y - wy3 - x3z + xz3)
-    D[:, 0, 4] = 4 * (w3y - wy3 - x3z + xz3)
-
-    # D[1,0] = -2*w3x - 2*wx3 - 2*y3z - 2*yz3 + 6*wxy2 + 6*wxz2 + 6*w2yz + 6*x2yz
-    D[:, 1, 0] = -2 * w3x - 2 * wx3 - 2 * y3z - 2 * yz3 + 6 * wxy2 + 6 * wxz2 + 6 * w2yz + 6 * x2yz
-
-    # D[1,1] = w4 - y4 - x4 + z4 + 6*x2y2 - 6*w2z2
-    D[:, 1, 1] = w4 - y4 - x4 + z4 + 6 * x2y2 - 6 * w2z2
-
-    # D[1,2] = 2*sqrt3 * (-w3z + wz3 - x3y + xy3 + w2xy + wx2z - wy2z - xyz2)
-    D[:, 1, 2] = 2 * sqrt3 * (-w3z + wz3 - x3y + xy3 + w2xy + wx2z - wy2z - xyz2)
-
-    # D[1,3] = 2*w3y + 2*wy3 - 2*x3z - 2*xz3 + 6*w2xz - 6*wx2y + 6*xy2z - 6*wyz2
-    D[:, 1, 3] = 2 * w3y + 2 * wy3 - 2 * x3z - 2 * xz3 + 6 * w2xz - 6 * wx2y + 6 * xy2z - 6 * wyz2
-
-    # D[1,4] = -2*w3z + 2*wz3 - 2*x3y + 2*xy3 - 6*w2xy - 6*wx2z + 6*wy2z + 6*xyz2
-    D[:, 1, 4] = -2 * w3z + 2 * wz3 - 2 * x3y + 2 * xy3 - 6 * w2xy - 6 * wx2z + 6 * wy2z + 6 * xyz2
-
-    # D[2,0] = 4*sqrt3 * (xy2z - wx2y + wyz2 - w2xz)
-    D[:, 2, 0] = 4 * sqrt3 * (xy2z - wx2y + wyz2 - w2xz)
-
-    # D[2,1] = 2*sqrt3 * (w3z - wz3 - x3y + xy3 + w2xy - wx2z + wy2z - xyz2)
-    D[:, 2, 1] = 2 * sqrt3 * (w3z - wz3 - x3y + xy3 + w2xy - wx2z + wy2z - xyz2)
-
-    # D[2,2] = w4 + x4 + y4 + z4 - 4*w2x2 + 2*w2y2 - 4*w2z2 - 4*x2y2 + 2*x2z2 - 4*y2z2
-    D[:, 2, 2] = w4 + x4 + y4 + z4 - 4 * w2x2 + 2 * w2y2 - 4 * w2z2 - 4 * x2y2 + 2 * x2z2 - 4 * y2z2
-
-    # D[2,3] = 2*sqrt3 * (-w3x + wx3 + y3z - yz3 - x2yz + w2yz - wxy2 + wxz2)
-    D[:, 2, 3] = 2 * sqrt3 * (-w3x + wx3 + y3z - yz3 - x2yz + w2yz - wxy2 + wxz2)
-
-    # D[2,4] = 2*sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 - 4*wxyz)
-    D[:, 2, 4] = 2 * sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 - 4 * wxyz)
-
-    # D[3,0] = 2*w3z + 2*wz3 - 2*x3y - 2*xy3 + 6*w2xy - 6*wx2z - 6*wy2z + 6*xyz2
-    D[:, 3, 0] = 2 * w3z + 2 * wz3 - 2 * x3y - 2 * xy3 + 6 * w2xy - 6 * wx2z - 6 * wy2z + 6 * xyz2
-
-    # D[3,1] = -2*w3y - 2*wy3 - 2*x3z - 2*xz3 + 6*w2xz + 6*wx2y + 6*xy2z + 6*wyz2
-    D[:, 3, 1] = -2 * w3y - 2 * wy3 - 2 * x3z - 2 * xz3 + 6 * w2xz + 6 * wx2y + 6 * xy2z + 6 * wyz2
-
-    # D[3,2] = 2*sqrt3 * (w3x - wx3 + y3z - yz3 - x2yz + w2yz + wxy2 - wxz2)
-    D[:, 3, 2] = 2 * sqrt3 * (w3x - wx3 + y3z - yz3 - x2yz + w2yz + wxy2 - wxz2)
-
-    # D[3,3] = w4 + x4 - y4 - z4 - 6*w2x2 + 6*y2z2
-    D[:, 3, 3] = w4 + x4 - y4 - z4 - 6 * w2x2 + 6 * y2z2
-
-    # D[3,4] = -2*w3x + 2*wx3 - 2*y3z + 2*yz3 + 6*wxy2 - 6*wxz2 + 6*w2yz - 6*x2yz
-    D[:, 3, 4] = -2 * w3x + 2 * wx3 - 2 * y3z + 2 * yz3 + 6 * wxy2 - 6 * wxz2 + 6 * w2yz - 6 * x2yz
-
-    # D[4,0] = 4 * (-w3y + wy3 - x3z + xz3)
-    D[:, 4, 0] = 4 * (-w3y + wy3 - x3z + xz3)
-
-    # D[4,1] = 2*w3z - 2*wz3 - 2*x3y + 2*xy3 - 6*w2xy - 6*wy2z + 6*wx2z + 6*xyz2
-    D[:, 4, 1] = 2 * w3z - 2 * wz3 - 2 * x3y + 2 * xy3 - 6 * w2xy - 6 * wy2z + 6 * wx2z + 6 * xyz2
-
-    # D[4,2] = 2*sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 + 4*wxyz)
-    D[:, 4, 2] = 2 * sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 + 4 * wxyz)
-
-    # D[4,3] = 2*w3x - 2*wx3 - 2*y3z + 2*yz3 + 6*wxz2 - 6*wxy2 + 6*w2yz - 6*x2yz
-    D[:, 4, 3] = 2 * w3x - 2 * wx3 - 2 * y3z + 2 * yz3 + 6 * wxz2 - 6 * wxy2 + 6 * w2yz - 6 * x2yz
-
-    # D[4,4] = w4 + x4 + y4 + z4 - 6*w2y2 - 6*x2z2
-    D[:, 4, 4] = w4 + x4 + y4 + z4 - 6 * w2y2 - 6 * x2z2
+    # Stack into matrix - builds the whole matrix in one operation
+    # This minimizes autograd graph nodes compared to indexed assignment
+    D = torch.stack([
+        torch.stack([d00, d01, d02, d03, d04], dim=-1),
+        torch.stack([d10, d11, d12, d13, d14], dim=-1),
+        torch.stack([d20, d21, d22, d23, d24], dim=-1),
+        torch.stack([d30, d31, d32, d33, d34], dim=-1),
+        torch.stack([d40, d41, d42, d43, d44], dim=-1),
+    ], dim=-2)
 
     return D
 
