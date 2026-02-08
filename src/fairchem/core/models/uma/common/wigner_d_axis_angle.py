@@ -889,7 +889,8 @@ def axis_angle_wigner_polynomial(
     on GPU for lmax >= 4.
 
     Uses the same SLERP-blended two-chart quaternion approach as axis_angle_wigner
-    to handle singularities correctly.
+    to handle singularities correctly. Combines edge→Y and gamma rotations into
+    a single quaternion before computing the Wigner D.
 
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
@@ -912,11 +913,20 @@ def axis_angle_wigner_polynomial(
     # Normalize edges
     edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
 
-    # Compute quaternion (edge → +Y) using SLERP-blended two-chart approach
-    q = quaternion_edge_to_y_stable(edge_normalized)
+    # Compute gamma if not provided
+    if gamma is None:
+        gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
 
-    # Compute Wigner D using Ra/Rb polynomial (without gamma)
-    D = wigner_d_from_quaternion_polynomial(q, lmax)
+    # Compute quaternion (edge → +Y) using SLERP-blended two-chart approach
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Create Y-rotation quaternion and combine with edge→Y
+    # Combined rotation: first edge→Y, then rotate about Y by gamma
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    # Compute single Wigner D from combined quaternion using Ra/Rb polynomial
+    D = wigner_d_from_quaternion_polynomial(q_combined, lmax)
 
     # Transform l=1 block from m-ordering (y,z,x) to Cartesian (x,y,z)
     # This matches the convention used by wigner_d_from_axis_angle_batched
@@ -934,17 +944,7 @@ def axis_angle_wigner_polynomial(
         D = D.clone()  # Avoid modifying the original
         D[:, 1:4, 1:4] = D_l1_cartesian
 
-    # Compute gamma if not provided
-    if gamma is None:
-        gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
-
-    # Apply gamma Y-rotation BEFORE the Euler transform
-    # This matches axis_angle_wigner: D = euler_transform(D_y(gamma) @ D_rodrigues)
-    generators = get_so3_generators(lmax, dtype, device)
-    D_y_gamma = wigner_d_y_rotation_batched(gamma, generators, lmax)
-    D = bmm_block_diagonal(D_y_gamma, D, lmax)
-
-    # Apply Euler-matching basis transformation for l >= 2 AFTER gamma
+    # Apply Euler-matching basis transformation for l >= 2
     if lmax >= 2:
         U_list = get_euler_transforms(lmax, dtype, device)
         D = apply_euler_transform(D, lmax, U_list)
@@ -1370,15 +1370,8 @@ def axis_angle_wigner(
     The output uses the same real spherical harmonic basis as the Euler-based
     implementation (rotation.py), making this a drop-in replacement.
 
-    Pipeline:
-    1. Normalize edges
-    2. Compute quaternion (edge → +Y) using two charts with SLERP blending
-    3. Extract axis-angle
-    4. Compute D_rodrigues via matrix_exp
-    5. Compute gamma (random by default, or -atan2(ex, ez) for Euler matching)
-    6. Apply D_y(gamma) roll correction
-    7. Apply Euler-matching basis transformation for l >= 2
-    8. Return D = D_y(gamma) @ D_rodrigues (transformed)
+    Combines edge→Y and gamma rotations into a single quaternion before computing
+    the Wigner D, avoiding the overhead of computing two separate Wigner D matrices.
 
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
@@ -1399,26 +1392,14 @@ def axis_angle_wigner(
     if edge_distance_vec.dim() == 1:
         edge_distance_vec = edge_distance_vec.unsqueeze(0)
 
+    N = edge_distance_vec.shape[0]
     device = edge_distance_vec.device
     dtype = edge_distance_vec.dtype
 
     # Step 1: Normalize edges
     edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
 
-    # Step 2: Get generators (cached)
-    generators = get_so3_generators(lmax, dtype, device)
-
-    # Step 3: Compute Rodrigues quaternion (edge → +Y)
-    # This has a pole only at -Y, not at +Y like the Euler approach
-    q = quaternion_edge_to_y_stable(edge_normalized)
-
-    # Step 4: Extract axis-angle
-    axis, angle = quaternion_to_axis_angle(q)
-
-    # Step 5: Compute D_rodrigues via matrix_exp
-    D_rodrigues = wigner_d_from_axis_angle_batched(axis, angle, generators, lmax)
-
-    # Step 6: Compute gamma if not provided
+    # Step 2: Compute gamma if not provided
     if gamma is None:
         if use_euler_gamma:
             # Use atan2-based gamma to exactly match Euler code output
@@ -1426,21 +1407,31 @@ def axis_angle_wigner(
             gamma = compute_euler_matching_gamma(edge_normalized)
         else:
             # Random gamma for SO(2) equivariance (default for training)
-            N = edge_normalized.shape[0]
             gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
 
-    # Step 7: Compute D_y(gamma) roll correction
-    D_y_gamma = wigner_d_y_rotation_batched(gamma, generators, lmax)
+    # Step 3: Compute quaternion (edge → +Y) using SLERP-blended two-chart approach
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
 
-    # Step 8: Combine: D = D_y(gamma) @ D_rodrigues (block-wise for efficiency)
-    D = bmm_block_diagonal(D_y_gamma, D_rodrigues, lmax)
+    # Step 4: Create Y-rotation quaternion and combine with edge→Y
+    # Combined rotation: first edge→Y, then rotate about Y by gamma
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
 
-    # Step 9: Apply Euler-matching basis transformation for l >= 2
+    # Step 5: Extract axis-angle from combined quaternion
+    axis, angle = quaternion_to_axis_angle(q_combined)
+
+    # Step 6: Get generators (cached)
+    generators = get_so3_generators(lmax, dtype, device)
+
+    # Step 7: Compute single Wigner D from combined rotation via matrix_exp
+    D = wigner_d_from_axis_angle_batched(axis, angle, generators, lmax)
+
+    # Step 8: Apply Euler-matching basis transformation for l >= 2
     if lmax >= 2:
         U_list = get_euler_transforms(lmax, dtype, device)
         D = apply_euler_transform(D, lmax, U_list)
 
-    # Step 10: Inverse is transpose (orthogonal matrix)
+    # Step 9: Inverse is transpose (orthogonal matrix)
     D_inv = D.transpose(1, 2).contiguous()
 
     return D, D_inv

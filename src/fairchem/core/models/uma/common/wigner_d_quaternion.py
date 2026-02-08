@@ -1796,7 +1796,12 @@ def quaternion_wigner(
     Compute Wigner D matrices from edge vectors using quaternions.
 
     This is the main entry point for quaternion-based Wigner D computation.
+    Matches the convention of axis_angle_wigner and Euler-based rotation.py.
     Precomputed coefficients are cached automatically.
+
+    The gamma rotation is combined with the edge→Y quaternion before computing
+    the Wigner D, avoiding the overhead of computing two separate Wigner D
+    matrices and multiplying them.
 
     Args:
         edge_distance_vec: Edge distance vectors of shape (N, 3)
@@ -1812,11 +1817,66 @@ def quaternion_wigner(
 
         This matches the return convention of the Euler-based rotation.py.
     """
+    # Import axis_angle helpers (they provide the correct quaternion and transforms)
+    from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+        quaternion_edge_to_y_stable,
+        quaternion_multiply,
+        quaternion_y_rotation,
+        get_euler_transforms,
+        apply_euler_transform,
+    )
+
+    # Handle single vector input
+    if edge_distance_vec.dim() == 1:
+        edge_distance_vec = edge_distance_vec.unsqueeze(0)
+
+    N = edge_distance_vec.shape[0]
     dtype = edge_distance_vec.dtype
     device = edge_distance_vec.device
 
+    # Step 1: Normalize edges
+    edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
+
+    # Step 2: Compute gamma if not provided
+    if gamma is None:
+        gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+
+    # Step 3: Compute quaternion (edge → +Y) using SLERP-blended two-chart approach
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Step 4: Create Y-rotation quaternion and combine with edge→Y
+    # Combined rotation: first edge→Y, then rotate about Y by gamma
+    # q_combined = q_gamma * q_edge_to_y
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    # Step 5: Get cached coefficients
     coeffs, U_blocks = _get_cached_coefficients(lmax, dtype, device)
 
-    return get_wigner_from_edge_vectors(
-        edge_distance_vec, coeffs, U_blocks, gamma=gamma
-    )
+    # Step 6: Compute single Wigner D from combined quaternion using Ra/Rb polynomial
+    D = compute_wigner_d_from_quaternion(q_combined, coeffs, U_blocks)
+
+    # Step 7: Transform l=1 block from m-ordering (y,z,x) to Cartesian (x,y,z)
+    if lmax >= 1:
+        # P transforms from m-ordering to Cartesian basis
+        P = torch.tensor([
+            [0., 0., 1.],  # x from position 2
+            [1., 0., 0.],  # y from position 0
+            [0., 1., 0.]   # z from position 1
+        ], dtype=dtype, device=device)
+
+        # Extract l=1 block (indices 1:4), transform, and put back
+        D_l1 = D[:, 1:4, 1:4]
+        D_l1_cartesian = torch.einsum('ij,njk,kl->nil', P, D_l1, P.T)
+        D = D.clone()
+        D[:, 1:4, 1:4] = D_l1_cartesian
+
+    # Step 8: Apply Euler-matching basis transformation for l >= 2
+    if lmax >= 2:
+        U_list = get_euler_transforms(lmax, dtype, device)
+        D = apply_euler_transform(D, lmax, U_list)
+
+    # Step 9: Return D and its inverse (transpose for orthogonal matrices)
+    D_inv = D.transpose(1, 2).contiguous()
+
+    return D, D_inv
