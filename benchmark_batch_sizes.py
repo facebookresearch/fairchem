@@ -147,8 +147,9 @@ def main():
         return axis_angle_wigner(edges, lmax, generators=generators)
 
     # Compile functions once
-    euler_forward_compiled = torch.compile(euler_forward)
-    axis_forward_compiled = torch.compile(axis_forward)
+    # Use aot_eager backend because inductor has issues with complex numbers (Ra/Rb for l>=3)
+    euler_forward_compiled = torch.compile(euler_forward, backend="aot_eager")
+    axis_forward_compiled = torch.compile(axis_forward, backend="aot_eager")
 
     # Correctness checks
     print("CORRECTNESS CHECKS")
@@ -219,14 +220,14 @@ def main():
         edges_base = torch.randn(n_edges, 3, dtype=dtype, device=device)
         edges_base = torch.nn.functional.normalize(edges_base, dim=-1)
 
-        # Euler (using pre-compiled function)
+        # Euler (using aot_eager compiled function)
         def euler_bwd_fn():
             edges = edges_base.clone().requires_grad_(True)
             W = euler_forward_compiled(edges)
             torch.autograd.grad(W.sum(), edges)
         t_euler = benchmark_fn(euler_bwd_fn, n_warmup, n_runs, device)
 
-        # Axis-Angle (using pre-compiled function)
+        # Axis-Angle (using aot_eager compiled function)
         def axis_bwd_fn():
             edges = edges_base.clone().requires_grad_(True)
             W, _ = axis_forward_compiled(edges)
