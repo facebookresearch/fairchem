@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from fairchem.core.models.uma.common.rotation import init_edge_rot_euler_angles, eulers_to_wigner
-from fairchem.core.models.uma.common.wigner_d_axis_angle import axis_angle_wigner
+from fairchem.core.models.uma.common.wigner_d_axis_angle import axis_angle_wigner_hybrid as axis_angle_wigner
 
 
 def parse_args():
@@ -114,7 +114,7 @@ def main():
         n_warmup = 3
         n_runs = 5
     else:
-        batch_sizes = [100, 500, 1000, 2000, 5000, 10000, 20000, 50000]
+        batch_sizes = [100, 500, 1000, 2000, 5000] + list(range(10000, 150000, 10000)) + list(range(200000,600000,100000))
         n_warmup = 5
         n_runs = 20
 
@@ -172,12 +172,12 @@ def main():
         def euler_fn():
             angles = init_edge_rot_euler_angles(edges)
             return eulers_to_wigner(angles, 0, lmax, Jd)
-        t_euler = benchmark_fn(euler_fn, n_warmup, n_runs, device)
+        t_euler = benchmark_fn(torch.compile(euler_fn), n_warmup, n_runs, device)
 
         # Axis-Angle
         def axis_fn():
             return axis_angle_wigner(edges, lmax, use_euler_gamma=True)
-        t_axis = benchmark_fn(axis_fn, n_warmup, n_runs, device)
+        t_axis = benchmark_fn(torch.compile(axis_fn), n_warmup, n_runs, device)
 
         ratio = t_euler / t_axis if t_axis > 0 else float('inf')
         euler_per_edge = t_euler / n_edges * 1000  # µs
