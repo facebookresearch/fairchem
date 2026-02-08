@@ -1449,9 +1449,9 @@ def wigner_d_from_axis_angle_hybrid(
             # The result is already in Cartesian (x,y,z) basis - no permutation needed
             D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
         elif ell == 2:
-            # Direct quaternion to Wigner D l=2 (faster backward than Cayley-Hamilton)
-            # Uses degree-4 polynomial formulas, avoiding bmm/sqrt/where overhead
-            D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2(q)
+            # Direct quaternion to Wigner D l=2 using einsum tensor contraction
+            # ~20x faster on GPU without torch.compile, equal with compile
+            D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
 
         block_start = block_end
 
@@ -1598,6 +1598,7 @@ def axis_angle_wigner(
     lmax: int,
     gamma: Optional[torch.Tensor] = None,
     use_euler_gamma: bool = False,
+    generators: Optional[dict[str, list[torch.Tensor]]] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D from edge vectors using axis-angle representation.
@@ -1624,6 +1625,10 @@ def axis_angle_wigner(
         use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
                of random gamma. This makes output exactly match Euler code.
                Note: this introduces gradient singularity at edge = +Y.
+        generators: Optional pre-computed SO(3) generators from get_so3_generators().
+               If None, generators are fetched internally (may cause torch.compile
+               graph breaks). For optimal torch.compile performance, pre-compute
+               generators and pass them here.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
@@ -1663,9 +1668,10 @@ def axis_angle_wigner(
     # Step 5: Extract axis-angle from combined quaternion
     axis, angle = quaternion_to_axis_angle(q_combined)
 
-    # Step 6: Get Euler-aligned generators (cached)
+    # Step 6: Get Euler-aligned generators (cached or passed in)
     # These have the Euler transform folded in for l >= 2
-    generators = get_so3_generators(lmax, dtype, device)
+    if generators is None:
+        generators = get_so3_generators(lmax, dtype, device)
 
     # Step 7: Compute single Wigner D from combined rotation via matrix_exp
     # Output is directly in Euler basis thanks to Euler-aligned generators
@@ -1682,6 +1688,7 @@ def axis_angle_wigner_hybrid(
     lmax: int,
     gamma: Optional[torch.Tensor] = None,
     use_euler_gamma: bool = False,
+    generators: Optional[dict[str, list[torch.Tensor]]] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D using hybrid approach (Rodrigues/Cayley-Hamilton + Ra/Rb).
@@ -1706,6 +1713,10 @@ def axis_angle_wigner_hybrid(
                If None, uses random gamma (for SO(2) equivariance during training).
         use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
                of random gamma. This makes output exactly match Euler code.
+        generators: Optional pre-computed SO(3) generators from get_so3_generators().
+               If None, generators are fetched internally (may cause torch.compile
+               graph breaks). For optimal torch.compile performance, pre-compute
+               generators and pass them here.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
@@ -1741,9 +1752,10 @@ def axis_angle_wigner_hybrid(
     # Step 5: Extract axis-angle from combined quaternion (needed for l=2)
     axis, angle = quaternion_to_axis_angle(q_combined)
 
-    # Step 6: Get Euler-aligned generators (cached)
+    # Step 6: Get Euler-aligned generators (cached or passed in)
     # These have the Euler transform folded in for l=2
-    generators = get_so3_generators(lmax, dtype, device)
+    if generators is None:
+        generators = get_so3_generators(lmax, dtype, device)
 
     # Step 7: Compute Wigner D using hybrid approach
     D = wigner_d_from_axis_angle_hybrid(axis, angle, q_combined, generators, lmax)
