@@ -13,7 +13,8 @@ Key features:
 - Optional Ra/Rb polynomial mode for faster GPU computation
 
 The output uses the same real spherical harmonic basis as the Euler-based
-implementation, achieved via an automatic basis transformation for l >= 2.
+implementation. The Euler-matching basis transformation for l >= 2 is folded
+into the SO(3) generators, so no separate transformation step is needed.
 This makes axis_angle_wigner() a drop-in replacement for the Euler code.
 
 The implementation:
@@ -23,8 +24,8 @@ The implementation:
    - SLERP blend in ey ∈ [-0.9, -0.7] for C-infinity continuity
 2. Converts the quaternion to axis-angle representation
 3. Computes Wigner D via D^l = exp(θ * (n · K^l)) where K are SO(3) generators
+   (with Euler-matching transformation pre-applied for l >= 2)
 4. Applies an optional gamma roll correction about the Y-axis
-5. Applies Euler-matching basis transformation for l >= 2
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
@@ -57,8 +58,6 @@ from fairchem.core.models.uma.common.wigner_d_quaternion import (
 # =============================================================================
 
 _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
-_EULER_GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
-_EULER_TRANSFORM_CACHE: dict[tuple[int, torch.dtype, torch.device], list[torch.Tensor]] = {}
 _RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
 _RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
@@ -72,8 +71,6 @@ def clear_memory_caches() -> None:
     transforms, and Ra/Rb coefficients. Useful for testing or reducing memory.
     """
     _GENERATOR_CACHE.clear()
-    _EULER_GENERATOR_CACHE.clear()
-    _EULER_TRANSFORM_CACHE.clear()
     _RA_RB_COEFF_CACHE.clear()
     _RA_RB_U_CACHE.clear()
     _RA_RB_RANGE_CACHE.clear()
@@ -142,89 +139,6 @@ def _build_euler_transform(ell: int, Jd: torch.Tensor) -> torch.Tensor:
         U[i, :] = sign * Jd[jd_row, :]
 
     return U
-
-
-def get_euler_transforms(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> list[torch.Tensor]:
-    """
-    Get cached Euler-matching transformation matrices for l=0..lmax.
-
-    These matrices transform axis-angle Wigner D to match Euler Wigner D:
-        D_euler[l] = U[l] @ D_axis[l] @ U[l].T  for l >= 2
-
-    For l=0 and l=1, returns identity matrices (no transformation needed).
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Data type for the matrices
-        device: Device for the matrices
-
-    Returns:
-        List of transformation matrices [U_0, U_1, ..., U_lmax]
-    """
-    key = (lmax, dtype, device)
-
-    if key not in _EULER_TRANSFORM_CACHE:
-        from pathlib import Path
-
-        # Load Jd matrices
-        jd_path = Path(__file__).parent.parent / "Jd.pt"
-        Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
-
-        U_list = []
-        for ell in range(lmax + 1):
-            if ell <= 1:
-                # l=0 and l=1 match directly, use identity
-                size = 2 * ell + 1
-                U = torch.eye(size, dtype=dtype, device=device)
-            else:
-                Jd = Jd_list[ell].to(dtype=dtype, device=device)
-                U = _build_euler_transform(ell, Jd)
-            U_list.append(U)
-
-        _EULER_TRANSFORM_CACHE[key] = U_list
-
-    return _EULER_TRANSFORM_CACHE[key]
-
-
-def apply_euler_transform(
-    D: torch.Tensor,
-    lmax: int,
-    U_list: list[torch.Tensor],
-    inplace: bool = True,
-) -> torch.Tensor:
-    """
-    Apply Euler-matching transformation to a block-diagonal Wigner D matrix.
-
-    Transforms each l-block: D_euler[l] = U[l] @ D_axis[l] @ U[l].T
-
-    Args:
-        D: Wigner D matrix of shape (N, size, size) where size = (lmax+1)^2
-        lmax: Maximum angular momentum
-        U_list: List of transformation matrices from get_euler_transforms
-        inplace: If True, modify D in-place; if False, return a new tensor
-
-    Returns:
-        Transformed Wigner D matrix of shape (N, size, size)
-    """
-    D_out = D if inplace else D.clone()
-
-    for ell in range(2, lmax + 1):  # Skip l=0,1 (identity transform)
-        start = ell * ell
-        end = start + 2 * ell + 1
-        U = U_list[ell]
-
-        # D_euler = U @ D_axis @ U.T
-        # Use two matmuls: the intermediate result acts as a buffer, avoiding clone
-        # temp = D @ U.T creates new tensor, then U @ temp writes to D_out
-        block = D_out[:, start:end, start:end]
-        temp = torch.matmul(block, U.T)  # (N, size, size) - creates new tensor
-        D_out[:, start:end, start:end] = torch.matmul(U, temp)
-
-    return D_out
 
 
 def _build_u_matrix(ell: int) -> torch.Tensor:
@@ -315,41 +229,20 @@ def _build_so3_generators(ell: int) -> tuple[torch.Tensor, torch.Tensor, torch.T
     return K_x, K_y, K_z
 
 
-def _eigendecompose_antisymmetric(K: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Eigendecompose an antisymmetric matrix K.
-
-    For antisymmetric K, eigenvalues are purely imaginary: ±i*λ where λ >= 0.
-    We return the imaginary parts and the unitary eigenvector matrix V.
-
-    Since K is real antisymmetric, K = V @ diag(i*λ) @ V^H where V is unitary.
-    So exp(θK) = V @ diag(exp(i*θ*λ)) @ V^H
-
-    Args:
-        K: Real antisymmetric matrix
-
-    Returns:
-        eigenvalues: Shape (n,) - the imaginary parts (can be positive/negative/zero)
-        V: Shape (n, n) - unitary eigenvector matrix (complex)
-    """
-    eigenvalues_complex, V = torch.linalg.eig(K.to(torch.complex128))
-    eigenvalues_imag = eigenvalues_complex.imag
-    return eigenvalues_imag.to(K.dtype), V
-
-
 def get_so3_generators(
     lmax: int,
     dtype: torch.dtype,
     device: torch.device,
 ) -> dict[str, list[torch.Tensor]]:
     """
-    Return cached K_x, K_y, K_z lists for l=0..lmax with precomputed eigendecomposition.
+    Return cached K_x, K_y, K_z lists for l=0..lmax.
 
-    The generators are stored in m-ordered basis. For l=1, a permutation
-    matrix P is also cached to convert to Cartesian basis when needed.
+    For l >= 2, the generators include the Euler-matching transformation folded in,
+    so the matrix exponential (or Rodrigues/Cayley-Hamilton) produces output directly
+    in the Euler basis.
 
-    Also precomputes eigendecomposition of K_y for each l, enabling fast
-    Y-rotation computation via: exp(γK_y) = V @ diag(exp(i*γ*λ)) @ V^H
+    For l=1, a permutation matrix P is also cached to convert to Cartesian basis
+    when needed.
 
     Args:
         lmax: Maximum angular momentum
@@ -357,33 +250,38 @@ def get_so3_generators(
         device: Device for the generators
 
     Returns:
-        Dictionary with 'K_x', 'K_y', 'K_z' lists, 'P' for l=1 permutation,
-        and 'Ky_eigenvalues', 'Ky_V' for fast Y-rotation
+        Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
     """
+    from pathlib import Path
+
     key = (lmax, dtype, device)
 
     if key not in _GENERATOR_CACHE:
+        # Load Jd matrices for Euler transforms (l >= 2)
+        jd_path = Path(__file__).parent.parent / "Jd.pt"
+        Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
+
         K_x_list = []
         K_y_list = []
         K_z_list = []
-        Ky_eigenvalues_list = []
-        Ky_V_list = []
 
         for ell in range(lmax + 1):
             K_x, K_y, K_z = _build_so3_generators(ell)
-            K_x_list.append(K_x.to(device=device, dtype=dtype))
-            K_y_list.append(K_y.to(device=device, dtype=dtype))
-            K_z_list.append(K_z.to(device=device, dtype=dtype))
+            K_x = K_x.to(device=device, dtype=dtype)
+            K_y = K_y.to(device=device, dtype=dtype)
+            K_z = K_z.to(device=device, dtype=dtype)
 
-            # Precompute eigendecomposition of K_y for fast Y-rotation
-            if ell == 0:
-                # Trivial 1x1 case
-                Ky_eigenvalues_list.append(torch.zeros(1, dtype=dtype, device=device))
-                Ky_V_list.append(torch.ones(1, 1, dtype=torch.complex128, device=device))
-            else:
-                eigenvalues, V = _eigendecompose_antisymmetric(K_y)
-                Ky_eigenvalues_list.append(eigenvalues.to(device=device, dtype=dtype))
-                Ky_V_list.append(V.to(device=device))
+            if ell >= 2:
+                # Apply Euler-matching transformation: K_euler = U @ K @ U.T
+                Jd = Jd_list[ell].to(dtype=dtype, device=device)
+                U = _build_euler_transform(ell, Jd)
+                K_x = U @ K_x @ U.T
+                K_y = U @ K_y @ U.T
+                K_z = U @ K_z @ U.T
+
+            K_x_list.append(K_x)
+            K_y_list.append(K_y)
+            K_z_list.append(K_z)
 
         # Permutation matrix for l=1: (y,z,x) -> (x,y,z)
         P = torch.tensor([
@@ -396,98 +294,10 @@ def get_so3_generators(
             'K_x': K_x_list,
             'K_y': K_y_list,
             'K_z': K_z_list,
-            'Ky_eigenvalues': Ky_eigenvalues_list,
-            'Ky_V': Ky_V_list,
             'P': P,
         }
 
     return _GENERATOR_CACHE[key]
-
-
-def get_so3_generators_euler_aligned(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> dict[str, list[torch.Tensor]]:
-    """
-    Return cached K_x, K_y, K_z lists with Euler-matching transformation folded in.
-
-    For l >= 2, the generators are transformed: K_euler = U @ K @ U.T
-    where U is the Euler-matching transformation matrix.
-
-    This allows the matrix exponential (or Rodrigues/Cayley-Hamilton) to produce
-    output directly in the Euler basis, eliminating the need for a separate
-    apply_euler_transform step.
-
-    For l=0 and l=1, generators are unchanged (Euler transform is identity).
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Data type for the generators
-        device: Device for the generators
-
-    Returns:
-        Dictionary with 'K_x', 'K_y', 'K_z' lists in Euler-aligned basis,
-        plus 'P' and eigendecomposition data for Y-rotation.
-    """
-    key = (lmax, dtype, device)
-
-    if key not in _EULER_GENERATOR_CACHE:
-        # Get standard generators
-        standard = get_so3_generators(lmax, dtype, device)
-
-        # Get Euler transforms
-        U_list = get_euler_transforms(lmax, dtype, device)
-
-        K_x_list = []
-        K_y_list = []
-        K_z_list = []
-        Ky_eigenvalues_list = []
-        Ky_V_list = []
-
-        for ell in range(lmax + 1):
-            K_x = standard['K_x'][ell]
-            K_y = standard['K_y'][ell]
-            K_z = standard['K_z'][ell]
-
-            if ell <= 1:
-                # l=0 and l=1: Euler transform is identity, no change needed
-                K_x_list.append(K_x)
-                K_y_list.append(K_y)
-                K_z_list.append(K_z)
-                Ky_eigenvalues_list.append(standard['Ky_eigenvalues'][ell])
-                Ky_V_list.append(standard['Ky_V'][ell])
-            else:
-                # l>=2: transform generators to Euler basis
-                # K_euler = U @ K @ U.T
-                U = U_list[ell]
-                K_x_euler = U @ K_x @ U.T
-                K_y_euler = U @ K_y @ U.T
-                K_z_euler = U @ K_z @ U.T
-
-                K_x_list.append(K_x_euler)
-                K_y_list.append(K_y_euler)
-                K_z_list.append(K_z_euler)
-
-                # Recompute eigendecomposition for the transformed K_y
-                if ell == 0:
-                    Ky_eigenvalues_list.append(torch.zeros(1, dtype=dtype, device=device))
-                    Ky_V_list.append(torch.ones(1, 1, dtype=torch.complex128, device=device))
-                else:
-                    eigenvalues, V = _eigendecompose_antisymmetric(K_y_euler)
-                    Ky_eigenvalues_list.append(eigenvalues.to(device=device, dtype=dtype))
-                    Ky_V_list.append(V.to(device=device))
-
-        _EULER_GENERATOR_CACHE[key] = {
-            'K_x': K_x_list,
-            'K_y': K_y_list,
-            'K_z': K_z_list,
-            'Ky_eigenvalues': Ky_eigenvalues_list,
-            'Ky_V': Ky_V_list,
-            'P': standard['P'],  # Permutation is unchanged
-        }
-
-    return _EULER_GENERATOR_CACHE[key]
 
 
 # =============================================================================
@@ -658,7 +468,7 @@ def quaternion_slerp(
     # This ensures that at t=1, we get exactly q2 (not -q2)
     dot = (q1 * q2).sum(dim=-1, keepdim=True)
     q1_aligned = torch.where(dot < 0, -q1, q1)
-    dot = torch.abs(dot).clamp(max=1.0 - 1e-7)  # Clamp for numerical stability
+    dot = torch.abs(dot).clamp(max=1.0)  # Clamp for numerical stability
 
     # Compute angle between quaternions
     theta = torch.acos(dot)
@@ -1267,75 +1077,6 @@ def wigner_d_from_axis_angle_hybrid(
 
 
 # =============================================================================
-# Y-Rotation (Roll Correction)
-# =============================================================================
-
-
-def wigner_d_y_rotation_batched(
-    gamma: torch.Tensor,
-    generators: dict[str, list[torch.Tensor]],
-    lmax: int,
-) -> torch.Tensor:
-    """
-    Compute Wigner D matrices for rotations about the Y-axis.
-
-    Uses precomputed eigendecomposition for O(n²) computation instead of O(n³)
-    matrix exponential: exp(γK_y) = V @ diag(exp(i*γ*λ)) @ V^H
-
-    The l=1 block is transformed to Cartesian basis for compatibility.
-
-    Args:
-        gamma: Rotation angles of shape (N,)
-        generators: Dictionary with 'Ky_eigenvalues', 'Ky_V', and 'P'
-        lmax: Maximum angular momentum
-
-    Returns:
-        Block-diagonal Wigner D matrices of shape (N, size, size)
-    """
-    N = gamma.shape[0]
-    device = gamma.device
-    dtype = gamma.dtype
-    size = (lmax + 1) ** 2
-
-    Ky_eigenvalues = generators['Ky_eigenvalues']
-    Ky_V = generators['Ky_V']
-    P = generators['P']
-
-    D = torch.zeros(N, size, size, dtype=dtype, device=device)
-
-    block_start = 0
-    for ell in range(lmax + 1):
-        block_size = 2 * ell + 1
-        block_end = block_start + block_size
-
-        if ell == 0:
-            D[:, 0, 0] = 1.0
-            block_start = block_end
-            continue
-
-        eigenvalues = Ky_eigenvalues[ell]  # (block_size,)
-        V = Ky_V[ell]  # (block_size, block_size), complex
-
-        # exp(i * gamma * eigenvalues): shape (N, block_size)
-        exp_diag = torch.exp(1j * gamma[:, None] * eigenvalues[None, :])
-
-        V_H = V.conj().T  # (block_size, block_size)
-
-        # D_ell = V @ diag(exp_diag) @ V^H using einsum
-        D_ell_complex = torch.einsum('ij,nj,jk->nik', V, exp_diag, V_H)
-        D_ell = D_ell_complex.real.to(dtype=dtype)
-
-        # For l=1, transform to Cartesian basis
-        if ell == 1:
-            D_ell = torch.einsum('ij,njk,kl->nil', P, D_ell, P.T)
-
-        D[:, block_start:block_end, block_start:block_end] = D_ell
-        block_start = block_end
-
-    return D
-
-
-# =============================================================================
 # Gamma Computation for Euler Matching
 # =============================================================================
 
@@ -1529,7 +1270,7 @@ def axis_angle_wigner(
 
     # Step 6: Get Euler-aligned generators (cached)
     # These have the Euler transform folded in for l >= 2
-    generators = get_so3_generators_euler_aligned(lmax, dtype, device)
+    generators = get_so3_generators(lmax, dtype, device)
 
     # Step 7: Compute single Wigner D from combined rotation via matrix_exp
     # Output is directly in Euler basis thanks to Euler-aligned generators
@@ -1607,7 +1348,7 @@ def axis_angle_wigner_hybrid(
 
     # Step 6: Get Euler-aligned generators (cached)
     # These have the Euler transform folded in for l=2
-    generators = get_so3_generators_euler_aligned(lmax, dtype, device)
+    generators = get_so3_generators(lmax, dtype, device)
 
     # Step 7: Compute Wigner D using hybrid approach
     D = wigner_d_from_axis_angle_hybrid(axis, angle, q_combined, generators, lmax)
@@ -1618,33 +1359,82 @@ def axis_angle_wigner_hybrid(
     return D, D_inv
 
 
-# =============================================================================
-# Convenience function matching quaternion_wigner interface
-# =============================================================================
-
-
-def axis_angle_wigner_random_gamma(
+def axis_angle_wigner_fast(
     edge_distance_vec: torch.Tensor,
     lmax: int,
+    gamma: Optional[torch.Tensor] = None,
+    use_euler_gamma: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Compute Wigner D with random gamma (matching training behavior).
+    Compute Wigner D using optimized quaternion-only approach.
 
-    This matches the behavior of the Euler-based code which uses random gamma
-    for SO(2) equivariance during training. The output uses the same basis
-    as the Euler code, making this a drop-in replacement.
+    This is an optimized version that avoids axis-angle extraction overhead:
+    - l=0: Trivial (identity)
+    - l=1: Direct quaternion to rotation matrix (fastest for 3x3)
+    - l>=2: Ra/Rb polynomial from quaternion (no Cayley-Hamilton)
+
+    Key optimization: No axis-angle extraction (atan2, sqrt) since Ra/Rb
+    works directly from quaternion for all l>=2.
 
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
         lmax: Maximum angular momentum
+        gamma: Optional roll angles of shape (N,).
+               If None, uses random gamma (for SO(2) equivariance during training).
+        use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
+               of random gamma. This makes output exactly match Euler code.
 
     Returns:
-        Tuple of (wigner_edge_to_y, wigner_y_to_edge)
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
     """
+    # Handle single vector input
+    if edge_distance_vec.dim() == 1:
+        edge_distance_vec = edge_distance_vec.unsqueeze(0)
+
     N = edge_distance_vec.shape[0]
-    dtype = edge_distance_vec.dtype
     device = edge_distance_vec.device
+    dtype = edge_distance_vec.dtype
+    size = (lmax + 1) ** 2
 
-    gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+    # Step 1: Normalize edges
+    edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
 
-    return axis_angle_wigner(edge_distance_vec, lmax, gamma=gamma)
+    # Step 2: Compute gamma if not provided
+    if gamma is None:
+        if use_euler_gamma:
+            gamma = compute_euler_matching_gamma(edge_normalized)
+        else:
+            gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+
+    # Step 3: Compute quaternion (edge → +Y)
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Step 4: Create Y-rotation quaternion and combine with edge→Y
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    # Step 5: Build Wigner D matrix
+    D = torch.zeros(N, size, size, dtype=dtype, device=device)
+
+    # l=0: trivial
+    D[:, 0, 0] = 1.0
+
+    # l=1: direct quaternion to rotation matrix (fastest, already Cartesian)
+    if lmax >= 1:
+        D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q_combined)
+
+    # l>=2: Ra/Rb polynomial (no axis-angle extraction needed!)
+    if lmax >= 2:
+        coeffs, U_blocks = _get_ra_rb_coefficients_range(2, lmax, dtype, device)
+        Ra, Rb = quaternion_to_ra_rb(q_combined)
+        D_complex = wigner_d_matrix_complex_range(Ra, Rb, coeffs)
+        D_real = wigner_d_complex_to_real_range(D_complex, U_blocks, 2, lmax)
+        # Copy l>=2 blocks (starts at index 4 = 1 + 3)
+        D[:, 4:, 4:] = D_real
+
+    # Step 6: Inverse is transpose (orthogonal matrix)
+    D_inv = D.transpose(1, 2).contiguous()
+
+    return D, D_inv
+
