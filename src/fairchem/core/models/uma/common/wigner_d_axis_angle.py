@@ -42,8 +42,8 @@ import torch
 from fairchem.core.models.uma.common.wigner_d_quaternion import (
     precompute_wigner_coefficients_symmetric,
     precompute_wigner_coefficients_range,
-    precompute_U_blocks,
-    precompute_U_blocks_range,
+    precompute_U_blocks_euler_aligned,
+    precompute_U_blocks_euler_aligned_range,
     quaternion_to_ra_rb,
     wigner_d_matrix_complex,
     wigner_d_matrix_complex_range,
@@ -57,10 +57,26 @@ from fairchem.core.models.uma.common.wigner_d_quaternion import (
 # =============================================================================
 
 _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
+_EULER_GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _EULER_TRANSFORM_CACHE: dict[tuple[int, torch.dtype, torch.device], list[torch.Tensor]] = {}
 _RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
 _RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
+
+
+def clear_memory_caches() -> None:
+    """
+    Clear all in-memory caches for Wigner D computation.
+
+    This clears the module-level dictionaries that cache generators,
+    transforms, and Ra/Rb coefficients. Useful for testing or reducing memory.
+    """
+    _GENERATOR_CACHE.clear()
+    _EULER_GENERATOR_CACHE.clear()
+    _EULER_TRANSFORM_CACHE.clear()
+    _RA_RB_COEFF_CACHE.clear()
+    _RA_RB_U_CACHE.clear()
+    _RA_RB_RANGE_CACHE.clear()
 
 
 # =============================================================================
@@ -386,6 +402,92 @@ def get_so3_generators(
         }
 
     return _GENERATOR_CACHE[key]
+
+
+def get_so3_generators_euler_aligned(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> dict[str, list[torch.Tensor]]:
+    """
+    Return cached K_x, K_y, K_z lists with Euler-matching transformation folded in.
+
+    For l >= 2, the generators are transformed: K_euler = U @ K @ U.T
+    where U is the Euler-matching transformation matrix.
+
+    This allows the matrix exponential (or Rodrigues/Cayley-Hamilton) to produce
+    output directly in the Euler basis, eliminating the need for a separate
+    apply_euler_transform step.
+
+    For l=0 and l=1, generators are unchanged (Euler transform is identity).
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Data type for the generators
+        device: Device for the generators
+
+    Returns:
+        Dictionary with 'K_x', 'K_y', 'K_z' lists in Euler-aligned basis,
+        plus 'P' and eigendecomposition data for Y-rotation.
+    """
+    key = (lmax, dtype, device)
+
+    if key not in _EULER_GENERATOR_CACHE:
+        # Get standard generators
+        standard = get_so3_generators(lmax, dtype, device)
+
+        # Get Euler transforms
+        U_list = get_euler_transforms(lmax, dtype, device)
+
+        K_x_list = []
+        K_y_list = []
+        K_z_list = []
+        Ky_eigenvalues_list = []
+        Ky_V_list = []
+
+        for ell in range(lmax + 1):
+            K_x = standard['K_x'][ell]
+            K_y = standard['K_y'][ell]
+            K_z = standard['K_z'][ell]
+
+            if ell <= 1:
+                # l=0 and l=1: Euler transform is identity, no change needed
+                K_x_list.append(K_x)
+                K_y_list.append(K_y)
+                K_z_list.append(K_z)
+                Ky_eigenvalues_list.append(standard['Ky_eigenvalues'][ell])
+                Ky_V_list.append(standard['Ky_V'][ell])
+            else:
+                # l>=2: transform generators to Euler basis
+                # K_euler = U @ K @ U.T
+                U = U_list[ell]
+                K_x_euler = U @ K_x @ U.T
+                K_y_euler = U @ K_y @ U.T
+                K_z_euler = U @ K_z @ U.T
+
+                K_x_list.append(K_x_euler)
+                K_y_list.append(K_y_euler)
+                K_z_list.append(K_z_euler)
+
+                # Recompute eigendecomposition for the transformed K_y
+                if ell == 0:
+                    Ky_eigenvalues_list.append(torch.zeros(1, dtype=dtype, device=device))
+                    Ky_V_list.append(torch.ones(1, 1, dtype=torch.complex128, device=device))
+                else:
+                    eigenvalues, V = _eigendecompose_antisymmetric(K_y_euler)
+                    Ky_eigenvalues_list.append(eigenvalues.to(device=device, dtype=dtype))
+                    Ky_V_list.append(V.to(device=device))
+
+        _EULER_GENERATOR_CACHE[key] = {
+            'K_x': K_x_list,
+            'K_y': K_y_list,
+            'K_z': K_z_list,
+            'Ky_eigenvalues': Ky_eigenvalues_list,
+            'Ky_V': Ky_V_list,
+            'P': standard['P'],  # Permutation is unchanged
+        }
+
+    return _EULER_GENERATOR_CACHE[key]
 
 
 # =============================================================================
@@ -849,7 +951,7 @@ def _get_ra_rb_coefficients(
     dtype: torch.dtype,
     device: torch.device,
 ) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients, computing if necessary."""
+    """Get cached Ra/Rb polynomial coefficients with Euler-aligned U blocks."""
     key = (lmax, dtype, device)
 
     if key not in _RA_RB_COEFF_CACHE:
@@ -857,7 +959,7 @@ def _get_ra_rb_coefficients(
         _RA_RB_COEFF_CACHE[key] = coeffs
 
     if key not in _RA_RB_U_CACHE:
-        U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
         _RA_RB_U_CACHE[key] = U_blocks
 
     return _RA_RB_COEFF_CACHE[key], _RA_RB_U_CACHE[key]
@@ -874,11 +976,10 @@ def _get_ra_rb_coefficients_range(
 
     if key not in _RA_RB_RANGE_CACHE:
         coeffs = precompute_wigner_coefficients_range(lmin, lmax, dtype=dtype, device=device)
-        U_blocks = precompute_U_blocks_range(lmin, lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks_euler_aligned_range(lmin, lmax, dtype=dtype, device=device)
         _RA_RB_RANGE_CACHE[key] = (coeffs, U_blocks)
 
     return _RA_RB_RANGE_CACHE[key]
-
 
 
 def wigner_d_from_quaternion_polynomial(
@@ -892,12 +993,15 @@ def wigner_d_from_quaternion_polynomial(
     Uses the same algorithm as wigner_d_quaternion.py but takes the quaternion
     directly (computed by axis_angle's SLERP-blended two-chart approach).
 
+    Output is in Euler-aligned basis with l=1 Cartesian permutation and l>=2
+    Euler basis transformation folded into the U blocks.
+
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
         lmax: Maximum angular momentum
 
     Returns:
-        Real Wigner D matrices of shape (N, size, size) in e3nn convention
+        Real Wigner D matrices of shape (N, size, size)
     """
     from fairchem.core.models.uma.common.wigner_d_quaternion import (
         quaternion_to_ra_rb,
@@ -966,22 +1070,8 @@ def axis_angle_wigner_polynomial(
     q_gamma = quaternion_y_rotation(gamma)
     q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
 
-    # Compute single Wigner D from combined quaternion using Ra/Rb polynomial
+    # Compute Wigner D using Ra/Rb polynomial
     D = wigner_d_from_quaternion_polynomial(q_combined, lmax)
-
-    # Transform l=1 block from m-ordering (y,z,x) to Cartesian (x,y,z)
-    # This matches the convention used by wigner_d_from_axis_angle_batched
-    if lmax >= 1:
-        # Use index reordering instead of einsum with P matrix (faster)
-        # P transforms [y,z,x] -> [x,y,z], which is index permutation [2,0,1]
-        # D_cartesian = P @ D_m @ P.T is equivalent to reordering rows and columns
-        D_l1 = D[:, 1:4, 1:4]
-        D[:, 1:4, 1:4] = D_l1[:, [2, 0, 1], :][:, :, [2, 0, 1]]
-
-    # Apply Euler-matching basis transformation for l >= 2
-    if lmax >= 2:
-        U_list = get_euler_transforms(lmax, dtype, device)
-        D = apply_euler_transform(D, lmax, U_list)
 
     # Return D and its inverse (transpose for orthogonal matrices)
     D_inv = D.transpose(1, 2).contiguous()
@@ -1101,9 +1191,11 @@ def wigner_d_from_axis_angle_hybrid(
 
     Uses the fastest method for each l:
     - l=0: Trivial (identity)
-    - l=1: Rodrigues formula (fastest for 3x3)
-    - l=2: Cayley-Hamilton (fastest for 5x5)
+    - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
+    - l=2: Cayley-Hamilton from axis-angle (fastest for 5x5)
     - l>=3: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
+
+    The caller should pass Euler-aligned generators for l>=2.
 
     Args:
         axis: Rotation axes of shape (N, 3), unit vectors
@@ -1385,6 +1477,9 @@ def axis_angle_wigner(
     Combines edge→Y and gamma rotations into a single quaternion before computing
     the Wigner D, avoiding the overhead of computing two separate Wigner D matrices.
 
+    Uses Euler-aligned generators that have the Euler basis transformation folded in,
+    so the matrix exponential output is directly in Euler basis.
+
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
         lmax: Maximum angular momentum
@@ -1432,18 +1527,15 @@ def axis_angle_wigner(
     # Step 5: Extract axis-angle from combined quaternion
     axis, angle = quaternion_to_axis_angle(q_combined)
 
-    # Step 6: Get generators (cached)
-    generators = get_so3_generators(lmax, dtype, device)
+    # Step 6: Get Euler-aligned generators (cached)
+    # These have the Euler transform folded in for l >= 2
+    generators = get_so3_generators_euler_aligned(lmax, dtype, device)
 
     # Step 7: Compute single Wigner D from combined rotation via matrix_exp
+    # Output is directly in Euler basis thanks to Euler-aligned generators
     D = wigner_d_from_axis_angle_batched(axis, angle, generators, lmax)
 
-    # Step 8: Apply Euler-matching basis transformation for l >= 2
-    if lmax >= 2:
-        U_list = get_euler_transforms(lmax, dtype, device)
-        D = apply_euler_transform(D, lmax, U_list)
-
-    # Step 9: Inverse is transpose (orthogonal matrix)
+    # Step 8: Inverse is transpose (orthogonal matrix)
     D_inv = D.transpose(1, 2).contiguous()
 
     return D, D_inv
@@ -1460,13 +1552,16 @@ def axis_angle_wigner_hybrid(
 
     Uses the fastest method for each l:
     - l=0: Trivial (identity)
-    - l=1: Rodrigues formula from axis-angle (fastest for 3x3)
-    - l=2: Cayley-Hamilton from axis-angle (fastest for 5x5)
-    - l>=3: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
+    - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
+    - l=2: Cayley-Hamilton from axis-angle with Euler-aligned generators
+    - l>=3: Ra/Rb polynomial from quaternion with Euler-aligned U blocks
 
     Combines the edge→Y and gamma rotations into a single quaternion before
     computing the Wigner D, avoiding the overhead of computing two separate
     Wigner D matrices and multiplying them.
+
+    Uses Euler-aligned generators (l=2) and U blocks (l>=3) that have the
+    Euler basis transformation folded in, eliminating the separate transform step.
 
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
@@ -1507,21 +1602,17 @@ def axis_angle_wigner_hybrid(
     q_gamma = quaternion_y_rotation(gamma)
     q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
 
-    # Step 5: Extract axis-angle from combined quaternion (needed for l=1,2)
+    # Step 5: Extract axis-angle from combined quaternion (needed for l=2)
     axis, angle = quaternion_to_axis_angle(q_combined)
 
-    # Step 6: Get generators (cached)
-    generators = get_so3_generators(lmax, dtype, device)
+    # Step 6: Get Euler-aligned generators (cached)
+    # These have the Euler transform folded in for l=2
+    generators = get_so3_generators_euler_aligned(lmax, dtype, device)
 
-    # Step 7: Compute single Wigner D from combined rotation
+    # Step 7: Compute Wigner D using hybrid approach
     D = wigner_d_from_axis_angle_hybrid(axis, angle, q_combined, generators, lmax)
 
-    # Step 8: Apply Euler-matching basis transformation for l >= 2
-    if lmax >= 2:
-        U_list = get_euler_transforms(lmax, dtype, device)
-        D = apply_euler_transform(D, lmax, U_list)
-
-    # Step 9: Inverse is transpose (orthogonal matrix)
+    # Step 8: Inverse is transpose (orthogonal matrix)
     D_inv = D.transpose(1, 2).contiguous()
 
     return D, D_inv

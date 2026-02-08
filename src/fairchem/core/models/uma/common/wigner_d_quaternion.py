@@ -1320,6 +1320,105 @@ def precompute_U_blocks_range(
     return [_build_u_block(ell, complex_dtype, device) for ell in range(lmin, lmax + 1)]
 
 
+def precompute_U_blocks_euler_aligned(
+    lmax: int,
+    dtype: torch.dtype = torch.float64,
+    device: torch.device = torch.device("cpu"),
+) -> list[torch.Tensor]:
+    """
+    Precompute U transformation matrices with Euler basis alignment folded in.
+
+    This combines the complex→real transformation with:
+    - For l=1: The Cartesian permutation P (m-ordering → x,y,z)
+    - For l>=2: The Euler-matching basis transformation
+
+    Using these combined U blocks eliminates the need for separate
+    apply_euler_transform and l=1 permutation steps, reducing computation.
+
+    The combined transformation is:
+        D_euler_real = U_combined @ D_complex @ U_combined^H
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Real dtype (float32 or float64)
+        device: Torch device
+
+    Returns:
+        List of combined U matrices where U_blocks[ell] has shape (2*ell+1, 2*ell+1)
+    """
+    # Get standard complex→real U blocks
+    U_blocks = precompute_U_blocks(lmax, dtype, device)
+
+    # Get complex dtype for combining
+    if dtype == torch.float32:
+        complex_dtype = torch.complex64
+    else:
+        complex_dtype = torch.complex128
+
+    # Build l=1 permutation matrix P: (y,z,x) -> (x,y,z)
+    # This is real, but we treat it as complex for composition
+    P = torch.tensor([
+        [0., 0., 1.],  # x from position 2
+        [1., 0., 0.],  # y from position 0
+        [0., 1., 0.]   # z from position 1
+    ], dtype=complex_dtype, device=device)
+
+    # Load Jd matrices for Euler transforms (l >= 2)
+    jd_path = Path(__file__).parent.parent / "Jd.pt"
+    Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
+
+    U_combined = []
+    for ell in range(lmax + 1):
+        U_ell = U_blocks[ell].to(dtype=complex_dtype, device=device)
+
+        if ell == 0:
+            # l=0: no transformation needed
+            U_combined.append(U_ell)
+        elif ell == 1:
+            # l=1: fold in Cartesian permutation P
+            # D_cartesian = P @ D_m_ordered @ P.T
+            # D_m_ordered = U @ D_complex @ U^H
+            # D_cartesian = P @ U @ D_complex @ U^H @ P.T = (P @ U) @ D_complex @ (P @ U)^H
+            U_combined.append(P @ U_ell)
+        else:
+            # l>=2: fold in Euler-matching transformation
+            # D_euler = U_euler @ D_axis @ U_euler.T
+            # Since U_euler is real orthogonal: U_euler.T = U_euler^H
+            # D_euler = U_euler @ U @ D_complex @ U^H @ U_euler^H = (U_euler @ U) @ D_complex @ (U_euler @ U)^H
+            from fairchem.core.models.uma.common.wigner_d_axis_angle import _build_euler_transform
+            Jd = Jd_list[ell].to(dtype=dtype, device=device)
+            U_euler = _build_euler_transform(ell, Jd).to(dtype=complex_dtype, device=device)
+            U_combined.append(U_euler @ U_ell)
+
+    return U_combined
+
+
+def precompute_U_blocks_euler_aligned_range(
+    lmin: int,
+    lmax: int,
+    dtype: torch.dtype = torch.float64,
+    device: torch.device = torch.device("cpu"),
+) -> list[torch.Tensor]:
+    """
+    Precompute Euler-aligned U transformation matrices for l in [lmin, lmax] only.
+
+    This is the range version of precompute_U_blocks_euler_aligned, for use
+    in the hybrid Wigner D computation where only l >= lmin blocks are needed.
+
+    Args:
+        lmin: Minimum angular momentum
+        lmax: Maximum angular momentum
+        dtype: Real dtype (float32 or float64)
+        device: Torch device
+
+    Returns:
+        List of combined U matrices where U_blocks[i] corresponds to l=lmin+i
+    """
+    # Get the full Euler-aligned U blocks and return the range subset
+    full_U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype, device)
+    return full_U_blocks[lmin:]
+
+
 def precompute_complex_to_real_matrix(
     lmax: int,
     dtype: torch.dtype = torch.complex128,
@@ -1759,6 +1858,18 @@ def clear_wigner_cache(cache_dir: Optional[Path] = None) -> int:
     return count
 
 
+def clear_memory_caches() -> None:
+    """
+    Clear all in-memory caches for Wigner coefficients.
+
+    This clears the module-level dictionaries that cache precomputed
+    coefficients and U blocks. Useful for testing or reducing memory usage.
+    """
+    global _COEFF_CACHE, _U_CACHE
+    _COEFF_CACHE.clear()
+    _U_CACHE.clear()
+
+
 # =============================================================================
 # Simple API with automatic caching
 # =============================================================================
@@ -1773,7 +1884,7 @@ def _get_cached_coefficients(
     dtype: torch.dtype,
     device: torch.device,
 ) -> tuple[dict, list]:
-    """Get cached coefficients, computing if necessary."""
+    """Get cached coefficients with Euler-aligned U blocks."""
     key = (lmax, dtype, device)
 
     if key not in _COEFF_CACHE:
@@ -1781,7 +1892,7 @@ def _get_cached_coefficients(
         _COEFF_CACHE[key] = coeffs
 
     if key not in _U_CACHE:
-        U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
+        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
         _U_CACHE[key] = U_blocks
 
     return _COEFF_CACHE[key], _U_CACHE[key]
@@ -1803,6 +1914,9 @@ def quaternion_wigner(
     the Wigner D, avoiding the overhead of computing two separate Wigner D
     matrices and multiplying them.
 
+    Uses Euler-aligned U blocks that fold in the l=1 Cartesian permutation
+    and l>=2 Euler basis transformation, eliminating separate transformation steps.
+
     Args:
         edge_distance_vec: Edge distance vectors of shape (N, 3)
         lmax: Maximum angular momentum
@@ -1817,13 +1931,11 @@ def quaternion_wigner(
 
         This matches the return convention of the Euler-based rotation.py.
     """
-    # Import axis_angle helpers (they provide the correct quaternion and transforms)
+    # Import axis_angle helpers (they provide the correct quaternion computation)
     from fairchem.core.models.uma.common.wigner_d_axis_angle import (
         quaternion_edge_to_y_stable,
         quaternion_multiply,
         quaternion_y_rotation,
-        get_euler_transforms,
-        apply_euler_transform,
     )
 
     # Handle single vector input
@@ -1851,32 +1963,13 @@ def quaternion_wigner(
     q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
 
     # Step 5: Get cached coefficients
+    # U blocks have l=1 Cartesian permutation and l>=2 Euler transform folded in
     coeffs, U_blocks = _get_cached_coefficients(lmax, dtype, device)
 
-    # Step 6: Compute single Wigner D from combined quaternion using Ra/Rb polynomial
+    # Step 6: Compute Wigner D from combined quaternion using Ra/Rb polynomial
     D = compute_wigner_d_from_quaternion(q_combined, coeffs, U_blocks)
 
-    # Step 7: Transform l=1 block from m-ordering (y,z,x) to Cartesian (x,y,z)
-    if lmax >= 1:
-        # P transforms from m-ordering to Cartesian basis
-        P = torch.tensor([
-            [0., 0., 1.],  # x from position 2
-            [1., 0., 0.],  # y from position 0
-            [0., 1., 0.]   # z from position 1
-        ], dtype=dtype, device=device)
-
-        # Extract l=1 block (indices 1:4), transform, and put back
-        D_l1 = D[:, 1:4, 1:4]
-        D_l1_cartesian = torch.einsum('ij,njk,kl->nil', P, D_l1, P.T)
-        D = D.clone()
-        D[:, 1:4, 1:4] = D_l1_cartesian
-
-    # Step 8: Apply Euler-matching basis transformation for l >= 2
-    if lmax >= 2:
-        U_list = get_euler_transforms(lmax, dtype, device)
-        D = apply_euler_transform(D, lmax, U_list)
-
-    # Step 9: Return D and its inverse (transpose for orthogonal matrices)
+    # Step 7: Return D and its inverse (transpose for orthogonal matrices)
     D_inv = D.transpose(1, 2).contiguous()
 
     return D, D_inv
