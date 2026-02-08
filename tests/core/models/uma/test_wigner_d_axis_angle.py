@@ -134,6 +134,49 @@ class TestWignerDProperties:
             f"Edge {edge} did not map to +Y, got {result}"
         )
 
+    def test_composition_law(self, lmax, dtype, device):
+        """D(R1) @ D(R2) = D(R1 @ R2) - the fundamental group composition property."""
+        torch.manual_seed(123)
+        n_samples = 10
+
+        # Generate two random rotations (gamma is randomized internally when not specified)
+        edges1 = torch.randn(n_samples, 3, dtype=dtype, device=device)
+        edges2 = torch.randn(n_samples, 3, dtype=dtype, device=device)
+
+        D1, _ = axis_angle_wigner(edges1, lmax)
+        D2, _ = axis_angle_wigner(edges2, lmax)
+
+        # Compose the Wigner D matrices
+        D_product = D1 @ D2
+
+        # The l=1 block of D_product is the composed rotation matrix R1 @ R2
+        R_composed = D_product[:, 1:4, 1:4]
+
+        # From R_composed, extract edge (second row, since R @ edge = +Y means edge = R^T @ +Y)
+        edge_composed = R_composed[:, 1, :]
+
+        # Compute D for edge_composed with gamma=0 to get the canonical alignment rotation
+        D_canonical, _ = axis_angle_wigner(
+            edge_composed, lmax, gamma=torch.zeros(n_samples, dtype=dtype, device=device)
+        )
+        R_canonical = D_canonical[:, 1:4, 1:4]
+
+        # The composed rotation is R_composed = R_gamma @ R_canonical
+        # So R_gamma = R_composed @ R_canonical^T
+        R_gamma = R_composed @ R_canonical.transpose(-1, -2)
+
+        # R_gamma is rotation around Y by gamma:
+        # [[cos γ, 0, sin γ], [0, 1, 0], [-sin γ, 0, cos γ]]
+        # So cos(γ) = R_gamma[0, 0] and sin(γ) = R_gamma[0, 2]
+        gamma_composed = torch.atan2(R_gamma[:, 0, 2], R_gamma[:, 0, 0])
+
+        # Compute D for the composed rotation
+        D_composed, _ = axis_angle_wigner(edge_composed, lmax, gamma=gamma_composed)
+
+        # Check that the product equals the composed Wigner D
+        max_err = (D_product - D_composed).abs().max().item()
+        assert max_err < 1e-9, f"Composition law failed: max error = {max_err}"
+
 
 # =============================================================================
 # Test Gradient Stability
