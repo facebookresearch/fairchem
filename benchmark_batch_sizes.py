@@ -14,7 +14,10 @@ import time
 from pathlib import Path
 
 from fairchem.core.models.uma.common.rotation import init_edge_rot_euler_angles, eulers_to_wigner
-from fairchem.core.models.uma.common.wigner_d_axis_angle import axis_angle_wigner_hybrid as axis_angle_wigner
+from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+    axis_angle_wigner_hybrid as axis_angle_wigner,
+    get_so3_generators,
+)
 
 
 def parse_args():
@@ -132,6 +135,21 @@ def main():
     Jd = torch.load(jd_path, map_location=device, weights_only=True)
     Jd = [J.to(dtype=dtype) for J in Jd]
 
+    # Pre-compute generators for axis-angle (avoids torch.compile graph breaks)
+    generators = get_so3_generators(lmax, dtype, device)
+
+    # Define functions to be compiled (once, outside the loops)
+    def euler_forward(edges):
+        angles = init_edge_rot_euler_angles(edges)
+        return eulers_to_wigner(angles, 0, lmax, Jd)
+
+    def axis_forward(edges):
+        return axis_angle_wigner(edges, lmax, generators=generators)
+
+    # Compile functions once
+    euler_forward_compiled = torch.compile(euler_forward)
+    axis_forward_compiled = torch.compile(axis_forward)
+
     # Correctness checks
     print("CORRECTNESS CHECKS")
     print("-" * 90)
@@ -147,7 +165,7 @@ def main():
     euler_ok = check_wigner_correctness(W_euler, "Euler", test_batch, lmax, test_edges, device, dtype)
 
     # Axis-Angle
-    W_axis, _ = axis_angle_wigner(test_edges, lmax, use_euler_gamma=True)
+    W_axis, _ = axis_angle_wigner(test_edges, lmax)
     axis_ok = check_wigner_correctness(W_axis, "Axis-Angle", test_batch, lmax, test_edges, device, dtype)
 
     if not (euler_ok and axis_ok):
@@ -168,16 +186,15 @@ def main():
         edges = torch.randn(n_edges, 3, dtype=dtype, device=device)
         edges = torch.nn.functional.normalize(edges, dim=-1)
 
-        # Euler
+        # Euler (using pre-compiled function)
         def euler_fn():
-            angles = init_edge_rot_euler_angles(edges)
-            return eulers_to_wigner(angles, 0, lmax, Jd)
-        t_euler = benchmark_fn(torch.compile(euler_fn), n_warmup, n_runs, device)
+            return euler_forward_compiled(edges)
+        t_euler = benchmark_fn(euler_fn, n_warmup, n_runs, device)
 
-        # Axis-Angle
+        # Axis-Angle (using pre-compiled function)
         def axis_fn():
-            return axis_angle_wigner(edges, lmax, use_euler_gamma=True)
-        t_axis = benchmark_fn(torch.compile(axis_fn), n_warmup, n_runs, device)
+            return axis_forward_compiled(edges)
+        t_axis = benchmark_fn(axis_fn, n_warmup, n_runs, device)
 
         ratio = t_euler / t_axis if t_axis > 0 else float('inf')
         euler_per_edge = t_euler / n_edges * 1000  # µs
@@ -202,18 +219,17 @@ def main():
         edges_base = torch.randn(n_edges, 3, dtype=dtype, device=device)
         edges_base = torch.nn.functional.normalize(edges_base, dim=-1)
 
-        # Euler
+        # Euler (using pre-compiled function)
         def euler_bwd_fn():
             edges = edges_base.clone().requires_grad_(True)
-            angles = init_edge_rot_euler_angles(edges)
-            W = eulers_to_wigner(angles, 0, lmax, Jd)
+            W = euler_forward_compiled(edges)
             torch.autograd.grad(W.sum(), edges)
         t_euler = benchmark_fn(euler_bwd_fn, n_warmup, n_runs, device)
 
-        # Axis-Angle
+        # Axis-Angle (using pre-compiled function)
         def axis_bwd_fn():
             edges = edges_base.clone().requires_grad_(True)
-            W, _ = axis_angle_wigner(edges, lmax, use_euler_gamma=True)
+            W, _ = axis_forward_compiled(edges)
             torch.autograd.grad(W.sum(), edges)
         t_axis = benchmark_fn(axis_bwd_fn, n_warmup, n_runs, device)
 
