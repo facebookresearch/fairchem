@@ -613,6 +613,138 @@ def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
     return R
 
 
+def quaternion_to_wigner_d_l2(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion directly to 5x5 l=2 Wigner D matrix.
+
+    Uses degree-4 polynomial formulas in quaternion components (w,x,y,z),
+    avoiding the Cayley-Hamilton overhead (bmm, sqrt, torch.where, sin/cos).
+    This provides faster backward pass since polynomials have simple gradients.
+
+    Output matches the Euler-aligned basis of _cayley_hamilton_exp_l2.
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Wigner D matrices of shape (N, 5, 5) for l=2
+    """
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    N = q.shape[0]
+    dtype = q.dtype
+    device = q.device
+
+    # Precompute powers
+    w2, x2, y2, z2 = w * w, x * x, y * y, z * z
+    w3, x3, y3, z3 = w2 * w, x2 * x, y2 * y, z2 * z
+    w4, x4, y4, z4 = w2 * w2, x2 * x2, y2 * y2, z2 * z2
+
+    # Precompute mixed terms (degree 4)
+    w2x2 = w2 * x2
+    w2y2 = w2 * y2
+    w2z2 = w2 * z2
+    x2y2 = x2 * y2
+    x2z2 = x2 * z2
+    y2z2 = y2 * z2
+
+    # Precompute degree-3 terms with single factors
+    w3x, w3y, w3z = w3 * x, w3 * y, w3 * z
+    wx3, wy3, wz3 = w * x3, w * y3, w * z3
+    x3y, x3z = x3 * y, x3 * z
+    xy3, xz3 = x * y3, x * z3
+    y3z, yz3 = y3 * z, y * z3
+
+    # Precompute degree-2 mixed terms for degree-4 products
+    w2xy, w2xz, w2yz = w2 * x * y, w2 * x * z, w2 * y * z
+    wx2y, wx2z = w * x2 * y, w * x2 * z
+    wxy2, wxz2 = w * x * y2, w * x * z2
+    wy2z, wyz2 = w * y2 * z, w * y * z2
+    x2yz, xy2z, xyz2 = x2 * y * z, x * y2 * z, x * y * z2
+    wxyz = w * x * y * z
+
+    sqrt3 = 1.7320508075688772  # math.sqrt(3)
+
+    # Build the 5x5 Wigner D matrix using derived polynomial formulas
+    D = torch.zeros(N, 5, 5, dtype=dtype, device=device)
+
+    # D[0,0] = w4 + y4 - x4 - z4 - 6*w2y2 + 6*x2z2
+    D[:, 0, 0] = w4 + y4 - x4 - z4 - 6 * w2y2 + 6 * x2z2
+
+    # D[0,1] = 2*w3x + 2*wx3 - 2*y3z - 2*yz3 - 6*wxy2 - 6*wxz2 + 6*w2yz + 6*x2yz
+    D[:, 0, 1] = 2 * w3x + 2 * wx3 - 2 * y3z - 2 * yz3 - 6 * wxy2 - 6 * wxz2 + 6 * w2yz + 6 * x2yz
+
+    # D[0,2] = 4*sqrt3 * (xy2z + wx2y - wyz2 - w2xz)
+    D[:, 0, 2] = 4 * sqrt3 * (xy2z + wx2y - wyz2 - w2xz)
+
+    # D[0,3] = -2*w3z - 2*wz3 - 2*x3y - 2*xy3 + 6*w2xy + 6*wx2z + 6*wy2z + 6*xyz2
+    D[:, 0, 3] = -2 * w3z - 2 * wz3 - 2 * x3y - 2 * xy3 + 6 * w2xy + 6 * wx2z + 6 * wy2z + 6 * xyz2
+
+    # D[0,4] = 4 * (w3y - wy3 - x3z + xz3)
+    D[:, 0, 4] = 4 * (w3y - wy3 - x3z + xz3)
+
+    # D[1,0] = -2*w3x - 2*wx3 - 2*y3z - 2*yz3 + 6*wxy2 + 6*wxz2 + 6*w2yz + 6*x2yz
+    D[:, 1, 0] = -2 * w3x - 2 * wx3 - 2 * y3z - 2 * yz3 + 6 * wxy2 + 6 * wxz2 + 6 * w2yz + 6 * x2yz
+
+    # D[1,1] = w4 - y4 - x4 + z4 + 6*x2y2 - 6*w2z2
+    D[:, 1, 1] = w4 - y4 - x4 + z4 + 6 * x2y2 - 6 * w2z2
+
+    # D[1,2] = 2*sqrt3 * (-w3z + wz3 - x3y + xy3 + w2xy + wx2z - wy2z - xyz2)
+    D[:, 1, 2] = 2 * sqrt3 * (-w3z + wz3 - x3y + xy3 + w2xy + wx2z - wy2z - xyz2)
+
+    # D[1,3] = 2*w3y + 2*wy3 - 2*x3z - 2*xz3 + 6*w2xz - 6*wx2y + 6*xy2z - 6*wyz2
+    D[:, 1, 3] = 2 * w3y + 2 * wy3 - 2 * x3z - 2 * xz3 + 6 * w2xz - 6 * wx2y + 6 * xy2z - 6 * wyz2
+
+    # D[1,4] = -2*w3z + 2*wz3 - 2*x3y + 2*xy3 - 6*w2xy - 6*wx2z + 6*wy2z + 6*xyz2
+    D[:, 1, 4] = -2 * w3z + 2 * wz3 - 2 * x3y + 2 * xy3 - 6 * w2xy - 6 * wx2z + 6 * wy2z + 6 * xyz2
+
+    # D[2,0] = 4*sqrt3 * (xy2z - wx2y + wyz2 - w2xz)
+    D[:, 2, 0] = 4 * sqrt3 * (xy2z - wx2y + wyz2 - w2xz)
+
+    # D[2,1] = 2*sqrt3 * (w3z - wz3 - x3y + xy3 + w2xy - wx2z + wy2z - xyz2)
+    D[:, 2, 1] = 2 * sqrt3 * (w3z - wz3 - x3y + xy3 + w2xy - wx2z + wy2z - xyz2)
+
+    # D[2,2] = w4 + x4 + y4 + z4 - 4*w2x2 + 2*w2y2 - 4*w2z2 - 4*x2y2 + 2*x2z2 - 4*y2z2
+    D[:, 2, 2] = w4 + x4 + y4 + z4 - 4 * w2x2 + 2 * w2y2 - 4 * w2z2 - 4 * x2y2 + 2 * x2z2 - 4 * y2z2
+
+    # D[2,3] = 2*sqrt3 * (-w3x + wx3 + y3z - yz3 - x2yz + w2yz - wxy2 + wxz2)
+    D[:, 2, 3] = 2 * sqrt3 * (-w3x + wx3 + y3z - yz3 - x2yz + w2yz - wxy2 + wxz2)
+
+    # D[2,4] = 2*sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 - 4*wxyz)
+    D[:, 2, 4] = 2 * sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 - 4 * wxyz)
+
+    # D[3,0] = 2*w3z + 2*wz3 - 2*x3y - 2*xy3 + 6*w2xy - 6*wx2z - 6*wy2z + 6*xyz2
+    D[:, 3, 0] = 2 * w3z + 2 * wz3 - 2 * x3y - 2 * xy3 + 6 * w2xy - 6 * wx2z - 6 * wy2z + 6 * xyz2
+
+    # D[3,1] = -2*w3y - 2*wy3 - 2*x3z - 2*xz3 + 6*w2xz + 6*wx2y + 6*xy2z + 6*wyz2
+    D[:, 3, 1] = -2 * w3y - 2 * wy3 - 2 * x3z - 2 * xz3 + 6 * w2xz + 6 * wx2y + 6 * xy2z + 6 * wyz2
+
+    # D[3,2] = 2*sqrt3 * (w3x - wx3 + y3z - yz3 - x2yz + w2yz + wxy2 - wxz2)
+    D[:, 3, 2] = 2 * sqrt3 * (w3x - wx3 + y3z - yz3 - x2yz + w2yz + wxy2 - wxz2)
+
+    # D[3,3] = w4 + x4 - y4 - z4 - 6*w2x2 + 6*y2z2
+    D[:, 3, 3] = w4 + x4 - y4 - z4 - 6 * w2x2 + 6 * y2z2
+
+    # D[3,4] = -2*w3x + 2*wx3 - 2*y3z + 2*yz3 + 6*wxy2 - 6*wxz2 + 6*w2yz - 6*x2yz
+    D[:, 3, 4] = -2 * w3x + 2 * wx3 - 2 * y3z + 2 * yz3 + 6 * wxy2 - 6 * wxz2 + 6 * w2yz - 6 * x2yz
+
+    # D[4,0] = 4 * (-w3y + wy3 - x3z + xz3)
+    D[:, 4, 0] = 4 * (-w3y + wy3 - x3z + xz3)
+
+    # D[4,1] = 2*w3z - 2*wz3 - 2*x3y + 2*xy3 - 6*w2xy - 6*wy2z + 6*wx2z + 6*xyz2
+    D[:, 4, 1] = 2 * w3z - 2 * wz3 - 2 * x3y + 2 * xy3 - 6 * w2xy - 6 * wy2z + 6 * wx2z + 6 * xyz2
+
+    # D[4,2] = 2*sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 + 4*wxyz)
+    D[:, 4, 2] = 2 * sqrt3 * (w2x2 - w2z2 - x2y2 + y2z2 + 4 * wxyz)
+
+    # D[4,3] = 2*w3x - 2*wx3 - 2*y3z + 2*yz3 + 6*wxz2 - 6*wxy2 + 6*w2yz - 6*x2yz
+    D[:, 4, 3] = 2 * w3x - 2 * wx3 - 2 * y3z + 2 * yz3 + 6 * wxz2 - 6 * wxy2 + 6 * w2yz - 6 * x2yz
+
+    # D[4,4] = w4 + x4 + y4 + z4 - 6*w2y2 - 6*x2z2
+    D[:, 4, 4] = w4 + x4 + y4 + z4 - 6 * w2y2 - 6 * x2z2
+
+    return D
+
+
 # =============================================================================
 # Cayley-Hamilton for l=2 (5x5 antisymmetric matrices)
 # =============================================================================
@@ -1002,7 +1134,7 @@ def wigner_d_from_axis_angle_hybrid(
     Uses the fastest method for each l:
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
-    - l=2: Cayley-Hamilton from axis-angle (fastest for 5x5)
+    - l=2: Quaternion to Wigner D via degree-4 polynomials (faster backward pass)
     - l>=3: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
 
     The caller should pass Euler-aligned generators for l>=2.
@@ -1044,19 +1176,9 @@ def wigner_d_from_axis_angle_hybrid(
             # The result is already in Cartesian (x,y,z) basis - no permutation needed
             D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
         elif ell == 2:
-            # Cayley-Hamilton for l=2
-            K_x = K_x_list[2]
-            K_y = K_y_list[2]
-            K_z = K_z_list[2]
-
-            K = (
-                axis[:, 0:1, None, None] * K_x +
-                axis[:, 1:2, None, None] * K_y +
-                axis[:, 2:3, None, None] * K_z
-            ).squeeze(1)
-
-            D_ell = _cayley_hamilton_exp_l2(K, angle)
-            D[:, block_start:block_end, block_start:block_end] = D_ell
+            # Direct quaternion to Wigner D l=2 (faster backward than Cayley-Hamilton)
+            # Uses degree-4 polynomial formulas, avoiding bmm/sqrt/where overhead
+            D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2(q)
 
         block_start = block_end
 

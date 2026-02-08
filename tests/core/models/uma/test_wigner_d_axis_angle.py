@@ -333,5 +333,105 @@ class TestRangeFunctions:
         assert max_err < 1e-12, f"Range differs from full by {max_err}"
 
 
+# =============================================================================
+# Test Quaternion to Wigner D l=2 Polynomial Function
+# =============================================================================
+
+
+class TestQuaternionToWignerDL2:
+    """Tests for the quaternion_to_wigner_d_l2 polynomial function."""
+
+    def test_matches_cayley_hamilton(self, dtype, device):
+        """Polynomial function matches Cayley-Hamilton for random quaternions."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2,
+            _cayley_hamilton_exp_l2,
+            quaternion_to_axis_angle,
+            get_so3_generators,
+        )
+
+        torch.manual_seed(42)
+        n_samples = 500
+        q = torch.randn(n_samples, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+
+        # Polynomial method
+        D_poly = quaternion_to_wigner_d_l2(q)
+
+        # Cayley-Hamilton method
+        axis, angle = quaternion_to_axis_angle(q)
+        generators = get_so3_generators(2, dtype, device)
+        K_x, K_y, K_z = generators['K_x'][2], generators['K_y'][2], generators['K_z'][2]
+        K = (
+            axis[:, 0:1, None, None] * K_x +
+            axis[:, 1:2, None, None] * K_y +
+            axis[:, 2:3, None, None] * K_z
+        ).squeeze(1)
+        D_cayley = _cayley_hamilton_exp_l2(K, angle)
+
+        max_err = (D_poly - D_cayley).abs().max().item()
+        assert max_err < 1e-10, f"Polynomial differs from Cayley-Hamilton by {max_err}"
+
+    def test_orthogonality(self, dtype, device):
+        """Polynomial function produces orthogonal matrices."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2,
+        )
+
+        torch.manual_seed(123)
+        q = torch.randn(100, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+
+        D = quaternion_to_wigner_d_l2(q)
+        I = torch.eye(5, dtype=dtype, device=device)
+
+        orth_err = (D @ D.transpose(-1, -2) - I).abs().max().item()
+        assert orth_err < 1e-10, f"Orthogonality error: {orth_err}"
+
+    def test_determinant_one(self, dtype, device):
+        """Polynomial function produces matrices with determinant 1."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2,
+        )
+
+        torch.manual_seed(456)
+        q = torch.randn(100, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+
+        D = quaternion_to_wigner_d_l2(q)
+        dets = torch.linalg.det(D)
+
+        det_err = (dets - 1.0).abs().max().item()
+        assert det_err < 1e-10, f"Determinant error: {det_err}"
+
+    def test_gradcheck(self, dtype, device):
+        """Gradcheck passes for the polynomial function."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2,
+        )
+
+        q = torch.randn(5, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+        q = q.detach().requires_grad_(True)
+
+        result = torch.autograd.gradcheck(
+            quaternion_to_wigner_d_l2, q, eps=1e-6, atol=1e-4
+        )
+        assert result
+
+    def test_identity_quaternion(self, dtype, device):
+        """Identity quaternion produces identity matrix."""
+        from fairchem.core.models.uma.common.wigner_d_axis_angle import (
+            quaternion_to_wigner_d_l2,
+        )
+
+        q = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=dtype, device=device)
+        D = quaternion_to_wigner_d_l2(q)
+        I = torch.eye(5, dtype=dtype, device=device)
+
+        err = (D[0] - I).abs().max().item()
+        assert err < 1e-10, f"Identity error: {err}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
