@@ -38,6 +38,19 @@ from typing import Optional
 
 import torch
 
+# Import Ra/Rb functions at module level to avoid per-call import overhead
+from fairchem.core.models.uma.common.wigner_d_quaternion import (
+    precompute_wigner_coefficients_symmetric,
+    precompute_wigner_coefficients_range,
+    precompute_U_blocks,
+    precompute_U_blocks_range,
+    quaternion_to_ra_rb,
+    wigner_d_matrix_complex,
+    wigner_d_matrix_complex_range,
+    wigner_d_complex_to_real_blockwise,
+    wigner_d_complex_to_real_range,
+)
+
 
 # =============================================================================
 # Generator and Transform Caching
@@ -188,11 +201,12 @@ def apply_euler_transform(
         end = start + 2 * ell + 1
         U = U_list[ell]
 
-        # D_out[:, start:end, start:end] = U @ D[:, start:end, start:end] @ U.T
-        # Read block, transform, write back (safe because blocks are independent)
-        block = D_out[:, start:end, start:end].clone()  # Need clone for read-before-write
-        transformed = torch.einsum("ij,njk,lk->nil", U, block, U)
-        D_out[:, start:end, start:end] = transformed
+        # D_euler = U @ D_axis @ U.T
+        # Use two matmuls: the intermediate result acts as a buffer, avoiding clone
+        # temp = D @ U.T creates new tensor, then U @ temp writes to D_out
+        block = D_out[:, start:end, start:end]
+        temp = torch.matmul(block, U.T)  # (N, size, size) - creates new tensor
+        D_out[:, start:end, start:end] = torch.matmul(U, temp)
 
     return D_out
 
@@ -652,6 +666,41 @@ def quaternion_to_axis_angle(
     return axis, angle
 
 
+def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion directly to 3x3 rotation matrix (l=1 Wigner D).
+
+    This is faster than going through axis-angle + Rodrigues because it
+    avoids: atan2, sqrt for normalization, sin/cos, K matrix construction.
+
+    Uses the standard quaternion to rotation matrix formula:
+        R = [[1-2(y²+z²),  2(xy-wz),   2(xz+wy) ],
+             [2(xy+wz),    1-2(x²+z²), 2(yz-wx) ],
+             [2(xz-wy),    2(yz+wx),   1-2(x²+y²)]]
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Rotation matrices of shape (N, 3, 3)
+    """
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+
+    # Precompute products (each used multiple times)
+    x2, y2, z2 = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
+
+    # Build rotation matrix
+    R = torch.stack([
+        torch.stack([1 - 2*(y2 + z2), 2*(xy - wz),     2*(xz + wy)    ], dim=-1),
+        torch.stack([2*(xy + wz),     1 - 2*(x2 + z2), 2*(yz - wx)    ], dim=-1),
+        torch.stack([2*(xz - wy),     2*(yz + wx),     1 - 2*(x2 + y2)], dim=-1),
+    ], dim=-2)
+
+    return R
+
+
 # =============================================================================
 # Cayley-Hamilton for l=2 (5x5 antisymmetric matrices)
 # =============================================================================
@@ -804,15 +853,10 @@ def _get_ra_rb_coefficients(
     key = (lmax, dtype, device)
 
     if key not in _RA_RB_COEFF_CACHE:
-        from fairchem.core.models.uma.common.wigner_d_quaternion import (
-            precompute_wigner_coefficients_symmetric,
-            precompute_U_blocks,
-        )
         coeffs = precompute_wigner_coefficients_symmetric(lmax, dtype=dtype, device=device)
         _RA_RB_COEFF_CACHE[key] = coeffs
 
     if key not in _RA_RB_U_CACHE:
-        from fairchem.core.models.uma.common.wigner_d_quaternion import precompute_U_blocks
         U_blocks = precompute_U_blocks(lmax, dtype=dtype, device=device)
         _RA_RB_U_CACHE[key] = U_blocks
 
@@ -829,15 +873,12 @@ def _get_ra_rb_coefficients_range(
     key = (lmin, lmax, dtype, device)
 
     if key not in _RA_RB_RANGE_CACHE:
-        from fairchem.core.models.uma.common.wigner_d_quaternion import (
-            precompute_wigner_coefficients_range,
-            precompute_U_blocks_range,
-        )
         coeffs = precompute_wigner_coefficients_range(lmin, lmax, dtype=dtype, device=device)
         U_blocks = precompute_U_blocks_range(lmin, lmax, dtype=dtype, device=device)
         _RA_RB_RANGE_CACHE[key] = (coeffs, U_blocks)
 
     return _RA_RB_RANGE_CACHE[key]
+
 
 
 def wigner_d_from_quaternion_polynomial(
@@ -931,18 +972,11 @@ def axis_angle_wigner_polynomial(
     # Transform l=1 block from m-ordering (y,z,x) to Cartesian (x,y,z)
     # This matches the convention used by wigner_d_from_axis_angle_batched
     if lmax >= 1:
-        # P transforms from m-ordering to Cartesian basis
-        P = torch.tensor([
-            [0., 0., 1.],  # x from position 2
-            [1., 0., 0.],  # y from position 0
-            [0., 1., 0.]   # z from position 1
-        ], dtype=dtype, device=device)
-
-        # Extract l=1 block (indices 1:4), transform, and put back
+        # Use index reordering instead of einsum with P matrix (faster)
+        # P transforms [y,z,x] -> [x,y,z], which is index permutation [2,0,1]
+        # D_cartesian = P @ D_m @ P.T is equivalent to reordering rows and columns
         D_l1 = D[:, 1:4, 1:4]
-        D_l1_cartesian = torch.einsum('ij,njk,kl->nil', P, D_l1, P.T)
-        D = D.clone()  # Avoid modifying the original
-        D[:, 1:4, 1:4] = D_l1_cartesian
+        D[:, 1:4, 1:4] = D_l1[:, [2, 0, 1], :][:, :, [2, 0, 1]]
 
     # Apply Euler-matching basis transformation for l >= 2
     if lmax >= 2:
@@ -1026,9 +1060,9 @@ def wigner_d_from_axis_angle_batched(
             K2 = torch.bmm(K, K)
             D_ell = I + sin_t * K + (1 - cos_t) * K2
 
-            # Transform from m-ordering (y,z,x) to Cartesian (x,y,z)
-            D_ell = torch.einsum('ij,njk,kl->nil', P, D_ell, P.T)
-            D[:, block_start:block_end, block_start:block_end] = D_ell
+            # Transform from m-ordering (y,z,x) to Cartesian (x,y,z) via index reordering
+            # P transforms [y,z,x] -> [x,y,z], which is index permutation [2,0,1]
+            D[:, 1:4, 1:4] = D_ell[:, [2, 0, 1], :][:, :, [2, 0, 1]]
         else:
             # l>=2: Use Cayley-Hamilton for l=2, matrix_exp for l>=3
             # Note: Cayley-Hamilton is ~1.4x faster for l=2 but slower for l>=5
@@ -1082,12 +1116,6 @@ def wigner_d_from_axis_angle_hybrid(
         Block-diagonal Wigner D matrices of shape (N, size, size)
         where size = (lmax+1)²
     """
-    from fairchem.core.models.uma.common.wigner_d_quaternion import (
-        quaternion_to_ra_rb,
-        wigner_d_matrix_complex_range,
-        wigner_d_complex_to_real_range,
-    )
-
     N = axis.shape[0]
     device = axis.device
     dtype = axis.dtype
@@ -1109,26 +1137,10 @@ def wigner_d_from_axis_angle_hybrid(
         if ell == 0:
             D[:, 0, 0] = 1.0
         elif ell == 1:
-            # Rodrigues formula for l=1
-            K_x = K_x_list[1]
-            K_y = K_y_list[1]
-            K_z = K_z_list[1]
-
-            K = (
-                axis[:, 0:1, None, None] * K_x +
-                axis[:, 1:2, None, None] * K_y +
-                axis[:, 2:3, None, None] * K_z
-            ).squeeze(1)
-
-            I = torch.eye(3, dtype=dtype, device=device)
-            sin_t = torch.sin(angle)[:, None, None]
-            cos_t = torch.cos(angle)[:, None, None]
-            K2 = torch.bmm(K, K)
-            D_ell = I + sin_t * K + (1 - cos_t) * K2
-
-            # Transform from m-ordering (y,z,x) to Cartesian (x,y,z)
-            D_ell = torch.einsum('ij,njk,kl->nil', P, D_ell, P.T)
-            D[:, block_start:block_end, block_start:block_end] = D_ell
+            # Direct quaternion to rotation matrix (faster than axis-angle + Rodrigues)
+            # This avoids: atan2, sqrt, sin/cos, K matrix construction, bmm
+            # The result is already in Cartesian (x,y,z) basis - no permutation needed
+            D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
         elif ell == 2:
             # Cayley-Hamilton for l=2
             K_x = K_x_list[2]
