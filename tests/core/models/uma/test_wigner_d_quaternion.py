@@ -54,6 +54,25 @@ def Jd_matrices(lmax, dtype, device):
 
 
 # =============================================================================
+# Test Edge Sets
+# =============================================================================
+
+# Standard test edges: ±X, ±Y, ±Z, diagonal, and 3 random
+STANDARD_TEST_EDGES = [
+    ([1.0, 0.0, 0.0], "+X"),
+    ([-1.0, 0.0, 0.0], "-X"),
+    ([0.0, 1.0, 0.0], "+Y"),
+    ([0.0, -1.0, 0.0], "-Y"),
+    ([0.0, 0.0, 1.0], "+Z"),
+    ([0.0, 0.0, -1.0], "-Z"),
+    ([1.0, 1.0, 1.0], "diagonal"),
+    ([0.3, 0.5, 0.8], "random1"),
+    ([0.7, -0.2, 0.4], "random2"),
+    ([-0.4, 0.6, -0.3], "random3"),
+]
+
+
+# =============================================================================
 # Test Core Properties
 # =============================================================================
 
@@ -61,31 +80,22 @@ def Jd_matrices(lmax, dtype, device):
 class TestQuaternionWigner:
     """Tests for quaternion_wigner function."""
 
-    def test_all_edges_align_to_y_axis(self, dtype, device):
-        """All edge vectors should align to +Y axis."""
-        test_edges = [
-            [0.0, 1.0, 0.0],   # +Y (identity)
-            [0.0, -1.0, 0.0],  # -Y
-            [1.0, 0.0, 0.0],   # X
-            [0.0, 0.0, 1.0],   # Z
-            [1.0, 1.0, 1.0],   # diagonal
-            [0.3, 0.5, 0.8],   # random
-        ]
-
+    @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
+    def test_edge_aligns_to_y_axis(self, dtype, device, edge, desc):
+        """Edge vector should align to +Y axis."""
         y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
 
-        for edge in test_edges:
-            edge_t = torch.tensor([edge], dtype=dtype, device=device)
-            edge_t = torch.nn.functional.normalize(edge_t, dim=-1)
-            gamma = torch.zeros(1, dtype=dtype, device=device)
+        edge_t = torch.tensor([edge], dtype=dtype, device=device)
+        edge_t = torch.nn.functional.normalize(edge_t, dim=-1)
+        gamma = torch.zeros(1, dtype=dtype, device=device)
 
-            D, _ = quaternion_wigner(edge_t, 1, gamma=gamma)
-            D_l1 = D[0, 1:4, 1:4]
-            result = D_l1 @ edge_t[0]
+        D, _ = quaternion_wigner(edge_t, 1, gamma=gamma)
+        D_l1 = D[0, 1:4, 1:4]
+        result = D_l1 @ edge_t[0]
 
-            assert torch.allclose(result, y_axis, atol=1e-5), (
-                f"Edge {edge} did not align to +Y, got {result}"
-            )
+        assert torch.allclose(result, y_axis, atol=1e-5), (
+            f"Edge {desc} did not align to +Y, got {result}"
+        )
 
     def test_orthogonality_and_determinant(self, lmax, dtype, device):
         """Wigner D matrices are orthogonal with determinant 1."""
@@ -177,35 +187,37 @@ class TestImplementationAgreement:
 class TestGradientStability:
     """Tests for gradient stability."""
 
-    def test_gradient_flow(self, lmax, dtype, device):
+    @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
+    def test_gradient_flow(self, lmax, dtype, device, edge, desc):
         """Gradients flow without NaN/Inf and are reasonably bounded."""
-        torch.manual_seed(42)
-        edges = torch.randn(10, 3, dtype=dtype, device=device, requires_grad=True)
-        gamma = torch.rand(10, dtype=dtype, device=device)
+        edge_t = torch.tensor([edge], dtype=dtype, device=device, requires_grad=True)
+        gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        D, _ = quaternion_wigner(edges, lmax, gamma=gamma)
+        D, _ = quaternion_wigner(edge_t, lmax, gamma=gamma)
         loss = D.sum()
         loss.backward()
 
-        assert edges.grad is not None
-        assert not torch.isnan(edges.grad).any(), "NaN in gradients"
-        assert not torch.isinf(edges.grad).any(), "Inf in gradients"
-        assert edges.grad.abs().max() < 1000, f"Gradient too large: {edges.grad.abs().max()}"
+        grad = edge_t.grad
+        assert grad is not None, f"No gradient for {desc}"
+        assert not torch.isnan(grad).any(), f"NaN gradient for {desc}"
+        assert not torch.isinf(grad).any(), f"Inf gradient for {desc}"
+        assert grad.abs().max() < 1000, f"Gradient too large for {desc}: {grad.abs().max()}"
 
-    def test_near_y_axis_gradients(self, lmax, dtype, device):
+    @pytest.mark.parametrize("epsilon", [1e-4, 1e-6, 1e-8])
+    def test_near_y_axis_gradients(self, lmax, dtype, device, epsilon):
         """Gradients remain bounded near ±Y axis."""
-        for ey in [0.9999, -0.9999]:
+        for sign in [1.0, -1.0]:
             edge = torch.tensor(
-                [[1e-4, ey, 1e-4]], dtype=dtype, device=device, requires_grad=True
+                [[epsilon, sign * 1.0, epsilon]], dtype=dtype, device=device, requires_grad=True
             )
             edge_norm = torch.nn.functional.normalize(edge, dim=-1)
 
             D, _ = quaternion_wigner(edge_norm, lmax)
             D.sum().backward()
 
-            assert not torch.isnan(edge.grad).any(), f"NaN gradient near ey={ey}"
+            assert not torch.isnan(edge.grad).any(), f"NaN gradient near {'+'if sign>0 else '-'}Y (eps={epsilon})"
             assert edge.grad.abs().max() < 1000, (
-                f"Gradient too large near ey={ey}: {edge.grad.abs().max()}"
+                f"Gradient too large near {'+'if sign>0 else '-'}Y (eps={epsilon}): {edge.grad.abs().max()}"
             )
 
 

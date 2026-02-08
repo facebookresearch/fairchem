@@ -58,6 +58,25 @@ def Jd_matrices(lmax, dtype, device):
 
 
 # =============================================================================
+# Test Edge Sets
+# =============================================================================
+
+# Standard test edges: ±X, ±Y, ±Z, diagonal, and 3 random
+STANDARD_TEST_EDGES = [
+    ([1.0, 0.0, 0.0], "+X"),
+    ([-1.0, 0.0, 0.0], "-X"),
+    ([0.0, 1.0, 0.0], "+Y"),
+    ([0.0, -1.0, 0.0], "-Y"),
+    ([0.0, 0.0, 1.0], "+Z"),
+    ([0.0, 0.0, -1.0], "-Z"),
+    ([1.0, 1.0, 1.0], "diagonal"),
+    ([0.3, 0.5, 0.8], "random1"),
+    ([0.7, -0.2, 0.4], "random2"),
+    ([-0.4, 0.6, -0.3], "random3"),
+]
+
+
+# =============================================================================
 # Test Core Wigner D Properties
 # =============================================================================
 
@@ -98,15 +117,7 @@ class TestWignerDProperties:
         # Check inverse equals transpose
         assert torch.allclose(D_inv[0], D[0].T, atol=1e-10)
 
-    @pytest.mark.parametrize(
-        "edge,desc",
-        [
-            ([1.0, 0.0, 0.0], "X-axis"),
-            ([0.0, 0.0, 1.0], "Z-axis"),
-            ([1.0, 1.0, 1.0], "diagonal"),
-            ([0.6, 0.5, 0.8], "general"),
-        ],
-    )
+    @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
     def test_edge_to_y(self, lmax, dtype, device, edge, desc):
         """The l=1 block rotates edge → +Y."""
         edge_t = torch.tensor([edge], dtype=dtype, device=device)
@@ -132,26 +143,20 @@ class TestWignerDProperties:
 class TestGradientStability:
     """Tests for gradient stability including near singularities."""
 
-    def test_gradient_flow(self, lmax, dtype, device):
+    @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
+    def test_gradient_flow(self, lmax, dtype, device, edge, desc):
         """Gradients flow without NaN/Inf and are reasonably bounded."""
-        test_edges = [
-            [1.0, 0.0, 0.0],      # X-axis
-            [0.01, 1.0, 0.01],    # near +Y
-            [0.01, -1.0, 0.01],   # near -Y
-        ]
+        edge_t = torch.tensor([edge], dtype=dtype, device=device, requires_grad=True)
+        gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        for edge in test_edges:
-            edge_t = torch.tensor([edge], dtype=dtype, device=device, requires_grad=True)
-            gamma = torch.zeros(1, dtype=dtype, device=device)
+        D, _ = axis_angle_wigner(edge_t, lmax, gamma=gamma)
+        loss = D.sum()
+        loss.backward()
 
-            D, _ = axis_angle_wigner(edge_t, lmax, gamma=gamma)
-            loss = D.sum()
-            loss.backward()
-
-            grad = edge_t.grad
-            assert not torch.isnan(grad).any(), f"NaN gradient for {edge}"
-            assert not torch.isinf(grad).any(), f"Inf gradient for {edge}"
-            assert grad.abs().max() < 1000, f"Gradient too large for {edge}: {grad.abs().max()}"
+        grad = edge_t.grad
+        assert not torch.isnan(grad).any(), f"NaN gradient for {desc}"
+        assert not torch.isinf(grad).any(), f"Inf gradient for {desc}"
+        assert grad.abs().max() < 1000, f"Gradient too large for {desc}: {grad.abs().max()}"
 
     @pytest.mark.parametrize("epsilon", [1e-4, 1e-6, 1e-8])
     def test_near_singularity_correctness(self, lmax, dtype, device, epsilon):
