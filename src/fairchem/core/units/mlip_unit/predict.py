@@ -155,6 +155,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
+        if inference_settings.use_quaternion_wigner is not None:
+            overrides["backbone"]["use_quaternion_wigner"] = (
+                inference_settings.use_quaternion_wigner
+            )
+
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
