@@ -6,6 +6,9 @@ Usage:
     python benchmark_batch_sizes.py --cpu        # Force CPU
     python benchmark_batch_sizes.py --cuda       # Force CUDA
     python benchmark_batch_sizes.py --quick      # Quick mode (fewer runs)
+    python benchmark_batch_sizes.py --method polynomial  # Use polynomial method
+    python benchmark_batch_sizes.py --l3_l4_kernels  # Use l3/l4 matmul kernels (hybrid)
+    python benchmark_batch_sizes.py --real       # Use real arithmetic
 """
 
 import argparse
@@ -14,10 +17,9 @@ import time
 from pathlib import Path
 
 from fairchem.core.models.uma.common.rotation import init_edge_rot_euler_angles, eulers_to_wigner
-from fairchem.core.models.uma.common.wigner_d_axis_angle import (
-    axis_angle_wigner_hybrid as axis_angle_wigner,
-    get_so3_generators,
-)
+from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
+from fairchem.core.models.uma.common.wigner_d_matexp import axis_angle_wigner as axis_angle_wigner_matexp
+from fairchem.core.models.uma.common.wigner_d_polynomial import axis_angle_wigner_polynomial
 
 
 def parse_args():
@@ -28,6 +30,10 @@ def parse_args():
     parser.add_argument("--compile", action="store_true", help="Apply torch.compile to both methods")
     parser.add_argument("--lmax", type=int, default=6, help="Maximum angular momentum")
     parser.add_argument("--dtype", choices=["float32", "float64"], default="float64", help="Data type")
+    parser.add_argument("--method", choices=["hybrid", "matexp", "polynomial"], default="hybrid",
+                        help="Axis-angle method to use (default: hybrid)")
+    parser.add_argument("--l3_l4_kernels", action="store_true", help="Use l3/l4 matmul kernels (hybrid only)")
+    parser.add_argument("--real", action="store_true", help="Use real arithmetic (hybrid/polynomial only)")
     return parser.parse_args()
 
 
@@ -123,9 +129,13 @@ def main():
         n_runs = 20
 
     print("=" * 90)
-    print("PERFORMANCE: Euler vs Axis-Angle by Batch Size")
+    print(f"PERFORMANCE: Euler vs Axis-Angle ({args.method}) by Batch Size")
     if args.compile:
         print("(with torch.compile)")
+    if args.l3_l4_kernels:
+        print("(with l3_l4_kernels)")
+    if args.real:
+        print("(with real arithmetic)")
     print("=" * 90)
     print(f"lmax = {lmax}, dtype = {dtype}, device = {device}")
     print(f"Warmup runs: {n_warmup}, Timed runs: {n_runs}")
@@ -138,16 +148,25 @@ def main():
     Jd = torch.load(jd_path, map_location=device, weights_only=True)
     Jd = [J.to(dtype=dtype) for J in Jd]
 
-    # Pre-compute generators for axis-angle (avoids torch.compile graph breaks)
-    generators = get_so3_generators(lmax, dtype, device)
-
     # Define functions to be compiled (once, outside the loops)
     def euler_forward(edges):
         angles = init_edge_rot_euler_angles(edges)
         return eulers_to_wigner(angles, 0, lmax, Jd)
 
     def axis_forward(edges):
-        return axis_angle_wigner(edges, lmax, generators=generators)
+        if args.method == "hybrid":
+            return axis_angle_wigner_hybrid(
+                edges, lmax,
+                l3_l4_kernel=args.l3_l4_kernels,
+                use_real_arithmetic=args.real,
+            )
+        elif args.method == "matexp":
+            return axis_angle_wigner_matexp(edges, lmax)
+        else:  # polynomial
+            return axis_angle_wigner_polynomial(
+                edges, lmax,
+                use_real_arithmetic=args.real,
+            )
 
     # Optionally apply torch.compile
     if args.compile:
@@ -173,8 +192,8 @@ def main():
     euler_ok = check_wigner_correctness(W_euler, "Euler", test_batch, lmax, test_edges, device, dtype)
 
     # Axis-Angle
-    W_axis, _ = axis_angle_wigner(test_edges, lmax)
-    axis_ok = check_wigner_correctness(W_axis, "Axis-Angle", test_batch, lmax, test_edges, device, dtype)
+    W_axis, _ = axis_forward(test_edges)
+    axis_ok = check_wigner_correctness(W_axis, f"Axis-Angle ({args.method})", test_batch, lmax, test_edges, device, dtype)
 
     if not (euler_ok and axis_ok):
         print("\nWARNING: Some correctness checks failed!")
