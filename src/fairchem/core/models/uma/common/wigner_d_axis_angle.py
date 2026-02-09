@@ -45,11 +45,17 @@ from fairchem.core.models.uma.common.wigner_d_quaternion import (
     precompute_wigner_coefficients_range,
     precompute_U_blocks_euler_aligned,
     precompute_U_blocks_euler_aligned_range,
+    precompute_U_blocks_euler_aligned_real,
     quaternion_to_ra_rb,
+    quaternion_to_ra_rb_real,
     wigner_d_matrix_complex,
     wigner_d_matrix_complex_range,
+    wigner_d_matrix_real,
+    wigner_d_matrix_real_range,
     wigner_d_complex_to_real_blockwise,
     wigner_d_complex_to_real_range,
+    wigner_d_pair_to_real_blockwise,
+    wigner_d_pair_to_real_range,
 )
 
 
@@ -60,7 +66,9 @@ from fairchem.core.models.uma.common.wigner_d_quaternion import (
 _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
+_RA_RB_U_REAL_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
 _RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
+_RA_RB_RANGE_REAL_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
 _L2_COEFF_TENSOR_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
 
 
@@ -74,7 +82,9 @@ def clear_memory_caches() -> None:
     _GENERATOR_CACHE.clear()
     _RA_RB_COEFF_CACHE.clear()
     _RA_RB_U_CACHE.clear()
+    _RA_RB_U_REAL_CACHE.clear()
     _RA_RB_RANGE_CACHE.clear()
+    _RA_RB_RANGE_REAL_CACHE.clear()
     _L2_COEFF_TENSOR_CACHE.clear()
 
 
@@ -1197,6 +1207,47 @@ def _get_ra_rb_coefficients_range(
     return _RA_RB_RANGE_CACHE[key]
 
 
+def _get_ra_rb_coefficients_real(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> tuple[dict, list]:
+    """Get cached Ra/Rb polynomial coefficients with real-pair U blocks."""
+    key = (lmax, dtype, device)
+
+    if key not in _RA_RB_COEFF_CACHE:
+        coeffs = precompute_wigner_coefficients_symmetric(lmax, dtype=dtype, device=device)
+        _RA_RB_COEFF_CACHE[key] = coeffs
+
+    if key not in _RA_RB_U_REAL_CACHE:
+        U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
+        _RA_RB_U_REAL_CACHE[key] = U_blocks_real
+
+    return _RA_RB_COEFF_CACHE[key], _RA_RB_U_REAL_CACHE[key]
+
+
+def _get_ra_rb_coefficients_range_real(
+    lmin: int,
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> tuple[dict, list]:
+    """Get cached Ra/Rb polynomial coefficients for l in [lmin, lmax] with real-pair U blocks."""
+    key = (lmin, lmax, dtype, device)
+
+    if key not in _RA_RB_RANGE_REAL_CACHE:
+        from fairchem.core.models.uma.common.wigner_d_quaternion import (
+            precompute_wigner_coefficients_range,
+        )
+        coeffs = precompute_wigner_coefficients_range(lmin, lmax, dtype=dtype, device=device)
+        # Get full real U blocks and slice to range
+        full_U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
+        U_blocks_range_real = full_U_blocks_real[lmin:]
+        _RA_RB_RANGE_REAL_CACHE[key] = (coeffs, U_blocks_range_real)
+
+    return _RA_RB_RANGE_REAL_CACHE[key]
+
+
 def wigner_d_from_quaternion_polynomial(
     q: torch.Tensor,
     lmax: int,
@@ -1287,6 +1338,88 @@ def axis_angle_wigner_polynomial(
 
     # Compute Wigner D using Ra/Rb polynomial
     D = wigner_d_from_quaternion_polynomial(q_combined, lmax)
+
+    # Return D and its inverse (transpose for orthogonal matrices)
+    D_inv = D.transpose(1, 2).contiguous()
+
+    return D, D_inv
+
+
+def wigner_d_from_quaternion_polynomial_real(
+    q: torch.Tensor,
+    lmax: int,
+) -> torch.Tensor:
+    """
+    Compute Wigner D matrices from quaternions using real-pair arithmetic.
+
+    This is a torch.compile-compatible version of wigner_d_from_quaternion_polynomial
+    that avoids complex tensor operations.
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+        lmax: Maximum angular momentum
+
+    Returns:
+        Real Wigner D matrices of shape (N, size, size)
+    """
+    dtype = q.dtype
+    device = q.device
+
+    coeffs, U_blocks_real = _get_ra_rb_coefficients_real(lmax, dtype, device)
+
+    ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
+    D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
+    D_real = wigner_d_pair_to_real_blockwise(D_re, D_im, U_blocks_real, lmax)
+
+    return D_real
+
+
+def axis_angle_wigner_polynomial_real(
+    edge_distance_vec: torch.Tensor,
+    lmax: int,
+    gamma: Optional[torch.Tensor] = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute Wigner D using real-pair Ra/Rb polynomial (torch.compile compatible).
+
+    This is the torch.compile-compatible version of axis_angle_wigner_polynomial
+    that uses real-pair arithmetic to avoid graph breaks from complex operations.
+
+    Args:
+        edge_distance_vec: Edge vectors of shape (N, 3)
+        lmax: Maximum angular momentum
+        gamma: Optional roll angles of shape (N,).
+               If None, uses random gamma (for SO(2) equivariance during training).
+
+    Returns:
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
+    """
+    # Handle single vector input
+    if edge_distance_vec.dim() == 1:
+        edge_distance_vec = edge_distance_vec.unsqueeze(0)
+
+    device = edge_distance_vec.device
+    dtype = edge_distance_vec.dtype
+    N = edge_distance_vec.shape[0]
+
+    # Normalize edges
+    edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
+
+    # Compute gamma if not provided
+    if gamma is None:
+        gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+
+    # Compute quaternion (edge → +Y) using SLERP-blended two-chart approach
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Create Y-rotation quaternion and combine with edge→Y
+    # Combined rotation: first edge→Y, then rotate about Y by gamma
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    # Compute Wigner D using real-pair Ra/Rb polynomial
+    D = wigner_d_from_quaternion_polynomial_real(q_combined, lmax)
 
     # Return D and its inverse (transpose for orthogonal matrices)
     D_inv = D.transpose(1, 2).contiguous()
@@ -1465,6 +1598,69 @@ def wigner_d_from_axis_angle_hybrid(
 
         # Copy l>=3 blocks directly from the range result
         # D_ra_rb_range is already just the l>=3 blocks
+        block_offset = 9  # Skip l=0,1,2 in full matrix (1 + 3 + 5 = 9)
+        D[:, block_offset:, block_offset:] = D_ra_rb_range
+
+    return D
+
+
+def wigner_d_from_axis_angle_hybrid_real(
+    axis: torch.Tensor,
+    angle: torch.Tensor,
+    q: torch.Tensor,
+    generators: dict[str, list[torch.Tensor]],
+    lmax: int,
+) -> torch.Tensor:
+    """
+    Compute Wigner D matrices using hybrid approach with real-pair arithmetic.
+
+    This is the torch.compile-compatible version of wigner_d_from_axis_angle_hybrid
+    that uses real-pair arithmetic for l>=3 to avoid complex tensor operations.
+
+    Uses the fastest method for each l:
+    - l=0: Trivial (identity)
+    - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
+    - l=2: Quaternion to Wigner D via degree-4 polynomials (faster backward pass)
+    - l>=3: Ra/Rb polynomial with real-pair arithmetic (torch.compile compatible)
+
+    Args:
+        axis: Rotation axes of shape (N, 3), unit vectors
+        angle: Rotation angles of shape (N,), in radians
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+        generators: Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P'
+        lmax: Maximum angular momentum
+
+    Returns:
+        Block-diagonal Wigner D matrices of shape (N, size, size)
+        where size = (lmax+1)²
+    """
+    N = axis.shape[0]
+    device = axis.device
+    dtype = axis.dtype
+    size = (lmax + 1) ** 2
+
+    D = torch.zeros(N, size, size, dtype=dtype, device=device)
+
+    # Compute l=0, l=1, l=2 using direct quaternion methods (all real arithmetic)
+    for ell in range(min(lmax + 1, 3)):  # Only l=0,1,2
+        if ell == 0:
+            D[:, 0, 0] = 1.0
+        elif ell == 1:
+            # Direct quaternion to rotation matrix (already real)
+            D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
+        elif ell == 2:
+            # Direct quaternion to Wigner D l=2 using einsum tensor contraction
+            D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
+
+    # Compute l>=3 using Ra/Rb polynomial with real-pair arithmetic
+    if lmax >= 3:
+        # Get Ra/Rb coefficients for l>=3 only with real U blocks
+        coeffs_range, U_blocks_range_real = _get_ra_rb_coefficients_range_real(3, lmax, dtype, device)
+        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
+        D_re_range, D_im_range = wigner_d_matrix_real_range(ra_re, ra_im, rb_re, rb_im, coeffs_range)
+        D_ra_rb_range = wigner_d_pair_to_real_range(D_re_range, D_im_range, U_blocks_range_real, 3, lmax)
+
+        # Copy l>=3 blocks directly from the range result
         block_offset = 9  # Skip l=0,1,2 in full matrix (1 + 3 + 5 = 9)
         D[:, block_offset:, block_offset:] = D_ra_rb_range
 
@@ -1759,6 +1955,80 @@ def axis_angle_wigner_hybrid(
 
     # Step 7: Compute Wigner D using hybrid approach
     D = wigner_d_from_axis_angle_hybrid(axis, angle, q_combined, generators, lmax)
+
+    # Step 8: Inverse is transpose (orthogonal matrix)
+    D_inv = D.transpose(1, 2).contiguous()
+
+    return D, D_inv
+
+
+def axis_angle_wigner_hybrid_real(
+    edge_distance_vec: torch.Tensor,
+    lmax: int,
+    gamma: Optional[torch.Tensor] = None,
+    use_euler_gamma: bool = False,
+    generators: Optional[dict[str, list[torch.Tensor]]] = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute Wigner D using hybrid approach with real-pair arithmetic (torch.compile compatible).
+
+    This is the torch.compile-compatible version of axis_angle_wigner_hybrid that
+    uses real-pair arithmetic for l>=3 to avoid graph breaks from complex operations.
+
+    Uses the fastest method for each l:
+    - l=0: Trivial (identity)
+    - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
+    - l=2: Quaternion to Wigner D via degree-4 polynomials
+    - l>=3: Ra/Rb polynomial with real-pair arithmetic (no complex tensors)
+
+    Args:
+        edge_distance_vec: Edge vectors of shape (N, 3)
+        lmax: Maximum angular momentum
+        gamma: Optional roll angles of shape (N,).
+               If None, uses random gamma (for SO(2) equivariance during training).
+        use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
+               of random gamma. This makes output exactly match Euler code.
+        generators: Optional pre-computed SO(3) generators from get_so3_generators().
+               If None, generators are fetched internally.
+
+    Returns:
+        Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
+        (N, size, size) and size = (lmax+1)².
+    """
+    # Handle single vector input
+    if edge_distance_vec.dim() == 1:
+        edge_distance_vec = edge_distance_vec.unsqueeze(0)
+
+    N = edge_distance_vec.shape[0]
+    device = edge_distance_vec.device
+    dtype = edge_distance_vec.dtype
+
+    # Step 1: Normalize edges
+    edge_normalized = torch.nn.functional.normalize(edge_distance_vec, dim=-1)
+
+    # Step 2: Compute gamma if not provided
+    if gamma is None:
+        if use_euler_gamma:
+            gamma = compute_euler_matching_gamma(edge_normalized)
+        else:
+            gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+
+    # Step 3: Compute quaternion (edge → +Y)
+    q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
+
+    # Step 4: Create Y-rotation quaternion and combine with edge→Y
+    q_gamma = quaternion_y_rotation(gamma)
+    q_combined = quaternion_multiply(q_gamma, q_edge_to_y)
+
+    # Step 5: Extract axis-angle from combined quaternion (needed for generators, but not used here)
+    axis, angle = quaternion_to_axis_angle(q_combined)
+
+    # Step 6: Get Euler-aligned generators (cached or passed in)
+    if generators is None:
+        generators = get_so3_generators(lmax, dtype, device)
+
+    # Step 7: Compute Wigner D using hybrid approach with real-pair arithmetic
+    D = wigner_d_from_axis_angle_hybrid_real(axis, angle, q_combined, generators, lmax)
 
     # Step 8: Inverse is transpose (orthogonal matrix)
     D_inv = D.transpose(1, 2).contiguous()
