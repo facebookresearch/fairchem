@@ -19,15 +19,15 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
+from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    create_wigner_data_module,
+)
 from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
-from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
-from fairchem.core.models.uma.common.quaternion_wigner_utils import (
-    create_wigner_data_module,
-)
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
 from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
     DatasetEmbedding,

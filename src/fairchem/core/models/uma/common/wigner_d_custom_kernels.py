@@ -104,12 +104,12 @@ def rodrigues_rotation_l1(
 
     WARNING: This method is slower than quaternion_to_rotation_matrix because:
     1. It requires extracting axis-angle from quaternion (expensive trig ops)
-    2. It uses bmm for K² computation
+    2. It uses bmm for K^2 computation
     3. It requires fetching/broadcasting generator matrices
 
     This is maintained for reference and inspiration only.
 
-    Uses: exp(θK) = I + sin(θ)K + (1-cos(θ))K²
+    Uses: exp(theta K) = I + sin(theta)K + (1-cos(theta))K^2
 
     Args:
         axis: Rotation axes of shape (N, 3), unit vectors
@@ -436,17 +436,17 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
 
 def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor:
     """
-    Compute exp(θK) for 5×5 antisymmetric K using Cayley-Hamilton.
+    Compute exp(theta K) for 5x5 antisymmetric K using Cayley-Hamilton.
 
     WARNING: This method is slower than quaternion_to_wigner_d_l2_einsum because:
     1. It requires extracting axis-angle from quaternion (expensive trig ops)
-    2. It uses multiple bmm operations for K², K³, K⁴
+    2. It uses multiple bmm operations for K^2, K^3, K^4
     3. It has complex branching for degenerate eigenvalue handling
 
     This is maintained for reference and inspiration only.
 
-    For antisymmetric K with eigenvalues 0, ±iλ₁, ±iλ₂:
-        exp(θK) = I + c₁K + c₂K² + c₃K³ + c₄K⁴
+    For antisymmetric K with eigenvalues 0, ±iλ_1, ±iλ_2:
+        exp(theta K) = I + c_1K + c_2K^2 + c_3 K^3 + c_4 K^4
 
     The coefficients are derived via Lagrange interpolation on the eigenvalues.
 
@@ -455,7 +455,7 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
         angle: Rotation angles of shape (N,)
 
     Returns:
-        Rotation matrices exp(θK) of shape (N, 5, 5)
+        Rotation matrices exp(theta K) of shape (N, 5, 5)
     """
     device = K.device
     dtype = K.dtype
@@ -468,20 +468,20 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     K4 = torch.bmm(K2, K2)
 
     # Extract eigenvalue info from traces
-    # For antisymmetric K: eigenvalues are 0, ±iλ₁, ±iλ₂
-    # tr(K²) = -2(λ₁² + λ₂²)
-    # tr(K⁴) = 2(λ₁⁴ + λ₂⁴)
+    # For antisymmetric K: eigenvalues are 0, ±iλ_1, ±iλ_2
+    # tr(K^2) = -2(λ_1^2 + λ_2^2)
+    # tr(K^4) = 2(λ_1^4 + λ_2^4)
     tr_K2 = torch.einsum("nii->n", K2)
     tr_K4 = torch.einsum("nii->n", K4)
 
-    s1 = -tr_K2 / 2  # λ₁² + λ₂²
-    s2 = tr_K4 / 2  # λ₁⁴ + λ₂⁴
+    s1 = -tr_K2 / 2  # λ_1^2 + λ_2^2
+    s2 = tr_K4 / 2  # λ_1^4 + λ_2^4
 
-    # Solve for σ₁ = λ₁², σ₂ = λ₂²
-    # Product p = σ₁ * σ₂ = (s1² - s2) / 2
+    # Solve for sigma_1 = λ_1^2, sigma_2 = λ_2^2
+    # Product p = sigma_1 * sigma_2 = (s1^2 - s2) / 2
     p = (s1 * s1 - s2) / 2
 
-    # σ₁, σ₂ are roots of t² - s1*t + p = 0
+    # sigma_1, sigma_2 are roots of t^2 - s1*t + p = 0
     discriminant = (s1 * s1 - 4 * p).clamp(min=0)
     sqrt_disc = torch.sqrt(discriminant)
 
@@ -495,10 +495,10 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     eps = 1e-12
 
     # Compute sinc-like functions:
-    # A = (cos(θλ₁) - 1) / σ₁
-    # B = (cos(θλ₂) - 1) / σ₂
-    # C = sin(θλ₁) / λ₁
-    # D = sin(θλ₂) / λ₂
+    # A = (cos(theta λ_1) - 1) / sigma_1
+    # B = (cos(theta λ_2) - 1) / sigma_2
+    # C = sin(theta λ_1) / λ_1
+    # D = sin(theta λ_2) / λ_2
 
     theta_l1 = theta * lambda1
     theta_l2 = theta * lambda2
@@ -508,23 +508,23 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     sin_l1 = torch.sin(theta_l1)
     sin_l2 = torch.sin(theta_l2)
 
-    # Safe division for A = (cos(θλ) - 1) / σ
+    # Safe division for A = (cos(theta λ) - 1) / sigma
     sigma1_safe = torch.where(sigma1 < eps, torch.ones_like(sigma1), sigma1)
     sigma2_safe = torch.where(sigma2 < eps, torch.ones_like(sigma2), sigma2)
     A = torch.where(sigma1 < eps, -theta * theta / 2, (cos_l1 - 1) / sigma1_safe)
     B = torch.where(sigma2 < eps, -theta * theta / 2, (cos_l2 - 1) / sigma2_safe)
 
-    # Safe division for C = sin(θλ) / λ
+    # Safe division for C = sin(theta λ) / λ
     lambda1_safe = torch.where(lambda1 < eps, torch.ones_like(lambda1), lambda1)
     lambda2_safe = torch.where(lambda2 < eps, torch.ones_like(lambda2), lambda2)
     C = torch.where(lambda1 < eps, theta, sin_l1 / lambda1_safe)
     D_coeff = torch.where(lambda2 < eps, theta, sin_l2 / lambda2_safe)
 
     # Coefficients via Lagrange interpolation:
-    #   c₁ = (σ₂C - σ₁D) / (σ₂ - σ₁)
-    #   c₂ = (σ₁B - σ₂A) / (σ₂ - σ₁)
-    #   c₃ = (C - D) / (σ₂ - σ₁)
-    #   c₄ = (B - A) / (σ₂ - σ₁)
+    #   c_1 = (sigma_2 C - sigma_1 D) / (sigma_2 - sigma_1)
+    #   c_2 = (sigma_1 B - sigma_2 A) / (sigma_2 - sigma_1)
+    #   c_3 = (C - D) / (sigma_2 - sigma_1)
+    #   c_4 = (B - A) / (sigma_2 - sigma_1)
 
     sigma_diff = sigma2 - sigma1
     degenerate = sigma_diff.abs() < eps
@@ -536,7 +536,7 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     c3_nondeg = (C - D_coeff) / sigma_diff_safe
     c4_nondeg = (B - A) / sigma_diff_safe
 
-    # Degenerate case (σ₁ = σ₂ = σ): Rodrigues-like formula
+    # Degenerate case (sigma_1 = sigma_2 = sigma): Rodrigues-like formula
     sigma_common = (sigma1 + sigma2) / 2
     lambda_common = torch.sqrt(sigma_common.clamp(min=0))
     theta_lc = theta * lambda_common
@@ -569,7 +569,7 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     c3 = c3[:, None, None]
     c4 = c4[:, None, None]
 
-    # exp(θK) = I + c₁K + c₂K² + c₃K³ + c₄K⁴
+    # exp(theta K) = I + c_1 K + c_2 K^2 + c_3 K^3 + c_4 K^4
     return I + c1 * K + c2 * K2 + c3 * K3 + c4 * K4
 
 

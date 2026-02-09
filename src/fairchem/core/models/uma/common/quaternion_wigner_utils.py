@@ -107,7 +107,9 @@ class WignerCoefficientsModule(nn.Module):
         # Derived element mapping
         self.register_buffer("derived_row", derived_row, persistent=False)
         self.register_buffer("derived_col", derived_col, persistent=False)
-        self.register_buffer("derived_primary_idx", derived_primary_idx, persistent=False)
+        self.register_buffer(
+            "derived_primary_idx", derived_primary_idx, persistent=False
+        )
         self.register_buffer("derived_sign", derived_sign, persistent=False)
 
 
@@ -949,7 +951,7 @@ def _build_euler_transform(ell: int, Jd: torch.Tensor) -> torch.Tensor:
 def _build_u_matrix(
     ell: int,
     dtype: torch.dtype = torch.complex128,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device | None = None,
 ) -> torch.Tensor:
     """
     Build complex-to-real spherical harmonic transformation matrix.
@@ -964,6 +966,8 @@ def _build_u_matrix(
     Returns:
         U matrix of shape (2*ell+1, 2*ell+1)
     """
+    if device is None:
+        device = torch.device("cpu")
     size = 2 * ell + 1
     sqrt2_inv = 1.0 / math.sqrt(2.0)
 
@@ -1166,7 +1170,7 @@ def quaternion_to_ra_rb_real(
 def precompute_wigner_coefficients(
     lmax: int,
     dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device | None = None,
     lmin: int = 0,
 ) -> WignerCoefficients:
     """
@@ -1189,6 +1193,8 @@ def precompute_wigner_coefficients(
     Returns:
         WignerCoefficients dataclass with symmetric coefficient tables
     """
+    if device is None:
+        device = torch.device("cpu")
     factorial = _factorial_table(2 * lmax + 1, dtype, device)
 
     # Count elements
@@ -1609,7 +1615,7 @@ def wigner_d_matrix_real(
 def precompute_U_blocks_euler_aligned(
     lmax: int,
     dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device | None = None,
     lmin: int = 0,
 ) -> list[torch.Tensor]:
     """
@@ -1628,6 +1634,8 @@ def precompute_U_blocks_euler_aligned(
     Returns:
         List of combined U matrices where U_blocks[i] corresponds to l=lmin+i
     """
+    if device is None:
+        device = torch.device("cpu")
     if dtype == torch.float32:
         complex_dtype = torch.complex64
     else:
@@ -1664,7 +1672,7 @@ def precompute_U_blocks_euler_aligned(
 def precompute_U_blocks_euler_aligned_real(
     lmax: int,
     dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device | None = None,
 ) -> list[tuple[torch.Tensor, torch.Tensor]]:
     """
     Precompute Euler-aligned U transformation matrices as real/imag pairs.
@@ -1679,6 +1687,8 @@ def precompute_U_blocks_euler_aligned_real(
     Returns:
         List of (U_re, U_im) tuples where each has shape (2*ell+1, 2*ell+1)
     """
+    if device is None:
+        device = torch.device("cpu")
     U_blocks_complex = precompute_U_blocks_euler_aligned(
         lmax, dtype=dtype, device=device
     )
@@ -1913,7 +1923,7 @@ def _load_coefficients(
 def get_wigner_coefficients(
     lmax: int,
     dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device | None = None,
     cache_dir: Optional[Path] = None,
     use_cache: bool = True,
 ) -> WignerCoefficients:
@@ -1930,6 +1940,8 @@ def get_wigner_coefficients(
     Returns:
         WignerCoefficients with precomputed coefficient tensors
     """
+    if device is None:
+        device = torch.device("cpu")
     cache_path = _get_cache_path(lmax, "symmetric", cache_dir)
 
     if use_cache:
