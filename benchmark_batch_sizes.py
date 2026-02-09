@@ -11,15 +11,26 @@ Usage:
     python benchmark_batch_sizes.py --real       # Use real arithmetic
 """
 
+from __future__ import annotations
+
 import argparse
-import torch
 import time
 from pathlib import Path
 
-from fairchem.core.models.uma.common.rotation import init_edge_rot_euler_angles, eulers_to_wigner
+import torch
+
+from fairchem.core.models.uma.common.quaternion_wigner_utils import get_so3_generators
+from fairchem.core.models.uma.common.rotation import (
+    eulers_to_wigner,
+    init_edge_rot_euler_angles,
+)
 from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
-from fairchem.core.models.uma.common.wigner_d_matexp import axis_angle_wigner as axis_angle_wigner_matexp
-from fairchem.core.models.uma.common.wigner_d_polynomial import axis_angle_wigner_polynomial
+from fairchem.core.models.uma.common.wigner_d_matexp import (
+    axis_angle_wigner as axis_angle_wigner_matexp,
+)
+from fairchem.core.models.uma.common.wigner_d_polynomial import (
+    axis_angle_wigner_polynomial,
+)
 
 
 def parse_args():
@@ -27,13 +38,29 @@ def parse_args():
     parser.add_argument("--cpu", action="store_true", help="Force CPU device")
     parser.add_argument("--cuda", action="store_true", help="Force CUDA device")
     parser.add_argument("--quick", action="store_true", help="Quick mode (fewer runs)")
-    parser.add_argument("--compile", action="store_true", help="Apply torch.compile to both methods")
+    parser.add_argument(
+        "--compile", action="store_true", help="Apply torch.compile to both methods"
+    )
     parser.add_argument("--lmax", type=int, default=6, help="Maximum angular momentum")
-    parser.add_argument("--dtype", choices=["float32", "float64"], default="float64", help="Data type")
-    parser.add_argument("--method", choices=["hybrid", "matexp", "polynomial"], default="hybrid",
-                        help="Axis-angle method to use (default: hybrid)")
-    parser.add_argument("--l3_l4_kernels", action="store_true", help="Use l3/l4 matmul kernels (hybrid only)")
-    parser.add_argument("--real", action="store_true", help="Use real arithmetic (hybrid/polynomial only)")
+    parser.add_argument(
+        "--dtype", choices=["float32", "float64"], default="float64", help="Data type"
+    )
+    parser.add_argument(
+        "--method",
+        choices=["hybrid", "matexp", "polynomial"],
+        default="hybrid",
+        help="Axis-angle method to use (default: hybrid)",
+    )
+    parser.add_argument(
+        "--l3_l4_kernels",
+        action="store_true",
+        help="Use l3/l4 matmul kernels (hybrid only)",
+    )
+    parser.add_argument(
+        "--real",
+        action="store_true",
+        help="Use real arithmetic (hybrid/polynomial only)",
+    )
     return parser.parse_args()
 
 
@@ -67,14 +94,16 @@ def check_wigner_correctness(W, method_name, n_edges, lmax, test_edges, device, 
     # Check shape
     expected_size = (lmax + 1) ** 2
     if W.shape != (n_edges, expected_size, expected_size):
-        errors.append(f"wrong shape {W.shape}, expected ({n_edges}, {expected_size}, {expected_size})")
+        errors.append(
+            f"wrong shape {W.shape}, expected ({n_edges}, {expected_size}, {expected_size})"
+        )
 
     # Check orthogonality of each l-block
     max_ortho_err = 0.0
     offset = 0
     for l in range(lmax + 1):
         block_size = 2 * l + 1
-        D_l = W[:, offset:offset+block_size, offset:offset+block_size]
+        D_l = W[:, offset : offset + block_size, offset : offset + block_size]
         I_expected = torch.eye(block_size, dtype=dtype, device=device).unsqueeze(0)
         DDT = torch.bmm(D_l, D_l.transpose(-2, -1))
         ortho_err = (DDT - I_expected).abs().max().item()
@@ -124,7 +153,11 @@ def main():
         n_warmup = 3
         n_runs = 5
     else:
-        batch_sizes = [100, 500, 1000, 2000, 5000] + list(range(10000, 150000, 10000)) + list(range(200000,600000,100000))
+        batch_sizes = (
+            [100, 500, 1000, 2000, 5000]
+            + list(range(10000, 150000, 10000))
+            + list(range(200000, 600000, 100000))
+        )
         n_warmup = 5
         n_runs = 20
 
@@ -144,7 +177,15 @@ def main():
     print()
 
     # Load Jd matrices for Euler
-    jd_path = Path(__file__).parent.resolve() / "src" / "fairchem" / "core" / "models" / "uma" / "Jd.pt"
+    jd_path = (
+        Path(__file__).parent.resolve()
+        / "src"
+        / "fairchem"
+        / "core"
+        / "models"
+        / "uma"
+        / "Jd.pt"
+    )
     Jd = torch.load(jd_path, map_location=device, weights_only=True)
     Jd = [J.to(dtype=dtype) for J in Jd]
 
@@ -153,18 +194,25 @@ def main():
         angles = init_edge_rot_euler_angles(edges)
         return eulers_to_wigner(angles, 0, lmax, Jd)
 
+    # Pre-compute generators for matexp method (avoids torch.compile graph breaks)
+    generators = (
+        get_so3_generators(lmax, dtype, device) if args.method == "matexp" else None
+    )
+
     def axis_forward(edges):
         if args.method == "hybrid":
             return axis_angle_wigner_hybrid(
-                edges, lmax,
+                edges,
+                lmax,
                 l3_l4_kernel=args.l3_l4_kernels,
                 use_real_arithmetic=args.real,
             )
         elif args.method == "matexp":
-            return axis_angle_wigner_matexp(edges, lmax)
+            return axis_angle_wigner_matexp(edges, lmax, generators=generators)
         else:  # polynomial
             return axis_angle_wigner_polynomial(
-                edges, lmax,
+                edges,
+                lmax,
                 use_real_arithmetic=args.real,
             )
 
@@ -189,11 +237,21 @@ def main():
     # Euler
     angles = init_edge_rot_euler_angles(test_edges)
     W_euler = eulers_to_wigner(angles, 0, lmax, Jd)
-    euler_ok = check_wigner_correctness(W_euler, "Euler", test_batch, lmax, test_edges, device, dtype)
+    euler_ok = check_wigner_correctness(
+        W_euler, "Euler", test_batch, lmax, test_edges, device, dtype
+    )
 
     # Axis-Angle
     W_axis, _ = axis_forward(test_edges)
-    axis_ok = check_wigner_correctness(W_axis, f"Axis-Angle ({args.method})", test_batch, lmax, test_edges, device, dtype)
+    axis_ok = check_wigner_correctness(
+        W_axis,
+        f"Axis-Angle ({args.method})",
+        test_batch,
+        lmax,
+        test_edges,
+        device,
+        dtype,
+    )
 
     if not (euler_ok and axis_ok):
         print("\nWARNING: Some correctness checks failed!")
@@ -216,20 +274,24 @@ def main():
         # Euler
         def euler_fn():
             return euler_forward_fn(edges)
+
         t_euler = benchmark_fn(euler_fn, n_warmup, n_runs, device)
 
         # Axis-Angle
         def axis_fn():
             return axis_forward_fn(edges)
+
         t_axis = benchmark_fn(axis_fn, n_warmup, n_runs, device)
 
-        ratio = t_euler / t_axis if t_axis > 0 else float('inf')
+        ratio = t_euler / t_axis if t_axis > 0 else float("inf")
         euler_per_edge = t_euler / n_edges * 1000  # µs
         axis_per_edge = t_axis / n_edges * 1000
 
         forward_results.append((n_edges, t_euler, t_axis, ratio))
 
-        print(f"{n_edges:<8} {t_euler:<15.2f} {t_axis:<16.2f} {ratio:<12.2f} {euler_per_edge:<15.3f} {axis_per_edge:<15.3f}")
+        print(
+            f"{n_edges:<8} {t_euler:<15.2f} {t_axis:<16.2f} {ratio:<12.2f} {euler_per_edge:<15.3f} {axis_per_edge:<15.3f}"
+        )
 
     print()
 
@@ -251,6 +313,7 @@ def main():
             edges = edges_base.clone().requires_grad_(True)
             W = euler_forward_fn(edges)
             torch.autograd.grad(W.sum(), edges)
+
         t_euler = benchmark_fn(euler_bwd_fn, n_warmup, n_runs, device)
 
         # Axis-Angle
@@ -258,15 +321,18 @@ def main():
             edges = edges_base.clone().requires_grad_(True)
             W, _ = axis_forward_fn(edges)
             torch.autograd.grad(W.sum(), edges)
+
         t_axis = benchmark_fn(axis_bwd_fn, n_warmup, n_runs, device)
 
-        ratio = t_euler / t_axis if t_axis > 0 else float('inf')
+        ratio = t_euler / t_axis if t_axis > 0 else float("inf")
         euler_per_edge = t_euler / n_edges * 1000
         axis_per_edge = t_axis / n_edges * 1000
 
         backward_results.append((n_edges, t_euler, t_axis, ratio))
 
-        print(f"{n_edges:<8} {t_euler:<15.2f} {t_axis:<16.2f} {ratio:<12.2f} {euler_per_edge:<15.3f} {axis_per_edge:<15.3f}")
+        print(
+            f"{n_edges:<8} {t_euler:<15.2f} {t_axis:<16.2f} {ratio:<12.2f} {euler_per_edge:<15.3f} {axis_per_edge:<15.3f}"
+        )
 
     print()
     print("=" * 90)
