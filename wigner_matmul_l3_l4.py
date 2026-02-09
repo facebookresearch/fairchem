@@ -14,6 +14,7 @@ import math
 from typing import Tuple, List
 
 # Caches
+_L2_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], Tuple[torch.Tensor, List]] = {}
 _L3_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], Tuple[torch.Tensor, List]] = {}
 _L4_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], Tuple[torch.Tensor, List]] = {}
 
@@ -92,6 +93,15 @@ def _build_matmul_data(ell: int) -> Tuple[torch.Tensor, List[Tuple[int, int, int
     return C, monomials
 
 
+def _get_l2_matmul_data(dtype: torch.dtype, device: torch.device):
+    """Get cached matmul data for l=2."""
+    key = (dtype, device)
+    if key not in _L2_MATMUL_CACHE:
+        C, monomials = _build_matmul_data(2)
+        _L2_MATMUL_CACHE[key] = (C.to(dtype=dtype, device=device), monomials)
+    return _L2_MATMUL_CACHE[key]
+
+
 def _get_l3_matmul_data(dtype: torch.dtype, device: torch.device):
     """Get cached matmul data for l=3."""
     key = (dtype, device)
@@ -108,6 +118,50 @@ def _get_l4_matmul_data(dtype: torch.dtype, device: torch.device):
         C, monomials = _build_matmul_data(4)
         _L4_MATMUL_CACHE[key] = (C.to(dtype=dtype, device=device), monomials)
     return _L4_MATMUL_CACHE[key]
+
+
+def quaternion_to_wigner_d_l2_matmul(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion to 5x5 l=2 Wigner D matrix using matmul.
+
+    Computes D = M @ C^T where:
+    - M[n, k] = product of quaternion powers for monomial k
+    - C[ij, k] = coefficient of monomial k in D[i,j]
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Wigner D matrices of shape (N, 5, 5) for l=2
+    """
+    C, monomials = _get_l2_matmul_data(q.dtype, q.device)
+    N = q.shape[0]
+
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+
+    # Precompute powers up to 4
+    w2 = w*w; w3 = w2*w; w4 = w2*w2
+    x2 = x*x; x3 = x2*x; x4 = x2*x2
+    y2 = y*y; y3 = y2*y; y4 = y2*y2
+    z2 = z*z; z3 = z2*z; z4 = z2*z2
+
+    powers = {
+        0: {0: torch.ones_like(w), 1: w, 2: w2, 3: w3, 4: w4},
+        1: {0: torch.ones_like(x), 1: x, 2: x2, 3: x3, 4: x4},
+        2: {0: torch.ones_like(y), 1: y, 2: y2, 3: y3, 4: y4},
+        3: {0: torch.ones_like(z), 1: z, 2: z2, 3: z3, 4: z4},
+    }
+
+    # Build monomial matrix M: (N, n_monomials)
+    M = torch.stack([
+        powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
+        for a, b, c, d in monomials
+    ], dim=1)
+
+    # D_flat = M @ C^T: (N, 25)
+    D_flat = M @ C.T
+
+    return D_flat.view(N, 5, 5)
 
 
 def quaternion_to_wigner_d_l3_matmul(q: torch.Tensor) -> torch.Tensor:

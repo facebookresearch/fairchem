@@ -31,6 +31,7 @@ from wigner_einsum_l3_l4 import (
     quaternion_to_wigner_d_l4_einsum,
 )
 from wigner_matmul_l3_l4 import (
+    quaternion_to_wigner_d_l2_matmul,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
 )
@@ -109,9 +110,14 @@ def run_benchmarks(batch_sizes, device, dtype=torch.float64):
         print(f"    Einsum:             {t*1000:8.4f} ms")
         results[batch_size]['l2_einsum'] = t
 
-        # Verify einsum matches polynomial
-        max_err = (D_poly - D_einsum).abs().max().item()
-        print(f"    (einsum verification: {max_err:.2e})")
+        # Matmul
+        t, D_matmul = benchmark_function(quaternion_to_wigner_d_l2_matmul, q)
+        print(f"    Matmul:             {t*1000:8.4f} ms")
+        results[batch_size]['l2_matmul'] = t
+
+        # Verify matmul matches polynomial
+        max_err = (D_poly - D_matmul).abs().max().item()
+        print(f"    (matmul verification: {max_err:.2e})")
 
         # Matrix exponential
         t, D_matexp = benchmark_function(matrix_exp_wigner_d, q, ell, gens)
