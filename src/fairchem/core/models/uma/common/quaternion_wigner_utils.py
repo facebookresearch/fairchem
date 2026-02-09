@@ -22,10 +22,119 @@ from pathlib import Path
 from typing import Optional
 
 import torch
+import torch.nn as nn
 
 # =============================================================================
 # Data Structures for Wigner Coefficients
 # =============================================================================
+
+
+class CaseCoeffsModule(nn.Module):
+    """Polynomial coefficients for one case (|Ra|>=|Rb| or |Ra|<|Rb|) as nn.Module."""
+
+    def __init__(
+        self,
+        coeff: torch.Tensor,
+        horner: torch.Tensor,
+        poly_len: torch.Tensor,
+        ra_exp: torch.Tensor,
+        rb_exp: torch.Tensor,
+        sign: torch.Tensor,
+    ):
+        super().__init__()
+        self.register_buffer("coeff", coeff)
+        self.register_buffer("horner", horner)
+        self.register_buffer("poly_len", poly_len)
+        self.register_buffer("ra_exp", ra_exp)
+        self.register_buffer("rb_exp", rb_exp)
+        self.register_buffer("sign", sign)
+
+
+class WignerCoefficientsModule(nn.Module):
+    """Precomputed coefficients for Wigner D matrix computation as nn.Module."""
+
+    def __init__(
+        self,
+        lmin: int,
+        lmax: int,
+        size: int,
+        max_poly_len: int,
+        n_primary: int,
+        n_derived: int,
+        primary_row: torch.Tensor,
+        primary_col: torch.Tensor,
+        case1: CaseCoeffsModule,
+        case2: CaseCoeffsModule,
+        mp_plus_m: torch.Tensor,
+        m_minus_mp: torch.Tensor,
+        diagonal_mask: torch.Tensor,
+        anti_diagonal_mask: torch.Tensor,
+        special_2m: torch.Tensor,
+        anti_diag_sign: torch.Tensor,
+        derived_row: torch.Tensor,
+        derived_col: torch.Tensor,
+        derived_primary_idx: torch.Tensor,
+        derived_sign: torch.Tensor,
+    ):
+        super().__init__()
+        # Metadata (regular attributes, not tensors)
+        self.lmin = lmin
+        self.lmax = lmax
+        self.size = size
+        self.max_poly_len = max_poly_len
+        self.n_primary = n_primary
+        self.n_derived = n_derived
+
+        # Primary element indices
+        self.register_buffer("primary_row", primary_row)
+        self.register_buffer("primary_col", primary_col)
+
+        # Case coefficients (submodules)
+        self.case1 = case1
+        self.case2 = case2
+
+        # Phase computation
+        self.register_buffer("mp_plus_m", mp_plus_m)
+        self.register_buffer("m_minus_mp", m_minus_mp)
+
+        # Special cases (Ra~0 or Rb~0)
+        self.register_buffer("diagonal_mask", diagonal_mask)
+        self.register_buffer("anti_diagonal_mask", anti_diagonal_mask)
+        self.register_buffer("special_2m", special_2m)
+        self.register_buffer("anti_diag_sign", anti_diag_sign)
+
+        # Derived element mapping
+        self.register_buffer("derived_row", derived_row)
+        self.register_buffer("derived_col", derived_col)
+        self.register_buffer("derived_primary_idx", derived_primary_idx)
+        self.register_buffer("derived_sign", derived_sign)
+
+
+class WignerDataModule(nn.Module):
+    """
+    Combined Wigner coefficients and U transformation blocks as nn.Module.
+
+    This module holds all precomputed data needed for Wigner D computation,
+    and automatically moves with the parent model via .to(device).
+    """
+
+    def __init__(
+        self,
+        coeffs: WignerCoefficientsModule,
+        U_blocks: list[torch.Tensor],
+    ):
+        super().__init__()
+        self.coeffs = coeffs
+
+        # Register U_blocks as buffers
+        self._n_U_blocks = len(U_blocks)
+        for i, U in enumerate(U_blocks):
+            self.register_buffer(f"U_block_{i}", U)
+
+    @property
+    def U_blocks(self) -> list[torch.Tensor]:
+        """Return U_blocks as a list for compatibility with existing code."""
+        return [getattr(self, f"U_block_{i}") for i in range(self._n_U_blocks)]
 
 
 @dataclass
@@ -192,6 +301,85 @@ def get_ra_rb_coefficients_real(
         _COEFF_REAL_CACHE[key] = (coeffs, U_blocks_range_real)
 
     return _COEFF_REAL_CACHE[key]
+
+
+def create_wigner_data_module(
+    lmax: int,
+    lmin: int = 3,
+) -> WignerDataModule:
+    """
+    Create a WignerDataModule with precomputed coefficients and U blocks.
+
+    This creates an nn.Module that holds all precomputed Wigner D data,
+    which can be registered as a submodule and will automatically move
+    with the parent model via .to(device).
+
+    The module is created on CPU with float64 precision. When the parent
+    model is moved to a device or dtype, the buffers will be converted
+    automatically.
+
+    Args:
+        lmax: Maximum angular momentum
+        lmin: Minimum angular momentum (default 3, matching hybrid method)
+
+    Returns:
+        WignerDataModule containing coefficients and U_blocks
+    """
+    # Create on CPU with float64 (will be converted when model moves)
+    dtype = torch.float64
+    device = torch.device("cpu")
+
+    # Use existing precompute functions
+    coeffs_dataclass = precompute_wigner_coefficients(
+        lmax, dtype=dtype, device=device, lmin=lmin
+    )
+    U_blocks = precompute_U_blocks_euler_aligned(
+        lmax, dtype=dtype, device=device, lmin=lmin
+    )
+
+    # Convert CaseCoeffs dataclass to CaseCoeffsModule
+    case1_module = CaseCoeffsModule(
+        coeff=coeffs_dataclass.case1.coeff,
+        horner=coeffs_dataclass.case1.horner,
+        poly_len=coeffs_dataclass.case1.poly_len,
+        ra_exp=coeffs_dataclass.case1.ra_exp,
+        rb_exp=coeffs_dataclass.case1.rb_exp,
+        sign=coeffs_dataclass.case1.sign,
+    )
+    case2_module = CaseCoeffsModule(
+        coeff=coeffs_dataclass.case2.coeff,
+        horner=coeffs_dataclass.case2.horner,
+        poly_len=coeffs_dataclass.case2.poly_len,
+        ra_exp=coeffs_dataclass.case2.ra_exp,
+        rb_exp=coeffs_dataclass.case2.rb_exp,
+        sign=coeffs_dataclass.case2.sign,
+    )
+
+    # Create WignerCoefficientsModule
+    coeffs_module = WignerCoefficientsModule(
+        lmin=coeffs_dataclass.lmin,
+        lmax=coeffs_dataclass.lmax,
+        size=coeffs_dataclass.size,
+        max_poly_len=coeffs_dataclass.max_poly_len,
+        n_primary=coeffs_dataclass.n_primary,
+        n_derived=coeffs_dataclass.n_derived,
+        primary_row=coeffs_dataclass.primary_row,
+        primary_col=coeffs_dataclass.primary_col,
+        case1=case1_module,
+        case2=case2_module,
+        mp_plus_m=coeffs_dataclass.mp_plus_m,
+        m_minus_mp=coeffs_dataclass.m_minus_mp,
+        diagonal_mask=coeffs_dataclass.diagonal_mask,
+        anti_diagonal_mask=coeffs_dataclass.anti_diagonal_mask,
+        special_2m=coeffs_dataclass.special_2m,
+        anti_diag_sign=coeffs_dataclass.anti_diag_sign,
+        derived_row=coeffs_dataclass.derived_row,
+        derived_col=coeffs_dataclass.derived_col,
+        derived_primary_idx=coeffs_dataclass.derived_primary_idx,
+        derived_sign=coeffs_dataclass.derived_sign,
+    )
+
+    return WignerDataModule(coeffs=coeffs_module, U_blocks=U_blocks)
 
 
 # =============================================================================

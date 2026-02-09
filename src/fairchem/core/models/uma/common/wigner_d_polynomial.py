@@ -43,6 +43,8 @@ def wigner_d_from_quaternion_polynomial(
     q: torch.Tensor,
     lmax: int,
     use_real_arithmetic: bool = False,
+    coeffs: Optional[object] = None,
+    U_blocks: Optional[list] = None,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices from quaternions using Ra/Rb polynomial.
@@ -59,6 +61,9 @@ def wigner_d_from_quaternion_polynomial(
         lmax: Maximum angular momentum
         use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
                             (torch.compile compatible, avoids complex tensors)
+        coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
+                skips the cache lookup for better performance in hot paths.
+        U_blocks: Optional pre-computed U transformation blocks.
 
     Returns:
         Real Wigner D matrices of shape (N, size, size)
@@ -68,13 +73,15 @@ def wigner_d_from_quaternion_polynomial(
 
     if use_real_arithmetic:
         # Real-pair arithmetic (torch.compile compatible)
-        coeffs, U_blocks = get_ra_rb_coefficients_real(lmax, dtype, device)
+        if coeffs is None or U_blocks is None:
+            coeffs, U_blocks = get_ra_rb_coefficients_real(lmax, dtype, device)
         ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
         D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
         D_real = wigner_d_pair_to_real(D_re, D_im, U_blocks, lmax)
     else:
         # Complex arithmetic
-        coeffs, U_blocks = get_ra_rb_coefficients(lmax, dtype, device)
+        if coeffs is None or U_blocks is None:
+            coeffs, U_blocks = get_ra_rb_coefficients(lmax, dtype, device)
         Ra, Rb = quaternion_to_ra_rb(q)
         D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
         D_real = wigner_d_complex_to_real(D_complex, U_blocks, lmax)
@@ -92,6 +99,8 @@ def axis_angle_wigner_polynomial(
     lmax: int,
     gamma: Optional[torch.Tensor] = None,
     use_real_arithmetic: bool = False,
+    coeffs: Optional[object] = None,
+    U_blocks: Optional[list] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D using Ra/Rb polynomial (GPU-optimized version).
@@ -111,6 +120,9 @@ def axis_angle_wigner_polynomial(
                If None, uses random gamma (for SO(2) equivariance during training).
         use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
                (torch.compile compatible, avoids complex tensors)
+        coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
+               skips the cache lookup for better performance in hot paths.
+        U_blocks: Optional pre-computed U transformation blocks.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
@@ -144,6 +156,8 @@ def axis_angle_wigner_polynomial(
         q_combined,
         lmax,
         use_real_arithmetic=use_real_arithmetic,
+        coeffs=coeffs,
+        U_blocks=U_blocks,
     )
 
     # Return D and its inverse (transpose for orthogonal matrices)
