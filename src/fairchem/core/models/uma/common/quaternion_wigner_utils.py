@@ -42,12 +42,13 @@ class CaseCoeffsModule(nn.Module):
         sign: torch.Tensor,
     ):
         super().__init__()
-        self.register_buffer("coeff", coeff)
-        self.register_buffer("horner", horner)
-        self.register_buffer("poly_len", poly_len)
-        self.register_buffer("ra_exp", ra_exp)
-        self.register_buffer("rb_exp", rb_exp)
-        self.register_buffer("sign", sign)
+        # Use persistent=False since these are computed, not learned
+        self.register_buffer("coeff", coeff, persistent=False)
+        self.register_buffer("horner", horner, persistent=False)
+        self.register_buffer("poly_len", poly_len, persistent=False)
+        self.register_buffer("ra_exp", ra_exp, persistent=False)
+        self.register_buffer("rb_exp", rb_exp, persistent=False)
+        self.register_buffer("sign", sign, persistent=False)
 
 
 class WignerCoefficientsModule(nn.Module):
@@ -85,29 +86,29 @@ class WignerCoefficientsModule(nn.Module):
         self.n_primary = n_primary
         self.n_derived = n_derived
 
-        # Primary element indices
-        self.register_buffer("primary_row", primary_row)
-        self.register_buffer("primary_col", primary_col)
+        # Primary element indices (persistent=False since these are computed)
+        self.register_buffer("primary_row", primary_row, persistent=False)
+        self.register_buffer("primary_col", primary_col, persistent=False)
 
         # Case coefficients (submodules)
         self.case1 = case1
         self.case2 = case2
 
         # Phase computation
-        self.register_buffer("mp_plus_m", mp_plus_m)
-        self.register_buffer("m_minus_mp", m_minus_mp)
+        self.register_buffer("mp_plus_m", mp_plus_m, persistent=False)
+        self.register_buffer("m_minus_mp", m_minus_mp, persistent=False)
 
         # Special cases (Ra~0 or Rb~0)
-        self.register_buffer("diagonal_mask", diagonal_mask)
-        self.register_buffer("anti_diagonal_mask", anti_diagonal_mask)
-        self.register_buffer("special_2m", special_2m)
-        self.register_buffer("anti_diag_sign", anti_diag_sign)
+        self.register_buffer("diagonal_mask", diagonal_mask, persistent=False)
+        self.register_buffer("anti_diagonal_mask", anti_diagonal_mask, persistent=False)
+        self.register_buffer("special_2m", special_2m, persistent=False)
+        self.register_buffer("anti_diag_sign", anti_diag_sign, persistent=False)
 
         # Derived element mapping
-        self.register_buffer("derived_row", derived_row)
-        self.register_buffer("derived_col", derived_col)
-        self.register_buffer("derived_primary_idx", derived_primary_idx)
-        self.register_buffer("derived_sign", derived_sign)
+        self.register_buffer("derived_row", derived_row, persistent=False)
+        self.register_buffer("derived_col", derived_col, persistent=False)
+        self.register_buffer("derived_primary_idx", derived_primary_idx, persistent=False)
+        self.register_buffer("derived_sign", derived_sign, persistent=False)
 
 
 class WignerDataModule(nn.Module):
@@ -126,10 +127,10 @@ class WignerDataModule(nn.Module):
         super().__init__()
         self.coeffs = coeffs
 
-        # Register U_blocks as buffers
+        # Register U_blocks as non-persistent buffers (computed, not learned)
         self._n_U_blocks = len(U_blocks)
         for i, U in enumerate(U_blocks):
-            self.register_buffer(f"U_block_{i}", U)
+            self.register_buffer(f"U_block_{i}", U, persistent=False)
 
     @property
     def U_blocks(self) -> list[torch.Tensor]:
