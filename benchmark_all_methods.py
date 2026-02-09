@@ -82,14 +82,19 @@ def ra_rb_wigner_d_complex(q: torch.Tensor, ell: int, coeffs: dict) -> torch.Ten
 _RARB_WRAPPER_CACHE: dict[tuple[int, torch.dtype, torch.device], callable] = {}
 
 
+def _make_rarb_wrapper(ell: int, dtype: torch.dtype, device: torch.device) -> callable:
+    """Create a compilable wrapper for Ra/Rb real that captures coeffs for a specific device."""
+    coeffs = _get_rarb_coeffs(ell, dtype, device)
+    def wrapper(q: torch.Tensor) -> torch.Tensor:
+        return ra_rb_wigner_d(q, ell, coeffs)
+    return wrapper
+
+
 def _get_rarb_wrapper(ell: int, dtype: torch.dtype, device: torch.device) -> callable:
-    """Get a compilable wrapper for Ra/Rb real that captures coeffs."""
+    """Get a cached compilable wrapper for Ra/Rb real."""
     key = (ell, dtype, device)
     if key not in _RARB_WRAPPER_CACHE:
-        coeffs = _get_rarb_coeffs(ell, dtype, device)
-        def wrapper(q: torch.Tensor) -> torch.Tensor:
-            return ra_rb_wigner_d(q, ell, coeffs)
-        _RARB_WRAPPER_CACHE[key] = wrapper
+        _RARB_WRAPPER_CACHE[key] = _make_rarb_wrapper(ell, dtype, device)
     return _RARB_WRAPPER_CACHE[key]
 
 
@@ -566,8 +571,29 @@ if __name__ == "__main__":
         print("GPU BENCHMARKS")
         print("=" * 80)
 
-        gpu_fwd = run_benchmarks(batch_sizes, device=torch.device('cuda'), funcs=funcs)
+        # Create GPU-specific funcs with CUDA Ra/Rb wrappers
+        gpu_device = torch.device('cuda')
+        gpu_funcs = {
+            'l2_poly': funcs['l2_poly'],
+            'l2_einsum': funcs['l2_einsum'],
+            'l2_matmul': funcs['l2_matmul'],
+            'l2_rarb': _get_rarb_wrapper(2, dtype, gpu_device),
+            'l3_poly': funcs['l3_poly'],
+            'l3_einsum': funcs['l3_einsum'],
+            'l3_matmul': funcs['l3_matmul'],
+            'l3_rarb': _get_rarb_wrapper(3, dtype, gpu_device),
+            'l4_poly': funcs['l4_poly'],
+            'l4_einsum': funcs['l4_einsum'],
+            'l4_matmul': funcs['l4_matmul'],
+            'l4_rarb': _get_rarb_wrapper(4, dtype, gpu_device),
+        }
+        if args.compile:
+            # Compile the new GPU Ra/Rb wrappers
+            for k in ['l2_rarb', 'l3_rarb', 'l4_rarb']:
+                gpu_funcs[k] = torch.compile(gpu_funcs[k])
+
+        gpu_fwd = run_benchmarks(batch_sizes, device=gpu_device, funcs=gpu_funcs)
         print_speedup_summary(gpu_fwd)
 
-        gpu_bwd = run_backward_benchmarks(batch_sizes, device=torch.device('cuda'), funcs=funcs)
+        gpu_bwd = run_backward_benchmarks(batch_sizes, device=gpu_device, funcs=gpu_funcs)
         print_backward_summary(gpu_bwd)
