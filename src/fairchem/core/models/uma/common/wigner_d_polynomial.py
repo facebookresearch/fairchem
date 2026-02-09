@@ -21,7 +21,6 @@ from typing import Optional
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
-    compute_euler_matching_gamma,
     get_ra_rb_coefficients,
     get_ra_rb_coefficients_real,
     quaternion_edge_to_y_stable,
@@ -34,7 +33,6 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
-
 
 # =============================================================================
 # Polynomial Wigner D Computation
@@ -143,7 +141,8 @@ def axis_angle_wigner_polynomial(
 
     # Compute Wigner D using Ra/Rb polynomial
     D = wigner_d_from_quaternion_polynomial(
-        q_combined, lmax,
+        q_combined,
+        lmax,
         use_real_arithmetic=use_real_arithmetic,
     )
 

@@ -23,7 +23,6 @@ from typing import Optional
 
 import torch
 
-
 # =============================================================================
 # Data Structures for Wigner Coefficients
 # =============================================================================
@@ -116,6 +115,7 @@ def clear_memory_caches() -> None:
 
     # Also clear caches in method modules if they exist
     import sys
+
     for module_name in [
         "fairchem.core.models.uma.common.wigner_d_matexp",
     ]:
@@ -150,8 +150,12 @@ def get_ra_rb_coefficients(
     key = (lmin, lmax, dtype, device)
 
     if key not in _COEFF_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device, lmin=lmin)
-        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device, lmin=lmin)
+        coeffs = precompute_wigner_coefficients(
+            lmax, dtype=dtype, device=device, lmin=lmin
+        )
+        U_blocks = precompute_U_blocks_euler_aligned(
+            lmax, dtype=dtype, device=device, lmin=lmin
+        )
         _COEFF_CACHE[key] = (coeffs, U_blocks)
 
     return _COEFF_CACHE[key]
@@ -177,9 +181,13 @@ def get_ra_rb_coefficients_real(
     key = (lmin, lmax, dtype, device)
 
     if key not in _COEFF_REAL_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device, lmin=lmin)
+        coeffs = precompute_wigner_coefficients(
+            lmax, dtype=dtype, device=device, lmin=lmin
+        )
         # Get full real U blocks and slice to range
-        full_U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
+        full_U_blocks_real = precompute_U_blocks_euler_aligned_real(
+            lmax, dtype=dtype, device=device
+        )
         U_blocks_range_real = full_U_blocks_real[lmin:]
         _COEFF_REAL_CACHE[key] = (coeffs, U_blocks_range_real)
 
@@ -385,7 +393,9 @@ def _scatter_primary_to_matrix(
     """
     N = result.shape[0]
     device = result.device
-    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_primary)
+    batch_indices = (
+        torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_primary)
+    )
     row_expanded = coeffs.primary_row.unsqueeze(0).expand(N, coeffs.n_primary)
     col_expanded = coeffs.primary_col.unsqueeze(0).expand(N, coeffs.n_primary)
     D[batch_indices, row_expanded, col_expanded] = result
@@ -886,17 +896,17 @@ def get_so3_generators(
             K_y_list.append(K_y)
             K_z_list.append(K_z)
 
-        P = torch.tensor([
-            [0., 0., 1.],
-            [1., 0., 0.],
-            [0., 1., 0.]
-        ], dtype=dtype, device=device)
+        P = torch.tensor(
+            [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            dtype=dtype,
+            device=device,
+        )
 
         _GENERATOR_CACHE[key] = {
-            'K_x': K_x_list,
-            'K_y': K_y_list,
-            'K_z': K_z_list,
-            'P': P,
+            "K_x": K_x_list,
+            "K_y": K_y_list,
+            "K_z": K_z_list,
+            "P": P,
         }
 
     return _GENERATOR_CACHE[key]
@@ -1003,7 +1013,7 @@ def precompute_wigner_coefficients(
     )
     n_derived = n_total - n_primary
     max_poly_len = lmax + 1
-    size = (lmax + 1) ** 2 - lmin ** 2
+    size = (lmax + 1) ** 2 - lmin**2
 
     # Allocate primary element arrays
     primary_row = torch.zeros(n_primary, dtype=torch.int64, device=device)
@@ -1064,10 +1074,24 @@ def precompute_wigner_coefficients(
 
                 # Compute both cases using helper function
                 _compute_case_coefficients(
-                    case1, primary_idx, ell, mp, m, sqrt_factor, factorial, is_case1=True
+                    case1,
+                    primary_idx,
+                    ell,
+                    mp,
+                    m,
+                    sqrt_factor,
+                    factorial,
+                    is_case1=True,
                 )
                 _compute_case_coefficients(
-                    case2, primary_idx, ell, mp, m, sqrt_factor, factorial, is_case1=False
+                    case2,
+                    primary_idx,
+                    ell,
+                    mp,
+                    m,
+                    sqrt_factor,
+                    factorial,
+                    is_case1=False,
                 )
 
                 primary_idx += 1
@@ -1098,7 +1122,9 @@ def precompute_wigner_coefficients(
 
                 derived_row[derived_idx] = row
                 derived_col[derived_idx] = col
-                derived_primary_idx[derived_idx] = primary_map[(primary_row_idx, primary_col_idx)]
+                derived_primary_idx[derived_idx] = primary_map[
+                    (primary_row_idx, primary_col_idx)
+                ]
                 derived_sign[derived_idx] = (-1) ** (mp - m)
 
                 derived_idx += 1
@@ -1181,9 +1207,13 @@ def wigner_d_matrix_complex(
     safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
     log_abs_Rb = torch.log(torch.abs(safe_Rb))
     arg_Rb = torch.angle(safe_Rb)
-    exponent = torch.outer(log_abs_Rb, coeffs.special_2m) + 1j * torch.outer(arg_Rb, coeffs.special_2m)
+    exponent = torch.outer(log_abs_Rb, coeffs.special_2m) + 1j * torch.outer(
+        arg_Rb, coeffs.special_2m
+    )
     rb_power = torch.exp(exponent.to(dtype=complex_dtype))
-    special_val_antidiag = coeffs.anti_diag_sign.unsqueeze(0).to(complex_dtype) * rb_power
+    special_val_antidiag = (
+        coeffs.anti_diag_sign.unsqueeze(0).to(complex_dtype) * rb_power
+    )
     mask_antidiag = ra_small.unsqueeze(1) & coeffs.anti_diagonal_mask.unsqueeze(0)
     result = torch.where(mask_antidiag, special_val_antidiag, result)
 
@@ -1191,14 +1221,18 @@ def wigner_d_matrix_complex(
     safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
     log_abs_Ra = torch.log(torch.abs(safe_Ra))
     arg_Ra = torch.angle(safe_Ra)
-    exponent = torch.outer(log_abs_Ra, coeffs.special_2m) + 1j * torch.outer(arg_Ra, coeffs.special_2m)
+    exponent = torch.outer(log_abs_Ra, coeffs.special_2m) + 1j * torch.outer(
+        arg_Ra, coeffs.special_2m
+    )
     ra_power = torch.exp(exponent.to(dtype=complex_dtype))
     mask_diag = (rb_small & ~ra_small).unsqueeze(1) & coeffs.diagonal_mask.unsqueeze(0)
     result = torch.where(mask_diag, ra_power, result)
 
     # General Case 1: |Ra| >= |Rb|
     ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    real_factor1 = _compute_case_magnitude(log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len)
+    real_factor1 = _compute_case_magnitude(
+        log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len
+    )
     val1 = real_factor1 * exp_phase
 
     valid_case1 = coeffs.case1.poly_len > 0
@@ -1207,7 +1241,9 @@ def wigner_d_matrix_complex(
 
     # General Case 2: |Ra| < |Rb|
     ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    real_factor2 = _compute_case_magnitude(log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len)
+    real_factor2 = _compute_case_magnitude(
+        log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len
+    )
     val2 = real_factor2 * exp_phase
 
     valid_case2 = coeffs.case2.poly_len > 0
@@ -1221,9 +1257,13 @@ def wigner_d_matrix_complex(
     # Fill derived elements using symmetry
     if coeffs.n_derived > 0:
         primary_vals = result[:, coeffs.derived_primary_idx]
-        derived_vals = coeffs.derived_sign.unsqueeze(0).to(complex_dtype) * primary_vals.conj()
+        derived_vals = (
+            coeffs.derived_sign.unsqueeze(0).to(complex_dtype) * primary_vals.conj()
+        )
 
-        batch_indices_d = torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_derived)
+        batch_indices_d = (
+            torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_derived)
+        )
         row_expanded_d = coeffs.derived_row.unsqueeze(0).expand(N, coeffs.n_derived)
         col_expanded_d = coeffs.derived_col.unsqueeze(0).expand(N, coeffs.n_derived)
 
@@ -1321,7 +1361,9 @@ def wigner_d_matrix_real(
 
     # General Case 1: |Ra| >= |Rb|
     ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    real_factor1 = _compute_case_magnitude(log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len)
+    real_factor1 = _compute_case_magnitude(
+        log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len
+    )
     val1_re = real_factor1 * exp_phase_re
     val1_im = real_factor1 * exp_phase_im
 
@@ -1332,7 +1374,9 @@ def wigner_d_matrix_real(
 
     # General Case 2: |Ra| < |Rb|
     ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    real_factor2 = _compute_case_magnitude(log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len)
+    real_factor2 = _compute_case_magnitude(
+        log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len
+    )
     val2_re = real_factor2 * exp_phase_re
     val2_im = real_factor2 * exp_phase_im
 
@@ -1356,7 +1400,9 @@ def wigner_d_matrix_real(
         derived_re = derived_sign_expanded * primary_re
         derived_im = -derived_sign_expanded * primary_im
 
-        batch_indices_d = torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_derived)
+        batch_indices_d = (
+            torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_derived)
+        )
         row_expanded_d = coeffs.derived_row.unsqueeze(0).expand(N, coeffs.n_derived)
         col_expanded_d = coeffs.derived_col.unsqueeze(0).expand(N, coeffs.n_derived)
 
@@ -1398,11 +1444,11 @@ def precompute_U_blocks_euler_aligned(
     else:
         complex_dtype = torch.complex128
 
-    P = torch.tensor([
-        [0., 0., 1.],
-        [1., 0., 0.],
-        [0., 1., 0.]
-    ], dtype=complex_dtype, device=device)
+    P = torch.tensor(
+        [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=complex_dtype,
+        device=device,
+    )
 
     jd_path = Path(__file__).parent.parent / "Jd.pt"
     Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
@@ -1418,7 +1464,9 @@ def precompute_U_blocks_euler_aligned(
             U_combined.append(P @ U_ell)
         else:
             Jd = Jd_list[ell].to(dtype=dtype, device=device)
-            U_euler = _build_euler_transform(ell, Jd).to(dtype=complex_dtype, device=device)
+            U_euler = _build_euler_transform(ell, Jd).to(
+                dtype=complex_dtype, device=device
+            )
             U_combined.append(U_euler @ U_ell)
 
     return U_combined
@@ -1442,7 +1490,9 @@ def precompute_U_blocks_euler_aligned_real(
     Returns:
         List of (U_re, U_im) tuples where each has shape (2*ell+1, 2*ell+1)
     """
-    U_blocks_complex = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
+    U_blocks_complex = precompute_U_blocks_euler_aligned(
+        lmax, dtype=dtype, device=device
+    )
     return [(U.real.to(dtype=dtype), U.imag.to(dtype=dtype)) for U in U_blocks_complex]
 
 
@@ -1654,7 +1704,9 @@ def _save_coefficients(coeffs: WignerCoefficients, path: Path) -> None:
     """Save coefficients to disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
     coeffs_dict = _coeffs_to_dict(coeffs)
-    coeffs_cpu = {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in coeffs_dict.items()}
+    coeffs_cpu = {
+        k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in coeffs_dict.items()
+    }
     torch.save(coeffs_cpu, path)
 
 

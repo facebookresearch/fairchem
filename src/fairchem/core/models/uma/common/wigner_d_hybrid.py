@@ -37,14 +37,12 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
-
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
 )
-
 
 # =============================================================================
 # Hybrid Wigner D Computation
@@ -104,7 +102,9 @@ def wigner_d_from_quaternion_hybrid(
     if lmax >= lmin:
         if use_real_arithmetic:
             # Real-pair arithmetic (torch.compile compatible)
-            coeffs, U_blocks = get_ra_rb_coefficients_real(lmax, dtype, device, lmin=lmin)
+            coeffs, U_blocks = get_ra_rb_coefficients_real(
+                lmax, dtype, device, lmin=lmin
+            )
             ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
             D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
             D_range = wigner_d_pair_to_real(D_re, D_im, U_blocks, lmin=lmin, lmax=lmax)
@@ -113,7 +113,9 @@ def wigner_d_from_quaternion_hybrid(
             coeffs, U_blocks = get_ra_rb_coefficients(lmax, dtype, device, lmin=lmin)
             Ra, Rb = quaternion_to_ra_rb(q)
             D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
-            D_range = wigner_d_complex_to_real(D_complex, U_blocks, lmin=lmin, lmax=lmax)
+            D_range = wigner_d_complex_to_real(
+                D_complex, U_blocks, lmin=lmin, lmax=lmax
+            )
 
         block_offset = lmin * lmin  # 9 for lmin=3, 25 for lmin=5
         D[:, block_offset:, block_offset:] = D_range
@@ -190,7 +192,8 @@ def axis_angle_wigner_hybrid(
 
     # Step 5: Compute Wigner D using hybrid approach
     D = wigner_d_from_quaternion_hybrid(
-        q_combined, lmax,
+        q_combined,
+        lmax,
         l3_l4_kernel=l3_l4_kernel,
         use_real_arithmetic=use_real_arithmetic,
     )

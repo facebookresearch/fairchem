@@ -35,7 +35,6 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     quaternion_to_axis_angle,
 )
 
-
 # =============================================================================
 # Module-Level Caches
 # =============================================================================
@@ -76,11 +75,14 @@ def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
     xy, xz, yz = x * y, x * z, y * z
     wx, wy, wz = w * x, w * y, w * z
 
-    R = torch.stack([
-        torch.stack([1 - 2*(y2 + z2), 2*(xy - wz),     2*(xz + wy)    ], dim=-1),
-        torch.stack([2*(xy + wz),     1 - 2*(x2 + z2), 2*(yz - wx)    ], dim=-1),
-        torch.stack([2*(xz - wy),     2*(yz + wx),     1 - 2*(x2 + y2)], dim=-1),
-    ], dim=-2)
+    R = torch.stack(
+        [
+            torch.stack([1 - 2 * (y2 + z2), 2 * (xy - wz), 2 * (xz + wy)], dim=-1),
+            torch.stack([2 * (xy + wz), 1 - 2 * (x2 + z2), 2 * (yz - wx)], dim=-1),
+            torch.stack([2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (x2 + y2)], dim=-1),
+        ],
+        dim=-2,
+    )
 
     return R
 
@@ -122,9 +124,9 @@ def rodrigues_rotation_l1(
     dtype = axis.dtype
 
     K = (
-        axis[:, 0:1, None, None] * K_x +
-        axis[:, 1:2, None, None] * K_y +
-        axis[:, 2:3, None, None] * K_z
+        axis[:, 0:1, None, None] * K_x
+        + axis[:, 1:2, None, None] * K_y
+        + axis[:, 2:3, None, None] * K_z
     ).squeeze(1)
 
     I = torch.eye(3, dtype=dtype, device=device)
@@ -180,10 +182,10 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     add_term(0, 1, 6, X, X, Y, Z)
 
     # D[0,2]
-    add_term(0, 2, 4*sqrt3, X, Y, Y, Z)
-    add_term(0, 2, 4*sqrt3, W, X, X, Y)
-    add_term(0, 2, -4*sqrt3, W, Y, Z, Z)
-    add_term(0, 2, -4*sqrt3, W, W, X, Z)
+    add_term(0, 2, 4 * sqrt3, X, Y, Y, Z)
+    add_term(0, 2, 4 * sqrt3, W, X, X, Y)
+    add_term(0, 2, -4 * sqrt3, W, Y, Z, Z)
+    add_term(0, 2, -4 * sqrt3, W, W, X, Z)
 
     # D[0,3]
     add_term(0, 3, -2, W, W, W, Z)
@@ -220,14 +222,14 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     add_term(1, 1, -6, W, W, Z, Z)
 
     # D[1,2]
-    add_term(1, 2, -2*sqrt3, W, W, W, Z)
-    add_term(1, 2, 2*sqrt3, W, Z, Z, Z)
-    add_term(1, 2, -2*sqrt3, X, X, X, Y)
-    add_term(1, 2, 2*sqrt3, X, Y, Y, Y)
-    add_term(1, 2, 2*sqrt3, W, W, X, Y)
-    add_term(1, 2, 2*sqrt3, W, X, X, Z)
-    add_term(1, 2, -2*sqrt3, W, Y, Y, Z)
-    add_term(1, 2, -2*sqrt3, X, Y, Z, Z)
+    add_term(1, 2, -2 * sqrt3, W, W, W, Z)
+    add_term(1, 2, 2 * sqrt3, W, Z, Z, Z)
+    add_term(1, 2, -2 * sqrt3, X, X, X, Y)
+    add_term(1, 2, 2 * sqrt3, X, Y, Y, Y)
+    add_term(1, 2, 2 * sqrt3, W, W, X, Y)
+    add_term(1, 2, 2 * sqrt3, W, X, X, Z)
+    add_term(1, 2, -2 * sqrt3, W, Y, Y, Z)
+    add_term(1, 2, -2 * sqrt3, X, Y, Z, Z)
 
     # D[1,3]
     add_term(1, 3, 2, W, W, W, Y)
@@ -250,20 +252,20 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     add_term(1, 4, 6, X, Y, Z, Z)
 
     # D[2,0]
-    add_term(2, 0, 4*sqrt3, X, Y, Y, Z)
-    add_term(2, 0, -4*sqrt3, W, X, X, Y)
-    add_term(2, 0, 4*sqrt3, W, Y, Z, Z)
-    add_term(2, 0, -4*sqrt3, W, W, X, Z)
+    add_term(2, 0, 4 * sqrt3, X, Y, Y, Z)
+    add_term(2, 0, -4 * sqrt3, W, X, X, Y)
+    add_term(2, 0, 4 * sqrt3, W, Y, Z, Z)
+    add_term(2, 0, -4 * sqrt3, W, W, X, Z)
 
     # D[2,1]
-    add_term(2, 1, 2*sqrt3, W, W, W, Z)
-    add_term(2, 1, -2*sqrt3, W, Z, Z, Z)
-    add_term(2, 1, -2*sqrt3, X, X, X, Y)
-    add_term(2, 1, 2*sqrt3, X, Y, Y, Y)
-    add_term(2, 1, 2*sqrt3, W, W, X, Y)
-    add_term(2, 1, -2*sqrt3, W, X, X, Z)
-    add_term(2, 1, 2*sqrt3, W, Y, Y, Z)
-    add_term(2, 1, -2*sqrt3, X, Y, Z, Z)
+    add_term(2, 1, 2 * sqrt3, W, W, W, Z)
+    add_term(2, 1, -2 * sqrt3, W, Z, Z, Z)
+    add_term(2, 1, -2 * sqrt3, X, X, X, Y)
+    add_term(2, 1, 2 * sqrt3, X, Y, Y, Y)
+    add_term(2, 1, 2 * sqrt3, W, W, X, Y)
+    add_term(2, 1, -2 * sqrt3, W, X, X, Z)
+    add_term(2, 1, 2 * sqrt3, W, Y, Y, Z)
+    add_term(2, 1, -2 * sqrt3, X, Y, Z, Z)
 
     # D[2,2]
     add_term(2, 2, 1, W, W, W, W)
@@ -278,21 +280,21 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     add_term(2, 2, -4, Y, Y, Z, Z)
 
     # D[2,3]
-    add_term(2, 3, -2*sqrt3, W, W, W, X)
-    add_term(2, 3, 2*sqrt3, W, X, X, X)
-    add_term(2, 3, 2*sqrt3, Y, Y, Y, Z)
-    add_term(2, 3, -2*sqrt3, Y, Z, Z, Z)
-    add_term(2, 3, -2*sqrt3, X, X, Y, Z)
-    add_term(2, 3, 2*sqrt3, W, W, Y, Z)
-    add_term(2, 3, -2*sqrt3, W, X, Y, Y)
-    add_term(2, 3, 2*sqrt3, W, X, Z, Z)
+    add_term(2, 3, -2 * sqrt3, W, W, W, X)
+    add_term(2, 3, 2 * sqrt3, W, X, X, X)
+    add_term(2, 3, 2 * sqrt3, Y, Y, Y, Z)
+    add_term(2, 3, -2 * sqrt3, Y, Z, Z, Z)
+    add_term(2, 3, -2 * sqrt3, X, X, Y, Z)
+    add_term(2, 3, 2 * sqrt3, W, W, Y, Z)
+    add_term(2, 3, -2 * sqrt3, W, X, Y, Y)
+    add_term(2, 3, 2 * sqrt3, W, X, Z, Z)
 
     # D[2,4]
-    add_term(2, 4, 2*sqrt3, W, W, X, X)
-    add_term(2, 4, -2*sqrt3, W, W, Z, Z)
-    add_term(2, 4, -2*sqrt3, X, X, Y, Y)
-    add_term(2, 4, 2*sqrt3, Y, Y, Z, Z)
-    add_term(2, 4, -8*sqrt3, W, X, Y, Z)
+    add_term(2, 4, 2 * sqrt3, W, W, X, X)
+    add_term(2, 4, -2 * sqrt3, W, W, Z, Z)
+    add_term(2, 4, -2 * sqrt3, X, X, Y, Y)
+    add_term(2, 4, 2 * sqrt3, Y, Y, Z, Z)
+    add_term(2, 4, -8 * sqrt3, W, X, Y, Z)
 
     # D[3,0]
     add_term(3, 0, 2, W, W, W, Z)
@@ -315,14 +317,14 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     add_term(3, 1, 6, W, Y, Z, Z)
 
     # D[3,2]
-    add_term(3, 2, 2*sqrt3, W, W, W, X)
-    add_term(3, 2, -2*sqrt3, W, X, X, X)
-    add_term(3, 2, 2*sqrt3, Y, Y, Y, Z)
-    add_term(3, 2, -2*sqrt3, Y, Z, Z, Z)
-    add_term(3, 2, -2*sqrt3, X, X, Y, Z)
-    add_term(3, 2, 2*sqrt3, W, W, Y, Z)
-    add_term(3, 2, 2*sqrt3, W, X, Y, Y)
-    add_term(3, 2, -2*sqrt3, W, X, Z, Z)
+    add_term(3, 2, 2 * sqrt3, W, W, W, X)
+    add_term(3, 2, -2 * sqrt3, W, X, X, X)
+    add_term(3, 2, 2 * sqrt3, Y, Y, Y, Z)
+    add_term(3, 2, -2 * sqrt3, Y, Z, Z, Z)
+    add_term(3, 2, -2 * sqrt3, X, X, Y, Z)
+    add_term(3, 2, 2 * sqrt3, W, W, Y, Z)
+    add_term(3, 2, 2 * sqrt3, W, X, Y, Y)
+    add_term(3, 2, -2 * sqrt3, W, X, Z, Z)
 
     # D[3,3]
     add_term(3, 3, 1, W, W, W, W)
@@ -359,11 +361,11 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     add_term(4, 1, 6, X, Y, Z, Z)
 
     # D[4,2]
-    add_term(4, 2, 2*sqrt3, W, W, X, X)
-    add_term(4, 2, -2*sqrt3, W, W, Z, Z)
-    add_term(4, 2, -2*sqrt3, X, X, Y, Y)
-    add_term(4, 2, 2*sqrt3, Y, Y, Z, Z)
-    add_term(4, 2, 8*sqrt3, W, X, Y, Z)
+    add_term(4, 2, 2 * sqrt3, W, W, X, X)
+    add_term(4, 2, -2 * sqrt3, W, W, Z, Z)
+    add_term(4, 2, -2 * sqrt3, X, X, Y, Y)
+    add_term(4, 2, 2 * sqrt3, Y, Y, Z, Z)
+    add_term(4, 2, 8 * sqrt3, W, X, Y, Z)
 
     # D[4,3]
     add_term(4, 3, 2, W, W, W, X)
@@ -386,11 +388,15 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
     return C
 
 
-def _get_l2_coefficient_tensor(dtype: torch.dtype, device: torch.device) -> torch.Tensor:
+def _get_l2_coefficient_tensor(
+    dtype: torch.dtype, device: torch.device
+) -> torch.Tensor:
     """Get cached l=2 coefficient tensor for einsum computation."""
     key = (dtype, device)
     if key not in _L2_COEFF_TENSOR_CACHE:
-        _L2_COEFF_TENSOR_CACHE[key] = _build_l2_coefficient_tensor().to(dtype=dtype, device=device)
+        _L2_COEFF_TENSOR_CACHE[key] = _build_l2_coefficient_tensor().to(
+            dtype=dtype, device=device
+        )
     return _L2_COEFF_TENSOR_CACHE[key]
 
 
@@ -413,10 +419,12 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
 
     # Build q x q, then (q x q) x (q x q) = q x q x q x q
     q2 = q.unsqueeze(-1) * q.unsqueeze(-2)  # (N, 4, 4)
-    q4 = q2.unsqueeze(-1).unsqueeze(-1) * q2.unsqueeze(-3).unsqueeze(-3)  # (N, 4, 4, 4, 4)
+    q4 = q2.unsqueeze(-1).unsqueeze(-1) * q2.unsqueeze(-3).unsqueeze(
+        -3
+    )  # (N, 4, 4, 4, 4)
 
     # Contract with coefficient tensor
-    D = torch.einsum('nabcd,ijabcd->nij', q4, C)
+    D = torch.einsum("nabcd,ijabcd->nij", q4, C)
 
     return D
 
@@ -463,11 +471,11 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     # For antisymmetric K: eigenvalues are 0, ±iλ₁, ±iλ₂
     # tr(K²) = -2(λ₁² + λ₂²)
     # tr(K⁴) = 2(λ₁⁴ + λ₂⁴)
-    tr_K2 = torch.einsum('nii->n', K2)
-    tr_K4 = torch.einsum('nii->n', K4)
+    tr_K2 = torch.einsum("nii->n", K2)
+    tr_K4 = torch.einsum("nii->n", K4)
 
     s1 = -tr_K2 / 2  # λ₁² + λ₂²
-    s2 = tr_K4 / 2   # λ₁⁴ + λ₂⁴
+    s2 = tr_K4 / 2  # λ₁⁴ + λ₂⁴
 
     # Solve for σ₁ = λ₁², σ₂ = λ₂²
     # Product p = σ₁ * σ₂ = (s1² - s2) / 2
@@ -610,10 +618,10 @@ def _derive_matmul_coefficients(ell: int) -> tuple[torch.Tensor, list]:
         X[:, i] = (q[:, 0] ** a) * (q[:, 1] ** b) * (q[:, 2] ** c) * (q[:, 3] ** d)
 
     # Compute reference D matrices using matrix_exp
-    gens = get_so3_generators(ell, torch.float64, torch.device('cpu'))
-    K_x = gens['K_x'][ell]
-    K_y = gens['K_y'][ell]
-    K_z = gens['K_z'][ell]
+    gens = get_so3_generators(ell, torch.float64, torch.device("cpu"))
+    K_x = gens["K_x"][ell]
+    K_y = gens["K_y"][ell]
+    K_z = gens["K_z"][ell]
 
     axis, angle = quaternion_to_axis_angle(q)
 
@@ -704,10 +712,13 @@ def quaternion_to_wigner_d_l3_matmul(q: torch.Tensor) -> torch.Tensor:
     }
 
     # Build monomial matrix M: (N, n_monomials)
-    M = torch.stack([
-        powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
-        for a, b, c, d in monomials
-    ], dim=1)
+    M = torch.stack(
+        [
+            powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
+            for a, b, c, d in monomials
+        ],
+        dim=1,
+    )
 
     # D_flat = M @ C^T: (N, 49)
     D_flat = M @ C.T
@@ -765,17 +776,60 @@ def quaternion_to_wigner_d_l4_matmul(q: torch.Tensor) -> torch.Tensor:
     z8 = z4 * z4
 
     powers = {
-        0: {0: torch.ones_like(w), 1: w, 2: w2, 3: w3, 4: w4, 5: w5, 6: w6, 7: w7, 8: w8},
-        1: {0: torch.ones_like(x), 1: x, 2: x2, 3: x3, 4: x4, 5: x5, 6: x6, 7: x7, 8: x8},
-        2: {0: torch.ones_like(y), 1: y, 2: y2, 3: y3, 4: y4, 5: y5, 6: y6, 7: y7, 8: y8},
-        3: {0: torch.ones_like(z), 1: z, 2: z2, 3: z3, 4: z4, 5: z5, 6: z6, 7: z7, 8: z8},
+        0: {
+            0: torch.ones_like(w),
+            1: w,
+            2: w2,
+            3: w3,
+            4: w4,
+            5: w5,
+            6: w6,
+            7: w7,
+            8: w8,
+        },
+        1: {
+            0: torch.ones_like(x),
+            1: x,
+            2: x2,
+            3: x3,
+            4: x4,
+            5: x5,
+            6: x6,
+            7: x7,
+            8: x8,
+        },
+        2: {
+            0: torch.ones_like(y),
+            1: y,
+            2: y2,
+            3: y3,
+            4: y4,
+            5: y5,
+            6: y6,
+            7: y7,
+            8: y8,
+        },
+        3: {
+            0: torch.ones_like(z),
+            1: z,
+            2: z2,
+            3: z3,
+            4: z4,
+            5: z5,
+            6: z6,
+            7: z7,
+            8: z8,
+        },
     }
 
     # Build monomial matrix M: (N, n_monomials)
-    M = torch.stack([
-        powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
-        for a, b, c, d in monomials
-    ], dim=1)
+    M = torch.stack(
+        [
+            powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
+            for a, b, c, d in monomials
+        ],
+        dim=1,
+    )
 
     # D_flat = M @ C^T: (N, 81)
     D_flat = M @ C.T

@@ -32,15 +32,12 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     quaternion_to_axis_angle,
     quaternion_y_rotation,
 )
-
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
-    clear_memory_caches,
     quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
 )
-
 
 # =============================================================================
 # Wigner D from Axis-Angle (Batched)
@@ -52,7 +49,7 @@ def wigner_d_from_axis_angle_batched(
     angle: torch.Tensor,
     generators: dict[str, list[torch.Tensor]],
     lmax: int,
-    l3_l4_kernels: bool=False
+    l3_l4_kernels: bool = False,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices from axis-angle representation.
@@ -82,9 +79,9 @@ def wigner_d_from_axis_angle_batched(
     dtype = axis.dtype
     size = (lmax + 1) ** 2
 
-    K_x_list = generators['K_x']
-    K_y_list = generators['K_y']
-    K_z_list = generators['K_z']
+    K_x_list = generators["K_x"]
+    K_y_list = generators["K_y"]
+    K_z_list = generators["K_z"]
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
 
@@ -94,12 +91,15 @@ def wigner_d_from_axis_angle_batched(
         half_angle = angle * 0.5
         cos_half = torch.cos(half_angle)
         sin_half = torch.sin(half_angle)
-        q = torch.stack([
-            cos_half,
-            sin_half * axis[:, 0],
-            sin_half * axis[:, 1],
-            sin_half * axis[:, 2],
-        ], dim=-1)
+        q = torch.stack(
+            [
+                cos_half,
+                sin_half * axis[:, 0],
+                sin_half * axis[:, 1],
+                sin_half * axis[:, 2],
+            ],
+            dim=-1,
+        )
 
     block_start = 0
     for ell in range(lmax + 1):
@@ -128,9 +128,9 @@ def wigner_d_from_axis_angle_batched(
             K_z = K_z_list[ell]
 
             K = (
-                axis[:, 0:1, None, None] * K_x +
-                axis[:, 1:2, None, None] * K_y +
-                axis[:, 2:3, None, None] * K_z
+                axis[:, 0:1, None, None] * K_x
+                + axis[:, 1:2, None, None] * K_y
+                + axis[:, 2:3, None, None] * K_z
             ).squeeze(1)
 
             D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
