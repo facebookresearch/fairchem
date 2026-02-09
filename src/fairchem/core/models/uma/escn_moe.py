@@ -200,6 +200,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_mapping: dict[str, str] | None = None,
     ):
         super().__init__()
         if head_kwargs is None:
@@ -210,9 +211,24 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.wrap_property = wrap_property
 
         self.dataset_names = sorted(dataset_names)
-        self.dataset_name_to_exp = {
-            value: idx for idx, value in enumerate(self.dataset_names)
-        }
+        if dataset_mapping is not None:
+            # get unquie sorted dataset names
+            mapped_dataset_names = sorted(
+                {dataset_mapping.get(name, name) for name in self.dataset_names}
+            )
+            # expert idx for mapped dataset names
+            mapped_dataset_idx = {
+                value: idx for idx, value in enumerate(mapped_dataset_names)
+            }
+            # remap dataset name to expert idx using mapping
+            self.dataset_name_to_exp = {
+                name: mapped_dataset_idx[dataset_mapping.get(name, name)]
+                for name in self.dataset_names
+            }
+        else:
+            self.dataset_name_to_exp = {
+                name: idx for idx, name in enumerate(self.dataset_names)
+            }
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
         self.global_mole_tensors = MOLEGlobals(

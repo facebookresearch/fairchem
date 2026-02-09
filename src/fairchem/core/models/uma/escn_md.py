@@ -128,6 +128,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
         dataset_list: list[str] | None = None,
+        dataset_mapping: dict[str, str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
@@ -171,6 +172,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_list = dataset_list
+        self.dataset_mapping = dataset_mapping
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
             assert (
@@ -218,6 +220,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.sphere_channels,
                 grad=self.dataset_emb_grad,
                 dataset_list=self.dataset_list,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
