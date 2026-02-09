@@ -34,7 +34,6 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     quaternion_to_axis_angle,
     quaternion_to_ra_rb,
     quaternion_to_ra_rb_real,
-    quaternion_to_rotation_matrix,
     quaternion_y_rotation,
     wigner_d_complex_to_real,
     wigner_d_matrix_complex,
@@ -43,6 +42,7 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
 )
 
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+    quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
@@ -60,6 +60,7 @@ def wigner_d_from_axis_angle_hybrid(
     q: torch.Tensor,
     generators: dict[str, list[torch.Tensor]],
     lmax: int,
+    l3_l4_kernel: bool=False,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices using hybrid approach.
@@ -68,7 +69,7 @@ def wigner_d_from_axis_angle_hybrid(
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
     - l=2: Quaternion to Wigner D via degree-4 polynomials (faster backward pass)
-    - l=3,4: Quaternion matmul (faster than Ra/Rb for small l)
+    - l=3,4: if l3_l4_kernel is True Quaternion matmul (faster than Ra/Rb for small l, but only when using torch.compile)
     - l>=5: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
 
     The caller should pass Euler-aligned generators for l>=2.
@@ -91,37 +92,35 @@ def wigner_d_from_axis_angle_hybrid(
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
 
-    # Compute l=0, l=1, l=2 using axis-angle (Rodrigues + Cayley-Hamilton)
-    for ell in range(min(lmax + 1, 3)):  # Only l=0,1,2
+    lmin = 5 if l3_l4_kernel else 3
+
+    # Compute l=0, l=1, l=2 using direct quaternion methods (all real arithmetic)
+    for ell in range(min(lmax + 1, lmin)):
         if ell == 0:
             D[:, 0, 0] = 1.0
         elif ell == 1:
-            # Direct quaternion to rotation matrix (faster than axis-angle + Rodrigues)
-            # This avoids: atan2, sqrt, sin/cos, K matrix construction, bmm
-            # The result is already in Cartesian (x,y,z) basis - no permutation needed
+            # Direct quaternion to rotation matrix (already real)
             D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
         elif ell == 2:
             # Direct quaternion to Wigner D l=2 using einsum tensor contraction
-            # ~20x faster on GPU without torch.compile, equal with compile
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
-
-    # Compute l=3,4 using quaternion matmul
-    if lmax >= 3:
-        D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
-    if lmax >= 4:
-        D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
+        # Compute l=3,4 using quaternion matmul
+        elif l3_l4_kernel and ell == 3:
+            D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
+        elif l3_l4_kernel and ell == 4:
+            D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
 
     # Compute l>=5 using Ra/Rb polynomial from quaternion (range version)
-    if lmax >= 5:
+    if lmax >= lmin:
         # Get Ra/Rb coefficients for l>=5 only (more efficient)
-        coeffs_range, U_blocks_range = get_ra_rb_coefficients(lmax, dtype, device, lmin=5)
+        coeffs_range, U_blocks_range = get_ra_rb_coefficients(lmax, dtype, device, lmin=lmin)
         Ra, Rb = quaternion_to_ra_rb(q)
         D_complex_range = wigner_d_matrix_complex(Ra, Rb, coeffs_range)
-        D_ra_rb_range = wigner_d_complex_to_real(D_complex_range, U_blocks_range, lmax, lmin=5)
+        D_ra_rb_range = wigner_d_complex_to_real(D_complex_range, U_blocks_range, lmin=lmin, lmax=lmax)
 
-        # Copy l>=5 blocks directly from the range result
-        # D_ra_rb_range is already just the l>=5 blocks
-        block_offset = 25  # Skip l=0,1,2,3,4 in full matrix (1 + 3 + 5 + 7 + 9 = 25)
+        # D_ra_rb_range is already just the l>=3 or 5 blocks
+        # Copy l>=3 or 5 blocks directly from the range result
+        block_offset = 25 if l3_l4_kernel else 9 # Skip l=0,1,2,3,4 in full matrix (1 + 3 + 5 + 7 + 9 = 25)
         D[:, block_offset:, block_offset:] = D_ra_rb_range
 
     return D
@@ -133,6 +132,7 @@ def wigner_d_from_axis_angle_hybrid_real(
     q: torch.Tensor,
     generators: dict[str, list[torch.Tensor]],
     lmax: int,
+    l3_l4_kernel: bool=False,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices using hybrid approach with real-pair arithmetic.
@@ -144,7 +144,7 @@ def wigner_d_from_axis_angle_hybrid_real(
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
     - l=2: Quaternion to Wigner D via degree-4 polynomials (faster backward pass)
-    - l=3,4: Quaternion matmul (faster than Ra/Rb for small l)
+    - l=3,4: if l3_l4_kernel is True Quaternion matmul (faster than Ra/Rb for small l, but only when using torch.compile)
     - l>=5: Ra/Rb polynomial with real-pair arithmetic (torch.compile compatible)
 
     Args:
@@ -165,8 +165,10 @@ def wigner_d_from_axis_angle_hybrid_real(
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
 
+    lmin = 5 if l3_l4_kernel else 3
+
     # Compute l=0, l=1, l=2 using direct quaternion methods (all real arithmetic)
-    for ell in range(min(lmax + 1, 3)):  # Only l=0,1,2
+    for ell in range(min(lmax + 1, lmin)):
         if ell == 0:
             D[:, 0, 0] = 1.0
         elif ell == 1:
@@ -175,23 +177,23 @@ def wigner_d_from_axis_angle_hybrid_real(
         elif ell == 2:
             # Direct quaternion to Wigner D l=2 using einsum tensor contraction
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
+        # Compute l=3,4 using quaternion matmul
+        elif l3_l4_kernel and ell == 3:
+            D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
+        elif l3_l4_kernel and ell == 4:
+            D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
 
-    # Compute l=3,4 using quaternion matmul
-    if lmax >= 3:
-        D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
-    if lmax >= 4:
-        D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
 
     # Compute l>=5 using Ra/Rb polynomial with real-pair arithmetic
-    if lmax >= 5:
+    if lmax >= lmin:
         # Get Ra/Rb coefficients for l>=5 only with real U blocks
-        coeffs_range, U_blocks_range_real = get_ra_rb_coefficients_real(lmax, dtype, device, lmin=5)
+        coeffs_range, U_blocks_range_real = get_ra_rb_coefficients_real(lmax, dtype, device, lmin=lmin)
         ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
         D_re_range, D_im_range = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs_range)
-        D_ra_rb_range = wigner_d_pair_to_real(D_re_range, D_im_range, U_blocks_range_real, lmax, lmin=5)
+        D_ra_rb_range = wigner_d_pair_to_real(D_re_range, D_im_range, U_blocks_range_real, lmin=lmin, lmax=lmax)
 
-        # Copy l>=5 blocks directly from the range result
-        block_offset = 25  # Skip l=0,1,2,3,4 in full matrix (1 + 3 + 5 + 7 + 9 = 25)
+        # Copy l>=3 or 5 blocks directly from the range result
+        block_offset = 25 if l3_l4_kernel else 9 # Skip l=0,1,2,3,4 in full matrix (1 + 3 + 5 + 7 + 9 = 25)
         D[:, block_offset:, block_offset:] = D_ra_rb_range
 
     return D

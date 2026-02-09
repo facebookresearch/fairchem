@@ -1,13 +1,20 @@
 """
-Custom Wigner D computation kernels for l=2, 3, 4.
+Custom Wigner D computation kernels for l=1, 2, 3, 4.
 
 This module contains specialized, optimized kernels for computing Wigner D
 matrices for small angular momentum values:
 
-- l=2: Quaternion einsum tensor contraction (~20x faster on GPU)
-       Also includes Cayley-Hamilton method for axis-angle approach
-- l=3: Quaternion matmul using derived polynomial coefficients
-- l=4: Quaternion matmul using derived polynomial coefficients
+Primary kernels (recommended for use):
+- l=1: quaternion_to_rotation_matrix - direct quaternion to 3x3 rotation
+- l=2: quaternion_to_wigner_d_l2_einsum - tensor contraction (~20x faster on GPU)
+- l=3: quaternion_to_wigner_d_l3_matmul - polynomial coefficient approach
+- l=4: quaternion_to_wigner_d_l4_matmul - polynomial coefficient approach
+
+Experimental kernels (maintained for reference/inspiration, not recommended):
+- l=1: rodrigues_rotation_l1 - Rodrigues formula from axis-angle
+       Slower than quaternion method since it requires axis-angle extraction
+- l=2: cayley_hamilton_exp_l2 - Cayley-Hamilton matrix exponential
+       Slower than einsum since it requires axis-angle and uses bmm
 
 These kernels are used by both wigner_d_matexp.py and wigner_d_hybrid.py
 to accelerate the most common angular momentum blocks.
@@ -43,6 +50,89 @@ def clear_memory_caches() -> None:
     _L2_COEFF_TENSOR_CACHE.clear()
     _L3_MATMUL_CACHE.clear()
     _L4_MATMUL_CACHE.clear()
+
+
+# =============================================================================
+# l=1 Quaternion to Rotation Matrix (Primary - Recommended)
+# =============================================================================
+
+
+def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion directly to 3x3 rotation matrix (l=1 Wigner D).
+
+    This is the recommended method for l=1 as it uses pure polynomial
+    arithmetic without requiring axis-angle extraction or matrix operations.
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Rotation matrices of shape (N, 3, 3)
+    """
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+
+    x2, y2, z2 = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
+
+    R = torch.stack([
+        torch.stack([1 - 2*(y2 + z2), 2*(xy - wz),     2*(xz + wy)    ], dim=-1),
+        torch.stack([2*(xy + wz),     1 - 2*(x2 + z2), 2*(yz - wx)    ], dim=-1),
+        torch.stack([2*(xz - wy),     2*(yz + wx),     1 - 2*(x2 + y2)], dim=-1),
+    ], dim=-2)
+
+    return R
+
+
+# =============================================================================
+# l=1 Rodrigues Formula (Experimental - Not Recommended)
+# =============================================================================
+
+
+def rodrigues_rotation_l1(
+    axis: torch.Tensor,
+    angle: torch.Tensor,
+    K_x: torch.Tensor,
+    K_y: torch.Tensor,
+    K_z: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute l=1 Wigner D (3x3 rotation) using Rodrigues formula from axis-angle.
+
+    WARNING: This method is slower than quaternion_to_rotation_matrix because:
+    1. It requires extracting axis-angle from quaternion (expensive trig ops)
+    2. It uses bmm for K² computation
+    3. It requires fetching/broadcasting generator matrices
+
+    This is maintained for reference and inspiration only.
+
+    Uses: exp(θK) = I + sin(θ)K + (1-cos(θ))K²
+
+    Args:
+        axis: Rotation axes of shape (N, 3), unit vectors
+        angle: Rotation angles of shape (N,), in radians
+        K_x, K_y, K_z: SO(3) generator matrices for l=1, shape (3, 3)
+
+    Returns:
+        Rotation matrices of shape (N, 3, 3) in m-ordering basis (y,z,x)
+        Note: Caller must apply index permutation [2,0,1] for Cartesian basis
+    """
+    device = axis.device
+    dtype = axis.dtype
+
+    K = (
+        axis[:, 0:1, None, None] * K_x +
+        axis[:, 1:2, None, None] * K_y +
+        axis[:, 2:3, None, None] * K_z
+    ).squeeze(1)
+
+    I = torch.eye(3, dtype=dtype, device=device)
+    sin_t = torch.sin(angle)[:, None, None]
+    cos_t = torch.cos(angle)[:, None, None]
+    K2 = torch.bmm(K, K)
+
+    return I + sin_t * K + (1 - cos_t) * K2
 
 
 # =============================================================================
@@ -332,7 +422,7 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
 
 
 # =============================================================================
-# l=2 Cayley-Hamilton Kernel (for axis-angle approach)
+# l=2 Cayley-Hamilton Kernel (Experimental - Not Recommended)
 # =============================================================================
 
 
@@ -340,11 +430,17 @@ def cayley_hamilton_exp_l2(K: torch.Tensor, angle: torch.Tensor) -> torch.Tensor
     """
     Compute exp(θK) for 5×5 antisymmetric K using Cayley-Hamilton.
 
+    WARNING: This method is slower than quaternion_to_wigner_d_l2_einsum because:
+    1. It requires extracting axis-angle from quaternion (expensive trig ops)
+    2. It uses multiple bmm operations for K², K³, K⁴
+    3. It has complex branching for degenerate eigenvalue handling
+
+    This is maintained for reference and inspiration only.
+
     For antisymmetric K with eigenvalues 0, ±iλ₁, ±iλ₂:
         exp(θK) = I + c₁K + c₂K² + c₃K³ + c₄K⁴
 
     The coefficients are derived via Lagrange interpolation on the eigenvalues.
-    This is ~1.4x faster than matrix_exp for l=2 blocks.
 
     Args:
         K: Antisymmetric matrices of shape (N, 5, 5)

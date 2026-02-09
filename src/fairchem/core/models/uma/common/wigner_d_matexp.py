@@ -35,6 +35,7 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
 
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     clear_memory_caches,
+    quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
@@ -51,6 +52,7 @@ def wigner_d_from_axis_angle_batched(
     angle: torch.Tensor,
     generators: dict[str, list[torch.Tensor]],
     lmax: int,
+    l3_l4_kernels: bool=False
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices from axis-angle representation.
@@ -86,9 +88,9 @@ def wigner_d_from_axis_angle_batched(
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
 
-    # Convert axis-angle to quaternion for l=2 einsum if needed
+    # Convert axis-angle to quaternion for l>=1 kernels
     q = None
-    if lmax >= 2:
+    if lmax >= 1:
         half_angle = angle * 0.5
         cos_half = torch.cos(half_angle)
         sin_half = torch.sin(half_angle)
@@ -108,34 +110,15 @@ def wigner_d_from_axis_angle_batched(
             # l=0 is trivial: 1x1 identity
             D[:, 0, 0] = 1.0
         elif ell == 1:
-            # l=1: Use Rodrigues formula for ~5x speedup
-            # exp(theta*K) = I + sin(theta)*K + (1-cos(theta))*K^2 for 3x3 rotation
-            K_x = K_x_list[1]
-            K_y = K_y_list[1]
-            K_z = K_z_list[1]
-
-            K = (
-                axis[:, 0:1, None, None] * K_x +
-                axis[:, 1:2, None, None] * K_y +
-                axis[:, 2:3, None, None] * K_z
-            ).squeeze(1)
-
-            I = torch.eye(3, dtype=dtype, device=device)
-            sin_t = torch.sin(angle)[:, None, None]
-            cos_t = torch.cos(angle)[:, None, None]
-            K2 = torch.bmm(K, K)
-            D_ell = I + sin_t * K + (1 - cos_t) * K2
-
-            # Transform from m-ordering (y,z,x) to Cartesian (x,y,z) via index reordering
-            # P transforms [y,z,x] -> [x,y,z], which is index permutation [2,0,1]
-            D[:, 1:4, 1:4] = D_ell[:, [2, 0, 1], :][:, :, [2, 0, 1]]
+            # l=1: Direct quaternion to rotation matrix (faster than Rodrigues)
+            D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
         elif ell == 2:
             # l=2: Use quaternion einsum (faster than Cayley-Hamilton)
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
-        elif ell == 3:
+        elif l3_l4_kernel and ell == 3:
             # l=3: Use quaternion matmul (faster than matrix_exp)
             D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
-        elif ell == 4:
+        elif l3_l4_kernel and ell == 4:
             # l=4: Use quaternion matmul (faster than matrix_exp)
             D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
         else:
