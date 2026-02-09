@@ -522,6 +522,8 @@ if __name__ == "__main__":
                         help="Apply torch.compile to polynomial, einsum, matmul, and Ra/Rb real functions")
     parser.add_argument("--no-cpu", action="store_true",
                         help="Skip CPU benchmarks (useful when only GPU results are needed)")
+    parser.add_argument("--backward-only", action="store_true",
+                        help="Only run forward+backward benchmarks (skip forward-only)")
     args = parser.parse_args()
 
     # Build function dictionary - Ra/Rb real wrappers need device/dtype
@@ -565,10 +567,6 @@ if __name__ == "__main__":
 
     # CPU benchmarks (unless --no-cpu)
     if not args.no_cpu:
-        print("\n" + "=" * 80)
-        print("CPU FORWARD PASS BENCHMARKS")
-        print("=" * 80)
-
         # Need CPU funcs if we started with GPU
         if device.type != 'cpu':
             cpu_device = torch.device('cpu')
@@ -594,18 +592,21 @@ if __name__ == "__main__":
         else:
             cpu_funcs = funcs
 
-        fwd_results = run_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=cpu_funcs)
-        print_speedup_summary(fwd_results)
+        if not args.backward_only:
+            print("\n" + "=" * 80)
+            print("CPU FORWARD PASS BENCHMARKS")
+            print("=" * 80)
+            fwd_results = run_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=cpu_funcs)
+            print_speedup_summary(fwd_results)
 
+        print("\n" + "=" * 80)
+        print("CPU FORWARD+BACKWARD BENCHMARKS")
+        print("=" * 80)
         bwd_results = run_backward_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=cpu_funcs)
         print_backward_summary(bwd_results)
 
     # GPU benchmarks if available
     if torch.cuda.is_available():
-        print("\n\n" + "=" * 80)
-        print("GPU FORWARD PASS BENCHMARKS")
-        print("=" * 80)
-
         gpu_device = torch.device('cuda')
 
         # If we already have GPU funcs (from --no-cpu), use them; otherwise create new ones
@@ -634,8 +635,15 @@ if __name__ == "__main__":
                 for k in ['l2_rarb', 'l3_rarb', 'l4_rarb']:
                     gpu_funcs[k] = torch.compile(gpu_funcs[k])
 
-        gpu_fwd = run_benchmarks(batch_sizes, device=gpu_device, funcs=gpu_funcs)
-        print_speedup_summary(gpu_fwd)
+        if not args.backward_only:
+            print("\n\n" + "=" * 80)
+            print("GPU FORWARD PASS BENCHMARKS")
+            print("=" * 80)
+            gpu_fwd = run_benchmarks(batch_sizes, device=gpu_device, funcs=gpu_funcs)
+            print_speedup_summary(gpu_fwd)
 
+        print("\n" + "=" * 80)
+        print("GPU FORWARD+BACKWARD BENCHMARKS")
+        print("=" * 80)
         gpu_bwd = run_backward_benchmarks(batch_sizes, device=gpu_device, funcs=gpu_funcs)
         print_backward_summary(gpu_bwd)
