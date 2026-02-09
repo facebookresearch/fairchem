@@ -227,7 +227,7 @@ def axis_angle_wigner(
     # Step 7: Compute single Wigner D from combined rotation via matrix_exp
     # Output is directly in Euler basis thanks to Euler-aligned generators
     D = wigner_d_from_axis_angle_batched(
-        axis, angle, generators, lmax, l3_l4_kernels=le_l4_kernels
+        axis, angle, generators, lmax, l3_l4_kernels=l3_l4_kernels
     )
 
     # Step 8: Inverse is transpose (orthogonal matrix)
