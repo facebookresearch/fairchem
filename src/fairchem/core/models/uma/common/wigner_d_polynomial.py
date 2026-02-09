@@ -23,9 +23,8 @@ import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     compute_euler_matching_gamma,
-    precompute_U_blocks_euler_aligned,
-    precompute_U_blocks_euler_aligned_real,
-    precompute_wigner_coefficients,
+    get_ra_rb_coefficients,
+    get_ra_rb_coefficients_real,
     quaternion_edge_to_y_stable,
     quaternion_multiply,
     quaternion_to_ra_rb,
@@ -36,65 +35,6 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
-
-
-# =============================================================================
-# Module-Level Caches
-# =============================================================================
-
-_RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
-_RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
-_RA_RB_U_REAL_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
-
-
-def clear_memory_caches() -> None:
-    """Clear all in-memory caches for this module."""
-    _RA_RB_COEFF_CACHE.clear()
-    _RA_RB_U_CACHE.clear()
-    _RA_RB_U_REAL_CACHE.clear()
-
-
-# =============================================================================
-# Coefficient Caching
-# =============================================================================
-
-
-def _get_ra_rb_coefficients(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients with Euler-aligned U blocks."""
-    key = (lmax, dtype, device)
-
-    if key not in _RA_RB_COEFF_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
-        _RA_RB_COEFF_CACHE[key] = coeffs
-
-    if key not in _RA_RB_U_CACHE:
-        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
-        _RA_RB_U_CACHE[key] = U_blocks
-
-    return _RA_RB_COEFF_CACHE[key], _RA_RB_U_CACHE[key]
-
-
-def _get_ra_rb_coefficients_real(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients with real-pair U blocks."""
-    key = (lmax, dtype, device)
-
-    if key not in _RA_RB_COEFF_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
-        _RA_RB_COEFF_CACHE[key] = coeffs
-
-    if key not in _RA_RB_U_REAL_CACHE:
-        U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
-        _RA_RB_U_REAL_CACHE[key] = U_blocks_real
-
-    return _RA_RB_COEFF_CACHE[key], _RA_RB_U_REAL_CACHE[key]
 
 
 # =============================================================================
@@ -126,7 +66,7 @@ def wigner_d_from_quaternion_polynomial(
     dtype = q.dtype
     device = q.device
 
-    coeffs, U_blocks = _get_ra_rb_coefficients(lmax, dtype, device)
+    coeffs, U_blocks = get_ra_rb_coefficients(lmax, dtype, device)
 
     Ra, Rb = quaternion_to_ra_rb(q)
     D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
@@ -155,7 +95,7 @@ def wigner_d_from_quaternion_polynomial_real(
     dtype = q.dtype
     device = q.device
 
-    coeffs, U_blocks_real = _get_ra_rb_coefficients_real(lmax, dtype, device)
+    coeffs, U_blocks_real = get_ra_rb_coefficients_real(lmax, dtype, device)
 
     ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
     D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)

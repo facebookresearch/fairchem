@@ -26,10 +26,9 @@ import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     compute_euler_matching_gamma,
+    get_ra_rb_coefficients,
+    get_ra_rb_coefficients_real,
     get_so3_generators,
-    precompute_U_blocks_euler_aligned,
-    precompute_U_blocks_euler_aligned_real,
-    precompute_wigner_coefficients,
     quaternion_edge_to_y_stable,
     quaternion_multiply,
     quaternion_to_axis_angle,
@@ -48,105 +47,6 @@ from fairchem.core.models.uma.common.wigner_d_matexp import (
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
 )
-
-
-# =============================================================================
-# Module-Level Caches
-# =============================================================================
-
-_RA_RB_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
-_RA_RB_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
-_RA_RB_U_REAL_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
-_RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
-_RA_RB_RANGE_REAL_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
-
-
-def clear_memory_caches() -> None:
-    """Clear all in-memory caches for this module."""
-    _RA_RB_COEFF_CACHE.clear()
-    _RA_RB_U_CACHE.clear()
-    _RA_RB_U_REAL_CACHE.clear()
-    _RA_RB_RANGE_CACHE.clear()
-    _RA_RB_RANGE_REAL_CACHE.clear()
-
-
-# =============================================================================
-# Coefficient Caching
-# =============================================================================
-
-
-def _get_ra_rb_coefficients(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients with Euler-aligned U blocks."""
-    key = (lmax, dtype, device)
-
-    if key not in _RA_RB_COEFF_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
-        _RA_RB_COEFF_CACHE[key] = coeffs
-
-    if key not in _RA_RB_U_CACHE:
-        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
-        _RA_RB_U_CACHE[key] = U_blocks
-
-    return _RA_RB_COEFF_CACHE[key], _RA_RB_U_CACHE[key]
-
-
-def _get_ra_rb_coefficients_range(
-    lmin: int,
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients for l in [lmin, lmax] only."""
-    key = (lmin, lmax, dtype, device)
-
-    if key not in _RA_RB_RANGE_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device, lmin=lmin)
-        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device, lmin=lmin)
-        _RA_RB_RANGE_CACHE[key] = (coeffs, U_blocks)
-
-    return _RA_RB_RANGE_CACHE[key]
-
-
-def _get_ra_rb_coefficients_real(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients with real-pair U blocks."""
-    key = (lmax, dtype, device)
-
-    if key not in _RA_RB_COEFF_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
-        _RA_RB_COEFF_CACHE[key] = coeffs
-
-    if key not in _RA_RB_U_REAL_CACHE:
-        U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
-        _RA_RB_U_REAL_CACHE[key] = U_blocks_real
-
-    return _RA_RB_COEFF_CACHE[key], _RA_RB_U_REAL_CACHE[key]
-
-
-def _get_ra_rb_coefficients_range_real(
-    lmin: int,
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> tuple[dict, list]:
-    """Get cached Ra/Rb polynomial coefficients for l in [lmin, lmax] with real-pair U blocks."""
-    key = (lmin, lmax, dtype, device)
-
-    if key not in _RA_RB_RANGE_REAL_CACHE:
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device, lmin=lmin)
-        # Get full real U blocks and slice to range
-        full_U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
-        U_blocks_range_real = full_U_blocks_real[lmin:]
-        _RA_RB_RANGE_REAL_CACHE[key] = (coeffs, U_blocks_range_real)
-
-    return _RA_RB_RANGE_REAL_CACHE[key]
 
 
 # =============================================================================
@@ -214,7 +114,7 @@ def wigner_d_from_axis_angle_hybrid(
     # Compute l>=5 using Ra/Rb polynomial from quaternion (range version)
     if lmax >= 5:
         # Get Ra/Rb coefficients for l>=5 only (more efficient)
-        coeffs_range, U_blocks_range = _get_ra_rb_coefficients_range(5, lmax, dtype, device)
+        coeffs_range, U_blocks_range = get_ra_rb_coefficients(lmax, dtype, device, lmin=5)
         Ra, Rb = quaternion_to_ra_rb(q)
         D_complex_range = wigner_d_matrix_complex(Ra, Rb, coeffs_range)
         D_ra_rb_range = wigner_d_complex_to_real(D_complex_range, U_blocks_range, lmax, lmin=5)
@@ -285,7 +185,7 @@ def wigner_d_from_axis_angle_hybrid_real(
     # Compute l>=5 using Ra/Rb polynomial with real-pair arithmetic
     if lmax >= 5:
         # Get Ra/Rb coefficients for l>=5 only with real U blocks
-        coeffs_range, U_blocks_range_real = _get_ra_rb_coefficients_range_real(5, lmax, dtype, device)
+        coeffs_range, U_blocks_range_real = get_ra_rb_coefficients_real(lmax, dtype, device, lmin=5)
         ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
         D_re_range, D_im_range = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs_range)
         D_ra_rb_range = wigner_d_pair_to_real(D_re_range, D_im_range, U_blocks_range_real, lmax, lmin=5)

@@ -42,11 +42,8 @@ _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "fairchem" / "wigner_coeffs"
 _GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 
 # Coefficient caches for Ra/Rb polynomial
-_COEFF_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
-
-# U block caches (complex and real-pair)
-_U_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
-_U_REAL_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
+_COEFF_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
+_COEFF_REAL_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
 
 
 def clear_memory_caches() -> None:
@@ -60,20 +57,78 @@ def clear_memory_caches() -> None:
     """
     _GENERATOR_CACHE.clear()
     _COEFF_CACHE.clear()
-    _U_CACHE.clear()
-    _U_REAL_CACHE.clear()
+    _COEFF_REAL_CACHE.clear()
 
     # Also clear caches in method modules if they exist
     import sys
     for module_name in [
         "fairchem.core.models.uma.common.wigner_d_matexp",
-        "fairchem.core.models.uma.common.wigner_d_hybrid",
-        "fairchem.core.models.uma.common.wigner_d_polynomial",
     ]:
         if module_name in sys.modules:
             module = sys.modules[module_name]
             if hasattr(module, "clear_memory_caches"):
                 module.clear_memory_caches()
+
+
+# =============================================================================
+# Coefficient Caching Functions
+# =============================================================================
+
+
+def get_ra_rb_coefficients(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+    lmin: int = 0,
+) -> tuple[dict, list]:
+    """Get cached Ra/Rb polynomial coefficients with Euler-aligned U blocks.
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Data type for coefficients
+        device: Device for tensors
+        lmin: Minimum angular momentum (default 0)
+
+    Returns:
+        Tuple of (coefficients dict, U_blocks list)
+    """
+    key = (lmin, lmax, dtype, device)
+
+    if key not in _COEFF_CACHE:
+        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device, lmin=lmin)
+        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device, lmin=lmin)
+        _COEFF_CACHE[key] = (coeffs, U_blocks)
+
+    return _COEFF_CACHE[key]
+
+
+def get_ra_rb_coefficients_real(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+    lmin: int = 0,
+) -> tuple[dict, list]:
+    """Get cached Ra/Rb polynomial coefficients with real-pair U blocks.
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Data type for coefficients
+        device: Device for tensors
+        lmin: Minimum angular momentum (default 0)
+
+    Returns:
+        Tuple of (coefficients dict, U_blocks_real list)
+    """
+    key = (lmin, lmax, dtype, device)
+
+    if key not in _COEFF_REAL_CACHE:
+        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device, lmin=lmin)
+        # Get full real U blocks and slice to range
+        full_U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
+        U_blocks_range_real = full_U_blocks_real[lmin:]
+        _COEFF_REAL_CACHE[key] = (coeffs, U_blocks_range_real)
+
+    return _COEFF_REAL_CACHE[key]
 
 
 # =============================================================================

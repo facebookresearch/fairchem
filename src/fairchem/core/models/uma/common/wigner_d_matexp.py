@@ -38,7 +38,6 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
 # Module-Level Caches
 # =============================================================================
 
-_GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
 _L2_COEFF_TENSOR_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
 _L3_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
 _L4_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
@@ -46,7 +45,6 @@ _L4_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
 
 def clear_memory_caches() -> None:
     """Clear all in-memory caches for this module."""
-    _GENERATOR_CACHE.clear()
     _L2_COEFF_TENSOR_CACHE.clear()
     _L3_MATMUL_CACHE.clear()
     _L4_MATMUL_CACHE.clear()
