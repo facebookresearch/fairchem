@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("--cpu", action="store_true", help="Force CPU device")
     parser.add_argument("--cuda", action="store_true", help="Force CUDA device")
     parser.add_argument("--quick", action="store_true", help="Quick mode (fewer runs)")
+    parser.add_argument("--compile", action="store_true", help="Apply torch.compile to both methods")
     parser.add_argument("--lmax", type=int, default=6, help="Maximum angular momentum")
     parser.add_argument("--dtype", choices=["float32", "float64"], default="float64", help="Data type")
     return parser.parse_args()
@@ -123,6 +124,8 @@ def main():
 
     print("=" * 90)
     print("PERFORMANCE: Euler vs Axis-Angle by Batch Size")
+    if args.compile:
+        print("(with torch.compile)")
     print("=" * 90)
     print(f"lmax = {lmax}, dtype = {dtype}, device = {device}")
     print(f"Warmup runs: {n_warmup}, Timed runs: {n_runs}")
@@ -146,10 +149,14 @@ def main():
     def axis_forward(edges):
         return axis_angle_wigner(edges, lmax, generators=generators)
 
-    # Compile functions once
-    # Use aot_eager backend because inductor has issues with complex numbers (Ra/Rb for l>=3)
-    euler_forward_compiled = torch.compile(euler_forward, backend="aot_eager")
-    axis_forward_compiled = torch.compile(axis_forward, backend="aot_eager")
+    # Optionally apply torch.compile
+    if args.compile:
+        print("Applying torch.compile to both methods...")
+        euler_forward_fn = torch.compile(euler_forward)
+        axis_forward_fn = torch.compile(axis_forward)
+    else:
+        euler_forward_fn = euler_forward
+        axis_forward_fn = axis_forward
 
     # Correctness checks
     print("CORRECTNESS CHECKS")
@@ -187,14 +194,14 @@ def main():
         edges = torch.randn(n_edges, 3, dtype=dtype, device=device)
         edges = torch.nn.functional.normalize(edges, dim=-1)
 
-        # Euler (using pre-compiled function)
+        # Euler
         def euler_fn():
-            return euler_forward_compiled(edges)
+            return euler_forward_fn(edges)
         t_euler = benchmark_fn(euler_fn, n_warmup, n_runs, device)
 
-        # Axis-Angle (using pre-compiled function)
+        # Axis-Angle
         def axis_fn():
-            return axis_forward_compiled(edges)
+            return axis_forward_fn(edges)
         t_axis = benchmark_fn(axis_fn, n_warmup, n_runs, device)
 
         ratio = t_euler / t_axis if t_axis > 0 else float('inf')
@@ -220,17 +227,17 @@ def main():
         edges_base = torch.randn(n_edges, 3, dtype=dtype, device=device)
         edges_base = torch.nn.functional.normalize(edges_base, dim=-1)
 
-        # Euler (using aot_eager compiled function)
+        # Euler
         def euler_bwd_fn():
             edges = edges_base.clone().requires_grad_(True)
-            W = euler_forward_compiled(edges)
+            W = euler_forward_fn(edges)
             torch.autograd.grad(W.sum(), edges)
         t_euler = benchmark_fn(euler_bwd_fn, n_warmup, n_runs, device)
 
-        # Axis-Angle (using aot_eager compiled function)
+        # Axis-Angle
         def axis_bwd_fn():
             edges = edges_base.clone().requires_grad_(True)
-            W, _ = axis_forward_compiled(edges)
+            W, _ = axis_forward_fn(edges)
             torch.autograd.grad(W.sum(), edges)
         t_axis = benchmark_fn(axis_bwd_fn, n_warmup, n_runs, device)
 

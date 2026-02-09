@@ -281,6 +281,51 @@ class TestImplementationAgreement:
                     f"l={ell} mismatch for edge {edge}"
                 )
 
+    def test_blend_region_matches_euler(self, lmax, dtype, device, Jd_matrices):
+        """Blend region edges (ey ∈ [-0.9, -0.7]) match Euler with correct gamma.
+
+        In the blend region, NLERP interpolation between two quaternion charts
+        requires a different gamma than the standard formula -atan2(ex, ez).
+        These pre-computed gamma values were derived from R_diff = R_euler @ R_hybrid.T.
+        """
+        # Blend region test edges with pre-computed gamma values
+        # Format: (normalized_edge, gamma) where gamma makes hybrid match Euler
+        # Edges are pre-normalized to avoid floating point differences
+        blend_region_edges = [
+            # yz-plane (ex=0), middle of blend
+            ([0.0, -0.8, 0.6], 0.0),
+            # xy-plane (ez=0), middle of blend
+            ([0.6, -0.8, 0.0], 3.1415926535897931),
+            # yz-plane, deeper in blend
+            ([0.0, -0.8499922481060458, 0.5267951956497234], 0.0),
+            # xy-plane, at blend boundary (ey=-0.9)
+            ([0.43589807987318724, -0.8999960355261952, 0.0], 1.5707963267948966),
+            # general edge, near blend boundary
+            ([0.1000022780778422, -0.7500170855838165, 0.6538148940729324], -0.1320878539772946),
+        ]
+
+        for edge, gamma in blend_region_edges:
+            edge_t = torch.tensor([edge], dtype=dtype, device=device)
+            gamma_t = torch.tensor([gamma], dtype=dtype, device=device)
+
+            # Compute with axis-angle hybrid using pre-computed gamma
+            D_hybrid, _ = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma_t)
+
+            # Compare with Euler (gamma=0)
+            alpha = torch.atan2(edge_t[0, 0], edge_t[0, 2])
+            beta = torch.acos(edge_t[0, 1].clamp(-1, 1))
+            gamma_zero = torch.zeros(1, dtype=dtype, device=device)
+
+            for ell in range(lmax + 1):
+                start = ell * ell
+                end = start + 2 * ell + 1
+                D_euler = wigner_D(ell, gamma_zero, -beta, -alpha, Jd_matrices)
+                D_hybrid_block = D_hybrid[0, start:end, start:end]
+
+                assert torch.allclose(D_euler[0], D_hybrid_block, atol=1e-10), (
+                    f"l={ell} mismatch for blend region edge {edge}"
+                )
+
 
 # =============================================================================
 # Test Range Functions (for hybrid lmin support)
