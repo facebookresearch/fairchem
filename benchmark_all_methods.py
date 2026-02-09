@@ -527,6 +527,7 @@ if __name__ == "__main__":
     dtype = torch.float64
     device = torch.device('cpu')
 
+    print("Precomputing Ra/Rb coefficients...", flush=True)
     funcs = {
         'l2_poly': quaternion_to_wigner_d_l2,
         'l2_einsum': quaternion_to_wigner_d_l2_einsum,
@@ -541,10 +542,12 @@ if __name__ == "__main__":
         'l4_matmul': quaternion_to_wigner_d_l4_matmul,
         'l4_rarb': _get_rarb_wrapper(4, dtype, device),
     }
+    print("Done.", flush=True)
 
     if args.compile:
-        print("Applying torch.compile to real-number functions...")
+        print("Applying torch.compile to real-number functions...", flush=True)
         funcs = {k: torch.compile(v) for k, v in funcs.items()}
+        print("Compilation done.", flush=True)
 
     print("=" * 80)
     print("WIGNER D MATRIX COMPUTATION BENCHMARKS")
@@ -573,6 +576,7 @@ if __name__ == "__main__":
 
         # Create GPU-specific funcs with CUDA Ra/Rb wrappers
         gpu_device = torch.device('cuda')
+        print("Precomputing Ra/Rb coefficients for GPU...", flush=True)
         gpu_funcs = {
             'l2_poly': funcs['l2_poly'],
             'l2_einsum': funcs['l2_einsum'],
@@ -587,6 +591,7 @@ if __name__ == "__main__":
             'l4_matmul': funcs['l4_matmul'],
             'l4_rarb': _get_rarb_wrapper(4, dtype, gpu_device),
         }
+        print("Done.", flush=True)
         if args.compile:
             # Compile the new GPU Ra/Rb wrappers
             for k in ['l2_rarb', 'l3_rarb', 'l4_rarb']:
