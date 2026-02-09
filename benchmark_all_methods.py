@@ -520,14 +520,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Benchmark Wigner D computation methods")
     parser.add_argument("--compile", action="store_true",
                         help="Apply torch.compile to polynomial, einsum, matmul, and Ra/Rb real functions")
+    parser.add_argument("--no-cpu", action="store_true",
+                        help="Skip CPU benchmarks (useful when only GPU results are needed)")
     args = parser.parse_args()
 
     # Build function dictionary - Ra/Rb real wrappers need device/dtype
-    # We'll create them for CPU float64 initially
+    # We'll create them for CPU float64 initially (or GPU if skipping CPU)
     dtype = torch.float64
-    device = torch.device('cpu')
+    if args.no_cpu and torch.cuda.is_available():
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
 
-    print("Precomputing Ra/Rb coefficients...", flush=True)
+    print(f"Precomputing Ra/Rb coefficients for {device}...", flush=True)
     funcs = {
         'l2_poly': quaternion_to_wigner_d_l2,
         'l2_einsum': quaternion_to_wigner_d_l2_einsum,
@@ -558,44 +563,76 @@ if __name__ == "__main__":
 
     batch_sizes = [100, 1000, 10000]
 
-    print("\n" + "=" * 80)
-    print("FORWARD PASS BENCHMARKS")
-    print("=" * 80)
+    # CPU benchmarks (unless --no-cpu)
+    if not args.no_cpu:
+        print("\n" + "=" * 80)
+        print("CPU FORWARD PASS BENCHMARKS")
+        print("=" * 80)
 
-    fwd_results = run_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=funcs)
-    print_speedup_summary(fwd_results)
+        # Need CPU funcs if we started with GPU
+        if device.type != 'cpu':
+            cpu_device = torch.device('cpu')
+            print("Precomputing Ra/Rb coefficients for CPU...", flush=True)
+            cpu_funcs = {
+                'l2_poly': funcs['l2_poly'],
+                'l2_einsum': funcs['l2_einsum'],
+                'l2_matmul': funcs['l2_matmul'],
+                'l2_rarb': _get_rarb_wrapper(2, dtype, cpu_device),
+                'l3_poly': funcs['l3_poly'],
+                'l3_einsum': funcs['l3_einsum'],
+                'l3_matmul': funcs['l3_matmul'],
+                'l3_rarb': _get_rarb_wrapper(3, dtype, cpu_device),
+                'l4_poly': funcs['l4_poly'],
+                'l4_einsum': funcs['l4_einsum'],
+                'l4_matmul': funcs['l4_matmul'],
+                'l4_rarb': _get_rarb_wrapper(4, dtype, cpu_device),
+            }
+            print("Done.", flush=True)
+            if args.compile:
+                for k in ['l2_rarb', 'l3_rarb', 'l4_rarb']:
+                    cpu_funcs[k] = torch.compile(cpu_funcs[k])
+        else:
+            cpu_funcs = funcs
 
-    bwd_results = run_backward_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=funcs)
-    print_backward_summary(bwd_results)
+        fwd_results = run_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=cpu_funcs)
+        print_speedup_summary(fwd_results)
+
+        bwd_results = run_backward_benchmarks(batch_sizes, device=torch.device('cpu'), funcs=cpu_funcs)
+        print_backward_summary(bwd_results)
 
     # GPU benchmarks if available
     if torch.cuda.is_available():
         print("\n\n" + "=" * 80)
-        print("GPU BENCHMARKS")
+        print("GPU FORWARD PASS BENCHMARKS")
         print("=" * 80)
 
-        # Create GPU-specific funcs with CUDA Ra/Rb wrappers
         gpu_device = torch.device('cuda')
-        print("Precomputing Ra/Rb coefficients for GPU...", flush=True)
-        gpu_funcs = {
-            'l2_poly': funcs['l2_poly'],
-            'l2_einsum': funcs['l2_einsum'],
-            'l2_matmul': funcs['l2_matmul'],
-            'l2_rarb': _get_rarb_wrapper(2, dtype, gpu_device),
-            'l3_poly': funcs['l3_poly'],
-            'l3_einsum': funcs['l3_einsum'],
-            'l3_matmul': funcs['l3_matmul'],
-            'l3_rarb': _get_rarb_wrapper(3, dtype, gpu_device),
-            'l4_poly': funcs['l4_poly'],
-            'l4_einsum': funcs['l4_einsum'],
-            'l4_matmul': funcs['l4_matmul'],
-            'l4_rarb': _get_rarb_wrapper(4, dtype, gpu_device),
-        }
-        print("Done.", flush=True)
-        if args.compile:
-            # Compile the new GPU Ra/Rb wrappers
-            for k in ['l2_rarb', 'l3_rarb', 'l4_rarb']:
-                gpu_funcs[k] = torch.compile(gpu_funcs[k])
+
+        # If we already have GPU funcs (from --no-cpu), use them; otherwise create new ones
+        if device.type == 'cuda':
+            gpu_funcs = funcs
+        else:
+            # Create GPU-specific funcs with CUDA Ra/Rb wrappers
+            print("Precomputing Ra/Rb coefficients for GPU...", flush=True)
+            gpu_funcs = {
+                'l2_poly': funcs['l2_poly'],
+                'l2_einsum': funcs['l2_einsum'],
+                'l2_matmul': funcs['l2_matmul'],
+                'l2_rarb': _get_rarb_wrapper(2, dtype, gpu_device),
+                'l3_poly': funcs['l3_poly'],
+                'l3_einsum': funcs['l3_einsum'],
+                'l3_matmul': funcs['l3_matmul'],
+                'l3_rarb': _get_rarb_wrapper(3, dtype, gpu_device),
+                'l4_poly': funcs['l4_poly'],
+                'l4_einsum': funcs['l4_einsum'],
+                'l4_matmul': funcs['l4_matmul'],
+                'l4_rarb': _get_rarb_wrapper(4, dtype, gpu_device),
+            }
+            print("Done.", flush=True)
+            if args.compile:
+                # Compile the new GPU Ra/Rb wrappers
+                for k in ['l2_rarb', 'l3_rarb', 'l4_rarb']:
+                    gpu_funcs[k] = torch.compile(gpu_funcs[k])
 
         gpu_fwd = run_benchmarks(batch_sizes, device=gpu_device, funcs=gpu_funcs)
         print_speedup_summary(gpu_fwd)

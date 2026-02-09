@@ -1447,7 +1447,8 @@ def wigner_d_from_axis_angle_batched(
     Uses optimizations:
     - l=0: Trivial (identity)
     - l=1: Rodrigues formula (4-5x faster than matrix_exp)
-    - l>=2: matrix_exp
+    - l=2: Quaternion einsum (faster than Cayley-Hamilton)
+    - l>=3: matrix_exp
 
     Args:
         axis: Rotation axes of shape (N, 3), unit vectors
@@ -1470,6 +1471,19 @@ def wigner_d_from_axis_angle_batched(
     P = generators['P']
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
+
+    # Convert axis-angle to quaternion for l=2 einsum if needed
+    q = None
+    if lmax >= 2:
+        half_angle = angle * 0.5
+        cos_half = torch.cos(half_angle)
+        sin_half = torch.sin(half_angle)
+        q = torch.stack([
+            cos_half,
+            sin_half * axis[:, 0],
+            sin_half * axis[:, 1],
+            sin_half * axis[:, 2],
+        ], dim=-1)
 
     block_start = 0
     for ell in range(lmax + 1):
@@ -1501,9 +1515,11 @@ def wigner_d_from_axis_angle_batched(
             # Transform from m-ordering (y,z,x) to Cartesian (x,y,z) via index reordering
             # P transforms [y,z,x] -> [x,y,z], which is index permutation [2,0,1]
             D[:, 1:4, 1:4] = D_ell[:, [2, 0, 1], :][:, :, [2, 0, 1]]
+        elif ell == 2:
+            # l=2: Use quaternion einsum (faster than Cayley-Hamilton)
+            D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
         else:
-            # l>=2: Use Cayley-Hamilton for l=2, matrix_exp for l>=3
-            # Note: Cayley-Hamilton is ~1.4x faster for l=2 but slower for l>=5
+            # l>=3: Use matrix_exp
             K_x = K_x_list[ell]
             K_y = K_y_list[ell]
             K_z = K_z_list[ell]
@@ -1514,12 +1530,7 @@ def wigner_d_from_axis_angle_batched(
                 axis[:, 2:3, None, None] * K_z
             ).squeeze(1)
 
-            if ell == 2:
-                # Use Cayley-Hamilton formula for l=2 (5x5 matrices)
-                D_ell = _cayley_hamilton_exp_l2(K, angle)
-            else:
-                # Use matrix_exp for l>=3
-                D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
+            D_ell = torch.linalg.matrix_exp(angle[:, None, None] * K)
             D[:, block_start:block_end, block_start:block_end] = D_ell
 
         block_start = block_end
