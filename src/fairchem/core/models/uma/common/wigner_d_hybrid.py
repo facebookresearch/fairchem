@@ -42,7 +42,7 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     wigner_d_pair_to_real,
 )
 
-from fairchem.core.models.uma.common.wigner_d_matexp import (
+from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
