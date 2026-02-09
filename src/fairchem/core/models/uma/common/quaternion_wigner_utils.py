@@ -1906,11 +1906,8 @@ def _load_coefficients(
     """Load coefficients from disk, returning None if not found or invalid."""
     if not path.exists():
         return None
-    try:
-        coeffs_dict = torch.load(path, map_location=device, weights_only=True)
-        return _dict_to_coeffs(coeffs_dict)
-    except Exception:
-        return None
+    coeffs_dict = torch.load(path, map_location=device, weights_only=True)
+    return _dict_to_coeffs(coeffs_dict)
 
 
 def get_wigner_coefficients(
@@ -1937,51 +1934,46 @@ def get_wigner_coefficients(
 
     if use_cache:
         coeffs = _load_coefficients(cache_path, device)
-        if coeffs is not None:
-            if coeffs.lmax == lmax:
-                if dtype != torch.float64:
-                    # Convert floating point tensors to requested dtype
-                    def convert_case(case: CaseCoeffs) -> CaseCoeffs:
-                        return CaseCoeffs(
-                            coeff=case.coeff.to(dtype=dtype),
-                            horner=case.horner.to(dtype=dtype),
-                            poly_len=case.poly_len,
-                            ra_exp=case.ra_exp.to(dtype=dtype),
-                            rb_exp=case.rb_exp.to(dtype=dtype),
-                            sign=case.sign.to(dtype=dtype),
-                        )
+        if coeffs is not None and coeffs.lmax == lmax and dtype != torch.float64:
+            # Convert floating point tensors to requested dtype
+            def convert_case(case: CaseCoeffs) -> CaseCoeffs:
+                return CaseCoeffs(
+                    coeff=case.coeff.to(dtype=dtype),
+                    horner=case.horner.to(dtype=dtype),
+                    poly_len=case.poly_len,
+                    ra_exp=case.ra_exp.to(dtype=dtype),
+                    rb_exp=case.rb_exp.to(dtype=dtype),
+                    sign=case.sign.to(dtype=dtype),
+                )
 
-                    coeffs = WignerCoefficients(
-                        lmin=coeffs.lmin,
-                        lmax=coeffs.lmax,
-                        size=coeffs.size,
-                        max_poly_len=coeffs.max_poly_len,
-                        primary_row=coeffs.primary_row,
-                        primary_col=coeffs.primary_col,
-                        n_primary=coeffs.n_primary,
-                        case1=convert_case(coeffs.case1),
-                        case2=convert_case(coeffs.case2),
-                        mp_plus_m=coeffs.mp_plus_m.to(dtype=dtype),
-                        m_minus_mp=coeffs.m_minus_mp.to(dtype=dtype),
-                        diagonal_mask=coeffs.diagonal_mask,
-                        anti_diagonal_mask=coeffs.anti_diagonal_mask,
-                        special_2m=coeffs.special_2m.to(dtype=dtype),
-                        anti_diag_sign=coeffs.anti_diag_sign.to(dtype=dtype),
-                        n_derived=coeffs.n_derived,
-                        derived_row=coeffs.derived_row,
-                        derived_col=coeffs.derived_col,
-                        derived_primary_idx=coeffs.derived_primary_idx,
-                        derived_sign=coeffs.derived_sign.to(dtype=dtype),
-                    )
-                return coeffs
+            coeffs = WignerCoefficients(
+                lmin=coeffs.lmin,
+                lmax=coeffs.lmax,
+                size=coeffs.size,
+                max_poly_len=coeffs.max_poly_len,
+                primary_row=coeffs.primary_row,
+                primary_col=coeffs.primary_col,
+                n_primary=coeffs.n_primary,
+                case1=convert_case(coeffs.case1),
+                case2=convert_case(coeffs.case2),
+                mp_plus_m=coeffs.mp_plus_m.to(dtype=dtype),
+                m_minus_mp=coeffs.m_minus_mp.to(dtype=dtype),
+                diagonal_mask=coeffs.diagonal_mask,
+                anti_diagonal_mask=coeffs.anti_diagonal_mask,
+                special_2m=coeffs.special_2m.to(dtype=dtype),
+                anti_diag_sign=coeffs.anti_diag_sign.to(dtype=dtype),
+                n_derived=coeffs.n_derived,
+                derived_row=coeffs.derived_row,
+                derived_col=coeffs.derived_col,
+                derived_primary_idx=coeffs.derived_primary_idx,
+                derived_sign=coeffs.derived_sign.to(dtype=dtype),
+            )
+            return coeffs
 
     coeffs = precompute_wigner_coefficients(lmax, dtype, device)
 
     if use_cache:
-        try:
-            _save_coefficients(coeffs, cache_path)
-        except Exception:
-            pass
+        _save_coefficients(coeffs, cache_path)
 
     return coeffs
 
@@ -2005,10 +1997,7 @@ def clear_wigner_cache(cache_dir: Optional[Path] = None) -> int:
 
     count = 0
     for f in cache_dir.glob("wigner_*.pt"):
-        try:
-            f.unlink()
-            count += 1
-        except Exception:
-            pass
+        f.unlink()
+        count += 1
 
     return count
