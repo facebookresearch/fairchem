@@ -443,33 +443,6 @@ def quaternion_to_axis_angle(
     return axis, angle
 
 
-def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
-    """
-    Convert quaternion directly to 3x3 rotation matrix (l=1 Wigner D).
-
-    Uses the standard quaternion to rotation matrix formula.
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-
-    Returns:
-        Rotation matrices of shape (N, 3, 3)
-    """
-    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
-
-    x2, y2, z2 = x * x, y * y, z * z
-    xy, xz, yz = x * y, x * z, y * z
-    wx, wy, wz = w * x, w * y, w * z
-
-    R = torch.stack([
-        torch.stack([1 - 2*(y2 + z2), 2*(xy - wz),     2*(xz + wy)    ], dim=-1),
-        torch.stack([2*(xy + wz),     1 - 2*(x2 + z2), 2*(yz - wx)    ], dim=-1),
-        torch.stack([2*(xz - wy),     2*(yz + wx),     1 - 2*(x2 + y2)], dim=-1),
-    ], dim=-2)
-
-    return R
-
-
 # =============================================================================
 # Gamma Computation for Euler Matching
 # =============================================================================

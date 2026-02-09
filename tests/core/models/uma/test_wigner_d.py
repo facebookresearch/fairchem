@@ -32,7 +32,6 @@ from fairchem.core.models.uma.common.wigner_d_hybrid import (
 )
 from fairchem.core.models.uma.common.wigner_d_polynomial import (
     axis_angle_wigner_polynomial,
-    axis_angle_wigner_polynomial_real,
 )
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     quaternion_to_ra_rb,
@@ -227,7 +226,7 @@ class TestEntryPointAgreement:
         D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
         D_hybrid_real, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma, use_real_arithmetic=True)
         D_poly, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma)
-        D_poly_real, _ = axis_angle_wigner_polynomial_real(edges, lmax, gamma=gamma)
+        D_poly_real, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma, use_real_arithmetic=True)
 
         assert (D_hybrid - D_hybrid_real).abs().max() < 1e-9, "hybrid_real differs from hybrid"
         assert (D_poly - D_poly_real).abs().max() < 1e-9, "polynomial_real differs from polynomial"
@@ -501,20 +500,20 @@ class TestTorchCompileCompatibility:
         reason="torch.compile not available"
     )
     def test_polynomial_real_compiles(self, lmax, dtype, device):
-        """axis_angle_wigner_polynomial_real should compile without graph breaks."""
+        """axis_angle_wigner_polynomial with use_real_arithmetic should compile without graph breaks."""
         import torch._dynamo as dynamo
 
         edges = torch.randn(10, 3, dtype=dtype, device=device)
         gamma = torch.rand(10, dtype=dtype, device=device) * 6.28
 
         def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_polynomial_real(edge_vec, lmax_val, gamma=g)
+            return axis_angle_wigner_polynomial(edge_vec, lmax_val, gamma=g, use_real_arithmetic=True)
 
         try:
             compiled_fn = torch.compile(fn, fullgraph=True)
             D, D_inv = compiled_fn(edges, lmax, gamma)
 
-            D_ref, D_inv_ref = axis_angle_wigner_polynomial_real(edges, lmax, gamma=gamma)
+            D_ref, D_inv_ref = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma, use_real_arithmetic=True)
             assert torch.allclose(D, D_ref, atol=1e-10)
         except Exception as e:
             explanation = dynamo.explain(fn)(edges, lmax, gamma)

@@ -203,11 +203,8 @@ def axis_angle_wigner(
     # Step 2: Compute gamma if not provided
     if gamma is None:
         if use_euler_gamma:
-            # Use atan2-based gamma to exactly match Euler code output
-            # Note: has gradient singularity at edge = +Y
             gamma = compute_euler_matching_gamma(edge_normalized)
         else:
-            # Random gamma for SO(2) equivariance (default for training)
             gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
 
     # Step 3: Compute quaternion (edge -> +Y) using NLERP-blended two-chart approach

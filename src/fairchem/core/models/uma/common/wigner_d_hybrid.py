@@ -131,7 +131,6 @@ def axis_angle_wigner_hybrid(
     lmax: int,
     gamma: Optional[torch.Tensor] = None,
     use_euler_gamma: bool = False,
-    generators: Optional[dict[str, list[torch.Tensor]]] = None,
     l3_l4_kernel: bool = False,
     use_real_arithmetic: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -156,10 +155,6 @@ def axis_angle_wigner_hybrid(
                If None, uses random gamma (for SO(2) equivariance during training).
         use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
                of random gamma. This makes output exactly match Euler code.
-        generators: Optional pre-computed SO(3) generators from get_so3_generators().
-               If None, generators are fetched internally (may cause torch.compile
-               graph breaks). For optimal torch.compile performance, pre-compute
-               generators and pass them here.
         l3_l4_kernel: If True, use custom matmul kernels for l=3,4
         use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
                (torch.compile compatible, avoids complex tensors)
