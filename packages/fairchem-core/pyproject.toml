@@ -28,7 +28,6 @@ dependencies = [
     "hydra-core",
     "torchtnt",
     "pyyaml",
-    "nvalchemi-toolkit-ops",
     "wandb",
     "websockets",
 ]
