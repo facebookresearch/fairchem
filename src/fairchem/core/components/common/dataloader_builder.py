@@ -19,7 +19,7 @@ def get_dataloader(
     batch_sampler_fn: callable,
     collate_fn: callable,
     num_workers,
-    mp_start_method: str = "forkserver",
+    mp_start_method: str = "fork",
 ) -> DataLoader:
     if gp_utils.initialized():
         num_replicas = gp_utils.get_dp_world_size()

@@ -9,4 +9,4 @@ dataloader_workers: 8
 debug: False
 mem_gb: 0
 cpus_per_task: 24
-mp_start_method: forkserver
+mp_start_method: fork

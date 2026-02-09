@@ -95,21 +95,30 @@ class AseAtomsDataset(BaseDataset, ABC):
         self.ids = self._load_dataset_get_ids(config)
         self.num_samples = len(self.ids)
 
+        logging.info(f"loaded {len(self.ids)} ase data points.")
+
         if len(self.ids) == 0:
             raise ValueError(
                 rf"No valid ase data found! \n"
                 f"Double check that the src path and/or glob search pattern gives ASE compatible data: {config['src']}"
             )
 
-        self._close_dbs()
+        # Optionally close dbs so, this will allow AseAtomsDataset to be pickeable allowing it work with spawn and forkserver multiprocessing start methods
+        if config.get("close_dbs_on_init", False):
+            self._close_dbs()
 
     def _close_dbs(self):
         """Close all database connections if they exist."""
         if hasattr(self, "dbs") and self.dbs is not None:
             for db in self.dbs:
-                if hasattr(db, "close"):
-                    db.close()
+                db.close()
             self.dbs = None
+
+        # Clear ASE's internal caches if they exist
+        import ase.db.core
+
+        if hasattr(ase.db.core, "_connections"):
+            ase.db.core._connections.clear()
 
     def __getitem__(self, idx):
         # Handle slicing
@@ -479,7 +488,7 @@ class AseDBDataset(AseAtomsDataset):
             return
 
         logging.info(
-            "Lazily loading databases ... these calls are expensive so we shouldn't be doing this often!"
+            f"Lazily loading databases from {config['src']} ... these calls are expensive so we shouldn't be doing this often!"
         )
         if isinstance(config["src"], list):
             filepaths = []
