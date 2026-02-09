@@ -141,6 +141,7 @@ def initialize_finetuning_model(
     overrides: dict | None = None,
     heads: dict | None = None,
     strict: bool = True,
+    load_existing_heads: bool = False,
 ) -> torch.nn.Module:
     model, checkpoint = load_inference_model(
         checkpoint_location, overrides, strict=strict
@@ -149,6 +150,10 @@ def initialize_finetuning_model(
     logging.warning(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
     )
+
+    if load_existing_heads:
+        model.finetune_model_full_config = checkpoint.model_config
+        return model
 
     checkpoint.model_config["heads"] = deepcopy(heads)
     model.finetune_model_full_config = checkpoint.model_config
