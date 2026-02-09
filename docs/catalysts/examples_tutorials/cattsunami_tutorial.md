@@ -13,9 +13,21 @@ kernelspec:
 
 # Transition State Search (NEBs)
 
+:::{card} Tutorial Overview
+
+| Property | Value |
+|----------|-------|
+| **Difficulty** | Advanced |
+| **Time** | 30-45 minutes |
+| **Prerequisites** | Understanding of NEB, ASE, catalysis |
+| **Goal** | Find transition states using CatTsunami tools |
+:::
+
 FAIR chemistry models can be used to enumerate and study reaction pathways via transition state search tools built into ASE or in packages like Sella via the ASE interface.
 
-The first section of this tutorial walks through how to use the CatTsunami tools to automatically enumerate a number of hypothetical initial/final configurations for various types of reactions on a heterogeneous catalyst surface. If you already have a NEB you're looking to optimize, you can jump straight to the last section (Run NEBs)!
+:::{note}
+The first section of this tutorial walks through how to use the CatTsunami tools to automatically enumerate a number of hypothetical initial/final configurations for various types of reactions on a heterogeneous catalyst surface. If you already have a NEB you're looking to optimize, you can jump straight to the last section (Run NEBs).
+:::
 
 Since the NEB calculations here can be a bit time consuming, we'll use a small number of steps during the documentation testing, and otherwise use a reasonable guess.
 

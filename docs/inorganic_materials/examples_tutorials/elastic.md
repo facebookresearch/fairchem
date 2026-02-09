@@ -11,8 +11,11 @@ kernelspec:
   name: python3
 ---
 
-Elastic Tensors
-------------------
+# Elastic Tensors
+
+:::{tip} What You Will Learn
+Calculate elastic constants and bulk modulus using automated strain-based workflows with quacc.
+:::
 
 Let's do something more interesting that normally takes quite a bit of work in DFT: calculating an elastic constant! Elastic properties are important to understand how strong or easy to deform a material is, or how a material might change if compressed or expanded in specific directions (i.e. the Poisson ratio!).
 

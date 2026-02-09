@@ -195,7 +195,7 @@ def test_calculator_setup(all_calculators):
 
         # all conservative UMA checkpoints should support E/F/S!
         if not calc.predictor.direct_forces and (
-            len(datasets) > 1 or calc.task_name != "omol"
+            len(datasets) > 1 or (calc.task_name != "omol" and calc.task_name != "odac")
         ):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")

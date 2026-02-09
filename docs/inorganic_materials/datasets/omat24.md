@@ -1,5 +1,17 @@
 # OMat24
 
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 1.07M structures (train) + 1.02M (val) |
+| **Domain** | Inorganic bulk materials |
+| **Labels** | Total energy (eV), forces (eV/A), stress (eV/A^3) |
+| **Level of Theory** | DFT (PBE/PBE+U) |
+| **License** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+| **Benchmark** | Matbench-Discovery compatible |
+:::
+
 The Open Materials 2024 (OMat24) dataset contains a mix of single point calculations of non-equilibrium structures and
 structural relaxations. The dataset contains structures labeled with total energy (eV), forces (eV/A)
 and stress (eV/A^3). The dataset is provided in ASE DB compatible lmdb files.
