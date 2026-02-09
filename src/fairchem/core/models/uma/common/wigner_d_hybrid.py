@@ -117,7 +117,9 @@ def wigner_d_from_quaternion_hybrid(
         else:
             # Complex arithmetic
             if coeffs is None or U_blocks is None:
-                coeffs, U_blocks = get_ra_rb_coefficients(lmax, dtype, device, lmin=lmin)
+                coeffs, U_blocks = get_ra_rb_coefficients(
+                    lmax, dtype, device, lmin=lmin
+                )
             Ra, Rb = quaternion_to_ra_rb(q)
             D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
             D_range = wigner_d_complex_to_real(
