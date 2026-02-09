@@ -1,6 +1,17 @@
 # OMol25 Electronic Structures
 
-The Open Molecules 2025 (OMol25) dataset represents the largest dataset of its kind, with more than 100 million density functional theory (DFT) calculations at the ωB97M-V/def2-TZVPD level of theory, spanning several chemical domains including small molecules, biomolecules, metal complexes, and electrolytes.
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 4M subset (full dataset available on request) |
+| **Contents** | ORCA outputs, GBW files, density matrices |
+| **Domains** | Small molecules, biomolecules, metal complexes, electrolytes |
+| **Level of Theory** | wB97M-V/def2-TZVPD |
+| **Access** | [Argonne National Laboratory via Globus](https://www.materialsdatafacility.org/spotlight/omol25) |
+:::
+
+The Open Molecules 2025 (OMol25) dataset represents the largest dataset of its kind, with more than 100 million density functional theory (DFT) calculations at the wB97M-V/def2-TZVPD level of theory, spanning several chemical domains including small molecules, biomolecules, metal complexes, and electrolytes.
 
 At release, the OMol25 dataset provided structure energies, per-atom forces, and Lowdin/Mulliken charges and spins, where available. These properties were sufficient to train state-of-the-art machine learning interatomic potentials (MLIPs) and are already demonstrating incredible performance across a wide range of applications. However, to maximize the community benefit of these calculations, we have partnered with the [Department of Energy’s Argonne National Laboratory](https://www.anl.gov/) to provide access to the raw DFT outputs and additional files for the OMol25 dataset.
 
