@@ -25,28 +25,28 @@ from typing import Optional
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
-    _smooth_step_cinf,
-    quaternion_multiply,
-    quaternion_nlerp,
-    quaternion_to_ra_rb,
-    quaternion_to_ra_rb_real,
-    wigner_d_matrix_complex,
-    wigner_d_complex_to_real,
-    wigner_d_matrix_real,
-    wigner_d_pair_to_real,
-    precompute_wigner_coefficients,
+    compute_euler_matching_gamma,
+    get_so3_generators,
     precompute_U_blocks_euler_aligned,
     precompute_U_blocks_euler_aligned_real,
+    precompute_wigner_coefficients,
+    quaternion_edge_to_y_stable,
+    quaternion_multiply,
+    quaternion_to_axis_angle,
+    quaternion_to_ra_rb,
+    quaternion_to_ra_rb_real,
+    quaternion_to_rotation_matrix,
+    quaternion_y_rotation,
+    wigner_d_complex_to_real,
+    wigner_d_matrix_complex,
+    wigner_d_matrix_real,
+    wigner_d_pair_to_real,
 )
 
 from fairchem.core.models.uma.common.wigner_d_matexp import (
-    get_so3_generators,
-    quaternion_edge_to_y_stable,
-    quaternion_to_axis_angle,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3_matmul,
     quaternion_to_wigner_d_l4_matmul,
-    compute_euler_matching_gamma,
 )
 
 
@@ -147,69 +147,6 @@ def _get_ra_rb_coefficients_range_real(
         _RA_RB_RANGE_REAL_CACHE[key] = (coeffs, U_blocks_range_real)
 
     return _RA_RB_RANGE_REAL_CACHE[key]
-
-
-# =============================================================================
-# Quaternion to Rotation Matrix (l=1)
-# =============================================================================
-
-
-def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
-    """
-    Convert quaternion directly to 3x3 rotation matrix (l=1 Wigner D).
-
-    This is faster than going through axis-angle + Rodrigues because it
-    avoids: atan2, sqrt for normalization, sin/cos, K matrix construction.
-
-    Uses the standard quaternion to rotation matrix formula:
-        R = [[1-2(y^2+z^2),  2(xy-wz),   2(xz+wy) ],
-             [2(xy+wz),    1-2(x^2+z^2), 2(yz-wx) ],
-             [2(xz-wy),    2(yz+wx),   1-2(x^2+y^2)]]
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-
-    Returns:
-        Rotation matrices of shape (N, 3, 3)
-    """
-    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
-
-    # Precompute products (each used multiple times)
-    x2, y2, z2 = x * x, y * y, z * z
-    xy, xz, yz = x * y, x * z, y * z
-    wx, wy, wz = w * x, w * y, w * z
-
-    # Build rotation matrix
-    R = torch.stack([
-        torch.stack([1 - 2*(y2 + z2), 2*(xy - wz),     2*(xz + wy)    ], dim=-1),
-        torch.stack([2*(xy + wz),     1 - 2*(x2 + z2), 2*(yz - wx)    ], dim=-1),
-        torch.stack([2*(xz - wy),     2*(yz + wx),     1 - 2*(x2 + y2)], dim=-1),
-    ], dim=-2)
-
-    return R
-
-
-# =============================================================================
-# Quaternion Y-Rotation
-# =============================================================================
-
-
-def quaternion_y_rotation(gamma: torch.Tensor) -> torch.Tensor:
-    """
-    Create quaternion for rotation about Y-axis by angle gamma.
-
-    Args:
-        gamma: Rotation angles of shape (N,)
-
-    Returns:
-        Quaternions of shape (N, 4) in (w, x, y, z) convention
-    """
-    half_gamma = gamma / 2
-    w = torch.cos(half_gamma)
-    x = torch.zeros_like(gamma)
-    y = torch.sin(half_gamma)
-    z = torch.zeros_like(gamma)
-    return torch.stack([w, x, y, z], dim=-1)
 
 
 # =============================================================================

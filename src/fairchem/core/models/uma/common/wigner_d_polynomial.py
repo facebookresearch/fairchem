@@ -22,23 +22,19 @@ from typing import Optional
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
-    _smooth_step_cinf,
-    quaternion_multiply,
-    quaternion_nlerp,
-    quaternion_to_ra_rb,
-    quaternion_to_ra_rb_real,
-    wigner_d_matrix_complex,
-    wigner_d_matrix_real,
-    wigner_d_complex_to_real,
-    wigner_d_pair_to_real,
-    precompute_wigner_coefficients,
+    compute_euler_matching_gamma,
     precompute_U_blocks_euler_aligned,
     precompute_U_blocks_euler_aligned_real,
-)
-
-from fairchem.core.models.uma.common.wigner_d_matexp import (
+    precompute_wigner_coefficients,
     quaternion_edge_to_y_stable,
-    compute_euler_matching_gamma,
+    quaternion_multiply,
+    quaternion_to_ra_rb,
+    quaternion_to_ra_rb_real,
+    quaternion_y_rotation,
+    wigner_d_complex_to_real,
+    wigner_d_matrix_complex,
+    wigner_d_matrix_real,
+    wigner_d_pair_to_real,
 )
 
 
@@ -99,29 +95,6 @@ def _get_ra_rb_coefficients_real(
         _RA_RB_U_REAL_CACHE[key] = U_blocks_real
 
     return _RA_RB_COEFF_CACHE[key], _RA_RB_U_REAL_CACHE[key]
-
-
-# =============================================================================
-# Quaternion Y-Rotation
-# =============================================================================
-
-
-def quaternion_y_rotation(gamma: torch.Tensor) -> torch.Tensor:
-    """
-    Create quaternion for rotation about Y-axis by angle gamma.
-
-    Args:
-        gamma: Rotation angles of shape (N,)
-
-    Returns:
-        Quaternions of shape (N, 4) in (w, x, y, z) convention
-    """
-    half_gamma = gamma / 2
-    w = torch.cos(half_gamma)
-    x = torch.zeros_like(gamma)
-    y = torch.sin(half_gamma)
-    z = torch.zeros_like(gamma)
-    return torch.stack([w, x, y, z], dim=-1)
 
 
 # =============================================================================

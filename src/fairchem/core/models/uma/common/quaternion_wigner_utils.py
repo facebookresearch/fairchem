@@ -1322,34 +1322,6 @@ def _build_u_block(
     return U_ell
 
 
-def precompute_U_blocks(
-    lmax: int,
-    dtype: torch.dtype = torch.float64,
-    device: torch.device = torch.device("cpu"),
-    lmin: int = 0,
-) -> list[torch.Tensor]:
-    """
-    Precompute U transformation matrices for l in [lmin, lmax].
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Real dtype (float32 or float64) - will use corresponding complex type
-        device: Torch device
-        lmin: Minimum angular momentum (default 0)
-
-    Returns:
-        List of U matrices where U_blocks[i] corresponds to l=lmin+i
-    """
-    if dtype == torch.float32:
-        complex_dtype = torch.complex64
-    elif dtype == torch.float64:
-        complex_dtype = torch.complex128
-    else:
-        complex_dtype = dtype
-
-    return [_build_u_block(ell, complex_dtype, device) for ell in range(lmin, lmax + 1)]
-
-
 def precompute_U_blocks_euler_aligned(
     lmax: int,
     dtype: torch.dtype = torch.float64,
@@ -1372,8 +1344,6 @@ def precompute_U_blocks_euler_aligned(
     Returns:
         List of combined U matrices where U_blocks[i] corresponds to l=lmin+i
     """
-    U_blocks = precompute_U_blocks(lmax, dtype, device, lmin=lmin)
-
     if dtype == torch.float32:
         complex_dtype = torch.complex64
     else:
@@ -1389,8 +1359,9 @@ def precompute_U_blocks_euler_aligned(
     Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
 
     U_combined = []
-    for idx, ell in enumerate(range(lmin, lmax + 1)):
-        U_ell = U_blocks[idx].to(dtype=complex_dtype, device=device)
+    for ell in range(lmin, lmax + 1):
+        # Build U block directly
+        U_ell = _build_u_block(ell, complex_dtype, device)
 
         if ell == 0:
             U_combined.append(U_ell)
