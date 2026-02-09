@@ -21,28 +21,27 @@ from pathlib import Path
 import pytest
 import torch
 
+from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    precompute_U_blocks_euler_aligned,
+    precompute_U_blocks_euler_aligned_real,
+    precompute_wigner_coefficients,
+    quaternion_to_ra_rb,
+    quaternion_to_ra_rb_real,
+    wigner_d_complex_to_real,
+    wigner_d_matrix_complex,
+    wigner_d_matrix_real,
+    wigner_d_pair_to_real,
+)
 from fairchem.core.models.uma.common.rotation import (
-    eulers_to_wigner,
     init_edge_rot_euler_angles,
     wigner_D,
 )
-from fairchem.core.models.uma.common.wigner_d_matexp import axis_angle_wigner
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
 )
+from fairchem.core.models.uma.common.wigner_d_matexp import axis_angle_wigner
 from fairchem.core.models.uma.common.wigner_d_polynomial import (
     axis_angle_wigner_polynomial,
-)
-from fairchem.core.models.uma.common.quaternion_wigner_utils import (
-    quaternion_to_ra_rb,
-    quaternion_to_ra_rb_real,
-    wigner_d_matrix_complex,
-    wigner_d_matrix_real,
-    wigner_d_complex_to_real,
-    wigner_d_pair_to_real,
-    precompute_wigner_coefficients,
-    precompute_U_blocks_euler_aligned,
-    precompute_U_blocks_euler_aligned_real,
 )
 
 
@@ -145,9 +144,26 @@ class TestWignerDProperties:
         y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
         result = D_l1 @ edge_t[0]
 
-        assert torch.allclose(result, y_axis, atol=1e-5), (
-            f"Edge {edge} did not map to +Y, got {result}"
-        )
+        assert torch.allclose(
+            result, y_axis, atol=1e-5
+        ), f"Edge {edge} did not map to +Y, got {result}"
+
+    @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
+    def test_y_to_edge(self, lmax, dtype, device, edge, desc):
+        """D_inv l=1 block rotates +Y -> edge (inverse of edge -> +Y)."""
+        edge_t = torch.tensor([edge], dtype=dtype, device=device)
+        edge_t = torch.nn.functional.normalize(edge_t, dim=-1)
+        gamma = torch.zeros(1, dtype=dtype, device=device)
+
+        _, D_inv = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
+        D_inv_l1 = D_inv[0, 1:4, 1:4]
+
+        y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
+        result = D_inv_l1 @ y_axis
+
+        assert torch.allclose(
+            result, edge_t[0], atol=1e-5
+        ), f"+Y did not map to edge {edge}, got {result}"
 
     def test_composition_law(self, lmax, dtype, device):
         """D(R1) @ D(R2) = D(R1 @ R2) - the fundamental group composition property."""
@@ -172,7 +188,9 @@ class TestWignerDProperties:
 
         # Compute D for edge_composed with gamma=0 to get the canonical alignment rotation
         D_canonical, _ = axis_angle_wigner_hybrid(
-            edge_composed, lmax, gamma=torch.zeros(n_samples, dtype=dtype, device=device)
+            edge_composed,
+            lmax,
+            gamma=torch.zeros(n_samples, dtype=dtype, device=device),
         )
         R_canonical = D_canonical[:, 1:4, 1:4]
 
@@ -186,7 +204,9 @@ class TestWignerDProperties:
         gamma_composed = torch.atan2(R_gamma[:, 0, 2], R_gamma[:, 0, 0])
 
         # Compute D for the composed rotation
-        D_composed, _ = axis_angle_wigner_hybrid(edge_composed, lmax, gamma=gamma_composed)
+        D_composed, _ = axis_angle_wigner_hybrid(
+            edge_composed, lmax, gamma=gamma_composed
+        )
 
         # Check that the product equals the composed Wigner D
         max_err = (D_product - D_composed).abs().max().item()
@@ -214,6 +234,24 @@ class TestEntryPointAgreement:
         assert (D_matexp - D_hybrid).abs().max() < 1e-9, "hybrid differs from matexp"
         assert (D_matexp - D_poly).abs().max() < 1e-9, "polynomial differs from matexp"
 
+    def test_l3_l4_kernel_matches(self, dtype, device):
+        """l3_l4_kernel=True produces same results as default methods."""
+        lmax = 4  # Need lmax >= 4 to test both l=3 and l=4 kernels
+        torch.manual_seed(42)
+        edges = torch.randn(50, 3, dtype=dtype, device=device)
+        gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
+
+        # Reference: hybrid without l3_l4_kernel
+        D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
+        # Test: hybrid with l3_l4_kernel=True
+        D_hybrid_l3l4, _ = axis_angle_wigner_hybrid(
+            edges, lmax, gamma=gamma, l3_l4_kernel=True
+        )
+
+        assert (
+            (D_hybrid - D_hybrid_l3l4).abs().max() < 1e-9
+        ), "hybrid with l3_l4_kernel=True differs from hybrid without"
+
     def test_real_methods_match_complex(self, lmax, dtype, device):
         """Real-arithmetic methods match complex-arithmetic methods."""
         torch.manual_seed(42)
@@ -221,12 +259,20 @@ class TestEntryPointAgreement:
         gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
 
         D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        D_hybrid_real, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma, use_real_arithmetic=True)
+        D_hybrid_real, _ = axis_angle_wigner_hybrid(
+            edges, lmax, gamma=gamma, use_real_arithmetic=True
+        )
         D_poly, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma)
-        D_poly_real, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma, use_real_arithmetic=True)
+        D_poly_real, _ = axis_angle_wigner_polynomial(
+            edges, lmax, gamma=gamma, use_real_arithmetic=True
+        )
 
-        assert (D_hybrid - D_hybrid_real).abs().max() < 1e-9, "hybrid_real differs from hybrid"
-        assert (D_poly - D_poly_real).abs().max() < 1e-9, "polynomial_real differs from polynomial"
+        assert (
+            D_hybrid - D_hybrid_real
+        ).abs().max() < 1e-9, "hybrid_real differs from hybrid"
+        assert (
+            D_poly - D_poly_real
+        ).abs().max() < 1e-9, "polynomial_real differs from polynomial"
 
 
 # =============================================================================
@@ -262,9 +308,9 @@ class TestEulerAgreement:
                 D_euler = wigner_D(ell, gamma_zero, beta, alpha, Jd_matrices)
                 D_axis_block = D_axis[0, start:end, start:end]
 
-                assert torch.allclose(D_euler, D_axis_block, atol=1e-10), (
-                    f"l={ell} mismatch for edge {edge}"
-                )
+                assert torch.allclose(
+                    D_euler, D_axis_block, atol=1e-10
+                ), f"l={ell} mismatch for edge {edge}"
 
     def test_blend_region_matches_euler(self, lmax, dtype, device, Jd_matrices):
         """Blend region edges (ey in [-0.9, -0.7]) match Euler with correct gamma."""
@@ -278,7 +324,10 @@ class TestEulerAgreement:
             # xy-plane, at blend boundary (ey=-0.9)
             ([0.43589807987318724, -0.8999960355261952, 0.0], 1.5707963267948966),
             # general edge, near blend boundary
-            ([0.1000022780778422, -0.7500170855838165, 0.6538148940729324], -0.1320878539772946),
+            (
+                [0.1000022780778422, -0.7500170855838165, 0.6538148940729324],
+                -0.1320878539772946,
+            ),
         ]
 
         for edge, gamma in blend_region_edges:
@@ -298,9 +347,9 @@ class TestEulerAgreement:
                 D_euler = wigner_D(ell, gamma_zero, beta, alpha, Jd_matrices)
                 D_hybrid_block = D_hybrid[0, start:end, start:end]
 
-                assert torch.allclose(D_euler[0], D_hybrid_block, atol=1e-10), (
-                    f"l={ell} mismatch for blend region edge {edge}"
-                )
+                assert torch.allclose(
+                    D_euler[0], D_hybrid_block, atol=1e-10
+                ), f"l={ell} mismatch for blend region edge {edge}"
 
 
 # =============================================================================
@@ -324,7 +373,9 @@ class TestGradientStability:
         grad = edge_t.grad
         assert not torch.isnan(grad).any(), f"NaN gradient for {desc}"
         assert not torch.isinf(grad).any(), f"Inf gradient for {desc}"
-        assert grad.abs().max() < 1000, f"Gradient too large for {desc}: {grad.abs().max()}"
+        assert (
+            grad.abs().max() < 1000
+        ), f"Gradient too large for {desc}: {grad.abs().max()}"
 
     @pytest.mark.parametrize("epsilon", [1e-4, 1e-6, 1e-8])
     def test_near_singularity_correctness(self, lmax, dtype, device, epsilon):
@@ -333,7 +384,10 @@ class TestGradientStability:
 
         for sign in [1.0, -1.0]:
             edge = torch.tensor(
-                [[epsilon, sign * 1.0, 0.0]], dtype=dtype, device=device, requires_grad=True
+                [[epsilon, sign * 1.0, 0.0]],
+                dtype=dtype,
+                device=device,
+                requires_grad=True,
             )
             edge_norm = torch.nn.functional.normalize(edge, dim=-1)
 
@@ -342,16 +396,16 @@ class TestGradientStability:
             result = D_l1 @ edge_norm[0]
 
             # Check maps to Y
-            assert torch.allclose(result, y_axis, atol=1e-5), (
-                f"Near {'+'if sign>0 else '-'}Y edge (eps={epsilon}) did not map to +Y"
-            )
+            assert torch.allclose(
+                result, y_axis, atol=1e-5
+            ), f"Near {'+'if sign>0 else '-'}Y edge (eps={epsilon}) did not map to +Y"
 
             # Check gradients are valid and bounded
             D.sum().backward()
             assert not torch.isnan(edge.grad).any()
-            assert edge.grad.abs().max() < 1000, (
-                f"Gradient too large near {'+'if sign>0 else '-'}Y (eps={epsilon}): {edge.grad.abs().max()}"
-            )
+            assert (
+                edge.grad.abs().max() < 1000
+            ), f"Gradient too large near {'+'if sign>0 else '-'}Y (eps={epsilon}): {edge.grad.abs().max()}"
 
 
 # =============================================================================
@@ -408,7 +462,9 @@ class TestRealArithmeticEquivalence:
 
         coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
         U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
-        U_blocks_real = precompute_U_blocks_euler_aligned_real(lmax, dtype=dtype, device=device)
+        U_blocks_real = precompute_U_blocks_euler_aligned_real(
+            lmax, dtype=dtype, device=device
+        )
 
         # Complex version
         Ra, Rb = quaternion_to_ra_rb(q)
@@ -430,7 +486,9 @@ class TestRealArithmeticGradients:
     def test_gradient_equivalence(self, lmax, dtype, device):
         """Gradients from real-arithmetic methods match complex-arithmetic methods."""
         torch.manual_seed(42)
-        edges_complex = torch.randn(10, 3, dtype=dtype, device=device, requires_grad=True)
+        edges_complex = torch.randn(
+            10, 3, dtype=dtype, device=device, requires_grad=True
+        )
         edges_real = edges_complex.detach().clone().requires_grad_(True)
         gamma = torch.rand(10, dtype=dtype, device=device) * 6.28
 
@@ -440,7 +498,9 @@ class TestRealArithmeticGradients:
         loss_complex.backward()
 
         # Real version gradient
-        D_real, _ = axis_angle_wigner_hybrid(edges_real, lmax, gamma=gamma, use_real_arithmetic=True)
+        D_real, _ = axis_angle_wigner_hybrid(
+            edges_real, lmax, gamma=gamma, use_real_arithmetic=True
+        )
         loss_real = D_real.sum()
         loss_real.backward()
 
@@ -458,8 +518,7 @@ class TestTorchCompileCompatibility:
     """Tests for torch.compile compatibility of real-arithmetic functions."""
 
     @pytest.mark.skipif(
-        not hasattr(torch, "_dynamo"),
-        reason="torch.compile not available"
+        not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
     def test_hybrid_real_compiles(self, lmax, dtype, device):
         """axis_angle_wigner_hybrid with use_real_arithmetic=True should compile without graph breaks."""
@@ -470,7 +529,9 @@ class TestTorchCompileCompatibility:
 
         # Define function to compile
         def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_hybrid(edge_vec, lmax_val, gamma=g, use_real_arithmetic=True)
+            return axis_angle_wigner_hybrid(
+                edge_vec, lmax_val, gamma=g, use_real_arithmetic=True
+            )
 
         # Try to compile and run
         try:
@@ -478,7 +539,9 @@ class TestTorchCompileCompatibility:
             D, D_inv = compiled_fn(edges, lmax, gamma)
 
             # Verify output matches uncompiled version
-            D_ref, D_inv_ref = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma, use_real_arithmetic=True)
+            D_ref, D_inv_ref = axis_angle_wigner_hybrid(
+                edges, lmax, gamma=gamma, use_real_arithmetic=True
+            )
             assert torch.allclose(D, D_ref, atol=1e-10)
         except Exception as e:
             # If fullgraph=True fails, check with explanation
@@ -490,8 +553,7 @@ class TestTorchCompileCompatibility:
             )
 
     @pytest.mark.skipif(
-        not hasattr(torch, "_dynamo"),
-        reason="torch.compile not available"
+        not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
     def test_polynomial_real_compiles(self, lmax, dtype, device):
         """axis_angle_wigner_polynomial with use_real_arithmetic should compile without graph breaks."""
@@ -501,13 +563,17 @@ class TestTorchCompileCompatibility:
         gamma = torch.rand(10, dtype=dtype, device=device) * 6.28
 
         def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_polynomial(edge_vec, lmax_val, gamma=g, use_real_arithmetic=True)
+            return axis_angle_wigner_polynomial(
+                edge_vec, lmax_val, gamma=g, use_real_arithmetic=True
+            )
 
         try:
             compiled_fn = torch.compile(fn, fullgraph=True)
             D, D_inv = compiled_fn(edges, lmax, gamma)
 
-            D_ref, D_inv_ref = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma, use_real_arithmetic=True)
+            D_ref, D_inv_ref = axis_angle_wigner_polynomial(
+                edges, lmax, gamma=gamma, use_real_arithmetic=True
+            )
             assert torch.allclose(D, D_ref, atol=1e-10)
         except Exception as e:
             explanation = dynamo.explain(fn)(edges, lmax, gamma)
@@ -517,8 +583,7 @@ class TestTorchCompileCompatibility:
             )
 
     @pytest.mark.skipif(
-        not hasattr(torch, "_dynamo"),
-        reason="torch.compile not available"
+        not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
     def test_wigner_d_matrix_real_compiles(self, lmax, dtype, device):
         """wigner_d_matrix_real should compile without graph breaks."""
@@ -574,9 +639,13 @@ class TestRangeFunctions:
 
         # Range computation
         coeffs_range = precompute_wigner_coefficients(lmax, dtype, device, lmin=lmin)
-        U_blocks_range = precompute_U_blocks_euler_aligned(lmax, dtype, device, lmin=lmin)
+        U_blocks_range = precompute_U_blocks_euler_aligned(
+            lmax, dtype, device, lmin=lmin
+        )
         D_complex_range = wigner_d_matrix_complex(Ra, Rb, coeffs_range)
-        D_real_range = wigner_d_complex_to_real(D_complex_range, U_blocks_range, lmax, lmin=lmin)
+        D_real_range = wigner_d_complex_to_real(
+            D_complex_range, U_blocks_range, lmax, lmin=lmin
+        )
 
         # Extract l >= lmin from full
         block_offset = lmin * lmin
@@ -598,9 +667,9 @@ class TestSpecializedKernels:
     def test_l2_einsum_matches_matexp(self, dtype, device):
         """l=2 einsum kernel matches matrix exponential method."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l2_einsum,
-            quaternion_to_axis_angle,
             get_so3_generators,
+            quaternion_to_axis_angle,
+            quaternion_to_wigner_d_l2_einsum,
         )
 
         torch.manual_seed(42)
@@ -614,11 +683,11 @@ class TestSpecializedKernels:
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
         generators = get_so3_generators(2, dtype, device)
-        K_x, K_y, K_z = generators['K_x'][2], generators['K_y'][2], generators['K_z'][2]
+        K_x, K_y, K_z = generators["K_x"][2], generators["K_y"][2], generators["K_z"][2]
         K = (
-            axis[:, 0:1, None, None] * K_x +
-            axis[:, 1:2, None, None] * K_y +
-            axis[:, 2:3, None, None] * K_z
+            axis[:, 0:1, None, None] * K_x
+            + axis[:, 1:2, None, None] * K_y
+            + axis[:, 2:3, None, None] * K_z
         ).squeeze(1)
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
@@ -628,9 +697,9 @@ class TestSpecializedKernels:
     def test_l3_matmul_matches_matexp(self, dtype, device):
         """l=3 matmul kernel matches matrix exponential method."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l3_matmul,
-            quaternion_to_axis_angle,
             get_so3_generators,
+            quaternion_to_axis_angle,
+            quaternion_to_wigner_d_l3_matmul,
         )
 
         torch.manual_seed(42)
@@ -644,11 +713,11 @@ class TestSpecializedKernels:
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
         generators = get_so3_generators(3, dtype, device)
-        K_x, K_y, K_z = generators['K_x'][3], generators['K_y'][3], generators['K_z'][3]
+        K_x, K_y, K_z = generators["K_x"][3], generators["K_y"][3], generators["K_z"][3]
         K = (
-            axis[:, 0:1, None, None] * K_x +
-            axis[:, 1:2, None, None] * K_y +
-            axis[:, 2:3, None, None] * K_z
+            axis[:, 0:1, None, None] * K_x
+            + axis[:, 1:2, None, None] * K_y
+            + axis[:, 2:3, None, None] * K_z
         ).squeeze(1)
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
@@ -658,9 +727,9 @@ class TestSpecializedKernels:
     def test_l4_matmul_matches_matexp(self, dtype, device):
         """l=4 matmul kernel matches matrix exponential method."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l4_matmul,
-            quaternion_to_axis_angle,
             get_so3_generators,
+            quaternion_to_axis_angle,
+            quaternion_to_wigner_d_l4_matmul,
         )
 
         torch.manual_seed(42)
@@ -674,11 +743,11 @@ class TestSpecializedKernels:
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
         generators = get_so3_generators(4, dtype, device)
-        K_x, K_y, K_z = generators['K_x'][4], generators['K_y'][4], generators['K_z'][4]
+        K_x, K_y, K_z = generators["K_x"][4], generators["K_y"][4], generators["K_z"][4]
         K = (
-            axis[:, 0:1, None, None] * K_x +
-            axis[:, 1:2, None, None] * K_y +
-            axis[:, 2:3, None, None] * K_z
+            axis[:, 0:1, None, None] * K_x
+            + axis[:, 1:2, None, None] * K_y
+            + axis[:, 2:3, None, None] * K_z
         ).squeeze(1)
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
