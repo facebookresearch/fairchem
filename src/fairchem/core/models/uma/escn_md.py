@@ -23,7 +23,7 @@ from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
-from fairchem.core.models.uma.common.wigner_d_quaternion import quaternion_wigner
+from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
 from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
@@ -309,7 +309,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if self.use_quaternion_wigner:
             with record_function("obtain rotmat wigner quaternion"):
-                wigner, wigner_inv = quaternion_wigner(
+                wigner, wigner_inv = axis_angle_wigner_hybrid(
                     edge_distance_vecs, self.lmax
                 )
         else:
