@@ -29,7 +29,6 @@ from fairchem.core.models.uma.common.rotation import (
 from fairchem.core.models.uma.common.wigner_d_matexp import axis_angle_wigner
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
-    axis_angle_wigner_hybrid_real,
 )
 from fairchem.core.models.uma.common.wigner_d_polynomial import (
     axis_angle_wigner_polynomial,
@@ -226,7 +225,7 @@ class TestEntryPointAgreement:
         gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
 
         D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        D_hybrid_real, _ = axis_angle_wigner_hybrid_real(edges, lmax, gamma=gamma)
+        D_hybrid_real, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma, use_real_arithmetic=True)
         D_poly, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma)
         D_poly_real, _ = axis_angle_wigner_polynomial_real(edges, lmax, gamma=gamma)
 
@@ -448,7 +447,7 @@ class TestRealArithmeticGradients:
         loss_complex.backward()
 
         # Real version gradient
-        D_real, _ = axis_angle_wigner_hybrid_real(edges_real, lmax, gamma=gamma)
+        D_real, _ = axis_angle_wigner_hybrid(edges_real, lmax, gamma=gamma, use_real_arithmetic=True)
         loss_real = D_real.sum()
         loss_real.backward()
 
@@ -470,7 +469,7 @@ class TestTorchCompileCompatibility:
         reason="torch.compile not available"
     )
     def test_hybrid_real_compiles(self, lmax, dtype, device):
-        """axis_angle_wigner_hybrid_real should compile without graph breaks."""
+        """axis_angle_wigner_hybrid with use_real_arithmetic=True should compile without graph breaks."""
         import torch._dynamo as dynamo
 
         edges = torch.randn(10, 3, dtype=dtype, device=device)
@@ -478,7 +477,7 @@ class TestTorchCompileCompatibility:
 
         # Define function to compile
         def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_hybrid_real(edge_vec, lmax_val, gamma=g)
+            return axis_angle_wigner_hybrid(edge_vec, lmax_val, gamma=g, use_real_arithmetic=True)
 
         # Try to compile and run
         try:
@@ -486,7 +485,7 @@ class TestTorchCompileCompatibility:
             D, D_inv = compiled_fn(edges, lmax, gamma)
 
             # Verify output matches uncompiled version
-            D_ref, D_inv_ref = axis_angle_wigner_hybrid_real(edges, lmax, gamma=gamma)
+            D_ref, D_inv_ref = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma, use_real_arithmetic=True)
             assert torch.allclose(D, D_ref, atol=1e-10)
         except Exception as e:
             # If fullgraph=True fails, check with explanation

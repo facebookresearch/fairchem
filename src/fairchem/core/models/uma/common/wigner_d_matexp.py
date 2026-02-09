@@ -115,10 +115,10 @@ def wigner_d_from_axis_angle_batched(
         elif ell == 2:
             # l=2: Use quaternion einsum (faster than Cayley-Hamilton)
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
-        elif l3_l4_kernel and ell == 3:
+        elif l3_l4_kernels and ell == 3:
             # l=3: Use quaternion matmul (faster than matrix_exp)
             D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
-        elif l3_l4_kernel and ell == 4:
+        elif l3_l4_kernels and ell == 4:
             # l=4: Use quaternion matmul (faster than matrix_exp)
             D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
         else:
