@@ -33,10 +33,11 @@ except ImportError:
     pmg_installed = False
 
 try:
-    from nvalchemiops.neighborlist import neighbor_list
+    from fairchem.core.graph.nvidia import get_neighbors_nvidia_atoms
 
     nvidia_installed = True
 except ImportError:
+    get_neighbors_nvidia_atoms = None
     nvidia_installed = False
 
 
@@ -106,111 +107,6 @@ def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
     _n_index = _n_index[_nonmax_idx]
     n_distance = n_distance[_nonmax_idx]
     _offsets = _offsets[_nonmax_idx]
-
-    return _c_index, _n_index, n_distance, _offsets
-
-
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-def get_neighbors_nvidia(
-    atoms: ase.Atoms, cutoff: float, max_neigh: int, method: str = "cell_list"
-):
-    """Performs nearest neighbor search using NVIDIA nvalchemiops and returns edge index, distances,
-    and cell offsets.
-
-    Args:
-        atoms: ASE Atoms object
-        cutoff: Cutoff radius in Angstroms
-        max_neigh: Maximum number of neighbors per atom
-        method: NVIDIA method to use ("naive" or "cell_list")
-
-    Returns:
-        _c_index: Center atom indices (numpy array)
-        _n_index: Neighbor atom indices (numpy array)
-        n_distance: Placeholder distances (numpy array) - set to 1.0 for compatibility
-        _offsets: Cell offsets (numpy array)
-    """
-    positions = torch.from_numpy(atoms.get_positions()).float()
-    cell = torch.from_numpy(np.array(atoms.get_cell(complete=True))).float()
-    pbc = torch.from_numpy(np.array(atoms.pbc)).bool()
-
-    total_atoms = positions.shape[0]
-
-    # Pre-allocate output tensors
-    neighbor_matrix = torch.full(
-        (total_atoms, max_neigh),
-        total_atoms,
-        dtype=torch.int32,
-        device=positions.device,
-    )
-    neighbor_matrix_shifts = torch.zeros(
-        (total_atoms, max_neigh, 3),
-        dtype=torch.int32,
-        device=positions.device,
-    )
-    num_neighbors = torch.zeros(total_atoms, dtype=torch.int32, device=positions.device)
-
-    # Run NVIDIA neighbor list
-    # NOTE: NVIDIA uses strict inequality (distance < cutoff) while PyMatGen uses
-    # inclusive inequality (distance <= cutoff). Add small epsilon to match PyMatGen.
-    # Using absolute epsilon to avoid floating point precision issues.
-    nvidia_cutoff = cutoff + 1e-6
-    neighbor_list(
-        positions=positions,
-        cutoff=nvidia_cutoff,
-        cell=cell,
-        pbc=pbc,
-        method=method,
-        neighbor_matrix=neighbor_matrix,
-        neighbor_matrix_shifts=neighbor_matrix_shifts,
-        num_neighbors=num_neighbors,
-        half_fill=False,  # Need full neighbor list to match PyMatGen behavior
-    )
-
-    # Convert to edge list format (c_index, n_index, offsets) - OPTIMIZED: NO DISTANCE COMPUTATION
-    num_neighbors_cpu = num_neighbors.cpu().numpy()
-    neighbor_matrix_cpu = neighbor_matrix.cpu().numpy()
-    neighbor_matrix_shifts_cpu = neighbor_matrix_shifts.cpu().numpy()
-
-    # Check if there are any edges
-    total_edges = num_neighbors_cpu.sum()
-    if total_edges == 0:
-        # No edges found
-        return (
-            np.array([], dtype=np.int64),
-            np.array([], dtype=np.int64),
-            np.array([], dtype=np.float64),
-            np.array([], dtype=np.int64).reshape(0, 3),
-        )
-
-    # Create index arrays for vectorized operations
-    # neighbor_matrix_cpu has shape (total_atoms, max_neigh)
-    atom_indices = np.arange(total_atoms)[:, None]  # Shape: (total_atoms, 1)
-    neigh_indices = np.arange(max_neigh)[None, :]  # Shape: (1, max_neigh)
-    valid_mask = (
-        neigh_indices < num_neighbors_cpu[:, None]
-    )  # Shape: (total_atoms, max_neigh)
-
-    # Extract valid edges
-    _c_index = np.repeat(atom_indices, max_neigh, axis=1)[valid_mask]
-    _n_index = neighbor_matrix_cpu[valid_mask]
-    _offsets = neighbor_matrix_shifts_cpu[valid_mask]
-
-    # Filter out invalid neighbors (fill_value is total_atoms)
-    # NVIDIA uses total_atoms as the fill value for empty slots
-    valid_neighbors = _n_index < total_atoms
-    _c_index = _c_index[valid_neighbors]
-    _n_index = _n_index[valid_neighbors]
-    _offsets = _offsets[valid_neighbors]
-
-    # Sort edges by center atom only (stable sort maintains NVIDIA's order within each atom)
-    sort_idx = np.argsort(_c_index, kind="stable")
-    _c_index = _c_index[sort_idx]
-    _n_index = _n_index[sort_idx]
-    _offsets = _offsets[sort_idx]
-
-    # Placeholder distances (set to 1.0 to pass the distance >= 1e-8 filter in reshape_features)
-    # Actual distances are not needed - they can be computed later if required
-    n_distance = np.ones(len(_c_index), dtype=np.float64)
 
     return _c_index, _n_index, n_distance, _offsets
 
@@ -480,7 +376,7 @@ class AtomicData:
                     raise ValueError(
                         f"Invalid NVIDIA method variant. Use 'nvidia-cell' or 'nvidia-naive', got {external_graph_method}"
                     )
-                split_idx_dist = get_neighbors_nvidia(
+                split_idx_dist = get_neighbors_nvidia_atoms(
                     atoms, radius, max_neigh, method=nvidia_variant
                 )
             else:

@@ -14,6 +14,14 @@ from fairchem.core.graph.radius_graph_pbc import (
     radius_graph_pbc_v2,
 )
 
+# Check for NVIDIA library availability
+try:
+    from fairchem.core.graph.nvidia import radius_graph_pbc_nvidia
+
+    NVIDIA_AVAILABLE = True
+except ImportError:
+    NVIDIA_AVAILABLE = False
+
 
 def get_pbc_distances(
     pos,
@@ -77,7 +85,7 @@ def generate_graph(
         cutoff (float): The maximum distance between atoms to consider them as neighbors.
         max_neighbors (int): The maximum number of neighbors to consider for each atom.
         enforce_max_neighbors_strictly (bool): Whether to strictly enforce the maximum number of neighbors.
-        radius_pbc_version: the version of radius_pbc impl (1 or 2)
+        radius_pbc_version: the version of radius_pbc impl (1, 2, or 3 for NVIDIA)
         pbc (list[bool]): The periodic boundary conditions in 3 dimensions, defaults to [True,True,True] for 3D pbc
 
     Returns:
@@ -93,6 +101,13 @@ def generate_graph(
         radius_graph_pbc_fn = radius_graph_pbc
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
+    elif radius_pbc_version == 3:
+        if not NVIDIA_AVAILABLE:
+            raise RuntimeError(
+                "radius_pbc_version=3 requires NVIDIA nvalchemiops library. "
+                "Install with: pip install nvalchemiops"
+            )
+        radius_graph_pbc_fn = radius_graph_pbc_nvidia
     else:
         raise ValueError(f"Invalid radius_pbc version {radius_pbc_version}")
 

@@ -14,7 +14,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.graph.compute import generate_graph
 
 
-@pytest.mark.parametrize("radius_pbc_version", [1, 2])
+@pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
 def test_radius_graph_1d(radius_pbc_version):
     cutoff = 6.0
     atoms = build.bulk("Cu", "fcc", a=3.58)  # minimum distance is 2.53
@@ -82,7 +82,7 @@ def test_radius_graph_1d(radius_pbc_version):
     assert graph_dict["neighbors"] == 4
 
 
-@pytest.mark.parametrize("radius_pbc_version", [1, 2])
+@pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
 def test_radius_graph_2d(radius_pbc_version):
     cutoff = 6.0
     atoms = build.bulk("Cu", "fcc", a=3.58)  # minimum distance is 2.53
@@ -150,7 +150,7 @@ def test_radius_graph_2d(radius_pbc_version):
     assert graph_dict["neighbors"] == 18
 
 
-@pytest.mark.parametrize("radius_pbc_version", [1, 2])
+@pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
 def test_radius_graph_3d(radius_pbc_version):
     cutoff = 6.0
     atoms = build.bulk("Cu", "fcc", a=3.58)  # minimum distance is 2.53
