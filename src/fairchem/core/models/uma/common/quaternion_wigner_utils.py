@@ -340,6 +340,57 @@ def _vectorized_horner(
     return result
 
 
+def _compute_case_magnitude(
+    log_ra: torch.Tensor,
+    log_rb: torch.Tensor,
+    ratio: torch.Tensor,
+    case: CaseCoeffs,
+    max_poly_len: int,
+) -> torch.Tensor:
+    """
+    Compute the real-valued magnitude factor for a general case.
+
+    This is the common computation for both Case 1 (|Ra| >= |Rb|) and
+    Case 2 (|Ra| < |Rb|), used by both complex and real-pair versions.
+
+    Args:
+        log_ra: Log of |Ra| magnitudes, shape (N,)
+        log_rb: Log of |Rb| magnitudes, shape (N,)
+        ratio: -(rb/ra)^2 for Case 1 or -(ra/rb)^2 for Case 2, shape (N,)
+        case: CaseCoeffs with polynomial coefficients for this case
+        max_poly_len: Maximum polynomial length
+
+    Returns:
+        Magnitude factor of shape (N, n_primary), real-valued
+    """
+    horner_sum = _vectorized_horner(ratio, case.horner, case.poly_len, max_poly_len)
+    ra_powers = torch.exp(torch.outer(log_ra, case.ra_exp))
+    rb_powers = torch.exp(torch.outer(log_rb, case.rb_exp))
+    magnitude = (case.sign * case.coeff) * ra_powers * rb_powers
+    return magnitude * horner_sum
+
+
+def _scatter_primary_to_matrix(
+    result: torch.Tensor,
+    D: torch.Tensor,
+    coeffs: WignerCoefficients,
+) -> None:
+    """
+    Scatter primary element results into the block-diagonal output matrix.
+
+    Args:
+        result: Primary element values, shape (N, n_primary)
+        D: Output matrix to fill, shape (N, size, size)
+        coeffs: WignerCoefficients with primary_row/primary_col indices
+    """
+    N = result.shape[0]
+    device = result.device
+    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_primary)
+    row_expanded = coeffs.primary_row.unsqueeze(0).expand(N, coeffs.n_primary)
+    col_expanded = coeffs.primary_col.unsqueeze(0).expand(N, coeffs.n_primary)
+    D[batch_indices, row_expanded, col_expanded] = result
+
+
 def _smooth_step_cinf(t: torch.Tensor) -> torch.Tensor:
     """
     C-infinity smooth step function based on the classic bump function.
@@ -1147,13 +1198,8 @@ def wigner_d_matrix_complex(
 
     # General Case 1: |Ra| >= |Rb|
     ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    horner_sum1 = _vectorized_horner(ratio1, coeffs.case1.horner, coeffs.case1.poly_len, coeffs.max_poly_len)
-
-    ra_powers1 = torch.exp(torch.outer(log_ra, coeffs.case1.ra_exp))
-    rb_powers1 = torch.exp(torch.outer(log_rb, coeffs.case1.rb_exp))
-
-    magnitude1 = (coeffs.case1.sign * coeffs.case1.coeff) * ra_powers1 * rb_powers1
-    val1 = magnitude1 * horner_sum1 * exp_phase
+    real_factor1 = _compute_case_magnitude(log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len)
+    val1 = real_factor1 * exp_phase
 
     valid_case1 = coeffs.case1.poly_len > 0
     mask1 = use_case1.unsqueeze(1) & valid_case1.unsqueeze(0)
@@ -1161,13 +1207,8 @@ def wigner_d_matrix_complex(
 
     # General Case 2: |Ra| < |Rb|
     ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    horner_sum2 = _vectorized_horner(ratio2, coeffs.case2.horner, coeffs.case2.poly_len, coeffs.max_poly_len)
-
-    ra_powers2 = torch.exp(torch.outer(log_ra, coeffs.case2.ra_exp))
-    rb_powers2 = torch.exp(torch.outer(log_rb, coeffs.case2.rb_exp))
-
-    magnitude2 = (coeffs.case2.sign * coeffs.case2.coeff) * ra_powers2 * rb_powers2
-    val2 = magnitude2 * horner_sum2 * exp_phase
+    real_factor2 = _compute_case_magnitude(log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len)
+    val2 = real_factor2 * exp_phase
 
     valid_case2 = coeffs.case2.poly_len > 0
     mask2 = use_case2.unsqueeze(1) & valid_case2.unsqueeze(0)
@@ -1175,12 +1216,7 @@ def wigner_d_matrix_complex(
 
     # Scatter primary results into output matrix
     D = torch.zeros(N, coeffs.size, coeffs.size, dtype=complex_dtype, device=device)
-
-    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_primary)
-    row_expanded = coeffs.primary_row.unsqueeze(0).expand(N, coeffs.n_primary)
-    col_expanded = coeffs.primary_col.unsqueeze(0).expand(N, coeffs.n_primary)
-
-    D[batch_indices, row_expanded, col_expanded] = result
+    _scatter_primary_to_matrix(result, D, coeffs)
 
     # Fill derived elements using symmetry
     if coeffs.n_derived > 0:
@@ -1285,13 +1321,7 @@ def wigner_d_matrix_real(
 
     # General Case 1: |Ra| >= |Rb|
     ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    horner_sum1 = _vectorized_horner(ratio1, coeffs.case1.horner, coeffs.case1.poly_len, coeffs.max_poly_len)
-
-    ra_powers1 = torch.exp(torch.outer(log_ra, coeffs.case1.ra_exp))
-    rb_powers1 = torch.exp(torch.outer(log_rb, coeffs.case1.rb_exp))
-
-    magnitude1 = (coeffs.case1.sign * coeffs.case1.coeff) * ra_powers1 * rb_powers1
-    real_factor1 = magnitude1 * horner_sum1
+    real_factor1 = _compute_case_magnitude(log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len)
     val1_re = real_factor1 * exp_phase_re
     val1_im = real_factor1 * exp_phase_im
 
@@ -1302,13 +1332,7 @@ def wigner_d_matrix_real(
 
     # General Case 2: |Ra| < |Rb|
     ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    horner_sum2 = _vectorized_horner(ratio2, coeffs.case2.horner, coeffs.case2.poly_len, coeffs.max_poly_len)
-
-    ra_powers2 = torch.exp(torch.outer(log_ra, coeffs.case2.ra_exp))
-    rb_powers2 = torch.exp(torch.outer(log_rb, coeffs.case2.rb_exp))
-
-    magnitude2 = (coeffs.case2.sign * coeffs.case2.coeff) * ra_powers2 * rb_powers2
-    real_factor2 = magnitude2 * horner_sum2
+    real_factor2 = _compute_case_magnitude(log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len)
     val2_re = real_factor2 * exp_phase_re
     val2_im = real_factor2 * exp_phase_im
 
@@ -1320,13 +1344,8 @@ def wigner_d_matrix_real(
     # Scatter primary results into output matrix
     D_re = torch.zeros(N, coeffs.size, coeffs.size, dtype=dtype, device=device)
     D_im = torch.zeros(N, coeffs.size, coeffs.size, dtype=dtype, device=device)
-
-    batch_indices = torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_primary)
-    row_expanded = coeffs.primary_row.unsqueeze(0).expand(N, coeffs.n_primary)
-    col_expanded = coeffs.primary_col.unsqueeze(0).expand(N, coeffs.n_primary)
-
-    D_re[batch_indices, row_expanded, col_expanded] = result_re
-    D_im[batch_indices, row_expanded, col_expanded] = result_im
+    _scatter_primary_to_matrix(result_re, D_re, coeffs)
+    _scatter_primary_to_matrix(result_im, D_im, coeffs)
 
     # Fill derived elements using symmetry
     if coeffs.n_derived > 0:
