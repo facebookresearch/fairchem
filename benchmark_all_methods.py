@@ -17,6 +17,7 @@ import torch
 import time
 from pathlib import Path
 import sys
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -407,10 +408,12 @@ def run_backward_benchmarks(batch_sizes, device, dtype=torch.float64, funcs=None
                 loss = D.sum()
                 loss.backward()
                 return q.grad
-
-            t, _ = benchmark_function(einsum_fwd_bwd, n_warmup=5, n_iter=50)
-            print(f"    Einsum:             {t*1000:8.4f} ms")
-            results[batch_size][f'l{ell}_einsum_bwd'] = t
+            if ell!=4:
+                t, _ = benchmark_function(einsum_fwd_bwd, n_warmup=5, n_iter=50)
+                print(f"    Einsum:             {t*1000:8.4f} ms")
+                results[batch_size][f'l{ell}_einsum_bwd'] = t
+            else:
+                results[batch_size][f'l{ell}_einsum_bwd'] = np.inf
 
             # Matmul - forward + backward
             def matmul_fwd_bwd():
@@ -563,7 +566,7 @@ if __name__ == "__main__":
         print("(with torch.compile for poly/einsum/matmul/rarb-real)")
     print("=" * 80)
 
-    batch_sizes = [100, 1000, 10000]
+    batch_sizes = [10000, 50000, 100000, 200000, 400000]
 
     # CPU benchmarks (unless --no-cpu)
     if not args.no_cpu:
