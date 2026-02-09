@@ -193,35 +193,43 @@ def run_benchmarks(batch_sizes, device, dtype=torch.float64):
 
 def print_speedup_summary(results):
     """Print speedup summary table."""
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print("SPEEDUP SUMMARY")
-    print("=" * 80)
+    print("=" * 100)
 
     print("\nSpeedup vs Matrix Exponential (higher = faster than matexp):")
-    print("-" * 80)
-    print(f"{'Batch':>12} | {'l=2 poly':>10} {'l=2 eins':>10} | {'l=3 poly':>10} {'l=3 eins':>10} | {'l=4 poly':>10} {'l=4 eins':>10}")
-    print("-" * 80)
+    print("-" * 100)
+    print(f"{'Batch':>12} | {'l=2 poly':>8} {'l=2 eins':>8} {'l=2 matm':>8} | {'l=3 poly':>8} {'l=3 eins':>8} {'l=3 matm':>8} | {'l=4 poly':>8} {'l=4 eins':>8} {'l=4 matm':>8}")
+    print("-" * 100)
 
     for batch_size in results:
         row = [f"{batch_size:>12}"]
         for ell in [2, 3, 4]:
             poly_speedup = results[batch_size][f'l{ell}_matexp'] / results[batch_size][f'l{ell}_poly']
             einsum_speedup = results[batch_size][f'l{ell}_matexp'] / results[batch_size][f'l{ell}_einsum']
-            row.append(f"{poly_speedup:>10.2f}x")
-            row.append(f"{einsum_speedup:>10.2f}x")
-        print(f"{row[0]} | {row[1]} {row[2]} | {row[3]} {row[4]} | {row[5]} {row[6]}")
+            matmul_speedup = results[batch_size][f'l{ell}_matexp'] / results[batch_size][f'l{ell}_matmul']
+            row.append(f"{poly_speedup:>8.2f}x")
+            row.append(f"{einsum_speedup:>8.2f}x")
+            row.append(f"{matmul_speedup:>8.2f}x")
+        print(f"{row[0]} | {row[1]} {row[2]} {row[3]} | {row[4]} {row[5]} {row[6]} | {row[7]} {row[8]} {row[9]}")
 
-    print("\nPoly vs Einsum (>1 = poly faster, <1 = einsum faster):")
-    print("-" * 60)
-    print(f"{'Batch':>12} | {'l=2':>15} | {'l=3':>15} | {'l=4':>15}")
-    print("-" * 60)
+    print("\nBest method comparison (ratio to fastest):")
+    print("-" * 80)
+    print(f"{'Batch':>12} | {'l=2':>20} | {'l=3':>20} | {'l=4':>20}")
+    print("-" * 80)
 
     for batch_size in results:
-        ratios = []
+        best = []
         for ell in [2, 3, 4]:
-            ratio = results[batch_size][f'l{ell}_einsum'] / results[batch_size][f'l{ell}_poly']
-            ratios.append(f"{ratio:.2f}x")
-        print(f"{batch_size:>12} | {ratios[0]:>15} | {ratios[1]:>15} | {ratios[2]:>15}")
+            times = {
+                'poly': results[batch_size][f'l{ell}_poly'],
+                'eins': results[batch_size][f'l{ell}_einsum'],
+                'matm': results[batch_size][f'l{ell}_matmul'],
+            }
+            fastest = min(times.values())
+            winner = [k for k, v in times.items() if v == fastest][0]
+            best.append(f"{winner} (1.0x)")
+        print(f"{batch_size:>12} | {best[0]:>20} | {best[1]:>20} | {best[2]:>20}")
 
 
 def run_backward_benchmarks(batch_sizes, device, dtype=torch.float64):
@@ -241,6 +249,11 @@ def run_backward_benchmarks(batch_sizes, device, dtype=torch.float64):
         2: quaternion_to_wigner_d_l2_einsum,
         3: quaternion_to_wigner_d_l3_einsum,
         4: quaternion_to_wigner_d_l4_einsum,
+    }
+    matmul_funcs = {
+        2: quaternion_to_wigner_d_l2_matmul,
+        3: quaternion_to_wigner_d_l3_matmul,
+        4: quaternion_to_wigner_d_l4_matmul,
     }
 
     for batch_size in batch_sizes:
@@ -282,6 +295,20 @@ def run_backward_benchmarks(batch_sizes, device, dtype=torch.float64):
             print(f"    Einsum:             {t*1000:8.4f} ms")
             results[batch_size][f'l{ell}_einsum_bwd'] = t
 
+            # Matmul - forward + backward
+            matmul_func = matmul_funcs[ell]
+            def matmul_fwd_bwd():
+                q = torch.randn(batch_size, 4, dtype=dtype, device=device, requires_grad=True)
+                q_norm = q / q.norm(dim=1, keepdim=True)
+                D = matmul_func(q_norm)
+                loss = D.sum()
+                loss.backward()
+                return q.grad
+
+            t, _ = benchmark_function(matmul_fwd_bwd, n_warmup=5, n_iter=50)
+            print(f"    Matmul:             {t*1000:8.4f} ms")
+            results[batch_size][f'l{ell}_matmul_bwd'] = t
+
             # Matrix exponential - forward + backward
             def matexp_fwd_bwd():
                 q = torch.randn(batch_size, 4, dtype=dtype, device=device, requires_grad=True)
@@ -300,35 +327,43 @@ def run_backward_benchmarks(batch_sizes, device, dtype=torch.float64):
 
 def print_backward_summary(results):
     """Print backward pass speedup summary."""
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print("BACKWARD PASS SPEEDUP SUMMARY")
-    print("=" * 80)
+    print("=" * 100)
 
     print("\nSpeedup vs Matrix Exponential (higher = faster than matexp):")
-    print("-" * 80)
-    print(f"{'Batch':>12} | {'l=2 poly':>10} {'l=2 eins':>10} | {'l=3 poly':>10} {'l=3 eins':>10} | {'l=4 poly':>10} {'l=4 eins':>10}")
-    print("-" * 80)
+    print("-" * 100)
+    print(f"{'Batch':>12} | {'l=2 poly':>8} {'l=2 eins':>8} {'l=2 matm':>8} | {'l=3 poly':>8} {'l=3 eins':>8} {'l=3 matm':>8} | {'l=4 poly':>8} {'l=4 eins':>8} {'l=4 matm':>8}")
+    print("-" * 100)
 
     for batch_size in results:
         row = [f"{batch_size:>12}"]
         for ell in [2, 3, 4]:
             poly_speedup = results[batch_size][f'l{ell}_matexp_bwd'] / results[batch_size][f'l{ell}_poly_bwd']
             einsum_speedup = results[batch_size][f'l{ell}_matexp_bwd'] / results[batch_size][f'l{ell}_einsum_bwd']
-            row.append(f"{poly_speedup:>10.2f}x")
-            row.append(f"{einsum_speedup:>10.2f}x")
-        print(f"{row[0]} | {row[1]} {row[2]} | {row[3]} {row[4]} | {row[5]} {row[6]}")
+            matmul_speedup = results[batch_size][f'l{ell}_matexp_bwd'] / results[batch_size][f'l{ell}_matmul_bwd']
+            row.append(f"{poly_speedup:>8.2f}x")
+            row.append(f"{einsum_speedup:>8.2f}x")
+            row.append(f"{matmul_speedup:>8.2f}x")
+        print(f"{row[0]} | {row[1]} {row[2]} {row[3]} | {row[4]} {row[5]} {row[6]} | {row[7]} {row[8]} {row[9]}")
 
-    print("\nPoly vs Einsum (>1 = poly faster, <1 = einsum faster):")
-    print("-" * 60)
-    print(f"{'Batch':>12} | {'l=2':>15} | {'l=3':>15} | {'l=4':>15}")
-    print("-" * 60)
+    print("\nBest method comparison (ratio to fastest):")
+    print("-" * 80)
+    print(f"{'Batch':>12} | {'l=2':>20} | {'l=3':>20} | {'l=4':>20}")
+    print("-" * 80)
 
     for batch_size in results:
-        ratios = []
+        best = []
         for ell in [2, 3, 4]:
-            ratio = results[batch_size][f'l{ell}_einsum_bwd'] / results[batch_size][f'l{ell}_poly_bwd']
-            ratios.append(f"{ratio:.2f}x")
-        print(f"{batch_size:>12} | {ratios[0]:>15} | {ratios[1]:>15} | {ratios[2]:>15}")
+            times = {
+                'poly': results[batch_size][f'l{ell}_poly_bwd'],
+                'eins': results[batch_size][f'l{ell}_einsum_bwd'],
+                'matm': results[batch_size][f'l{ell}_matmul_bwd'],
+            }
+            fastest = min(times.values())
+            winner = [k for k, v in times.items() if v == fastest][0]
+            best.append(f"{winner} (1.0x)")
+        print(f"{batch_size:>12} | {best[0]:>20} | {best[1]:>20} | {best[2]:>20}")
 
 
 if __name__ == "__main__":
