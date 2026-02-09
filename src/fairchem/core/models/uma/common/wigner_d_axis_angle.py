@@ -70,6 +70,8 @@ _RA_RB_U_REAL_CACHE: dict[tuple[int, torch.dtype, torch.device], list] = {}
 _RA_RB_RANGE_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
 _RA_RB_RANGE_REAL_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
 _L2_COEFF_TENSOR_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
+_L3_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
+_L4_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
 
 
 def clear_memory_caches() -> None:
@@ -86,6 +88,8 @@ def clear_memory_caches() -> None:
     _RA_RB_RANGE_CACHE.clear()
     _RA_RB_RANGE_REAL_CACHE.clear()
     _L2_COEFF_TENSOR_CACHE.clear()
+    _L3_MATMUL_CACHE.clear()
+    _L4_MATMUL_CACHE.clear()
 
 
 # =============================================================================
@@ -1029,6 +1033,224 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
 
 
 # =============================================================================
+# Matmul-based Wigner D for l=3 and l=4
+# =============================================================================
+
+
+def _derive_matmul_coefficients(ell: int) -> tuple[torch.Tensor, list]:
+    """
+    Derive Wigner D polynomial coefficients numerically for matmul approach.
+
+    Returns:
+        C: (size*size, n_monomials) coefficient matrix
+        monomials: list of (a, b, c, d) power tuples
+    """
+    size = 2 * ell + 1
+    degree = 2 * ell
+
+    # Generate all monomials of the given degree
+    monomials = []
+
+    def generate_monomials(n_vars, total_degree, current=None):
+        if current is None:
+            current = []
+        if len(current) == n_vars - 1:
+            current.append(total_degree - sum(current))
+            if current[-1] >= 0:
+                monomials.append(tuple(current))
+            return
+        for i in range(total_degree - sum(current) + 1):
+            generate_monomials(n_vars, total_degree, current + [i])
+
+    generate_monomials(4, degree)
+    n_monomials = len(monomials)
+    n_samples = n_monomials + 50
+
+    # Generate sample quaternions
+    torch.manual_seed(42)
+    q_raw = torch.randn(n_samples, 4, dtype=torch.float64)
+    q = q_raw / q_raw.norm(dim=1, keepdim=True)
+
+    # Build monomial matrix
+    X = torch.zeros(n_samples, n_monomials, dtype=torch.float64)
+    for i, (a, b, c, d) in enumerate(monomials):
+        X[:, i] = (q[:, 0] ** a) * (q[:, 1] ** b) * (q[:, 2] ** c) * (q[:, 3] ** d)
+
+    # Compute reference D matrices using matrix_exp
+    gens = get_so3_generators(ell, torch.float64, torch.device('cpu'))
+    K_x = gens['K_x'][ell]
+    K_y = gens['K_y'][ell]
+    K_z = gens['K_z'][ell]
+
+    axis, angle = quaternion_to_axis_angle(q)
+
+    D_ref = torch.zeros(n_samples, size, size, dtype=torch.float64)
+    for i in range(n_samples):
+        n = axis[i]
+        K = n[0] * K_x + n[1] * K_y + n[2] * K_z
+        D_ref[i] = torch.linalg.matrix_exp(angle[i] * K)
+
+    # Solve for coefficients via least squares
+    coefficients = torch.zeros(size, size, n_monomials, dtype=torch.float64)
+    for i in range(size):
+        for j in range(size):
+            y = D_ref[:, i, j]
+            c, _, _, _ = torch.linalg.lstsq(X, y.unsqueeze(1))
+            coefficients[i, j, :] = c.squeeze()
+
+    # Reshape to (size*size, n_monomials)
+    C = coefficients.view(size * size, n_monomials)
+
+    return C, monomials
+
+
+def _get_l3_matmul_data(dtype: torch.dtype, device: torch.device):
+    """Get cached matmul data for l=3."""
+    key = (dtype, device)
+    if key not in _L3_MATMUL_CACHE:
+        C, monomials = _derive_matmul_coefficients(3)
+        _L3_MATMUL_CACHE[key] = (C.to(dtype=dtype, device=device), monomials)
+    return _L3_MATMUL_CACHE[key]
+
+
+def _get_l4_matmul_data(dtype: torch.dtype, device: torch.device):
+    """Get cached matmul data for l=4."""
+    key = (dtype, device)
+    if key not in _L4_MATMUL_CACHE:
+        C, monomials = _derive_matmul_coefficients(4)
+        _L4_MATMUL_CACHE[key] = (C.to(dtype=dtype, device=device), monomials)
+    return _L4_MATMUL_CACHE[key]
+
+
+def quaternion_to_wigner_d_l3_matmul(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion to 7x7 l=3 Wigner D matrix using matmul.
+
+    Computes D = M @ C^T where:
+    - M[n, k] = product of quaternion powers for monomial k
+    - C[ij, k] = coefficient of monomial k in D[i,j]
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Wigner D matrices of shape (N, 7, 7) for l=3
+    """
+    C, monomials = _get_l3_matmul_data(q.dtype, q.device)
+    N = q.shape[0]
+
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+
+    # Precompute powers up to 6
+    w2 = w * w
+    w3 = w2 * w
+    w4 = w2 * w2
+    w5 = w4 * w
+    w6 = w4 * w2
+    x2 = x * x
+    x3 = x2 * x
+    x4 = x2 * x2
+    x5 = x4 * x
+    x6 = x4 * x2
+    y2 = y * y
+    y3 = y2 * y
+    y4 = y2 * y2
+    y5 = y4 * y
+    y6 = y4 * y2
+    z2 = z * z
+    z3 = z2 * z
+    z4 = z2 * z2
+    z5 = z4 * z
+    z6 = z4 * z2
+
+    powers = {
+        0: {0: torch.ones_like(w), 1: w, 2: w2, 3: w3, 4: w4, 5: w5, 6: w6},
+        1: {0: torch.ones_like(x), 1: x, 2: x2, 3: x3, 4: x4, 5: x5, 6: x6},
+        2: {0: torch.ones_like(y), 1: y, 2: y2, 3: y3, 4: y4, 5: y5, 6: y6},
+        3: {0: torch.ones_like(z), 1: z, 2: z2, 3: z3, 4: z4, 5: z5, 6: z6},
+    }
+
+    # Build monomial matrix M: (N, n_monomials)
+    M = torch.stack([
+        powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
+        for a, b, c, d in monomials
+    ], dim=1)
+
+    # D_flat = M @ C^T: (N, 49)
+    D_flat = M @ C.T
+
+    return D_flat.view(N, 7, 7)
+
+
+def quaternion_to_wigner_d_l4_matmul(q: torch.Tensor) -> torch.Tensor:
+    """
+    Convert quaternion to 9x9 l=4 Wigner D matrix using matmul.
+
+    Computes D = M @ C^T where:
+    - M[n, k] = product of quaternion powers for monomial k
+    - C[ij, k] = coefficient of monomial k in D[i,j]
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Wigner D matrices of shape (N, 9, 9) for l=4
+    """
+    C, monomials = _get_l4_matmul_data(q.dtype, q.device)
+    N = q.shape[0]
+
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+
+    # Precompute powers up to 8
+    w2 = w * w
+    w3 = w2 * w
+    w4 = w2 * w2
+    w5 = w4 * w
+    w6 = w4 * w2
+    w7 = w4 * w3
+    w8 = w4 * w4
+    x2 = x * x
+    x3 = x2 * x
+    x4 = x2 * x2
+    x5 = x4 * x
+    x6 = x4 * x2
+    x7 = x4 * x3
+    x8 = x4 * x4
+    y2 = y * y
+    y3 = y2 * y
+    y4 = y2 * y2
+    y5 = y4 * y
+    y6 = y4 * y2
+    y7 = y4 * y3
+    y8 = y4 * y4
+    z2 = z * z
+    z3 = z2 * z
+    z4 = z2 * z2
+    z5 = z4 * z
+    z6 = z4 * z2
+    z7 = z4 * z3
+    z8 = z4 * z4
+
+    powers = {
+        0: {0: torch.ones_like(w), 1: w, 2: w2, 3: w3, 4: w4, 5: w5, 6: w6, 7: w7, 8: w8},
+        1: {0: torch.ones_like(x), 1: x, 2: x2, 3: x3, 4: x4, 5: x5, 6: x6, 7: x7, 8: x8},
+        2: {0: torch.ones_like(y), 1: y, 2: y2, 3: y3, 4: y4, 5: y5, 6: y6, 7: y7, 8: y8},
+        3: {0: torch.ones_like(z), 1: z, 2: z2, 3: z3, 4: z4, 5: z5, 6: z6, 7: z7, 8: z8},
+    }
+
+    # Build monomial matrix M: (N, n_monomials)
+    M = torch.stack([
+        powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
+        for a, b, c, d in monomials
+    ], dim=1)
+
+    # D_flat = M @ C^T: (N, 81)
+    D_flat = M @ C.T
+
+    return D_flat.view(N, 9, 9)
+
+
+# =============================================================================
 # Cayley-Hamilton for l=2 (5x5 antisymmetric matrices)
 # =============================================================================
 
@@ -1448,7 +1670,8 @@ def wigner_d_from_axis_angle_batched(
     - l=0: Trivial (identity)
     - l=1: Rodrigues formula (4-5x faster than matrix_exp)
     - l=2: Quaternion einsum (faster than Cayley-Hamilton)
-    - l>=3: matrix_exp
+    - l=3,4: Quaternion matmul (faster than matrix_exp)
+    - l>=5: matrix_exp
 
     Args:
         axis: Rotation axes of shape (N, 3), unit vectors
@@ -1518,8 +1741,14 @@ def wigner_d_from_axis_angle_batched(
         elif ell == 2:
             # l=2: Use quaternion einsum (faster than Cayley-Hamilton)
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
+        elif ell == 3:
+            # l=3: Use quaternion matmul (faster than matrix_exp)
+            D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
+        elif ell == 4:
+            # l=4: Use quaternion matmul (faster than matrix_exp)
+            D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
         else:
-            # l>=3: Use matrix_exp
+            # l>=5: Use matrix_exp
             K_x = K_x_list[ell]
             K_y = K_y_list[ell]
             K_z = K_z_list[ell]
@@ -1552,7 +1781,8 @@ def wigner_d_from_axis_angle_hybrid(
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
     - l=2: Quaternion to Wigner D via degree-4 polynomials (faster backward pass)
-    - l>=3: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
+    - l=3,4: Quaternion matmul (faster than Ra/Rb for small l)
+    - l>=5: Ra/Rb polynomial from quaternion (faster than matrix_exp on GPU)
 
     The caller should pass Euler-aligned generators for l>=2.
 
@@ -1599,17 +1829,23 @@ def wigner_d_from_axis_angle_hybrid(
 
         block_start = block_end
 
-    # Compute l>=3 using Ra/Rb polynomial from quaternion (range version)
+    # Compute l=3,4 using quaternion matmul
     if lmax >= 3:
-        # Get Ra/Rb coefficients for l>=3 only (more efficient)
-        coeffs_range, U_blocks_range = _get_ra_rb_coefficients_range(3, lmax, dtype, device)
+        D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
+    if lmax >= 4:
+        D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
+
+    # Compute l>=5 using Ra/Rb polynomial from quaternion (range version)
+    if lmax >= 5:
+        # Get Ra/Rb coefficients for l>=5 only (more efficient)
+        coeffs_range, U_blocks_range = _get_ra_rb_coefficients_range(5, lmax, dtype, device)
         Ra, Rb = quaternion_to_ra_rb(q)
         D_complex_range = wigner_d_matrix_complex_range(Ra, Rb, coeffs_range)
-        D_ra_rb_range = wigner_d_complex_to_real_range(D_complex_range, U_blocks_range, 3, lmax)
+        D_ra_rb_range = wigner_d_complex_to_real_range(D_complex_range, U_blocks_range, 5, lmax)
 
-        # Copy l>=3 blocks directly from the range result
-        # D_ra_rb_range is already just the l>=3 blocks
-        block_offset = 9  # Skip l=0,1,2 in full matrix (1 + 3 + 5 = 9)
+        # Copy l>=5 blocks directly from the range result
+        # D_ra_rb_range is already just the l>=5 blocks
+        block_offset = 25  # Skip l=0,1,2,3,4 in full matrix (1 + 3 + 5 + 7 + 9 = 25)
         D[:, block_offset:, block_offset:] = D_ra_rb_range
 
     return D
@@ -1632,7 +1868,8 @@ def wigner_d_from_axis_angle_hybrid_real(
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
     - l=2: Quaternion to Wigner D via degree-4 polynomials (faster backward pass)
-    - l>=3: Ra/Rb polynomial with real-pair arithmetic (torch.compile compatible)
+    - l=3,4: Quaternion matmul (faster than Ra/Rb for small l)
+    - l>=5: Ra/Rb polynomial with real-pair arithmetic (torch.compile compatible)
 
     Args:
         axis: Rotation axes of shape (N, 3), unit vectors
@@ -1663,16 +1900,22 @@ def wigner_d_from_axis_angle_hybrid_real(
             # Direct quaternion to Wigner D l=2 using einsum tensor contraction
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
 
-    # Compute l>=3 using Ra/Rb polynomial with real-pair arithmetic
+    # Compute l=3,4 using quaternion matmul
     if lmax >= 3:
-        # Get Ra/Rb coefficients for l>=3 only with real U blocks
-        coeffs_range, U_blocks_range_real = _get_ra_rb_coefficients_range_real(3, lmax, dtype, device)
+        D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
+    if lmax >= 4:
+        D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
+
+    # Compute l>=5 using Ra/Rb polynomial with real-pair arithmetic
+    if lmax >= 5:
+        # Get Ra/Rb coefficients for l>=5 only with real U blocks
+        coeffs_range, U_blocks_range_real = _get_ra_rb_coefficients_range_real(5, lmax, dtype, device)
         ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
         D_re_range, D_im_range = wigner_d_matrix_real_range(ra_re, ra_im, rb_re, rb_im, coeffs_range)
-        D_ra_rb_range = wigner_d_pair_to_real_range(D_re_range, D_im_range, U_blocks_range_real, 3, lmax)
+        D_ra_rb_range = wigner_d_pair_to_real_range(D_re_range, D_im_range, U_blocks_range_real, 5, lmax)
 
-        # Copy l>=3 blocks directly from the range result
-        block_offset = 9  # Skip l=0,1,2 in full matrix (1 + 3 + 5 = 9)
+        # Copy l>=5 blocks directly from the range result
+        block_offset = 25  # Skip l=0,1,2,3,4 in full matrix (1 + 3 + 5 + 7 + 9 = 25)
         D[:, block_offset:, block_offset:] = D_ra_rb_range
 
     return D
