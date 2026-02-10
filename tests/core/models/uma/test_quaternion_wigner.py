@@ -22,9 +22,11 @@ import pytest
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    get_so3_generators,
     precompute_U_blocks_euler_aligned,
     precompute_U_blocks_euler_aligned_real,
     precompute_wigner_coefficients,
+    quaternion_to_axis_angle,
     quaternion_to_ra_rb,
     quaternion_to_ra_rb_real,
     wigner_d_complex_to_real,
@@ -36,12 +38,13 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
     wigner_D,
 )
+from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+    quaternion_to_wigner_d_l2_einsum,
+    quaternion_to_wigner_d_l3_matmul,
+    quaternion_to_wigner_d_l4_matmul,
+)
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
-)
-from fairchem.core.models.uma.common.wigner_d_matexp import axis_angle_wigner
-from fairchem.core.models.uma.common.wigner_d_polynomial import (
-    axis_angle_wigner_polynomial,
 )
 
 
@@ -221,31 +224,18 @@ class TestWignerDProperties:
 class TestEntryPointAgreement:
     """Tests for agreement between all Wigner D entry point functions."""
 
-    def test_all_methods_match(self, lmax, dtype, device):
-        """All Wigner D implementations produce identical results."""
+    def test_l4_kernel_matches(self, dtype, device):
+        """l4_kernel=True produces same results as default methods."""
+        lmax = 4  # Need lmax >= 4 to test l=4 kernels
         torch.manual_seed(42)
         edges = torch.randn(50, 3, dtype=dtype, device=device)
         gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
 
-        D_matexp, _ = axis_angle_wigner(edges, lmax, gamma=gamma)
+        # Reference: hybrid without l4_kernel
         D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        D_poly, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma)
-
-        assert (D_matexp - D_hybrid).abs().max() < 1e-9, "hybrid differs from matexp"
-        assert (D_matexp - D_poly).abs().max() < 1e-9, "polynomial differs from matexp"
-
-    def test_l3_l4_kernel_matches(self, dtype, device):
-        """l3_l4_kernel=True produces same results as default methods."""
-        lmax = 4  # Need lmax >= 4 to test both l=3 and l=4 kernels
-        torch.manual_seed(42)
-        edges = torch.randn(50, 3, dtype=dtype, device=device)
-        gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
-
-        # Reference: hybrid without l3_l4_kernel
-        D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        # Test: hybrid with l3_l4_kernel=True
+        # Test: hybrid with l4_kernel=True
         D_hybrid_l3l4, _ = axis_angle_wigner_hybrid(
-            edges, lmax, gamma=gamma, l3_l4_kernel=True
+            edges, lmax, gamma=gamma, l4_kernel=True
         )
 
         assert (
@@ -262,17 +252,10 @@ class TestEntryPointAgreement:
         D_hybrid_real, _ = axis_angle_wigner_hybrid(
             edges, lmax, gamma=gamma, use_real_arithmetic=True
         )
-        D_poly, _ = axis_angle_wigner_polynomial(edges, lmax, gamma=gamma)
-        D_poly_real, _ = axis_angle_wigner_polynomial(
-            edges, lmax, gamma=gamma, use_real_arithmetic=True
-        )
 
         assert (
             D_hybrid - D_hybrid_real
         ).abs().max() < 1e-9, "hybrid_real differs from hybrid"
-        assert (
-            D_poly - D_poly_real
-        ).abs().max() < 1e-9, "polynomial_real differs from polynomial"
 
 
 # =============================================================================
@@ -296,7 +279,7 @@ class TestEulerAgreement:
             edge_t = torch.tensor([edge], dtype=dtype, device=device)
 
             # Compute with axis-angle using Euler gamma
-            D_axis, _ = axis_angle_wigner(edge_t, lmax, use_euler_gamma=True)
+            D_axis, _ = axis_angle_wigner_hybrid(edge_t, lmax, use_euler_gamma=True)
 
             # Get Euler angles from production code, zero out random gamma
             gamma, beta, alpha = init_edge_rot_euler_angles(edge_t)
@@ -555,36 +538,6 @@ class TestTorchCompileCompatibility:
     @pytest.mark.skipif(
         not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
-    def test_polynomial_real_compiles(self, lmax, dtype, device):
-        """axis_angle_wigner_polynomial with use_real_arithmetic should compile without graph breaks."""
-        import torch._dynamo as dynamo
-
-        edges = torch.randn(10, 3, dtype=dtype, device=device)
-        gamma = torch.rand(10, dtype=dtype, device=device) * 6.28
-
-        def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_polynomial(
-                edge_vec, lmax_val, gamma=g, use_real_arithmetic=True
-            )
-
-        try:
-            compiled_fn = torch.compile(fn, fullgraph=True)
-            D, D_inv = compiled_fn(edges, lmax, gamma)
-
-            D_ref, D_inv_ref = axis_angle_wigner_polynomial(
-                edges, lmax, gamma=gamma, use_real_arithmetic=True
-            )
-            assert torch.allclose(D, D_ref, atol=1e-10)
-        except Exception as e:
-            explanation = dynamo.explain(fn)(edges, lmax, gamma)
-            pytest.fail(
-                f"torch.compile failed. Graph break count: {explanation.graph_break_count}. "
-                f"Error: {e}"
-            )
-
-    @pytest.mark.skipif(
-        not hasattr(torch, "_dynamo"), reason="torch.compile not available"
-    )
     def test_wigner_d_matrix_real_compiles(self, lmax, dtype, device):
         """wigner_d_matrix_real should compile without graph breaks."""
         import torch._dynamo as dynamo
@@ -666,11 +619,6 @@ class TestSpecializedKernels:
 
     def test_l2_einsum_matches_matexp(self, dtype, device):
         """l=2 einsum kernel matches matrix exponential method."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            get_so3_generators,
-            quaternion_to_axis_angle,
-            quaternion_to_wigner_d_l2_einsum,
-        )
 
         torch.manual_seed(42)
         n_samples = 500
@@ -696,11 +644,6 @@ class TestSpecializedKernels:
 
     def test_l3_matmul_matches_matexp(self, dtype, device):
         """l=3 matmul kernel matches matrix exponential method."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            get_so3_generators,
-            quaternion_to_axis_angle,
-            quaternion_to_wigner_d_l3_matmul,
-        )
 
         torch.manual_seed(42)
         n_samples = 100
@@ -726,11 +669,6 @@ class TestSpecializedKernels:
 
     def test_l4_matmul_matches_matexp(self, dtype, device):
         """l=4 matmul kernel matches matrix exponential method."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            get_so3_generators,
-            quaternion_to_axis_angle,
-            quaternion_to_wigner_d_l4_matmul,
-        )
 
         torch.manual_seed(42)
         n_samples = 100
@@ -756,11 +694,6 @@ class TestSpecializedKernels:
 
     def test_kernels_orthogonality(self, dtype, device):
         """Specialized kernels produce orthogonal matrices."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l2_einsum,
-            quaternion_to_wigner_d_l3_matmul,
-            quaternion_to_wigner_d_l4_matmul,
-        )
 
         torch.manual_seed(123)
         q = torch.randn(100, 4, dtype=dtype, device=device)
@@ -786,11 +719,6 @@ class TestSpecializedKernels:
 
     def test_kernels_determinant_one(self, dtype, device):
         """Specialized kernels produce matrices with determinant 1."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l2_einsum,
-            quaternion_to_wigner_d_l3_matmul,
-            quaternion_to_wigner_d_l4_matmul,
-        )
 
         torch.manual_seed(456)
         q = torch.randn(100, 4, dtype=dtype, device=device)
