@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
+from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -83,6 +84,11 @@ def get_balanced_attribute(
     balance_attribute_offset=0,
     balance_channel_idx=0,
 ):
+    """Balance per-atom attributes (charge/spin) to sum to system target.
+
+    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
+    which provides correct gradients in both forward and backward passes.
+    """
     out_emb = emb.clone()
 
     charge_unbalanced = emb[:, 0, balance_channel_idx]  # n x 2
@@ -95,8 +101,15 @@ def get_balanced_attribute(
 
     system_scalars_part.index_add_(0, data_dict["batch"], charge_unbalanced.view(-1))
 
-    assert not gp_utils.initialized()
-    system_scalar = system_scalars_part
+    # Reduce partial sums across all graph parallel ranks
+    # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
+    # ensuring correct gradient computation when atoms are split across ranks.
+    if gp_utils.initialized():
+        system_scalar = all_reduce_with_grad(
+            system_scalars_part, group=gp_utils.get_gp_group()
+        )
+    else:
+        system_scalar = system_scalars_part
 
     correction = (
         system_scalar - (data_dict[balance_attribute] - balance_attribute_offset)
