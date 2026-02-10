@@ -225,17 +225,6 @@ def clear_memory_caches() -> None:
     _COEFF_CACHE.clear()
     _COEFF_REAL_CACHE.clear()
 
-    # Also clear caches in method modules if they exist
-    import sys
-
-    for module_name in [
-        "fairchem.core.models.uma.common.wigner_d_matexp",
-    ]:
-        if module_name in sys.modules:
-            module = sys.modules[module_name]
-            if hasattr(module, "clear_memory_caches"):
-                module.clear_memory_caches()
-
 
 # =============================================================================
 # Coefficient Caching Functions
