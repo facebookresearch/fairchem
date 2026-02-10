@@ -11,12 +11,13 @@ kernelspec:
   name: python3
 ---
 
-Inference using ASE and Predictor interface
-------------------
+# Inference using ASE and Predictor Interface
 
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
-For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface but using the predictor directly.
+:::{tip}
+For simple cases such as demos or education, the ASE calculator is very easy to use. For more complex cases such as running MD or batched inference, we recommend using the predictor directly for better performance.
+:::
 
 ```{code-cell} python3
 from __future__ import annotations
@@ -104,19 +105,21 @@ predictor = pretrained_mlip.get_predict_unit(
 
 ## Multi-GPU Inference
 
-UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we leverage [ray](https://www.ray.io/) to launch Ray Actors for each GPU-rank under the hood. This allows us to seemlessly scale to any infrastructure that can run Ray.
+UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we leverage [ray](https://www.ray.io/) to launch Ray Actors for each GPU-rank under the hood. This allows us to seamlessly scale to any infrastructure that can run Ray.
 
 To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called [ParallelMLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/85bd83535fedbc1d99eee4c12e175603ccc44ef7/src/fairchem/core/units/mlip_unit/predict.py#L415)
 
-To enable this you need to install Ray manually or through the fairchem extra dependencies option
+:::{note}
+To enable multi-GPU inference, you need to install Ray manually or through the fairchem extra dependencies option.
+:::
 
-```
+```bash
 pip install fairchem-core[extras]
 ```
 
-For example, we can create a predictor with 8 GPU workers in a very similiar way to MLIPPredictUnit and perform a md calculation with the ase calculator. This mode of operation is also compatible with our LAMMPs integration.
+For example, we can create a predictor with 8 GPU workers in a very similar way to MLIPPredictUnit and perform an MD calculation with the ASE calculator. This mode of operation is also compatible with our LAMMPS integration.
 
-```
+```python
 from ase import units
 from ase.md.langevin import Langevin
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
@@ -151,4 +154,6 @@ dyn.attach(
 dyn.run(steps=1000)
 ```
 
-This will automatically create a Ray server on your local machine and use a local client to connect to it. If you have setup a Ray cluster, you can leverage it to run parallel inference on as many nodes as you like. We are actively working on optimziations to scale inference to large systems.
+:::{tip}
+This will automatically create a Ray server on your local machine and use a local client to connect to it. If you have set up a Ray cluster, you can leverage it to run parallel inference on as many nodes as you like.
+:::

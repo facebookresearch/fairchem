@@ -11,8 +11,11 @@ kernelspec:
   name: python3
 ---
 
-Phonons
-------------------
+# Phonon Calculations
+
+:::{tip} What You Will Learn
+Run phonon calculations to predict thermal conductivity, vibrational modes, entropy, and finite-temperature stability.
+:::
 
 Phonon calculations are very important for inorganic materials science to
 * Calculate thermal conductivity

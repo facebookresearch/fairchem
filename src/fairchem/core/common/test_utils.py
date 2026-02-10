@@ -47,7 +47,7 @@ class PGConfig:
     backend: str
     world_size: int
     gp_group_size: int = 1
-    port: str = "12345"
+    port: str = str(get_free_port())
     use_gp: bool = True
 
 
