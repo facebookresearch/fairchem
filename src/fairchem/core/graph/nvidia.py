@@ -65,9 +65,9 @@ def get_neighbors_nvidia(
 
     # Normalize inputs to batched format
     if cell.ndim == 2:
-        cell = cell.unsqueeze(0)  # (3, 3) -> (1, 3, 3)
+        cell = cell.unsqueeze(0)
     if pbc.ndim == 1:
-        pbc = pbc.unsqueeze(0)  # (3,) -> (1, 3)
+        pbc = pbc.unsqueeze(0)
     if batch is None:
         batch = torch.zeros(total_atoms, dtype=torch.long, device=device)
     if natoms is None:
@@ -87,7 +87,6 @@ def get_neighbors_nvidia(
     # Small epsilon to ensure atoms at exactly cutoff distance are included
     nvidia_cutoff = cutoff + 1e-6
 
-    # Allocate output tensors for neighbor_list
     neighbor_matrix = torch.full(
         (total_atoms, buffer_max_neigh),
         total_atoms,
@@ -101,7 +100,6 @@ def get_neighbors_nvidia(
     )
     num_neighbors = torch.zeros(total_atoms, dtype=torch.int32, device=device)
 
-    # Always use batched method
     neighbor_list(
         positions=positions,
         cutoff=nvidia_cutoff,
@@ -115,9 +113,7 @@ def get_neighbors_nvidia(
         half_fill=False,
     )
 
-    # Convert neighbor matrix to edge list format
-    total_edges = num_neighbors.sum().item()
-    if total_edges == 0:
+    if num_neighbors.sum() == 0:
         return (
             torch.empty(0, dtype=torch.int64, device=device),
             torch.empty(0, dtype=torch.int64, device=device),
@@ -140,37 +136,32 @@ def get_neighbors_nvidia(
     n_index = n_index[sort_idx].long()
     offsets = offsets[sort_idx].long()
 
-    # Compute distances with PBC corrections
+    # Compute squared distances with PBC corrections
     distance_vectors = positions[n_index] - positions[c_index]
-
-    # Apply cell offsets using per-edge cells
-    edge_cells = cell[batch[c_index]]  # [num_edges, 3, 3]
+    edge_cells = cell[batch[c_index]]
     offsets_cartesian = torch.bmm(
-        offsets.float().unsqueeze(1),  # [num_edges, 1, 3]
-        edge_cells.float(),  # [num_edges, 3, 3]
-    ).squeeze(1)  # [num_edges, 3]
-    distance_vectors = distance_vectors + offsets_cartesian
-
-    # Compute Euclidean distances
-    distances = distance_vectors.norm(dim=-1)
+        offsets.float().unsqueeze(1),
+        edge_cells.float(),
+    ).squeeze(1)
+    distance_vectors.add_(offsets_cartesian)
+    distances_sq = (distance_vectors**2).sum(dim=-1)
 
     # Apply max neighbors mask to handle degeneracy properly
     if max_neigh > 0 and len(c_index) > 0:
-        # Use squared distances for consistency with v1/v2 implementations
-        atom_distance_sqr = distances**2
-
         mask_num_neighbors, _ = get_max_neighbors_mask(
             natoms=natoms,
             index=c_index,
-            atom_distance=atom_distance_sqr,
+            atom_distance=distances_sq,
             max_num_neighbors_threshold=max_neigh,
             enforce_max_strictly=enforce_max_neighbors_strictly,
         )
 
         c_index = c_index[mask_num_neighbors]
         n_index = n_index[mask_num_neighbors]
-        distances = distances[mask_num_neighbors]
+        distances_sq = distances_sq[mask_num_neighbors]
         offsets = offsets[mask_num_neighbors]
+
+    distances = torch.sqrt(distances_sq)
 
     return c_index, n_index, distances, offsets
 
@@ -201,16 +192,17 @@ def radius_graph_pbc_nvidia(
         cell_offsets: (num_edges, 3) tensor with integer cell offsets
         neighbors: (batch_size,) tensor with number of edges per structure
     """
-    device = data.pos.device
-    batch_size = len(data.natoms)
+    pos = data.pos
+    natoms = data.natoms
+    cell = data.cell
+    device = pos.device
+    batch_size = len(natoms)
 
     # Get batch tensor
     if hasattr(data, "batch") and data.batch is not None:
         batch = data.batch
     else:
-        batch = torch.repeat_interleave(
-            torch.arange(batch_size, device=device), data.natoms
-        )
+        batch = torch.repeat_interleave(torch.arange(batch_size, device=device), natoms)
 
     # Get PBC tensor
     if pbc is None:
@@ -222,25 +214,22 @@ def radius_graph_pbc_nvidia(
     else:
         pbc_tensor = pbc
 
-    # Call core neighbor search function (handles max_neighbors mask internally)
     c_index, n_index, distances, offsets = get_neighbors_nvidia(
-        positions=data.pos,
-        cell=data.cell,
+        positions=pos,
+        cell=cell,
         pbc=pbc_tensor,
         cutoff=radius,
         max_neigh=max_num_neighbors_threshold,
         method="cell_list",
         enforce_max_neighbors_strictly=enforce_max_neighbors_strictly,
         batch=batch,
-        natoms=data.natoms,
+        natoms=natoms,
     )
 
-    # Compute neighbors per image
     edge_batch = batch[c_index]
     num_neighbors_image = torch.zeros(batch_size, dtype=torch.long, device=device)
     num_neighbors_image.scatter_add_(0, edge_batch, torch.ones_like(edge_batch))
 
-    # Format edge_index to match internal methods: [source, target] = [neighbor, center]
     edge_index = torch.stack([n_index, c_index], dim=0)
 
     return edge_index, offsets, num_neighbors_image
@@ -265,12 +254,10 @@ def get_neighbors_nvidia_atoms(
         distances: Pairwise distances (numpy array) accounting for PBC
         offsets: Cell offsets (numpy array)
     """
-    # Convert Atoms to tensors
     positions = torch.from_numpy(atoms.get_positions()).float()
     cell = torch.from_numpy(np.array(atoms.get_cell(complete=True))).float()
     pbc = torch.from_numpy(np.array(atoms.pbc)).bool()
 
-    # Call tensor function (handles max_neighbors mask internally)
     c_index, n_index, distances, offsets = get_neighbors_nvidia(
         positions=positions,
         cell=cell,
@@ -281,7 +268,6 @@ def get_neighbors_nvidia_atoms(
         enforce_max_neighbors_strictly=True,
     )
 
-    # Convert back to numpy for backward compatibility
     return (
         c_index.numpy(),
         n_index.numpy(),
