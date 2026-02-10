@@ -126,11 +126,10 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore
 
-    def validate_inference_settings(self, settings) -> None:
-        """
-        Validate inference settings are compatible with this model.
-        """
-        pass  # noqa
+    @classmethod
+    def build_inference_settings(cls, settings) -> dict:
+        """EScAIP has no inference-time config overrides."""
+        return {}
 
     def validate_tasks(self, dataset_to_tasks: dict) -> None:
         """

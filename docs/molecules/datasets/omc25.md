@@ -1,6 +1,25 @@
 # OMC25
 
-The Open Molecular Crystals 2025 (OMC25) dataset comprises >25 million structures of organic molecular crystals from relaxation trajectories of random packings of OE62 molecules into various 3D unit cells using Genarris 3.0 package. The dataset contains structures labeled with total energy (eV), forces (eV/A), and stress (ev/A^3) via VASP.
+:::{margin}
+```{image} ../../assets/icons/molecular-crystals.svg
+:alt: Molecular Crystals
+:width: 100px
+```
+:::
+
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 25+ million structures |
+| **Domain** | Organic molecular crystals |
+| **Labels** | Total energy (eV), forces (eV/A), stress (eV/A^3) |
+| **Level of Theory** | PBE+D3 (VASP) |
+| **License** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+| **Download** | [HuggingFace](https://huggingface.co/facebook/OMC25) |
+:::
+
+The Open Molecular Crystals 2025 (OMC25) dataset comprises >25 million structures of organic molecular crystals from relaxation trajectories of random packings of OE62 molecules into various 3D unit cells using Genarris 3.0 package. The dataset contains structures labeled with total energy (eV), forces (eV/A), and stress (eV/A^3) via VASP.
 
 The training and validation splits of the OMC25 dataset are available for download from HuggingFace at https://huggingface.co/facebook/OMC25, under the CC BY 4.0 license, after applying for the repository access on HuggingFace.
 

@@ -82,10 +82,21 @@ class BackboneInterface(metaclass=ABCMeta):
         """
         return
 
+    @classmethod
     @abstractmethod
-    def validate_inference_settings(self, settings: InferenceSettings) -> None:
-        """Validate inference settings are compatible with this backbone."""
-        pass  # noqa
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """
+        Build config overrides from inference settings.
+
+        Called BEFORE model instantiation. Override in subclasses to handle
+        model-specific settings like activation_checkpointing.
+
+        Can also perform validation of settings and raise errors if incompatible.
+
+        Returns:
+            Dict of backbone config key-value pairs to override.
+        """
+        return {}
 
     @abstractmethod
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
@@ -244,12 +255,6 @@ class HydraModel(nn.Module):
         """
         return getattr(self.backbone, "direct_forces", False)
 
-    def validate_inference_settings(self, settings: InferenceSettings) -> None:
-        """
-        Validate inference settings are compatible with this model.
-        """
-        self.backbone.validate_inference_settings(settings)
-
     def prepare_for_inference(
         self, data: AtomicData, settings: InferenceSettings
     ) -> None:
@@ -365,12 +370,6 @@ class HydraModelV2(nn.Module):
         Whether this model uses direct force prediction.
         """
         return getattr(self.backbone, "direct_forces", False)
-
-    def validate_inference_settings(self, settings: InferenceSettings) -> None:
-        """
-        Validate inference settings are compatible with this model.
-        """
-        self.backbone.validate_inference_settings(settings)
 
     def prepare_for_inference(
         self, data: AtomicData, settings: InferenceSettings

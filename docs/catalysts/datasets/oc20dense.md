@@ -1,7 +1,18 @@
-
 # Open Catalyst 2020 Dense (OC20Dense)
 
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 85,658 unique configurations |
+| **Systems** | ~1,000 adsorbate+surface materials |
+| **Purpose** | Global minimum adsorption energy evaluation |
+| **Paper** | [AdsorbML (arXiv)](https://arxiv.org/abs/2211.16486) |
+| **License** | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+:::
+
 ## Overview
+
 The OC20Dense dataset is a validation dataset which was used to assess model performance in [AdsorbML: A Leap in Efficiency for Adsorption Energy Calculations using Generalizable Machine Learning Potentials](https://arxiv.org/abs/2211.16486). OC20-Dense contains a dense sampling of adsorbate configurations on ~1,000 randomly selected adsorbate+surface materials from the [OC20](https://arxiv.org/abs/2010.09990) dataset. It comprises a total of 85,658 unique input configurations. This dataset, and the paper written for it, supports the determination of global minimum adsorbate-surface energies (the adsorption energy). This differs from OC20, which contains local adsorbate relaxations. Under low coverage conditions, the global minimum energy site is the most likely to be occupied. For computational catalysis research, we correlate the adsorption energy with important figures of merit, so aquisition of it is an important task.
 
 ## File Contents and Download

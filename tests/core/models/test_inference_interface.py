@@ -26,17 +26,16 @@ class MockBackbone(nn.Module):
         super().__init__()
         self.linear = nn.Linear(10, 10)
         self.dataset_list = dataset_list or ["omol", "omat"]
-        self._validated = False
         self._prepared = False
         self._checked = False
 
     def forward(self, data):
         return {"embedding": torch.randn(10, 10)}
 
-    def validate_inference_settings(self, settings):
-        self._validated = True
-        if settings.merge_mole:
-            raise ValueError("Mock backbone does not support MOLE")
+    @classmethod
+    def build_inference_settings(cls, settings):
+        """Build backbone config overrides from inference settings."""
+        return {}
 
     def validate_tasks(self, dataset_to_tasks):
         assert set(dataset_to_tasks.keys()).issubset(set(self.dataset_list))
@@ -87,17 +86,18 @@ class TestHydraModelInferenceInterface:
         model = HydraModelV2(backbone=backbone, heads=heads)
         return model
 
-    def test_validate_inference_settings_delegates_to_backbone(self, mock_hydra_model):
-        """Test that validate_inference_settings calls backbone method."""
+    def test_build_inference_settings_classmethod(self, mock_hydra_model):
+        """Test that build_inference_settings is a classmethod on backbone."""
         settings = InferenceSettings()
-        mock_hydra_model.validate_inference_settings(settings)
-        assert mock_hydra_model.backbone._validated
+        # build_inference_settings is called on the backbone CLASS before instantiation
+        result = type(mock_hydra_model.backbone).build_inference_settings(settings)
+        assert isinstance(result, dict)
 
-    def test_validate_inference_settings_raises_for_unsupported(self, mock_hydra_model):
-        """Test that validation errors propagate from backbone."""
-        settings = InferenceSettings(merge_mole=True)
-        with pytest.raises(ValueError, match="does not support MOLE"):
-            mock_hydra_model.validate_inference_settings(settings)
+    def test_build_inference_settings_returns_dict(self, mock_hydra_model):
+        """Test that build_inference_settings returns a dict."""
+        settings = InferenceSettings(activation_checkpointing=True)
+        result = type(mock_hydra_model.backbone).build_inference_settings(settings)
+        assert isinstance(result, dict)
 
     def test_prepare_for_inference_no_replacement(self, mock_hydra_model):
         """Test prepare_for_inference when backbone returns self."""
@@ -174,21 +174,37 @@ class TestHydraModelInferenceInterface:
 class TestBackboneInterface:
     """Tests for backbone interface method implementations."""
 
-    def test_escaip_validate_inference_settings(self):
-        """Test EScAIP rejects merge_mole."""
+    def test_escaip_build_inference_settings(self):
+        """Test EScAIP has build_inference_settings classmethod."""
         from fairchem.core.models.escaip.EScAIP import EScAIPBackbone
 
         # Verify methods exist
-        assert hasattr(EScAIPBackbone, "validate_inference_settings")
+        assert hasattr(EScAIPBackbone, "build_inference_settings")
         assert hasattr(EScAIPBackbone, "validate_tasks")
         assert hasattr(EScAIPBackbone, "prepare_for_inference")
         assert hasattr(EScAIPBackbone, "on_predict_check")
+
+        # Verify build_inference_settings returns empty dict
+        from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+        settings = InferenceSettings()
+        result = EScAIPBackbone.build_inference_settings(settings)
+        assert result == {}
 
     def test_uma_backbone_methods_exist(self):
         """Test UMA backbone has required methods."""
         from fairchem.core.models.uma.escn_md import eSCNMDBackbone
 
-        assert hasattr(eSCNMDBackbone, "validate_inference_settings")
+        assert hasattr(eSCNMDBackbone, "build_inference_settings")
         assert hasattr(eSCNMDBackbone, "validate_tasks")
         assert hasattr(eSCNMDBackbone, "prepare_for_inference")
         assert hasattr(eSCNMDBackbone, "on_predict_check")
+
+        # Verify build_inference_settings returns proper overrides
+        from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+        settings = InferenceSettings(activation_checkpointing=True)
+        result = eSCNMDBackbone.build_inference_settings(settings)
+        assert "always_use_pbc" in result
+        assert result["always_use_pbc"] is False
+        assert result.get("activation_checkpointing") is True

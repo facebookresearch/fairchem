@@ -1,4 +1,4 @@
-# Batched atomic simulations with an `InferenceBatcher`
+# Batched Atomic Simulations with InferenceBatcher
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -30,16 +30,15 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 
 ````
 
-```{admonition} Learning Objectives
-:class: note
-The `InferenceBatcher` class and underlying concurrent batching implementations are experimental and under current development. The following tutorial is intended to provide a basic understanding of the class and its usage, but the API may change. If you have suggestions for improvements, please open an issue or submit a pull request.
-```
+:::{warning}
+The `InferenceBatcher` class and underlying concurrent batching implementations are experimental and under current development. The API may change. If you have suggestions for improvements, please open an issue or submit a pull request.
+:::
 
 When running many independent ASE calculations (relaxations, molecular dynamics, etc.) on small to medium-sized systems, you can significantly improve GPU utilization by batching model inference calls together. The `InferenceBatcher` class provides a high-level API to do this with minimal code changes.
 
 The key idea is simple: instead of running each simulation sequentially, `InferenceBatcher` collects inference requests from multiple concurrent simulations and batches them together for more efficient GPU computation.
 
-## Basic setup
+## Basic Setup
 
 To use `InferenceBatcher`, you need to:
 
@@ -60,9 +59,11 @@ batcher = InferenceBatcher(
 )
 ```
 
-The `max_workers` parameter controls how many concurrent simulations can run concurrently.
+:::{tip}
+The `max_workers` parameter controls how many concurrent simulations can run concurrently. Adjust this based on your system's memory and the size of your structures.
+:::
 
-## Writing simulation functions
+## Writing Simulation Functions
 
 The only requirement for using `InferenceBatcher` is to write your simulation logic as a function that takes an `Atoms` object and a predict unit as arguments:
 
@@ -81,7 +82,7 @@ def run_relaxation(atoms, predict_unit):
     return atoms.get_potential_energy()
 ```
 
-## Running batched relaxations
+## Running Batched Relaxations
 
 Once you have your simulation function, you can run it in batched mode using the executor's `map` or `submit` methods:
 
@@ -133,7 +134,7 @@ futures = [
 relaxed_energies = [future.result() for future in futures]
 ```
 
-## Running batched molecular dynamics
+## Running Batched Molecular Dynamics
 
 The same pattern works for molecular dynamics simulations:
 
@@ -173,7 +174,7 @@ futures = [
 [future.result() for future in futures]
 ```
 
-## When to use an `InferenceBatcher`
+## When to Use InferenceBatcher
 
 `InferenceBatcher` is most beneficial when:
 
@@ -181,4 +182,6 @@ futures = [
 - GPU utilization is low with serial execution
 - Each individual simulation has many inference steps (relaxations, MD)
 
+:::{note}
 When running batch inference over static structures, consider using the [batch inference approach](batch_inference.md) with `AtomicData` directly instead. For single large systems, consider using the `MLIPParallelPredictUnit` for graph parallel inference.
+:::
