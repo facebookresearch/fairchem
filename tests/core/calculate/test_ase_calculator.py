@@ -444,9 +444,7 @@ def test_external_graph_generation_molecular_system():
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "external_graph_method", ["pymatgen", "nvidia-cell", "nvidia-naive"]
-)
+@pytest.mark.parametrize("external_graph_method", ["pymatgen", "nvidia"])
 def test_external_graph_gen_vs_internal(external_graph_method):
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
