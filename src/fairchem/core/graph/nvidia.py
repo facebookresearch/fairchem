@@ -14,8 +14,8 @@ from monty.dev import requires
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 
 try:
-    from nvalchemiops.neighborlist import neighbor_list
-    from nvalchemiops.neighborlist.neighbor_utils import estimate_max_neighbors
+    from nvalchemiops.torch.neighbors import neighbor_list
+    from nvalchemiops.torch.neighbors.neighbor_utils import estimate_max_neighbors
 
     nvidia_installed = True
 
