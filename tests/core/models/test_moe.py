@@ -6,9 +6,12 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 import torch
 
+from fairchem.core.models.uma.escn_moe import DatasetSpecificMoEWrapper
 from fairchem.core.models.uma.nn.mole import MOLE, MOLEGlobals
 
 
@@ -92,6 +95,35 @@ def test_1mole_merge():
     linear_output = linear(x.clone())
 
     assert mole_output.isclose(linear_output, atol=0.0001, rtol=0.001).all()
+
+
+@patch("fairchem.core.models.uma.escn_moe.registry.get_model_class")
+@patch("fairchem.core.models.uma.escn_moe.recursive_replace_all_linear")
+def test_dataset_mapping(mock_replace, mock_registry):
+    """Test that dataset_mapping correctly maps datasets to expert indices."""
+    mock_backbone = MagicMock()
+    mock_backbone.regress_stress = False
+    mock_backbone.regress_forces = True
+    mock_registry.return_value = MagicMock()
+
+    dataset_names = ["omol", "oc20_subset1", "oc20_subset2", "omat", "oc20"]
+    dataset_mapping = {"oc20_subset1": "oc20", "oc20_subset2": "oc20"}
+
+    wrapper = DatasetSpecificMoEWrapper(
+        backbone=mock_backbone,
+        dataset_names=dataset_names,
+        head_cls="some_head",
+        dataset_mapping=dataset_mapping,
+    )
+
+    expected = {
+        "oc20": 0,
+        "oc20_subset1": 0,
+        "oc20_subset2": 0,
+        "omat": 1,
+        "omol": 2,
+    }
+    assert wrapper.dataset_name_to_exp == expected
 
 
 if __name__ == "__main__":
