@@ -761,9 +761,10 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
     - Chart 1: q = normalize(1+ey, -ez, 0, ex) - singular at -Y
     - Chart 2: q = normalize(-ez, 1-ey, ex, 0) - singular at +Y
 
-    NLERP blend in ey in [-0.9, -0.7]:
+    NLERP blend in ey in [-0.9, 0.9]:
     - Uses Chart 2 when near -Y (stable there)
-    - Uses Chart 1 elsewhere (stable away from -Y)
+    - Uses Chart 1 when near +Y (stable there)
+    - Smoothly interpolates in between
 
     Args:
         edge_vec: Edge vectors of shape (N, 3), assumed normalized
@@ -779,7 +780,7 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
     q_chart2 = _quaternion_chart2_via_minus_y(ex, ey, ez)
 
     blend_start = -0.9
-    blend_width = 0.2
+    blend_width = 1.8
     t = (ey - blend_start) / blend_width
     t_smooth = _smooth_step_cinf(t)
 
@@ -840,13 +841,13 @@ def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
     Compute gamma to match the Euler convention.
 
     Uses a two-chart approach matching the quaternion_edge_to_y_stable function:
-    - Chart 1 (ey >= -0.7): gamma = -atan2(ex, ez)
+    - Chart 1 (ey >= 0.9): gamma = -atan2(ex, ez)
     - Chart 2 (ey <= -0.9): gamma = +atan2(ex, ez)
-    - Blend region (-0.9 < ey < -0.7): smooth interpolation
+    - Blend region (-0.9 < ey < 0.9): smooth interpolation
 
     For edges on Y-axis (ex = ez ~ 0): gamma = 0 (degenerate case).
 
-    Note: In the blend region, there is inherent approximation error (up to ~0.1)
+    Note: In the blend region, there is inherent approximation error
     due to the NLERP quaternion blending. This is acceptable for the intended
     use case of matching Euler output for testing/validation. Properly determined
     gamma values are used in the test.
@@ -861,7 +862,7 @@ def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
     ey = edge_vec[..., 1]
     ez = edge_vec[..., 2]
 
-    # Chart 1 gamma (used for ey >= -0.7)
+    # Chart 1 gamma (used for ey >= 0.9)
     gamma_chart1 = -torch.atan2(ex, ez)
 
     # Chart 2 gamma (used for ey <= -0.9)
@@ -869,7 +870,7 @@ def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
 
     # Blend factor (same as quaternion_edge_to_y_stable)
     blend_start = -0.9
-    blend_width = 0.2
+    blend_width = 1.8
     t = (ey - blend_start) / blend_width
     t_smooth = _smooth_step_cinf(t)
 

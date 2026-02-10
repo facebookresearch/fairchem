@@ -267,12 +267,17 @@ class TestEulerAgreement:
     """Tests for agreement with Euler-based rotation.py."""
 
     def test_matches_euler_code(self, lmax, dtype, device, Jd_matrices):
-        """Axis-angle with use_euler_gamma matches Euler implementation exactly."""
+        """Axis-angle with use_euler_gamma matches Euler implementation exactly.
+
+        Note: Only tests edges outside the blend region (|ey| > 0.9) where
+        exact Euler matching is possible.
+        """
+        # Edges outside blend region (|ey| > 0.9)
         test_edges = [
-            [0.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 1.0, 1.0],
-            [0.3, 0.5, 0.8],
+            [0.0, 1.0, 0.0],  # +Y (ey=1, Chart1)
+            [0.0, -1.0, 0.0],  # -Y (ey=-1, Chart2)
+            [0.1, 0.99, 0.0],  # near +Y
+            [0.0, 0.95, 0.3],  # near +Y
         ]
 
         for edge in test_edges:
@@ -296,21 +301,27 @@ class TestEulerAgreement:
                 ), f"l={ell} mismatch for edge {edge}"
 
     def test_blend_region_matches_euler(self, lmax, dtype, device, Jd_matrices):
-        """Blend region edges (ey in [-0.9, -0.7]) match Euler with correct gamma."""
+        """Blend region edges (ey in [-0.9, 0.9]) match Euler with correct gamma."""
         blend_region_edges = [
-            # yz-plane (ex=0), middle of blend
+            # yz-plane (ex=0), ey=-0.8
             ([0.0, -0.8, 0.6], 0.0),
-            # xy-plane (ez=0), middle of blend
-            ([0.6, -0.8, 0.0], 3.1415926535897931),
-            # yz-plane, deeper in blend
+            # xz-plane (ez=0), ey=-0.8
+            ([0.6, -0.8, 0.0], 1.5707964146104496),
+            # yz-plane, ey=-0.85
             ([0.0, -0.8499922481060458, 0.5267951956497234], 0.0),
             # xy-plane, at blend boundary (ey=-0.9)
-            ([0.43589807987318724, -0.8999960355261952, 0.0], 1.5707963267948966),
-            # general edge, near blend boundary
+            ([0.43589807987318724, -0.8999960355261952, 0.0], 1.5707963267950893),
+            # general edge, ey=-0.75
             (
                 [0.1000022780778422, -0.7500170855838165, 0.6538148940729324],
-                -0.1320878539772946,
+                0.1517701818416542,
             ),
+            # diagonal (1,1,1)
+            ([1.0, 1.0, 1.0], -0.7674963309777119),
+            # +X axis
+            ([1.0, 0.0, 0.0], -3.1415926535897931),
+            # +Z axis
+            ([0.0, 0.0, 1.0], 0.0),
         ]
 
         for edge, gamma in blend_region_edges:
