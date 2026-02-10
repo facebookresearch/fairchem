@@ -9,8 +9,10 @@ description = "Code for generating OMOL input configurations"
 license = {text = "MIT License"}
 dependencies = [
     "ase",
-    "sella",
 ]
+
+[project.optional-dependencies]
+extras = ["sella"]
 
 [project.urls]
 repository = "https://github.com/facebookresearch/fairchem/tree/main/src/fairchem/data/omol"
