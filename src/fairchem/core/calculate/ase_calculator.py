@@ -215,7 +215,7 @@ class FAIRChemCalculator(Calculator):
         # Convert using the current a2g object
         data = self.a2g(atoms)
 
-        # Batch and predict - single atom handling is now done in predictor.predict()
+        # Batch and predict
         pred = self.predictor.predict(data)
 
         # Collect the results into self.results
