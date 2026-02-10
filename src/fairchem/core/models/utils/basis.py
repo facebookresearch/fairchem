@@ -13,7 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 import torch.nn as nn
-from scipy.special import sph_harm
+from scipy.special import sph_harm_y
 
 from .activations import Act
 
@@ -290,7 +290,7 @@ class SphericalSmearing(nn.Module):
         theta_tile = np.tile(theta.reshape(len(xyz), 1), (1, len(self.m)))
         phi_tile = np.tile(phi.reshape(len(xyz), 1), (1, len(self.m)))
 
-        harm = sph_harm(m_tile, n_tile, theta_tile, phi_tile)
+        harm = sph_harm_y(n_tile, m_tile, theta_tile, phi_tile)
 
         harm_mzero = harm[:, self.m == 0]
         harm_mnonzero = harm[:, self.m != 0]
