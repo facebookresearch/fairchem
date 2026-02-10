@@ -34,7 +34,9 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
-from fairchem.core.units.mlip_unit.single_atom_patch import handle_single_atom_prediction
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    handle_single_atom_prediction,
+)
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
