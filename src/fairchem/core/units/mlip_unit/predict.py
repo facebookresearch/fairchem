@@ -45,6 +45,7 @@ from fairchem.core.units.mlip_unit.utils import (
 
 if TYPE_CHECKING:
     from ase import Atoms
+
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
