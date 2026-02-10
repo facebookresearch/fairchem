@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Heterogeneous Catalysis: Metal surface with molecule approaching -->
+
+  <!-- Metal slab - bottom layer -->
+  <circle cx="20" cy="85" r="10" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="40" cy="85" r="10" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="60" cy="85" r="10" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="80" cy="85" r="10" fill="#666" stroke="#444" stroke-width="1.5"/>
+
+  <!-- Metal slab - middle layer (offset) -->
+  <circle cx="30" cy="70" r="10" fill="#888" stroke="#555" stroke-width="1.5"/>
+  <circle cx="50" cy="70" r="10" fill="#888" stroke="#555" stroke-width="1.5"/>
+  <circle cx="70" cy="70" r="10" fill="#888" stroke="#555" stroke-width="1.5"/>
+
+  <!-- Metal slab - top layer -->
+  <circle cx="20" cy="55" r="10" fill="#999" stroke="#666" stroke-width="1.5"/>
+  <circle cx="40" cy="55" r="10" fill="#999" stroke="#666" stroke-width="1.5"/>
+  <circle cx="60" cy="55" r="10" fill="#999" stroke="#666" stroke-width="1.5"/>
+  <circle cx="80" cy="55" r="10" fill="#999" stroke="#666" stroke-width="1.5"/>
+
+  <!-- CO molecule approaching -->
+  <!-- Carbon atom -->
+  <circle cx="50" cy="28" r="8" fill="#444" stroke="#333" stroke-width="1.5"/>
+  <!-- Oxygen atom -->
+  <circle cx="50" cy="12" r="7" fill="#E85D04" stroke="#C04D00" stroke-width="1.5"/>
+  <!-- Bond line -->
+  <line x1="50" y1="20" x2="50" y2="19" stroke="#333" stroke-width="2"/>
+
+  <!-- Approach arrow -->
+  <path d="M50 36 L50 44 M46 40 L50 44 L54 40" stroke="#4A90A4" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

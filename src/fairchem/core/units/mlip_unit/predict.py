@@ -16,7 +16,7 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import hydra
 import numpy as np
@@ -38,9 +38,13 @@ from fairchem.core.common.distutils import (
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
+    get_backbone_class_from_checkpoint,
     load_inference_model,
     tf32_context_manager,
 )
+
+if TYPE_CHECKING:
+    from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
 def collate_predictions(predict_fn):
@@ -105,18 +109,25 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        # Build overrides from inference settings
+        # Load checkpoint first to get model type
+        checkpoint = torch.load(
+            inference_model_path, map_location="cpu", weights_only=False
+        )
+
+        # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
-            overrides, inference_settings
+            checkpoint, overrides, inference_settings
         )
 
-        # Load model once with final overrides
+        # Load model with overrides, passing pre-loaded checkpoint
         self.model, checkpoint = load_inference_model(
-            inference_model_path, use_ema=True, overrides=final_overrides
+            inference_model_path,
+            use_ema=True,
+            overrides=final_overrides,
+            preloaded_checkpoint=checkpoint,
         )
 
-        # Model validates its own settings and sets up tasks
-        self.model.module.validate_inference_settings(inference_settings)
+        # Model sets up tasks
         self.model.module.setup_tasks(checkpoint.tasks_config)
 
         self._setup_device(device)
@@ -182,37 +193,23 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
     def _build_overrides_from_settings(
-        self, user: dict | None, settings: InferenceSettings
+        self,
+        checkpoint: MLIPInferenceCheckpoint,
+        user: dict | None,
+        settings: InferenceSettings,
     ) -> dict:
-        """
-        Build backbone config overrides from inference settings and user inputs.
-
-        Models will either ignore overrides they don't support, or we need to
-        port this override setting code into the individual models too.
-        """
-
+        """Build backbone config overrides by delegating to model-specific logic."""
         overrides = {} if user is None else dict(user)
         if "backbone" not in overrides:
             overrides["backbone"] = {}
 
-        backbone_overrides = {}
-        # Always disable PBC wrapping for inference
-        backbone_overrides["always_use_pbc"] = False
-
-        if settings.activation_checkpointing is not None:
-            backbone_overrides["activation_checkpointing"] = (
-                settings.activation_checkpointing
-            )
-        if settings.edge_chunk_size is not None:
-            backbone_overrides["edge_chunk_size"] = settings.edge_chunk_size
-        if settings.external_graph_gen is not None:
-            backbone_overrides["otf_graph"] = not settings.external_graph_gen
-        if settings.internal_graph_gen_version is not None:
-            backbone_overrides["radius_pbc_version"] = (
-                settings.internal_graph_gen_version
-            )
+        # Delegate to model-specific classmethod
+        backbone_cls = get_backbone_class_from_checkpoint(checkpoint)
+        backbone_overrides = backbone_cls.build_inference_settings(settings)
 
         overrides["backbone"].update(backbone_overrides)
+
+        # User overrides take precedence
         if user is not None and "backbone" in user:
             overrides["backbone"].update(user["backbone"])
 
