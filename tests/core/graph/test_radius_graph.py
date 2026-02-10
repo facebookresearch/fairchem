@@ -249,7 +249,7 @@ def _validate_edges_match(data1, data2):
     return edges1 == edges2
 
 
-@pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
+@pytest.mark.parametrize("external_graph_method", ["nvidia"])
 def test_nvidia_graph_1d(external_graph_method):
     """Test nvidia graph generation methods with 1D PBC."""
     cutoff = 6.0
@@ -292,7 +292,7 @@ def test_nvidia_graph_1d(external_graph_method):
     ), f"{external_graph_method} produced different edges than pymatgen"
 
 
-@pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
+@pytest.mark.parametrize("external_graph_method", ["nvidia"])
 def test_nvidia_graph_2d(external_graph_method):
     """Test nvidia graph generation methods with 2D PBC."""
     cutoff = 6.0
@@ -335,7 +335,7 @@ def test_nvidia_graph_2d(external_graph_method):
     ), f"{external_graph_method} produced different edges than pymatgen"
 
 
-@pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
+@pytest.mark.parametrize("external_graph_method", ["nvidia"])
 def test_nvidia_graph_3d(external_graph_method):
     """Test nvidia graph generation methods with 3D PBC."""
     cutoff = 6.0
@@ -378,42 +378,7 @@ def test_nvidia_graph_3d(external_graph_method):
     ), f"{external_graph_method} produced different edges than pymatgen"
 
 
-def test_nvidia_methods_consistency():
-    """Test that nvidia-cell and nvidia-naive produce identical results."""
-    cutoff = 6.0
-    max_neigh = 100
-    atoms = build.bulk("Cu", "fcc", a=3.58)
-    atoms.pbc = [True, True, True]
-
-    # Generate graphs using both nvidia methods
-    data_cell = AtomicData.from_ase(
-        atoms,
-        r_edges=True,
-        radius=cutoff,
-        max_neigh=max_neigh,
-        external_graph_method="nvidia-cell",
-    )
-
-    data_naive = AtomicData.from_ase(
-        atoms,
-        r_edges=True,
-        radius=cutoff,
-        max_neigh=max_neigh,
-        external_graph_method="nvidia-naive",
-    )
-
-    # Verify both methods produce identical edge counts
-    assert (
-        data_cell.nedges.item() == data_naive.nedges.item()
-    ), f"nvidia-cell produced {data_cell.nedges.item()} edges, nvidia-naive produced {data_naive.nedges.item()}"
-
-    # Verify edges match exactly
-    assert _validate_edges_match(
-        data_cell, data_naive
-    ), "nvidia-cell and nvidia-naive produced different edge sets"
-
-
-@pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
+@pytest.mark.parametrize("external_graph_method", ["nvidia"])
 def test_nvidia_graph_max_neighbors(external_graph_method):
     """Test nvidia graph methods with varying max_neighbors settings."""
     cutoff = 6.0
@@ -449,7 +414,7 @@ def test_nvidia_graph_max_neighbors(external_graph_method):
     ), "max_neigh=10 should produce fewer edges than max_neigh=100"
 
 
-@pytest.mark.parametrize("external_graph_method", ["nvidia-cell", "nvidia-naive"])
+@pytest.mark.parametrize("external_graph_method", ["nvidia"])
 def test_nvidia_graph_larger_system(external_graph_method):
     """Test nvidia graph methods with a larger system."""
     cutoff = 6.0

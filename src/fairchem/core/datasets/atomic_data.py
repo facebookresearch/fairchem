@@ -363,25 +363,11 @@ class AtomicData:
 
             if external_graph_method == "pymatgen":
                 split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
-            elif external_graph_method.startswith("nvidia"):
-                # Parse NVIDIA method variant
-                if external_graph_method == "nvidia-cell":
-                    nvidia_variant = "cell_list"
-                elif external_graph_method == "nvidia-naive":
-                    nvidia_variant = "naive"
-                elif external_graph_method == "nvidia":
-                    # Default to cell_list for backwards compatibility
-                    nvidia_variant = "cell_list"
-                else:
-                    raise ValueError(
-                        f"Invalid NVIDIA method variant. Use 'nvidia-cell' or 'nvidia-naive', got {external_graph_method}"
-                    )
-                split_idx_dist = get_neighbors_nvidia_atoms(
-                    atoms, radius, max_neigh, method=nvidia_variant
-                )
+            elif external_graph_method == "nvidia":
+                split_idx_dist = get_neighbors_nvidia_atoms(atoms, radius, max_neigh)
             else:
                 raise ValueError(
-                    f"external_graph_method must be 'pymatgen', 'nvidia-cell', or 'nvidia-naive', got {external_graph_method}"
+                    f"external_graph_method must be 'pymatgen' or 'nvidia', got {external_graph_method}"
                 )
 
             edge_index, cell_offsets = reshape_features(*split_idx_dist)

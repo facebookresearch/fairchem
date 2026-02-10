@@ -236,9 +236,7 @@ def radius_graph_pbc_nvidia(
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-def get_neighbors_nvidia_atoms(
-    atoms, cutoff: float, max_neigh: int, method: str = "cell_list"
-):
+def get_neighbors_nvidia_atoms(atoms, cutoff: float, max_neigh: int):
     """Performs nearest neighbor search using NVIDIA nvalchemiops and returns edge index, distances,
     and cell offsets.
 
@@ -246,7 +244,6 @@ def get_neighbors_nvidia_atoms(
         atoms: ASE Atoms object
         cutoff: Cutoff radius in Angstroms
         max_neigh: Maximum number of neighbors per atom
-        method: NVIDIA method to use ("naive" or "cell_list")
 
     Returns:
         c_index: Center atom indices (numpy array)
@@ -264,7 +261,7 @@ def get_neighbors_nvidia_atoms(
         pbc=pbc,
         cutoff=cutoff,
         max_neigh=max_neigh,
-        method=method,
+        method="cell_list",
         enforce_max_neighbors_strictly=True,
     )
 
