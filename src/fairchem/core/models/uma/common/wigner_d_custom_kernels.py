@@ -26,7 +26,9 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import functools
 import math
+from pathlib import Path
 
 import torch
 
@@ -34,6 +36,9 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     get_so3_generators,
     quaternion_to_axis_angle,
 )
+
+# Precomputed coefficients file path
+_COEFFICIENTS_FILE = Path(__file__).parent / "wigner_d_coefficients.pt"
 
 # =============================================================================
 # Module-Level Caches
@@ -49,6 +54,32 @@ def clear_memory_caches() -> None:
     _L2_COEFF_TENSOR_CACHE.clear()
     _L3_MATMUL_CACHE.clear()
     _L4_MATMUL_CACHE.clear()
+    _load_coefficients.cache_clear()
+
+
+@functools.lru_cache(maxsize=1)
+def _load_coefficients() -> dict:
+    """Load precomputed coefficients from file (cached after first load)."""
+    return torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
+
+
+def _generate_monomials(n_vars: int, total_degree: int) -> list[tuple[int, ...]]:
+    """Generate all monomials of given degree in n_vars variables.
+
+    Returns a list of tuples (a, b, c, d) representing w^a * x^b * y^c * z^d
+    where a + b + c + d = total_degree.
+    """
+    monomials: list[tuple[int, ...]] = []
+
+    def generate(remaining_vars: int, remaining_deg: int, current: list[int]) -> None:
+        if remaining_vars == 1:
+            monomials.append(tuple(current + [remaining_deg]))
+            return
+        for i in range(remaining_deg + 1):
+            generate(remaining_vars - 1, remaining_deg - i, current + [i])
+
+    generate(n_vars, total_degree, [])
+    return monomials
 
 
 # =============================================================================
@@ -145,6 +176,9 @@ def rodrigues_rotation_l1(
 def _build_l2_coefficient_tensor() -> torch.Tensor:
     """
     Build the (5, 5, 4, 4, 4, 4) coefficient tensor for einsum-based l=2 computation.
+
+    NOTE: This function is kept for coefficient regeneration/verification purposes.
+    At runtime, coefficients are loaded from wigner_d_coefficients.pt instead.
 
     The tensor C satisfies: D[i,j] = sum_{a,b,c,d} C[i,j,a,b,c,d] * q[a] * q[b] * q[c] * q[d]
     where q = (w, x, y, z) at indices (0, 1, 2, 3).
@@ -391,12 +425,14 @@ def _build_l2_coefficient_tensor() -> torch.Tensor:
 def _get_l2_coefficient_tensor(
     dtype: torch.dtype, device: torch.device
 ) -> torch.Tensor:
-    """Get cached l=2 coefficient tensor for einsum computation."""
+    """Get cached l=2 coefficient tensor for einsum computation.
+
+    Loads from precomputed file (wigner_d_coefficients.pt) and caches by dtype/device.
+    """
     key = (dtype, device)
     if key not in _L2_COEFF_TENSOR_CACHE:
-        _L2_COEFF_TENSOR_CACHE[key] = _build_l2_coefficient_tensor().to(
-            dtype=dtype, device=device
-        )
+        coeffs = _load_coefficients()
+        _L2_COEFF_TENSOR_CACHE[key] = coeffs["C_l2"].to(dtype=dtype, device=device)
     return _L2_COEFF_TENSOR_CACHE[key]
 
 
@@ -582,6 +618,9 @@ def _derive_matmul_coefficients(ell: int) -> tuple[torch.Tensor, list]:
     """
     Derive Wigner D polynomial coefficients numerically for matmul approach.
 
+    NOTE: This function is kept for coefficient regeneration/verification purposes.
+    At runtime, coefficients are loaded from wigner_d_coefficients.pt instead.
+
     Returns:
         C: (size*size, n_monomials) coefficient matrix
         monomials: list of (a, b, c, d) power tuples
@@ -646,20 +685,32 @@ def _derive_matmul_coefficients(ell: int) -> tuple[torch.Tensor, list]:
 
 
 def _get_l3_matmul_data(dtype: torch.dtype, device: torch.device):
-    """Get cached matmul data for l=3."""
+    """Get cached matmul data for l=3.
+
+    Loads coefficient matrix from precomputed file and generates monomials
+    deterministically. Caches by dtype/device.
+    """
     key = (dtype, device)
     if key not in _L3_MATMUL_CACHE:
-        C, monomials = _derive_matmul_coefficients(3)
-        _L3_MATMUL_CACHE[key] = (C.to(dtype=dtype, device=device), monomials)
+        coeffs = _load_coefficients()
+        C = coeffs["C_l3"].to(dtype=dtype, device=device)
+        monomials = _generate_monomials(4, 6)  # degree 2*ell = 6 for ell=3
+        _L3_MATMUL_CACHE[key] = (C, monomials)
     return _L3_MATMUL_CACHE[key]
 
 
 def _get_l4_matmul_data(dtype: torch.dtype, device: torch.device):
-    """Get cached matmul data for l=4."""
+    """Get cached matmul data for l=4.
+
+    Loads coefficient matrix from precomputed file and generates monomials
+    deterministically. Caches by dtype/device.
+    """
     key = (dtype, device)
     if key not in _L4_MATMUL_CACHE:
-        C, monomials = _derive_matmul_coefficients(4)
-        _L4_MATMUL_CACHE[key] = (C.to(dtype=dtype, device=device), monomials)
+        coeffs = _load_coefficients()
+        C = coeffs["C_l4"].to(dtype=dtype, device=device)
+        monomials = _generate_monomials(4, 8)  # degree 2*ell = 8 for ell=4
+        _L4_MATMUL_CACHE[key] = (C, monomials)
     return _L4_MATMUL_CACHE[key]
 
 
