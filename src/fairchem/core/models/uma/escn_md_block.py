@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -27,6 +28,7 @@ from fairchem.core.models.uma.nn.mole import MOLE
 from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
 from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.uma.common.cueq_rotation import cuEquivariantRotation
 
 if TYPE_CHECKING:
     from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
@@ -53,6 +55,7 @@ class Edgewise(torch.nn.Module):
         # activation_checkpoint_chunk_size size edge blocks
         activation_checkpoint_chunk_size: int | None,
         act_type: Literal["gate", "s2"] = "gate",
+        cueq_rotation: cuEquivariantRotation | None = None,
     ):
         super().__init__()
 
@@ -66,6 +69,8 @@ class Edgewise(torch.nn.Module):
         self.SO3_grid = SO3_grid
         self.edge_channels_list = copy.deepcopy(edge_channels_list)
         self.act_type = act_type
+
+        self.cueq_rotation = cueq_rotation
 
         if self.act_type == "gate":
             self.act = GateActivation(
@@ -127,6 +132,7 @@ class Edgewise(torch.nn.Module):
         edge_envelope,
         total_atoms_across_gp_ranks,
         node_offset: int = 0,
+        euler_angles=None,
     ):
         # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
@@ -147,6 +153,7 @@ class Edgewise(torch.nn.Module):
                 wigner_and_M_mapping_inv,
                 edge_envelope,
                 node_offset,
+                euler_angles=euler_angles,
             )
         edge_index_partitions = edge_index.split(
             self.activation_checkpoint_chunk_size, dim=1
@@ -183,6 +190,7 @@ class Edgewise(torch.nn.Module):
                     edge_envelope_partitions[idx],
                     node_offset,
                     ac_mole_start_idx,
+                    euler_angles=euler_angles,
                     use_reentrant=False,
                 )
             )
@@ -204,20 +212,31 @@ class Edgewise(torch.nn.Module):
         edge_envelope,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
+        euler_angles=None,
     ):
         # here we need to update the ac_start_idx of the mole layers under here for this chunking to
         # work properly with MoLE together
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
-        x_source = x_full[edge_index[0]]
-        x_target = x_full[edge_index[1]]
 
-        x_message = torch.cat((x_source, x_target), dim=2)
+        if self.cueq_rotation is not None:
+            # cuEq path
+            x_message = self.cueq_rotation.rotate_euler(
+                n_edges=edge_index.shape[1],
+                sph_features=x_full.shape[1],
+                x_full=x_full,
+                euler_angles=euler_angles,
+                edge_index=edge_index
+            )
+        else:
+            x_source = x_full[edge_index[0]]
+            x_target = x_full[edge_index[1]]
+            x_message = torch.cat((x_source, x_target), dim=2)
 
-        with record_function("SO2Conv"):
             # Rotate the irreps to align with the edge
             x_message = torch.bmm(wigner_and_M_mapping, x_message)
 
+        with record_function("SO2Conv"):
             # SO2 convolution
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
 
@@ -228,17 +247,21 @@ class Edgewise(torch.nn.Module):
 
             x_message = x_message * edge_envelope
 
-            # Rotate back the irreps
+        # Rotate back the irreps
+        if self.cueq_rotation is not None:
+            new_embedding = self.cueq_rotation.rotate_euler_inv(x_message, x_full.shape[0], euler_angles, edge_index)
+        else:
             x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
 
-        # Compute the sum of the incoming neighboring messages for each target node
-        new_embedding = torch.zeros(
-            (x_original_shape,) + x_message.shape[1:],
-            dtype=x_message.dtype,
-            device=x_message.device,
-        )
+            # Compute the sum of the incoming neighboring messages for each target node
+            new_embedding = torch.zeros(
+                (x_original_shape,) + x_message.shape[1:],
+                dtype=x_message.dtype,
+                device=x_message.device,
+            )
 
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
+            new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
+
         # reset ac start index
         set_mole_ac_start_index(self, 0)
         return new_embedding
@@ -336,12 +359,14 @@ class eSCNMD_Block(torch.nn.Module):
         act_type: Literal["gate", "s2"],
         ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
+        cueq_rotation: cuEquivariantRotation | None = None,
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
         self.hidden_channels = hidden_channels
         self.lmax = lmax
         self.mmax = mmax
+        self.cueq_rotation = cueq_rotation
 
         self.norm_1 = get_normalization_layer(
             norm_type, lmax=self.lmax, num_channels=sphere_channels
@@ -358,6 +383,7 @@ class eSCNMD_Block(torch.nn.Module):
             cutoff=cutoff,
             act_type=act_type,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            cueq_rotation=cueq_rotation,
         )
 
         self.norm_2 = get_normalization_layer(
@@ -393,6 +419,7 @@ class eSCNMD_Block(torch.nn.Module):
         total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
+        euler_angles=None,
     ):
         x_res = x
         x = self.norm_1(x)
@@ -411,6 +438,7 @@ class eSCNMD_Block(torch.nn.Module):
                 edge_envelope,
                 total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
                 node_offset=node_offset,
+                euler_angles=euler_angles,
             )
             x = x + x_res
 
