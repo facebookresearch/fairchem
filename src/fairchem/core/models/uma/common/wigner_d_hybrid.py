@@ -9,7 +9,7 @@ This module provides Wigner D computation using the optimal method for each l:
 - l>=3 or 5: Ra/Rb polynomial (faster than matrix_exp on GPU)
 
 Entry point:
-- axis_angle_wigner_hybrid: Main function with configurable arithmetic mode
+- axis_angle_wigner_hybrid: Main function using real arithmetic throughout
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
@@ -25,15 +25,11 @@ import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     compute_euler_matching_gamma,
-    get_ra_rb_coefficients,
     get_ra_rb_coefficients_real,
     quaternion_edge_to_y_stable,
     quaternion_multiply,
-    quaternion_to_ra_rb,
     quaternion_to_ra_rb_real,
     quaternion_y_rotation,
-    wigner_d_complex_to_real,
-    wigner_d_matrix_complex,
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
@@ -53,7 +49,6 @@ def wigner_d_from_quaternion_hybrid(
     q: torch.Tensor,
     lmax: int,
     l4_kernel: bool = False,
-    use_real_arithmetic: bool = False,
     coeffs: Optional[object] = None,
     U_blocks: Optional[list] = None,
 ) -> torch.Tensor:
@@ -67,12 +62,12 @@ def wigner_d_from_quaternion_hybrid(
     - l=3,4: Quaternion matmul if l4_kernel=True (faster with torch.compile)
     - l>=lmin: Ra/Rb polynomial (lmin=5 if l4_kernel else 4)
 
+    Uses real-pair arithmetic throughout for torch.compile compatibility.
+
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
         lmax: Maximum angular momentum
         l4_kernel: If True, use custom matmul kernels for l=3,4
-        use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
-                            (torch.compile compatible, avoids complex tensors)
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
                 skips the cache lookup for better performance in hot paths.
         U_blocks: Optional pre-computed U transformation blocks.
@@ -103,28 +98,15 @@ def wigner_d_from_quaternion_hybrid(
         elif l4_kernel and ell == 4:
             D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
 
-    # Compute l>=lmin using Ra/Rb polynomial
+    # Compute l>=lmin using Ra/Rb polynomial with real-pair arithmetic
     if lmax >= lmin:
-        if use_real_arithmetic:
-            # Real-pair arithmetic (torch.compile compatible)
-            if coeffs is None or U_blocks is None:
-                coeffs, U_blocks = get_ra_rb_coefficients_real(
-                    lmax, dtype, device, lmin=lmin
-                )
-            ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
-            D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
-            D_range = wigner_d_pair_to_real(D_re, D_im, U_blocks, lmin=lmin, lmax=lmax)
-        else:
-            # Complex arithmetic
-            if coeffs is None or U_blocks is None:
-                coeffs, U_blocks = get_ra_rb_coefficients(
-                    lmax, dtype, device, lmin=lmin
-                )
-            Ra, Rb = quaternion_to_ra_rb(q)
-            D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
-            D_range = wigner_d_complex_to_real(
-                D_complex, U_blocks, lmin=lmin, lmax=lmax
+        if coeffs is None or U_blocks is None:
+            coeffs, U_blocks = get_ra_rb_coefficients_real(
+                lmax, dtype, device, lmin=lmin
             )
+        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
+        D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
+        D_range = wigner_d_pair_to_real(D_re, D_im, U_blocks, lmin=lmin, lmax=lmax)
 
         block_offset = lmin * lmin  # 16 for lmin=4, 25 for lmin=5
         D[:, block_offset:, block_offset:] = D_range
@@ -143,7 +125,6 @@ def axis_angle_wigner_hybrid(
     gamma: Optional[torch.Tensor] = None,
     use_euler_gamma: bool = False,
     l4_kernel: bool = False,
-    use_real_arithmetic: bool = False,
     coeffs: Optional[object] = None,
     U_blocks: Optional[list] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -161,6 +142,8 @@ def axis_angle_wigner_hybrid(
     computing the Wigner D, avoiding the overhead of computing two separate
     Wigner D matrices and multiplying them.
 
+    Uses real-pair arithmetic throughout for torch.compile compatibility.
+
     Args:
         edge_distance_vec: Edge vectors of shape (N, 3)
         lmax: Maximum angular momentum
@@ -169,8 +152,6 @@ def axis_angle_wigner_hybrid(
         use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
                of random gamma. This makes output exactly match Euler code.
         l4_kernel: If True, use custom matmul kernels for l=4
-        use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
-               (torch.compile compatible, avoids complex tensors)
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
                skips the cache lookup for better performance in hot paths.
         U_blocks: Optional pre-computed U transformation blocks.
@@ -209,7 +190,6 @@ def axis_angle_wigner_hybrid(
         q_combined,
         lmax,
         l4_kernel=l4_kernel,
-        use_real_arithmetic=use_real_arithmetic,
         coeffs=coeffs,
         U_blocks=U_blocks,
     )

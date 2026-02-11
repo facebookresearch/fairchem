@@ -6,10 +6,9 @@ Tests verify:
 2. Agreement between all entry point functions
 3. Agreement with Euler-based rotation.py
 4. Gradient stability
-5. Real-arithmetic equivalence to complex arithmetic
-6. torch.compile compatibility
-7. Range functions (lmin support)
-8. Specialized kernels (l=2 polynomial, l=3/4 matmul)
+5. torch.compile compatibility
+6. Range functions (lmin support)
+7. Specialized kernels (l=2 polynomial, l=3/4 matmul)
 
 Copyright (c) Meta Platforms, Inc. and affiliates.
 """
@@ -22,15 +21,12 @@ import pytest
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    get_ra_rb_coefficients_real,
     get_so3_generators,
-    precompute_U_blocks_euler_aligned,
     precompute_U_blocks_euler_aligned_real,
     precompute_wigner_coefficients,
     quaternion_to_axis_angle,
-    quaternion_to_ra_rb,
     quaternion_to_ra_rb_real,
-    wigner_d_complex_to_real,
-    wigner_d_matrix_complex,
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
@@ -242,21 +238,6 @@ class TestEntryPointAgreement:
             (D_hybrid - D_hybrid_l3l4).abs().max() < 1e-9
         ), "hybrid with l3_l4_kernel=True differs from hybrid without"
 
-    def test_real_methods_match_complex(self, lmax, dtype, device):
-        """Real-arithmetic methods match complex-arithmetic methods."""
-        torch.manual_seed(42)
-        edges = torch.randn(50, 3, dtype=dtype, device=device)
-        gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
-
-        D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        D_hybrid_real, _ = axis_angle_wigner_hybrid(
-            edges, lmax, gamma=gamma, use_real_arithmetic=True
-        )
-
-        assert (
-            D_hybrid - D_hybrid_real
-        ).abs().max() < 1e-9, "hybrid_real differs from hybrid"
-
 
 # =============================================================================
 # Test Euler Agreement
@@ -403,107 +384,6 @@ class TestGradientStability:
 
 
 # =============================================================================
-# Test Real-Arithmetic Equivalence
-# =============================================================================
-
-
-class TestRealArithmeticEquivalence:
-    """Tests verifying real-arithmetic functions match complex-arithmetic functions."""
-
-    def test_quaternion_to_ra_rb_real_matches_complex(self, dtype, device):
-        """quaternion_to_ra_rb_real produces same values as quaternion_to_ra_rb."""
-        torch.manual_seed(42)
-        q = torch.randn(50, 4, dtype=dtype, device=device)
-        q = torch.nn.functional.normalize(q, dim=-1)
-
-        # Complex version
-        Ra, Rb = quaternion_to_ra_rb(q)
-
-        # Real version
-        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
-
-        # Compare
-        assert torch.allclose(Ra.real, ra_re, atol=1e-12)
-        assert torch.allclose(Ra.imag, ra_im, atol=1e-12)
-        assert torch.allclose(Rb.real, rb_re, atol=1e-12)
-        assert torch.allclose(Rb.imag, rb_im, atol=1e-12)
-
-    def test_wigner_d_matrix_real_matches_complex(self, lmax, dtype, device):
-        """wigner_d_matrix_real produces same values as wigner_d_matrix_complex."""
-        torch.manual_seed(42)
-        q = torch.randn(20, 4, dtype=dtype, device=device)
-        q = torch.nn.functional.normalize(q, dim=-1)
-
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
-
-        # Complex version
-        Ra, Rb = quaternion_to_ra_rb(q)
-        D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
-
-        # Real version
-        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
-        D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
-
-        # Compare
-        assert torch.allclose(D_complex.real, D_re, atol=1e-10)
-        assert torch.allclose(D_complex.imag, D_im, atol=1e-10)
-
-    def test_wigner_d_pair_to_real_matches_blockwise(self, lmax, dtype, device):
-        """wigner_d_pair_to_real produces same result as complex version."""
-        torch.manual_seed(42)
-        q = torch.randn(20, 4, dtype=dtype, device=device)
-        q = torch.nn.functional.normalize(q, dim=-1)
-
-        coeffs = precompute_wigner_coefficients(lmax, dtype=dtype, device=device)
-        U_blocks = precompute_U_blocks_euler_aligned(lmax, dtype=dtype, device=device)
-        U_blocks_real = precompute_U_blocks_euler_aligned_real(
-            lmax, dtype=dtype, device=device
-        )
-
-        # Complex version
-        Ra, Rb = quaternion_to_ra_rb(q)
-        D_complex = wigner_d_matrix_complex(Ra, Rb, coeffs)
-        D_real_complex = wigner_d_complex_to_real(D_complex, U_blocks, lmax)
-
-        # Real version
-        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
-        D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
-        D_real_from_pair = wigner_d_pair_to_real(D_re, D_im, U_blocks_real, lmax)
-
-        # Compare
-        assert torch.allclose(D_real_complex, D_real_from_pair, atol=1e-9)
-
-
-class TestRealArithmeticGradients:
-    """Tests verifying gradients match between real and complex arithmetic."""
-
-    def test_gradient_equivalence(self, lmax, dtype, device):
-        """Gradients from real-arithmetic methods match complex-arithmetic methods."""
-        torch.manual_seed(42)
-        edges_complex = torch.randn(
-            10, 3, dtype=dtype, device=device, requires_grad=True
-        )
-        edges_real = edges_complex.detach().clone().requires_grad_(True)
-        gamma = torch.rand(10, dtype=dtype, device=device) * 6.28
-
-        # Complex version gradient
-        D_complex, _ = axis_angle_wigner_hybrid(edges_complex, lmax, gamma=gamma)
-        loss_complex = D_complex.sum()
-        loss_complex.backward()
-
-        # Real version gradient
-        D_real, _ = axis_angle_wigner_hybrid(
-            edges_real, lmax, gamma=gamma, use_real_arithmetic=True
-        )
-        loss_real = D_real.sum()
-        loss_real.backward()
-
-        # Compare gradients
-        grad_diff = (edges_complex.grad - edges_real.grad).abs().max().item()
-        assert grad_diff < 1e-8, f"Gradient difference: {grad_diff}"
-
-
-# =============================================================================
 # Test torch.compile Compatibility
 # =============================================================================
 
@@ -514,8 +394,8 @@ class TestTorchCompileCompatibility:
     @pytest.mark.skipif(
         not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
-    def test_hybrid_real_compiles(self, lmax, dtype, device):
-        """axis_angle_wigner_hybrid with use_real_arithmetic=True should compile without graph breaks."""
+    def test_hybrid_compiles(self, lmax, dtype, device):
+        """axis_angle_wigner_hybrid should compile without graph breaks."""
         import torch._dynamo as dynamo
 
         edges = torch.randn(10, 3, dtype=dtype, device=device)
@@ -523,9 +403,7 @@ class TestTorchCompileCompatibility:
 
         # Define function to compile
         def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_hybrid(
-                edge_vec, lmax_val, gamma=g, use_real_arithmetic=True
-            )
+            return axis_angle_wigner_hybrid(edge_vec, lmax_val, gamma=g)
 
         # Try to compile and run
         try:
@@ -533,9 +411,7 @@ class TestTorchCompileCompatibility:
             D, D_inv = compiled_fn(edges, lmax, gamma)
 
             # Verify output matches uncompiled version
-            D_ref, D_inv_ref = axis_angle_wigner_hybrid(
-                edges, lmax, gamma=gamma, use_real_arithmetic=True
-            )
+            D_ref, D_inv_ref = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
             assert torch.allclose(D, D_ref, atol=1e-10)
         except Exception as e:
             # If fullgraph=True fails, check with explanation
@@ -593,22 +469,25 @@ class TestRangeFunctions:
         # Create quaternions
         q = torch.randn(30, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
-        Ra, Rb = quaternion_to_ra_rb(q)
+        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
 
         # Full computation
         coeffs_full = precompute_wigner_coefficients(lmax, dtype, device)
-        U_blocks_full = precompute_U_blocks_euler_aligned(lmax, dtype, device)
-        D_complex_full = wigner_d_matrix_complex(Ra, Rb, coeffs_full)
-        D_real_full = wigner_d_complex_to_real(D_complex_full, U_blocks_full, lmax)
+        U_blocks_full = precompute_U_blocks_euler_aligned_real(lmax, dtype, device)
+        D_re_full, D_im_full = wigner_d_matrix_real(
+            ra_re, ra_im, rb_re, rb_im, coeffs_full
+        )
+        D_real_full = wigner_d_pair_to_real(D_re_full, D_im_full, U_blocks_full, lmax)
 
         # Range computation
-        coeffs_range = precompute_wigner_coefficients(lmax, dtype, device, lmin=lmin)
-        U_blocks_range = precompute_U_blocks_euler_aligned(
+        coeffs_range, U_blocks_range = get_ra_rb_coefficients_real(
             lmax, dtype, device, lmin=lmin
         )
-        D_complex_range = wigner_d_matrix_complex(Ra, Rb, coeffs_range)
-        D_real_range = wigner_d_complex_to_real(
-            D_complex_range, U_blocks_range, lmax, lmin=lmin
+        D_re_range, D_im_range = wigner_d_matrix_real(
+            ra_re, ra_im, rb_re, rb_im, coeffs_range
+        )
+        D_real_range = wigner_d_pair_to_real(
+            D_re_range, D_im_range, U_blocks_range, lmax, lmin=lmin
         )
 
         # Extract l >= lmin from full

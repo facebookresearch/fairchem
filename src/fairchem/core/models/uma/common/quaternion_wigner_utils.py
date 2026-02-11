@@ -119,25 +119,32 @@ class WignerDataModule(nn.Module):
 
     This module holds all precomputed data needed for Wigner D computation,
     and automatically moves with the parent model via .to(device).
+
+    U_blocks are stored as real/imaginary pairs for torch.compile compatibility.
     """
 
     def __init__(
         self,
         coeffs: WignerCoefficientsModule,
-        U_blocks: list[torch.Tensor],
+        U_blocks: list[tuple[torch.Tensor, torch.Tensor]],
     ):
         super().__init__()
         self.coeffs = coeffs
 
         # Register U_blocks as non-persistent buffers (computed, not learned)
+        # Each U_block is a (U_re, U_im) tuple
         self._n_U_blocks = len(U_blocks)
-        for i, U in enumerate(U_blocks):
-            self.register_buffer(f"U_block_{i}", U, persistent=False)
+        for i, (U_re, U_im) in enumerate(U_blocks):
+            self.register_buffer(f"U_block_{i}_re", U_re, persistent=False)
+            self.register_buffer(f"U_block_{i}_im", U_im, persistent=False)
 
     @property
-    def U_blocks(self) -> list[torch.Tensor]:
-        """Return U_blocks as a list for compatibility with existing code."""
-        return [getattr(self, f"U_block_{i}") for i in range(self._n_U_blocks)]
+    def U_blocks(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """Return U_blocks as a list of (U_re, U_im) tuples for compatibility with existing code."""
+        return [
+            (getattr(self, f"U_block_{i}_re"), getattr(self, f"U_block_{i}_im"))
+            for i in range(self._n_U_blocks)
+        ]
 
 
 @dataclass
@@ -204,11 +211,7 @@ _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "fairchem" / "wigner_coeffs"
 # Global Caches (consolidated from all modules)
 # =============================================================================
 
-# Generator cache for SO(3) Lie algebra generators
-_GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
-
-# Coefficient caches for Ra/Rb polynomial
-_COEFF_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
+# Coefficient cache for Ra/Rb polynomial (real-pair version)
 _COEFF_REAL_CACHE: dict[tuple[int, int, torch.dtype, torch.device], tuple] = {}
 
 
@@ -216,50 +219,17 @@ def clear_memory_caches() -> None:
     """
     Clear all in-memory caches for Wigner D computation.
 
-    This clears the module-level dictionaries that cache generators,
-    transforms, coefficients, and U blocks. Useful for testing or reducing memory.
+    This clears the module-level dictionaries that cache coefficients and U blocks.
+    Useful for testing or reducing memory.
 
     Also clears caches in the individual method modules if they are loaded.
     """
-    _GENERATOR_CACHE.clear()
-    _COEFF_CACHE.clear()
     _COEFF_REAL_CACHE.clear()
 
 
 # =============================================================================
 # Coefficient Caching Functions
 # =============================================================================
-
-
-def get_ra_rb_coefficients(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-    lmin: int = 0,
-) -> tuple[WignerCoefficients, list]:
-    """Get cached Ra/Rb polynomial coefficients with Euler-aligned U blocks.
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Data type for coefficients
-        device: Device for tensors
-        lmin: Minimum angular momentum (default 0)
-
-    Returns:
-        Tuple of (WignerCoefficients, U_blocks list)
-    """
-    key = (lmin, lmax, dtype, device)
-
-    if key not in _COEFF_CACHE:
-        coeffs = precompute_wigner_coefficients(
-            lmax, dtype=dtype, device=device, lmin=lmin
-        )
-        U_blocks = precompute_U_blocks_euler_aligned(
-            lmax, dtype=dtype, device=device, lmin=lmin
-        )
-        _COEFF_CACHE[key] = (coeffs, U_blocks)
-
-    return _COEFF_CACHE[key]
 
 
 def get_ra_rb_coefficients_real(
@@ -325,9 +295,11 @@ def create_wigner_data_module(
     coeffs_dataclass = precompute_wigner_coefficients(
         lmax, dtype=dtype, device=device, lmin=lmin
     )
-    U_blocks = precompute_U_blocks_euler_aligned(
-        lmax, dtype=dtype, device=device, lmin=lmin
+    # Get full real U blocks and slice to range
+    full_U_blocks_real = precompute_U_blocks_euler_aligned_real(
+        lmax, dtype=dtype, device=device
     )
+    U_blocks = full_U_blocks_real[lmin:]
 
     # Convert CaseCoeffs dataclass to CaseCoeffsModule
     case1_module = CaseCoeffsModule(
@@ -790,48 +762,6 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
 
 
 # =============================================================================
-# Quaternion to Axis-Angle
-# =============================================================================
-
-
-def quaternion_to_axis_angle(
-    q: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Convert quaternion to axis-angle representation.
-
-    Uses the stable formula:
-        angle = 2 * atan2(|xyz|, w)
-        axis = xyz / |xyz|
-
-    For small angles (|xyz| ~ 0), axis is undefined but angle ~ 0.
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-
-    Returns:
-        (axis, angle) where:
-        - axis has shape (N, 3), unit vectors
-        - angle has shape (N,), in radians
-    """
-    w = q[..., 0]
-    xyz = q[..., 1:4]
-
-    xyz_norm = torch.linalg.norm(xyz, dim=-1)
-    angle = 2.0 * torch.atan2(xyz_norm, w)
-
-    safe_xyz_norm = xyz_norm.clamp(min=1e-12)
-    axis = xyz / safe_xyz_norm.unsqueeze(-1)
-
-    small_angle = xyz_norm < 1e-8
-    z_axis = torch.tensor([0.0, 0.0, 1.0], dtype=q.dtype, device=q.device)
-    z_axis = z_axis.expand_as(axis)
-    axis = torch.where(small_angle.unsqueeze(-1), z_axis, axis)
-
-    return axis, angle
-
-
-# =============================================================================
 # Gamma Computation for Euler Matching
 # =============================================================================
 
@@ -985,144 +915,9 @@ def _build_u_matrix(
     return U
 
 
-def _build_so3_generators(ell: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Build SO(3) Lie algebra generators K_x, K_y, K_z for representation ell.
-
-    These are real antisymmetric (2*ell+1) x (2*ell+1) matrices satisfying:
-        D^ell(n, theta) = exp(theta * (n_x K_x + n_y K_y + n_z K_z))
-
-    Args:
-        ell: Angular momentum quantum number
-
-    Returns:
-        (K_x, K_y, K_z) tuple of generator matrices in float64
-    """
-    size = 2 * ell + 1
-
-    if ell == 0:
-        z = torch.zeros(1, 1, dtype=torch.float64)
-        return z, z.clone(), z.clone()
-
-    m_values = torch.arange(-ell, ell + 1, dtype=torch.float64)
-    J_z = torch.diag(m_values.to(torch.complex128))
-
-    J_plus = torch.zeros(size, size, dtype=torch.complex128)
-    J_minus = torch.zeros(size, size, dtype=torch.complex128)
-
-    for m in range(-ell, ell):
-        coeff = math.sqrt(ell * (ell + 1) - m * (m + 1))
-        J_plus[m + 1 + ell, m + ell] = coeff
-
-    for m in range(-ell + 1, ell + 1):
-        coeff = math.sqrt(ell * (ell + 1) - m * (m - 1))
-        J_minus[m - 1 + ell, m + ell] = coeff
-
-    J_x = (J_plus + J_minus) / 2
-    J_y = (J_plus - J_minus) / 2j
-
-    U = _build_u_matrix(ell)
-    U_dag = U.conj().T
-
-    K_x = (U @ (1j * J_x) @ U_dag).real
-    K_y = -(U @ (1j * J_y) @ U_dag).real
-    K_z = (U @ (1j * J_z) @ U_dag).real
-
-    return K_x, K_y, K_z
-
-
-def get_so3_generators(
-    lmax: int,
-    dtype: torch.dtype,
-    device: torch.device,
-) -> dict[str, list[torch.Tensor]]:
-    """
-    Return cached K_x, K_y, K_z lists for l=0..lmax.
-
-    For l >= 2, the generators include the Euler-matching transformation folded in,
-    so the matrix exponential produces output directly in the Euler basis.
-
-    For l=1, a permutation matrix P is also cached to convert to Cartesian basis.
-
-    Args:
-        lmax: Maximum angular momentum
-        dtype: Data type for the generators
-        device: Device for the generators
-
-    Returns:
-        Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
-    """
-    key = (lmax, dtype, device)
-
-    if key not in _GENERATOR_CACHE:
-        jd_path = Path(__file__).parent.parent / "Jd.pt"
-        Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
-
-        K_x_list = []
-        K_y_list = []
-        K_z_list = []
-
-        for ell in range(lmax + 1):
-            K_x, K_y, K_z = _build_so3_generators(ell)
-            K_x = K_x.to(device=device, dtype=dtype)
-            K_y = K_y.to(device=device, dtype=dtype)
-            K_z = K_z.to(device=device, dtype=dtype)
-
-            if ell >= 2:
-                Jd = Jd_list[ell].to(dtype=dtype, device=device)
-                U = _build_euler_transform(ell, Jd)
-                K_x = U @ K_x @ U.T
-                K_y = U @ K_y @ U.T
-                K_z = U @ K_z @ U.T
-
-            K_x_list.append(K_x)
-            K_y_list.append(K_y)
-            K_z_list.append(K_z)
-
-        P = torch.tensor(
-            [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-            dtype=dtype,
-            device=device,
-        )
-
-        _GENERATOR_CACHE[key] = {
-            "K_x": K_x_list,
-            "K_y": K_y_list,
-            "K_z": K_z_list,
-            "P": P,
-        }
-
-    return _GENERATOR_CACHE[key]
-
-
 # =============================================================================
 # Quaternion to Ra/Rb Decomposition
 # =============================================================================
-
-
-def quaternion_to_ra_rb(q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Decompose quaternion into complex numbers Ra and Rb.
-
-    For q = (w, x, y, z):
-        Ra = w + i*z
-        Rb = y + i*x
-
-    Args:
-        q: Quaternions of shape (..., 4) in (w, x, y, z) convention
-
-    Returns:
-        Tuple (Ra, Rb) of complex tensors with shape (...)
-    """
-    w = q[..., 0]
-    x = q[..., 1]
-    y = q[..., 2]
-    z = q[..., 3]
-
-    Ra = torch.complex(w, z)
-    Rb = torch.complex(y, x)
-
-    return Ra, Rb
 
 
 def quaternion_to_ra_rb_real(
@@ -1131,8 +926,7 @@ def quaternion_to_ra_rb_real(
     """
     Decompose quaternion into real/imaginary parts of Ra and Rb.
 
-    This is a torch.compile-compatible alternative to quaternion_to_ra_rb
-    that avoids creating complex tensors.
+    Uses real arithmetic throughout for torch.compile compatibility.
 
     For q = (w, x, y, z):
         Ra = w + i*z  ->  (ra_re=w, ra_im=z)
@@ -1341,123 +1135,6 @@ def precompute_wigner_coefficients(
 
 
 # =============================================================================
-# Complex Wigner D Matrix Computation
-# =============================================================================
-
-
-def wigner_d_matrix_complex(
-    Ra: torch.Tensor,
-    Rb: torch.Tensor,
-    coeffs: WignerCoefficients,
-) -> torch.Tensor:
-    """
-    Compute complex Wigner D matrices exploiting conjugate symmetry.
-
-    Computes only primary elements (~half) and derives the rest via:
-        D^l_{-m',-m} = (-1)^{m'-m} x conj(D^l_{m',m})
-
-    Args:
-        Ra, Rb: Complex Cayley-Klein parameters, shape (N,)
-        coeffs: Precomputed WignerCoefficients from precompute_wigner_coefficients
-
-    Returns:
-        Complex block-diagonal matrices of shape (N, size, size)
-    """
-    N = Ra.shape[0]
-    device = Ra.device
-    complex_dtype = Ra.dtype
-
-    ra = torch.abs(Ra)
-    rb = torch.abs(Rb)
-
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
-    general_mask = ~ra_small & ~rb_small
-    use_case1 = (ra >= rb) & general_mask
-    use_case2 = (ra < rb) & general_mask
-
-    phia = torch.angle(Ra)
-    phib = torch.angle(Rb)
-    phase = torch.outer(phia, coeffs.mp_plus_m) + torch.outer(phib, coeffs.m_minus_mp)
-    exp_phase = torch.exp(1j * phase)
-
-    safe_ra = torch.clamp(ra, min=EPSILON)
-    safe_rb = torch.clamp(rb, min=EPSILON)
-    log_ra = torch.log(safe_ra)
-    log_rb = torch.log(safe_rb)
-
-    result = torch.zeros(N, coeffs.n_primary, dtype=complex_dtype, device=device)
-
-    # Special Case 1: |Ra| ~ 0 - anti-diagonal elements
-    safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-    log_abs_Rb = torch.log(torch.abs(safe_Rb))
-    arg_Rb = torch.angle(safe_Rb)
-    exponent = torch.outer(log_abs_Rb, coeffs.special_2m) + 1j * torch.outer(
-        arg_Rb, coeffs.special_2m
-    )
-    rb_power = torch.exp(exponent.to(dtype=complex_dtype))
-    special_val_antidiag = (
-        coeffs.anti_diag_sign.unsqueeze(0).to(complex_dtype) * rb_power
-    )
-    mask_antidiag = ra_small.unsqueeze(1) & coeffs.anti_diagonal_mask.unsqueeze(0)
-    result = torch.where(mask_antidiag, special_val_antidiag, result)
-
-    # Special Case 2: |Rb| ~ 0 - diagonal elements
-    safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-    log_abs_Ra = torch.log(torch.abs(safe_Ra))
-    arg_Ra = torch.angle(safe_Ra)
-    exponent = torch.outer(log_abs_Ra, coeffs.special_2m) + 1j * torch.outer(
-        arg_Ra, coeffs.special_2m
-    )
-    ra_power = torch.exp(exponent.to(dtype=complex_dtype))
-    mask_diag = (rb_small & ~ra_small).unsqueeze(1) & coeffs.diagonal_mask.unsqueeze(0)
-    result = torch.where(mask_diag, ra_power, result)
-
-    # General Case 1: |Ra| >= |Rb|
-    ratio1 = -(rb * rb) / (safe_ra * safe_ra)
-    real_factor1 = _compute_case_magnitude(
-        log_ra, log_rb, ratio1, coeffs.case1, coeffs.max_poly_len
-    )
-    val1 = real_factor1 * exp_phase
-
-    valid_case1 = coeffs.case1.poly_len > 0
-    mask1 = use_case1.unsqueeze(1) & valid_case1.unsqueeze(0)
-    result = torch.where(mask1, val1.to(dtype=complex_dtype), result)
-
-    # General Case 2: |Ra| < |Rb|
-    ratio2 = -(ra * ra) / (safe_rb * safe_rb)
-    real_factor2 = _compute_case_magnitude(
-        log_ra, log_rb, ratio2, coeffs.case2, coeffs.max_poly_len
-    )
-    val2 = real_factor2 * exp_phase
-
-    valid_case2 = coeffs.case2.poly_len > 0
-    mask2 = use_case2.unsqueeze(1) & valid_case2.unsqueeze(0)
-    result = torch.where(mask2, val2.to(dtype=complex_dtype), result)
-
-    # Scatter primary results into output matrix
-    D = torch.zeros(N, coeffs.size, coeffs.size, dtype=complex_dtype, device=device)
-    _scatter_primary_to_matrix(result, D, coeffs)
-
-    # Fill derived elements using symmetry
-    if coeffs.n_derived > 0:
-        primary_vals = result[:, coeffs.derived_primary_idx]
-        derived_vals = (
-            coeffs.derived_sign.unsqueeze(0).to(complex_dtype) * primary_vals.conj()
-        )
-
-        batch_indices_d = (
-            torch.arange(N, device=device).unsqueeze(1).expand(N, coeffs.n_derived)
-        )
-        row_expanded_d = coeffs.derived_row.unsqueeze(0).expand(N, coeffs.n_derived)
-        col_expanded_d = coeffs.derived_col.unsqueeze(0).expand(N, coeffs.n_derived)
-
-        D[batch_indices_d, row_expanded_d, col_expanded_d] = derived_vals
-
-    return D
-
-
-# =============================================================================
 # Real-Pair Wigner D Matrix Computation (torch.compile compatible)
 # =============================================================================
 
@@ -1472,7 +1149,7 @@ def wigner_d_matrix_real(
     """
     Compute Wigner D matrices using real arithmetic only.
 
-    This is a torch.compile-compatible alternative to wigner_d_matrix_complex.
+    Uses real-pair arithmetic throughout for torch.compile compatibility.
 
     Args:
         ra_re, ra_im: Real and imaginary parts of Ra, shape (N,)
@@ -1602,14 +1279,16 @@ def wigner_d_matrix_real(
 # =============================================================================
 
 
-def precompute_U_blocks_euler_aligned(
+def _precompute_U_blocks_euler_aligned(
     lmax: int,
     dtype: torch.dtype = torch.float64,
     device: torch.device | None = None,
     lmin: int = 0,
 ) -> list[torch.Tensor]:
     """
-    Precompute U transformation matrices with Euler basis alignment folded in.
+    Private helper to precompute complex U transformation matrices.
+
+    Used internally by precompute_U_blocks_euler_aligned_real.
 
     This combines the complex->real transformation with:
     - For l=1: The Cartesian permutation P (m-ordering -> x,y,z)
@@ -1622,7 +1301,7 @@ def precompute_U_blocks_euler_aligned(
         lmin: Minimum angular momentum (default 0)
 
     Returns:
-        List of combined U matrices where U_blocks[i] corresponds to l=lmin+i
+        List of combined U matrices (complex) where U_blocks[i] corresponds to l=lmin+i
     """
     if device is None:
         device = torch.device("cpu")
@@ -1679,61 +1358,10 @@ def precompute_U_blocks_euler_aligned_real(
     """
     if device is None:
         device = torch.device("cpu")
-    U_blocks_complex = precompute_U_blocks_euler_aligned(
+    U_blocks_complex = _precompute_U_blocks_euler_aligned(
         lmax, dtype=dtype, device=device
     )
     return [(U.real.to(dtype=dtype), U.imag.to(dtype=dtype)) for U in U_blocks_complex]
-
-
-# =============================================================================
-# Wigner D Complex to Real Transformation
-# =============================================================================
-
-
-def wigner_d_complex_to_real(
-    D_complex: torch.Tensor,
-    U_blocks: list[torch.Tensor],
-    lmax: int,
-    lmin: int = 0,
-) -> torch.Tensor:
-    """
-    Transform Wigner D matrix from complex to real, exploiting block structure.
-
-    Args:
-        D_complex: Complex Wigner D matrices of shape (N, size, size)
-        U_blocks: List of U matrices for l in [lmin, lmax]
-        lmax: Maximum angular momentum
-        lmin: Minimum angular momentum (default 0)
-
-    Returns:
-        Real Wigner D matrices of shape (N, size, size)
-    """
-    N = D_complex.shape[0]
-    size = D_complex.shape[1]
-    device = D_complex.device
-    complex_dtype = D_complex.dtype
-    real_dtype = D_complex.real.dtype
-
-    D_real = torch.zeros(N, size, size, dtype=real_dtype, device=device)
-
-    block_start = 0
-    for idx, ell in enumerate(range(lmin, lmax + 1)):
-        block_size = 2 * ell + 1
-        block_end = block_start + block_size
-
-        D_block = D_complex[:, block_start:block_end, block_start:block_end]
-
-        U_ell = U_blocks[idx].to(dtype=complex_dtype, device=device)
-        U_ell_H = U_ell.conj().T
-
-        temp = torch.matmul(D_block, U_ell_H)
-        D_block_real = torch.matmul(U_ell, temp)
-
-        D_real[:, block_start:block_end, block_start:block_end] = D_block_real.real
-
-        block_start = block_end
-
-    return D_real
 
 
 def wigner_d_pair_to_real(
@@ -1746,7 +1374,7 @@ def wigner_d_pair_to_real(
     """
     Transform Wigner D matrix from real-pair to real basis using real arithmetic.
 
-    This is a torch.compile-compatible alternative to wigner_d_complex_to_real.
+    Uses real arithmetic throughout for torch.compile compatibility.
 
     Args:
         D_re: Real part of complex Wigner D matrices, shape (N, size, size)
@@ -2003,3 +1631,167 @@ def clear_wigner_cache(cache_dir: Optional[Path] = None) -> int:
         count += 1
 
     return count
+
+
+# =============================================================================
+# Reference Implementation for Testing (Not Used at Runtime)
+# =============================================================================
+#
+# The following functions provide a mathematically principled reference
+# implementation for computing Wigner D matrices via matrix exponential of
+# SO(3) Lie algebra generators. They are kept for verification purposes in
+# tests, which validate that the optimized polynomial kernels in
+# wigner_d_custom_kernels.py produce correct results.
+#
+# These functions are NOT used by any runtime code paths.
+# =============================================================================
+
+# Cache for SO(3) generators (used only by reference implementation)
+_GENERATOR_CACHE: dict[tuple[int, torch.dtype, torch.device], dict] = {}
+
+
+def quaternion_to_axis_angle(
+    q: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Convert quaternion to axis-angle representation.
+
+    Uses the stable formula:
+        angle = 2 * atan2(|xyz|, w)
+        axis = xyz / |xyz|
+
+    For small angles (|xyz| ~ 0), axis is undefined but angle ~ 0.
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        (axis, angle) where:
+        - axis has shape (N, 3), unit vectors
+        - angle has shape (N,), in radians
+    """
+    w = q[..., 0]
+    xyz = q[..., 1:4]
+
+    xyz_norm = torch.linalg.norm(xyz, dim=-1)
+    angle = 2.0 * torch.atan2(xyz_norm, w)
+
+    safe_xyz_norm = xyz_norm.clamp(min=1e-12)
+    axis = xyz / safe_xyz_norm.unsqueeze(-1)
+
+    small_angle = xyz_norm < 1e-8
+    z_axis = torch.tensor([0.0, 0.0, 1.0], dtype=q.dtype, device=q.device)
+    z_axis = z_axis.expand_as(axis)
+    axis = torch.where(small_angle.unsqueeze(-1), z_axis, axis)
+
+    return axis, angle
+
+
+def _build_so3_generators(ell: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Build SO(3) Lie algebra generators K_x, K_y, K_z for representation ell.
+
+    These are real antisymmetric (2*ell+1) x (2*ell+1) matrices satisfying:
+        D^ell(n, theta) = exp(theta * (n_x K_x + n_y K_y + n_z K_z))
+
+    Args:
+        ell: Angular momentum quantum number
+
+    Returns:
+        (K_x, K_y, K_z) tuple of generator matrices in float64
+    """
+    size = 2 * ell + 1
+
+    if ell == 0:
+        z = torch.zeros(1, 1, dtype=torch.float64)
+        return z, z.clone(), z.clone()
+
+    m_values = torch.arange(-ell, ell + 1, dtype=torch.float64)
+    J_z = torch.diag(m_values.to(torch.complex128))
+
+    J_plus = torch.zeros(size, size, dtype=torch.complex128)
+    J_minus = torch.zeros(size, size, dtype=torch.complex128)
+
+    for m in range(-ell, ell):
+        coeff = math.sqrt(ell * (ell + 1) - m * (m + 1))
+        J_plus[m + 1 + ell, m + ell] = coeff
+
+    for m in range(-ell + 1, ell + 1):
+        coeff = math.sqrt(ell * (ell + 1) - m * (m - 1))
+        J_minus[m - 1 + ell, m + ell] = coeff
+
+    J_x = (J_plus + J_minus) / 2
+    J_y = (J_plus - J_minus) / 2j
+
+    U = _build_u_matrix(ell)
+    U_dag = U.conj().T
+
+    K_x = (U @ (1j * J_x) @ U_dag).real
+    K_y = -(U @ (1j * J_y) @ U_dag).real
+    K_z = (U @ (1j * J_z) @ U_dag).real
+
+    return K_x, K_y, K_z
+
+
+def get_so3_generators(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> dict[str, list[torch.Tensor]]:
+    """
+    Return cached K_x, K_y, K_z lists for l=0..lmax.
+
+    For l >= 2, the generators include the Euler-matching transformation folded in,
+    so the matrix exponential produces output directly in the Euler basis.
+
+    For l=1, a permutation matrix P is also cached to convert to Cartesian basis.
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Data type for the generators
+        device: Device for the generators
+
+    Returns:
+        Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
+    """
+    key = (lmax, dtype, device)
+
+    if key not in _GENERATOR_CACHE:
+        jd_path = Path(__file__).parent.parent / "Jd.pt"
+        Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
+
+        K_x_list = []
+        K_y_list = []
+        K_z_list = []
+
+        for ell in range(lmax + 1):
+            K_x, K_y, K_z = _build_so3_generators(ell)
+            K_x = K_x.to(device=device, dtype=dtype)
+            K_y = K_y.to(device=device, dtype=dtype)
+            K_z = K_z.to(device=device, dtype=dtype)
+
+            if ell >= 2:
+                Jd = Jd_list[ell].to(dtype=dtype, device=device)
+                U = _build_euler_transform(ell, Jd)
+                K_x = U @ K_x @ U.T
+                K_y = U @ K_y @ U.T
+                K_z = U @ K_z @ U.T
+
+            K_x_list.append(K_x)
+            K_y_list.append(K_y)
+            K_z_list.append(K_z)
+
+        P = torch.tensor(
+            [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            dtype=dtype,
+            device=device,
+        )
+
+        _GENERATOR_CACHE[key] = {
+            "K_x": K_x_list,
+            "K_y": K_y_list,
+            "K_z": K_z_list,
+            "P": P,
+        }
+
+    return _GENERATOR_CACHE[key]
