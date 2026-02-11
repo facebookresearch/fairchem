@@ -78,28 +78,40 @@ def add_n_empty_edges(
 
 
 def get_balanced_attribute(
-    data_dict,
-    emb: dict[str, torch.Tensor],
-    balance_attribute="charge",
-    balance_attribute_offset=0,
-    balance_channel_idx=0,
-):
+    emb: torch.Tensor,
+    target_sum: torch.Tensor,
+    natoms: torch.Tensor,
+    batch: torch.Tensor,
+    balance_attribute_offset: float = 0,
+    balance_channel_idx: int = 0,
+) -> torch.Tensor:
     """Balance per-atom attributes (charge/spin) to sum to system target.
+
+    Args:
+        emb: Node embeddings of shape [num_atoms, sph_features, channels]
+        target_sum: Target sum per system of shape [num_systems]
+        natoms: Number of atoms per system of shape [num_systems]
+        batch: Batch indices mapping atoms to systems of shape [num_atoms]
+        balance_attribute_offset: Offset to subtract from target (e.g., 1 for spin)
+        balance_channel_idx: Which channel index to balance
+
+    Returns:
+        Modified embeddings with the specified channel balanced to sum to target.
 
     Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
     which provides correct gradients in both forward and backward passes.
     """
     out_emb = emb.clone()
 
-    charge_unbalanced = emb[:, 0, balance_channel_idx]  # n x 2
+    charge_unbalanced = emb[:, 0, balance_channel_idx]
 
     system_scalars_part = torch.zeros(
-        len(data_dict["natoms"]),
+        len(natoms),
         device=emb.device,
         dtype=emb.dtype,
     )
 
-    system_scalars_part.index_add_(0, data_dict["batch"], charge_unbalanced.view(-1))
+    system_scalars_part.index_add_(0, batch, charge_unbalanced.view(-1))
 
     # Reduce partial sums across all graph parallel ranks
     # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
@@ -111,17 +123,15 @@ def get_balanced_attribute(
     else:
         system_scalar = system_scalars_part
 
-    correction = (
-        system_scalar - (data_dict[balance_attribute] - balance_attribute_offset)
-    ) / data_dict.natoms
+    correction = (system_scalar - (target_sum - balance_attribute_offset)) / natoms
 
-    balanced_node_scalar = charge_unbalanced - correction[data_dict.batch]
+    balanced_node_scalar = charge_unbalanced - correction[batch]
 
     out_emb[:, 0, balance_channel_idx] = (
         out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
     )
 
-    return out_emb, balanced_node_scalar
+    return out_emb
 
 
 @torch.compiler.disable
@@ -361,23 +371,28 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def balance_channels(
         self,
-        x_message_prime,
-        data_dict,
-    ):
+        x_message_prime: torch.Tensor,
+        charge: torch.Tensor,
+        spin: torch.Tensor,
+        natoms: torch.Tensor,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
         for channel_idx in self.charge_balanced_channels:
-            x_message_prime, _ = get_balanced_attribute(
-                data_dict,
-                x_message_prime,
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=charge,
+                natoms=natoms,
+                batch=batch,
                 balance_channel_idx=channel_idx,
-                balance_attribute="charge",
             )
         for channel_idx in self.spin_balanced_channels:
-            x_message_prime, _ = get_balanced_attribute(
-                data_dict,
-                x_message_prime,
-                balance_channel_idx=channel_idx,
-                balance_attribute="spin",
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=spin,
+                natoms=natoms,
+                batch=batch,
                 balance_attribute_offset=1,
+                balance_channel_idx=channel_idx,
             )
         return x_message_prime
 
@@ -660,7 +675,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 # balance any channels requested
                 x_message = self.balance_channels(
                     x_message,
-                    data_dict,
+                    charge=data_dict["charge"],
+                    spin=data_dict["spin"],
+                    natoms=data_dict["natoms"],
+                    batch=data_dict["batch"],
                 )
 
         # Final layer norm

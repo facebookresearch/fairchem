@@ -19,7 +19,6 @@ num_distance_basis: 512
 regress_forces: True
 regress_stress: ${regress_stress}
 direct_forces: ${direct_forces}
-charge_balanced_channels: [0]
 num_layers: 2
 hidden_channels: 16
 norm_type: rms_norm_sh
