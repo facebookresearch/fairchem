@@ -217,15 +217,13 @@ class ChgSpinEmbedding(nn.Module):
 
 
 class DatasetEmbedding(nn.Module):
-    def __init__(
-        self, embedding_size, enable_grad, dataset_list, dataset_mapping=None
-    ) -> None:
+    def __init__(self, embedding_size, enable_grad, dataset_mapping) -> None:
         super().__init__()
         self.embedding_size = embedding_size
         self.enable_grad = enable_grad
         self.dataset_mapping = dataset_mapping
         self.dataset_emb_dict = nn.ModuleDict({})
-        for dataset in dataset_list:
+        for dataset in dataset_mapping:
             if dataset not in self.dataset_emb_dict:
                 self.dataset_emb_dict[dataset] = nn.Embedding(1, embedding_size)
             if not self.enable_grad:
@@ -235,11 +233,8 @@ class DatasetEmbedding(nn.Module):
     def forward(self, dataset_list):
         device = list(self.parameters())[0].device
         emb_idx = torch.tensor(0, device=device, dtype=torch.long)
-        # apply dataset mapping if provided
-        if self.dataset_mapping is not None:
-            dataset_list = [
-                self.dataset_mapping.get(dataset, dataset) for dataset in dataset_list
-            ]
+        # apply dataset mapping
+        dataset_list = [self.dataset_mapping[dataset] for dataset in dataset_list]
 
         if self.enable_grad and self.training:
             # If gradients are enabled we need to ensure that all embeddings are included

@@ -196,10 +196,11 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone,
-        dataset_mapping: dict[str, str],
+        dataset_names: list[str],  # soon to be deprecated in favor of dataset_mapping
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_mapping: dict[str, str] | None = None,
     ):
         super().__init__()
         if head_kwargs is None:
@@ -208,6 +209,13 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         self.regress_forces = backbone.regress_forces
 
         self.wrap_property = wrap_property
+
+        if dataset_mapping is None:
+            # add warning if dataset_mapping is not provided
+            logging.warning(
+                "If dataset_mapping is not provided, the code assumes that each dataset maps to itself. If this what you want please ignore otherwise add the dataset_mapping argument"
+            )
+            dataset_mapping = {name: name for name in dataset_names}
 
         self.dataset_names = sorted(dataset_mapping.keys())
         # get unique sorted dataset names

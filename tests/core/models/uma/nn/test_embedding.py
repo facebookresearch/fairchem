@@ -17,17 +17,17 @@ class TestDatasetEmbedding:
 
     def test_embeddings_trainable_when_grad_true(self):
         """Test that embeddings have requires_grad=True when grad=True."""
-        dataset_list = ["oc20", "omat", "omol"]
+        dataset_mapping = {"oc20": "oc20", "omat": "omat", "omol": "omol"}
         embedding_size = 64
 
         layer = DatasetEmbedding(
             embedding_size=embedding_size,
-            grad=True,
-            dataset_list=dataset_list,
+            enable_grad=True,
+            dataset_mapping=dataset_mapping,
         )
 
         # Check all embedding parameters have requires_grad=True
-        for dataset in dataset_list:
+        for dataset in dataset_mapping:
             for param in layer.dataset_emb_dict[dataset].parameters():
                 assert (
                     param.requires_grad is True
@@ -35,17 +35,17 @@ class TestDatasetEmbedding:
 
     def test_embeddings_not_trainable_when_grad_false(self):
         """Test that embeddings have requires_grad=False when grad=False."""
-        dataset_list = ["oc20", "omat", "omol"]
+        dataset_mapping = {"oc20": "oc20", "omat": "omat", "omol": "omol"}
         embedding_size = 64
 
         layer = DatasetEmbedding(
             embedding_size=embedding_size,
-            grad=False,
-            dataset_list=dataset_list,
+            enable_grad=False,
+            dataset_mapping=dataset_mapping,
         )
 
         # Check all embedding parameters have requires_grad=False
-        for dataset in dataset_list:
+        for dataset in dataset_mapping:
             for param in layer.dataset_emb_dict[dataset].parameters():
                 assert (
                     param.requires_grad is False
@@ -53,16 +53,26 @@ class TestDatasetEmbedding:
 
     def test_dataset_mapping(self):
         """Test that dataset_mapping correctly maps one dataset to another's embedding."""
-        dataset_list = ["omol", "omat", "oc20", "oc20_subset"]
+        dataset_mapping = {
+            "oc20_subset": "oc20",
+            "oc20": "oc20",
+            "omat": "omat",
+            "omol": "omol",
+        }
+        no_dataset_mapping = {
+            "oc20_subset": "oc20_subset",
+            "oc20": "oc20",
+            "omat": "omat",
+            "omol": "omol",
+        }
         embedding_size = 64
-        dataset_mapping = {"oc20_subset": "oc20"}
 
         # Instance 1: no mapping
         torch.manual_seed(42)
         layer_no_mapping = DatasetEmbedding(
             embedding_size=embedding_size,
-            grad=False,
-            dataset_list=dataset_list,
+            enable_grad=False,
+            dataset_mapping=no_dataset_mapping,
         )
         layer_no_mapping.eval()
 
@@ -70,8 +80,7 @@ class TestDatasetEmbedding:
         torch.manual_seed(42)
         layer_with_mapping = DatasetEmbedding(
             embedding_size=embedding_size,
-            grad=False,
-            dataset_list=dataset_list,
+            enable_grad=False,
             dataset_mapping=dataset_mapping,
         )
         layer_with_mapping.eval()

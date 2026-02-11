@@ -107,7 +107,13 @@ def test_dataset_mapping(mock_replace, mock_registry):
     mock_registry.return_value = MagicMock()
 
     dataset_names = ["omol", "oc20_subset1", "oc20_subset2", "omat", "oc20"]
-    dataset_mapping = {"oc20_subset1": "oc20", "oc20_subset2": "oc20"}
+    dataset_mapping = {
+        "omol": "omol",
+        "oc20_subset1": "oc20",
+        "oc20_subset2": "oc20",
+        "omat": "omat",
+        "oc20": "oc20",
+    }
 
     wrapper = DatasetSpecificMoEWrapper(
         backbone=mock_backbone,

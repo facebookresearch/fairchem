@@ -221,7 +221,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             self.dataset_embedding = DatasetEmbedding(
                 self.sphere_channels,
                 enable_grad=self.dataset_emb_grad,
-                dataset_list=list(self.dataset_mapping.keys()),
                 dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
