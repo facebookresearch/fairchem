@@ -7,8 +7,7 @@ matrices for small angular momentum values:
 Primary kernels (recommended for use):
 - l=1: quaternion_to_rotation_matrix - direct quaternion to 3x3 rotation
 - l=2: quaternion_to_wigner_d_l2_einsum - tensor contraction (~20x faster on GPU)
-- l=3: quaternion_to_wigner_d_l3_matmul - polynomial coefficient approach
-- l=4: quaternion_to_wigner_d_l4_matmul - polynomial coefficient approach
+- l=3,4: quaternion_to_wigner_d_matmul - polynomial coefficient approach
 
 These kernels are used by both wigner_d_matexp.py and wigner_d_hybrid.py
 to accelerate the most common angular momentum blocks.
@@ -34,17 +33,51 @@ _COEFFICIENTS_FILE = Path(__file__).parent / "wigner_d_coefficients.pt"
 # Module-Level Caches
 # =============================================================================
 
-_L2_COEFF_TENSOR_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
-_L3_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
-_L4_MATMUL_CACHE: dict[tuple[torch.dtype, torch.device], tuple] = {}
+# Processed kernel data cache: {(ell, dtype, device): data}
+# - l=2: coefficient tensor of shape (5, 5, 4, 4, 4, 4)
+# - l=3: (coefficient matrix (49, 84), monomials list)
+# - l=4: (coefficient matrix (81, 165), monomials list)
+_KERNEL_CACHE: dict[tuple[int, torch.dtype, torch.device], object] = {}
+
+
+@functools.lru_cache(maxsize=1)
+def _load_coefficients() -> dict:
+    """Load precomputed coefficients from file (cached after first load)."""
+    return torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
 
 
 def clear_memory_caches() -> None:
     """Clear all in-memory caches for this module."""
-    _L2_COEFF_TENSOR_CACHE.clear()
-    _L3_MATMUL_CACHE.clear()
-    _L4_MATMUL_CACHE.clear()
+    _KERNEL_CACHE.clear()
     _load_coefficients.cache_clear()
+
+
+def _get_kernel_data(ell: int, dtype: torch.dtype, device: torch.device) -> object:
+    """Get cached kernel data for l=2, 3, or 4.
+
+    Loads coefficient tensor from precomputed file and (for l>=3) generates
+    monomials deterministically. Caches by (ell, dtype, device).
+
+    Args:
+        ell: Angular momentum (2, 3, or 4)
+        dtype: Data type for the coefficients
+        device: Device for the tensors
+
+    Returns:
+        - For l=2: coefficient tensor of shape (5, 5, 4, 4, 4, 4)
+        - For l=3: tuple of (coefficient matrix (49, 84), monomials list of 84 tuples)
+        - For l=4: tuple of (coefficient matrix (81, 165), monomials list of 165 tuples)
+    """
+    key = (ell, dtype, device)
+    if key not in _KERNEL_CACHE:
+        coeffs = _load_coefficients()
+        C = coeffs[f"C_l{ell}"].to(dtype=dtype, device=device)
+        if ell == 2:
+            _KERNEL_CACHE[key] = C
+        else:
+            monomials = _generate_monomials(4, 2 * ell)
+            _KERNEL_CACHE[key] = (C, monomials)
+    return _KERNEL_CACHE[key]
 
 
 def preload_kernel_caches(
@@ -63,15 +96,8 @@ def preload_kernel_caches(
     """
     if device is None:
         device = torch.device("cpu")
-    _get_l2_coefficient_tensor(dtype, device)
-    _get_l3_matmul_data(dtype, device)
-    _get_l4_matmul_data(dtype, device)
-
-
-@functools.lru_cache(maxsize=1)
-def _load_coefficients() -> dict:
-    """Load precomputed coefficients from file (cached after first load)."""
-    return torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
+    for ell in (2, 3, 4):
+        _get_kernel_data(ell, dtype, device)
 
 
 def _generate_monomials(n_vars: int, total_degree: int) -> list[tuple[int, ...]]:
@@ -134,20 +160,6 @@ def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
 # =============================================================================
 
 
-def _get_l2_coefficient_tensor(
-    dtype: torch.dtype, device: torch.device
-) -> torch.Tensor:
-    """Get cached l=2 coefficient tensor for einsum computation.
-
-    Loads from precomputed file (wigner_d_coefficients.pt) and caches by dtype/device.
-    """
-    key = (dtype, device)
-    if key not in _L2_COEFF_TENSOR_CACHE:
-        coeffs = _load_coefficients()
-        _L2_COEFF_TENSOR_CACHE[key] = coeffs["C_l2"].to(dtype=dtype, device=device)
-    return _L2_COEFF_TENSOR_CACHE[key]
-
-
 def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
     """
     Convert quaternion to 5x5 l=2 Wigner D matrix using einsum tensor contraction.
@@ -163,7 +175,7 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
     Returns:
         Wigner D matrices of shape (N, 5, 5) for l=2
     """
-    C = _get_l2_coefficient_tensor(q.dtype, q.device)
+    C = _get_kernel_data(2, q.dtype, q.device)
 
     # Build q x q, then (q x q) x (q x q) = q x q x q x q
     q2 = q.unsqueeze(-1) * q.unsqueeze(-2)  # (N, 4, 4)
@@ -180,36 +192,6 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
 # =============================================================================
 # l=3,4 Quaternion Matmul Kernels
 # =============================================================================
-
-
-def _get_l3_matmul_data(dtype: torch.dtype, device: torch.device):
-    """Get cached matmul data for l=3.
-
-    Loads coefficient matrix from precomputed file and generates monomials
-    deterministically. Caches by dtype/device.
-    """
-    key = (dtype, device)
-    if key not in _L3_MATMUL_CACHE:
-        coeffs = _load_coefficients()
-        C = coeffs["C_l3"].to(dtype=dtype, device=device)
-        monomials = _generate_monomials(4, 6)  # degree 2*ell = 6 for ell=3
-        _L3_MATMUL_CACHE[key] = (C, monomials)
-    return _L3_MATMUL_CACHE[key]
-
-
-def _get_l4_matmul_data(dtype: torch.dtype, device: torch.device):
-    """Get cached matmul data for l=4.
-
-    Loads coefficient matrix from precomputed file and generates monomials
-    deterministically. Caches by dtype/device.
-    """
-    key = (dtype, device)
-    if key not in _L4_MATMUL_CACHE:
-        coeffs = _load_coefficients()
-        C = coeffs["C_l4"].to(dtype=dtype, device=device)
-        monomials = _generate_monomials(4, 8)  # degree 2*ell = 8 for ell=4
-        _L4_MATMUL_CACHE[key] = (C, monomials)
-    return _L4_MATMUL_CACHE[key]
 
 
 def _precompute_powers(
@@ -247,8 +229,8 @@ def _precompute_powers(
     }
 
 
-def _quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
-    """Generic matmul-based Wigner D computation for l=3 or l=4.
+def quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
+    """Matmul-based Wigner D computation for l=3 or l=4.
 
     Computes D = M @ C^T where:
     - M[n, k] = product of quaternion powers for monomial k
@@ -259,10 +241,9 @@ def _quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
         ell: Angular momentum (3 or 4)
 
     Returns:
-        Wigner D matrices of shape (N, 2*ell+1, 2*ell+1)
+        Wigner D matrices of shape (N, 7, 7) for l=3 or (N, 9, 9) for l=4
     """
-    cache_fn = _get_l3_matmul_data if ell == 3 else _get_l4_matmul_data
-    C, monomials = cache_fn(q.dtype, q.device)
+    C, monomials = _get_kernel_data(ell, q.dtype, q.device)
 
     w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
     powers = _precompute_powers(w, x, y, z, 2 * ell)
@@ -281,37 +262,3 @@ def _quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
     size = 2 * ell + 1
 
     return D_flat.view(q.shape[0], size, size)
-
-
-def quaternion_to_wigner_d_l3_matmul(q: torch.Tensor) -> torch.Tensor:
-    """
-    Convert quaternion to 7x7 l=3 Wigner D matrix using matmul.
-
-    Computes D = M @ C^T where:
-    - M[n, k] = product of quaternion powers for monomial k
-    - C[ij, k] = coefficient of monomial k in D[i,j]
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-
-    Returns:
-        Wigner D matrices of shape (N, 7, 7) for l=3
-    """
-    return _quaternion_to_wigner_d_matmul(q, 3)
-
-
-def quaternion_to_wigner_d_l4_matmul(q: torch.Tensor) -> torch.Tensor:
-    """
-    Convert quaternion to 9x9 l=4 Wigner D matrix using matmul.
-
-    Computes D = M @ C^T where:
-    - M[n, k] = product of quaternion powers for monomial k
-    - C[ij, k] = coefficient of monomial k in D[i,j]
-
-    Args:
-        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
-
-    Returns:
-        Wigner D matrices of shape (N, 9, 9) for l=4
-    """
-    return _quaternion_to_wigner_d_matmul(q, 4)

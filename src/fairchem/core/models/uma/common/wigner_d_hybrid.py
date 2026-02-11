@@ -37,8 +37,7 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
-    quaternion_to_wigner_d_l3_matmul,
-    quaternion_to_wigner_d_l4_matmul,
+    quaternion_to_wigner_d_matmul,
 )
 
 # =============================================================================
@@ -95,9 +94,9 @@ def wigner_d_from_quaternion_hybrid(
         elif ell == 2:
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
         elif ell == 3:
-            D[:, 9:16, 9:16] = quaternion_to_wigner_d_l3_matmul(q)
+            D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(q, 3)
         elif l4_kernel and ell == 4:
-            D[:, 16:25, 16:25] = quaternion_to_wigner_d_l4_matmul(q)
+            D[:, 16:25, 16:25] = quaternion_to_wigner_d_matmul(q, 4)
 
     # Compute l>=lmin using Ra/Rb polynomial with real-pair arithmetic
     if lmax >= lmin:

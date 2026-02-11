@@ -37,8 +37,7 @@ from fairchem.core.models.uma.common.rotation import (
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     preload_kernel_caches,
     quaternion_to_wigner_d_l2_einsum,
-    quaternion_to_wigner_d_l3_matmul,
-    quaternion_to_wigner_d_l4_matmul,
+    quaternion_to_wigner_d_matmul,
 )
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
@@ -514,21 +513,29 @@ class TestRangeFunctions:
 # Test Specialized Kernels
 # =============================================================================
 
+# Kernel test configuration: (ell, kernel_fn)
+_KERNEL_TEST_PARAMS = [
+    (2, quaternion_to_wigner_d_l2_einsum),
+    (3, lambda q: quaternion_to_wigner_d_matmul(q, 3)),
+    (4, lambda q: quaternion_to_wigner_d_matmul(q, 4)),
+]
+
+# Threshold for all kernel tests (all kernels achieve ~1e-15 accuracy)
+_KERNEL_THRESHOLD = 1e-12
+
 
 class TestSpecializedKernels:
     """Tests for the specialized l=2 polynomial and l=3/4 matmul kernels."""
 
     @pytest.mark.parametrize(
-        "ell,kernel_fn,n_samples,threshold",
+        "ell,kernel_fn,n_samples",
         [
-            (2, quaternion_to_wigner_d_l2_einsum, 500, 1e-10),
-            (3, quaternion_to_wigner_d_l3_matmul, 100, 1e-9),
-            (4, quaternion_to_wigner_d_l4_matmul, 100, 1e-9),
+            (2, quaternion_to_wigner_d_l2_einsum, 500),
+            (3, lambda q: quaternion_to_wigner_d_matmul(q, 3), 100),
+            (4, lambda q: quaternion_to_wigner_d_matmul(q, 4), 100),
         ],
     )
-    def test_kernel_matches_matexp(
-        self, dtype, device, ell, kernel_fn, n_samples, threshold
-    ):
+    def test_kernel_matches_matexp(self, dtype, device, ell, kernel_fn, n_samples):
         """Specialized kernels match matrix exponential method."""
         torch.manual_seed(42)
         q = torch.randn(n_samples, 4, dtype=dtype, device=device)
@@ -553,17 +560,12 @@ class TestSpecializedKernels:
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
         max_err = (D_kernel - D_matexp).abs().max().item()
-        assert max_err < threshold, f"l={ell} kernel differs from matexp by {max_err}"
+        assert (
+            max_err < _KERNEL_THRESHOLD
+        ), f"l={ell} kernel differs from matexp by {max_err}"
 
-    @pytest.mark.parametrize(
-        "ell,kernel_fn,threshold",
-        [
-            (2, quaternion_to_wigner_d_l2_einsum, 1e-10),
-            (3, quaternion_to_wigner_d_l3_matmul, 1e-9),
-            (4, quaternion_to_wigner_d_l4_matmul, 1e-9),
-        ],
-    )
-    def test_kernel_orthogonality(self, dtype, device, ell, kernel_fn, threshold):
+    @pytest.mark.parametrize("ell,kernel_fn", _KERNEL_TEST_PARAMS)
+    def test_kernel_orthogonality(self, dtype, device, ell, kernel_fn):
         """Specialized kernels produce orthogonal matrices."""
         torch.manual_seed(123)
         q = torch.randn(100, 4, dtype=dtype, device=device)
@@ -573,17 +575,10 @@ class TestSpecializedKernels:
         size = 2 * ell + 1
         I = torch.eye(size, dtype=dtype, device=device)
         orth_err = (D @ D.transpose(-1, -2) - I).abs().max().item()
-        assert orth_err < threshold, f"l={ell} orthogonality error: {orth_err}"
+        assert orth_err < _KERNEL_THRESHOLD, f"l={ell} orthogonality error: {orth_err}"
 
-    @pytest.mark.parametrize(
-        "ell,kernel_fn,threshold",
-        [
-            (2, quaternion_to_wigner_d_l2_einsum, 1e-10),
-            (3, quaternion_to_wigner_d_l3_matmul, 1e-9),
-            (4, quaternion_to_wigner_d_l4_matmul, 1e-9),
-        ],
-    )
-    def test_kernel_determinant_one(self, dtype, device, ell, kernel_fn, threshold):
+    @pytest.mark.parametrize("ell,kernel_fn", _KERNEL_TEST_PARAMS)
+    def test_kernel_determinant_one(self, dtype, device, ell, kernel_fn):
         """Specialized kernels produce matrices with determinant 1."""
         torch.manual_seed(456)
         q = torch.randn(100, 4, dtype=dtype, device=device)
@@ -591,7 +586,7 @@ class TestSpecializedKernels:
 
         D = kernel_fn(q)
         det_err = (torch.linalg.det(D) - 1.0).abs().max().item()
-        assert det_err < threshold, f"l={ell} determinant error: {det_err}"
+        assert det_err < _KERNEL_THRESHOLD, f"l={ell} determinant error: {det_err}"
 
 
 if __name__ == "__main__":
