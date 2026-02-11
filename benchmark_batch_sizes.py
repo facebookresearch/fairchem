@@ -7,7 +7,7 @@ Usage:
     python benchmark_batch_sizes.py --cuda       # Force CUDA
     python benchmark_batch_sizes.py --quick      # Quick mode (fewer runs)
     python benchmark_batch_sizes.py --method polynomial  # Use polynomial method
-    python benchmark_batch_sizes.py --l3_l4_kernels  # Use l3/l4 matmul kernels (hybrid)
+    python benchmark_batch_sizes.py --l4_kernel  # Use l4 matmul kernel (hybrid)
     python benchmark_batch_sizes.py --real       # Use real arithmetic
 """
 
@@ -52,9 +52,9 @@ def parse_args():
         help="Axis-angle method to use (default: hybrid)",
     )
     parser.add_argument(
-        "--l3_l4_kernels",
+        "--l4_kernel",
         action="store_true",
-        help="Use l3/l4 matmul kernels (hybrid only)",
+        help="Use l4 matmul kernel (hybrid only, l3 kernel always enabled)",
     )
     parser.add_argument(
         "--real",
@@ -165,8 +165,8 @@ def main():
     print(f"PERFORMANCE: Euler vs Axis-Angle ({args.method}) by Batch Size")
     if args.compile:
         print("(with torch.compile)")
-    if args.l3_l4_kernels:
-        print("(with l3_l4_kernels)")
+    if args.l4_kernel:
+        print("(with l4_kernel)")
     if args.real:
         print("(with real arithmetic)")
     print("=" * 90)
@@ -204,7 +204,7 @@ def main():
             return axis_angle_wigner_hybrid(
                 edges,
                 lmax,
-                l3_l4_kernel=args.l3_l4_kernels,
+                l4_kernel=args.l4_kernel,
                 use_real_arithmetic=args.real,
             )
         elif args.method == "matexp":
