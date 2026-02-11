@@ -34,6 +34,9 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    handle_single_atom_prediction,
+)
 from fairchem.core.units.mlip_unit.utils import (
     load_inference_model,
     tf32_context_manager,
@@ -158,6 +161,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.model, checkpoint = load_inference_model(
             inference_model_path, use_ema=True, overrides=overrides
         )
+
+        # Check if model natively supports single atom predictions
+        self.supports_single_atoms = checkpoint.model_config.get(
+            "supports_single_atoms", False
+        )
+
         tasks = [
             hydra.utils.instantiate(task_config)
             for task_config in checkpoint.tasks_config
@@ -254,6 +263,19 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 self.model = torch.compile(self.model, dynamic=True)
             self.lazy_model_intialized = True
 
+        # Handle single-atom systems (natoms==1 and pbc all False)
+        # Skip this check if the model natively supports single atoms
+        if not self.supports_single_atoms:
+            single_atom_result = handle_single_atom_prediction(
+                data=data,
+                atom_refs=self.atom_refs,
+                tasks=self.tasks,
+                device=self.device,
+            )
+            if single_atom_result is not None:
+                return single_atom_result
+
+        # Regular model prediction path
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
