@@ -10,16 +10,16 @@ from __future__ import annotations
 import copy
 from typing import TYPE_CHECKING
 
-from fairchem.core.common.profiler_utils import (
-    record_backward,
-    record_function_with_backward,
-)
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
 from typing_extensions import Literal
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.profiler_utils import (
+    record_backward,
+    record_function_with_backward,
+)
 from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,

@@ -11,10 +11,11 @@ import copy
 import math
 from typing import TYPE_CHECKING
 
-from fairchem.core.common.profiler_utils import record_backward
 import torch
 import torch.nn as nn
 from torch.nn import Linear
+
+from fairchem.core.common.profiler_utils import record_backward
 
 from .radial import RadialMLP
 

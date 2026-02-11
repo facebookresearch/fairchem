@@ -7,6 +7,7 @@ job:
     num_nodes: 1
     ranks_per_node: 1
   run_dir: /checkpoint/ocp/rgao/speed
+  graph_parallel_group_size: 1
 
 # job:
 #   device_type: CUDA

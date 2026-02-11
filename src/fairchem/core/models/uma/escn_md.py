@@ -10,12 +10,12 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Literal
 
-from fairchem.core.common.profiler_utils import record_backward
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.profiler_utils import record_backward
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
