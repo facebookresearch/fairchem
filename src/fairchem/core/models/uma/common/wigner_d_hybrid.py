@@ -7,9 +7,7 @@ This module provides Wigner D computation using the optimal method for each l:
 - l=2: Quaternion einsum tensor contraction (~20x faster on GPU)
 - l=3: Quaternion matmul (always used)
 - l=4: Quaternion matmul (optional, enabled with l4_kernel=True)
-- l=5: Quaternion matmul (optional, enabled with l5_kernel=True)
-- l=6: Quaternion matmul (optional, enabled with l6_kernel=True)
-- l>=lmin: Ra/Rb polynomial (faster than matrix_exp on GPU)
+- l>=4 or 5: Ra/Rb polynomial (faster than matrix_exp on GPU)
 
 Entry point:
 - axis_angle_wigner_hybrid: Main function with configurable arithmetic mode
@@ -55,8 +53,6 @@ def wigner_d_from_quaternion_hybrid(
     q: torch.Tensor,
     lmax: int,
     l4_kernel: bool = False,
-    l5_kernel: bool = False,
-    l6_kernel: bool = False,
     use_real_arithmetic: bool = False,
     coeffs: Optional[object] = None,
     U_blocks: Optional[list] = None,
@@ -70,16 +66,12 @@ def wigner_d_from_quaternion_hybrid(
     - l=2: Quaternion to Wigner D via degree-4 polynomial einsum
     - l=3: Quaternion matmul (always used)
     - l=4: Quaternion matmul if l4_kernel=True (faster with torch.compile)
-    - l=5: Quaternion matmul if l5_kernel=True (requires l4_kernel=True)
-    - l=6: Quaternion matmul if l6_kernel=True (requires l5_kernel=True)
-    - l>=lmin: Ra/Rb polynomial (lmin depends on kernel flags)
+    - l>=lmin: Ra/Rb polynomial (lmin=5 if l4_kernel else 4)
 
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
         lmax: Maximum angular momentum
         l4_kernel: If True, use custom matmul kernel for l=4
-        l5_kernel: If True, use custom matmul kernel for l=5 (requires l4_kernel)
-        l6_kernel: If True, use custom matmul kernel for l=6 (requires l5_kernel)
         use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
                             (torch.compile compatible, avoids complex tensors)
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
@@ -97,18 +89,9 @@ def wigner_d_from_quaternion_hybrid(
 
     D = torch.zeros(N, size, size, dtype=dtype, device=device)
 
-    # Determine lmin: the first l to compute using Ra/Rb polynomial
-    # Kernel flags must be set progressively (l5 requires l4, l6 requires l5)
-    if l6_kernel and l5_kernel and l4_kernel:
-        lmin = 7
-    elif l5_kernel and l4_kernel:
-        lmin = 6
-    elif l4_kernel:
-        lmin = 5
-    else:
-        lmin = 4
+    lmin = 5 if l4_kernel else 4
 
-    # Compute l=0,1,2,3 (and optionally 4,5,6) using direct quaternion methods
+    # Compute l=0,1,2,3 (and optionally 4) using direct quaternion methods
     for ell in range(min(lmax + 1, lmin)):
         if ell == 0:
             D[:, 0, 0] = 1.0
@@ -120,10 +103,6 @@ def wigner_d_from_quaternion_hybrid(
             D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(q, 3)
         elif l4_kernel and ell == 4:
             D[:, 16:25, 16:25] = quaternion_to_wigner_d_matmul(q, 4)
-        elif l5_kernel and l4_kernel and ell == 5:
-            D[:, 25:36, 25:36] = quaternion_to_wigner_d_matmul(q, 5)
-        elif l6_kernel and l5_kernel and l4_kernel and ell == 6:
-            D[:, 36:49, 36:49] = quaternion_to_wigner_d_matmul(q, 6)
 
     # Compute l>=lmin using Ra/Rb polynomial
     if lmax >= lmin:
@@ -165,8 +144,6 @@ def axis_angle_wigner_hybrid(
     gamma: Optional[torch.Tensor] = None,
     use_euler_gamma: bool = False,
     l4_kernel: bool = False,
-    l5_kernel: bool = False,
-    l6_kernel: bool = False,
     use_real_arithmetic: bool = False,
     coeffs: Optional[object] = None,
     U_blocks: Optional[list] = None,
@@ -180,9 +157,7 @@ def axis_angle_wigner_hybrid(
     - l=2: Quaternion einsum tensor contraction
     - l=3: Quaternion matmul (always used)
     - l=4: Quaternion matmul if l4_kernel=True
-    - l=5: Quaternion matmul if l5_kernel=True (requires l4_kernel)
-    - l=6: Quaternion matmul if l6_kernel=True (requires l5_kernel)
-    - l>=lmin: Ra/Rb polynomial (lmin depends on kernel flags)
+    - l>=lmin: Ra/Rb polynomial (lmin=5 if l4_kernel else 4)
 
     Combines the edge->Y and gamma rotations into a single quaternion before
     computing the Wigner D, avoiding the overhead of computing two separate
@@ -196,8 +171,6 @@ def axis_angle_wigner_hybrid(
         use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
                of random gamma. This makes output exactly match Euler code.
         l4_kernel: If True, use custom matmul kernel for l=4
-        l5_kernel: If True, use custom matmul kernel for l=5 (requires l4_kernel)
-        l6_kernel: If True, use custom matmul kernel for l=6 (requires l5_kernel)
         use_real_arithmetic: If True, use real-pair arithmetic for Ra/Rb
                (torch.compile compatible, avoids complex tensors)
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
@@ -238,8 +211,6 @@ def axis_angle_wigner_hybrid(
         q_combined,
         lmax,
         l4_kernel=l4_kernel,
-        l5_kernel=l5_kernel,
-        l6_kernel=l6_kernel,
         use_real_arithmetic=use_real_arithmetic,
         coeffs=coeffs,
         U_blocks=U_blocks,
