@@ -127,6 +127,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
+        dataset_list: (
+            list[str] | None
+        ) = None,  # deprecated, use dataset_mapping instead
         dataset_mapping: dict[str, str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
@@ -171,6 +174,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_mapping = dataset_mapping
+        self.dataset_list = dataset_list
+        if self.dataset_mapping is None and self.dataset_list is not None:
+            self.dataset_mapping = {dataset: dataset for dataset in self.dataset_list}
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
             assert self.dataset_mapping, "the dataset mapping is empty, please add it to the model backbone config"
