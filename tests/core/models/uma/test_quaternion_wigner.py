@@ -36,6 +36,10 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
     wigner_D,
 )
+from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+    preload_kernel_caches,
+    quaternion_to_wigner_d_matmul,
+)
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
 )
@@ -72,6 +76,16 @@ def Jd_matrices(lmax, dtype, device):
         return [J.to(dtype=dtype) for J in Jd[: lmax + 1]]
     else:
         pytest.skip(f"Jd.pt not found at {jd_path}")
+
+
+@pytest.fixture()
+def preload_kernel_coefficients(dtype, device):
+    """Pre-load kernel coefficients to avoid torch.load during torch.compile.
+
+    torch.compile cannot trace through torch.load, so we must ensure all
+    coefficient caches are populated before running compiled functions.
+    """
+    preload_kernel_caches(dtype, device)
 
 
 # =============================================================================
@@ -234,23 +248,23 @@ class TestEntryPointAgreement:
         assert (D_matexp - D_hybrid).abs().max() < 1e-9, "hybrid differs from matexp"
         assert (D_matexp - D_poly).abs().max() < 1e-9, "polynomial differs from matexp"
 
-    def test_l3_l4_kernel_matches(self, dtype, device):
-        """l3_l4_kernel=True produces same results as default methods."""
-        lmax = 4  # Need lmax >= 4 to test both l=3 and l=4 kernels
+    def test_l4_kernel_matches(self, dtype, device):
+        """l4_kernel=True produces same results as default methods."""
+        lmax = 4  # Need lmax >= 4 to test l=4 kernel
         torch.manual_seed(42)
         edges = torch.randn(50, 3, dtype=dtype, device=device)
         gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
 
-        # Reference: hybrid without l3_l4_kernel
+        # Reference: hybrid without l4_kernel
         D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        # Test: hybrid with l3_l4_kernel=True
-        D_hybrid_l3l4, _ = axis_angle_wigner_hybrid(
-            edges, lmax, gamma=gamma, l3_l4_kernel=True
+        # Test: hybrid with l4_kernel=True
+        D_hybrid_l4, _ = axis_angle_wigner_hybrid(
+            edges, lmax, gamma=gamma, l4_kernel=True
         )
 
         assert (
-            (D_hybrid - D_hybrid_l3l4).abs().max() < 1e-9
-        ), "hybrid with l3_l4_kernel=True differs from hybrid without"
+            D_hybrid - D_hybrid_l4
+        ).abs().max() < 1e-9, "hybrid with l4_kernel=True differs from hybrid without"
 
     def test_real_methods_match_complex(self, lmax, dtype, device):
         """Real-arithmetic methods match complex-arithmetic methods."""
@@ -703,14 +717,13 @@ class TestSpecializedKernels:
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
         max_err = (D_einsum - D_matexp).abs().max().item()
-        assert max_err < 1e-10, f"l=2 einsum differs from matexp by {max_err}"
+        assert max_err < 1e-12, f"l=2 einsum differs from matexp by {max_err}"
 
     def test_l3_matmul_matches_matexp(self, dtype, device):
         """l=3 matmul kernel matches matrix exponential method."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
             get_so3_generators,
             quaternion_to_axis_angle,
-            quaternion_to_wigner_d_l3_matmul,
         )
 
         torch.manual_seed(42)
@@ -719,7 +732,7 @@ class TestSpecializedKernels:
         q = q / q.norm(dim=-1, keepdim=True)
 
         # Matmul method
-        D_matmul = quaternion_to_wigner_d_l3_matmul(q)
+        D_matmul = quaternion_to_wigner_d_matmul(q, 3)
 
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
@@ -733,14 +746,13 @@ class TestSpecializedKernels:
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
         max_err = (D_matmul - D_matexp).abs().max().item()
-        assert max_err < 1e-9, f"l=3 matmul differs from matexp by {max_err}"
+        assert max_err < 1e-12, f"l=3 matmul differs from matexp by {max_err}"
 
     def test_l4_matmul_matches_matexp(self, dtype, device):
         """l=4 matmul kernel matches matrix exponential method."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
             get_so3_generators,
             quaternion_to_axis_angle,
-            quaternion_to_wigner_d_l4_matmul,
         )
 
         torch.manual_seed(42)
@@ -749,7 +761,7 @@ class TestSpecializedKernels:
         q = q / q.norm(dim=-1, keepdim=True)
 
         # Matmul method
-        D_matmul = quaternion_to_wigner_d_l4_matmul(q)
+        D_matmul = quaternion_to_wigner_d_matmul(q, 4)
 
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
@@ -763,14 +775,12 @@ class TestSpecializedKernels:
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
         max_err = (D_matmul - D_matexp).abs().max().item()
-        assert max_err < 1e-9, f"l=4 matmul differs from matexp by {max_err}"
+        assert max_err < 1e-12, f"l=4 matmul differs from matexp by {max_err}"
 
     def test_kernels_orthogonality(self, dtype, device):
         """Specialized kernels produce orthogonal matrices."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
             quaternion_to_wigner_d_l2_einsum,
-            quaternion_to_wigner_d_l3_matmul,
-            quaternion_to_wigner_d_l4_matmul,
         )
 
         torch.manual_seed(123)
@@ -784,13 +794,13 @@ class TestSpecializedKernels:
         assert orth_err_2 < 1e-10, f"l=2 orthogonality error: {orth_err_2}"
 
         # l=3
-        D3 = quaternion_to_wigner_d_l3_matmul(q)
+        D3 = quaternion_to_wigner_d_matmul(q, 3)
         I7 = torch.eye(7, dtype=dtype, device=device)
         orth_err_3 = (D3 @ D3.transpose(-1, -2) - I7).abs().max().item()
         assert orth_err_3 < 1e-9, f"l=3 orthogonality error: {orth_err_3}"
 
         # l=4
-        D4 = quaternion_to_wigner_d_l4_matmul(q)
+        D4 = quaternion_to_wigner_d_matmul(q, 4)
         I9 = torch.eye(9, dtype=dtype, device=device)
         orth_err_4 = (D4 @ D4.transpose(-1, -2) - I9).abs().max().item()
         assert orth_err_4 < 1e-9, f"l=4 orthogonality error: {orth_err_4}"
@@ -799,8 +809,6 @@ class TestSpecializedKernels:
         """Specialized kernels produce matrices with determinant 1."""
         from fairchem.core.models.uma.common.wigner_d_matexp import (
             quaternion_to_wigner_d_l2_einsum,
-            quaternion_to_wigner_d_l3_matmul,
-            quaternion_to_wigner_d_l4_matmul,
         )
 
         torch.manual_seed(456)
@@ -813,12 +821,12 @@ class TestSpecializedKernels:
         assert det_err_2 < 1e-10, f"l=2 determinant error: {det_err_2}"
 
         # l=3
-        D3 = quaternion_to_wigner_d_l3_matmul(q)
+        D3 = quaternion_to_wigner_d_matmul(q, 3)
         det_err_3 = (torch.linalg.det(D3) - 1.0).abs().max().item()
         assert det_err_3 < 1e-9, f"l=3 determinant error: {det_err_3}"
 
         # l=4
-        D4 = quaternion_to_wigner_d_l4_matmul(q)
+        D4 = quaternion_to_wigner_d_matmul(q, 4)
         det_err_4 = (torch.linalg.det(D4) - 1.0).abs().max().item()
         assert det_err_4 < 1e-9, f"l=4 determinant error: {det_err_4}"
 

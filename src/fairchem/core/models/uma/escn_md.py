@@ -27,6 +27,9 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+    preload_kernel_caches,
+)
 from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
 from fairchem.core.models.uma.nn.embedding_dev import (
     ChgSpinEmbedding,
@@ -190,8 +193,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # Precompute Wigner coefficients for quaternion path (like Jd for Euler path)
         if self.use_quaternion_wigner:
-            # lmin=3 because l=0,1,2 use custom kernels in the hybrid method
-            self.wigner_data = create_wigner_data_module(lmax=self.lmax, lmin=3)
+            # lmin=4 because l=0,1,2,3 use custom kernels in the hybrid method
+            self.wigner_data = create_wigner_data_module(lmax=self.lmax, lmin=4)
+            # Pre-load kernel caches for torch.compile compatibility
+            preload_kernel_caches()
 
         self.sph_feature_size = int((self.lmax + 1) ** 2)
         self.mappingReduced = CoefficientMapping(self.lmax, self.mmax)
