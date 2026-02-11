@@ -203,6 +203,12 @@ class WignerCoefficients:
 # Threshold for detecting near-zero magnitudes
 EPSILON = 1e-14
 
+# Blend region parameters for two-chart quaternion computation
+# The blend region is ey in [_BLEND_START, _BLEND_START + _BLEND_WIDTH]
+# which corresponds to ey in [-0.9, 0.9]
+_BLEND_START = -0.9
+_BLEND_WIDTH = 1.8
+
 # Default cache directory for precomputed coefficients
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "fairchem" / "wigner_coeffs"
 
@@ -751,9 +757,7 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
     q_chart1 = _quaternion_chart1_standard(ex, ey, ez)
     q_chart2 = _quaternion_chart2_via_minus_y(ex, ey, ez)
 
-    blend_start = -0.9
-    blend_width = 1.8
-    t = (ey - blend_start) / blend_width
+    t = (ey - _BLEND_START) / _BLEND_WIDTH
     t_smooth = _smooth_step_cinf(t)
 
     q = quaternion_nlerp(q_chart2, q_chart1, t_smooth)
@@ -799,9 +803,7 @@ def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
     gamma_chart2 = torch.atan2(ex, ez)
 
     # Blend factor (same as quaternion_edge_to_y_stable)
-    blend_start = -0.9
-    blend_width = 1.8
-    t = (ey - blend_start) / blend_width
+    t = (ey - _BLEND_START) / _BLEND_WIDTH
     t_smooth = _smooth_step_cinf(t)
 
     # Interpolate: t_smooth=0 -> chart2, t_smooth=1 -> chart1

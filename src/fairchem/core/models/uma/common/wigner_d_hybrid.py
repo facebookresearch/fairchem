@@ -24,6 +24,7 @@ from typing import Optional
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    WignerCoefficients,
     compute_euler_matching_gamma,
     get_ra_rb_coefficients_real,
     quaternion_edge_to_y_stable,
@@ -49,8 +50,8 @@ def wigner_d_from_quaternion_hybrid(
     q: torch.Tensor,
     lmax: int,
     l4_kernel: bool = False,
-    coeffs: Optional[object] = None,
-    U_blocks: Optional[list] = None,
+    coeffs: Optional[WignerCoefficients] = None,
+    U_blocks: Optional[list[tuple[torch.Tensor, torch.Tensor]]] = None,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices from quaternion using hybrid approach.
@@ -125,8 +126,8 @@ def axis_angle_wigner_hybrid(
     gamma: Optional[torch.Tensor] = None,
     use_euler_gamma: bool = False,
     l4_kernel: bool = False,
-    coeffs: Optional[object] = None,
-    U_blocks: Optional[list] = None,
+    coeffs: Optional[WignerCoefficients] = None,
+    U_blocks: Optional[list[tuple[torch.Tensor, torch.Tensor]]] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D using hybrid approach (optimal method per l).
