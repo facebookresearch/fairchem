@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import torch
 
-from src.fairchem.core.models.uma.nn.embedding_dev import DatasetEmbedding
+from fairchem.core.models.uma.nn.embedding import DatasetEmbedding
 
 
 class TestDatasetEmbedding:
