@@ -42,8 +42,23 @@ _KERNEL_CACHE: dict[tuple[int, torch.dtype, torch.device], object] = {}
 
 @functools.lru_cache(maxsize=1)
 def _load_coefficients() -> dict:
-    """Load precomputed coefficients from file (cached after first load)."""
-    return torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
+    """Load precomputed coefficients from file (cached after first load).
+
+    Coefficients are stored in palette-compressed format for smaller file size.
+    Each matrix is stored as (palette, indices, shape) and decompressed here.
+    """
+    raw = torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
+
+    # Decompress palette format
+    result = {}
+    for ell in [2, 3, 4]:
+        key = f"C_l{ell}"
+        palette = raw[f"{key}_palette"]
+        indices = raw[f"{key}_indices"]
+        shape = tuple(raw[f"{key}_shape"].tolist())
+        result[key] = palette[indices.long()].reshape(shape)
+
+    return result
 
 
 def clear_memory_caches() -> None:
