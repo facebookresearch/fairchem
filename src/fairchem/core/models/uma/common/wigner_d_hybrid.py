@@ -5,8 +5,9 @@ This module provides Wigner D computation using the optimal method for each l:
 - l=0: Trivial (identity)
 - l=1: Direct quaternion to rotation matrix (fastest for 3x3)
 - l=2: Quaternion einsum tensor contraction (~20x faster on GPU)
-- l=3,4: Quaternion matmul (optional, enabled with l4_kernel=True)
-- l>=3 or 5: Ra/Rb polynomial (faster than matrix_exp on GPU)
+- l=3: Quaternion matmul (always used)
+- l=4: Quaternion matmul (optional, enabled with l4_kernel=True)
+- l>=4 or 5: Ra/Rb polynomial (faster than matrix_exp on GPU)
 
 Entry point:
 - axis_angle_wigner_hybrid: Main function using real arithmetic throughout
@@ -59,7 +60,8 @@ def wigner_d_from_quaternion_hybrid(
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
     - l=2: Quaternion to Wigner D via degree-4 polynomial einsum
-    - l=3,4: Quaternion matmul if l4_kernel=True (faster with torch.compile)
+    - l=3: Quaternion matmul (always used)
+    - l=4: Quaternion matmul if l4_kernel=True (faster with torch.compile)
     - l>=lmin: Ra/Rb polynomial (lmin=5 if l4_kernel else 4)
 
     Uses real-pair arithmetic throughout for torch.compile compatibility.
@@ -67,7 +69,7 @@ def wigner_d_from_quaternion_hybrid(
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
         lmax: Maximum angular momentum
-        l4_kernel: If True, use custom matmul kernels for l=3,4
+        l4_kernel: If True, use custom matmul kernel for l=4
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
                 skips the cache lookup for better performance in hot paths.
         U_blocks: Optional pre-computed U transformation blocks.
@@ -135,7 +137,8 @@ def axis_angle_wigner_hybrid(
     - l=0: Trivial (identity)
     - l=1: Quaternion to rotation matrix (fastest for 3x3, already Cartesian)
     - l=2: Quaternion einsum tensor contraction
-    - l=3,4: Quaternion matmul if l4_kernel=True
+    - l=3: Quaternion matmul (always used)
+    - l=4: Quaternion matmul if l4_kernel=True
     - l>=lmin: Ra/Rb polynomial (lmin=5 if l4_kernel else 4)
 
     Combines the edge->Y and gamma rotations into a single quaternion before
@@ -151,7 +154,7 @@ def axis_angle_wigner_hybrid(
                If None, uses random gamma (for SO(2) equivariance during training).
         use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
                of random gamma. This makes output exactly match Euler code.
-        l4_kernel: If True, use custom matmul kernels for l=4
+        l4_kernel: If True, use custom matmul kernel for l=4
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
                skips the cache lookup for better performance in hot paths.
         U_blocks: Optional pre-computed U transformation blocks.

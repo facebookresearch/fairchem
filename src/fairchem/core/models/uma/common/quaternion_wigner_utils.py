@@ -273,7 +273,7 @@ def get_ra_rb_coefficients_real(
 
 def create_wigner_data_module(
     lmax: int,
-    lmin: int = 3,
+    lmin: int = 4,
 ) -> WignerDataModule:
     """
     Create a WignerDataModule with precomputed coefficients and U blocks.
@@ -288,7 +288,8 @@ def create_wigner_data_module(
 
     Args:
         lmax: Maximum angular momentum
-        lmin: Minimum angular momentum (default 3, matching hybrid method)
+        lmin: Minimum angular momentum (default 4, matching hybrid method
+              which uses custom kernels for l=0,1,2,3)
 
     Returns:
         WignerDataModule containing coefficients and U_blocks
