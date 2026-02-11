@@ -107,7 +107,7 @@ import triton
 import triton.language as tl
 
 
-@triton.jit
+@triton.jit(do_not_specialize=['N', 'stride_q', 'stride_d', 'stride_c_row'])
 def _wigner_d_l{ell}_kernel(
     q_ptr,              # Input: (N, 4)
     D_ptr,              # Output: (N, {n_outputs})
