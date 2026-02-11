@@ -7,7 +7,9 @@ Usage:
     python benchmark_batch_sizes.py --cuda       # Force CUDA
     python benchmark_batch_sizes.py --quick      # Quick mode (fewer runs)
     python benchmark_batch_sizes.py --method polynomial  # Use polynomial method
-    python benchmark_batch_sizes.py --l3_l4_kernels  # Use l3/l4 matmul kernels (hybrid)
+    python benchmark_batch_sizes.py --l4_kernel  # Use l4 matmul kernel (hybrid)
+    python benchmark_batch_sizes.py --l5_kernel  # Use l5 matmul kernel (hybrid)
+    python benchmark_batch_sizes.py --l6_kernel  # Use l6 matmul kernel (hybrid)
     python benchmark_batch_sizes.py --real       # Use real arithmetic
 """
 
@@ -52,9 +54,19 @@ def parse_args():
         help="Axis-angle method to use (default: hybrid)",
     )
     parser.add_argument(
-        "--l3_l4_kernels",
+        "--l4_kernel",
         action="store_true",
-        help="Use l3/l4 matmul kernels (hybrid only)",
+        help="Use l4 matmul kernel (hybrid only)",
+    )
+    parser.add_argument(
+        "--l5_kernel",
+        action="store_true",
+        help="Use l5 matmul kernel (hybrid only, requires --l4_kernel)",
+    )
+    parser.add_argument(
+        "--l6_kernel",
+        action="store_true",
+        help="Use l6 matmul kernel (hybrid only, requires --l5_kernel)",
     )
     parser.add_argument(
         "--real",
@@ -153,11 +165,7 @@ def main():
         n_warmup = 3
         n_runs = 5
     else:
-        batch_sizes = (
-            [100, 500, 1000, 2000, 5000]
-            + list(range(10000, 150000, 10000))
-            + list(range(200000, 600000, 100000))
-        )
+        batch_sizes = [1000, 5000, 10000, 100000, 500000]
         n_warmup = 5
         n_runs = 20
 
@@ -165,8 +173,12 @@ def main():
     print(f"PERFORMANCE: Euler vs Axis-Angle ({args.method}) by Batch Size")
     if args.compile:
         print("(with torch.compile)")
-    if args.l3_l4_kernels:
-        print("(with l3_l4_kernels)")
+    if args.l4_kernel:
+        print("(with l4_kernel)")
+    if args.l5_kernel:
+        print("(with l5_kernel)")
+    if args.l6_kernel:
+        print("(with l6_kernel)")
     if args.real:
         print("(with real arithmetic)")
     print("=" * 90)
@@ -204,7 +216,9 @@ def main():
             return axis_angle_wigner_hybrid(
                 edges,
                 lmax,
-                l3_l4_kernel=args.l3_l4_kernels,
+                l4_kernel=args.l4_kernel,
+                l5_kernel=args.l5_kernel,
+                l6_kernel=args.l6_kernel,
                 use_real_arithmetic=args.real,
             )
         elif args.method == "matexp":
