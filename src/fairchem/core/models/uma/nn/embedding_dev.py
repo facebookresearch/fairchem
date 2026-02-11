@@ -218,17 +218,17 @@ class ChgSpinEmbedding(nn.Module):
 
 class DatasetEmbedding(nn.Module):
     def __init__(
-        self, embedding_size, grad, dataset_list, dataset_mapping=None
+        self, embedding_size, enable_grad, dataset_list, dataset_mapping=None
     ) -> None:
         super().__init__()
         self.embedding_size = embedding_size
-        self.grad = grad
+        self.enable_grad = enable_grad
         self.dataset_mapping = dataset_mapping
         self.dataset_emb_dict = nn.ModuleDict({})
         for dataset in dataset_list:
             if dataset not in self.dataset_emb_dict:
                 self.dataset_emb_dict[dataset] = nn.Embedding(1, embedding_size)
-            if not self.grad:
+            if not self.enable_grad:
                 for param in self.dataset_emb_dict[dataset].parameters():
                     param.requires_grad = False
 
@@ -241,7 +241,7 @@ class DatasetEmbedding(nn.Module):
                 self.dataset_mapping.get(dataset, dataset) for dataset in dataset_list
             ]
 
-        if self.grad and self.training:
+        if self.enable_grad and self.training:
             # If gradients are enabled we need to ensure that all embeddings are included
             # in the graph even if they are missing from the batch
             safety_loss_emb = torch.stack(
