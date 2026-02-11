@@ -89,6 +89,9 @@ class InferenceSettings:
 
     edge_chunk_size: int | None = None
 
+    # Only compute energy , skip stress+forces
+    energy_only: bool = False
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
