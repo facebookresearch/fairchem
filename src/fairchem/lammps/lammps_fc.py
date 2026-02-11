@@ -142,10 +142,7 @@ def restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
     lz = boxhi[2] - boxlo[2]
 
     # Lammps uses a restricted triclinic box defined by 6 parameters: lx, ly, lz, xy, xz, yz. See https://docs.lammps.org/Howto_triclinic.html for details.
-    # ASE uses a 3x3 cell matrix who's rows represent lattice vectors of a generic triclinic cell. We can convert between these two representations using the following formulas:
-    # a = (lx, 0, 0)
-    # b = (xy, ly, 0)
-    # c = (xz, yz, lz)
+    # ASE uses a 3x3 cell matrix where the rows are the lattice vectors.
     unit_cell_matrix = torch.tensor(
         [
             [lx, 0, 0],  # a vector
