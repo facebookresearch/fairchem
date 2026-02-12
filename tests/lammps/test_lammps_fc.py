@@ -59,7 +59,65 @@ def create_lammps_data_file(filepath, positions, cell, atom_types, masses):
             f.write(f"{i} {atype} {pos[0]} {pos[1]} {pos[2]}\n")
 
 
-def test_scaled_positions_lammps_vs_ase():
+@pytest.mark.parametrize(
+    "cell_name,cell,fractional_positions",
+    [
+        (
+            "cubic",
+            np.array(
+                [[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]], dtype=np.float64
+            ),
+            np.array(
+                [[0.1, 0.2, 0.3], [0.7, 0.8, 0.1], [0.5, 0.5, 0.5]], dtype=np.float64
+            ),
+        ),
+        (
+            "orthorhombic",
+            np.array(
+                [[3.0, 0.0, 0.0], [0.0, 4.0, 0.0], [0.0, 0.0, 5.0]], dtype=np.float64
+            ),
+            np.array(
+                [[0.1, 0.2, 0.3], [0.7, 0.8, 0.1], [0.5, 0.5, 0.5]], dtype=np.float64
+            ),
+        ),
+        (
+            "monoclinic",
+            np.array(
+                [[4.0, 0.0, 0.0], [-1.5, 4.5, 0.0], [0.0, 0.0, 6.0]], dtype=np.float64
+            ),
+            np.array(
+                [[0.1, 0.2, 0.3], [0.7, 0.8, 0.1], [0.5, 0.5, 0.5]], dtype=np.float64
+            ),
+        ),
+        (
+            "triclinic",
+            np.array(
+                [[5.0, 0.0, 0.0], [1.2, 4.8, 0.0], [0.8, 0.5, 5.5]], dtype=np.float64
+            ),
+            np.array(
+                [[0.1, 0.2, 0.3], [0.7, 0.8, 0.1], [0.5, 0.5, 0.5]], dtype=np.float64
+            ),
+        ),
+        (
+            "triclinic_with_boundary_atoms",
+            np.array(
+                [[5.0, 0.0, 0.0], [1.0, 4.0, 0.0], [0.5, 0.3, 6.0]], dtype=np.float64
+            ),
+            np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [0.5, 0.0, 0.0],
+                    [0.0, 0.5, 0.0],
+                    [0.0, 0.0, 0.5],
+                    [0.5, 0.5, 0.5],
+                    [0.25, 0.75, 0.25],
+                ],
+                dtype=np.float64,
+            ),
+        ),
+    ],
+)
+def test_scaled_positions_lammps_vs_ase(cell_name, cell, fractional_positions):
     """
     Test that scaled atomic positions computed by ASE match those from LAMMPS.
 
@@ -71,31 +129,6 @@ def test_scaled_positions_lammps_vs_ase():
     5. Verifies that scaled (fractional) positions match
     """
     lammps = pytest.importorskip("lammps")
-
-    # Define a general triclinic cell (rows are lattice vectors)
-    # This is already in restricted triclinic form for simplicity
-    cell = np.array(
-        [
-            [5.0, 0.0, 0.0],  # a vector
-            [1.0, 4.0, 0.0],  # b vector (tilted in xy)
-            [0.5, 0.3, 6.0],  # c vector (tilted in xz and yz)
-        ],
-        dtype=np.float64,
-    )
-
-    # Define atom positions in Cartesian coordinates
-    # Place atoms at various fractional coordinates
-    fractional_positions = np.array(
-        [
-            [0.0, 0.0, 0.0],
-            [0.5, 0.0, 0.0],
-            [0.0, 0.5, 0.0],
-            [0.0, 0.0, 0.5],
-            [0.5, 0.5, 0.5],
-            [0.25, 0.75, 0.25],
-        ],
-        dtype=np.float64,
-    )
 
     # Convert fractional to Cartesian: pos = frac @ cell
     cartesian_positions = fractional_positions @ cell
@@ -142,110 +175,10 @@ def test_scaled_positions_lammps_vs_ase():
 
         # The key validation: scaled positions from ASE should match our original
         # fractional positions. We compare modulo 1 to handle periodic boundary effects.
-        # Use a reasonable tolerance for floating point precision through LAMMPS I/O.
         def normalize_fractional(frac):
             """Normalize fractional coordinates to [0, 1) handling numerical precision."""
             normalized = frac % 1.0
             # Handle values very close to 1.0 that should wrap to 0.0
-            normalized = np.where(np.abs(normalized - 1.0) < 1e-6, 0.0, normalized)
-            return normalized
-
-        wrapped_original = normalize_fractional(fractional_positions)
-        wrapped_ase = normalize_fractional(ase_scaled_positions)
-
-        assert np.allclose(
-            wrapped_ase, wrapped_original, atol=1e-5
-        ), f"Scaled positions don't match original fractional:\nASE: {wrapped_ase}\nOriginal: {wrapped_original}"
-
-        lmp.close()
-
-
-@pytest.mark.parametrize(
-    "cell_name,cell",
-    [
-        (
-            "cubic",
-            np.array(
-                [[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]], dtype=np.float64
-            ),
-        ),
-        (
-            "orthorhombic",
-            np.array(
-                [[3.0, 0.0, 0.0], [0.0, 4.0, 0.0], [0.0, 0.0, 5.0]], dtype=np.float64
-            ),
-        ),
-        (
-            "monoclinic",
-            np.array(
-                [[4.0, 0.0, 0.0], [-1.5, 4.5, 0.0], [0.0, 0.0, 6.0]], dtype=np.float64
-            ),
-        ),
-        (
-            "triclinic",
-            np.array(
-                [[5.0, 0.0, 0.0], [1.2, 4.8, 0.0], [0.8, 0.5, 5.5]], dtype=np.float64
-            ),
-        ),
-    ],
-)
-def test_scaled_positions_various_triclinic_cells(cell_name, cell):
-    """
-    Test scaled positions for various triclinic cell configurations.
-
-    Tests cubic, orthorhombic, monoclinic, and general triclinic cells
-    to ensure the cell conversion works correctly in all cases.
-    """
-    lammps = pytest.importorskip("lammps")
-
-    fractional_positions = np.array(
-        [
-            [0.1, 0.2, 0.3],
-            [0.7, 0.8, 0.1],
-            [0.5, 0.5, 0.5],
-        ],
-        dtype=np.float64,
-    )
-
-    atom_types = [1] * len(fractional_positions)
-    masses = {1: 12.011}
-
-    cartesian_positions = fractional_positions @ cell
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        data_file = os.path.join(tmpdir, "test.data")
-        create_lammps_data_file(
-            data_file, cartesian_positions, cell, atom_types, masses
-        )
-
-        lmp = lammps.lammps(cmdargs=["-screen", "none", "-log", "none"])
-        lmp.command("units metal")
-        lmp.command("atom_style atomic")
-        lmp.command("boundary p p p")
-        lmp.command(f"read_data {data_file}")
-
-        boxlo, boxhi, xy_lmp, yz_lmp, xz_lmp, periodicity, box_change = (
-            lmp.extract_box()
-        )
-
-        nlocal = lmp.get_natoms()
-        x_lammps = lmp.numpy.extract_atom("x")[:nlocal].copy()
-
-        cell_from_lammps = restricted_cell_from_lammps_box(
-            boxlo, boxhi, xy_lmp, yz_lmp, xz_lmp
-        )
-        cell_np = cell_from_lammps.squeeze().numpy()
-
-        ase_atoms = Atoms(
-            symbols=["C"] * nlocal, positions=x_lammps, cell=cell_np, pbc=True
-        )
-
-        ase_scaled_positions = ase_atoms.get_scaled_positions(wrap=False)
-
-        # Verify scaled positions match original fractional positions
-        def normalize_fractional(frac):
-            """Normalize fractional coordinates to [0, 1) handling numerical precision."""
-            normalized = frac % 1.0
             normalized = np.where(np.abs(normalized - 1.0) < 1e-6, 0.0, normalized)
             return normalized
 
