@@ -1,351 +1,292 @@
 from __future__ import annotations
 
+import os
+import tempfile
+
 import numpy as np
-import torch
+import pytest
+from ase import Atoms
 from fairchem.lammps.lammps_fc import restricted_cell_from_lammps_box
 
 
-def general_to_restricted_triclinic(A: np.ndarray, B: np.ndarray, C: np.ndarray):
+def create_lammps_data_file(filepath, positions, cell, atom_types, masses):
     """
-    Convert general triclinic lattice vectors A, B, C to LAMMPS restricted triclinic parameters.
-
-    Based on equations from https://docs.lammps.org/Howto_triclinic.html:
-    - lx = |A|
-    - xy = B · A_hat where A_hat = A/|A|
-    - ly = sqrt(|B|² - xy²)
-    - xz = C · A_hat
-    - yz = (C · B - xy*xz) / ly
-    - lz = sqrt(|C|² - xz² - yz²)
+    Create a LAMMPS data file for a triclinic box.
 
     Args:
-        A: First lattice vector (3,)
-        B: Second lattice vector (3,)
-        C: Third lattice vector (3,)
-
-    Returns:
-        tuple: (lx, ly, lz, xy, xz, yz) restricted triclinic parameters
+        filepath: Path to write the data file
+        positions: Nx3 array of atom positions in Cartesian coordinates
+        cell: 3x3 cell matrix (rows are lattice vectors)
+        atom_types: List of atom type IDs (1-indexed for LAMMPS)
+        masses: Dict mapping atom type ID to mass
     """
-    A = np.asarray(A, dtype=np.float64)
-    B = np.asarray(B, dtype=np.float64)
-    C = np.asarray(C, dtype=np.float64)
+    n_atoms = len(positions)
+    n_types = len(masses)
 
-    # lx = |A|
-    lx = np.linalg.norm(A)
-    A_hat = A / lx
+    # Extract cell parameters for LAMMPS triclinic box
+    # Cell rows are: a = cell[0], b = cell[1], c = cell[2]
+    a_vec = cell[0]
+    b_vec = cell[1]
+    c_vec = cell[2]
 
-    # xy = B · A_hat
-    xy = np.dot(B, A_hat)
+    # LAMMPS restricted triclinic parameters
+    # See: https://docs.lammps.org/Howto_triclinic.html
+    xlo, ylo, zlo = 0.0, 0.0, 0.0
+    xhi = a_vec[0]  # lx
+    xy = b_vec[0]
+    yhi = b_vec[1]  # ly
+    xz = c_vec[0]
+    yz = c_vec[1]
+    zhi = c_vec[2]  # lz
 
-    # ly = sqrt(|B|² - xy²)
-    ly = np.sqrt(np.dot(B, B) - xy**2)
+    with open(filepath, "w") as f:
+        f.write("LAMMPS data file\n\n")
+        f.write(f"{n_atoms} atoms\n")
+        f.write(f"{n_types} atom types\n\n")
 
-    # xz = C · A_hat
-    xz = np.dot(C, A_hat)
+        f.write(f"{xlo} {xhi} xlo xhi\n")
+        f.write(f"{ylo} {yhi} ylo yhi\n")
+        f.write(f"{zlo} {zhi} zlo zhi\n")
+        f.write(f"{xy} {xz} {yz} xy xz yz\n\n")
 
-    # yz = (C · B - xy*xz) / ly
-    yz = (np.dot(C, B) - xy * xz) / ly
+        f.write("Masses\n\n")
+        for type_id, mass in masses.items():
+            f.write(f"{type_id} {mass}\n")
+        f.write("\n")
 
-    # lz = sqrt(|C|² - xz² - yz²)
-    lz = np.sqrt(np.dot(C, C) - xz**2 - yz**2)
+        f.write("Atoms\n\n")
+        for i, (pos, atype) in enumerate(zip(positions, atom_types), start=1):
+            f.write(f"{i} {atype} {pos[0]} {pos[1]} {pos[2]}\n")
 
-    return lx, ly, lz, xy, xz, yz
 
-
-def cell_lengths_and_angles(cell: np.ndarray):
+def test_scaled_positions_lammps_vs_ase():
     """
-    Compute cell lengths (a, b, c) and angles (alpha, beta, gamma) from a 3x3 cell matrix.
+    Test that scaled atomic positions computed by ASE match those from LAMMPS.
 
-    Args:
-        cell: 3x3 array where rows are lattice vectors
-
-    Returns:
-        tuple: (a, b, c, alpha, beta, gamma) where angles are in radians
+    This test:
+    1. Creates a LAMMPS simulation with atoms in a triclinic box
+    2. Extracts box parameters and Cartesian positions from LAMMPS
+    3. Uses restricted_cell_from_lammps_box to get the ASE cell
+    4. Creates an ASE Atoms object with the positions and cell
+    5. Verifies that scaled (fractional) positions match
     """
-    a_vec, b_vec, c_vec = cell[0], cell[1], cell[2]
-    a = np.linalg.norm(a_vec)
-    b = np.linalg.norm(b_vec)
-    c = np.linalg.norm(c_vec)
+    lammps = pytest.importorskip("lammps")
 
-    # alpha = angle between b and c
-    alpha = np.arccos(np.dot(b_vec, c_vec) / (b * c))
-    # beta = angle between a and c
-    beta = np.arccos(np.dot(a_vec, c_vec) / (a * c))
-    # gamma = angle between a and b
-    gamma = np.arccos(np.dot(a_vec, b_vec) / (a * b))
+    # Define a general triclinic cell (rows are lattice vectors)
+    # This is already in restricted triclinic form for simplicity
+    cell = np.array(
+        [
+            [5.0, 0.0, 0.0],  # a vector
+            [1.0, 4.0, 0.0],  # b vector (tilted in xy)
+            [0.5, 0.3, 6.0],  # c vector (tilted in xz and yz)
+        ],
+        dtype=np.float64,
+    )
 
-    return a, b, c, alpha, beta, gamma
+    # Define atom positions in Cartesian coordinates
+    # Place atoms at various fractional coordinates
+    fractional_positions = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [0.0, 0.5, 0.0],
+            [0.0, 0.0, 0.5],
+            [0.5, 0.5, 0.5],
+            [0.25, 0.75, 0.25],
+        ],
+        dtype=np.float64,
+    )
+
+    # Convert fractional to Cartesian: pos = frac @ cell
+    cartesian_positions = fractional_positions @ cell
+
+    # Atom types (all type 1 = Carbon for simplicity)
+    atom_types = [1] * len(cartesian_positions)
+    masses = {1: 12.011}  # Carbon mass
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        data_file = os.path.join(tmpdir, "test.data")
+        create_lammps_data_file(
+            data_file, cartesian_positions, cell, atom_types, masses
+        )
+
+        # Create LAMMPS instance and read the data file
+        lmp = lammps.lammps(cmdargs=["-screen", "none", "-log", "none"])
+        lmp.command("units metal")
+        lmp.command("atom_style atomic")
+        lmp.command("boundary p p p")
+        lmp.command(f"read_data {data_file}")
+
+        # Extract box parameters from LAMMPS
+        boxlo, boxhi, xy_lmp, yz_lmp, xz_lmp, periodicity, box_change = (
+            lmp.extract_box()
+        )
+
+        # Extract atom positions from LAMMPS
+        nlocal = lmp.get_natoms()
+        x_lammps = lmp.numpy.extract_atom("x")[:nlocal].copy()
+
+        # Get ASE cell from LAMMPS box parameters
+        cell_from_lammps = restricted_cell_from_lammps_box(
+            boxlo, boxhi, xy_lmp, yz_lmp, xz_lmp
+        )
+        cell_np = cell_from_lammps.squeeze().numpy()
+
+        # Create ASE Atoms object
+        ase_atoms = Atoms(
+            symbols=["C"] * nlocal, positions=x_lammps, cell=cell_np, pbc=True
+        )
+
+        # Get scaled positions from ASE (wrap=False to avoid [0,1) wrapping issues)
+        ase_scaled_positions = ase_atoms.get_scaled_positions(wrap=False)
+
+        # The key validation: scaled positions from ASE should match our original
+        # fractional positions. We compare modulo 1 to handle periodic boundary effects.
+        # Use a reasonable tolerance for floating point precision through LAMMPS I/O.
+        def normalize_fractional(frac):
+            """Normalize fractional coordinates to [0, 1) handling numerical precision."""
+            normalized = frac % 1.0
+            # Handle values very close to 1.0 that should wrap to 0.0
+            normalized = np.where(np.abs(normalized - 1.0) < 1e-6, 0.0, normalized)
+            return normalized
+
+        wrapped_original = normalize_fractional(fractional_positions)
+        wrapped_ase = normalize_fractional(ase_scaled_positions)
+
+        assert np.allclose(
+            wrapped_ase, wrapped_original, atol=1e-5
+        ), f"Scaled positions don't match original fractional:\nASE: {wrapped_ase}\nOriginal: {wrapped_original}"
+
+        lmp.close()
 
 
-class TestGeneralTriclinicCellFromLammpsBox:
-    """Tests for restricted_cell_from_lammps_box function.
-
-    The function converts LAMMPS restricted triclinic box parameters to ASE cell format.
-    Tests verify that starting from general lattice vectors A, B, C:
-    1. Convert to restricted parameters (lx, ly, lz, xy, xz, yz)
-    2. Call restricted_cell_from_lammps_box
-    3. The resulting cell preserves volume, cell lengths, and angles
+@pytest.mark.parametrize(
+    "cell_name,cell",
+    [
+        (
+            "cubic",
+            np.array(
+                [[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]], dtype=np.float64
+            ),
+        ),
+        (
+            "orthorhombic",
+            np.array(
+                [[3.0, 0.0, 0.0], [0.0, 4.0, 0.0], [0.0, 0.0, 5.0]], dtype=np.float64
+            ),
+        ),
+        (
+            "monoclinic",
+            np.array(
+                [[4.0, 0.0, 0.0], [-1.5, 4.5, 0.0], [0.0, 0.0, 6.0]], dtype=np.float64
+            ),
+        ),
+        (
+            "triclinic",
+            np.array(
+                [[5.0, 0.0, 0.0], [1.2, 4.8, 0.0], [0.8, 0.5, 5.5]], dtype=np.float64
+            ),
+        ),
+    ],
+)
+def test_scaled_positions_various_triclinic_cells(cell_name, cell):
     """
+    Test scaled positions for various triclinic cell configurations.
 
-    def test_cubic_cell(self):
-        """Test with a simple cubic cell - lattice vectors along axes."""
-        # Cubic cell with lattice parameter a = 5.0
-        A = np.array([5.0, 0.0, 0.0])
-        B = np.array([0.0, 5.0, 0.0])
-        C = np.array([0.0, 0.0, 5.0])
-        original_cell = np.stack([A, B, C])
+    Tests cubic, orthorhombic, monoclinic, and general triclinic cells
+    to ensure the cell conversion works correctly in all cases.
+    """
+    lammps = pytest.importorskip("lammps")
 
-        lx, ly, lz, xy, xz, yz = general_to_restricted_triclinic(A, B, C)
+    fractional_positions = np.array(
+        [
+            [0.1, 0.2, 0.3],
+            [0.7, 0.8, 0.1],
+            [0.5, 0.5, 0.5],
+        ],
+        dtype=np.float64,
+    )
 
-        boxlo = [0.0, 0.0, 0.0]
-        boxhi = [lx, ly, lz]
+    atom_types = [1] * len(fractional_positions)
+    masses = {1: 12.011}
 
-        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
-        cell_np = cell.squeeze().numpy()
+    cartesian_positions = fractional_positions @ cell
 
-        # For cubic, the restricted form equals the original
-        expected_cell = torch.tensor(
-            [
-                [5.0, 0.0, 0.0],
-                [0.0, 5.0, 0.0],
-                [0.0, 0.0, 5.0],
-            ],
-            dtype=torch.float32,
-        ).unsqueeze(0)
-
-        assert torch.allclose(cell, expected_cell, atol=1e-5)
-
-        # Verify volume is preserved
-        original_volume = np.abs(np.linalg.det(original_cell))
-        result_volume = np.abs(np.linalg.det(cell_np))
-        assert np.isclose(original_volume, result_volume, atol=1e-4)
-
-    def test_orthorhombic_cell(self):
-        """Test with an orthorhombic cell - different lengths, right angles."""
-        A = np.array([3.0, 0.0, 0.0])
-        B = np.array([0.0, 4.0, 0.0])
-        C = np.array([0.0, 0.0, 5.0])
-        original_cell = np.stack([A, B, C])
-
-        lx, ly, lz, xy, xz, yz = general_to_restricted_triclinic(A, B, C)
-
-        boxlo = [0.0, 0.0, 0.0]
-        boxhi = [lx, ly, lz]
-
-        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
-        cell_np = cell.squeeze().numpy()
-
-        # For orthorhombic, the restricted form equals the original
-        expected_cell = torch.tensor(
-            [
-                [3.0, 0.0, 0.0],
-                [0.0, 4.0, 0.0],
-                [0.0, 0.0, 5.0],
-            ],
-            dtype=torch.float32,
-        ).unsqueeze(0)
-
-        assert torch.allclose(cell, expected_cell, atol=1e-5)
-
-        # Verify volume is preserved
-        original_volume = np.abs(np.linalg.det(original_cell))
-        result_volume = np.abs(np.linalg.det(cell_np))
-        assert np.isclose(original_volume, result_volume, atol=1e-4)
-
-    def test_monoclinic_cell(self):
-        """Test with a monoclinic cell - one tilted angle.
-
-        Starts with general lattice vectors, converts to restricted,
-        and verifies that the resulting cell has the same volume, lengths, and angles.
-        """
-        # Monoclinic cell with beta angle != 90 degrees
-        a, b, c = 4.0, 5.0, 6.0
-        beta = np.radians(110)  # angle between A and C
-
-        # General lattice vectors (A along x, B along y, C tilted in xz-plane)
-        A = np.array([a, 0.0, 0.0])
-        B = np.array([0.0, b, 0.0])
-        C = np.array([c * np.cos(beta), 0.0, c * np.sin(beta)])
-        original_cell = np.stack([A, B, C])
-
-        # Convert to restricted triclinic parameters
-        lx, ly, lz, xy, xz, yz = general_to_restricted_triclinic(A, B, C)
-
-        boxlo = [0.0, 0.0, 0.0]
-        boxhi = [lx, ly, lz]
-
-        # Get the cell from the function
-        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
-        cell_np = cell.squeeze().numpy()
-
-        # Verify cell volumes match
-        original_volume = np.abs(np.linalg.det(original_cell))
-        result_volume = np.abs(np.linalg.det(cell_np))
-        assert np.isclose(
-            original_volume, result_volume, atol=1e-4
-        ), f"Volume mismatch: original={original_volume}, result={result_volume}"
-
-        # Verify cell lengths match
-        orig_a, orig_b, orig_c, orig_alpha, orig_beta, orig_gamma = (
-            cell_lengths_and_angles(original_cell)
-        )
-        res_a, res_b, res_c, res_alpha, res_beta, res_gamma = cell_lengths_and_angles(
-            cell_np
+    with tempfile.TemporaryDirectory() as tmpdir:
+        data_file = os.path.join(tmpdir, "test.data")
+        create_lammps_data_file(
+            data_file, cartesian_positions, cell, atom_types, masses
         )
 
-        assert np.isclose(
-            orig_a, res_a, atol=1e-4
-        ), f"Length a mismatch: {orig_a} vs {res_a}"
-        assert np.isclose(
-            orig_b, res_b, atol=1e-4
-        ), f"Length b mismatch: {orig_b} vs {res_b}"
-        assert np.isclose(
-            orig_c, res_c, atol=1e-4
-        ), f"Length c mismatch: {orig_c} vs {res_c}"
+        lmp = lammps.lammps(cmdargs=["-screen", "none", "-log", "none"])
+        lmp.command("units metal")
+        lmp.command("atom_style atomic")
+        lmp.command("boundary p p p")
+        lmp.command(f"read_data {data_file}")
 
-        # Verify angles match
-        assert np.isclose(
-            orig_alpha, res_alpha, atol=1e-4
-        ), f"Alpha mismatch: {np.degrees(orig_alpha)} vs {np.degrees(res_alpha)}"
-        assert np.isclose(
-            orig_beta, res_beta, atol=1e-4
-        ), f"Beta mismatch: {np.degrees(orig_beta)} vs {np.degrees(res_beta)}"
-        assert np.isclose(
-            orig_gamma, res_gamma, atol=1e-4
-        ), f"Gamma mismatch: {np.degrees(orig_gamma)} vs {np.degrees(res_gamma)}"
-
-    def test_triclinic_cell(self):
-        """Test with a general triclinic cell - all angles different.
-
-        Starts with general lattice vectors, converts to restricted,
-        and verifies that the resulting cell has the same volume, lengths, and angles.
-        """
-        # General triclinic cell with alpha, beta, gamma all != 90
-        a, b, c = 4.0, 5.0, 6.0
-        alpha = np.radians(80)  # angle between B and C
-        beta = np.radians(85)  # angle between A and C
-        gamma = np.radians(75)  # angle between A and B
-
-        # Construct general lattice vectors from cell parameters
-        # A along x-axis
-        A = np.array([a, 0.0, 0.0])
-
-        # B in xy-plane
-        B = np.array([b * np.cos(gamma), b * np.sin(gamma), 0.0])
-
-        # C in general direction
-        cx = c * np.cos(beta)
-        cy = c * (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
-        cz = np.sqrt(c**2 - cx**2 - cy**2)
-        C = np.array([cx, cy, cz])
-        original_cell = np.stack([A, B, C])
-
-        # Convert to restricted triclinic parameters
-        lx, ly, lz, xy, xz, yz = general_to_restricted_triclinic(A, B, C)
-
-        boxlo = [0.0, 0.0, 0.0]
-        boxhi = [lx, ly, lz]
-
-        # Get the cell from the function
-        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
-        cell_np = cell.squeeze().numpy()
-
-        # Verify cell volumes match
-        original_volume = np.abs(np.linalg.det(original_cell))
-        result_volume = np.abs(np.linalg.det(cell_np))
-        assert np.isclose(
-            original_volume, result_volume, atol=1e-4
-        ), f"Volume mismatch: original={original_volume}, result={result_volume}"
-
-        # Verify cell lengths match
-        orig_a, orig_b, orig_c, orig_alpha, orig_beta, orig_gamma = (
-            cell_lengths_and_angles(original_cell)
-        )
-        res_a, res_b, res_c, res_alpha, res_beta, res_gamma = cell_lengths_and_angles(
-            cell_np
+        boxlo, boxhi, xy_lmp, yz_lmp, xz_lmp, periodicity, box_change = (
+            lmp.extract_box()
         )
 
-        assert np.isclose(
-            orig_a, res_a, atol=1e-4
-        ), f"Length a mismatch: {orig_a} vs {res_a}"
-        assert np.isclose(
-            orig_b, res_b, atol=1e-4
-        ), f"Length b mismatch: {orig_b} vs {res_b}"
-        assert np.isclose(
-            orig_c, res_c, atol=1e-4
-        ), f"Length c mismatch: {orig_c} vs {res_c}"
+        nlocal = lmp.get_natoms()
+        x_lammps = lmp.numpy.extract_atom("x")[:nlocal].copy()
 
-        # Verify angles match
-        assert np.isclose(
-            orig_alpha, res_alpha, atol=1e-4
-        ), f"Alpha mismatch: {np.degrees(orig_alpha)} vs {np.degrees(res_alpha)}"
-        assert np.isclose(
-            orig_beta, res_beta, atol=1e-4
-        ), f"Beta mismatch: {np.degrees(orig_beta)} vs {np.degrees(res_beta)}"
-        assert np.isclose(
-            orig_gamma, res_gamma, atol=1e-4
-        ), f"Gamma mismatch: {np.degrees(orig_gamma)} vs {np.degrees(res_gamma)}"
-
-    def test_hexagonal_cell(self):
-        """Test with a hexagonal cell - gamma = 120 degrees."""
-        a = 3.0
-        c = 5.0
-        gamma = np.radians(120)
-
-        A = np.array([a, 0.0, 0.0])
-        B = np.array([a * np.cos(gamma), a * np.sin(gamma), 0.0])
-        C = np.array([0.0, 0.0, c])
-        original_cell = np.stack([A, B, C])
-
-        lx, ly, lz, xy, xz, yz = general_to_restricted_triclinic(A, B, C)
-
-        boxlo = [0.0, 0.0, 0.0]
-        boxhi = [lx, ly, lz]
-
-        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
-        cell_np = cell.squeeze().numpy()
-
-        # Verify volume is preserved
-        original_volume = np.abs(np.linalg.det(original_cell))
-        result_volume = np.abs(np.linalg.det(cell_np))
-        assert np.isclose(original_volume, result_volume, atol=1e-4)
-
-        # Verify cell lengths and angles match
-        orig_a, orig_b, orig_c, orig_alpha, orig_beta, orig_gamma = (
-            cell_lengths_and_angles(original_cell)
+        cell_from_lammps = restricted_cell_from_lammps_box(
+            boxlo, boxhi, xy_lmp, yz_lmp, xz_lmp
         )
-        res_a, res_b, res_c, res_alpha, res_beta, res_gamma = cell_lengths_and_angles(
-            cell_np
+        cell_np = cell_from_lammps.squeeze().numpy()
+
+        ase_atoms = Atoms(
+            symbols=["C"] * nlocal, positions=x_lammps, cell=cell_np, pbc=True
         )
 
-        assert np.isclose(orig_a, res_a, atol=1e-4)
-        assert np.isclose(orig_b, res_b, atol=1e-4)
-        assert np.isclose(orig_c, res_c, atol=1e-4)
-        assert np.isclose(orig_alpha, res_alpha, atol=1e-4)
-        assert np.isclose(orig_beta, res_beta, atol=1e-4)
-        assert np.isclose(orig_gamma, res_gamma, atol=1e-4)
+        ase_scaled_positions = ase_atoms.get_scaled_positions(wrap=False)
 
-        # Check specific restricted values for hexagonal
-        assert np.isclose(lx, a, atol=1e-5)
-        assert np.isclose(xy, a * np.cos(gamma), atol=1e-5)  # -a/2
-        assert np.isclose(ly, a * np.sin(gamma), atol=1e-5)  # a*sqrt(3)/2
-        assert np.isclose(lz, c, atol=1e-5)
+        # Verify scaled positions match original fractional positions
+        def normalize_fractional(frac):
+            """Normalize fractional coordinates to [0, 1) handling numerical precision."""
+            normalized = frac % 1.0
+            normalized = np.where(np.abs(normalized - 1.0) < 1e-6, 0.0, normalized)
+            return normalized
 
-    def test_nonzero_boxlo(self):
-        """Test that boxlo offsets are properly handled."""
-        # Simple cubic with non-zero boxlo
-        boxlo = [1.0, 2.0, 3.0]
-        boxhi = [6.0, 7.0, 8.0]  # lx=ly=lz=5
-        xy, yz, xz = 0.0, 0.0, 0.0
+        wrapped_original = normalize_fractional(fractional_positions)
+        wrapped_ase = normalize_fractional(ase_scaled_positions)
 
-        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
+        assert np.allclose(
+            wrapped_ase, wrapped_original, atol=1e-5
+        ), f"Cell {cell_name}: Scaled positions don't match.\nASE: {wrapped_ase}\nOriginal: {wrapped_original}"
 
-        expected_cell = torch.tensor(
-            [
-                [5.0, 0.0, 0.0],
-                [0.0, 5.0, 0.0],
-                [0.0, 0.0, 5.0],
-            ],
-            dtype=torch.float32,
-        ).unsqueeze(0)
+        lmp.close()
 
-        assert torch.allclose(cell, expected_cell, atol=1e-5)
+
+@pytest.mark.parametrize(
+    "box_name,boxlo,boxhi,xy,yz,xz",
+    [
+        ("cubic", [0.0, 0.0, 0.0], [5.0, 5.0, 5.0], 0.0, 0.0, 0.0),
+        ("orthorhombic", [0.0, 0.0, 0.0], [3.0, 4.0, 5.0], 0.0, 0.0, 0.0),
+        ("xy_tilt", [0.0, 0.0, 0.0], [4.0, 5.0, 6.0], 1.0, 0.0, 0.0),
+        ("yz_tilt", [0.0, 0.0, 0.0], [4.0, 5.0, 6.0], 0.0, 0.5, 0.0),
+        ("xz_tilt", [0.0, 0.0, 0.0], [4.0, 5.0, 6.0], 0.0, 0.0, 0.3),
+        ("full_triclinic", [0.0, 0.0, 0.0], [4.0, 5.0, 6.0], 1.0, 0.5, 0.3),
+        ("nonzero_boxlo", [1.0, 2.0, 3.0], [6.0, 7.0, 8.0], 0.5, 0.3, 0.2),
+    ],
+)
+def test_cell_conversion_preserves_volume(box_name, boxlo, boxhi, xy, yz, xz):
+    """
+    Test that restricted_cell_from_lammps_box preserves cell volume.
+    """
+    cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
+    cell_np = cell.squeeze().numpy()
+
+    # Expected volume: lx * ly * lz (for restricted triclinic)
+    lx = boxhi[0] - boxlo[0]
+    ly = boxhi[1] - boxlo[1]
+    lz = boxhi[2] - boxlo[2]
+    expected_volume = lx * ly * lz
+
+    actual_volume = np.abs(np.linalg.det(cell_np))
+
+    assert np.isclose(expected_volume, actual_volume, atol=1e-6), (
+        f"Volume mismatch for {box_name}: boxlo={boxlo}, boxhi={boxhi}, xy={xy}, yz={yz}, xz={xz}.\n"
+        f"Expected: {expected_volume}, Actual: {actual_volume}"
+    )
