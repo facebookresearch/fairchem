@@ -357,8 +357,8 @@ class MDRunner(CalculateRunner):
             raise FileNotFoundError(f"Log file not found: {log_file}")
 
         if trajectory_file.suffix == ".parquet":
-            df = pd.read_parquet(trajectory_file)
-            num_frames = len(df)
+            traj_df = pd.read_parquet(trajectory_file)
+            num_frames = len(traj_df)
         else:
             num_frames = (
                 self._trajectory_writer.total_frames if self._trajectory_writer else 0
