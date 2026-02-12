@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import random
+import threading
 from functools import partial
 
 import numpy as np
@@ -288,6 +289,132 @@ def mole_inference(
             )
             assert output[k].device.type == device
             assert output_baseline[k].device.type == device
+
+
+@pytest.mark.parametrize(
+    "activation_checkpointing",
+    [
+        False,
+        True,
+    ],
+)
+def test_conserving_mole_multithreaded_inference(
+    activation_checkpointing,
+    conserving_mole_checkpoint,
+    fake_uma_dataset,
+    torch_deterministic,
+    compile_reset_state,
+):
+    """Test multi-threaded inference with conserving mole checkpoint.
+    
+    This test spawns 8 threads that each open AseDB and run inference
+    to verify thread safety of the predictor.
+    """
+    conserving_mole_checkpoint_pt, _ = conserving_mole_checkpoint
+    
+    # Use default inference settings for thread safety
+    inference_mode = inference_settings_default()
+    inference_mode = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=activation_checkpointing,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+    device = "cpu"  # Use CPU for thread safety
+    # Create predictor for this thread
+    predictor = MLIPPredictUnit(
+        conserving_mole_checkpoint_pt,
+        device=device,
+        inference_settings=inference_mode,
+    )
+
+    def worker_thread(predictor, thread_id, results, errors):
+        """Worker function for each thread."""
+        try:
+            # Each thread opens its own AseDB connection
+            db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
+            
+            # Create atomic data sample
+            sample = AtomicData.from_ase(
+                db.get_atoms(thread_id % len(db)),  # Use different atoms for each thread
+                max_neigh=10,
+                radius=100,
+                r_energy=False,
+                r_forces=False,
+                r_edges=inference_mode.external_graph_gen,
+                r_data_keys=["spin", "charge"],
+            )
+            sample["dataset"] = "oc20"
+            batch = data_list_collater(
+                [sample], otf_graph=not inference_mode.external_graph_gen
+            )
+            
+            # Run inference multiple times to test consistency
+            outputs = []
+            for _ in range(3):
+                output = predictor.predict(batch.clone())
+                outputs.append(output)
+            
+            # Verify outputs are consistent
+            for i in range(1, len(outputs)):
+                for k in outputs[0]:
+                    assert torch.allclose(
+                        outputs[0][k], 
+                        outputs[i][k], 
+                        rtol=1e-4, 
+                        atol=1e-4
+                    ), f"Thread {thread_id}: Output {k} not consistent across runs"
+            
+            # Store result
+            results[thread_id] = outputs[0]
+        finally:
+            pass    
+        #except Exception as e:
+        #    errors[thread_id] = e
+    
+    # Create threads
+    num_threads = 8
+    threads = []
+    results = {}
+    errors = {}
+    
+    # Start all threads
+    for i in range(num_threads):
+        thread = threading.Thread(
+            target=worker_thread,
+            args=(predictor, i, results, errors)
+        )
+        threads.append(thread)
+        thread.start()
+    
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+    
+    # Check for errors
+    if errors:
+        error_msg = "Errors in threads:\n"
+        for thread_id, error in errors.items():
+            error_msg += f"Thread {thread_id}: {error}\n"
+        raise AssertionError(error_msg)
+    
+    # Verify all threads completed successfully
+    assert len(results) == num_threads, f"Expected {num_threads} results, got {len(results)}"
+    
+    # Verify all outputs have the expected keys and are on the correct device
+    expected_keys = set()
+    for thread_id, output in results.items():
+        if not expected_keys:
+            expected_keys = set(output.keys())
+        else:
+            assert set(output.keys()) == expected_keys, f"Thread {thread_id} has different output keys"
+        
+        for k, v in output.items():
+            assert v.device.type == device, f"Thread {thread_id}: Output {k} on wrong device"
+            assert not torch.isnan(v).any(), f"Thread {thread_id}: NaN values in {k}"
+            assert torch.isfinite(v).all(), f"Thread {thread_id}: Non-finite values in {k}"
 
 
 # example how to use checkpoint fixtures
