@@ -39,6 +39,9 @@ _COEFFICIENTS_FILE = Path(__file__).parent / "wigner_d_coefficients.pt"
 # - l=4: (coefficient matrix (81, 165), monomials list)
 _KERNEL_CACHE: dict[tuple[int, torch.dtype, torch.device], object] = {}
 
+# Batched l=3,4 combined coefficient cache: {(dtype, device): tensor}
+_BATCHED_L3L4_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
+
 
 @functools.lru_cache(maxsize=1)
 def _load_coefficients() -> dict:
@@ -64,6 +67,7 @@ def _load_coefficients() -> dict:
 def clear_memory_caches() -> None:
     """Clear all in-memory caches for this module."""
     _KERNEL_CACHE.clear()
+    _BATCHED_L3L4_CACHE.clear()
     _load_coefficients.cache_clear()
 
 
@@ -113,6 +117,7 @@ def preload_kernel_caches(
         device = torch.device("cpu")
     for ell in (2, 3, 4):
         _get_kernel_data(ell, dtype, device)
+    _get_batched_l3l4_kernel_data(dtype, device)
 
 
 def _generate_monomials(n_vars: int, total_degree: int) -> list[tuple[int, ...]]:
@@ -277,3 +282,95 @@ def quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
     size = 2 * ell + 1
 
     return D_flat.view(q.shape[0], size, size)
+
+
+def _get_batched_l3l4_kernel_data(
+    dtype: torch.dtype, device: torch.device
+) -> torch.Tensor:
+    """Get cached combined coefficient matrix for batched l=3,4 computation.
+
+    Lifts the l=3 degree-6 coefficients to degree-8 by multiplying each
+    monomial by |q|^2 = w^2 + x^2 + y^2 + z^2 = 1, then stacks with l=4
+    coefficients for a single matmul.
+
+    Args:
+        dtype: Data type for the coefficients
+        device: Device for the tensors
+
+    Returns:
+        Combined coefficient matrix of shape (130, 165) where the first 49
+        rows correspond to l=3 and the remaining 81 rows to l=4.
+    """
+    key = (dtype, device)
+    if key not in _BATCHED_L3L4_CACHE:
+        # Get existing kernel data
+        C_l3, monomials_l3 = _get_kernel_data(3, dtype, device)  # (49, 84), 84 tuples
+        C_l4, monomials_l4 = _get_kernel_data(4, dtype, device)  # (81, 165), 165 tuples
+
+        # Build lookup from degree-8 monomial tuple to column index
+        mono8_to_idx = {m: i for i, m in enumerate(monomials_l4)}
+
+        # Lift l=3 coefficients from degree-6 to degree-8
+        # Each degree-6 monomial (a,b,c,d) maps to four degree-8 monomials:
+        #   (a+2,b,c,d), (a,b+2,c,d), (a,b,c+2,d), (a,b,c,d+2)
+        # since |q|^2 = w^2 + x^2 + y^2 + z^2 = 1
+        n_mono8 = len(monomials_l4)  # 165
+        C_l3_lifted = torch.zeros(49, n_mono8, dtype=dtype, device=device)
+
+        for j, (a, b, c, d) in enumerate(monomials_l3):
+            # For each degree-6 monomial, distribute its coefficients
+            # to the four degree-8 monomials
+            lifted = [
+                (a + 2, b, c, d),
+                (a, b + 2, c, d),
+                (a, b, c + 2, d),
+                (a, b, c, d + 2),
+            ]
+            for mono8 in lifted:
+                idx = mono8_to_idx[mono8]
+                C_l3_lifted[:, idx] += C_l3[:, j]
+
+        # Stack: first 49 rows = l=3, next 81 rows = l=4
+        C_combined = torch.cat([C_l3_lifted, C_l4], dim=0)  # (130, 165)
+        _BATCHED_L3L4_CACHE[key] = C_combined
+
+    return _BATCHED_L3L4_CACHE[key]
+
+
+def quaternion_to_wigner_d_l3l4_batched(
+    q: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute l=3 and l=4 Wigner D matrices in a single matmul.
+
+    Builds degree-8 monomials once and multiplies by the combined (130, 165)
+    coefficient matrix to get both D_l3 and D_l4 from one kernel dispatch.
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        Tuple of (D_l3, D_l4) with shapes (N, 7, 7) and (N, 9, 9)
+    """
+    C_combined = _get_batched_l3l4_kernel_data(q.dtype, q.device)
+    _, monomials_l4 = _get_kernel_data(4, q.dtype, q.device)
+
+    w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
+    powers = _precompute_powers(w, x, y, z, 8)
+
+    # Build degree-8 monomial vector: (N, 165)
+    M = torch.stack(
+        [
+            powers[0][a] * powers[1][b] * powers[2][c] * powers[3][d]
+            for a, b, c, d in monomials_l4
+        ],
+        dim=1,
+    )
+
+    # Single matmul: (N, 165) @ (165, 130) -> (N, 130)
+    D_flat = M @ C_combined.T
+
+    N = q.shape[0]
+    D_l3 = D_flat[:, :49].reshape(N, 7, 7)
+    D_l4 = D_flat[:, 49:].reshape(N, 9, 9)
+
+    return D_l3, D_l4
