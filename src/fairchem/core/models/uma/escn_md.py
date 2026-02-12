@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import TYPE_CHECKING, Literal
 
@@ -40,6 +39,13 @@ from fairchem.core.models.uma.nn.layer_norm import (
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
 from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.uma.outputs import (
+    compute_energy,
+    compute_forces,
+    compute_forces_and_stress,
+    get_l_component,
+    reduce_node_to_system,
+)
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 
 from .escn_md_block import eSCNMD_Block
@@ -51,11 +57,12 @@ if TYPE_CHECKING:
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 
 
-def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
+def add_n_empty_edges(
+    graph_dict: dict, edges_to_add: int, cutoff: float, node_offset: int = 0
+):
     graph_dict["edge_index"] = torch.cat(
         (
-            graph_dict["edge_index"].new_ones(2, edges_to_add)
-            * graph_dict["node_offset"],
+            graph_dict["edge_index"].new_ones(2, edges_to_add) * node_offset,
             graph_dict["edge_index"],
         ),
         dim=1,
@@ -77,7 +84,7 @@ def add_n_empty_edges(graph_dict: dict, edges_to_add: int, cutoff: float):
 
 
 @torch.compiler.disable
-def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
+def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
     n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
 
     if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
@@ -92,7 +99,7 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float):
         # contribute to embeddings or message passing; they only ensure the edge count
         # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
         # activation checkpointing and avoiding empty tensor edge cases.
-        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff)
+        add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
 @registry.register_model("escnmd_backbone")
@@ -130,7 +137,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dataset_list: list[str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
-        radius_pbc_version: int = 1,
+        radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         edge_chunk_size: int | None = None,
     ) -> None:
@@ -388,6 +395,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             return torch.nn.SiLU()(self.mix_csd(torch.cat((chg_emb, spin_emb), dim=1)))
 
     def _generate_graph(self, data_dict):
+        data_dict["gp_node_offset"] = 0
+        if gp_utils.initialized():
+            # create the partitions
+            atomic_numbers_full = data_dict["atomic_numbers_full"]
+            node_partition = torch.tensor_split(
+                torch.arange(
+                    len(atomic_numbers_full), device=atomic_numbers_full.device
+                ),
+                gp_utils.get_gp_world_size(),
+            )[gp_utils.get_gp_rank()]
+            assert (
+                node_partition.numel() > 0
+            ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
+            data_dict["node_partition"] = node_partition
+
         if self.otf_graph:
             pbc = None
             if self.always_use_pbc:
@@ -400,7 +422,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
-            logging.debug(f"Using radius graph gen version {self.radius_pbc_version}")
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -437,20 +458,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_distance": edge_distance,
                 "edge_distance_vec": edge_distance_vec,
             }
-        graph_dict["node_offset"] = 0  # default value
 
         if gp_utils.initialized():
-            graph_dict = self._init_gp_partitions(
-                graph_dict, data_dict["atomic_numbers_full"]
-            )
-            # create partial atomic numbers and batch tensors for GP
             data_dict["atomic_numbers"] = data_dict["atomic_numbers_full"][
-                graph_dict["node_partition"]
+                node_partition
             ]
-            data_dict["batch"] = data_dict["batch_full"][graph_dict["node_partition"]]
+            data_dict["batch"] = data_dict["batch_full"][node_partition]
+            data_dict["gp_node_offset"] = node_partition.min().item()
 
         if self.edge_chunk_size is not None:
-            pad_edges(graph_dict, self.edge_chunk_size, self.cutoff)
+            pad_edges(
+                graph_dict,
+                self.edge_chunk_size,
+                self.cutoff,
+                data_dict["gp_node_offset"],
+            )
 
         return graph_dict
 
@@ -540,7 +562,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 graph_dict["edge_index"],
                 wigner_and_M_mapping_inv,
                 edge_envelope,
-                graph_dict["node_offset"],
+                data_dict["gp_node_offset"],
             )
 
         ###############################################################
@@ -560,7 +582,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
-                    node_offset=graph_dict["node_offset"],
+                    node_offset=data_dict["gp_node_offset"],
                 )
 
         # Final layer norm
@@ -572,36 +594,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             "batch": data_dict["batch"],
         }
         return out
-
-    def _init_gp_partitions(self, graph_dict, atomic_numbers_full):
-        """Graph Parallel
-        This creates the required partial tensors for each rank given the full tensors.
-        The tensors are split on the dimension along the node index using node_partition.
-        """
-        edge_index = graph_dict["edge_index"]
-
-        node_partition = torch.tensor_split(
-            torch.arange(len(atomic_numbers_full)).to(atomic_numbers_full.device),
-            gp_utils.get_gp_world_size(),
-        )[gp_utils.get_gp_rank()]
-        assert (
-            node_partition.numel() > 0
-        ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-        edge_partition = torch.where(
-            torch.logical_and(
-                edge_index[1] >= node_partition.min(),
-                edge_index[1] <= node_partition.max(),  # TODO: 0 or 1?
-            )
-        )[0]
-        graph_dict["node_offset"] = node_partition.min().item()
-        graph_dict["node_partition"] = node_partition
-        # gp versions of data
-        graph_dict["edge_index"] = edge_index[:, edge_partition]
-        graph_dict["edge_distance"] = graph_dict["edge_distance"][edge_partition]
-        graph_dict["edge_distance_vec"] = graph_dict["edge_distance_vec"][
-            edge_partition
-        ]
-        return graph_dict
 
     @property
     def num_params(self) -> int:
@@ -637,18 +629,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return set(no_wd_list)
 
 
-class MLP_EFS_Head(nn.Module, HeadInterface):
+class MLP_Energy_Head(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone: eSCNMDBackbone,
+        reduce: str = "sum",
         prefix: str | None = None,
-        wrap_property: bool = True,
+        wrap_property: bool = False,
     ) -> None:
         super().__init__()
-        backbone.energy_block = None
-        backbone.force_block = None
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
+        self.reduce = reduce
         self.prefix = prefix
         self.wrap_property = wrap_property
 
@@ -662,6 +652,48 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             nn.Linear(self.hidden_channels, 1, bias=True),
         )
 
+    def forward(
+        self, data: AtomicData, emb: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
+        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        node_energy = self.energy_block(scalar_embedding)
+        energy, _ = compute_energy(node_energy, data["batch"], len(data["natoms"]))
+
+        if self.reduce == "sum":
+            pass  # energy is already sum
+        elif self.reduce == "mean":
+            energy = energy / data["natoms"]
+        else:
+            raise ValueError(
+                f"reduce can only be sum or mean, user provided: {self.reduce}"
+            )
+
+        return {energy_key: {"energy": energy} if self.wrap_property else energy}
+
+
+class MLP_EFS_Head(MLP_Energy_Head):
+    """MLP head for predicting energy, forces, and stress using autograd derivatives.
+
+    This head extends MLP_Energy_Head to compute forces and stress by taking
+    gradients of the energy with respect to atomic positions and cell displacement.
+    """
+
+    def __init__(
+        self,
+        backbone: eSCNMDBackbone,
+        reduce: str = "sum",
+        prefix: str | None = None,
+        wrap_property: bool = True,
+    ) -> None:
+        super().__init__(
+            backbone, reduce=reduce, prefix=prefix, wrap_property=wrap_property
+        )
+        backbone.energy_block = None
+        backbone.force_block = None
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
+
         # TODO: this is not very clean, bug-prone.
         # but is currently necessary for finetuning pretrained models that did not have
         # the direct_forces flag set to False
@@ -674,28 +706,18 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        if self.prefix:
-            energy_key = f"{self.prefix}_energy"
-            forces_key = f"{self.prefix}_forces"
-            stress_key = f"{self.prefix}_stress"
-        else:
-            energy_key = "energy"
-            forces_key = "forces"
-            stress_key = "stress"
+        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
+        forces_key = f"{self.prefix}_forces" if self.prefix else "forces"
+        stress_key = f"{self.prefix}_stress" if self.prefix else "stress"
 
         outputs = {}
-        _input = emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        _output = self.energy_block(_input)
-        node_energy = _output.view(-1, 1, 1)
-        energy_part = torch.zeros(
-            len(data["natoms"]), device=data["pos"].device, dtype=node_energy.dtype
-        )
-        energy_part.index_add_(0, data["batch"], node_energy.view(-1))
 
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
+        # Use shared energy computation from parent class
+        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        node_energy = self.energy_block(scalar_embedding)
+        energy, energy_part = compute_energy(
+            node_energy, data["batch"], len(data["natoms"])
+        )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
 
@@ -706,87 +728,21 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             )
 
         if self.regress_stress:
-            grads = torch.autograd.grad(
-                [energy_part.sum()],
-                [data["pos_original"], emb["displacement"]],
-                create_graph=self.training,
-                retain_graph=self.training,
+            forces, stress = compute_forces_and_stress(
+                energy_part,
+                data["pos_original"],
+                emb["displacement"],
+                data["cell"],
+                training=self.training,
             )
-            if gp_utils.initialized():
-                grads = (
-                    gp_utils.reduce_from_model_parallel_region(grads[0]),
-                    gp_utils.reduce_from_model_parallel_region(grads[1]),
-                )
-
-            forces = torch.neg(grads[0])
-            virial = grads[1].view(-1, 3, 3)
-            volume = torch.det(data["cell"]).abs().unsqueeze(-1)
-            stress = virial / volume.view(-1, 1, 1)
-            virial = torch.neg(virial)
-            stress = stress.view(
-                -1, 9
-            )  # NOTE to work better with current Multi-task trainer
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
         elif self.regress_forces:
-            forces = (
-                -1
-                * torch.autograd.grad(
-                    energy_part.sum(),
-                    data["pos"],
-                    create_graph=self.training,
-                    retain_graph=self.training,
-                )[0]
-            )
-            if gp_utils.initialized():
-                forces = gp_utils.reduce_from_model_parallel_region(forces)
+            forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+
         return outputs
-
-
-class MLP_Energy_Head(nn.Module, HeadInterface):
-    def __init__(self, backbone: eSCNMDBackbone, reduce: str = "sum") -> None:
-        super().__init__()
-        self.reduce = reduce
-
-        self.sphere_channels = backbone.sphere_channels
-        self.hidden_channels = backbone.hidden_channels
-        self.energy_block = nn.Sequential(
-            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, 1, bias=True),
-        )
-
-    def forward(
-        self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        node_energy = self.energy_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
-
-        energy_part = torch.zeros(
-            len(data_dict["natoms"]),
-            device=node_energy.device,
-            dtype=node_energy.dtype,
-        )
-
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
-
-        if self.reduce == "sum":
-            return {"energy": energy}
-        elif self.reduce == "mean":
-            return {"energy": energy / data_dict["natoms"]}
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
 
 
 class Linear_Energy_Head(nn.Module, HeadInterface):
@@ -798,22 +754,14 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        node_energy = self.energy_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
+        # Extract L=0 (scalar) component and compute per-node energy
+        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        node_energy = self.energy_block(scalar_embedding)
 
-        energy_part = torch.zeros(
-            len(data_dict["natoms"]),
-            device=node_energy.device,
-            dtype=node_energy.dtype,
+        # Reduce to system-level energy
+        energy, _ = compute_energy(
+            node_energy, data_dict["batch"], len(data_dict["natoms"])
         )
-
-        energy_part.index_add_(0, data_dict["batch"], node_energy.view(-1))
-
-        if gp_utils.initialized():
-            energy = gp_utils.reduce_from_model_parallel_region(energy_part)
-        else:
-            energy = energy_part
 
         if self.reduce == "sum":
             return {"energy": energy}
@@ -831,13 +779,20 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
 
     def forward(self, data_dict: AtomicData, emb: dict[str, torch.Tensor]):
-        forces = self.linear(emb["node_embedding"].narrow(1, 0, 4))
-        forces = forces.narrow(1, 1, 3)
+        # Extract L=0 and L=1 components (first 4 spherical harmonic components)
+        # SO3_Linear with lmax=1 requires both L=0 and L=1 as input
+        l0_l1_embedding = emb["node_embedding"].narrow(1, 0, 4)  # (lmax=1)^2 = 4
+        forces_output = self.linear(l0_l1_embedding)
+
+        # Extract L=1 (vector) component from the output
+        forces = get_l_component(forces_output, l=1)
         forces = forces.view(-1, 3).contiguous()
+
         if gp_utils.initialized():
             forces = gp_utils.gather_from_model_parallel_region(
                 forces, data_dict["atomic_numbers_full"].shape[0]
             )
+
         return {"forces": forces}
 
 
@@ -882,12 +837,14 @@ def compose_tensor(
 
 
 class MLP_Stress_Head(nn.Module, HeadInterface):
+    """MLP head for predicting the stress tensor.
+
+    Predicts the isotropic (L=0) and anisotropic (L=2) parts of the stress tensor
+    separately to ensure symmetry, then recomposes back to the full stress tensor.
+    """
+
     def __init__(self, backbone: eSCNMDBackbone, reduce: str = "mean") -> None:
         super().__init__()
-        """
-        predict the isotropic and anisotropic parts of the stress tensor
-        to ensure symmetry and then recompose back to the full stress tensor
-        """
         self.reduce = reduce
         assert reduce in ["sum", "mean"]
         self.sphere_channels = backbone.sphere_channels
@@ -905,41 +862,28 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        node_scalar = self.scalar_block(
-            emb["node_embedding"].narrow(1, 0, 1).squeeze(1)
-        ).view(-1, 1, 1)
+        num_systems = len(data_dict["natoms"])
+        batch = data_dict["batch"]
 
-        iso_stress = torch.zeros(
-            len(data_dict["natoms"]),
-            device=node_scalar.device,
-            dtype=node_scalar.dtype,
-        )
-        iso_stress.index_add_(0, data_dict["batch"], node_scalar.view(-1))
-
-        if gp_utils.initialized():
-            raise NotImplementedError("This code hasn't been tested yet.")
-            # iso_stress = gp_utils.reduce_from_model_parallel_region(iso_stress)
+        # Compute isotropic (L=0) part of stress using MLP on scalar embedding
+        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        node_scalar = self.scalar_block(scalar_embedding).view(-1)
+        iso_stress, _ = reduce_node_to_system(node_scalar, batch, num_systems)
 
         if self.reduce == "mean":
-            iso_stress /= data_dict["natoms"]
+            iso_stress = iso_stress / data_dict["natoms"]
 
-        node_l2 = self.l2_linear(emb["node_embedding"].narrow(1, 0, 9))
-        node_l2 = node_l2.narrow(1, 4, 5)
-        node_l2 = node_l2.view(-1, 5).contiguous()
+        # Compute anisotropic (L=2) part of stress using SO3_Linear
+        l0l1l2_embedding = emb["node_embedding"].narrow(1, 0, 9)  # (lmax=2)^2 = 9
+        l2_output = self.l2_linear(l0l1l2_embedding)
 
-        aniso_stress = torch.zeros(
-            (len(data_dict["natoms"]), 5),
-            device=node_l2.device,
-            dtype=node_l2.dtype,
-        )
-        aniso_stress.index_add_(0, data_dict["batch"], node_l2)
-        if gp_utils.initialized():
-            raise NotImplementedError("This code hasn't been tested yet.")
-            # aniso_stress = gp_utils.reduce_from_model_parallel_region(aniso_stress)
+        node_l2 = get_l_component(l2_output, l=2).view(-1, 5).contiguous()
+        aniso_stress, _ = reduce_node_to_system(node_l2, batch, num_systems)
 
         if self.reduce == "mean":
-            aniso_stress /= data_dict["natoms"].unsqueeze(1)
+            aniso_stress = aniso_stress / data_dict["natoms"].unsqueeze(1)
 
+        # Recompose the full stress tensor from isotropic and anisotropic parts
         stress = compose_tensor(iso_stress.unsqueeze(1), aniso_stress)
 
         return {"stress": stress}

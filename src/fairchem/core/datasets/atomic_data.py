@@ -79,7 +79,7 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
 
 @requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
-    """Preforms nearest neighbor search and returns edge index, distances,
+    """Performs nearest neighbor search and returns edge index, distances,
     and cell offsets"""
     struct = AseAtomsAdaptor.get_structure(atoms)
 
@@ -165,8 +165,16 @@ class AtomicData:
         self.tags = tags
         self.sid = sid if sid is not None else [""]
 
+        # Always normalize dataset to a list for consistent batching
         if dataset is not None:
-            self.dataset = dataset
+            if isinstance(dataset, str):
+                self.dataset = [dataset]
+            elif isinstance(dataset, list):
+                self.dataset = dataset
+            else:
+                raise ValueError(
+                    f"dataset must be a string or list of strings, got {type(dataset)}"
+                )
 
         # tagets
         if energy is not None:
@@ -242,11 +250,8 @@ class AtomicData:
         assert len(self.sid) == self.num_graphs
 
         if "dataset" in self.__keys__:
-            if isinstance(self.dataset, list):
-                assert len(self.dataset) == self.num_graphs
-            else:
-                assert isinstance(self.dataset, str)
-                assert self.num_graphs == 1
+            assert isinstance(self.dataset, list), "dataset must always be a list"
+            assert len(self.dataset) == self.num_graphs
 
         # dtype checks
         assert (
@@ -895,7 +900,15 @@ def atomicdata_list_to_batch(
         # TODO: this allows non-tensor fields to be batched.
         # we might want to remove support for that.
         else:
-            batched_data_dict[key] = items
+            # For list attributes, flatten nested lists to maintain consistency
+            # This handles cases where already-batched data is re-batched
+            if items and all(isinstance(item, list) for item in items):
+                flattened = []
+                for item in items:
+                    flattened.extend(item)
+                batched_data_dict[key] = flattened
+            else:
+                batched_data_dict[key] = items
 
     batched_data_dict["batch"] = torch.cat(batch, dim=-1)
     batched_data_dict["sid"] = sid_list

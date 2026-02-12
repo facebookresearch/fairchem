@@ -1,0 +1,174 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
+from __future__ import annotations
+
+import torch
+
+from fairchem.core.common import gp_utils
+
+
+def get_l_component(x: torch.Tensor, l: int) -> torch.Tensor:
+    """Extract the (2L+1) spherical harmonic components for a specific L from node embeddings.
+
+    The node embeddings are assumed to be organized as [N, (lmax+1)^2, C] where the
+    second dimension contains spherical harmonic coefficients ordered by L:
+    - L=0: index 0 (1 component)
+    - L=1: indices 1-3 (3 components)
+    - L=2: indices 4-8 (5 components)
+    - etc.
+
+    Args:
+        x: Node embeddings tensor of shape [N, (lmax+1)^2, C].
+        l: The angular momentum quantum number (0, 1, 2, ...).
+
+    Returns:
+        Tensor of shape [N, 2L+1, C] containing the L-th spherical harmonic components.
+    """
+    start_idx = l * l  # Sum of (2k+1) for k=0 to l-1 equals l^2
+    num_components = 2 * l + 1
+    return x.narrow(1, start_idx, num_components)
+
+
+def reduce_node_to_system(
+    node_values: torch.Tensor,
+    batch: torch.Tensor,
+    num_systems: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Reduce node-level values to system-level by summing over nodes in each system.
+
+    Handles graph-parallel (GP) reduction when GP is initialized.
+
+    Args:
+        node_values: Node-level values of shape [N, ...] where N is the number of nodes.
+        batch: Batch indices mapping each node to its system, shape [N].
+        num_systems: Total number of systems in the batch.
+
+    Returns:
+        A tuple of (reduced, unreduced) where:
+        - reduced: System-level values after GP reduction (if applicable), shape [num_systems, ...].
+        - unreduced: System-level values before GP reduction, useful for autograd, shape [num_systems, ...].
+    """
+    output_shape = (num_systems,) + node_values.shape[1:]
+    system_values = torch.zeros(
+        output_shape,
+        device=node_values.device,
+        dtype=node_values.dtype,
+    )
+
+    if node_values.dim() == 1:
+        system_values.index_add_(0, batch, node_values)
+    else:
+        # For multi-dimensional tensors, we need to handle each trailing dimension
+        flat_node = node_values.view(node_values.shape[0], -1)
+        flat_system = system_values.view(num_systems, -1)
+        flat_system.index_add_(0, batch, flat_node)
+        system_values = flat_system.view(output_shape)
+
+    if gp_utils.initialized():
+        reduced = gp_utils.reduce_from_model_parallel_region(system_values)
+    else:
+        reduced = system_values
+
+    return reduced, system_values
+
+
+def compute_energy(
+    node_energy: torch.Tensor,
+    batch: torch.Tensor,
+    num_systems: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute system-level energy from node-level energy predictions.
+
+    Args:
+        node_energy: Per-node energy predictions, shape [N] or [N, 1].
+        batch: Batch indices mapping each node to its system, shape [N].
+        num_systems: Total number of systems in the batch.
+
+    Returns:
+        A tuple of (energy, energy_part) where:
+        - energy: System-level energy after GP reduction, shape [num_systems].
+        - energy_part: System-level energy before GP reduction (for autograd), shape [num_systems].
+    """
+    # Flatten to 1D if needed
+    node_energy_flat = node_energy.view(-1)
+    energy, energy_part = reduce_node_to_system(node_energy_flat, batch, num_systems)
+    return energy, energy_part
+
+
+def compute_forces(
+    energy_part: torch.Tensor,
+    pos: torch.Tensor,
+    training: bool = True,
+) -> torch.Tensor:
+    """Compute forces as negative gradient of energy with respect to positions.
+
+    Args:
+        energy_part: System-level energy before GP reduction, shape [num_systems].
+        pos: Atomic positions, shape [N, 3].
+        training: Whether to create graph for higher-order gradients.
+
+    Returns:
+        Forces tensor of shape [N, 3].
+    """
+    (grad,) = torch.autograd.grad(
+        energy_part.sum(),
+        pos,
+        create_graph=training,
+    )
+    forces = torch.neg(grad)
+
+    if gp_utils.initialized():
+        forces = gp_utils.reduce_from_model_parallel_region(forces)
+
+    return forces
+
+
+def compute_forces_and_stress(
+    energy_part: torch.Tensor,
+    pos_original: torch.Tensor,
+    displacement: torch.Tensor,
+    cell: torch.Tensor,
+    training: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute forces and stress from energy using autograd.
+
+    Forces are computed as the negative gradient of energy with respect to positions.
+    Stress is computed from the virial (gradient with respect to strain/displacement)
+    divided by the cell volume.
+
+    Args:
+        energy_part: System-level energy before GP reduction, shape [num_systems].
+        pos_original: Original atomic positions (before strain applied), shape [N, 3].
+        displacement: Strain displacement tensor, shape [num_systems, 3, 3].
+        cell: Unit cell vectors, shape [num_systems, 3, 3].
+        training: Whether to create graph for higher-order gradients.
+
+    Returns:
+        A tuple of (forces, stress) where:
+        - forces: Shape [N, 3].
+        - stress: Shape [num_systems, 9] (flattened 3x3 tensor).
+    """
+    grads = torch.autograd.grad(
+        [energy_part.sum()],
+        [pos_original, displacement],
+        create_graph=training,
+    )
+
+    if gp_utils.initialized():
+        grads = (
+            gp_utils.reduce_from_model_parallel_region(grads[0]),
+            gp_utils.reduce_from_model_parallel_region(grads[1]),
+        )
+
+    forces = torch.neg(grads[0])
+    virial = grads[1].view(-1, 3, 3)
+    volume = torch.det(cell).abs().unsqueeze(-1)
+    stress = virial / volume.view(-1, 1, 1)
+    stress = stress.view(-1, 9)
+
+    return forces, stress
