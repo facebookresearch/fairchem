@@ -11,8 +11,11 @@ kernelspec:
   display_name: Python 3 (ipykernel)
 ---
 
-Adsorption Energies
-======================================================
+# Adsorption Energies in MOFs
+
+:::{tip} What You Will Learn
+Calculate CO2 and H2O adsorption energies in metal-organic frameworks, including accounting for MOF flexibility and deformation.
+:::
 
 Pre-trained ODAC models are versatile across various MOF-related tasks. To begin, we'll start with a fundamental application: calculating the adsorption energy for a single CO<sub>2</sub> molecule. This serves as an excellent and simple demonstration of what you can achieve with these datasets and models.
 
