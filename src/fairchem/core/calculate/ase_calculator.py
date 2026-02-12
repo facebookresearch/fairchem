@@ -239,40 +239,6 @@ class FAIRChemCalculator(Calculator):
                     stress_voigt = full_3x3_to_voigt_6_stress(stress)
                     self.results["stress"] = stress_voigt
 
-    def get_hessian(self, atoms: Atoms, vmap: bool = True) -> np.ndarray:
-        """
-        Get the Hessian matrix for the given atomic structure.
-
-        Args:
-            atoms (Atoms): The atomic structure to calculate the Hessian for.
-            vmap (bool): Whether to use vectorized mapping for Hessian calculation. Defaults to True.
-
-        Returns:
-            np.ndarray: The Hessian matrix.
-        """
-        # Convert Atoms to AtomicData
-        data_object = self.a2g(atoms)
-
-        # Call the MLIPPredictUnit method
-        return self.predictor.get_hessian(data_object, vmap=vmap)
-
-    def get_numerical_hessian(self, atoms: Atoms, eps: float = 1e-4) -> np.ndarray:
-        """
-        Get the Hessian matrix for the given atomic structure.
-
-        Args:
-            atoms (Atoms): The atomic structure to calculate the Hessian for.
-            eps (float): The finite difference step size. Defaults to 1e-4.
-
-        Returns:
-            np.ndarray: The Hessian matrix.
-        """
-        # Convert Atoms to AtomicData
-        data_object = self.a2g(atoms)
-
-        # Call the MLIPPredictUnit method
-        return self.predictor.get_numerical_hessian(data_object, eps=eps)
-
     def _get_single_atom_energies(self, atoms) -> dict:
         """
         Populate output with single atom energies
