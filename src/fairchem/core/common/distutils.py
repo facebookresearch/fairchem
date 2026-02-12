@@ -135,12 +135,25 @@ def setup(config) -> None:
         local_rank = int(os.environ["LOCAL_RANK"])
         assign_device_for_local_rank(config["cpu"], local_rank)
 
-        dist.init_process_group(
-            backend=config["distributed_backend"],
-            rank=int(os.environ["RANK"]),
-            world_size=config["world_size"],
-            timeout=timeout,
-        )
+        # Retry with a new port if we hit EADDRINUSE (get_free_port has a
+        # TOCTOU race — the port can be grabbed between discovery and bind).
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                dist.init_process_group(
+                    backend=config["distributed_backend"],
+                    rank=int(os.environ["RANK"]),
+                    world_size=config["world_size"],
+                    timeout=timeout,
+                )
+                break
+            except (dist.DistNetworkError, RuntimeError) as e:
+                if "EADDRINUSE" not in str(e) or attempt == max_retries - 1:
+                    raise
+                logging.warning(
+                    f"Port {os.environ['MASTER_PORT']} in use, retrying with a new port (attempt {attempt + 1}/{max_retries})"
+                )
+                os.environ["MASTER_PORT"] = str(get_free_port())
 
 
 def cleanup() -> None:
