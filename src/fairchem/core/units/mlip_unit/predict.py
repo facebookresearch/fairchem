@@ -82,6 +82,21 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
+def merge_uma_model(model, data):
+    logging.info("Calling merge_uma_model")
+    # merge the backbone
+    model.backbone = model.backbone.merge_MOLE_model(data)
+
+    # merge any heads
+    new_output_heads = torch.nn.ModuleDict()
+    for head_name, head in model.output_heads.items():
+        if hasattr(head, "merge_MOLE_model"):
+            new_output_heads[head_name] = head.merge_MOLE_model(data)
+        else:
+            new_output_heads[head_name] = head
+    model.output_heads = new_output_heads
+
+
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -376,6 +391,7 @@ class MLIPWorkerLocal:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
+                torch.distributed.broadcast(self.last_received_atomic_data.cell, src=0)
                 self.predict_unit.predict(self.last_received_atomic_data)
 
         return None
@@ -540,7 +556,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             self.atomic_data_on_device = data.clone()
         else:
             self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+            self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
             torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
+            torch.distributed.broadcast(self.atomic_data_on_device.cell, src=0)
 
         return self.local_rank0.predict(self.atomic_data_on_device)
 
