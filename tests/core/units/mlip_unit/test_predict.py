@@ -483,7 +483,7 @@ def test_merge_mole_vs_non_merged_consistency():
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit_merged = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_merged, workers=2
+        "uma-s-1p1", device="cuda", inference_settings=settings_merged
     )
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
 
@@ -499,7 +499,7 @@ def test_merge_mole_vs_non_merged_consistency():
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
     predict_unit_non_merged = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged, workers=2
+        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
 
