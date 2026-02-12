@@ -41,6 +41,7 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
+    quaternion_to_wigner_d_l3l4_batched,
     quaternion_to_wigner_d_matmul,
 )
 
@@ -92,17 +93,26 @@ def wigner_d_from_quaternion_hybrid(
     lmin = 5 if l4_kernel else 4
 
     # Compute l=0,1,2,3 (and optionally 4) using direct quaternion methods
-    for ell in range(min(lmax + 1, lmin)):
-        if ell == 0:
-            D[:, 0, 0] = 1.0
-        elif ell == 1:
+    if l4_kernel and lmax >= 4:
+        # Use batched l=3,4 kernel for a single matmul dispatch
+        D[:, 0, 0] = 1.0
+        if lmax >= 1:
             D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
-        elif ell == 2:
+        if lmax >= 2:
             D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
-        elif ell == 3:
-            D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(q, 3)
-        elif l4_kernel and ell == 4:
-            D[:, 16:25, 16:25] = quaternion_to_wigner_d_matmul(q, 4)
+        D_l3, D_l4 = quaternion_to_wigner_d_l3l4_batched(q)
+        D[:, 9:16, 9:16] = D_l3
+        D[:, 16:25, 16:25] = D_l4
+    else:
+        for ell in range(min(lmax + 1, lmin)):
+            if ell == 0:
+                D[:, 0, 0] = 1.0
+            elif ell == 1:
+                D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
+            elif ell == 2:
+                D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
+            elif ell == 3:
+                D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(q, 3)
 
     # Compute l>=lmin using Ra/Rb polynomial
     if lmax >= lmin:
