@@ -478,8 +478,7 @@ def test_merge_mole_composition_check():
 @pytest.mark.gpu()
 def test_merge_mole_vs_non_merged_consistency():
     """Test that merged and non-merged versions produce identical results."""
-    # atoms = bulk("MgO", "rocksalt", a=4.213)
-    atoms = get_fcc_crystal_by_num_atoms(500)
+    atoms = bulk("MgO", "rocksalt", a=4.213)
 
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
