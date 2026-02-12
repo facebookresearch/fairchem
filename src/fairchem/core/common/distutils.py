@@ -131,14 +131,14 @@ def setup(config) -> None:
             local_rank = int(os.environ.get("LOCAL_RANK", 0))
             rank = int(os.environ.get("RANK", 0))
             assign_device_for_local_rank(config["cpu"], local_rank)
+            assert os.path.isdir(config["shared_file_dir"])
+            shared_filename = os.path.join(
+                config["shared_file_dir"],
+                ".distributed-shared-file",
+            )
 
             init_method = get_file_init_method(
-                world_size=config["world_size"],
-                rank=rank,
-                filename=os.path.join(
-                    config["shared_file_dir"],
-                    f".distributed-shared-file-{config['array_job_num']}",
-                ),
+                world_size=config["world_size"], rank=rank, filename=shared_filename
             )
             dist.init_process_group(
                 backend=config["distributed_backend"],
