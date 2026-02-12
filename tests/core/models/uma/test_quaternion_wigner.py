@@ -521,7 +521,7 @@ _KERNEL_TEST_PARAMS = [
 ]
 
 # Threshold for all kernel tests (all kernels achieve ~1e-15 accuracy)
-_KERNEL_THRESHOLD = 1e-12
+_KERNEL_THRESHOLD = 5e-14
 
 
 class TestSpecializedKernels:
