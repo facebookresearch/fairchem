@@ -13,11 +13,13 @@ import subprocess
 from datetime import timedelta
 from typing import Any, TypeVar
 
+import ray
 import torch
 import torch.distributed as dist
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
 
+from fairchem.core.common import gp_utils
 from fairchem.core.common.typing import none_throws
 
 T = TypeVar("T")
@@ -148,6 +150,15 @@ def cleanup() -> None:
         dist.destroy_process_group()
     if CURRENT_DEVICE_TYPE_STR in os.environ:
         os.environ.pop(CURRENT_DEVICE_TYPE_STR)
+
+
+def cleanup_gp_ray():
+    """Useful for cleaning up GP with ray"""
+    if ray.is_initialized():
+        ray.shutdown()
+    cleanup()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
 
 
 def initialized() -> bool:

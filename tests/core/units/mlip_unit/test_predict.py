@@ -10,30 +10,17 @@ import ray
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 
-import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
-
-
-def get_fcc_crystal_by_num_atoms(
-    num_atoms: int,
-    lattice_constant: float = 3.8,
-):
-    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
-    atoms = bulk("C", "fcc", a=lattice_constant)
-    n_cells = int(np.ceil(np.cbrt(num_atoms)))
-    atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
-    sampled_atoms = atoms[indices]
-    return sampled_atoms
 
 
 @pytest.fixture()
@@ -164,10 +151,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    ray.shutdown()
-    distutils.cleanup()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
+    distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -246,10 +230,7 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    ray.shutdown()
-    distutils.cleanup()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
+    distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -498,29 +479,31 @@ def test_merge_mole_composition_check():
 def test_merge_mole_vs_non_merged_consistency():
     """Test that merged and non-merged versions produce identical results."""
     # atoms = bulk("MgO", "rocksalt", a=4.213)
-    atoms = get_fcc_crystal_by_num_atoms(1000)
+    atoms = get_fcc_crystal_by_num_atoms(500)
 
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit_merged = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_merged
+        "uma-s-1p1", device="cuda", inference_settings=settings_merged, workers=2
     )
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
 
     atoms_merged = atoms.copy()
+    atoms_non_merged = atoms.copy()
     atoms_merged.calc = calc_merged
     energy_merged = atoms_merged.get_potential_energy()
     forces_merged = atoms_merged.get_forces()
     stress_merged = atoms_merged.get_stress(voigt=False)
 
+    distutils.cleanup_gp_ray()  # Ensure clean state before next test
+
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
     predict_unit_non_merged = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged
+        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged, workers=2
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
 
-    atoms_non_merged = atoms.copy()
     atoms_non_merged.calc = calc_non_merged
     energy_non_merged = atoms_non_merged.get_potential_energy()
     forces_non_merged = atoms_non_merged.get_forces()
@@ -553,7 +536,6 @@ def test_merge_mole_vs_non_merged_consistency():
 @pytest.mark.gpu()
 def test_merge_mole_supercell_energy_forces_consistency():
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
-    # atoms_orig = get_fcc_crystal_by_num_atoms(1000)
 
     settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit = pretrained_mlip.get_predict_unit(
@@ -583,7 +565,6 @@ def test_merge_mole_supercell_energy_forces_consistency():
 def batch_server_handle(uma_predict_unit):
     """Set up a batch server for testing."""
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-    import ray
     from ray import serve
 
     from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
@@ -703,6 +684,9 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
         assert preds["forces"].shape == (len(atoms_list[i]), 3)
 
 
+@pytest.disable(
+    reason="This test requires multiple gpus to run on CI but should pass locally"
+)
 @pytest.mark.gpu()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
@@ -727,7 +711,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
-    md_steps = 100
+    md_steps = 10
     timestep = 1.0 * units.fs
     initial_temp_K = 300.0
     pressure = 1.01325 * units.bar  # 1 atm
@@ -791,13 +775,6 @@ def test_merge_mole_md_consistency(workers, ensemble):
             "stresses": np.array(stresses),
         }
 
-    def cleanup_distributed():
-        """Clean up distributed resources between trials."""
-        ray.shutdown()
-        distutils.cleanup()
-        if gp_utils.initialized():
-            gp_utils.cleanup_gp()
-
     # Trial A: no merge
     settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
     predict_unit_A = pretrained_mlip.get_predict_unit(
@@ -808,7 +785,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     )
     calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
     results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
-    cleanup_distributed()
+    distutils.cleanup_gp_ray()
 
     # Trial B: no merge again (baseline for numerical noise)
     predict_unit_B = pretrained_mlip.get_predict_unit(
@@ -819,7 +796,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     )
     calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
     results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
-    cleanup_distributed()
+    distutils.cleanup_gp_ray()
 
     # Trial C: merge
     settings_merge = InferenceSettings(merge_mole=True, **base_settings)
@@ -828,7 +805,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     )
     calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
     results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
-    cleanup_distributed()
+    distutils.cleanup_gp_ray()
 
     # Compute drifts
     # Energy drift

@@ -83,7 +83,7 @@ class MLIPPredictUnitProtocol(Protocol):
 
 
 def merge_uma_model(model, data):
-    # merge the backbone
+    logging.info("Calling merge_uma_model")
     model.backbone = model.backbone.merge_MOLE_model(data)
 
     # merge any heads
@@ -414,6 +414,7 @@ class MLIPWorkerLocal:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
+                torch.distributed.broadcast(self.last_received_atomic_data.cell, src=0)
                 self.predict_unit.predict(self.last_received_atomic_data)
 
         return None
@@ -576,7 +577,9 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             self.atomic_data_on_device = data.clone()
         else:
             self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+            self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
             torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
+            torch.distributed.broadcast(self.atomic_data_on_device.cell, src=0)
 
         return self.local_rank0.predict(self.atomic_data_on_device)
 
