@@ -1075,13 +1075,23 @@ def get_so3_generators(
         K_y_list = []
         K_z_list = []
 
+        P = torch.tensor(
+            [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            dtype=dtype,
+            device=device,
+        )
+
         for ell in range(lmax + 1):
             K_x, K_y, K_z = _build_so3_generators(ell)
             K_x = K_x.to(device=device, dtype=dtype)
             K_y = K_y.to(device=device, dtype=dtype)
             K_z = K_z.to(device=device, dtype=dtype)
 
-            if ell >= 2:
+            if ell == 1:
+                K_x = P @ K_x @ P.T
+                K_y = P @ K_y @ P.T
+                K_z = P @ K_z @ P.T
+            elif ell >= 2:
                 Jd = Jd_list[ell].to(dtype=dtype, device=device)
                 U = _build_euler_transform(ell, Jd)
                 K_x = U @ K_x @ U.T
@@ -1091,12 +1101,6 @@ def get_so3_generators(
             K_x_list.append(K_x)
             K_y_list.append(K_y)
             K_z_list.append(K_z)
-
-        P = torch.tensor(
-            [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-            dtype=dtype,
-            device=device,
-        )
 
         _GENERATOR_CACHE[key] = {
             "K_x": K_x_list,

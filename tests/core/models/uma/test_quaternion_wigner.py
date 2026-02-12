@@ -251,24 +251,6 @@ class TestEntryPointAgreement:
         assert (D_matexp - D_hybrid).abs().max() < 1e-9, "hybrid differs from matexp"
         assert (D_matexp - D_poly).abs().max() < 1e-9, "polynomial differs from matexp"
 
-    def test_l4_kernel_matches(self, dtype, device):
-        """l4_kernel=True produces same results as default methods."""
-        lmax = 4  # Need lmax >= 4 to test l=4 kernels
-        torch.manual_seed(42)
-        edges = torch.randn(50, 3, dtype=dtype, device=device)
-        gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
-
-        # Reference: hybrid without l4_kernel
-        D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
-        # Test: hybrid with l4_kernel=True
-        D_hybrid_l3l4, _ = axis_angle_wigner_hybrid(
-            edges, lmax, gamma=gamma, l4_kernel=True
-        )
-
-        assert (
-            (D_hybrid - D_hybrid_l3l4).abs().max() < 1e-9
-        ), "hybrid with l3_l4_kernel=True differs from hybrid without"
-
     def test_real_methods_match_complex(self, lmax, dtype, device):
         """Real-arithmetic methods match complex-arithmetic methods."""
         torch.manual_seed(42)

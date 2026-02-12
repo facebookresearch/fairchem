@@ -7,7 +7,6 @@ Usage:
     python benchmark_batch_sizes.py --cuda       # Force CUDA
     python benchmark_batch_sizes.py --quick      # Quick mode (fewer runs)
     python benchmark_batch_sizes.py --method polynomial  # Use polynomial method
-    python benchmark_batch_sizes.py --l4_kernel  # Use l4 matmul kernel (hybrid)
     python benchmark_batch_sizes.py --real       # Use real arithmetic
 """
 
@@ -25,6 +24,9 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
+from fairchem.core.models.uma.common.wigner_d_hybrid_matexp import (
+    axis_angle_wigner_hybrid_matexp,
+)
 from fairchem.core.models.uma.common.wigner_d_matexp import (
     axis_angle_wigner as axis_angle_wigner_matexp,
 )
@@ -47,14 +49,9 @@ def parse_args():
     )
     parser.add_argument(
         "--method",
-        choices=["hybrid", "matexp", "polynomial"],
+        choices=["hybrid", "matexp", "polynomial", "hybrid_matexp"],
         default="hybrid",
         help="Axis-angle method to use (default: hybrid)",
-    )
-    parser.add_argument(
-        "--l4_kernel",
-        action="store_true",
-        help="Use l4 matmul kernel (hybrid only, l3 kernel always enabled)",
     )
     parser.add_argument(
         "--real",
@@ -165,8 +162,6 @@ def main():
     print(f"PERFORMANCE: Euler vs Axis-Angle ({args.method}) by Batch Size")
     if args.compile:
         print("(with torch.compile)")
-    if args.l4_kernel:
-        print("(with l4_kernel)")
     if args.real:
         print("(with real arithmetic)")
     print("=" * 90)
@@ -194,9 +189,11 @@ def main():
         angles = init_edge_rot_euler_angles(edges)
         return eulers_to_wigner(angles, 0, lmax, Jd)
 
-    # Pre-compute generators for matexp method (avoids torch.compile graph breaks)
+    # Pre-compute generators for matexp methods (avoids torch.compile graph breaks)
     generators = (
-        get_so3_generators(lmax, dtype, device) if args.method == "matexp" else None
+        get_so3_generators(lmax, dtype, device)
+        if args.method in ("matexp", "hybrid_matexp")
+        else None
     )
 
     def axis_forward(edges):
@@ -204,11 +201,12 @@ def main():
             return axis_angle_wigner_hybrid(
                 edges,
                 lmax,
-                l4_kernel=args.l4_kernel,
                 use_real_arithmetic=args.real,
             )
         elif args.method == "matexp":
             return axis_angle_wigner_matexp(edges, lmax, generators=generators)
+        elif args.method == "hybrid_matexp":
+            return axis_angle_wigner_hybrid_matexp(edges, lmax, generators=generators)
         else:  # polynomial
             return axis_angle_wigner_polynomial(
                 edges,
