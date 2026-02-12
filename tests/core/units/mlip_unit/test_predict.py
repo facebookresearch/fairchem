@@ -684,13 +684,11 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
         assert preds["forces"].shape == (len(atoms_list[i]), 3)
 
 
-@pytest.disable(
-    reason="This test requires multiple gpus to run on CI but should pass locally"
-)
-@pytest.mark.gpu()
+# this should pass for multi-gpu as well when run locally
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
-def test_merge_mole_md_consistency(workers, ensemble):
+@pytest.mark.parametrize("device", ["cpu"])
+def test_merge_mole_md_consistency(workers, ensemble, device):
     """Test merge_mole vs no-merge consistency over MD trajectory.
 
     Runs 3 trials:
@@ -711,7 +709,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
-    md_steps = 10
+    md_steps = 5
     timestep = 1.0 * units.fs
     initial_temp_K = 300.0
     pressure = 1.01325 * units.bar  # 1 atm
@@ -779,7 +777,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
     predict_unit_A = pretrained_mlip.get_predict_unit(
         "uma-s-1p1",
-        device="cuda",
+        device=device,
         inference_settings=settings_no_merge,
         workers=workers,
     )
@@ -790,7 +788,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     # Trial B: no merge again (baseline for numerical noise)
     predict_unit_B = pretrained_mlip.get_predict_unit(
         "uma-s-1p1",
-        device="cuda",
+        device=device,
         inference_settings=settings_no_merge,
         workers=workers,
     )
@@ -801,7 +799,7 @@ def test_merge_mole_md_consistency(workers, ensemble):
     # Trial C: merge
     settings_merge = InferenceSettings(merge_mole=True, **base_settings)
     predict_unit_C = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_merge, workers=workers
+        "uma-s-1p1", device=device, inference_settings=settings_merge, workers=workers
     )
     calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
     results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
