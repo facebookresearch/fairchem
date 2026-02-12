@@ -722,7 +722,19 @@ def test_hessian(vmap):
     )
     batch = atomicdata_list_to_batch([data])
 
-    hessian = predict_unit.get_hessian(batch, vmap=vmap).detach().cpu().numpy()
+    # Enable Hessian computation on the head
+    head = predict_unit.model.module.output_heads["energyandforcehead"]
+    if hasattr(head, "head"):
+        head = head.head
+    head.regress_hessian = True
+    head.hessian_vmap = vmap
+
+    # Get predictions with Hessian
+    preds = predict_unit.predict(batch)
+    hessian = preds["hessian"].detach().cpu().numpy()
+
+    # Restore original setting
+    head.regress_hessian = False
 
     # Check shape (3 atoms * 3 coords = 9x9 matrix)
     assert hessian.shape == (9, 9)
@@ -744,9 +756,22 @@ def test_hessian_vs_numerical():
         molecule_cell_size=120,
     )
     batch = atomicdata_list_to_batch([data])
-    hessian_analytical = (
-        predict_unit.get_hessian(batch, vmap=True).detach().cpu().numpy()
-    )
+
+    # Enable Hessian computation on the head
+    head = predict_unit.model.module.output_heads["energyandforcehead"]
+    if hasattr(head, "head"):
+        head = head.head
+    head.regress_hessian = True
+    head.hessian_vmap = True
+
+    # Get analytical Hessian
+    preds = predict_unit.predict(batch)
+    hessian_analytical = preds["hessian"].detach().cpu().numpy()
+
+    # Restore original setting
+    head.regress_hessian = False
+
+    # Get numerical Hessian
     hessian_numerical = (
         get_numerical_hessian(data, predict_unit, eps=1e-4, device="cuda")
         .detach()
@@ -780,7 +805,20 @@ def test_hessian_symmetry():
         molecule_cell_size=120,
     )
     batch = atomicdata_list_to_batch([data])
-    hessian = predict_unit.get_hessian(batch, vmap=True)
+
+    # Enable Hessian computation on the head
+    head = predict_unit.model.module.output_heads["energyandforcehead"]
+    if hasattr(head, "head"):
+        head = head.head
+    head.regress_hessian = True
+    head.hessian_vmap = True
+
+    # Get predictions with Hessian
+    preds = predict_unit.predict(batch)
+    hessian = preds["hessian"]
+
+    # Restore original setting
+    head.regress_hessian = False
 
     # Hessian should be symmetric
     npt.assert_allclose(

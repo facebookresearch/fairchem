@@ -309,63 +309,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         return pred_output
 
-    def get_hessian(self, data: AtomicData, vmap: bool = True) -> torch.Tensor:
-        """
-        Get the Hessian matrix for the given atomic data.
-
-        Args:
-            data (AtomicData): The atomic data to calculate the Hessian for.
-            vmap (bool): Whether to use vectorized mapping for Hessian calculation. Defaults to True.
-
-        Returns:
-            torch.Tensor: The Hessian matrix with shape (n_atoms * 3, n_atoms * 3).
-        """
-
-        if not self.lazy_model_intialized:
-            self.move_to_device()
-            self.lazy_model_intialized = True
-
-        self.model.module.output_heads["energyandforcehead"].head.training = True
-
-        preds = self.predict(data)
-        forces = preds["forces"]
-        positions = data["pos"]
-
-        forces_flat = forces.flatten()
-        if vmap:
-
-            def compute_grad_component(vec):
-                return torch.autograd.grad(
-                    -1 * forces_flat,
-                    positions,
-                    grad_outputs=vec,
-                    retain_graph=True,
-                )[0]
-
-            hessian = torch.vmap(compute_grad_component)(
-                torch.eye(forces_flat.numel(), device=forces_flat.device)
-            )
-        else:
-            hessian = torch.zeros(
-                (len(forces_flat), len(forces_flat)),
-                device=self.device,
-                requires_grad=False,
-            )
-            n_forces = len(forces_flat)
-            for i in range(n_forces):
-                hessian[:, i] = torch.autograd.grad(
-                    -forces_flat[i],
-                    positions,
-                    retain_graph=i < n_forces - 1,
-                )[0].flatten()
-
-        self.model.module.output_heads["energyandforcehead"].head.training = False
-
-        n_atoms = (
-            data.natoms.item() if hasattr(data.natoms, "item") else int(data.natoms)
-        )
-        return hessian.reshape(n_atoms * 3, n_atoms * 3)
-
 
 def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
     """Create a mapping from dataset names to their associated tasks.

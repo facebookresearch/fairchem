@@ -43,6 +43,7 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
+    compute_hessian,
     get_l_component,
     reduce_node_to_system,
 )
@@ -685,6 +686,8 @@ class MLP_EFS_Head(MLP_Energy_Head):
         reduce: str = "sum",
         prefix: str | None = None,
         wrap_property: bool = True,
+        regress_hessian: bool = False,
+        hessian_vmap: bool = True,
     ) -> None:
         super().__init__(
             backbone, reduce=reduce, prefix=prefix, wrap_property=wrap_property
@@ -693,6 +696,8 @@ class MLP_EFS_Head(MLP_Energy_Head):
         backbone.force_block = None
         self.regress_stress = backbone.regress_stress
         self.regress_forces = backbone.regress_forces
+        self.regress_hessian = regress_hessian
+        self.hessian_vmap = hessian_vmap
 
         # TODO: this is not very clean, bug-prone.
         # but is currently necessary for finetuning pretrained models that did not have
@@ -709,6 +714,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
         energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
         forces_key = f"{self.prefix}_forces" if self.prefix else "forces"
         stress_key = f"{self.prefix}_stress" if self.prefix else "stress"
+        hessian_key = f"{self.prefix}_hessian" if self.prefix else "hessian"
 
         outputs = {}
 
@@ -727,20 +733,49 @@ class MLP_EFS_Head(MLP_Energy_Head):
                 {"embeddings": embeddings} if self.wrap_property else embeddings
             )
 
+        # Determine if we need create_graph for higher-order derivatives
+        # Hessian computation requires second derivatives, so we need create_graph=True
+        create_graph = self.training or self.regress_hessian
+
         if self.regress_stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos_original"],
                 emb["displacement"],
                 data["cell"],
-                training=self.training,
+                training=create_graph,
             )
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
+            pos = data["pos_original"]
         elif self.regress_forces:
-            forces = compute_forces(energy_part, data["pos"], training=self.training)
+            forces = compute_forces(energy_part, data["pos"], training=create_graph)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+            pos = data["pos"]
+        else:
+            forces = None
+            pos = None
+
+        # Compute Hessian if requested
+        if self.regress_hessian:
+            if forces is None:
+                raise ValueError(
+                    "Hessian computation requires forces. "
+                    "Please enable regress_forces or regress_stress."
+                )
+            if data["natoms"].numel() != 1:
+                raise ValueError(
+                    f"Hessian computation requires exactly 1 system in batch, "
+                    f"found {data['natoms'].numel()}"
+                )
+
+            hessian = compute_hessian(
+                forces, pos, vmap=self.hessian_vmap, training=self.training
+            )
+            outputs[hessian_key] = (
+                {"hessian": hessian} if self.wrap_property else hessian
+            )
 
         return outputs
 

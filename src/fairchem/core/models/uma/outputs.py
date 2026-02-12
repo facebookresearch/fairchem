@@ -172,3 +172,117 @@ def compute_forces_and_stress(
     stress = stress.view(-1, 9)
 
     return forces, stress
+
+
+def compute_hessian_vmap(
+    forces_flat: torch.Tensor,
+    pos: torch.Tensor,
+    create_graph: bool,
+) -> torch.Tensor:
+    """Compute Hessian using vectorized mapping (vmap).
+
+    Uses torch.vmap to compute all Hessian components in parallel by taking
+    gradients of each force component with respect to all positions.
+
+    Args:
+        forces_flat: Flattened forces tensor, shape [N*3].
+        pos: Atomic positions, shape [N, 3].
+        create_graph: Whether to create graph for third-order derivatives.
+
+    Returns:
+        Hessian matrix of shape [N*3, N*3].
+    """
+
+    def compute_grad_component(vec):
+        """Compute gradient of forces w.r.t. positions for a single component."""
+        return torch.autograd.grad(
+            -1 * forces_flat,
+            pos,
+            grad_outputs=vec,
+            retain_graph=True,
+            create_graph=create_graph,
+        )[0]
+
+    # Use vmap to compute all components in parallel
+    hessian = torch.vmap(compute_grad_component)(
+        torch.eye(forces_flat.numel(), device=forces_flat.device)
+    )
+
+    return hessian
+
+
+def compute_hessian_loop(
+    forces_flat: torch.Tensor,
+    pos: torch.Tensor,
+    create_graph: bool,
+) -> torch.Tensor:
+    """Compute Hessian using a loop over force components.
+
+    Iteratively computes gradients of each force component with respect to
+    positions. This is a fallback when vmap is not desired or unavailable.
+
+    Args:
+        forces_flat: Flattened forces tensor, shape [N*3].
+        pos: Atomic positions, shape [N, 3].
+        create_graph: Whether to create graph for third-order derivatives.
+
+    Returns:
+        Hessian matrix of shape [N*3, N*3].
+    """
+    n_forces = len(forces_flat)
+    hessian = torch.zeros(
+        (n_forces, n_forces),
+        device=forces_flat.device,
+        dtype=forces_flat.dtype,
+        requires_grad=False,
+    )
+
+    for i in range(n_forces):
+        hessian[:, i] = torch.autograd.grad(
+            -forces_flat[i],
+            pos,
+            retain_graph=i < n_forces - 1,
+            create_graph=create_graph,
+        )[0].flatten()
+
+    return hessian
+
+
+def compute_hessian(
+    forces: torch.Tensor,
+    pos: torch.Tensor,
+    vmap: bool = True,
+    training: bool = False,
+) -> torch.Tensor:
+    """Compute Hessian matrix as second derivative of energy w.r.t. positions.
+
+    The Hessian is computed as the negative gradient of forces with respect to
+    positions: H = -∇_pos(forces) = ∇²_pos(energy).
+
+    Args:
+        forces: Force tensor, shape [N, 3].
+        pos: Atomic positions, shape [N, 3].
+        vmap: Whether to use vectorized mapping (faster but higher memory).
+        training: Whether to create graph for third-order derivatives.
+
+    Returns:
+        Hessian matrix of shape [N*3, N*3].
+
+    Note:
+        Graph parallel (GP) mode is not fully supported. The Hessian should
+        be computed after forces have been reduced across GP ranks.
+    """
+    if gp_utils.initialized():
+        raise NotImplementedError(
+            "Hessian computation is not currently supported with graph parallel mode. "
+            "Please compute Hessian on a single rank after force reduction."
+        )
+
+    forces_flat = forces.flatten()
+
+    if vmap:
+        hessian = compute_hessian_vmap(forces_flat, pos, create_graph=training)
+    else:
+        hessian = compute_hessian_loop(forces_flat, pos, create_graph=training)
+
+    return hessian
