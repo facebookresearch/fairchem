@@ -121,7 +121,7 @@ def convert_train_checkpoint_to_inference_checkpoint(
     dcp_to_torch_save(dcp_checkpoint_loc, checkpoint_loc)
 
     inference_ckpt = torch.load(
-        checkpoint_loc, map_location="cpu", weights_only=False
+        checkpoint_loc, map_location="cpu", weights_only=False, mmap=True
     )  # DCP model config
     train_eval_unit_state = inference_ckpt["config"]["runner"]["train_eval_unit"]
     unit_state = inference_ckpt["unit_state"]
