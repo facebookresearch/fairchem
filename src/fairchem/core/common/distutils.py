@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import time
 from datetime import timedelta
 from typing import Any, TypeVar
 
@@ -150,6 +151,7 @@ def cleanup() -> None:
         dist.destroy_process_group()
     if CURRENT_DEVICE_TYPE_STR in os.environ:
         os.environ.pop(CURRENT_DEVICE_TYPE_STR)
+    time.sleep(0.5)  # Give OS time to release ports
 
 
 def cleanup_gp_ray():
@@ -159,6 +161,7 @@ def cleanup_gp_ray():
     cleanup()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
+    time.sleep(0.5)  # Give OS time to release ports
 
 
 def initialized() -> bool:
