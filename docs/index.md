@@ -232,3 +232,5 @@ Access pretrained UMA checkpoints
 [facebook/UMA](https://huggingface.co/facebook/UMA)
 :::
 ::::
+
+[Terms of Use](https://opensource.fb.com/legal/terms) | [Privacy Policy](https://opensource.fb.com/legal/privacy)
