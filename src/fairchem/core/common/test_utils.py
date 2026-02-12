@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
 import pdb
@@ -120,21 +121,33 @@ def spawn_multi_process(
     manager = multiprocessing.Manager()
     mp_output_dict = manager.dict()
 
-    port = str(get_free_port())
-    config.port = port
-    torch.multiprocessing.spawn(
-        # torch.multiprocessing.spawn sends rank as the first param
-        # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
-        init_and_launch,
-        args=(
-            config,
-            mp_output_dict,
-            test_method,
-            test_method_args,
-            test_method_kwargs,
-        ),
-        nprocs=config.world_size,
-    )
+    # Retry with a new port if we hit EADDRINUSE (get_free_port has a
+    # TOCTOU race — the port can be grabbed between discovery and bind).
+    max_retries = 5
+    for attempt in range(max_retries):
+        port = str(get_free_port())
+        config.port = port
+        try:
+            torch.multiprocessing.spawn(
+                # torch.multiprocessing.spawn sends rank as the first param
+                # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
+                init_and_launch,
+                args=(
+                    config,
+                    mp_output_dict,
+                    test_method,
+                    test_method_args,
+                    test_method_kwargs,
+                ),
+                nprocs=config.world_size,
+            )
+            break
+        except torch.multiprocessing.ProcessRaisedException as e:
+            if "EADDRINUSE" not in str(e) or attempt == max_retries - 1:
+                raise
+            logging.warning(
+                f"Port {port} in use, retrying with a new port (attempt {attempt + 1}/{max_retries})"
+            )
 
     return [mp_output_dict[i] for i in range(config.world_size)]
 
