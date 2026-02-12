@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-import tempfile
 from datetime import timedelta
 from typing import Any, TypeVar
 
@@ -133,12 +132,13 @@ def setup(config) -> None:
             rank = int(os.environ.get("RANK", 0))
             assign_device_for_local_rank(config["cpu"], local_rank)
 
-            with tempfile.NamedTemporaryFile(delete=False) as f:
-                tmp_filename = f.name
             init_method = get_file_init_method(
                 world_size=config["world_size"],
                 rank=rank,
-                filename=tmp_filename,
+                filename=os.path.join(
+                    config["shared_file_dir"],
+                    f".distributed-shared-file-{config['array_job_num']}",
+                ),
             )
             dist.init_process_group(
                 backend=config["distributed_backend"],
