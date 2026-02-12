@@ -13,10 +13,10 @@ pytest tests -c packages/fairchem-core/pyproject.toml
 pytest tests/core/models/test_uma.py -vv
 pytest tests/core -m "not gpu"
 
-# Lint & format
-ruff check src/fairchem/core --fix
-ruff format src/fairchem/core
-pre-commit run --all-files
+# Lint & format (only modified files)
+ruff check path/to/modified_file.py --fix
+ruff format path/to/modified_file.py
+pre-commit run --files path/to/modified_file.py
 
 # CLI
 fairchem -c config.yaml [overrides...]
