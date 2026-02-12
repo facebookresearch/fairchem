@@ -15,9 +15,10 @@ import hydra
 import torch
 import torch.distributed as dist
 from omegaconf import OmegaConf
+from torchtnt.utils.distributed import get_file_init_method
 
 from fairchem.core._cli import get_hydra_config_from_yaml
-from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
+from fairchem.core.common.distutils import assign_device_for_local_rank
 from fairchem.core.components.train.train_runner import (
     get_most_recent_viable_checkpoint_path,
 )
@@ -35,8 +36,10 @@ def check_model_state_equal(old_state: dict, new_state: dict) -> bool:
 def test_traineval_runner_save_and_load_checkpoint(fake_uma_dataset):
     hydra.core.global_hydra.GlobalHydra.instance().clear()
     assign_device_for_local_rank(True, 0)
-    setup_env_local()
-    dist.init_process_group(backend="gloo", rank=0, world_size=1)
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        init_file = f.name
+    init_method = get_file_init_method(world_size=1, rank=0, filename=init_file)
+    dist.init_process_group(init_method=init_method, backend="gloo")
     config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
     # TODO mock main to avoid repeating this code in other tests

@@ -8,15 +8,17 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+import tempfile
 
 import hydra
 import pytest
 import torch
 import torch.distributed as dist
 from omegaconf import OmegaConf
+from torchtnt.utils.distributed import get_file_init_method
 
 from fairchem.core._cli import get_hydra_config_from_yaml
-from fairchem.core.common.distutils import assign_device_for_local_rank, setup_env_local
+from fairchem.core.common.distutils import assign_device_for_local_rank
 from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
 from fairchem.core.units.mlip_unit.utils import update_configs
 
@@ -36,9 +38,11 @@ def check_backbone_state_equal(old_state: dict, new_state: dict) -> bool:
 @pytest.mark.skip()
 def test_traineval_runner_finetuning():
     hydra.core.global_hydra.GlobalHydra.instance().clear()
-    setup_env_local()
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        init_file = f.name
+    init_method = get_file_init_method(world_size=1, rank=0, filename=init_file)
     assign_device_for_local_rank(True, 0)
-    dist.init_process_group(backend="gloo", rank=0, world_size=1)
+    dist.init_process_group(init_method=init_method, backend="gloo")
     config = "tests/core/units/mlip_unit/test_mlip_train.yaml"
     # remove callbacks for checking loss
 
