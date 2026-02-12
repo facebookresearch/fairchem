@@ -22,9 +22,11 @@ import pytest
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    get_so3_generators,
     precompute_U_blocks_euler_aligned,
     precompute_U_blocks_euler_aligned_real,
     precompute_wigner_coefficients,
+    quaternion_to_axis_angle,
     quaternion_to_ra_rb,
     quaternion_to_ra_rb_real,
     wigner_d_complex_to_real,
@@ -38,6 +40,7 @@ from fairchem.core.models.uma.common.rotation import (
 )
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     preload_kernel_caches,
+    quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_matmul,
 )
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
@@ -250,7 +253,7 @@ class TestEntryPointAgreement:
 
     def test_l4_kernel_matches(self, dtype, device):
         """l4_kernel=True produces same results as default methods."""
-        lmax = 4  # Need lmax >= 4 to test l=4 kernel
+        lmax = 4  # Need lmax >= 4 to test l=4 kernels
         torch.manual_seed(42)
         edges = torch.randn(50, 3, dtype=dtype, device=device)
         gamma = torch.rand(50, dtype=dtype, device=device) * 6.28
@@ -258,13 +261,13 @@ class TestEntryPointAgreement:
         # Reference: hybrid without l4_kernel
         D_hybrid, _ = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
         # Test: hybrid with l4_kernel=True
-        D_hybrid_l4, _ = axis_angle_wigner_hybrid(
+        D_hybrid_l3l4, _ = axis_angle_wigner_hybrid(
             edges, lmax, gamma=gamma, l4_kernel=True
         )
 
         assert (
-            D_hybrid - D_hybrid_l4
-        ).abs().max() < 1e-9, "hybrid with l4_kernel=True differs from hybrid without"
+            (D_hybrid - D_hybrid_l3l4).abs().max() < 1e-9
+        ), "hybrid with l3_l4_kernel=True differs from hybrid without"
 
     def test_real_methods_match_complex(self, lmax, dtype, device):
         """Real-arithmetic methods match complex-arithmetic methods."""
@@ -686,29 +689,45 @@ class TestRangeFunctions:
 # =============================================================================
 
 
+# Kernel test configuration: (ell, kernel_fn)
+_KERNEL_TEST_PARAMS = [
+    (2, quaternion_to_wigner_d_l2_einsum),
+    (3, lambda q: quaternion_to_wigner_d_matmul(q, 3)),
+    (4, lambda q: quaternion_to_wigner_d_matmul(q, 4)),
+]
+
+# Threshold for all kernel tests (all kernels achieve ~1e-15 accuracy)
+_KERNEL_THRESHOLD = 5e-14
+
+
 class TestSpecializedKernels:
     """Tests for the specialized l=2 polynomial and l=3/4 matmul kernels."""
 
-    def test_l2_einsum_matches_matexp(self, dtype, device):
-        """l=2 einsum kernel matches matrix exponential method."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            get_so3_generators,
-            quaternion_to_axis_angle,
-            quaternion_to_wigner_d_l2_einsum,
-        )
-
+    @pytest.mark.parametrize(
+        "ell,kernel_fn,n_samples",
+        [
+            (2, quaternion_to_wigner_d_l2_einsum, 500),
+            (3, lambda q: quaternion_to_wigner_d_matmul(q, 3), 100),
+            (4, lambda q: quaternion_to_wigner_d_matmul(q, 4), 100),
+        ],
+    )
+    def test_kernel_matches_matexp(self, dtype, device, ell, kernel_fn, n_samples):
+        """Specialized kernels match matrix exponential method."""
         torch.manual_seed(42)
-        n_samples = 500
         q = torch.randn(n_samples, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
 
-        # Einsum method
-        D_einsum = quaternion_to_wigner_d_l2_einsum(q)
+        # Kernel method
+        D_kernel = kernel_fn(q)
 
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
-        generators = get_so3_generators(2, dtype, device)
-        K_x, K_y, K_z = generators["K_x"][2], generators["K_y"][2], generators["K_z"][2]
+        generators = get_so3_generators(ell, dtype, device)
+        K_x, K_y, K_z = (
+            generators["K_x"][ell],
+            generators["K_y"][ell],
+            generators["K_z"][ell],
+        )
         K = (
             axis[:, 0:1, None, None] * K_x
             + axis[:, 1:2, None, None] * K_y
@@ -716,119 +735,34 @@ class TestSpecializedKernels:
         ).squeeze(1)
         D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
 
-        max_err = (D_einsum - D_matexp).abs().max().item()
-        assert max_err < 1e-12, f"l=2 einsum differs from matexp by {max_err}"
+        max_err = (D_kernel - D_matexp).abs().max().item()
+        assert (
+            max_err < _KERNEL_THRESHOLD
+        ), f"l={ell} kernel differs from matexp by {max_err}"
 
-    def test_l3_matmul_matches_matexp(self, dtype, device):
-        """l=3 matmul kernel matches matrix exponential method."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            get_so3_generators,
-            quaternion_to_axis_angle,
-        )
-
-        torch.manual_seed(42)
-        n_samples = 100
-        q = torch.randn(n_samples, 4, dtype=dtype, device=device)
-        q = q / q.norm(dim=-1, keepdim=True)
-
-        # Matmul method
-        D_matmul = quaternion_to_wigner_d_matmul(q, 3)
-
-        # Matrix exponential method
-        axis, angle = quaternion_to_axis_angle(q)
-        generators = get_so3_generators(3, dtype, device)
-        K_x, K_y, K_z = generators["K_x"][3], generators["K_y"][3], generators["K_z"][3]
-        K = (
-            axis[:, 0:1, None, None] * K_x
-            + axis[:, 1:2, None, None] * K_y
-            + axis[:, 2:3, None, None] * K_z
-        ).squeeze(1)
-        D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
-
-        max_err = (D_matmul - D_matexp).abs().max().item()
-        assert max_err < 1e-12, f"l=3 matmul differs from matexp by {max_err}"
-
-    def test_l4_matmul_matches_matexp(self, dtype, device):
-        """l=4 matmul kernel matches matrix exponential method."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            get_so3_generators,
-            quaternion_to_axis_angle,
-        )
-
-        torch.manual_seed(42)
-        n_samples = 100
-        q = torch.randn(n_samples, 4, dtype=dtype, device=device)
-        q = q / q.norm(dim=-1, keepdim=True)
-
-        # Matmul method
-        D_matmul = quaternion_to_wigner_d_matmul(q, 4)
-
-        # Matrix exponential method
-        axis, angle = quaternion_to_axis_angle(q)
-        generators = get_so3_generators(4, dtype, device)
-        K_x, K_y, K_z = generators["K_x"][4], generators["K_y"][4], generators["K_z"][4]
-        K = (
-            axis[:, 0:1, None, None] * K_x
-            + axis[:, 1:2, None, None] * K_y
-            + axis[:, 2:3, None, None] * K_z
-        ).squeeze(1)
-        D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
-
-        max_err = (D_matmul - D_matexp).abs().max().item()
-        assert max_err < 1e-12, f"l=4 matmul differs from matexp by {max_err}"
-
-    def test_kernels_orthogonality(self, dtype, device):
+    @pytest.mark.parametrize("ell,kernel_fn", _KERNEL_TEST_PARAMS)
+    def test_kernel_orthogonality(self, dtype, device, ell, kernel_fn):
         """Specialized kernels produce orthogonal matrices."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l2_einsum,
-        )
-
         torch.manual_seed(123)
         q = torch.randn(100, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
 
-        # l=2
-        D2 = quaternion_to_wigner_d_l2_einsum(q)
-        I5 = torch.eye(5, dtype=dtype, device=device)
-        orth_err_2 = (D2 @ D2.transpose(-1, -2) - I5).abs().max().item()
-        assert orth_err_2 < 1e-10, f"l=2 orthogonality error: {orth_err_2}"
+        D = kernel_fn(q)
+        size = 2 * ell + 1
+        I = torch.eye(size, dtype=dtype, device=device)
+        orth_err = (D @ D.transpose(-1, -2) - I).abs().max().item()
+        assert orth_err < _KERNEL_THRESHOLD, f"l={ell} orthogonality error: {orth_err}"
 
-        # l=3
-        D3 = quaternion_to_wigner_d_matmul(q, 3)
-        I7 = torch.eye(7, dtype=dtype, device=device)
-        orth_err_3 = (D3 @ D3.transpose(-1, -2) - I7).abs().max().item()
-        assert orth_err_3 < 1e-9, f"l=3 orthogonality error: {orth_err_3}"
-
-        # l=4
-        D4 = quaternion_to_wigner_d_matmul(q, 4)
-        I9 = torch.eye(9, dtype=dtype, device=device)
-        orth_err_4 = (D4 @ D4.transpose(-1, -2) - I9).abs().max().item()
-        assert orth_err_4 < 1e-9, f"l=4 orthogonality error: {orth_err_4}"
-
-    def test_kernels_determinant_one(self, dtype, device):
+    @pytest.mark.parametrize("ell,kernel_fn", _KERNEL_TEST_PARAMS)
+    def test_kernel_determinant_one(self, dtype, device, ell, kernel_fn):
         """Specialized kernels produce matrices with determinant 1."""
-        from fairchem.core.models.uma.common.wigner_d_matexp import (
-            quaternion_to_wigner_d_l2_einsum,
-        )
-
         torch.manual_seed(456)
         q = torch.randn(100, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
 
-        # l=2
-        D2 = quaternion_to_wigner_d_l2_einsum(q)
-        det_err_2 = (torch.linalg.det(D2) - 1.0).abs().max().item()
-        assert det_err_2 < 1e-10, f"l=2 determinant error: {det_err_2}"
-
-        # l=3
-        D3 = quaternion_to_wigner_d_matmul(q, 3)
-        det_err_3 = (torch.linalg.det(D3) - 1.0).abs().max().item()
-        assert det_err_3 < 1e-9, f"l=3 determinant error: {det_err_3}"
-
-        # l=4
-        D4 = quaternion_to_wigner_d_matmul(q, 4)
-        det_err_4 = (torch.linalg.det(D4) - 1.0).abs().max().item()
-        assert det_err_4 < 1e-9, f"l=4 determinant error: {det_err_4}"
+        D = kernel_fn(q)
+        det_err = (torch.linalg.det(D) - 1.0).abs().max().item()
+        assert det_err < _KERNEL_THRESHOLD, f"l={ell} determinant error: {det_err}"
 
 
 if __name__ == "__main__":
