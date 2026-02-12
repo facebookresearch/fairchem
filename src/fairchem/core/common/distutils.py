@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import tempfile
 from datetime import timedelta
 from typing import Any, TypeVar
 
@@ -127,20 +128,38 @@ def setup(config) -> None:
             except FileNotFoundError:  # Slurm is not installed
                 pass
     else:  # local mode
-        if "MASTER_ADDR" not in os.environ:
-            assert (
-                config["world_size"] == 1
-            ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
-            setup_env_local()
-        local_rank = int(os.environ["LOCAL_RANK"])
-        assign_device_for_local_rank(config["cpu"], local_rank)
+        if config.get("init_method") == "file":
+            local_rank = int(os.environ.get("LOCAL_RANK", 0))
+            rank = int(os.environ.get("RANK", 0))
+            assign_device_for_local_rank(config["cpu"], local_rank)
 
-        dist.init_process_group(
-            backend=config["distributed_backend"],
-            rank=int(os.environ["RANK"]),
-            world_size=config["world_size"],
-            timeout=timeout,
-        )
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                tmp_filename = f.name
+            init_method = get_file_init_method(
+                world_size=config["world_size"],
+                rank=rank,
+                filename=tmp_filename,
+            )
+            dist.init_process_group(
+                backend=config["distributed_backend"],
+                init_method=init_method,
+                timeout=timeout,
+            )
+        else:
+            if "MASTER_ADDR" not in os.environ:
+                assert (
+                    config["world_size"] == 1
+                ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
+                setup_env_local()
+            local_rank = int(os.environ["LOCAL_RANK"])
+            assign_device_for_local_rank(config["cpu"], local_rank)
+
+            dist.init_process_group(
+                backend=config["distributed_backend"],
+                rank=int(os.environ["RANK"]),
+                world_size=config["world_size"],
+                timeout=timeout,
+            )
 
 
 def cleanup() -> None:
