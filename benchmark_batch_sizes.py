@@ -150,11 +150,7 @@ def main():
         n_warmup = 3
         n_runs = 5
     else:
-        batch_sizes = (
-            [100, 500, 1000, 2000, 5000]
-            + list(range(10000, 150000, 10000))
-            + list(range(200000, 600000, 100000))
-        )
+        batch_sizes = [1000, 10000, 50000, 100000, 500000]
         n_warmup = 5
         n_runs = 20
 
