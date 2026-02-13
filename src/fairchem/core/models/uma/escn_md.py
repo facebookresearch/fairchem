@@ -126,6 +126,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         direct_forces: bool = True,
         regress_forces: bool = True,
         regress_stress: bool = False,
+        regress_hessian: bool = False,
+        hessian_vmap: bool = True,
         # escnmd specific
         num_layers: int = 2,
         hidden_channels: int = 128,
@@ -160,6 +162,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.regress_forces = regress_forces
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
+        self.regress_hessian = regress_hessian
+        self.hessian_vmap = hessian_vmap
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -817,18 +821,17 @@ class MLP_EFS_Head(MLP_Energy_Head):
         reduce: str = "sum",
         prefix: str | None = None,
         wrap_property: bool = True,
-        regress_hessian: bool = False,
-        hessian_vmap: bool = True,
     ) -> None:
         super().__init__(
             backbone, reduce=reduce, prefix=prefix, wrap_property=wrap_property
         )
         backbone.energy_block = None
         backbone.force_block = None
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
-        self.regress_hessian = regress_hessian
-        self.hessian_vmap = hessian_vmap
+
+        # Store backbone reference without registering it as a submodule
+        # Use object.__setattr__ to bypass PyTorch's module registration
+        object.__setattr__(self, "_backbone_ref", backbone)
+        # self._backbone_ref = lambda: backbone
 
         # TODO: this is not very clean, bug-prone.
         # but is currently necessary for finetuning pretrained models that did not have
@@ -837,6 +840,22 @@ class MLP_EFS_Head(MLP_Energy_Head):
         assert (
             not backbone.direct_forces
         ), "EFS head is only used for gradient-based forces/stress."
+
+    @property
+    def regress_stress(self) -> bool:
+        return self._backbone_ref.regress_stress
+
+    @property
+    def regress_forces(self) -> bool:
+        return self._backbone_ref.regress_forces
+
+    @property
+    def regress_hessian(self) -> bool:
+        return self._backbone_ref.regress_hessian
+
+    @property
+    def hessian_vmap(self) -> bool:
+        return self._backbone_ref.hessian_vmap
 
     @conditional_grad(torch.enable_grad())
     def forward(

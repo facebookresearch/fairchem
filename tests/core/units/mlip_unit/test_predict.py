@@ -878,19 +878,17 @@ def test_hessian(vmap):
     )
     batch = atomicdata_list_to_batch([data])
 
-    # Enable Hessian computation on the head
-    head = predict_unit.model.module.output_heads["energyandforcehead"]
-    if hasattr(head, "head"):
-        head = head.head
-    head.regress_hessian = True
-    head.hessian_vmap = vmap
+    # Enable Hessian computation on the backbone
+    backbone = predict_unit.model.module.backbone
+    backbone.regress_hessian = True
+    backbone.hessian_vmap = vmap
 
     # Get predictions with Hessian
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"].detach().cpu().numpy()
 
     # Restore original setting
-    head.regress_hessian = False
+    backbone.regress_hessian = False
 
     # Check shape (3 atoms * 3 coords = 9x9 matrix)
     assert hessian.shape == (9, 9)
@@ -913,19 +911,17 @@ def test_hessian_vs_numerical():
     )
     batch = atomicdata_list_to_batch([data])
 
-    # Enable Hessian computation on the head
-    head = predict_unit.model.module.output_heads["energyandforcehead"]
-    if hasattr(head, "head"):
-        head = head.head
-    head.regress_hessian = True
-    head.hessian_vmap = True
+    # Enable Hessian computation on the backbone
+    backbone = predict_unit.model.module.backbone
+    backbone.regress_hessian = True
+    backbone.hessian_vmap = True
 
     # Get analytical Hessian
     preds = predict_unit.predict(batch)
     hessian_analytical = preds["hessian"].detach().cpu().numpy()
 
     # Restore original setting
-    head.regress_hessian = False
+    backbone.regress_hessian = False
 
     # Get numerical Hessian
     hessian_numerical = (
@@ -962,19 +958,17 @@ def test_hessian_symmetry():
     )
     batch = atomicdata_list_to_batch([data])
 
-    # Enable Hessian computation on the head
-    head = predict_unit.model.module.output_heads["energyandforcehead"]
-    if hasattr(head, "head"):
-        head = head.head
-    head.regress_hessian = True
-    head.hessian_vmap = True
+    # Enable Hessian computation on the backbone
+    backbone = predict_unit.model.module.backbone
+    backbone.regress_hessian = True
+    backbone.hessian_vmap = True
 
     # Get predictions with Hessian
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"]
 
     # Restore original setting
-    head.regress_hessian = False
+    backbone.regress_hessian = False
 
     # Hessian should be symmetric
     npt.assert_allclose(
