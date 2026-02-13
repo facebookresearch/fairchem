@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -14,6 +15,8 @@ import torch
 import torch.nn as nn
 
 from .radial import RadialMLP
+
+from fairchem.core.models.uma.common.cueq_rotation import cuEquivariantRotation
 
 
 class EdgeDegreeEmbedding(torch.nn.Module):
@@ -47,6 +50,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         # Enables activation checkpointing in size of
         # activation_checkpoint_chunk_size edge blocks
         activation_checkpoint_chunk_size: int | None,
+        cueq_rotation: cuEquivariantRotation | None = None,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -67,6 +71,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self.rad_func = RadialMLP(edge_channels_list)
 
         self.rescale_factor = rescale_factor
+        self.cueq_rotation = cueq_rotation
 
     def forward_chunk(
         self,
@@ -76,6 +81,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         edge_envelope,
         node_offset=0,
+        euler_angles=None,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
         x_edge_m_0 = x_edge_m_0.reshape(
@@ -85,16 +91,31 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             x_edge_m_0,
             (0, 0, 0, (self.m_all_num_coefficents - self.m_0_num_coefficients)),
         )
-        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
+        if self.cueq_rotation is not None:
+            # cuEq path: rotation + envelope + scatter all in one efficient call
+                x_node_embedding = self.cueq_rotation.rotate_euler_inv_scatter(
+                    x_edge_embedding,
+                    x.shape[0],  # n_nodes
+                    euler_angles,
+                    edge_index,
+                    edge_envelope,
+                    self.rescale_factor,
+                    node_offset,
+                )
+                # Convert to target dtype if needed
+                x_node_embedding = x_node_embedding.to(x.dtype)
+                return x + x_node_embedding
+        else:
+            x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
-        x_edge_embedding = x_edge_embedding * edge_envelope
+            x_edge_embedding = x_edge_embedding * edge_envelope
 
-        # TODO is this needed?
-        x_edge_embedding = x_edge_embedding.to(x.dtype)
+            # TODO is this needed?
+            x_edge_embedding = x_edge_embedding.to(x.dtype)
 
-        return x.index_add(
-            0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
-        )
+            return x.index_add(
+                0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
+            )
 
     def forward(
         self,
@@ -104,6 +125,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_and_M_mapping_inv,
         edge_envelope,
         node_offset=0,
+        euler_angles=None,
     ):
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
@@ -113,6 +135,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 wigner_and_M_mapping_inv,
                 edge_envelope,
                 node_offset,
+                euler_angles,
             )
 
         edge_index_partitions = edge_index.split(
