@@ -11,13 +11,14 @@ import multiprocessing
 import os
 import pdb
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
 import torch
 import torch.distributed as dist
-from torch.distributed.elastic.utils.distributed import get_free_port
+from torchtnt.utils.distributed import get_file_init_method
 
 from fairchem.core.common.gp_utils import setup_gp
 
@@ -47,7 +48,6 @@ class PGConfig:
     backend: str
     world_size: int
     gp_group_size: int = 1
-    port: str = "12345"
     use_gp: bool = True
 
 
@@ -60,7 +60,6 @@ def init_env_rank_and_launch_test(
     kwargs: dict[str, object],
 ) -> None:
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = pg_setup_params.port
     os.environ["WORLD_SIZE"] = str(pg_setup_params.world_size)
     os.environ["LOCAL_RANK"] = str(rank)
     os.environ["RANK"] = str(rank)
@@ -76,15 +75,18 @@ def init_pg_and_rank_and_launch_test(
     kwargs: dict[str, object],
 ) -> None:
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = pg_setup_params.port
     os.environ["WORLD_SIZE"] = str(pg_setup_params.world_size)
     os.environ["LOCAL_RANK"] = str(rank)
+    init_method = get_file_init_method(
+        world_size=pg_setup_params.world_size,
+        rank=rank,
+        filename=pg_setup_params.init_file,
+    )
     # setup default process group
     dist.init_process_group(
-        rank=rank,
-        world_size=pg_setup_params.world_size,
+        init_method=init_method,
         backend=pg_setup_params.backend,
-        timeout=timedelta(seconds=10),  # setting up timeout for distributed collectives
+        timeout=timedelta(seconds=10),
     )
     # setup gp
     if pg_setup_params.use_gp:
@@ -105,7 +107,7 @@ def spawn_multi_process(
 ) -> list[Any]:
     """
     Spawn single node, multi-rank function.
-    Uses localhost and free port to communicate.
+    Uses a shared file for process group initialization to avoid port races.
 
     Args:
         world_size: number of processes
@@ -120,31 +122,36 @@ def spawn_multi_process(
     manager = multiprocessing.Manager()
     mp_output_dict = manager.dict()
 
-    port = str(get_free_port())
-    config.port = port
-    torch.multiprocessing.spawn(
-        # torch.multiprocessing.spawn sends rank as the first param
-        # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
-        init_and_launch,
-        args=(
-            config,
-            mp_output_dict,
-            test_method,
-            test_method_args,
-            test_method_kwargs,
-        ),
-        nprocs=config.world_size,
-    )
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        config.init_file = f.name
+
+    try:
+        torch.multiprocessing.spawn(
+            # torch.multiprocessing.spawn sends rank as the first param
+            # https://pytorch.org/docs/stable/multiprocessing.html#torch.multiprocessing.spawn
+            init_and_launch,
+            args=(
+                config,
+                mp_output_dict,
+                test_method,
+                test_method_args,
+                test_method_kwargs,
+            ),
+            nprocs=config.world_size,
+        )
+    finally:
+        if os.path.exists(config.init_file):
+            os.unlink(config.init_file)
 
     return [mp_output_dict[i] for i in range(config.world_size)]
 
 
 def init_local_distributed_process_group(backend="nccl"):
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = str(get_free_port())
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        init_file = f.name
+    init_method = get_file_init_method(world_size=1, rank=0, filename=init_file)
     dist.init_process_group(
-        rank=0,
-        world_size=1,
+        init_method=init_method,
         backend=backend,
-        timeout=timedelta(seconds=10),  # setting up timeout for distributed collectives
+        timeout=timedelta(seconds=10),
     )

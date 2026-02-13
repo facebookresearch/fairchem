@@ -12,15 +12,27 @@ kernelspec:
   name: python3
 ---
 
-Intro to  adsorption energies
-==================================================
+# Intro to Adsorption Energies
+
+:::{card} Tutorial Overview
+
+| Property | Value |
+|----------|-------|
+| **Difficulty** | Beginner |
+| **Time** | 15-30 minutes |
+| **Prerequisites** | Basic Python, familiarity with ASE |
+| **Goal** | Calculate adsorption energies using UMA models |
+:::
 
 To introduce OCP we start with using it to calculate adsorption energies for a simple, atomic adsorbate where we specify the site we want to the adsorption energy for. Conceptually, you do this like you would do it with density functional theory. You create a slab model for the surface, place an adsorbate on it as an initial guess, run a relaxation to get the lowest energy geometry, and then compute the adsorption energy using reference states for the adsorbate.
 
-You do have to be careful in the details though. Some OCP model/checkpoint combinations return a total energy like density functional theory would, but some return an "adsorption energy" directly. You have to know which one you are using. In this example, the model we use returns an "adsorption energy".
+:::{important}
+Some OCP model/checkpoint combinations return a total energy like density functional theory would, but some return an "adsorption energy" directly. You have to know which one you are using. In this example, the model we use returns an "adsorption energy".
+:::
 
 +++
 
+(intro-to-adsorption-energies)=
 ## Intro to Adsorption energies
 
 Adsorption energies are always a reaction energy (an adsorbed species relative to some implied combination of reactants). There are many common schemes in the catalysis literature.
@@ -174,7 +186,7 @@ to get a comparable energy of about -1.68 eV. There is about ~0.2 eV difference 
 
 Some of these differences tend to be systematic, and you can calibrate and correct these, especially if you can augment these with your own DFT calculations.
 
-See [convergence study](#Convergence-study) for some additional studies of factors that influence this number.
+See [convergence study](#convergence-study) for some additional studies of factors that influence this number.
 
 +++
 
@@ -375,9 +387,10 @@ In the next step, we consider some more complex adsorbates in nitrogen reduction
 
 +++
 
+(convergence-study)=
 ### Convergence study
 
-In [Calculating adsorption energies](#Calculating-adsorption-energies) we discussed some possible reasons we might see a discrepancy. Here we investigate some factors that impact the computed energies.
+In [the adsorption energies section](#intro-to-adsorption-energies) we discussed some possible reasons we might see a discrepancy. Here we investigate some factors that impact the computed energies.
 
 In this section, the energies refer to the reaction 1/2 O2 -> O*.
 
