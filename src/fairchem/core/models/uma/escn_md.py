@@ -52,6 +52,7 @@ from .escn_md_block import eSCNMD_Block
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
@@ -646,6 +647,138 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     no_wd_list.append(global_parameter_name)
 
         return set(no_wd_list)
+
+    @classmethod
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """Build backbone config overrides from inference settings."""
+        overrides = {}
+
+        # Always disable PBC wrapping for inference
+        overrides["always_use_pbc"] = False
+
+        if settings.activation_checkpointing is not None:
+            overrides["activation_checkpointing"] = settings.activation_checkpointing
+        if settings.edge_chunk_size is not None:
+            overrides["edge_chunk_size"] = settings.edge_chunk_size
+        if settings.external_graph_gen is not None:
+            overrides["otf_graph"] = not settings.external_graph_gen
+        if settings.internal_graph_gen_version is not None:
+            overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.use_quaternion_wigner is not None:
+            overrides["use_quaternion_wigner"] = settings.use_quaternion_wigner
+
+        return overrides
+
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
+        """
+        Validate that task datasets are compatible with this backbone.
+        """
+        assert set(dataset_to_tasks.keys()).issubset(
+            set(self.dataset_list)
+        ), "Datasets in tasks is not a strict subset of datasets in backbone."
+
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
+        """
+        Prepare model for inference. Called once on first prediction.
+
+        For UMA: handles MOLE merging if settings.merge_mole is True.
+        Stores initial composition for consistency checking.
+
+        Returns:
+            self or a new merged backbone if MOLE merging was performed. We return
+            because type could have changed due to merging MOLE.
+        """
+        self._inference_settings = settings
+        self._merged_composition = None
+
+        if settings.merge_mole:
+            assert (
+                data.natoms.numel() == 1
+            ), "Cannot merge model with multiple systems in batch"
+            # Store composition we merged on
+            self._merged_composition = self._get_composition_info(data)
+            # Merge the model - returns new merged backbone
+            new_backbone = self.merge_MOLE_model(data)
+            # Transfer inference state to new backbone
+            new_backbone._inference_settings = settings
+            new_backbone._merged_composition = self._merged_composition
+            return new_backbone
+
+        return self
+
+    def on_predict_check(self, data: AtomicData) -> None:
+        """
+        Called before each prediction. UMA checks MOLE consistency here.
+        """
+        if not getattr(self, "_inference_settings", None):
+            return  # Not initialized yet
+
+        if self._inference_settings.merge_mole and self._merged_composition is not None:
+            assert (
+                data.natoms.numel() == 1
+            ), "Cannot run merged model on batch with multiple systems"
+            current = self._get_composition_info(data)
+            self._assert_composition_matches(current)
+
+    def _get_composition_info(self, data) -> tuple:
+        """
+        Get composition info for MOLE consistency checking.
+        """
+        composition = data.atomic_numbers.new_zeros(
+            self.max_num_elements, dtype=torch.int
+        ).index_add(
+            0,
+            data.atomic_numbers.to(torch.int),
+            data.atomic_numbers.new_ones(len(data.atomic_numbers), dtype=torch.int),
+        )
+        return (
+            composition,
+            getattr(data, "charge", None),
+            getattr(data, "spin", None),
+            getattr(data, "dataset", [None]),
+        )
+
+    def _assert_composition_matches(self, current: tuple) -> None:
+        """
+        Assert current composition matches what model was merged on.
+        """
+        merged = self._merged_composition
+        # Move current tensors to same device as merged (CPU) for comparison
+        device = merged[0].device
+
+        merged_norm = merged[0].float() / merged[0].sum()
+        curr_norm = current[0].float().to(device) / current[0].sum().to(device)
+
+        assert merged_norm.isclose(
+            curr_norm, rtol=1e-5
+        ).all(), "Compositions differ from merged model"
+
+        # Charge and spin are tensors that need device alignment
+        merged_charge = merged[1]
+        curr_charge = (
+            current[1].to(device)
+            if isinstance(current[1], torch.Tensor)
+            else current[1]
+        )
+        assert (
+            (merged_charge == curr_charge).all()
+            if isinstance(merged_charge, torch.Tensor)
+            else merged_charge == curr_charge
+        ), f"Charge differs: {merged_charge} vs {current[1]}"
+
+        merged_spin = merged[2]
+        curr_spin = (
+            current[2].to(device)
+            if isinstance(current[2], torch.Tensor)
+            else current[2]
+        )
+        assert (
+            (merged_spin == curr_spin).all()
+            if isinstance(merged_spin, torch.Tensor)
+            else merged_spin == curr_spin
+        ), f"Spin differs: {merged_spin} vs {current[2]}"
+
+        assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
 
 
 class MLP_EFS_Head(nn.Module, HeadInterface):
