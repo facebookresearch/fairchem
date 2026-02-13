@@ -33,9 +33,9 @@ def check_input_script(input_script: str):
 
 def check_atom_id_match_masses(types_arr, masses):
     for atom_id in types_arr:
-        assert np.allclose(masses[atom_id], atomic_masses[atom_id], atol=1e-1), (
-            f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
-        )
+        assert np.allclose(
+            masses[atom_id], atomic_masses[atom_id], atol=1e-1
+        ), f"Atom {chemical_symbols[atom_id]} (type {atom_id}) has mass {masses[atom_id]} but is expected to have mass {atomic_masses[atom_id]}."
 
 
 def atomic_data_from_lammps_data(
@@ -136,17 +136,18 @@ def separate_run_commands(input_script: str) -> tuple[list[str], list[str]]:
     return script, run_cmds
 
 
-# TODO: doubles check this
-def cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
+def restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz):
     lx = boxhi[0] - boxlo[0]
     ly = boxhi[1] - boxlo[1]
     lz = boxhi[2] - boxlo[2]
 
+    # Lammps uses a restricted triclinic box defined by 6 parameters: lx, ly, lz, xy, xz, yz. See https://docs.lammps.org/Howto_triclinic.html for details.
+    # ASE uses a 3x3 cell matrix where the rows are the lattice vectors.
     unit_cell_matrix = torch.tensor(
         [
-            [lx, xy, xz],  # First column: a vector
-            [0, ly, yz],  # Second column: b vector
-            [0, 0, lz],  # Third column: c vector
+            [lx, 0, 0],  # a vector
+            [xy, ly, 0],  # b vector
+            [xz, yz, lz],  # c vector
         ],
         dtype=torch.float32,
     )
@@ -167,7 +168,7 @@ class FixExternalCallback:
         atomic_mass_arr = masses[atom_type_np]
         atomic_numbers = lookup_atomic_number_by_mass(atomic_mass_arr)
         boxlo, boxhi, xy, yz, xz, periodicity, box_change = lmp.extract_box()
-        cell = cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
+        cell = restricted_cell_from_lammps_box(boxlo, boxhi, xy, yz, xz)
 
         x_wrapped = wrap_positions(
             x, cell=cell.squeeze().numpy(), pbc=periodicity, eps=0
