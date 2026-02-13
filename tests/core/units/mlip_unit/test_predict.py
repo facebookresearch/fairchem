@@ -23,10 +23,30 @@ FORCE_TOL = 1e-4
 ATOL = 5e-4
 
 
-@pytest.fixture()
-def uma_predict_unit(request):
+@pytest.fixture(scope="module")
+def uma_predict_unit_cuda():
+    """Module-scoped predict unit using the first available UMA model with device=cuda."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(uma_models[0], device="cuda")
+
+
+@pytest.fixture(scope="module")
+def uma_predict_unit(uma_predict_unit_cuda):
+    """Module-scoped predict unit - uses cuda version if available, otherwise cpu."""
+    if torch.cuda.is_available():
+        return uma_predict_unit_cuda
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     return pretrained_mlip.get_predict_unit(uma_models[0])
+
+
+@pytest.fixture(scope="module")
+def uma_merge_mole_predict_unit():
+    """Module-scoped predict unit with merge_mole=True for MgO tests."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    return pretrained_mlip.get_predict_unit(
+        uma_models[0], device="cuda", inference_settings=settings
+    )
 
 
 @pytest.mark.gpu()
@@ -366,10 +386,9 @@ def _random_rotation_matrix(rng: np.random.Generator) -> np.ndarray:
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
-def test_rotational_invariance_out_of_plane(mol_name):
+def test_rotational_invariance_out_of_plane(mol_name, uma_predict_unit_cuda):
     rng = np.random.default_rng(seed=123)
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+    calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
 
     atoms = molecule(mol_name)
     atoms.info.update({"charge": 0, "spin": 1})
@@ -390,9 +409,8 @@ def test_rotational_invariance_out_of_plane(mol_name):
 @pytest.mark.gpu()
 @pytest.mark.xfail(reason="Y-aligned edges cause problems in eSCN family", strict=False)
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
-def test_original_out_of_plane_forces(mol_name):
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
+    calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
     atoms = molecule(mol_name)
     atoms.info.update({"charge": 0, "spin": 1})
     atoms.calc = calc
@@ -410,14 +428,10 @@ def test_original_out_of_plane_forces(mol_name):
         np.array([[2, 0, 0], [0, 3, 0], [0, 0, 1]]),  # 2x3x1 supercell (6 atoms)
     ],
 )
-def test_merge_mole_with_supercell(supercell_matrix):
+def test_merge_mole_with_supercell(supercell_matrix, uma_merge_mole_predict_unit):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
-    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings
-    )
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(uma_merge_mole_predict_unit, task_name="omat")
 
     atoms_orig.calc = calc
     energy_orig = atoms_orig.get_potential_energy()
@@ -533,14 +547,10 @@ def test_merge_mole_vs_non_merged_consistency():
 
 
 @pytest.mark.gpu()
-def test_merge_mole_supercell_energy_forces_consistency():
+def test_merge_mole_supercell_energy_forces_consistency(uma_merge_mole_predict_unit):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
-    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings
-    )
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(uma_merge_mole_predict_unit, task_name="omat")
 
     atoms_orig.calc = calc
     energy1 = atoms_orig.get_potential_energy()
