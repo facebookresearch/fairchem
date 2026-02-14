@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.gemnet_oc.gemnet_oc import (
     GemNetOCBackbone,
@@ -22,7 +22,7 @@ from fairchem.core.models.gemnet_oc.gemnet_oc import (
 
 @pytest.fixture()
 def data():
-    atoms = get_fcc_carbon_xtal(100)
+    atoms = get_fcc_crystal_by_num_atoms(100)
     return AtomicData.from_ase(atoms)
 
 

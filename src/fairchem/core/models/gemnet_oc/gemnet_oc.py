@@ -1357,14 +1357,10 @@ class GemNetOCBackbone(nn.Module):
             "num_neighbors": main_graph["num_neighbors"],
         }
 
-    def validate_inference_settings(self, settings: InferenceSettings) -> None:
+    @classmethod
+    def build_inference_settings(self, settings: InferenceSettings) -> None:
         """Validate inference settings are compatible with GemNet."""
-        if settings.merge_mole:
-            raise ValueError("GemNet does not support MOLE merging (merge_mole=True)")
-        if settings.activation_checkpointing is not None:
-            logging.warning("GemNet ignores activation_checkpointing setting")
-        if settings.edge_chunk_size is not None:
-            logging.warning("GemNet ignores edge_chunk_size setting")
+        return {}
 
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """Validate that task datasets are compatible with this backbone."""
