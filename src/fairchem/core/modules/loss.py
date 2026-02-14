@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 from fairchem.core.common import distutils, gp_utils
-from fairchem.core.common.registry import registry
+from fairchem.core.common.utils import resolve_class
 
 
 class DDPMTLoss(nn.Module):
@@ -168,7 +168,6 @@ class DDPMTLoss(nn.Module):
         return self.coefficient * loss
 
 
-@registry.register_loss("mae")
 class MAELoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -182,7 +181,6 @@ class MAELoss(nn.Module):
         return self.loss(pred, target)
 
 
-@registry.register_loss("mse")
 class MSELoss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -196,7 +194,6 @@ class MSELoss(nn.Module):
         return self.loss(pred, target)
 
 
-@registry.register_loss("per_atom_mae")
 class PerAtomMAELoss(nn.Module):
     """
     Simply divide a loss by the number of atoms/nodes in the graph.
@@ -220,8 +217,6 @@ class PerAtomMAELoss(nn.Module):
         return self.loss(pred / _natoms, target / _natoms)
 
 
-@registry.register_loss("l2norm")
-@registry.register_loss("l2mae")
 class L2NormLoss(nn.Module):
     """
     Currently this loss is intened to used with vectors.
@@ -236,6 +231,28 @@ class L2NormLoss(nn.Module):
         assert target.dim() == 2
         assert target.shape[1] != 1
         return torch.linalg.vector_norm(pred - target, ord=2, dim=-1)
+
+
+LOSS_REGISTRY: dict[str, type] = {
+    "mae": MAELoss,
+    "mse": MSELoss,
+    "per_atom_mae": PerAtomMAELoss,
+    "l2norm": L2NormLoss,
+    "l2mae": L2NormLoss,
+}
+
+
+def get_loss_class(name: str) -> type:
+    """Resolve a loss class from its name or fully-qualified path.
+
+    Args:
+        name: Loss name (e.g., "mae") or full path
+            (e.g., "fairchem.core.modules.loss.MAELoss")
+
+    Returns:
+        The loss class
+    """
+    return resolve_class(name, LOSS_REGISTRY, "loss")
 
 
 class DDPLoss(nn.Module):
@@ -285,7 +302,7 @@ class DDPLoss(nn.Module):
         reduction: Literal["mean", "sum"],
     ) -> None:
         super().__init__()
-        self.loss_fn = registry.get_loss_class(loss_name)()
+        self.loss_fn = get_loss_class(loss_name)()
         # default reduction is mean
         self.reduction = reduction if reduction is not None else "mean"
         self.reduction_map = {
