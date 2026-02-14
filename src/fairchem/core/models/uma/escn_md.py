@@ -26,7 +26,7 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
-from fairchem.core.models.uma.nn.embedding_dev import (
+from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
     EdgeDegreeEmbedding,
@@ -140,7 +140,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
-        dataset_list: list[str] | None = None,
+        dataset_list: (
+            list[str] | None
+        ) = None,  # deprecated, use dataset_mapping instead
+        dataset_mapping: dict[str, str] | None = None,
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
@@ -183,12 +186,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
+        self.dataset_mapping = dataset_mapping
         self.dataset_list = dataset_list
+        if self.dataset_mapping is None and self.dataset_list is not None:
+            self.dataset_mapping = {dataset: dataset for dataset in self.dataset_list}
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
-            assert (
-                self.dataset_list
-            ), "the dataset list is empty, please add it to the model backbone config"
+            assert self.dataset_mapping, "the dataset mapping is empty, please add it to the model backbone config"
 
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
@@ -229,8 +233,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.use_dataset_embedding:
             self.dataset_embedding = DatasetEmbedding(
                 self.sphere_channels,
-                grad=self.dataset_emb_grad,
-                dataset_list=self.dataset_list,
+                enable_grad=self.dataset_emb_grad,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)

@@ -196,10 +196,11 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone,
-        dataset_names,
+        dataset_names: list[str],  # soon to be deprecated in favor of dataset_mapping
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_mapping: dict[str, str] | None = None,
     ):
         super().__init__()
         if head_kwargs is None:
@@ -209,9 +210,26 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
 
         self.wrap_property = wrap_property
 
-        self.dataset_names = sorted(dataset_names)
+        if dataset_mapping is None:
+            # add warning if dataset_mapping is not provided
+            logging.warning(
+                "If dataset_mapping is not provided, the code assumes that each dataset maps to itself. If this what you want please ignore otherwise add the dataset_mapping argument"
+            )
+            dataset_mapping = {name: name for name in dataset_names}
+
+        self.dataset_names = sorted(dataset_mapping.keys())
+        # get unique sorted dataset names
+        mapped_dataset_names = sorted(
+            {dataset_mapping[name] for name in self.dataset_names}
+        )
+        # expert idx for mapped dataset names
+        mapped_dataset_idx = {
+            value: idx for idx, value in enumerate(mapped_dataset_names)
+        }
+        # remap dataset name to expert idx using mapping
         self.dataset_name_to_exp = {
-            value: idx for idx, value in enumerate(self.dataset_names)
+            name: mapped_dataset_idx[dataset_mapping[name]]
+            for name in self.dataset_names
         }
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
