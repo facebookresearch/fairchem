@@ -38,12 +38,15 @@ from fairchem.core.common.distutils import (
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
+    get_backbone_class_from_checkpoint,
     load_inference_model,
     tf32_context_manager,
 )
 
 if TYPE_CHECKING:
     from ase import Atoms
+
+    from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
 def collate_predictions(predict_fn):
@@ -77,8 +80,25 @@ def collate_predictions(predict_fn):
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None: ...
+
     @property
     def dataset_to_tasks(self) -> dict[str, list]: ...
+
+
+def merge_uma_model(model, data):
+    logging.info("Calling merge_uma_model")
+    # merge the backbone
+    model.backbone = model.backbone.merge_MOLE_model(data)
+
+    # merge any heads
+    new_output_heads = torch.nn.ModuleDict()
+    for head_name, head in model.output_heads.items():
+        if hasattr(head, "merge_MOLE_model"):
+            new_output_heads[head_name] = head.merge_MOLE_model(data)
+        else:
+            new_output_heads[head_name] = head
+    model.output_heads = new_output_heads
 
 
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
@@ -108,18 +128,25 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        # Build overrides from inference settings
+        # Load checkpoint first to get model type
+        checkpoint = torch.load(
+            inference_model_path, map_location="cpu", weights_only=False
+        )
+
+        # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
-            overrides, inference_settings
+            checkpoint, overrides, inference_settings
         )
 
-        # Load model once with final overrides
+        # Load model with overrides, passing pre-loaded checkpoint
         self.model, checkpoint = load_inference_model(
-            inference_model_path, use_ema=True, overrides=final_overrides
+            inference_model_path,
+            use_ema=True,
+            overrides=final_overrides,
+            preloaded_checkpoint=checkpoint,
         )
 
-        # Model validates its own settings and sets up tasks
-        self.model.module.validate_inference_settings(inference_settings)
+        # Model sets up tasks
         self.model.module.setup_tasks(checkpoint.tasks_config)
 
         self._setup_device(device)
@@ -185,37 +212,23 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
 
     def _build_overrides_from_settings(
-        self, user: dict | None, settings: InferenceSettings
+        self,
+        checkpoint: MLIPInferenceCheckpoint,
+        user: dict | None,
+        settings: InferenceSettings,
     ) -> dict:
-        """
-        Build backbone config overrides from inference settings and user inputs.
-
-        Models will either ignore overrides they don't support, or we need to
-        port this override setting code into the individual models too.
-        """
-
+        """Build backbone config overrides by delegating to model-specific logic."""
         overrides = {} if user is None else dict(user)
         if "backbone" not in overrides:
             overrides["backbone"] = {}
 
-        backbone_overrides = {}
-        # Always disable PBC wrapping for inference
-        backbone_overrides["always_use_pbc"] = False
-
-        if settings.activation_checkpointing is not None:
-            backbone_overrides["activation_checkpointing"] = (
-                settings.activation_checkpointing
-            )
-        if settings.edge_chunk_size is not None:
-            backbone_overrides["edge_chunk_size"] = settings.edge_chunk_size
-        if settings.external_graph_gen is not None:
-            backbone_overrides["otf_graph"] = not settings.external_graph_gen
-        if settings.internal_graph_gen_version is not None:
-            backbone_overrides["radius_pbc_version"] = (
-                settings.internal_graph_gen_version
-            )
+        # Delegate to model-specific classmethod
+        backbone_cls = get_backbone_class_from_checkpoint(checkpoint)
+        backbone_overrides = backbone_cls.build_inference_settings(settings)
 
         overrides["backbone"].update(backbone_overrides)
+
+        # User overrides take precedence
         if user is not None and "backbone" in user:
             overrides["backbone"].update(user["backbone"])
 
@@ -390,6 +403,7 @@ class MLIPWorkerLocal:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
+                torch.distributed.broadcast(self.last_received_atomic_data.cell, src=0)
                 self.predict_unit.predict(self.last_received_atomic_data)
 
         return None
@@ -429,6 +443,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             inference_settings = InferenceSettings()
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
+        self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
@@ -554,9 +569,19 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             self.atomic_data_on_device = data.clone()
         else:
             self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+            self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
             torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
+            torch.distributed.broadcast(self.atomic_data_on_device.cell, src=0)
 
         return self.local_rank0.predict(self.atomic_data_on_device)
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Delegates to the model's validate_atoms_data captured at init time.
+        """
+        self._validate_atoms_data_fn(atoms, task_name)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -574,14 +599,16 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
         server_handle,
+        predict_unit: MLIPPredictUnit,
     ):
         """
         Args:
             server_handle: Ray Serve deployment handle for BatchPredictServer
-            dataset_to_tasks: Mapping from dataset names to their associated tasks
-            atom_refs: Optional atom references dictionary
+            predict_unit: Local MLIPPredictUnit used for input validation.
+                Validation must run locally because it mutates atoms.info.
         """
         self.server_handle = server_handle
+        self._predict_unit = predict_unit
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
@@ -596,6 +623,14 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             data, undo_element_references
         ).result()
         return result
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Runs locally (not via Ray Serve) because validation mutates atoms.info.
+        """
+        self._predict_unit.validate_atoms_data(atoms, task_name)
 
     @property
     def dataset_to_tasks(self) -> dict:

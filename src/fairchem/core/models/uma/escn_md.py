@@ -634,11 +634,24 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return set(no_wd_list)
 
-    def validate_inference_settings(self, settings: InferenceSettings) -> None:
-        """
-        Validate inference settings are compatible with this model.
-        """
-        pass  # noqa
+    @classmethod
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """Build backbone config overrides from inference settings."""
+        overrides = {}
+
+        # Always disable PBC wrapping for inference
+        overrides["always_use_pbc"] = False
+
+        if settings.activation_checkpointing is not None:
+            overrides["activation_checkpointing"] = settings.activation_checkpointing
+        if settings.edge_chunk_size is not None:
+            overrides["edge_chunk_size"] = settings.edge_chunk_size
+        if settings.external_graph_gen is not None:
+            overrides["otf_graph"] = not settings.external_graph_gen
+        if settings.internal_graph_gen_version is not None:
+            overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+
+        return overrides
 
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """
