@@ -12,7 +12,7 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Sequence
-from typing import List, Optional, Union
+from typing import Union
 
 import ase
 import ase.db.sqlite
@@ -31,6 +31,14 @@ try:
 except ImportError:
     AseAtomsAdaptor = None
     pmg_installed = False
+
+try:
+    from fairchem.core.graph.nvidia import get_neighbors_nvidia_atoms
+
+    nvidia_installed = True
+except ImportError:
+    get_neighbors_nvidia_atoms = None
+    nvidia_installed = False
 
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
@@ -64,7 +72,7 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
         out = item.item()
     elif torch.is_tensor(item):
         out = str(list(item.size()))
-    elif isinstance(item, (List, tuple)):
+    elif isinstance(item, (list, tuple)):
         out = str([len(item)])
     elif isinstance(item, dict):
         lines = [indent_str + size_repr(k, v, 2) for k, v in item.items()]
@@ -280,10 +288,8 @@ class AtomicData:
             assert self.forces.dtype == torch.float
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
-            assert (
-                self.stress.dim() == 3
-                and self.stress.shape[1:] == (3, 3)
-                or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
+            assert (self.stress.dim() == 3 and self.stress.shape[1:] == (3, 3)) or (
+                self.stress.dim() == 2 and self.stress.shape[1:] == (9,)
             )
             assert self.stress.shape[0] == self.num_graphs
             assert self.stress.dtype == torch.float
@@ -312,6 +318,7 @@ class AtomicData:
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
         target_dtype: torch.dtype = torch.float32,
+        external_graph_method: str = "pymatgen",
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -353,7 +360,16 @@ class AtomicData:
             assert (
                 max_neigh is not None
             ), "max_neigh must be specified for cpu graph construction."
-            split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+
+            if external_graph_method == "pymatgen":
+                split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+            elif external_graph_method == "nvidia":
+                split_idx_dist = get_neighbors_nvidia_atoms(atoms, radius, max_neigh)
+            else:
+                raise ValueError(
+                    f"external_graph_method must be 'pymatgen' or 'nvidia', got {external_graph_method}"
+                )
+
             edge_index, cell_offsets = reshape_features(*split_idx_dist)
             nedges = torch.tensor([edge_index.shape[1]], dtype=torch.long)
         else:
@@ -820,7 +836,7 @@ class AtomicData:
 
 
 def atomicdata_list_to_batch(
-    data_list: list[AtomicData], exclude_keys: Optional[list] = None
+    data_list: list[AtomicData], exclude_keys: list | None = None
 ) -> AtomicData:
     """
     all data points must be single graphs and have the same set of keys.
