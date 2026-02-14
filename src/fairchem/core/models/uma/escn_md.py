@@ -17,6 +17,7 @@ import torch.nn as nn
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
+from fairchem.core.common.profiler_utils import record_backward
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
@@ -314,6 +315,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    @record_backward("get_rotmat_and_wigner")
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -322,15 +324,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             for l in range(self.lmax + 1)
         ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+        # with record_function("obtain rotmat wigner original"):
+        euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+        wigner = eulers_to_wigner(
+            euler_angles,
+            0,
+            self.lmax,
+            Jd_buffers,
+        )
+        wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
         # select subset of coefficients we are using
         if self.mmax != self.lmax:
@@ -548,11 +550,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # edge degree embedding
         with record_function("edge embedding"):
-            dist_scaled = graph_dict["edge_distance"] / self.cutoff
+            edge_distance = graph_dict["edge_distance"]
+            dist_scaled = edge_distance / self.cutoff
             edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
-            edge_distance_embedding = self.distance_expansion(
-                graph_dict["edge_distance"]
-            )
+            edge_distance_embedding = self.distance_expansion(edge_distance)
             source_embedding = self.source_embedding(
                 data_dict["atomic_numbers_full"][graph_dict["edge_index"][0]]
             )
