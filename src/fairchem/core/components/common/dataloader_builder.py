@@ -15,7 +15,11 @@ from fairchem.core.common import distutils, gp_utils
 
 
 def get_dataloader(
-    dataset: Dataset, batch_sampler_fn: callable, collate_fn: callable, num_workers
+    dataset: Dataset,
+    batch_sampler_fn: callable,
+    collate_fn: callable,
+    num_workers,
+    mp_start_method: str = "fork",
 ) -> DataLoader:
     if gp_utils.initialized():
         num_replicas = gp_utils.get_dp_world_size()
@@ -37,6 +41,7 @@ def get_dataloader(
         num_workers=num_workers,
         pin_memory=True,
         batch_sampler=batch_sampler,
+        multiprocessing_context=mp_start_method if num_workers > 0 else None,
     )
     logging.info("get_dataloader::Done!")
     return dataloader
