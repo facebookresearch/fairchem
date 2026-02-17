@@ -15,13 +15,12 @@ from fairchem.core.common import gp_utils
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.models.uma.escn_md import RegressConfig
 
 
-def prepare_displacement_and_cell(
+def get_displacement_and_cell(
     data: AtomicData,
-    regress_stress: bool,
-    regress_forces: bool,
-    direct_forces: bool,
+    regress_config: RegressConfig,
 ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
     """
     Prepare displacement tensor and cell for gradient-based stress computation.
@@ -36,9 +35,7 @@ def prepare_displacement_and_cell(
 
     Args:
         data: Atomic data containing positions, cell, and batch information.
-        regress_stress: Whether stress prediction is enabled.
-        regress_forces: Whether force prediction is enabled.
-        direct_forces: Whether forces are computed directly (vs. via gradients).
+        regress_config: Configuration for gradient-based computation of forces and stress.
 
     Returns:
         A tuple of (displacement, orig_cell) where:
@@ -58,7 +55,7 @@ def prepare_displacement_and_cell(
     orig_cell = None
 
     # Set up displacement for stress computation
-    if regress_stress and not direct_forces:
+    if regress_config.stress and not regress_config.direct_forces:
         displacement = torch.zeros(
             (3, 3),
             dtype=data["pos"].dtype,
@@ -88,9 +85,9 @@ def prepare_displacement_and_cell(
 
     # Enable gradients for force-only computation
     if (
-        not regress_stress
-        and regress_forces
-        and not direct_forces
+        not regress_config.stress
+        and regress_config.forces
+        and not regress_config.direct_forces
         and data["pos"].requires_grad is False
     ):
         data["pos"].requires_grad = True

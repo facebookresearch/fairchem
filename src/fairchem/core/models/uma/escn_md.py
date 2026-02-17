@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -43,9 +44,8 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
-    compute_hessian,
+    get_displacement_and_cell,
     get_l_component,
-    prepare_displacement_and_cell,
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
@@ -57,6 +57,13 @@ if TYPE_CHECKING:
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+@dataclass
+class RegressConfig:
+    direct_forces: bool = False
+    forces: bool = False
+    stress: bool = False
 
 
 def add_n_empty_edges(
@@ -126,8 +133,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         direct_forces: bool = True,
         regress_forces: bool = True,
         regress_stress: bool = False,
-        regress_hessian: bool = False,
-        hessian_vmap: bool = True,
         # escnmd specific
         num_layers: int = 2,
         hidden_channels: int = 128,
@@ -159,11 +164,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.always_use_pbc = always_use_pbc
 
         # energy conservation related
-        self.regress_forces = regress_forces
-        self.direct_forces = direct_forces
-        self.regress_stress = regress_stress
-        self.regress_hessian = regress_hessian
-        self.hessian_vmap = hessian_vmap
+        self.regress_config = RegressConfig(
+            direct_forces=direct_forces, forces=regress_forces, stress=regress_stress
+        )
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -314,6 +317,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    @property
+    def direct_forces(self) -> bool:
+        return self.regress_config.direct_forces
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
+
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -459,11 +474,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = prepare_displacement_and_cell(
-                data_dict,
-                regress_stress=self.regress_stress,
-                regress_forces=self.regress_forces,
-                direct_forces=self.direct_forces,
+            displacement, orig_cell = get_displacement_and_cell(
+                data=data_dict,
+                regress_config=self.regress_config,
             )
 
         with record_function("generate_graph"):
@@ -660,11 +673,8 @@ class MLP_EFS_Head(MLP_Energy_Head):
         )
         backbone.energy_block = None
         backbone.force_block = None
-
-        # Store backbone reference without registering it as a submodule
-        # Use object.__setattr__ to bypass PyTorch's module registration
-        object.__setattr__(self, "_backbone_ref", backbone)
-        # self._backbone_ref = lambda: backbone
+        self.regress_stress = backbone.regress_stress
+        self.regress_forces = backbone.regress_forces
 
         # TODO: this is not very clean, bug-prone.
         # but is currently necessary for finetuning pretrained models that did not have
@@ -674,22 +684,6 @@ class MLP_EFS_Head(MLP_Energy_Head):
             not backbone.direct_forces
         ), "EFS head is only used for gradient-based forces/stress."
 
-    @property
-    def regress_stress(self) -> bool:
-        return self._backbone_ref.regress_stress
-
-    @property
-    def regress_forces(self) -> bool:
-        return self._backbone_ref.regress_forces
-
-    @property
-    def regress_hessian(self) -> bool:
-        return self._backbone_ref.regress_hessian
-
-    @property
-    def hessian_vmap(self) -> bool:
-        return self._backbone_ref.hessian_vmap
-
     @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
@@ -697,7 +691,6 @@ class MLP_EFS_Head(MLP_Energy_Head):
         energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
         forces_key = f"{self.prefix}_forces" if self.prefix else "forces"
         stress_key = f"{self.prefix}_stress" if self.prefix else "stress"
-        hessian_key = f"{self.prefix}_hessian" if self.prefix else "hessian"
 
         outputs = {}
 
@@ -716,49 +709,20 @@ class MLP_EFS_Head(MLP_Energy_Head):
                 {"embeddings": embeddings} if self.wrap_property else embeddings
             )
 
-        # Determine if we need create_graph for higher-order derivatives
-        # Hessian computation requires second derivatives, so we need create_graph=True
-        create_graph = self.training or self.regress_hessian
-
         if self.regress_stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos_original"],
                 emb["displacement"],
                 data["cell"],
-                training=create_graph,
+                training=self.training,
             )
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
-            pos = data["pos_original"]
         elif self.regress_forces:
-            forces = compute_forces(energy_part, data["pos"], training=create_graph)
+            forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
-            pos = data["pos"]
-        else:
-            forces = None
-            pos = None
-
-        # Compute Hessian if requested
-        if self.regress_hessian:
-            if forces is None:
-                raise ValueError(
-                    "Hessian computation requires forces. "
-                    "Please enable regress_forces or regress_stress."
-                )
-            if data["natoms"].numel() != 1:
-                raise ValueError(
-                    f"Hessian computation requires exactly 1 system in batch, "
-                    f"found {data['natoms'].numel()}"
-                )
-
-            hessian = compute_hessian(
-                forces, pos, vmap=self.hessian_vmap, training=self.training
-            )
-            outputs[hessian_key] = (
-                {"hessian": hessian} if self.wrap_property else hessian
-            )
 
         return outputs
 
