@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
@@ -43,8 +44,8 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
+    get_displacement_and_cell,
     get_l_component,
-    prepare_displacement_and_cell,
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
@@ -56,6 +57,13 @@ if TYPE_CHECKING:
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+@dataclass
+class RegressConfig:
+    direct_forces: bool = False
+    forces: bool = False
+    stress: bool = False
 
 
 def add_n_empty_edges(
@@ -156,9 +164,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.always_use_pbc = always_use_pbc
 
         # energy conservation related
-        self.regress_forces = regress_forces
-        self.direct_forces = direct_forces
-        self.regress_stress = regress_stress
+        self.regress_config = RegressConfig(
+            direct_forces=direct_forces, forces=regress_forces, stress=regress_stress
+        )
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -309,6 +317,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    @property
+    def direct_forces(self) -> bool:
+        return self.regress_config.direct_forces
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
+
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -454,11 +474,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = prepare_displacement_and_cell(
-                data_dict,
-                regress_stress=self.regress_stress,
-                regress_forces=self.regress_forces,
-                direct_forces=self.direct_forces,
+            displacement, orig_cell = get_displacement_and_cell(
+                data=data_dict,
+                regress_config=self.regress_config,
             )
 
         with record_function("generate_graph"):
