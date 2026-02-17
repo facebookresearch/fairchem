@@ -7,9 +7,95 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 
 from fairchem.core.common import gp_utils
+
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
+
+
+def prepare_displacement_and_cell(
+    data: AtomicData,
+    regress_stress: bool,
+    regress_forces: bool,
+    direct_forces: bool,
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+    """
+    Prepare displacement tensor and cell for gradient-based stress computation.
+
+    This function sets up the displacement tensor and modifies the input data
+    to enable gradient-based computation of forces and stress. When stress
+    regression is enabled with gradient-based forces, it:
+    - Creates a symmetric displacement tensor with gradients enabled
+    - Applies the displacement to atomic positions
+    - Applies the displacement to the unit cell
+    - Stores original positions and cell for later use
+
+    Args:
+        data: Atomic data containing positions, cell, and batch information.
+        regress_stress: Whether stress prediction is enabled.
+        regress_forces: Whether force prediction is enabled.
+        direct_forces: Whether forces are computed directly (vs. via gradients).
+
+    Returns:
+        A tuple of (displacement, orig_cell) where:
+        - displacement: Symmetric strain displacement tensor of shape [num_systems, 3, 3],
+          or None if stress regression is disabled.
+        - orig_cell: Original unit cell before displacement, shape [num_systems, 3, 3],
+          or None if stress regression is disabled.
+
+    Note:
+        This function modifies the input data dict in place:
+        - Sets data["pos_original"] to original positions
+        - Modifies data["pos"] to include displacement
+        - Modifies data["cell"] to include displacement
+        - Enables gradients on data["pos"] if needed
+    """
+    displacement = None
+    orig_cell = None
+
+    # Set up displacement for stress computation
+    if regress_stress and not direct_forces:
+        displacement = torch.zeros(
+            (3, 3),
+            dtype=data["pos"].dtype,
+            device=data["pos"].device,
+        )
+        num_batch = len(data["natoms"])
+        displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
+        displacement.requires_grad = True
+
+        # Create symmetric displacement tensor
+        symmetric_displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
+
+        # Enable gradients on positions if needed
+        if data["pos"].requires_grad is False:
+            data["pos"].requires_grad = True
+
+        # Store original positions and apply displacement
+        data["pos_original"] = data["pos"]
+        data["pos"] = data["pos"] + torch.bmm(
+            data["pos"].unsqueeze(-2),
+            torch.index_select(symmetric_displacement, 0, data["batch"]),
+        ).squeeze(-2)
+
+        # Store original cell and apply displacement
+        orig_cell = data["cell"]
+        data["cell"] = data["cell"] + torch.bmm(data["cell"], symmetric_displacement)
+
+    # Enable gradients for force-only computation
+    if (
+        not regress_stress
+        and regress_forces
+        and not direct_forces
+        and data["pos"].requires_grad is False
+    ):
+        data["pos"].requires_grad = True
+
+    return displacement, orig_cell
 
 
 def get_l_component(x: torch.Tensor, l: int) -> torch.Tensor:

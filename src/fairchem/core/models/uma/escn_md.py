@@ -44,6 +44,7 @@ from fairchem.core.models.uma.outputs import (
     compute_forces,
     compute_forces_and_stress,
     get_l_component,
+    prepare_displacement_and_cell,
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
@@ -339,48 +340,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
 
-    def _get_displacement_and_cell(
-        self, data_dict: AtomicData
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        ###############################################################
-        # gradient-based forces/stress
-        ###############################################################
-        displacement = None
-        orig_cell = None
-        if self.regress_stress and not self.direct_forces:
-            displacement = torch.zeros(
-                (3, 3),
-                dtype=data_dict["pos"].dtype,
-                device=data_dict["pos"].device,
-            )
-            num_batch = len(data_dict["natoms"])
-            displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
-            displacement.requires_grad = True
-            symmetric_displacement = 0.5 * (
-                displacement + displacement.transpose(-1, -2)
-            )
-            if data_dict["pos"].requires_grad is False:
-                data_dict["pos"].requires_grad = True
-            data_dict["pos_original"] = data_dict["pos"]
-            data_dict["pos"] = data_dict["pos"] + torch.bmm(
-                data_dict["pos"].unsqueeze(-2),
-                torch.index_select(symmetric_displacement, 0, data_dict["batch"]),
-            ).squeeze(-2)
-
-            orig_cell = data_dict["cell"]
-            data_dict["cell"] = data_dict["cell"] + torch.bmm(
-                data_dict["cell"], symmetric_displacement
-            )
-
-        if (
-            not self.regress_stress
-            and self.regress_forces
-            and not self.direct_forces
-            and data_dict["pos"].requires_grad is False
-        ):
-            data_dict["pos"].requires_grad = True
-        return displacement, orig_cell
-
     def csd_embedding(self, charge, spin, dataset):
         with record_function("charge spin dataset embeddings"):
             # Add charge, spin, and dataset embeddings
@@ -495,7 +454,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = self._get_displacement_and_cell(data_dict)
+            displacement, orig_cell = prepare_displacement_and_cell(
+                data_dict,
+                regress_stress=self.regress_stress,
+                regress_forces=self.regress_forces,
+                direct_forces=self.direct_forces,
+            )
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
