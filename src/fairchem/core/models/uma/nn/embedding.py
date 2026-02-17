@@ -221,7 +221,7 @@ class DatasetEmbedding(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.enable_grad = enable_grad
-        self.dataset_mapping = dataset_mapping
+        self.dataset_mapping = dataset_mapping  # mapping from dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         self.dataset_emb_dict = nn.ModuleDict({})
         for dataset in dataset_mapping:
             if dataset not in self.dataset_emb_dict:

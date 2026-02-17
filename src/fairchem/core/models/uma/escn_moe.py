@@ -196,12 +196,30 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone,
-        dataset_names: list[str],  # soon to be deprecated in favor of dataset_mapping
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_names: (
+            list[str] | None
+        ) = None,  # deprecated in favor of dataset_mapping
         dataset_mapping: dict[str, str] | None = None,
     ):
+        """
+        Initialize the DatasetSpecificMoEWrapper.
+
+        Args:
+            backbone: The backbone model providing embeddings.
+            head_cls: Registry name of the head class to instantiate.
+            wrap_property: If True, wrap output tensors in a dict with the key name.
+            head_kwargs: Additional keyword arguments passed to the head constructor.
+            dataset_names: Deprecated. Use dataset_mapping instead.
+            dataset_mapping: A mapping from dataset names to head identifiers.
+                Allows multiple datasets to share the same head/expert by mapping
+                them to the same identifier. Example:
+                {"omol": "omol", "omat": "omat", "oc20": "oc20", "oc20_subset": "oc20"}
+                Here omol and omat have their own heads while oc20 and oc20_subset
+                share the same oc20 head. Dict values must be a subset of dict keys.
+        """
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
@@ -210,27 +228,9 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
 
         self.wrap_property = wrap_property
 
-        if dataset_mapping is None:
-            # add warning if dataset_mapping is not provided
-            logging.warning(
-                "If dataset_mapping is not provided, the code assumes that each dataset maps to itself. If this what you want please ignore otherwise add the dataset_mapping argument"
-            )
-            dataset_mapping = {name: name for name in dataset_names}
-
-        self.dataset_names = sorted(dataset_mapping.keys())
-        # get unique sorted dataset names
-        mapped_dataset_names = sorted(
-            {dataset_mapping[name] for name in self.dataset_names}
+        self.dataset_names, self.dataset_name_to_exp = self._build_expert_mapping(
+            dataset_names, dataset_mapping
         )
-        # expert idx for mapped dataset names
-        mapped_dataset_idx = {
-            value: idx for idx, value in enumerate(mapped_dataset_names)
-        }
-        # remap dataset name to expert idx using mapping
-        self.dataset_name_to_exp = {
-            name: mapped_dataset_idx[dataset_mapping[name]]
-            for name in self.dataset_names
-        }
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
         self.global_mole_tensors = MOLEGlobals(
@@ -244,6 +244,49 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             cache=None,
         )
         recursive_replace_all_linear(self.head, replacement_factory)
+
+    @staticmethod
+    def _build_expert_mapping(
+        dataset_names: list[str] | None,
+        dataset_mapping: dict[str, str] | None,
+    ) -> tuple[list[str], dict[str, int]]:
+        """
+        Build the dataset-to-expert-index mapping.
+
+        Args:
+            dataset_names: Deprecated list of dataset names.
+            dataset_mapping: Dict mapping dataset names to head identifiers.
+
+        Returns:
+            A tuple of (sorted dataset names list, dict mapping names to expert indices).
+        """
+        if dataset_names is not None and dataset_mapping is not None:
+            raise ValueError(
+                "Both 'dataset_names' and 'dataset_mapping' provided. Please provide 'dataset_mapping' only as 'dataset_names' is deprecated."
+            )
+        if dataset_names is None and dataset_mapping is None:
+            raise ValueError(
+                "Either 'dataset_names' or 'dataset_mapping' must be provided. Please provide 'dataset_mapping' as 'dataset_names' is deprecated."
+            )
+        if dataset_names is not None:
+            logging.warning(
+                "If 'dataset_mapping' is not provided, the code assumes that each dataset maps to itself."
+            )
+            dataset_mapping = {name: name for name in dataset_names}
+        if not isinstance(dataset_mapping, dict) or not dataset_mapping:
+            raise ValueError(
+                "Please set 'dataset_mapping' in the DatasetSpecificMoEWrapper config, it is a dictionary and it cannot be empty."
+            )
+        assert set(dataset_mapping.values()) <= set(
+            dataset_mapping.keys()
+        ), "'dataset_mapping.values()' must be a subset of 'dataset_mapping.keys'."
+
+        sorted_names = sorted(dataset_mapping.keys())
+        unique_targets = sorted(set(dataset_mapping.values()))
+        name_to_exp = {
+            name: unique_targets.index(dataset_mapping[name]) for name in sorted_names
+        }
+        return sorted_names, name_to_exp
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:

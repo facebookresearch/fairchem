@@ -130,7 +130,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         dataset_list: (
             list[str] | None
         ) = None,  # deprecated, use dataset_mapping instead
-        dataset_mapping: dict[str, str] | None = None,
+        dataset_mapping: (
+            dict[str, str] | None
+        ) = None,  # mapping from dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
