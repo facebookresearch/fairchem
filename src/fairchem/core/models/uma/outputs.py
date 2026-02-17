@@ -7,15 +7,99 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import torch
 
 from fairchem.core.common import gp_utils
 
+if TYPE_CHECKING:
+    from fairchem.core.datasets.atomic_data import AtomicData
 
-def get_l_component_range(x: torch.Tensor, l_min: int, l_max: int) -> torch.Tensor:
-    """Extract spherical harmonic components for L in [l_min, l_max] from node embeddings.
+
+def prepare_displacement_and_cell(
+    data: AtomicData,
+    regress_stress: bool,
+    regress_forces: bool,
+    direct_forces: bool,
+) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+    """
+    Prepare displacement tensor and cell for gradient-based stress computation.
+
+    This function sets up the displacement tensor and modifies the input data
+    to enable gradient-based computation of forces and stress. When stress
+    regression is enabled with gradient-based forces, it:
+    - Creates a symmetric displacement tensor with gradients enabled
+    - Applies the displacement to atomic positions
+    - Applies the displacement to the unit cell
+    - Stores original positions and cell for later use
+
+    Args:
+        data: Atomic data containing positions, cell, and batch information.
+        regress_stress: Whether stress prediction is enabled.
+        regress_forces: Whether force prediction is enabled.
+        direct_forces: Whether forces are computed directly (vs. via gradients).
+
+    Returns:
+        A tuple of (displacement, orig_cell) where:
+        - displacement: Symmetric strain displacement tensor of shape [num_systems, 3, 3],
+          or None if stress regression is disabled.
+        - orig_cell: Original unit cell before displacement, shape [num_systems, 3, 3],
+          or None if stress regression is disabled.
+
+    Note:
+        This function modifies the input data dict in place:
+        - Sets data["pos_original"] to original positions
+        - Modifies data["pos"] to include displacement
+        - Modifies data["cell"] to include displacement
+        - Enables gradients on data["pos"] if needed
+    """
+    displacement = None
+    orig_cell = None
+
+    # Set up displacement for stress computation
+    if regress_stress and not direct_forces:
+        displacement = torch.zeros(
+            (3, 3),
+            dtype=data["pos"].dtype,
+            device=data["pos"].device,
+        )
+        num_batch = len(data["natoms"])
+        displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
+        displacement.requires_grad = True
+
+        # Create symmetric displacement tensor
+        symmetric_displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
+
+        # Enable gradients on positions if needed
+        if data["pos"].requires_grad is False:
+            data["pos"].requires_grad = True
+
+        # Store original positions and apply displacement
+        data["pos_original"] = data["pos"]
+        data["pos"] = data["pos"] + torch.bmm(
+            data["pos"].unsqueeze(-2),
+            torch.index_select(symmetric_displacement, 0, data["batch"]),
+        ).squeeze(-2)
+
+        # Store original cell and apply displacement
+        orig_cell = data["cell"]
+        data["cell"] = data["cell"] + torch.bmm(data["cell"], symmetric_displacement)
+
+    # Enable gradients for force-only computation
+    if (
+        not regress_stress
+        and regress_forces
+        and not direct_forces
+        and data["pos"].requires_grad is False
+    ):
+        data["pos"].requires_grad = True
+
+    return displacement, orig_cell
+
+
+def get_l_component(x: torch.Tensor, l: int) -> torch.Tensor:
+    """Extract the (2L+1) spherical harmonic components for a specific L from node embeddings.
 
     The node embeddings are assumed to be organized as [N, (lmax+1)^2, C] where the
     second dimension contains spherical harmonic coefficients ordered by L:
@@ -26,15 +110,13 @@ def get_l_component_range(x: torch.Tensor, l_min: int, l_max: int) -> torch.Tens
 
     Args:
         x: Node embeddings tensor of shape [N, (lmax+1)^2, C].
-        l_min: Lowest angular momentum quantum number to include (0, 1, 2, ...).
-        l_max: Highest angular momentum quantum number to include (>= l_min).
+        l: The angular momentum quantum number (0, 1, 2, ...).
 
     Returns:
-        Tensor of shape [N, (l_max+1)^2 - l_min^2, C] containing the concatenated
-        spherical harmonic components for all L in [l_min, l_max].
+        Tensor of shape [N, 2L+1, C] containing the L-th spherical harmonic components.
     """
-    start_idx = l_min * l_min
-    num_components = (l_max + 1) ** 2 - l_min**2
+    start_idx = l * l  # Sum of (2k+1) for k=0 to l-1 equals l^2
+    num_components = 2 * l + 1
     return x.narrow(1, start_idx, num_components)
 
 
@@ -82,49 +164,25 @@ def reduce_node_to_system(
 
 
 def compute_energy(
-    emb: dict[str, torch.Tensor],
-    energy_block: torch.nn.Module,
+    node_energy: torch.Tensor,
     batch: torch.Tensor,
     num_systems: int,
-    natoms: torch.Tensor | None = None,
-    reduce: Literal["sum", "mean"] = "sum",
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Compute system-level energy from node embeddings and an energy block.
-
-    Extracts the L=0 (scalar) component from node embeddings, applies the energy
-    block to produce per-node energies, reduces to system-level energies, and
-    optionally normalizes by the number of atoms per system.
+    """Compute system-level energy from node-level energy predictions.
 
     Args:
-        emb: Embedding dictionary containing "node_embedding" of shape [N, (lmax+1)^2, C].
-        energy_block: Module that maps scalar node features [N, C] to per-node energies [N, 1].
+        node_energy: Per-node energy predictions, shape [N] or [N, 1].
         batch: Batch indices mapping each node to its system, shape [N].
         num_systems: Total number of systems in the batch.
-        natoms: Number of atoms per system, shape [num_systems]. Required when reduce="mean".
-        reduce: How to aggregate node energies into system energies. "sum" returns the total
-            energy; "mean" divides by natoms to return the average energy per atom.
 
     Returns:
         A tuple of (energy, energy_part) where:
-        - energy: System-level energy after GP reduction and reduce, shape [num_systems].
+        - energy: System-level energy after GP reduction, shape [num_systems].
         - energy_part: System-level energy before GP reduction (for autograd), shape [num_systems].
     """
-    scalar_embedding = get_l_component_range(
-        emb["node_embedding"], l_min=0, l_max=0
-    ).squeeze(1)
-    node_energy = energy_block(scalar_embedding)
+    # Flatten to 1D if needed
     node_energy_flat = node_energy.view(-1)
     energy, energy_part = reduce_node_to_system(node_energy_flat, batch, num_systems)
-
-    if reduce == "sum":
-        pass
-    elif reduce == "mean":
-        if natoms is None:
-            raise ValueError("natoms must be provided when reduce='mean'")
-        energy = energy / natoms
-    else:
-        raise ValueError(f"reduce can only be sum or mean, got: {reduce}")
-
     return energy, energy_part
 
 
@@ -158,28 +216,22 @@ def compute_forces(
 
 def compute_forces_and_stress(
     energy_part: torch.Tensor,
-    pos: torch.Tensor,
+    pos_original: torch.Tensor,
+    displacement: torch.Tensor,
     cell: torch.Tensor,
-    batch: torch.Tensor,
     training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute forces and stress from energy using autograd.
 
     Forces are computed as the negative gradient of energy with respect to positions.
-    Stress is computed by reconstructing the virial tensor from the position and cell
-    gradients, equivalent to the strain-derivative approach.
-
-    The virial is:
-        V = (g_r^T r + r^T g_r) / 2 + (cell^T g_h + g_h^T cell) / 2
-
-    where g_r = dE/dpos and g_h = dE/dcell. This matches dE/dε for a symmetric
-    strain ε applied as r' = r(I + ε), h' = h(I + ε).
+    Stress is computed from the virial (gradient with respect to strain/displacement)
+    divided by the cell volume.
 
     Args:
         energy_part: System-level energy before GP reduction, shape [num_systems].
-        pos: Atomic positions, shape [N, 3].
+        pos_original: Original atomic positions (before strain applied), shape [N, 3].
+        displacement: Strain displacement tensor, shape [num_systems, 3, 3].
         cell: Unit cell vectors, shape [num_systems, 3, 3].
-        batch: Batch indices mapping each node to its system, shape [N].
         training: Whether to create graph for higher-order gradients.
 
     Returns:
@@ -189,7 +241,7 @@ def compute_forces_and_stress(
     """
     grads = torch.autograd.grad(
         [energy_part.sum()],
-        [pos, cell],
+        [pos_original, displacement],
         create_graph=training,
     )
 
@@ -199,130 +251,10 @@ def compute_forces_and_stress(
             gp_utils.reduce_from_model_parallel_region(grads[1]),
         )
 
-    num_systems = cell.shape[0]
     forces = torch.neg(grads[0])
-    pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
-    pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
-
-    cell_virial = cell.mT @ grads[1]  # [B, 3, 3]
-
-    virial = (pos_virial + pos_virial.mT + cell_virial + cell_virial.mT) / 2
+    virial = grads[1].view(-1, 3, 3)
     volume = torch.det(cell).abs().unsqueeze(-1)
     stress = virial / volume.view(-1, 1, 1)
     stress = stress.view(-1, 9)
 
     return forces, stress
-
-
-def compute_hessian_vmap(
-    forces_flat: torch.Tensor,
-    pos: torch.Tensor,
-    create_graph: bool,
-) -> torch.Tensor:
-    """Compute Hessian using vectorized mapping (vmap).
-
-    Uses torch.vmap to compute all Hessian components in parallel by taking
-    gradients of each force component with respect to all positions.
-
-    Args:
-        forces_flat: Flattened forces tensor, shape [N*3].
-        pos: Atomic positions, shape [N, 3].
-        create_graph: Whether to create graph for third-order derivatives.
-
-    Returns:
-        Hessian matrix of shape [N*3, N*3].
-    """
-
-    def compute_grad_component(vec):
-        """Compute gradient of forces w.r.t. positions for a single component."""
-        return torch.autograd.grad(
-            -1 * forces_flat,
-            pos,
-            grad_outputs=vec,
-            retain_graph=True,
-            create_graph=create_graph,
-        )[0]
-
-    # Use vmap to compute all components in parallel
-    hessian = torch.vmap(compute_grad_component)(
-        torch.eye(forces_flat.numel(), device=forces_flat.device)
-    )
-
-    return hessian
-
-
-def compute_hessian_loop(
-    forces_flat: torch.Tensor,
-    pos: torch.Tensor,
-    create_graph: bool,
-) -> torch.Tensor:
-    """Compute Hessian using a loop over force components.
-
-    Iteratively computes gradients of each force component with respect to
-    positions. This is a fallback when vmap is not desired or unavailable.
-
-    Args:
-        forces_flat: Flattened forces tensor, shape [N*3].
-        pos: Atomic positions, shape [N, 3].
-        create_graph: Whether to create graph for third-order derivatives.
-
-    Returns:
-        Hessian matrix of shape [N*3, N*3].
-    """
-    n_forces = len(forces_flat)
-    hessian = torch.zeros(
-        (n_forces, n_forces),
-        device=forces_flat.device,
-        dtype=forces_flat.dtype,
-        requires_grad=False,
-    )
-
-    for i in range(n_forces):
-        hessian[:, i] = torch.autograd.grad(
-            -forces_flat[i],
-            pos,
-            retain_graph=i < n_forces - 1,
-            create_graph=create_graph,
-        )[0].flatten()
-
-    return hessian
-
-
-def compute_hessian(
-    forces: torch.Tensor,
-    pos: torch.Tensor,
-    vmap: bool = True,
-    training: bool = False,
-) -> torch.Tensor:
-    """Compute Hessian matrix as second derivative of energy w.r.t. positions.
-
-    The Hessian is computed as the negative gradient of forces with respect to
-    positions: H = -∇_pos(forces) = ∇²_pos(energy).
-
-    Args:
-        forces: Force tensor, shape [N, 3].
-        pos: Atomic positions, shape [N, 3].
-        vmap: Whether to use vectorized mapping (faster but higher memory).
-        training: Whether to create graph for third-order derivatives.
-
-    Returns:
-        Hessian matrix of shape [N*3, N*3].
-
-    Note:
-        Graph parallel (GP) mode is not fully supported. The Hessian should
-        be computed after forces have been reduced across GP ranks.
-    """
-    if gp_utils.initialized():
-        raise NotImplementedError(
-            "Hessian computation is not currently supported with graph parallel mode. "
-            "Please compute Hessian on a single rank after force reduction."
-        )
-
-    forces_flat = forces.flatten()
-
-    if vmap:
-        hessian = compute_hessian_vmap(forces_flat, pos, create_graph=training)
-    else:
-        hessian = compute_hessian_loop(forces_flat, pos, create_graph=training)
-
-    return hessian
