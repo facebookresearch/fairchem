@@ -389,6 +389,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
+        node_partition = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -401,7 +402,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-            data_dict["node_partition"] = node_partition
+            # data_dict["node_partition"] = node_partition
 
         if self.otf_graph:
             pbc = None
@@ -422,6 +423,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
+                node_partition=node_partition,
             )
         else:
             # this assume edge_index is provided

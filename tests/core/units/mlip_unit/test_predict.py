@@ -129,17 +129,22 @@ def test_multiple_dataset_predict(uma_predict_unit):
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, device, checkpointing",
+    "workers, device, checkpointing, graph_gen_version",
     [
-        (1, "cpu", False),
-        (2, "cpu", False),
-        (1, "cuda", False),
-        (1, "cuda", True),
+        (1, "cpu", False, 2),
+        (2, "cpu", False, 2),
+        (1, "cuda", False, 2),
+        (1, "cuda", True, 2),
+        (1, "cuda", True, 3),
+        (1, "cuda", False, 3),
+        (1, "cpu", False, 3),
+        (1, "cpu", True, 3),
+        (2, "cpu", False, 3),
         # (2, "cuda", False),
         # (2, "cuda", True),
     ],
 )
-def test_parallel_predict_unit(workers, device, checkpointing):
+def test_parallel_predict_unit(workers, device, checkpointing, graph_gen_version):
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -148,7 +153,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
         tf32=False,
         merge_mole=True,
         activation_checkpointing=checkpointing,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=graph_gen_version,
         external_graph_gen=False,
     )
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
