@@ -108,12 +108,13 @@ def reshape_features(
     n_index: np.ndarray,
     n_distance: np.ndarray,
     offsets: np.ndarray,
+    target_dtype: torch.dtype = torch.float32,
 ):
     """Stack center and neighbor index and reshapes distances,
     takes in np.arrays and returns torch tensors"""
     edge_index = torch.LongTensor(np.vstack((n_index, c_index)))
-    edge_distances = torch.FloatTensor(n_distance)
-    cell_offsets = torch.FloatTensor(offsets)
+    edge_distances = torch.tensor(n_distance, dtype=target_dtype)
+    cell_offsets = torch.tensor(offsets, dtype=target_dtype)
 
     # remove distances smaller than a tolerance ~ 0. The small tolerance is
     # needed to correct for pymatgen's neighbor_list returning self atoms
@@ -273,11 +274,11 @@ class AtomicData:
         if hasattr(self, "energy"):
             assert self.energy.dim() == 1
             assert self.energy.shape[0] == self.num_graphs
-            assert self.energy.dtype == torch.float
+            assert self.energy.dtype in (torch.float32, torch.float64)
         if hasattr(self, "forces"):
             assert self.forces.shape[0] == self.pos.shape[0]
             assert self.forces.shape[1] == 3
-            assert self.forces.dtype == torch.float
+            assert self.forces.dtype in (torch.float32, torch.float64)
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
             assert (
@@ -286,7 +287,7 @@ class AtomicData:
                 or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
             )
             assert self.stress.shape[0] == self.num_graphs
-            assert self.stress.dtype == torch.float
+            assert self.stress.dtype in (torch.float32, torch.float64)
 
         if self.sid is not None:
             assert isinstance(self.sid, list)
@@ -354,7 +355,9 @@ class AtomicData:
                 max_neigh is not None
             ), "max_neigh must be specified for cpu graph construction."
             split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
-            edge_index, cell_offsets = reshape_features(*split_idx_dist)
+            edge_index, cell_offsets = reshape_features(
+                *split_idx_dist, target_dtype=target_dtype
+            )
             nedges = torch.tensor([edge_index.shape[1]], dtype=torch.long)
         else:
             # empty graph

@@ -8,8 +8,12 @@ file in the root directory of this source tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from fairchem.core.common.utils import StrEnum
+
+if TYPE_CHECKING:
+    import torch
 
 
 class UMATask(StrEnum):
@@ -88,6 +92,12 @@ class InferenceSettings:
     torch_num_threads: int | None = None
 
     edge_chunk_size: int | None = None
+
+    # Base precision dtype for model parameters and input data.
+    # When set (e.g. to torch.float64), all model parameters, buffers,
+    # and float input tensors will be cast to this dtype.
+    # None means use the checkpoint's native dtype (typically float32).
+    base_precision_dtype: torch.dtype | None = None
 
 
 # this is most general setting that works for most systems and models,
