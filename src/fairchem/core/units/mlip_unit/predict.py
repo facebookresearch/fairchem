@@ -165,6 +165,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.lazy_model_intialized = False
         self.inference_settings = inference_settings
         self.assert_on_nans = assert_on_nans
+        self._warned_upcast = False
 
         if self.model.module.direct_forces:
             logging.warning(
@@ -273,6 +274,20 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         if self.inference_settings.base_precision_dtype is not None:
             dtype = self.inference_settings.base_precision_dtype
+            # Raising a warning only if we are upcasting the atomic coordinates,
+            # not downcasting
+            if (
+                not self._warned_upcast
+                and torch.finfo(dtype).bits > torch.finfo(data_device.pos.dtype).bits
+            ):
+                logging.warning(
+                    "Upcasting atomic coordinates from %s to %s. "
+                    "Accuracy may be limited by the precision of the "
+                    "input coordinates.",
+                    data_device.pos.dtype,
+                    dtype,
+                )
+                self._warned_upcast = True
             for key, val in data_device:
                 if torch.is_tensor(val) and val.is_floating_point():
                     data_device[key] = val.to(dtype)
