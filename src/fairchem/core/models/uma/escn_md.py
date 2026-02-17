@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -89,6 +90,63 @@ def add_n_empty_edges(
     )
 
 
+def get_balanced_attribute(
+    emb: torch.Tensor,
+    target_sum: torch.Tensor,
+    natoms: torch.Tensor,
+    batch: torch.Tensor,
+    balance_attribute_offset: float = 0,
+    balance_channel_idx: int = 0,
+) -> torch.Tensor:
+    """Balance per-atom attributes (charge/spin) to sum to system target.
+
+    Args:
+        emb: Node embeddings of shape [num_atoms, sph_features, channels]
+        target_sum: Target sum per system of shape [num_systems]
+        natoms: Number of atoms per system of shape [num_systems]
+        batch: Batch indices mapping atoms to systems of shape [num_atoms]
+        balance_attribute_offset: Offset to subtract from target (e.g., 1 for spin)
+        balance_channel_idx: Which channel index to balance
+
+    Returns:
+        Modified embeddings with the specified channel balanced to sum to target.
+
+    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
+    which provides correct gradients in both forward and backward passes.
+    """
+    out_emb = emb.clone()
+
+    charge_unbalanced = emb[:, 0, balance_channel_idx]
+
+    system_scalars_part = torch.zeros(
+        len(natoms),
+        device=emb.device,
+        dtype=emb.dtype,
+    )
+
+    system_scalars_part.index_add_(0, batch, charge_unbalanced.view(-1))
+
+    # Reduce partial sums across all graph parallel ranks
+    # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
+    # ensuring correct gradient computation when atoms are split across ranks.
+    if gp_utils.initialized():
+        system_scalar = all_reduce_with_grad(
+            system_scalars_part, group=gp_utils.get_gp_group()
+        )
+    else:
+        system_scalar = system_scalars_part
+
+    correction = (system_scalar - (target_sum - balance_attribute_offset)) / natoms
+
+    balanced_node_scalar = charge_unbalanced - correction[batch]
+
+    out_emb[:, 0, balance_channel_idx] = (
+        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
+    )
+
+    return out_emb
+
+
 @torch.compiler.disable
 def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
     n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
@@ -145,6 +203,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
+        charge_balanced_channels: list[int] | None = None,
+        spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
@@ -164,6 +224,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.regress_forces = regress_forces
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
+
+        # which channels to balance
+        self.charge_balanced_channels = (
+            charge_balanced_channels if charge_balanced_channels is not None else []
+        )
+        self.spin_balanced_channels = (
+            spin_balanced_channels if spin_balanced_channels is not None else []
+        )
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -313,6 +381,33 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             self.lmax, self.mmax
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
+
+    def balance_channels(
+        self,
+        x_message_prime: torch.Tensor,
+        charge: torch.Tensor,
+        spin: torch.Tensor,
+        natoms: torch.Tensor,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
+        for channel_idx in self.charge_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=charge,
+                natoms=natoms,
+                batch=batch,
+                balance_channel_idx=channel_idx,
+            )
+        for channel_idx in self.spin_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=spin,
+                natoms=natoms,
+                batch=batch,
+                balance_attribute_offset=1,
+                balance_channel_idx=channel_idx,
+            )
+        return x_message_prime
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -589,6 +684,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    charge=data_dict["charge"],
+                    spin=data_dict["spin"],
+                    natoms=data_dict["natoms"],
+                    batch=data_dict["batch"],
                 )
 
         # Final layer norm
