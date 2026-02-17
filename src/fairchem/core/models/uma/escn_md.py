@@ -60,7 +60,11 @@ ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
 
 
 @dataclass
-class RegressConfig:
+class GradRegressConfig:
+    """
+    Configuration for gradient-based computation of forces and stress.
+    """
+
     direct_forces: bool = False
     forces: bool = False
     stress: bool = False
@@ -164,7 +168,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.always_use_pbc = always_use_pbc
 
         # energy conservation related
-        self.regress_config = RegressConfig(
+        self.regress_config = GradRegressConfig(
             direct_forces=direct_forces, forces=regress_forces, stress=regress_stress
         )
 
@@ -673,16 +677,15 @@ class MLP_EFS_Head(MLP_Energy_Head):
         )
         backbone.energy_block = None
         backbone.force_block = None
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
+        self.regress_config = backbone.regress_config
 
-        # TODO: this is not very clean, bug-prone.
-        # but is currently necessary for finetuning pretrained models that did not have
-        # the direct_forces flag set to False
-        backbone.direct_forces = False
-        assert (
-            not backbone.direct_forces
-        ), "EFS head is only used for gradient-based forces/stress."
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     @conditional_grad(torch.enable_grad())
     def forward(
@@ -709,7 +712,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
                 {"embeddings": embeddings} if self.wrap_property else embeddings
             )
 
-        if self.regress_stress:
+        if self.regress_config.stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos_original"],
@@ -720,7 +723,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
-        elif self.regress_forces:
+        elif self.regress_config.forces:
             forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
 
