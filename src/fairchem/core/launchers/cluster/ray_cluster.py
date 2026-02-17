@@ -238,6 +238,7 @@ def _ray_head_script(
     # using 0 as the port for the head will make ray search for an open port instead of
     # always using the same one.
     port = find_free_port()
+    dashboard_port = find_free_port()
     head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
@@ -261,6 +262,7 @@ def _ray_head_script(
                 "--num-gpus",
                 f"{num_gpus}",
                 "--dashboard-host=0.0.0.0",
+                f"--dashboard-port={dashboard_port}",
             ],
             env=head_env,
             stdout=subprocess.PIPE,
