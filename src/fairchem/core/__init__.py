@@ -25,7 +25,6 @@ from fairchem.core._config import clear_cache
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import (
     FAIRChemCalculator,
-    FAIRChemRayServeCalculator,
 )
 
 try:
@@ -35,7 +34,6 @@ except PackageNotFoundError:
 
 __all__ = [
     "FAIRChemCalculator",
-    "FAIRChemRayServeCalculator",
     "pretrained_mlip",
     "clear_cache",
 ]

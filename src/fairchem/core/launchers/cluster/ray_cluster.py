@@ -20,6 +20,8 @@ from fairchem.core.common.distutils import os_environ_get_or_throw
 import submitit
 from submitit.helpers import Checkpointable, DelayedSubmission
 
+logger = logging.getLogger(__name__)
+
 
 def kill_proc_tree(pid, including_parent=True):
     parent = psutil.Process(pid)
@@ -134,7 +136,7 @@ class RayClusterState:
             with self._head_json.open("r") as f:
                 return HeadInfo(**json.load(f))
         except Exception as ex:
-            print(f"failed to load head info: {ex}. Maybe it's not ready yet?")
+            logger.info(f"failed to load head info: {ex}. Maybe it's not ready yet?")
             return None
 
     def save_head_info(self, head_info: HeadInfo):
@@ -242,7 +244,7 @@ def _ray_head_script(
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
     )
-    print(f"host {hostname}:{port}")
+    logger.info(f"host {hostname}:{port}")
     with tempfile.TemporaryDirectory(dir="/tmp") as temp_dir:
         # ray workers have the same tempdir name (even on a different host)
         # as the head. This is a problem when we use  /scratch/slurm_tmpdir/JOBID as
@@ -295,11 +297,11 @@ def worker_script(
     start_wait_time_seconds: int = 60,  # TODO pass this around properly
 ):
     """start an array of worker nodes for the Ray cluster on slurm. Waiting on the head node first."""
-    print(f"Waiting for head node. {cluster_state.cluster_id}")
+    logger.info(f"Waiting for head node. {cluster_state.cluster_id}")
     while not cluster_state.is_head_ready():
         # wait for head to have started
         time.sleep(5)
-    print("Head node found.")
+    logger.info("Head node found.")
     head_info = cluster_state.head_info()
     assert head_info is not None, "something went wrong getting head information."
     worker_env = os.environ.copy()
@@ -328,8 +330,7 @@ def worker_script(
             check=False,
         )
     finally:
-        if head_info.temp_dir:
-            shutil.rmtree(Path(head_info.temp_dir))
+        pass  # Ray manages its own temp directory cleanup
 
 
 # TODO deal with ports better: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#slurm-networking-caveats
@@ -362,7 +363,7 @@ class RayCluster:
         worker_wait_timeout_seconds: int = 60,
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
-        print(f"cluster {self.state.cluster_id}")
+        logger.info(f"cluster {self.state.cluster_id}")
         self.output_dir = log_dir
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
@@ -372,7 +373,7 @@ class RayCluster:
         self.num_drivers = 0
         self.head_started = False
         self.jobs: list[submitit.Job] = []
-        print(f"logs will be in {self.log_dir.resolve()}")
+        logger.info(f"logs will be in {self.log_dir.resolve()}")
 
     def start_head_and_workers(
         self,
@@ -403,7 +404,7 @@ class RayCluster:
         self.state.add_job(slurm_job)
         self.jobs.append(slurm_job)
         mk_symlinks(self.log_dir, "job", slurm_job.paths)
-        print("slurm job id:", slurm_job.job_id)
+        logger.info(f"slurm job id: {slurm_job.job_id}")
         return slurm_job.job_id
 
     def start_head(
@@ -438,7 +439,7 @@ class RayCluster:
         self.state.add_job(head_job)
         self.jobs.append(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
-        print("head slurm job id:", head_job.job_id)
+        logger.info(f"head slurm job id: {head_job.job_id}")
         return head_job.job_id
 
     def start_workers(
@@ -473,7 +474,7 @@ class RayCluster:
 
         for idx, j in enumerate(jobs):
             mk_symlinks(self.log_dir, f"worker_{self.num_worker_groups}_{idx}", j.paths)
-        print("workers slurm job ids:", [job.job_id for job in jobs])
+        logger.info(f"workers slurm job ids: {[job.job_id for job in jobs]}")
         for j in jobs:
             self.state.add_job(j)
             self.jobs.append(j)
@@ -490,7 +491,7 @@ class RayCluster:
             os.getpid(), including_parent=False
         )  # kill local job started by submitit as subprocess TODO that's not going to work when this is not the main process (e.g. recovering on cli)
         self.state.clean()
-        print(f"cluster {self.state.cluster_id} shutdown")
+        logger.info(f"cluster {self.state.cluster_id} shutdown")
 
     def __enter__(self):
         # only use as a context if you have something blocking waiting on the driver
