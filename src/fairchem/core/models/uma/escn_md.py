@@ -108,6 +108,56 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int 
         add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
+def resolve_dataset_mapping(
+    deprecated_list: list[str] | None,
+    dataset_mapping: dict[str, str] | None,
+    deprecated_param_name: str = "dataset_list",
+) -> dict[str, str]:
+    """
+    Validate and resolve dataset mapping from either a deprecated list or a mapping dict.
+
+    Args:
+        deprecated_list: Deprecated list of dataset names. If provided, it is
+            converted to a mapping where each name maps to itself.
+        dataset_mapping: Mapping from the config dataset name to desired dataset name for embeddings and heads.
+            Allows multiple subsets to share the same dataset embedding and/or output head by mapping
+            them to the same identifier.
+        deprecated_param_name: Name of the deprecated parameter, used in
+            warning/error messages.
+
+    Returns:
+        The resolved dataset mapping dict.
+
+    Raises:
+        ValueError: If both or neither arguments are provided, if the mapping
+            is not a non-empty dict, or if mapping values are not a subset of
+            mapping keys.
+    """
+    if deprecated_list is not None and dataset_mapping is not None:
+        raise ValueError(
+            f"Both '{deprecated_param_name}' and 'dataset_mapping' provided. "
+            f"Please provide 'dataset_mapping' only as '{deprecated_param_name}' is deprecated."
+        )
+    if deprecated_list is None and dataset_mapping is None:
+        raise ValueError(
+            "'dataset_mapping' must be provided to use dataset embeddings."
+        )
+    if deprecated_list is not None:
+        dataset_mapping = {name: name for name in deprecated_list}
+        logging.warning(
+            f"If '{deprecated_param_name}' is provided, the code assumes that each dataset "
+            f"maps to itself. Please use 'dataset_mapping' as '{deprecated_param_name}' "
+            "is deprecated and will be removed in the future."
+        )
+    if not isinstance(dataset_mapping, dict) or not dataset_mapping:
+        raise ValueError("'dataset_mapping' must be a non-empty dictionary.")
+    if not set(dataset_mapping.values()) <= set(dataset_mapping.keys()):
+        raise ValueError(
+            "'dataset_mapping.values()' must be a subset of 'dataset_mapping.keys()'."
+        )
+    return dataset_mapping
+
+
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
     def __init__(
@@ -145,7 +195,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ) = None,  # deprecated, use dataset_mapping instead
         dataset_mapping: (
             dict[str, str] | None
-        ) = None,  # mapping from dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
+        ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
@@ -190,12 +240,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.dataset_emb_grad = dataset_emb_grad
         self.dataset_mapping = dataset_mapping
         self.dataset_list = dataset_list
-        if self.dataset_mapping is None and self.dataset_list is not None:
-            self.dataset_mapping = {dataset: dataset for dataset in self.dataset_list}
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
-            assert self.dataset_mapping, "the dataset mapping is empty, please add it to the model backbone config"
-
+            self.dataset_mapping = resolve_dataset_mapping(
+                self.dataset_list, dataset_mapping, "dataset_list"
+            )
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
@@ -663,9 +712,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         Validate that task datasets are compatible with this backbone.
         """
-        assert set(dataset_to_tasks.keys()).issubset(
-            set(self.dataset_list)
-        ), "Datasets in tasks is not a strict subset of datasets in backbone."
+        if self.use_dataset_embedding:
+            assert set(dataset_to_tasks.keys()).issubset(
+                set(self.dataset_mapping.values())
+            ), "Datasets in tasks is not a strict subset of datasets in backbone."
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """

@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
-from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 from fairchem.core.models.uma.nn.mole import (
     MOLEGlobals,
 )
@@ -213,7 +213,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             wrap_property: If True, wrap output tensors in a dict with the key name.
             head_kwargs: Additional keyword arguments passed to the head constructor.
             dataset_names: Deprecated. Use dataset_mapping instead.
-            dataset_mapping: A mapping from dataset names to head identifiers.
+            dataset_mapping: A mapping from dataset names to output head identifiers.
                 Allows multiple datasets to share the same head/expert by mapping
                 them to the same identifier. Example:
                 {"omol": "omol", "omat": "omat", "oc20": "oc20", "oc20_subset": "oc20"}
@@ -260,26 +260,9 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         Returns:
             A tuple of (sorted dataset names list, dict mapping names to expert indices).
         """
-        if dataset_names is not None and dataset_mapping is not None:
-            raise ValueError(
-                "Both 'dataset_names' and 'dataset_mapping' provided. Please provide 'dataset_mapping' only as 'dataset_names' is deprecated."
-            )
-        if dataset_names is None and dataset_mapping is None:
-            raise ValueError(
-                "Either 'dataset_names' or 'dataset_mapping' must be provided. Please provide 'dataset_mapping' as 'dataset_names' is deprecated."
-            )
-        if dataset_names is not None:
-            logging.warning(
-                "If 'dataset_mapping' is not provided, the code assumes that each dataset maps to itself."
-            )
-            dataset_mapping = {name: name for name in dataset_names}
-        if not isinstance(dataset_mapping, dict) or not dataset_mapping:
-            raise ValueError(
-                "Please set 'dataset_mapping' in the DatasetSpecificMoEWrapper config, it is a dictionary and it cannot be empty."
-            )
-        assert set(dataset_mapping.values()) <= set(
-            dataset_mapping.keys()
-        ), "'dataset_mapping.values()' must be a subset of 'dataset_mapping.keys'."
+        dataset_mapping = resolve_dataset_mapping(
+            dataset_names, dataset_mapping, "dataset_names"
+        )
 
         sorted_names = sorted(dataset_mapping.keys())
         unique_targets = sorted(set(dataset_mapping.values()))
