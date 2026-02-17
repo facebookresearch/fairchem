@@ -10,30 +10,17 @@ import ray
 import torch
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 
-import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
-
-
-def get_fcc_crystal_by_num_atoms(
-    num_atoms: int,
-    lattice_constant: float = 3.8,
-):
-    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
-    atoms = bulk("C", "fcc", a=lattice_constant)
-    n_cells = int(np.ceil(np.cbrt(num_atoms)))
-    atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
-    sampled_atoms = atoms[indices]
-    return sampled_atoms
 
 
 @pytest.fixture()
@@ -164,10 +151,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    ray.shutdown()
-    distutils.cleanup()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
+    distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -246,10 +230,7 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    ray.shutdown()
-    distutils.cleanup()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
+    distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -489,7 +470,7 @@ def test_merge_mole_composition_check():
 
     with pytest.raises(
         AssertionError,
-        match="Cannot run on merged model on system. Relative compositions seem different",
+        match="Compositions differ from merged model",
     ):
         _ = atoms_al.get_potential_energy()
 
@@ -507,10 +488,13 @@ def test_merge_mole_vs_non_merged_consistency():
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
 
     atoms_merged = atoms.copy()
+    atoms_non_merged = atoms.copy()
     atoms_merged.calc = calc_merged
     energy_merged = atoms_merged.get_potential_energy()
     forces_merged = atoms_merged.get_forces()
     stress_merged = atoms_merged.get_stress(voigt=False)
+
+    distutils.cleanup_gp_ray()  # Ensure clean state before next test
 
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
@@ -519,7 +503,6 @@ def test_merge_mole_vs_non_merged_consistency():
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
 
-    atoms_non_merged = atoms.copy()
     atoms_non_merged.calc = calc_non_merged
     energy_non_merged = atoms_non_merged.get_potential_energy()
     forces_non_merged = atoms_non_merged.get_forces()
@@ -581,7 +564,6 @@ def test_merge_mole_supercell_energy_forces_consistency():
 def batch_server_handle(uma_predict_unit):
     """Set up a batch server for testing."""
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-    import ray
     from ray import serve
 
     from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
@@ -634,6 +616,7 @@ def test_batch_server_predict_unit_with_calculator(
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
+        predict_unit=uma_predict_unit,
     )
 
     atoms = bulk("Cu")
@@ -668,7 +651,9 @@ def test_batch_server_predict_unit_with_calculator(
 
 
 @pytest.mark.gpu()
-def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
+def test_batch_server_predict_unit_multiple_systems(
+    batch_server_handle, uma_predict_unit
+):
     """Test BatchServerPredictUnit with multiple concurrent requests."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -676,6 +661,7 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
+        predict_unit=uma_predict_unit,
     )
 
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
@@ -699,3 +685,177 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
         assert "stress" in preds
         assert preds["energy"].shape == (1,)
         assert preds["forces"].shape == (len(atoms_list[i]), 3)
+
+
+# this should pass for multi-gpu as well when run locally
+@pytest.mark.parametrize("workers", [0, 2])
+@pytest.mark.parametrize("ensemble", ["nvt", "npt"])
+@pytest.mark.parametrize("device", ["cpu"])
+def test_merge_mole_md_consistency(workers, ensemble, device):
+    """Test merge_mole vs no-merge consistency over MD trajectory.
+
+    Runs 3 trials:
+    A) no merge
+    B) no merge again (baseline for numerical noise)
+    C) merge
+
+    Compares the relative drift of A-C against baseline A-B to ensure
+    merge_mole doesn't introduce additional numerical drift beyond
+    the inherent noise between identical runs.
+    """
+    from ase import units
+    from ase.md.langevin import Langevin
+    from ase.md.nptberendsen import NPTBerendsen
+    from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+
+    # Simple system
+    atoms_template = bulk("Cu", "fcc", a=3.6)
+    atoms_template = atoms_template.repeat((2, 2, 2))
+
+    md_steps = 5
+    timestep = 1.0 * units.fs
+    initial_temp_K = 300.0
+    pressure = 1.01325 * units.bar  # 1 atm
+    taut = 100 * units.fs  # Thermostat coupling time
+    taup = 500 * units.fs  # Barostat coupling time
+    compressibility = 4.57e-5 / units.bar  # Water-like compressibility
+
+    # Shared inference settings (except merge_mole)
+    base_settings = dict(
+        tf32=True,
+        activation_checkpointing=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+
+    def run_md_trial(atoms, calc, seed, steps):
+        """Run MD and collect energy/forces/stress at each step."""
+        atoms = atoms.copy()
+        atoms.calc = calc
+
+        seed_everywhere(seed)
+        MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temp_K)
+
+        if ensemble == "npt":
+            dyn = NPTBerendsen(
+                atoms,
+                timestep=timestep,
+                temperature_K=initial_temp_K,
+                pressure_au=pressure,
+                taut=taut,
+                taup=taup,
+                compressibility_au=compressibility,
+            )
+        else:  # nvt
+            dyn = Langevin(
+                atoms,
+                timestep=timestep,
+                temperature_K=initial_temp_K,
+                friction=0.01 / units.fs,
+            )
+
+        energies = []
+        forces_list = []
+        stresses = []
+
+        # Collect initial state
+        energies.append(atoms.get_potential_energy())
+        forces_list.append(atoms.get_forces().copy())
+        stresses.append(atoms.get_stress(voigt=False).copy())
+
+        for _ in range(steps):
+            dyn.run(1)
+            energies.append(atoms.get_potential_energy())
+            forces_list.append(atoms.get_forces().copy())
+            stresses.append(atoms.get_stress(voigt=False).copy())
+
+        return {
+            "energies": np.array(energies),
+            "forces": np.array(forces_list),
+            "stresses": np.array(stresses),
+        }
+
+    # Trial A: no merge
+    settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
+    predict_unit_A = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device=device,
+        inference_settings=settings_no_merge,
+        workers=workers,
+    )
+    calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
+    results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
+    distutils.cleanup_gp_ray()
+
+    # Trial B: no merge again (baseline for numerical noise)
+    predict_unit_B = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device=device,
+        inference_settings=settings_no_merge,
+        workers=workers,
+    )
+    calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
+    results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
+    distutils.cleanup_gp_ray()
+
+    # Trial C: merge
+    settings_merge = InferenceSettings(merge_mole=True, **base_settings)
+    predict_unit_C = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device=device, inference_settings=settings_merge, workers=workers
+    )
+    calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
+    results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
+    distutils.cleanup_gp_ray()
+
+    # Compute drifts
+    # Energy drift
+    energy_drift_AB = np.abs(results_A["energies"] - results_B["energies"])
+    energy_drift_AC = np.abs(results_A["energies"] - results_C["energies"])
+
+    # Forces drift (mean absolute difference across all atoms and steps)
+    forces_drift_AB = np.abs(results_A["forces"] - results_B["forces"])
+    forces_drift_AC = np.abs(results_A["forces"] - results_C["forces"])
+
+    # Stress drift
+    stress_drift_AB = np.abs(results_A["stresses"] - results_B["stresses"])
+    stress_drift_AC = np.abs(results_A["stresses"] - results_C["stresses"])
+
+    # Log the drifts for debugging
+    logging.info(f"Energy drift A-B (max): {energy_drift_AB.max():.2e}")
+    logging.info(f"Energy drift A-C (max): {energy_drift_AC.max():.2e}")
+    logging.info(f"Forces drift A-B (max): {forces_drift_AB.max():.2e}")
+    logging.info(f"Forces drift A-C (max): {forces_drift_AC.max():.2e}")
+    logging.info(f"Stress drift A-B (max): {stress_drift_AB.max():.2e}")
+    logging.info(f"Stress drift A-C (max): {stress_drift_AC.max():.2e}")
+
+    # The drift between A-C should be comparable to the baseline drift A-B
+    # Allow some tolerance factor (e.g., 10x) for merge_mole overhead
+    tolerance_factor = 10.0
+
+    # For energy: max drift A-C should be within tolerance of max drift A-B
+    baseline_energy_drift = max(energy_drift_AB.max(), 1e-10)  # avoid division by zero
+    npt.assert_array_less(
+        energy_drift_AC.max(),
+        tolerance_factor * baseline_energy_drift + 1e-6,
+        err_msg=f"Energy drift A-C ({energy_drift_AC.max():.2e}) exceeds "
+        f"{tolerance_factor}x baseline A-B ({baseline_energy_drift:.2e})",
+    )
+
+    # For forces: max drift A-C should be within tolerance of max drift A-B
+    baseline_forces_drift = max(forces_drift_AB.max(), 1e-10)
+    npt.assert_array_less(
+        forces_drift_AC.max(),
+        tolerance_factor * baseline_forces_drift + 1e-6,
+        err_msg=f"Forces drift A-C ({forces_drift_AC.max():.2e}) exceeds "
+        f"{tolerance_factor}x baseline A-B ({baseline_forces_drift:.2e})",
+    )
+
+    # For stress: max drift A-C should be within tolerance of max drift A-B
+    baseline_stress_drift = max(stress_drift_AB.max(), 1e-10)
+    npt.assert_array_less(
+        stress_drift_AC.max(),
+        tolerance_factor * baseline_stress_drift + 1e-6,
+        err_msg=f"Stress drift A-C ({stress_drift_AC.max():.2e}) exceeds "
+        f"{tolerance_factor}x baseline A-B ({baseline_stress_drift:.2e})",
+    )
