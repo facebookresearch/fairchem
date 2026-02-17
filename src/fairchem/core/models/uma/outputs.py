@@ -15,12 +15,12 @@ from fairchem.core.common import gp_utils
 
 if TYPE_CHECKING:
     from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.models.uma.escn_md import RegressConfig
+    from fairchem.core.models.uma.escn_md import GradRegressConfig
 
 
 def get_displacement_and_cell(
     data: AtomicData,
-    regress_config: RegressConfig,
+    regress_config: GradRegressConfig,
 ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
     """
     Prepare displacement tensor and cell for gradient-based stress computation.
