@@ -8,12 +8,10 @@ file in the root directory of this source tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+
+import torch  # noqa: TCH002 - needed at runtime for dataclass field type resolution
 
 from fairchem.core.common.utils import StrEnum
-
-if TYPE_CHECKING:
-    import torch
 
 
 class UMATask(StrEnum):
