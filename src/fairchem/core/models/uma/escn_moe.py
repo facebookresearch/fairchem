@@ -324,6 +324,14 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         ]
         return self
 
+    def prepare_for_inference(self, data, settings):
+        """
+        Prepare head for inference. Handles MOLE merging if needed.
+        """
+        if settings.merge_mole:
+            return self.merge_MOLE_model(data)
+        return self
+
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         data_batch_full = data.batch_full.cpu()
