@@ -142,7 +142,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     include_self=np.isclose(self.model_version, 1.0).item(),
                 )
                 embeddings.append(composition.unsqueeze(0))
-            embeddings.append(csd_mixed_emb[None].to(torch.float32))
+            embeddings.append(csd_mixed_emb[None])
 
             expert_mixing_coefficients_before_norm = self.routing_mlp(
                 torch.vstack(embeddings)
