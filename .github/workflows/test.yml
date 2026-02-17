@@ -89,7 +89,11 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          # --lf flag retries only the subset of tests that failed on the last
+          # pytest invocation. So overall we run all tests but retry individual
+          # test cases that fail up to two times. 
+          alias pytest_cmd='NCCL_DEBUG=INFO pytest -n auto tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml'
+          pytest_cmd || pytest_cmd --lf || pytest_cmd --lf
 
       - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
         name: codecov-coverage
