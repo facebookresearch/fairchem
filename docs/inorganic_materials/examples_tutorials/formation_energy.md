@@ -11,8 +11,11 @@ kernelspec:
   name: python3
 ---
 
-Formation energies
-------------------
+# Formation Energy
+
+:::{tip} What You Will Learn
+Calculate formation energies for inorganic materials using UMA with Materials Project-compatible corrections.
+:::
 
 We're going to start simple here - let's run a local relaxation (optimize the unit cell and positions) using a pre-trained UMA model to compute formation energies for inorganic materials.
 
@@ -55,14 +58,18 @@ import pprint
 from ase.build import bulk
 from ase.optimize import FIRE
 from quacc.recipes.mlp.core import relax_job
+from quacc import flow
+from fairchem.core.calculate import FAIRChemCalculator, FormationEnergyCalculator
 
-from fairchem.core.calculate.ase_calculator import FAIRChemCalculator, FormationEnergyCalculator
-
-# Make an Atoms object of a bulk MgO structure
-atoms = bulk("MgO", "rocksalt", a=4.213)
+# Make an Atoms object of a bulk Cu structure
+atoms = bulk("Cu")
 
 # Run a structure relaxation
-result = relax_job(
+@flow
+def relax_flow(*args, **kwargs):
+  return relax_job(*args, **kwargs)
+
+result = relax_flow(
     atoms,
     method="fairchem",
     name_or_path="uma-s-1p1",
@@ -89,7 +96,7 @@ form_energy = atoms.get_potential_energy()
 pprint.pprint(f"Total energy: {result['results']['energy']} eV \n Formation energy {form_energy} eV")
 ```
 
-Compare the results to the value of [-3.038 eV/atom reported](https://next-gen.materialsproject.org/materials/mp-1265?chemsys=Mg-O#thermodynamic_stability) in the the Materials Project!
+Compare the results to the value of [-3.038 eV/atom reported](https://next-gen.materialsproject.org/materials/mp-1265?chemsys=Mg-O#thermodynamic_stability) in the Materials Project!
 *Note that we expect differences due to the different DFT settings used to calculate the OMat24 training data.*
 
 Congratulations; you ran your first relaxation and predicted the formation energy of MgO using UMA and `quacc`!

@@ -7,12 +7,15 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -49,11 +52,22 @@ from fairchem.core.models.uma.outputs import (
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
+from fairchem.core.units.mlip_unit.api.inference import (
+    CHARGE_RANGE,
+    DEFAULT_CHARGE,
+    DEFAULT_SPIN,
+    DEFAULT_SPIN_OMOL,
+    SPIN_RANGE,
+    UMATask,
+)
 
 from .escn_md_block import eSCNMD_Block
 
 if TYPE_CHECKING:
+    from ase import Atoms
+
     from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
@@ -94,6 +108,63 @@ def add_n_empty_edges(
     graph_dict["edge_distance"] = torch.cat(
         (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
     )
+
+
+def get_balanced_attribute(
+    emb: torch.Tensor,
+    target_sum: torch.Tensor,
+    natoms: torch.Tensor,
+    batch: torch.Tensor,
+    balance_attribute_offset: float = 0,
+    balance_channel_idx: int = 0,
+) -> torch.Tensor:
+    """Balance per-atom attributes (charge/spin) to sum to system target.
+
+    Args:
+        emb: Node embeddings of shape [num_atoms, sph_features, channels]
+        target_sum: Target sum per system of shape [num_systems]
+        natoms: Number of atoms per system of shape [num_systems]
+        batch: Batch indices mapping atoms to systems of shape [num_atoms]
+        balance_attribute_offset: Offset to subtract from target (e.g., 1 for spin)
+        balance_channel_idx: Which channel index to balance
+
+    Returns:
+        Modified embeddings with the specified channel balanced to sum to target.
+
+    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
+    which provides correct gradients in both forward and backward passes.
+    """
+    out_emb = emb.clone()
+
+    charge_unbalanced = emb[:, 0, balance_channel_idx]
+
+    system_scalars_part = torch.zeros(
+        len(natoms),
+        device=emb.device,
+        dtype=emb.dtype,
+    )
+
+    system_scalars_part.index_add_(0, batch, charge_unbalanced.view(-1))
+
+    # Reduce partial sums across all graph parallel ranks
+    # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
+    # ensuring correct gradient computation when atoms are split across ranks.
+    if gp_utils.initialized():
+        system_scalar = all_reduce_with_grad(
+            system_scalars_part, group=gp_utils.get_gp_group()
+        )
+    else:
+        system_scalar = system_scalars_part
+
+    correction = (system_scalar - (target_sum - balance_attribute_offset)) / natoms
+
+    balanced_node_scalar = charge_unbalanced - correction[batch]
+
+    out_emb[:, 0, balance_channel_idx] = (
+        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
+    )
+
+    return out_emb
 
 
 @torch.compiler.disable
@@ -152,6 +223,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
+        charge_balanced_channels: list[int] | None = None,
+        spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
@@ -170,6 +243,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # energy conservation related
         self.regress_config = GradRegressConfig(
             direct_forces=direct_forces, forces=regress_forces, stress=regress_stress
+        )
+
+        # which channels to balance
+        self.charge_balanced_channels = (
+            charge_balanced_channels if charge_balanced_channels is not None else []
+        )
+        self.spin_balanced_channels = (
+            spin_balanced_channels if spin_balanced_channels is not None else []
         )
 
         # NOTE: graph construction related, to remove, except for cutoff
@@ -332,6 +413,33 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     @property
     def regress_stress(self) -> bool:
         return self.regress_config.stress
+
+    def balance_channels(
+        self,
+        x_message_prime: torch.Tensor,
+        charge: torch.Tensor,
+        spin: torch.Tensor,
+        natoms: torch.Tensor,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
+        for channel_idx in self.charge_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=charge,
+                natoms=natoms,
+                batch=batch,
+                balance_channel_idx=channel_idx,
+            )
+        for channel_idx in self.spin_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=spin,
+                natoms=natoms,
+                batch=batch,
+                balance_attribute_offset=1,
+                balance_channel_idx=channel_idx,
+            )
+        return x_message_prime
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -570,6 +678,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
                 )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    charge=data_dict["charge"],
+                    spin=data_dict["spin"],
+                    natoms=data_dict["natoms"],
+                    batch=data_dict["batch"],
+                )
 
         # Final layer norm
         x_message = self.norm(x_message)
@@ -613,6 +729,191 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     no_wd_list.append(global_parameter_name)
 
         return set(no_wd_list)
+
+    @classmethod
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """Build backbone config overrides from inference settings."""
+        overrides = {}
+
+        # Always disable PBC wrapping for inference
+        overrides["always_use_pbc"] = False
+
+        if settings.activation_checkpointing is not None:
+            overrides["activation_checkpointing"] = settings.activation_checkpointing
+        if settings.edge_chunk_size is not None:
+            overrides["edge_chunk_size"] = settings.edge_chunk_size
+        if settings.external_graph_gen is not None:
+            overrides["otf_graph"] = not settings.external_graph_gen
+        if settings.internal_graph_gen_version is not None:
+            overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+
+        return overrides
+
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
+        """
+        Validate that task datasets are compatible with this backbone.
+        """
+        assert set(dataset_to_tasks.keys()).issubset(
+            set(self.dataset_list)
+        ), "Datasets in tasks is not a strict subset of datasets in backbone."
+
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
+        """
+        Prepare model for inference. Called once on first prediction.
+
+        For UMA: handles MOLE merging if settings.merge_mole is True.
+        Stores initial composition for consistency checking.
+
+        Returns:
+            self or a new merged backbone if MOLE merging was performed. We return
+            because type could have changed due to merging MOLE.
+        """
+        self._inference_settings = settings
+        self._merged_composition = None
+
+        if settings.merge_mole:
+            assert (
+                data.natoms.numel() == 1
+            ), "Cannot merge model with multiple systems in batch"
+            # Store composition we merged on
+            self._merged_composition = self._get_composition_info(data)
+            # Merge the model - returns new merged backbone
+            new_backbone = self.merge_MOLE_model(data)
+            # Transfer inference state to new backbone
+            new_backbone._inference_settings = settings
+            new_backbone._merged_composition = self._merged_composition
+            return new_backbone
+
+        return self
+
+    def on_predict_check(self, data: AtomicData) -> None:
+        """
+        Called before each prediction. UMA checks MOLE consistency here.
+        """
+        if not getattr(self, "_inference_settings", None):
+            return  # Not initialized yet
+
+        if self._inference_settings.merge_mole and self._merged_composition is not None:
+            assert (
+                data.natoms.numel() == 1
+            ), "Cannot run merged model on batch with multiple systems"
+            current = self._get_composition_info(data)
+            self._assert_composition_matches(current)
+
+    def _get_composition_info(self, data) -> tuple:
+        """
+        Get composition info for MOLE consistency checking.
+        """
+        composition = data.atomic_numbers.new_zeros(
+            self.max_num_elements, dtype=torch.int
+        ).index_add(
+            0,
+            data.atomic_numbers.to(torch.int),
+            data.atomic_numbers.new_ones(len(data.atomic_numbers), dtype=torch.int),
+        )
+        return (
+            composition,
+            getattr(data, "charge", None),
+            getattr(data, "spin", None),
+            getattr(data, "dataset", [None]),
+        )
+
+    def _assert_composition_matches(self, current: tuple) -> None:
+        """
+        Assert current composition matches what model was merged on.
+        """
+        merged = self._merged_composition
+        # Move current tensors to same device as merged (CPU) for comparison
+        device = merged[0].device
+
+        merged_norm = merged[0].float() / merged[0].sum()
+        curr_norm = current[0].float().to(device) / current[0].sum().to(device)
+
+        assert merged_norm.isclose(
+            curr_norm, rtol=1e-5
+        ).all(), "Compositions differ from merged model"
+
+        # Charge and spin are tensors that need device alignment
+        merged_charge = merged[1]
+        curr_charge = (
+            current[1].to(device)
+            if isinstance(current[1], torch.Tensor)
+            else current[1]
+        )
+        assert (
+            (merged_charge == curr_charge).all()
+            if isinstance(merged_charge, torch.Tensor)
+            else merged_charge == curr_charge
+        ), f"Charge differs: {merged_charge} vs {current[1]}"
+
+        merged_spin = merged[2]
+        curr_spin = (
+            current[2].to(device)
+            if isinstance(current[2], torch.Tensor)
+            else current[2]
+        )
+        assert (
+            (merged_spin == curr_spin).all()
+            if isinstance(merged_spin, torch.Tensor)
+            else merged_spin == curr_spin
+        ), f"Spin differs: {merged_spin} vs {current[2]}"
+
+        assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        UMA-specific validation: handle charge/spin for OMOL task.
+
+        Sets default values for charge and spin in atoms.info and validates
+        they are within acceptable ranges.
+        """
+        # Set charge defaults
+        if "charge" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                logging.warning(
+                    "task_name='omol' detected, but charge is not set in atoms.info. "
+                    "Defaulting to charge=0. Ensure charge is an integer representing "
+                    "the total charge on the system and is within the range -100 to 100."
+                )
+            atoms.info["charge"] = DEFAULT_CHARGE
+
+        # Set spin defaults (OMOL uses spin=1, others use spin=0)
+        if "spin" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                atoms.info["spin"] = DEFAULT_SPIN_OMOL
+                logging.warning(
+                    "task_name='omol' detected, but spin multiplicity is not set in "
+                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
+                    "representing the spin multiplicity from 0 to 100."
+                )
+            else:
+                atoms.info["spin"] = DEFAULT_SPIN
+
+        # Validate charge range
+        charge = atoms.info["charge"]
+        if not isinstance(charge, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for charge: {type(charge)}. "
+                "Charge must be an integer representing the total charge on the system."
+            )
+        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for charge: {charge}. "
+                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
+            )
+
+        # Validate spin range
+        spin = atoms.info["spin"]
+        if not isinstance(spin, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for spin: {type(spin)}. "
+                "Spin must be an integer representing the spin multiplicity."
+            )
+        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for spin: {spin}. "
+                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+            )
 
 
 class MLP_Energy_Head(nn.Module, HeadInterface):
