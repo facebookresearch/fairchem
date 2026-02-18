@@ -127,6 +127,7 @@ class Edgewise(torch.nn.Module):
         edge_envelope,
         total_atoms_across_gp_ranks,
         node_offset: int = 0,
+        precomputed_radial: torch.Tensor | None = None,
     ):
         # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
@@ -147,6 +148,7 @@ class Edgewise(torch.nn.Module):
                 wigner_and_M_mapping_inv,
                 edge_envelope,
                 node_offset,
+                precomputed_radial=precomputed_radial,
             )
         edge_index_partitions = edge_index.split(
             self.activation_checkpoint_chunk_size, dim=1
@@ -204,6 +206,7 @@ class Edgewise(torch.nn.Module):
         edge_envelope,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
+        precomputed_radial: torch.Tensor | None = None,
     ):
         # here we need to update the ac_start_idx of the mole layers under here for this chunking to
         # work properly with MoLE together
@@ -393,6 +396,7 @@ class eSCNMD_Block(torch.nn.Module):
         total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
+        precomputed_radial: torch.Tensor | None = None,
     ):
         x_res = x
         x = self.norm_1(x)
@@ -411,6 +415,7 @@ class eSCNMD_Block(torch.nn.Module):
                 edge_envelope,
                 total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
                 node_offset=node_offset,
+                precomputed_radial=precomputed_radial,
             )
             x = x + x_res
 

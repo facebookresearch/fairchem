@@ -42,6 +42,7 @@ from fairchem.core.models.uma.nn.layer_norm import (
 from fairchem.core.models.uma.nn.mole_utils import MOLEInterface
 from fairchem.core.models.uma.nn.radial import GaussianSmearing, PolynomialEnvelope
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
+from fairchem.core.models.uma.nn.unified_radial import create_unified_radial_mlp
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
 from fairchem.core.units.mlip_unit.api.inference import (
     CHARGE_RANGE,
@@ -62,6 +63,22 @@ if TYPE_CHECKING:
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+# Execution modes that use the unified radial MLP for batched computation
+_FAST_MODES = {"fast_triton", "fast_cpp", "fast_pytorch"}
+
+
+def is_fast_mode(execution_mode: str) -> bool:
+    """
+    Check if the execution mode is a fast mode that uses unified radial.
+
+    Args:
+        execution_mode: The execution mode string.
+
+    Returns:
+        True if the mode uses unified radial MLP batching.
+    """
+    return execution_mode in _FAST_MODES
 
 
 def add_n_empty_edges(
@@ -206,6 +223,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
+        # UMA-S execution mode:
+        #   "baseline" - Reference PyTorch (SO2_Convolution, M-mapped Wigner)
+        #   "fast_triton" - Triton GPU kernels (future)
+        #   "fast_cpp" - C++ CPU kernels (future)
+        #   "fast_pytorch" - Optimized PyTorch (future)
+        execution_mode: str = "baseline",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -246,6 +269,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+
+        # UMA-S execution mode
+        self.execution_mode = execution_mode
+
+        # Unified radial MLP (lazy initialization after MOLE merge)
+        self._unified_radial_mlp = None
+        self._unified_radial_initialized = False
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -408,6 +438,32 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 balance_channel_idx=channel_idx,
             )
         return x_message_prime
+
+    def _initialize_unified_radial_mlp(self) -> None:
+        """
+        Initialize the unified radial MLP from all blocks' so2_conv_1
+        rad_func modules.
+
+        This is called lazily on first forward to ensure it happens
+        after MOLE merge.
+        """
+        if self._unified_radial_initialized:
+            return
+
+        if not is_fast_mode(self.execution_mode):
+            self._unified_radial_initialized = True
+            return
+
+        # Collect all rad_func modules from the blocks
+        rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in self.blocks]
+
+        # Create the unified radial MLP
+        self._unified_radial_mlp = create_unified_radial_mlp(
+            rad_funcs=rad_funcs,
+            backend="einsum",
+        )
+
+        self._unified_radial_initialized = True
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -667,10 +723,25 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         ###############################################################
+        # Precompute ALL radial functions (single block)
+        ###############################################################
+        self._initialize_unified_radial_mlp()
+
+        radial_weights_per_layer = None
+        if is_fast_mode(self.execution_mode) and self._unified_radial_mlp is not None:
+            with record_function("precompute all radial"):
+                radial_weights_per_layer = self._unified_radial_mlp(x_edge)
+
+        ###############################################################
         # Update spherical node embeddings
         ###############################################################
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                precomputed_radial = (
+                    radial_weights_per_layer[i]
+                    if radial_weights_per_layer is not None
+                    else None
+                )
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
@@ -684,6 +755,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                    precomputed_radial=precomputed_radial,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(
