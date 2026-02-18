@@ -23,12 +23,18 @@ if TYPE_CHECKING:
 
 class SO2_m_Conv(torch.nn.Module):
     """
-    SO(2) Conv: Perform an SO(2) convolution on features corresponding to +- m
+    SO(2) Conv with block-diagonal GEMM for m > 0.
+
+    Uses a single larger GEMM instead of batched GEMM:
+        [x_real, x_imag] @ [[W1, -W2], [W2, W1]]^T -> [out_real, out_imag]
+
+    This can be 1.3-1.5x faster than the standard batched approach
+    due to better tensor core utilization.
 
     Args:
         m (int):                    Order of the spherical harmonic coefficients
         sphere_channels (int):      Number of spherical channels
-        m_output_channels (int):    Number of output channels used during the SO(2) conv
+        m_output_channels (int):    Number of output channels
         lmax (int):                 degrees (l)
         mmax (int):                 orders (m)
     """
@@ -56,6 +62,9 @@ class SO2_m_Conv(torch.nn.Module):
         self.out_channels_half = self.m_output_channels * (
             num_channels // self.sphere_channels
         )
+        self.in_size = num_channels
+        self.num_l = self.out_channels_half // self.m_output_channels
+
         self.fc = Linear(
             num_channels,
             2 * self.out_channels_half,
@@ -63,17 +72,42 @@ class SO2_m_Conv(torch.nn.Module):
         )
         self.fc.weight.data.mul_(1 / math.sqrt(2))
 
-    def forward(self, x_m: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        x_m = self.fc(x_m)
-        x_r_0, x_i_0, x_r_1, x_i_1 = x_m.reshape(
-            x_m.shape[0], -1, self.out_channels_half
-        ).split(1, dim=1)
-        x_m_r = x_r_0 - x_i_1  # x_r[:, 0] - x_i[:, 1]
-        x_m_i = x_r_1 + x_i_0  # x_r[:, 1] + x_i[:, 0]
-        return (
-            x_m_r.view(x_m.shape[0], -1, self.m_output_channels),
-            x_m_i.view(x_m.shape[0], -1, self.m_output_channels),
-        )
+        # Cached block matrix, built lazily on first forward
+        self.register_buffer("_w_block", None, persistent=False)
+
+    @torch.no_grad()
+    def _build_w_block(self) -> None:
+        """
+        Build and cache the block matrix from fc weights.
+
+        Converts from weight layout W1, W2 = fc.weight[:out_half],
+        fc.weight[out_half:] to block matrix [[W1, -W2], [W2, W1]].
+        """
+        W1, W2 = self.fc.weight.split(self.out_channels_half, dim=0)
+        self._w_block = torch.cat(
+            [
+                torch.cat([W1, -W2], dim=1),
+                torch.cat([W2, W1], dim=1),
+            ],
+            dim=0,
+        ).contiguous()
+
+    def forward(self, x_m: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass using block-diagonal GEMM.
+
+        Args:
+            x_m: [E, 2, in_size] where dim 1 is [real, imag]
+
+        Returns:
+            out: [E, 2*num_l, m_output_channels] with real and imag
+                concatenated in dim 1
+        """
+        if self._w_block is None:
+            self._build_w_block()
+
+        out_cat = x_m.flatten(1) @ self._w_block.T
+        return out_cat.view(-1, 2 * self.num_l, self.m_output_channels)
 
 
 class SO2_Convolution(torch.nn.Module):
@@ -188,7 +222,7 @@ class SO2_Convolution(torch.nn.Module):
             if self.rad_func is not None:
                 x_m = x_m * x_edge_by_m[m].unsqueeze(1)
             x_m = self.so2_m_conv[m - 1](x_m)
-            out.extend(x_m)
+            out.append(x_m)
 
         out = torch.cat(out, dim=1)
 
