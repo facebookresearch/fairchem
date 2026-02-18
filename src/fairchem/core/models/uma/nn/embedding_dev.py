@@ -8,12 +8,15 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 import torch.nn as nn
 
 from .radial import RadialMLP
+
+if TYPE_CHECKING:
+    from .execution_backends import BaseExecutionBackend
 
 
 class EdgeDegreeEmbedding(torch.nn.Module):
@@ -34,6 +37,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         cutoff (float):             Cutoff distance for the radial function
 
         mappingReduced (CoefficientMapping): Class to convert l and m indices once node embedding is rotated
+        backend (BaseExecutionBackend): Execution backend for edge_degree_scatter
     """
 
     def __init__(
@@ -47,6 +51,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         # Enables activation checkpointing in size of
         # activation_checkpoint_chunk_size edge blocks
         activation_checkpoint_chunk_size: int | None,
+        backend: BaseExecutionBackend,
     ):
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -54,6 +59,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         self.mmax = mmax
         self.mappingReduced = mappingReduced
         self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
+        self.backend = backend
 
         self.m_0_num_coefficients: int = self.mappingReduced.m_size[0]
         self.m_all_num_coefficents: int = len(self.mappingReduced.l_harmonic)
@@ -73,27 +79,27 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x,
         x_edge,
         edge_index,
-        wigner_and_M_mapping_inv,
-        edge_envelope,
+        wigner_inv_for_edge_degree,  # [E, 9, 3] or [E, 9, 9] with envelope pre-fused
         node_offset=0,
+        precomputed_radial=None,  # Optional: precomputed rad_func output
     ):
-        x_edge_m_0 = self.rad_func(x_edge)
-        x_edge_m_0 = x_edge_m_0.reshape(
-            -1, self.m_0_num_coefficients, self.sphere_channels
+        # Compute radial if not precomputed
+        radial = (
+            precomputed_radial
+            if precomputed_radial is not None
+            else self.rad_func(x_edge)
         )
-        x_edge_embedding = torch.nn.functional.pad(
-            x_edge_m_0,
-            (0, 0, 0, (self.m_all_num_coefficents - self.m_0_num_coefficients)),
-        )
-        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
 
-        x_edge_embedding = x_edge_embedding * edge_envelope
-
-        # TODO is this needed?
-        x_edge_embedding = x_edge_embedding.to(x.dtype)
-
-        return x.index_add(
-            0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
+        # Delegate to backend
+        return self.backend.edge_degree_scatter(
+            x,
+            radial,
+            wigner_inv_for_edge_degree,
+            edge_index,
+            self.m_0_num_coefficients,
+            self.sphere_channels,
+            self.rescale_factor,
+            node_offset,
         )
 
     def forward(
@@ -101,27 +107,24 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x,
         x_edge,
         edge_index,
-        wigner_and_M_mapping_inv,
-        edge_envelope,
+        wigner_inv_for_edge_degree,
         node_offset=0,
+        precomputed_radial=None,  # Optional: precomputed rad_func output
     ):
         if self.activation_checkpoint_chunk_size is None:
             return self.forward_chunk(
                 x,
                 x_edge,
                 edge_index,
-                wigner_and_M_mapping_inv,
-                edge_envelope,
+                wigner_inv_for_edge_degree,
                 node_offset,
+                precomputed_radial,
             )
 
         edge_index_partitions = edge_index.split(
             self.activation_checkpoint_chunk_size, dim=1
         )
-        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        edge_envelope_partitions = edge_envelope.split(
+        wigner_inv_partitions = wigner_inv_for_edge_degree.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -133,7 +136,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 x_edge_partitions[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
-                edge_envelope_partitions[idx],
                 node_offset,
                 use_reentrant=False,
             )
@@ -151,7 +153,11 @@ class ChgSpinEmbedding(nn.Module):
         scale: float = 1.0,
     ) -> None:
         super().__init__()
-        assert embedding_type in ["pos_emb", "lin_emb", "rand_emb"]
+        assert embedding_type in [
+            "pos_emb",
+            "lin_emb",
+            "rand_emb",
+        ]
         self.embedding_type = embedding_type
         assert embedding_target in ["charge", "spin"]
         self.embedding_target = embedding_target
@@ -168,11 +174,13 @@ class ChgSpinEmbedding(nn.Module):
             # dividing by 2 because x_proj multiplies by 2
             if not grad:
                 self.W = nn.Parameter(
-                    torch.randn(embedding_size // 2) * scale, requires_grad=False
+                    torch.randn(embedding_size // 2) * scale,
+                    requires_grad=False,
                 )
             else:
                 self.W = nn.Parameter(
-                    torch.randn(embedding_size // 2) * scale, requires_grad=True
+                    torch.randn(embedding_size // 2) * scale,
+                    requires_grad=True,
                 )
         elif self.embedding_type == "lin_emb":
             self.lin_emb = nn.Linear(in_features=1, out_features=embedding_size)
@@ -186,7 +194,7 @@ class ChgSpinEmbedding(nn.Module):
                     param.requires_grad = False
 
         else:
-            raise ValueError(f"embedding type {self.embedding_type} not implemented")
+            raise ValueError(f"embedding type {self.embedding_type} " "not implemented")
 
     def forward(self, x):
         # null token for spin is 0
@@ -194,10 +202,16 @@ class ChgSpinEmbedding(nn.Module):
         if self.embedding_type == "pos_emb":
             x_proj = x[:, None] * self.W[None, :] * 2 * torch.pi
             if self.embedding_target == "charge":
-                return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+                return torch.cat(
+                    [torch.sin(x_proj), torch.cos(x_proj)],
+                    dim=-1,
+                )
             elif self.embedding_target == "spin":
                 zero_idxs = torch.where(x == 0)[0]
-                emb = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+                emb = torch.cat(
+                    [torch.sin(x_proj), torch.cos(x_proj)],
+                    dim=-1,
+                )
                 # this sets the null spin embedding to zero
                 emb[zero_idxs] = 0
                 return emb
@@ -213,7 +227,7 @@ class ChgSpinEmbedding(nn.Module):
                     dtype=torch.long,
                 )
             )
-        raise ValueError(f"embedding type {self.embedding_type} not implemented")
+        raise ValueError(f"embedding type {self.embedding_type} " "not implemented")
 
 
 class DatasetEmbedding(nn.Module):
@@ -234,7 +248,8 @@ class DatasetEmbedding(nn.Module):
 
         # TODO: this is a hack to accomodate the MPA finetuning
         # emb_for_datasets = [
-        #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
+        #     self.dataset_emb_dict[dataset](emb_idx)
+        #     for dataset in dataset_list
         # ]
         emb_for_datasets = [
             (

@@ -32,6 +32,12 @@ from fairchem.core.models.uma.nn.embedding_dev import (
     DatasetEmbedding,
     EdgeDegreeEmbedding,
 )
+from fairchem.core.models.uma.nn.execution_backends import (
+    EdgeDegreeBackend,
+    ExecutionMode,
+    is_fast_mode,
+    uses_raw_wigner,
+)
 from fairchem.core.models.uma.nn.layer_norm import (
     EquivariantLayerNormArray,
     EquivariantLayerNormArraySphericalHarmonics,
@@ -206,6 +212,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
+        # UMA-S execution mode:
+        #   "baseline" - Reference PyTorch (SO2_Convolution, M-mapped Wigner)
+        #   "fast_triton" - Triton GPU kernels (specialized SO2, raw Wigner)
+        #   "fast_cpp" - C++ CPU kernels (future)
+        #   "fast_pytorch" - Optimized PyTorch (specialized SO2, M-mapped Wigner)
+        execution_mode: str = "baseline",
+        triton_backward_impl: str = "triton",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -246,6 +259,39 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+
+        # UMA-S execution mode
+        self.execution_mode = ExecutionMode(execution_mode)
+        self.triton_backward_impl = triton_backward_impl
+
+        # =================================================================
+        # Execution mode constraints validation (fail early)
+        # =================================================================
+
+        # All fast modes require no activation checkpointing
+        if is_fast_mode(self.execution_mode):
+            assert not activation_checkpointing, (
+                f"{self.execution_mode.value} does not support "
+                "activation checkpointing. "
+                "Please set activation_checkpointing=False."
+            )
+
+        # Modes using raw Wigner (triton, cpp) require lmax=mmax=2
+        if uses_raw_wigner(self.execution_mode):
+            assert lmax == 2, (
+                f"{self.execution_mode.value} requires lmax=2, " f"got lmax={lmax}"
+            )
+            assert mmax == 2, (
+                f"{self.execution_mode.value} requires mmax=2, " f"got mmax={mmax}"
+            )
+
+        # Triton-specific: sphere_channels must be divisible by 128
+        if self.execution_mode == ExecutionMode.FAST_TRITON:
+            assert sphere_channels % 128 == 0, (
+                "fast_triton requires sphere_channels to be "
+                "divisible by 128, "
+                f"got sphere_channels={sphere_channels}"
+            )
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -342,6 +388,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            backend=EdgeDegreeBackend(),
         )
 
         self.envelope = PolynomialEnvelope(exponent=5)
@@ -368,6 +415,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                # UMA-S execution mode
+                execution_mode=self.execution_mode.value,
+                triton_backward_impl=self.triton_backward_impl,
             )
             self.blocks.append(block)
 
@@ -417,8 +467,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             for l in range(self.lmax + 1)
         ]
 
+        # Number of m=0 coefficients (3 for lmax=2: one per L=0,1,2)
+        m_0_num_coeffs = self.mappingReduced.m_size[0]
+
         with record_function("obtain rotmat wigner original"):
             euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+
+            # Standard path: full [E, 9, 9] format
             wigner = eulers_to_wigner(
                 euler_angles,
                 0,
@@ -432,13 +487,38 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             wigner = wigner.index_select(1, self.coefficient_index)
             wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
 
+        # Fast modes that use raw Wigner require lmax=mmax=2
+        # (validated in __init__)
+        if uses_raw_wigner(self.execution_mode):
+            # Return raw Wigner matrices
+            # (Triton/C++ handles L<->M internally)
+            to_m_m0 = self.mappingReduced.to_m[:m_0_num_coeffs, :].to(wigner_inv.dtype)
+            wigner_inv_for_edge_degree = torch.einsum(
+                "njk,mk->njm", wigner_inv, to_m_m0
+            )
+            return (
+                wigner,
+                wigner_inv,
+                wigner_inv_for_edge_degree,
+            )
+
+        # Baseline/fast_pytorch path: apply M-mapping to Wigner
+        # matrices
         wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
+            "mk,nkj->nmj",
+            self.mappingReduced.to_m.to(wigner.dtype),
+            wigner,
         )
         wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
+            "njk,mk->njm",
+            wigner_inv,
+            self.mappingReduced.to_m.to(wigner_inv.dtype),
         )
-        return wigner_and_M_mapping, wigner_and_M_mapping_inv
+        return (
+            wigner_and_M_mapping,
+            wigner_and_M_mapping_inv,
+            wigner_and_M_mapping_inv,
+        )
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -607,10 +687,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
-                self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec"],
-                )
+            (
+                wigner_and_M_mapping,
+                wigner_and_M_mapping_inv,
+                wigner_inv_for_edge_degree,
+            ) = self._get_rotmat_and_wigner(
+                graph_dict["edge_distance_vec"],
             )
 
         ###############################################################
@@ -641,7 +723,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
-        # edge degree embedding
+        # edge embedding features
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff
             edge_envelope = self.envelope(dist_scaled).reshape(-1, 1, 1)
@@ -657,14 +739,26 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_edge = torch.cat(
                 (edge_distance_embedding, source_embedding, target_embedding), dim=1
             )
+
+            # Always fuse envelope into wigner (saves memory traffic)
+            wigner_inv_for_edge_degree = wigner_inv_for_edge_degree * edge_envelope
+
+        ###############################################################
+        # Edge degree embedding
+        ###############################################################
+        with record_function("edge degree scatter"):
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv,
-                edge_envelope,
+                wigner_inv_for_edge_degree,
                 data_dict["gp_node_offset"],
             )
+
+        ###############################################################
+        # Fuse envelope into wigner_inv (saves memory traffic)
+        ###############################################################
+        wigner_and_M_mapping_inv = wigner_and_M_mapping_inv * edge_envelope
 
         ###############################################################
         # Update spherical node embeddings
@@ -678,7 +772,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
-                    edge_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
