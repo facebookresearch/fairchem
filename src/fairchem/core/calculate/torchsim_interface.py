@@ -7,24 +7,17 @@ energies, forces, and stresses of atomistic systems.
 from __future__ import annotations
 
 import os
-import traceback
 import typing
-import warnings
 from pathlib import Path
-from typing import Any
 
 import torch
-
+import torch_sim as ts
+from torch_sim.models.interface import ModelInterface
 
 from fairchem.core import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import UMATask
 from fairchem.core.common.utils import setup_imports, setup_logging
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
-
-import torch_sim as ts
-from torch_sim.models.interface import ModelInterface
-
-
 
 if typing.TYPE_CHECKING:
     from collections.abc import Callable

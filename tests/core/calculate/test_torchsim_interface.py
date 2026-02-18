@@ -4,29 +4,12 @@ Tests the FairChemModel wrapper that provides a torch-sim compatible interface
 for FairChem models to compute energies, forces, and stresses.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 import torch
-
-try:
-    import torch_sim as ts
-    from torch_sim.models.interface import validate_model_outputs
-
-    TORCH_SIM_AVAILABLE = True
-except ImportError:
-    TORCH_SIM_AVAILABLE = False
-
-    def validate_model_outputs(*args, **kwargs):
-        return None
-
-
-if not TORCH_SIM_AVAILABLE:
-    pytest.skip(
-        "torch_sim not installed. Install torch-sim-atomistic separately if needed.",
-        allow_module_level=True,
-    )
-
-from collections.abc import Callable
-
 from ase.build import bulk, fcc100, molecule
 from huggingface_hub.utils._auth import get_token
 
@@ -35,17 +18,28 @@ from fairchem.core.calculate.pretrained_mlip import (
 )
 from fairchem.core.calculate.torchsim_interface import FairChemModel
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+pytest.importorskip(
+    "torch_sim",
+    reason="torch_sim not installed. Install torch-sim-atomistic separately if needed.",
+)
+
+import torch_sim as ts  # noqa: E402
+from torch_sim.models.interface import validate_model_outputs  # noqa: E402
+
 DTYPE = torch.float32
 DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 
-@pytest.fixture
+@pytest.fixture()
 def uma_model_omat() -> FairChemModel:
     """UMA model for materials (periodic boundary conditions)."""
     return FairChemModel(model="uma-s-1", task_name="omat", device=DEVICE)
 
 
-@pytest.fixture
+@pytest.fixture()
 def uma_model_omol() -> FairChemModel:
     """UMA model for molecules."""
     return FairChemModel(model="uma-s-1", task_name="omol", device=DEVICE)
@@ -231,13 +225,9 @@ def test_device_consistency() -> None:
 )
 def test_empty_batch_error() -> None:
     """Test that empty batches raise appropriate errors."""
-    model = FairChemModel(
-        model="uma-s-1", task_name="omat", device=torch.device("cpu")
-    )
+    model = FairChemModel(model="uma-s-1", task_name="omat", device=torch.device("cpu"))
     with pytest.raises((ValueError, RuntimeError, IndexError)):
-        model(
-            ts.io.atoms_to_state([], device=torch.device("cpu"), dtype=torch.float32)
-        )
+        model(ts.io.atoms_to_state([], device=torch.device("cpu"), dtype=torch.float32))
 
 
 @pytest.mark.skipif(
