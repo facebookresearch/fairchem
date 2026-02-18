@@ -36,6 +36,7 @@ from fairchem.core.components.calculate import (
 @dataclass
 class MockMetadata:
     results_dir: str
+    checkpoint_dir: str = ""
     array_job_num: int = 0
 
 
@@ -50,9 +51,11 @@ class MockJobConfig:
     scheduler: MockScheduler
 
 
-def _create_mock_job_config(results_dir: str) -> MockJobConfig:
+def _create_mock_job_config(
+    results_dir: str, checkpoint_dir: str = ""
+) -> MockJobConfig:
     return MockJobConfig(
-        metadata=MockMetadata(results_dir=results_dir),
+        metadata=MockMetadata(results_dir=results_dir, checkpoint_dir=checkpoint_dir),
         scheduler=MockScheduler(num_array_jobs=1),
     )
 
@@ -158,9 +161,9 @@ class TestParquetTrajectoryWriter:
         writer.append(make_frame(3))
         writer.close()
 
-        df = pd.read_parquet(path)
-        assert len(df) == 4
-        assert list(df["step"]) == [0, 1, 2, 3]
+        traj_df = pd.read_parquet(path)
+        assert len(traj_df) == 4
+        assert list(traj_df["step"]) == [0, 1, 2, 3]
 
 
 class TestASETrajectoryWriter:
@@ -250,12 +253,12 @@ class TestMDRunner:
         traj_ase.close()
 
         # Compare
-        df = pd.read_parquet(results["trajectory_file"])
+        traj_df = pd.read_parquet(results["trajectory_file"])
         ase_frames = Trajectory(str(ase_traj_file), "r")
-        assert len(df) == len(ase_frames), "Frame count mismatch"
+        assert len(traj_df) == len(ase_frames), "Frame count mismatch"
 
         for i, ase_atoms in enumerate(ase_frames):
-            row = df.iloc[i]
+            row = traj_df.iloc[i]
             parquet_pos = np.vstack(row["positions"])
             parquet_vel = np.vstack(row["velocities"])
             parquet_forces = np.vstack(row["forces"])
@@ -390,8 +393,8 @@ class TestMDRunner:
         with open(checkpoint_dir / "thermostat_state.json") as f:
             saved_state = json.load(f)
         assert saved_state["class_name"] == "NoseHooverChainNVT"
-        npt.assert_allclose(saved_state["nested_thermostat"]["_eta"], eta_before)
-        npt.assert_allclose(saved_state["nested_thermostat"]["_p_eta"], p_eta_before)
+        npt.assert_allclose(saved_state["eta"], eta_before)
+        npt.assert_allclose(saved_state["p_eta"], p_eta_before)
 
         with open(checkpoint_dir / "md_state.json") as f:
             md_state = json.load(f)
@@ -476,3 +479,51 @@ class TestMDRunner:
                 atol=1e-10,
                 err_msg=f"Energy mismatch at step {step}",
             )
+
+    def test_periodic_checkpoint(self, cu_atoms, results_dir):
+        """
+        Test periodic checkpoint saving during MD simulation.
+
+        Verifies:
+        1. Checkpoint files are created at the specified interval
+        2. Checkpoint contains correct step count
+        3. Simulation completes normally with checkpointing enabled
+        4. Trajectory writer is not closed by periodic checkpoints
+        """
+        checkpoint_dir = results_dir / "checkpoints"
+        checkpoint_dir.mkdir()
+
+        total_steps = 50
+        checkpoint_interval = 20
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            steps=total_steps,
+            trajectory_interval=10,
+            log_interval=10,
+            checkpoint_interval=checkpoint_interval,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner._job_config = _create_mock_job_config(
+            str(results_dir), str(checkpoint_dir)
+        )
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        # Verify checkpoint files exist
+        periodic_dir = checkpoint_dir / "periodic_state"
+        assert periodic_dir.exists(), "Periodic checkpoint directory not created"
+        assert (periodic_dir / "checkpoint.xyz").exists()
+        assert (periodic_dir / "thermostat_state.json").exists()
+        assert (periodic_dir / "md_state.json").exists()
+
+        # Verify checkpoint reflects the last checkpoint step
+        with open(periodic_dir / "md_state.json") as f:
+            md_state = json.load(f)
+        assert md_state["current_step"] == 40  # last multiple of 20 before 50
+
+        # Verify trajectory is complete (writer was not closed by periodic save)
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        expected_steps = [0, 10, 20, 30, 40, 50]
+        assert list(traj_df["step"]) == expected_steps

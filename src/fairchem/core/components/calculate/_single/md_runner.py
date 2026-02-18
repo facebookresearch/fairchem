@@ -52,6 +52,7 @@ class MDRunner(CalculateRunner):
         steps: int = 1000,
         trajectory_interval: int = 1,
         log_interval: int = 10,
+        checkpoint_interval: int = 1,
         trajectory_writer: type[TrajectoryWriter]
         | Callable[..., TrajectoryWriter]
         | None = None,
@@ -69,6 +70,8 @@ class MDRunner(CalculateRunner):
             steps: Total number of MD steps to run
             trajectory_interval: Interval for writing trajectory frames
             log_interval: Interval for writing thermodynamic data to log
+            checkpoint_interval: Interval (in MD steps) for saving periodic
+                checkpoints. 0 disables periodic checkpointing.
             trajectory_writer: Trajectory writer class or factory function.
                 Defaults to ParquetTrajectoryWriter if None.
             trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
@@ -79,6 +82,7 @@ class MDRunner(CalculateRunner):
         self.steps = steps
         self.trajectory_interval = trajectory_interval
         self.log_interval = log_interval
+        self.checkpoint_interval = checkpoint_interval
         self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
         self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
 
@@ -90,39 +94,10 @@ class MDRunner(CalculateRunner):
 
         super().__init__(calculator=calculator, input_data=[atoms])
 
-    # Known thermostat/barostat state attributes across different ASE dynamics classes
-    # This list can be extended as new thermostats are added
-    _THERMOSTAT_STATE_ATTRS: ClassVar[tuple[str, ...]] = (
-        # Nose-Hoover NPT (ASE)
-        "zeta",  # Thermostat friction
-        "zeta_integrated",  # Integrated thermostat friction
-        "eta",  # Barostat strain rate (3x3)
-        "eta_past",  # Previous eta
-        "zeta_past",  # Previous zeta
-        "q",  # Fractional coordinates
-        "q_past",  # Previous q
-        "q_future",  # Future q
-        "h",  # Cell matrix
-        "h_past",  # Previous cell matrix
-        # Nose-Hoover chain variants
-        "xi",  # Alternative thermostat variable name
-        "p_zeta",  # Chain momenta
-        # Berendsen
-        "tau",
-        # General barostat
-        "strain",
-        "vbox",
-        # Parrinello-Rahman
-        "h_inv",
-        "inv_h",
-        "h0",
-        "v",
-    )
-
-    # Nested thermostat state for NoseHooverChainNVT and related classes
-    _NESTED_THERMOSTAT_ATTRS: ClassVar[tuple[str, ...]] = (
-        "_eta",  # Thermostat positions
-        "_p_eta",  # Thermostat momenta
+    # Supported dynamics classes for checkpoint save/restore
+    _SUPPORTED_DYNAMICS: ClassVar[tuple[str, ...]] = (
+        "VelocityVerlet",
+        "NoseHooverChainNVT",
     )
 
     def _get_trajectory_extension(self) -> str:
@@ -150,54 +125,30 @@ class MDRunner(CalculateRunner):
 
     def _save_thermostat_state(self, dyn: MolecularDynamics) -> dict:
         """
-        Extract all thermostat/barostat state from dynamics object.
+        Extract thermostat state from dynamics object.
 
-        This method introspects the dynamics object and saves:
-        1. Known thermostat state attributes (xi, eta, zeta, etc.)
-        2. Nested thermostat state (for NoseHooverChainNVT and similar)
-        3. NumPy RNG state if the dynamics uses stochastic methods
-        4. The dynamics class name for verification on restore
+        Supports VelocityVerlet (NVE, no thermostat state) and
+        NoseHooverChainNVT (saves chain positions and momenta).
 
         Args:
             dyn: The ASE dynamics object
 
         Returns:
-            Dictionary containing all saved state (JSON-serializable)
+            Dictionary containing saved state (JSON-serializable)
         """
-        state = {
-            "class_name": type(dyn).__name__,
-            "attrs": {},
-            "nested_thermostat": {},
-        }
+        class_name = type(dyn).__name__
+        if class_name not in self._SUPPORTED_DYNAMICS:
+            raise ValueError(
+                f"Unsupported dynamics class '{class_name}' for checkpointing. "
+                f"Supported: {self._SUPPORTED_DYNAMICS}"
+            )
 
-        for attr in self._THERMOSTAT_STATE_ATTRS:
-            if hasattr(dyn, attr):
-                value = getattr(dyn, attr)
-                if isinstance(value, (int, float)):
-                    state["attrs"][attr] = value
-                elif isinstance(value, np.ndarray):
-                    state["attrs"][attr] = value.tolist()
+        state: dict[str, Any] = {"class_name": class_name}
 
-        # Handle nested thermostat state (NoseHooverChainNVT, etc.)
-        if hasattr(dyn, "_thermostat"):
+        if class_name == "NoseHooverChainNVT":
             thermostat = dyn._thermostat
-            for attr in self._NESTED_THERMOSTAT_ATTRS:
-                if hasattr(thermostat, attr):
-                    value = getattr(thermostat, attr)
-                    if isinstance(value, (int, float)):
-                        state["nested_thermostat"][attr] = value
-                    elif isinstance(value, np.ndarray):
-                        state["nested_thermostat"][attr] = value.tolist()
-
-        if hasattr(dyn, "rng") and dyn.rng is np.random:
-            rng_state = np.random.get_state()
-            state["numpy_random_state"] = {
-                "name": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            }
+            state["eta"] = thermostat._eta.tolist()
+            state["p_eta"] = thermostat._p_eta.tolist()
 
         return state
 
@@ -205,7 +156,10 @@ class MDRunner(CalculateRunner):
         self, dyn: MolecularDynamics, state: dict | None
     ) -> None:
         """
-        Restore thermostat/barostat state to dynamics object.
+        Restore thermostat state to dynamics object.
+
+        Supports VelocityVerlet (NVE, no-op) and NoseHooverChainNVT
+        (restores chain positions and momenta).
 
         Args:
             dyn: The ASE dynamics object
@@ -220,44 +174,10 @@ class MDRunner(CalculateRunner):
             saved_class == current_class
         ), f"Restoring state from {saved_class} to {current_class}"
 
-        for attr, value in state.get("attrs", {}).items():
-            if hasattr(dyn, attr):
-                current = getattr(dyn, attr)
-                if isinstance(value, list) and isinstance(current, np.ndarray):
-                    setattr(dyn, attr, np.array(value))
-                elif isinstance(value, (int, float)) and isinstance(
-                    current, (int, float)
-                ):
-                    setattr(dyn, attr, value)
-
-        # Handle nested thermostat state (NoseHooverChainNVT, etc.)
-        if hasattr(dyn, "_thermostat") and "nested_thermostat" in state:
+        if current_class == "NoseHooverChainNVT":
             thermostat = dyn._thermostat
-            for attr, value in state["nested_thermostat"].items():
-                if hasattr(thermostat, attr):
-                    current = getattr(thermostat, attr)
-                    if isinstance(value, list) and isinstance(current, np.ndarray):
-                        setattr(thermostat, attr, np.array(value))
-                    elif isinstance(value, (int, float)) and isinstance(
-                        current, (int, float)
-                    ):
-                        setattr(thermostat, attr, value)
-
-        if (
-            "numpy_random_state" in state
-            and hasattr(dyn, "rng")
-            and dyn.rng is np.random
-        ):
-            rng = state["numpy_random_state"]
-            np.random.set_state(
-                (
-                    rng["name"],
-                    np.array(rng["keys"], dtype=np.uint32),
-                    rng["pos"],
-                    rng["has_gauss"],
-                    rng["cached_gaussian"],
-                )
-            )
+            thermostat._eta = np.array(state["eta"])
+            thermostat._p_eta = np.array(state["p_eta"])
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> dict[str, Any]:
         """
@@ -315,6 +235,18 @@ class MDRunner(CalculateRunner):
                 logger()
 
         self._dyn.attach(log_with_alignment, interval=1)
+
+        if self.checkpoint_interval > 0:
+            checkpoint_dir = str(
+                Path(self.job_config.metadata.checkpoint_dir) / "periodic_state"
+            )
+
+            def periodic_checkpoint():
+                global_step = self._dyn.get_number_of_steps() + self._start_step
+                if global_step > 0 and global_step % self.checkpoint_interval == 0:
+                    self.save_state(checkpoint_dir, is_preemption=False)
+
+            self._dyn.attach(periodic_checkpoint, interval=1)
 
         remaining_steps = self.steps - self._start_step
         self._dyn.run(remaining_steps)
@@ -409,7 +341,10 @@ class MDRunner(CalculateRunner):
 
         try:
             if self._trajectory_writer:
-                self._trajectory_writer.close()
+                if is_preemption:
+                    self._trajectory_writer.close()
+                elif hasattr(self._trajectory_writer, "flush"):
+                    self._trajectory_writer.flush()
 
             atoms_path = checkpoint_dir / "checkpoint.xyz"
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
