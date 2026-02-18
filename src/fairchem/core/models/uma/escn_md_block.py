@@ -123,7 +123,7 @@ class Edgewise(torch.nn.Module):
         edge_distance,
         edge_index,
         wigner_and_M_mapping,
-        wigner_and_M_mapping_inv,
+        wigner_and_M_mapping_inv_envelope,
         total_atoms_across_gp_ranks,
         node_offset: int = 0,
     ):
@@ -143,7 +143,7 @@ class Edgewise(torch.nn.Module):
                 edge_distance,
                 edge_index,
                 wigner_and_M_mapping,
-                wigner_and_M_mapping_inv,
+                wigner_and_M_mapping_inv_envelope,
                 node_offset,
             )
         edge_index_partitions = edge_index.split(
@@ -152,7 +152,7 @@ class Edgewise(torch.nn.Module):
         wigner_partitions = wigner_and_M_mapping.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
-        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
+        wigner_inv_partitions = wigner_and_M_mapping_inv_envelope.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         edge_distance_parititons = edge_distance.split(
@@ -194,7 +194,7 @@ class Edgewise(torch.nn.Module):
         edge_distance,
         edge_index,
         wigner_and_M_mapping,
-        wigner_and_M_mapping_inv,
+        wigner_and_M_mapping_inv_envelope,
         node_offset: int = 0,
         ac_mole_start_idx: int = 0,
     ):
@@ -219,11 +219,11 @@ class Edgewise(torch.nn.Module):
 
             x_message = self.so2_conv_2(x_message, x_edge)
 
-            # Envelope is pre-fused into wigner_and_M_mapping_inv,
+            # Envelope is pre-fused into wigner_and_M_mapping_inv_envelope,
             # so no separate multiply needed
 
             # Rotate back the irreps
-            x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
+            x_message = torch.bmm(wigner_and_M_mapping_inv_envelope, x_message)
 
         # Compute the sum of the incoming neighboring messages for each target node
         new_embedding = torch.zeros(
@@ -382,7 +382,7 @@ class eSCNMD_Block(torch.nn.Module):
         edge_distance,
         edge_index,
         wigner_and_M_mapping,
-        wigner_and_M_mapping_inv,
+        wigner_and_M_mapping_inv_envelope,
         total_atoms_across_gp_ranks,
         sys_node_embedding=None,
         node_offset: int = 0,
@@ -400,7 +400,7 @@ class eSCNMD_Block(torch.nn.Module):
                 edge_distance,
                 edge_index,
                 wigner_and_M_mapping,
-                wigner_and_M_mapping_inv,
+                wigner_and_M_mapping_inv_envelope,
                 total_atoms_across_gp_ranks=total_atoms_across_gp_ranks,
                 node_offset=node_offset,
             )
