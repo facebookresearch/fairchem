@@ -113,7 +113,7 @@ add_adsorbate(slab, adsorbate, 2.0, "bridge")
 atomic_data_list = [
     # note that we put the molecule in a large box
     AtomicData.from_ase(
-        h2o, task_name="omol", r_data_keys=["spin", "charge"], molecule_cell_size=12
+        h2o, task_name="omol", molecule_cell_size=12
     ),
     AtomicData.from_ase(pt, task_name="omat"),
     AtomicData.from_ase(slab, task_name="oc20"),
