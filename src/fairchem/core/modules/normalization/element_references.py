@@ -45,7 +45,7 @@ class ElementReferences(nn.Module):
             ).scatter_reduce(
                 0,
                 batch_idx,
-                atomic_numbers,
+                elem_refs[atomic_numbers],
                 reduce="sum",
             )
             if operation == "subtract":
