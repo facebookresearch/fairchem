@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
@@ -99,14 +100,16 @@ def test_1mole_merge():
 
 @patch("fairchem.core.models.uma.escn_moe.registry.get_model_class")
 @patch("fairchem.core.models.uma.escn_moe.recursive_replace_all_linear")
-def test_dataset_mapping(mock_replace, mock_registry):
-    """Test that dataset_mapping correctly maps datasets to expert indices."""
+def test_dataset_mapping_wrapper_with_mapping(mock_replace, mock_registry):
+    """
+    Test that DatasetSpecificMoEWrapper with a dataset_mapping dict
+    correctly maps datasets to expert indices.
+    """
     mock_backbone = MagicMock()
     mock_backbone.regress_stress = False
     mock_backbone.regress_forces = True
     mock_registry.return_value = MagicMock()
 
-    dataset_names = ["omol", "oc20_subset1", "oc20_subset2", "omat", "oc20"]
     dataset_mapping = {
         "omol": "omol",
         "oc20_subset1": "oc20",
@@ -117,7 +120,6 @@ def test_dataset_mapping(mock_replace, mock_registry):
 
     wrapper = DatasetSpecificMoEWrapper(
         backbone=mock_backbone,
-        dataset_names=dataset_names,
         head_cls="some_head",
         dataset_mapping=dataset_mapping,
     )
@@ -126,6 +128,34 @@ def test_dataset_mapping(mock_replace, mock_registry):
         "oc20": 0,
         "oc20_subset1": 0,
         "oc20_subset2": 0,
+        "omat": 1,
+        "omol": 2,
+    }
+    assert wrapper.dataset_name_to_exp == expected
+
+
+@patch("fairchem.core.models.uma.escn_moe.registry.get_model_class")
+@patch("fairchem.core.models.uma.escn_moe.recursive_replace_all_linear")
+def test_dataset_mapping_wrapper_with_deprecated_list(mock_replace, mock_registry):
+    """
+    Test that DatasetSpecificMoEWrapper with the deprecated dataset_names list
+    correctly maps datasets to expert indices.
+    """
+    mock_backbone = MagicMock()
+    mock_backbone.regress_stress = False
+    mock_backbone.regress_forces = True
+    mock_registry.return_value = MagicMock()
+
+    dataset_names = ["omol", "omat", "oc20"]
+
+    wrapper = DatasetSpecificMoEWrapper(
+        backbone=mock_backbone,
+        head_cls="some_head",
+        dataset_names=dataset_names,
+    )
+
+    expected = {
+        "oc20": 0,
         "omat": 1,
         "omol": 2,
     }
