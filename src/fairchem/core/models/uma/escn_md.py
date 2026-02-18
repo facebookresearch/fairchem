@@ -655,16 +655,23 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 data_dict["atomic_numbers_full"][graph_dict["edge_index"][1]]
             )
             x_edge = torch.cat(
-                (edge_distance_embedding, source_embedding, target_embedding), dim=1
+                (edge_distance_embedding, source_embedding, target_embedding),
+                dim=1,
             )
+
+            # Pre-fuse envelope into wigner_inv for edge degree embedding
+            wigner_inv_for_edge_degree = wigner_and_M_mapping_inv * edge_envelope
+
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv,
-                edge_envelope,
+                wigner_inv_for_edge_degree,
                 data_dict["gp_node_offset"],
             )
+
+        # Pre-fuse envelope into wigner_inv for block message passing
+        wigner_and_M_mapping_inv = wigner_and_M_mapping_inv * edge_envelope
 
         ###############################################################
         # Update spherical node embeddings
@@ -678,7 +685,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
                     wigner_and_M_mapping_inv,
-                    edge_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
