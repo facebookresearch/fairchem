@@ -153,5 +153,5 @@ def init_local_distributed_process_group(backend="nccl"):
     dist.init_process_group(
         init_method=init_method,
         backend=backend,
-        timeout=timedelta(seconds=10),
+        timeout=timedelta(seconds=100),
     )
