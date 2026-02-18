@@ -660,7 +660,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
             # Pre-fuse envelope into wigner_inv for edge degree embedding
-            wigner_and_M_mapping_inv_envelope_for_edge_degree = wigner_and_M_mapping_inv * edge_envelope
+            wigner_and_M_mapping_inv_envelope_for_edge_degree = (
+                wigner_and_M_mapping_inv * edge_envelope
+            )
 
             x_message = self.edge_degree_embedding(
                 x_message,

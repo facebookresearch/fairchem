@@ -86,7 +86,9 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         )
         # Envelope is pre-fused into wigner_and_M_mapping_inv_envelope_for_edge_degree,
         # so no separate multiply needed
-        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv_envelope_for_edge_degree, x_edge_embedding)
+        x_edge_embedding = torch.bmm(
+            wigner_and_M_mapping_inv_envelope_for_edge_degree, x_edge_embedding
+        )
 
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
