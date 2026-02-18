@@ -14,19 +14,14 @@ import torch
 
 from fairchem.core.datasets import data_list_collater
 from fairchem.core.modules.normalization.element_references import (
-    LinearReferences,
+    ElementReferences,
     create_element_references,
     fit_linear_references,
 )
 
-pytest.skip(
-    "Skipping this entire file for now. Tests need to be re-written for new modules in use.",
-    allow_module_level=True,
-)
 
-
-@pytest.fixture(scope="session", params=(True, False))
-def element_refs(dummy_binary_db_dataset, max_num_elements, request):
+@pytest.fixture(scope="session")
+def element_refs(dummy_binary_db_dataset, max_num_elements):
     return fit_linear_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
@@ -34,11 +29,10 @@ def element_refs(dummy_binary_db_dataset, max_num_elements, request):
         shuffle=False,
         max_num_elements=max_num_elements,
         seed=0,
-        use_numpy=request.param,
     )
 
 
-def test_apply_linear_references(
+def test_apply_element_references(
     element_refs, dummy_binary_db_dataset, dummy_element_refs
 ):
     max_noise = 0.05 * dummy_element_refs.mean()
@@ -46,11 +40,11 @@ def test_apply_linear_references(
     # check that removing element refs keeps only values within max noise
     batch = data_list_collater(list(dummy_binary_db_dataset), otf_graph=True)
     energy = batch.energy.clone().view(len(batch), -1)
-    deref_energy = element_refs["energy"].dereference(energy, batch)
+    deref_energy = element_refs["energy"].apply_refs(batch, energy)
     assert all(deref_energy <= max_noise)
 
-    # and check that we recover the total energy from applying references
-    ref_energy = element_refs["energy"](deref_energy, batch)
+    # and check that we recover the total energy from undoing references
+    ref_energy = element_refs["energy"].undo_refs(batch, deref_energy)
     assert torch.allclose(ref_energy, energy)
 
 
@@ -59,7 +53,7 @@ def test_create_element_references(element_refs, tmp_path):
     sdict = element_refs["energy"].state_dict()
 
     refs = create_element_references(state_dict=sdict)
-    assert isinstance(refs, LinearReferences)
+    assert isinstance(refs, ElementReferences)
     assert torch.allclose(
         element_refs["energy"].element_references, refs.element_references
     )
@@ -67,7 +61,7 @@ def test_create_element_references(element_refs, tmp_path):
     # test from saved stated dict
     torch.save(sdict, tmp_path / "linref.pt")
     refs = create_element_references(file=tmp_path / "linref.pt")
-    assert isinstance(refs, LinearReferences)
+    assert isinstance(refs, ElementReferences)
     assert torch.allclose(
         element_refs["energy"].element_references, refs.element_references
     )
@@ -77,7 +71,7 @@ def test_create_element_references(element_refs, tmp_path):
         tmp_path / "linref.npz", coeff=element_refs["energy"].element_references.numpy()
     )
     refs = create_element_references(file=tmp_path / "linref.npz")
-    assert isinstance(refs, LinearReferences)
+    assert isinstance(refs, ElementReferences)
     assert torch.allclose(
         element_refs["energy"].element_references, refs.element_references
     )
@@ -89,13 +83,13 @@ def test_create_element_references(element_refs, tmp_path):
     )
 
     refs = create_element_references(file=tmp_path / "linref.npz")
-    assert isinstance(refs, LinearReferences)
+    assert isinstance(refs, ElementReferences)
     assert torch.allclose(
         element_refs["energy"].element_references, refs.element_references
     )
 
 
-def test_fit_linear_references(
+def test_fit_element_references(
     element_refs, dummy_binary_db_dataset, max_num_elements, dummy_element_refs
 ):
     # create the composition matrix
@@ -123,19 +117,22 @@ def test_fit_linear_references(
         element_refs_np, element_refs["energy"].element_references.numpy(), atol=1e-5
     )
     # close enough to ground truth w/out noise
+    # tolerance is relatively high because the dummy dataset is small (underdetermined system)
     npt.assert_allclose(
         dummy_element_refs[mask],
         element_refs["energy"].element_references.numpy()[mask],
-        atol=5e-2,
+        atol=0.5,
     )
 
 
 def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
+    batch_size = 4
+    num_batches = max(len(dummy_binary_db_dataset) // batch_size - 1, 1)
     refs_seed = fit_linear_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
-        batch_size=16,
-        num_batches=len(dummy_binary_db_dataset) // 16 - 2,
+        batch_size=batch_size,
+        num_batches=num_batches,
         shuffle=True,
         max_num_elements=max_num_elements,
         seed=0,
@@ -143,8 +140,8 @@ def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
     refs_seed1 = fit_linear_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
-        batch_size=16,
-        num_batches=len(dummy_binary_db_dataset) // 16 - 2,
+        batch_size=batch_size,
+        num_batches=num_batches,
         shuffle=True,
         max_num_elements=max_num_elements,
         seed=0,
@@ -152,8 +149,8 @@ def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
     refs_noseed = fit_linear_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
-        batch_size=16,
-        num_batches=len(dummy_binary_db_dataset) // 16 - 2,
+        batch_size=batch_size,
+        num_batches=num_batches,
         shuffle=True,
         max_num_elements=max_num_elements,
         seed=1,

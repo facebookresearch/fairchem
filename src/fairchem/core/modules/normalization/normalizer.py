@@ -26,7 +26,7 @@ from ._load_utils import _load_from_config
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from fairchem.core.modules.normalization.element_references import LinearReferences
+    from fairchem.core.modules.normalization.element_references import ElementReferences
 
 
 class Normalizer(nn.Module):
@@ -234,8 +234,8 @@ def fit_normalizers(
         for target in targets:
             target_vector = batch[target]
             if target in element_references:
-                target_vector = element_references[target].dereference(
-                    target_vector, batch, reshaped=False
+                target_vector = element_references[target].apply_refs(
+                    batch, target_vector
                 )
             target_vectors[target].append(target_vector)
 
@@ -264,7 +264,7 @@ def load_normalizers_from_config(
     dataset: Dataset,
     seed: int = 0,
     checkpoint_dir: str | Path | None = None,
-    element_references: dict[str, LinearReferences] | None = None,
+    element_references: dict[str, ElementReferences] | None = None,
 ) -> dict[str, Normalizer]:
     """Create a dictionary with element references from a config."""
     # edit the config slightly to extract override args

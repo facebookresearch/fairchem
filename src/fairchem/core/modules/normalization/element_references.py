@@ -37,13 +37,15 @@ class ElementReferences(nn.Module):
     @staticmethod
     def compute_references(batch, tensor, elem_refs, operation):
         assert tensor.shape[0] == len(batch.natoms)
+        batch_idx = getattr(batch, "batch_full", batch.batch)
+        atomic_numbers = getattr(batch, "atomic_numbers_full", batch.atomic_numbers)
         with torch.autocast(elem_refs.device.type, enabled=False):
             refs = torch.zeros(
                 tensor.shape, dtype=elem_refs.dtype, device=tensor.device
             ).scatter_reduce(
                 0,
-                batch.batch_full,
-                elem_refs[batch.atomic_numbers_full],
+                batch_idx,
+                atomic_numbers,
                 reduce="sum",
             )
             if operation == "subtract":
@@ -78,88 +80,18 @@ class ElementReferences(nn.Module):
         )
 
 
-class LinearReferences(nn.Module):
-    """Represents an elemental linear references model for a target property.
-
-    In an elemental reference associates a value with each chemical element present in the dataset.
-    Elemental references define a chemical composition model, i.e. a rough approximation of a target
-    property (energy) using elemental references is done by summing the elemental references multiplied
-    by the number of times the corresponding element is present.
-
-    Elemental references energies can be taken as:
-     - the energy of a chemical species in its elemental state
-       (i.e. lowest energy polymorph of single element crystal structures for solids)
-     - fitting a linear model to a dataset, where the features are the counts of each element in each data point.
-       see the function fit_linear references below for details
-
-    Training GNNs to predict the difference between DFT and the predictions of a chemical composition
-    model represent a useful normalization scheme that can improve model accuracy. See for example the
-    "Alternative reference scheme" section of the OC22 manuscript: https://arxiv.org/pdf/2206.08917
-    """
-
-    def __init__(
-        self,
-        element_references: torch.Tensor | None = None,
-        max_num_elements: int = 118,
-    ):
-        """
-        Args:
-            element_references (Tensor): tensor with linear reference values
-            max_num_elements (int): max number of elements - 118 is a stretch
-            metrics (dict): dictionary with accuracy metrics in predicting values for structures used in fitting.
-        """
-        super().__init__()
-        self.register_buffer(
-            name="element_references",
-            tensor=(
-                element_references
-                if element_references is not None
-                else torch.zeros(max_num_elements + 1)
-            ),
-        )
-
-    def _apply_refs(
-        self, target: torch.Tensor, batch: AtomicData, sign: int, reshaped: bool = True
-    ) -> torch.Tensor:
-        """Apply references batch-wise"""
-        indices = batch.atomic_numbers.to(
-            dtype=torch.int, device=self.element_references.device
-        )
-        elemrefs = self.element_references[indices].to(dtype=target.dtype)
-        # this option should not exist, all tensors should have compatible shapes in dataset and trainer outputs
-        if reshaped:
-            elemrefs = elemrefs.view(batch.natoms.sum(), -1)
-
-        return target.index_add(0, batch.batch, elemrefs, alpha=sign)
-
-    @torch.autocast(device_type="cuda", enabled=False)
-    def dereference(
-        self, target: torch.Tensor, batch: AtomicData, reshaped: bool = True
-    ) -> torch.Tensor:
-        """Remove linear references"""
-        return self._apply_refs(target, batch, -1, reshaped=reshaped)
-
-    @torch.autocast(device_type="cuda", enabled=False)
-    def forward(
-        self, target: torch.Tensor, batch: AtomicData, reshaped: bool = True
-    ) -> torch.Tensor:
-        """Add linear references"""
-        return self._apply_refs(target, batch, 1, reshaped=reshaped)
-
-
 def create_element_references(
     file: str | Path | None = None,
     state_dict: dict | None = None,
-) -> LinearReferences:
+) -> ElementReferences:
     """Create an element reference module.
 
     Args:
-        type (str): type of reference (only linear implemented)
         file (str or Path): path to pt or npz file
         state_dict (dict): a state dict of a element reference module
 
     Returns:
-        LinearReference
+        ElementReferences
     """
     if file is not None and state_dict is not None:
         logging.warning(
@@ -191,7 +123,7 @@ def create_element_references(
     if "element_references" not in state_dict:
         raise RuntimeError("Unable to load linear element references!")
 
-    return LinearReferences(element_references=state_dict["element_references"])
+    return ElementReferences(element_references=state_dict["element_references"])
 
 
 @torch.no_grad()
@@ -207,12 +139,12 @@ def fit_linear_references(
     driver: str | None = None,
     shuffle: bool = True,
     seed: int = 0,
-) -> dict[str, LinearReferences]:
-    """Fit a set linear references for a list of targets using a given number of batches.
+) -> dict[str, ElementReferences]:
+    """Fit a set of element references for a list of targets using a given number of batches.
 
     Args:
         targets: list of target names
-        dataset: data set to fit linear references with
+        dataset: data set to fit element references with
         batch_size: size of batch
         num_batches: number of batches to use in fit. If not given will use all batches
         num_workers: number of workers to use in data loader.
@@ -227,7 +159,7 @@ def fit_linear_references(
         seed: random seed used to shuffle the sampler if shuffle=True
 
     Returns:
-        dict of fitted LinearReferences objects
+        dict of fitted ElementReferences objects
     """
     data_loader = DataLoader(
         dataset,
@@ -307,7 +239,7 @@ def fit_linear_references(
             solution = lstsq.solution
 
         coeffs[mask] = solution
-        elementrefs[target] = LinearReferences(coeffs)
+        elementrefs[target] = ElementReferences(coeffs)
 
         if log_metrics is True:
             y = target_vectors[target]
@@ -331,7 +263,7 @@ def load_references_from_config(
     dataset: Dataset,
     seed: int = 0,
     checkpoint_dir: str | Path | None = None,
-) -> dict[str, LinearReferences]:
+) -> dict[str, ElementReferences]:
     """Create a dictionary with element references from a config."""
     return _load_from_config(
         config,
