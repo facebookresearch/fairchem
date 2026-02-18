@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
@@ -206,6 +207,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
+        use_cueq_rot: bool = False,
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -334,6 +336,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             self.edge_channels,
         ]
 
+        # cueq rotation
+        self.use_cueq_rot = use_cueq_rot
+        if self.use_cueq_rot:
+            from fairchem.core.models.uma.common.cueq_rotation import cuEquivariantRotation
+            self.cueq_rotation = cuEquivariantRotation(self.lmax, self.mmax, self.sphere_channels, self.mappingReduced)
+        else:
+            self.cueq_rotation = None
+
         self.edge_degree_embedding = EdgeDegreeEmbedding(
             sphere_channels=self.sphere_channels,
             lmax=self.lmax,
@@ -342,6 +352,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            cueq_rotation=self.cueq_rotation,
         )
 
         self.envelope = PolynomialEnvelope(exponent=5)
@@ -368,6 +379,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                cueq_rotation=self.cueq_rotation,
             )
             self.blocks.append(block)
 
@@ -606,12 +618,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 f"No edges found in input system, this means either you have a single atom in the system or the atoms are farther apart than the radius cutoff of the model of {self.cutoff} Angstroms. We don't know how to handle this case. Check the positions of system: {data_dict['pos']}"
             )
 
-        with record_function("obtain wigner"):
-            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
-                self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec"],
+        if self.use_cueq_rot:
+            with record_function("obtain rotmat wigner for cueq"):
+                euler_angles = self.cueq_rotation.init_edge_rot_euler_angles(graph_dict["edge_distance_vec"])
+                wigner_and_M_mapping = None
+                wigner_and_M_mapping_inv = None
+        else:
+            with record_function("obtain wigner"):
+                (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
+                    self._get_rotmat_and_wigner(
+                        graph_dict["edge_distance_vec"],
+                    )
                 )
-            )
 
         ###############################################################
         # Initialize node embeddings
@@ -664,6 +682,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 wigner_and_M_mapping_inv,
                 edge_envelope,
                 data_dict["gp_node_offset"],
+                euler_angles if self.use_cueq_rot else None,
             )
 
         ###############################################################
@@ -684,6 +703,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                    euler_angles=euler_angles if self.use_cueq_rot else None,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(
