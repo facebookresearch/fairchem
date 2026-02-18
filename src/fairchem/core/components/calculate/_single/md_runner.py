@@ -52,7 +52,6 @@ class MDRunner(CalculateRunner):
         steps: int = 1000,
         trajectory_interval: int = 1,
         log_interval: int = 10,
-        checkpoint_interval: int = 1,
         trajectory_writer: type[TrajectoryWriter]
         | Callable[..., TrajectoryWriter]
         | None = None,
@@ -70,8 +69,6 @@ class MDRunner(CalculateRunner):
             steps: Total number of MD steps to run
             trajectory_interval: Interval for writing trajectory frames
             log_interval: Interval for writing thermodynamic data to log
-            checkpoint_interval: Interval (in MD steps) for saving periodic
-                checkpoints. 0 disables periodic checkpointing.
             trajectory_writer: Trajectory writer class or factory function.
                 Defaults to ParquetTrajectoryWriter if None.
             trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
@@ -82,7 +79,6 @@ class MDRunner(CalculateRunner):
         self.steps = steps
         self.trajectory_interval = trajectory_interval
         self.log_interval = log_interval
-        self.checkpoint_interval = checkpoint_interval
         self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
         self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
 
@@ -211,6 +207,7 @@ class MDRunner(CalculateRunner):
         # We use interval=1 and check alignment manually to handle checkpoint resume correctly
         def collect_frame():
             global_step = self._dyn.get_number_of_steps() + self._start_step
+            self._atoms.info["md_step"] = global_step
             if global_step % self.trajectory_interval == 0:
                 frame = TrajectoryFrame.from_atoms(
                     self._atoms,
@@ -235,18 +232,6 @@ class MDRunner(CalculateRunner):
                 logger()
 
         self._dyn.attach(log_with_alignment, interval=1)
-
-        if self.checkpoint_interval > 0:
-            checkpoint_dir = str(
-                Path(self.job_config.metadata.checkpoint_dir) / "periodic_state"
-            )
-
-            def periodic_checkpoint():
-                global_step = self._dyn.get_number_of_steps() + self._start_step
-                if global_step > 0 and global_step % self.checkpoint_interval == 0:
-                    self.save_state(checkpoint_dir, is_preemption=False)
-
-            self._dyn.attach(periodic_checkpoint, interval=1)
 
         remaining_steps = self.steps - self._start_step
         self._dyn.run(remaining_steps)
@@ -347,6 +332,8 @@ class MDRunner(CalculateRunner):
                     self._trajectory_writer.flush()
 
             atoms_path = checkpoint_dir / "checkpoint.xyz"
+            current_step = self._dyn.get_number_of_steps() + self._start_step
+            self._atoms.info["md_step"] = current_step
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
             thermostat_state = self._save_thermostat_state(self._dyn)
@@ -355,7 +342,7 @@ class MDRunner(CalculateRunner):
                 json.dump(thermostat_state, f)
 
             md_state = {
-                "current_step": self._dyn.get_number_of_steps() + self._start_step,
+                "current_step": current_step,
                 "total_steps": self.steps,
                 "trajectory_frames_written": (
                     self._trajectory_writer.total_frames

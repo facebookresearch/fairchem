@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+import ase.io
 import numpy as np
 import numpy.testing as npt
 import pandas as pd
@@ -390,6 +391,10 @@ class TestMDRunner:
         assert (checkpoint_dir / "thermostat_state.json").exists()
         assert (checkpoint_dir / "md_state.json").exists()
 
+        # Verify md_step is embedded in the checkpoint atoms
+        checkpoint_atoms = ase.io.read(str(checkpoint_dir / "checkpoint.xyz"))
+        assert checkpoint_atoms.info["md_step"] == interrupt_at_step
+
         with open(checkpoint_dir / "thermostat_state.json") as f:
             saved_state = json.load(f)
         assert saved_state["class_name"] == "NoseHooverChainNVT"
@@ -479,51 +484,3 @@ class TestMDRunner:
                 atol=1e-10,
                 err_msg=f"Energy mismatch at step {step}",
             )
-
-    def test_periodic_checkpoint(self, cu_atoms, results_dir):
-        """
-        Test periodic checkpoint saving during MD simulation.
-
-        Verifies:
-        1. Checkpoint files are created at the specified interval
-        2. Checkpoint contains correct step count
-        3. Simulation completes normally with checkpointing enabled
-        4. Trajectory writer is not closed by periodic checkpoints
-        """
-        checkpoint_dir = results_dir / "checkpoints"
-        checkpoint_dir.mkdir()
-
-        total_steps = 50
-        checkpoint_interval = 20
-
-        runner = MDRunner(
-            calculator=EMT(),
-            atoms=cu_atoms.copy(),
-            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
-            steps=total_steps,
-            trajectory_interval=10,
-            log_interval=10,
-            checkpoint_interval=checkpoint_interval,
-            trajectory_writer_kwargs={"flush_interval": 1000},
-        )
-        runner._job_config = _create_mock_job_config(
-            str(results_dir), str(checkpoint_dir)
-        )
-        results = runner.calculate(job_num=0, num_jobs=1)
-
-        # Verify checkpoint files exist
-        periodic_dir = checkpoint_dir / "periodic_state"
-        assert periodic_dir.exists(), "Periodic checkpoint directory not created"
-        assert (periodic_dir / "checkpoint.xyz").exists()
-        assert (periodic_dir / "thermostat_state.json").exists()
-        assert (periodic_dir / "md_state.json").exists()
-
-        # Verify checkpoint reflects the last checkpoint step
-        with open(periodic_dir / "md_state.json") as f:
-            md_state = json.load(f)
-        assert md_state["current_step"] == 40  # last multiple of 20 before 50
-
-        # Verify trajectory is complete (writer was not closed by periodic save)
-        traj_df = pd.read_parquet(results["trajectory_file"])
-        expected_steps = [0, 10, 20, 30, 40, 50]
-        assert list(traj_df["step"]) == expected_steps
