@@ -23,7 +23,8 @@ warnings.filterwarnings(
 
 # TODO: Remove this warning when we require numpy >= 2.0
 import numpy as np
-if np.__version__.split('.')[0] == "1":
+
+if np.__version__.split(".")[0] == "1":
     warnings.warn(
         f"Numpy version {np.__version__} can result in slower fairchem-core performance. Version 2.0 or higher is recommended.",
         UserWarning
