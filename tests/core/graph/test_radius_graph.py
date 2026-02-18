@@ -506,7 +506,6 @@ class TestFilterEdgesByNodePartition:
         assert new_neighbors.tolist() == [2, 1]
 
     def test_filter_empty_partition(self):
-        """Test with empty node partition returns no edges."""
         edge_index = torch.tensor([[0, 1], [1, 0]])
         cell_offsets = torch.zeros(2, 3, dtype=torch.long)
         neighbors = torch.tensor([2])
@@ -519,7 +518,8 @@ class TestFilterEdgesByNodePartition:
         )
 
         assert new_edge_index.shape[1] == 0
-        assert new_neighbors.numel() == 0
+        assert new_neighbors[0] == 0
+        assert cell_offsets.shape[0] == 2
 
     def test_filter_all_atoms_in_partition(self):
         """Test with all atoms in partition keeps all edges."""

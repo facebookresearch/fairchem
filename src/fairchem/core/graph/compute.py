@@ -73,7 +73,7 @@ def filter_edges_by_node_partition(
     )
 
     # Remove systems with zero edges
-    new_neighbors = new_neighbors[new_neighbors > 0]
+    # new_neighbors = new_neighbors[new_neighbors > 0]
 
     return edge_index, cell_offsets, new_neighbors
 
