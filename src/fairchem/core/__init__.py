@@ -27,7 +27,7 @@ import numpy as np
 if np.__version__.split(".")[0] == "1":
     warnings.warn(
         f"Numpy version {np.__version__} can result in slower fairchem-core performance. Version 2.0 or higher is recommended.",
-        UserWarning
+        UserWarning,
     )
 
 from fairchem.core._config import clear_cache
