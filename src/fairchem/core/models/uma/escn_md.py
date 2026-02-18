@@ -32,6 +32,11 @@ from fairchem.core.models.uma.nn.embedding_dev import (
     DatasetEmbedding,
     EdgeDegreeEmbedding,
 )
+from fairchem.core.models.uma.nn.execution_backends import (
+    ExecutionMode,
+    is_fast_mode,
+    uses_raw_wigner,
+)
 from fairchem.core.models.uma.nn.layer_norm import (
     EquivariantLayerNormArray,
     EquivariantLayerNormArraySphericalHarmonics,
@@ -206,6 +211,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
+        # UMA-S execution mode:
+        #   "baseline" - Reference PyTorch (SO2_Convolution, M-mapped Wigner)
+        #   "fast_triton" - Triton GPU kernels (raw Wigner)
+        execution_mode: str = "baseline",
+        triton_backward_impl: str = "scatter_add",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -246,6 +256,39 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+
+        # UMA-S execution mode
+        self.execution_mode = ExecutionMode(execution_mode)
+        self.triton_backward_impl = triton_backward_impl
+
+        # =============================================================
+        # Execution mode constraints validation (fail early)
+        # =============================================================
+
+        # Fast modes require no activation checkpointing
+        if is_fast_mode(self.execution_mode):
+            assert not activation_checkpointing, (
+                f"{self.execution_mode.value} does not support "
+                "activation checkpointing. "
+                "Please set activation_checkpointing=False."
+            )
+
+        # Modes using raw Wigner (triton) require lmax=mmax=2
+        if uses_raw_wigner(self.execution_mode):
+            assert lmax == 2, (
+                f"{self.execution_mode.value} requires lmax=2, " f"got lmax={lmax}"
+            )
+            assert mmax == 2, (
+                f"{self.execution_mode.value} requires mmax=2, " f"got mmax={mmax}"
+            )
+
+        # Triton-specific: sphere_channels must be divisible by 128
+        if self.execution_mode == ExecutionMode.FAST_TRITON:
+            assert sphere_channels % 128 == 0, (
+                f"fast_triton requires sphere_channels to be "
+                f"divisible by 128, "
+                f"got sphere_channels={sphere_channels}"
+            )
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -368,6 +411,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                execution_mode=self.execution_mode.value,
+                triton_backward_impl=self.triton_backward_impl,
             )
             self.blocks.append(block)
 
@@ -411,7 +456,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         Jd_buffers = [
             getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
@@ -432,11 +477,20 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             wigner = wigner.index_select(1, self.coefficient_index)
             wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
 
+        # Fast modes using raw Wigner (Triton handles L<->M internally)
+        if uses_raw_wigner(self.execution_mode):
+            return wigner, wigner_inv
+
+        # Baseline path: apply M-mapping to Wigner matrices
         wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
+            "mk,nkj->nmj",
+            self.mappingReduced.to_m.to(wigner.dtype),
+            wigner,
         )
         wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
+            "njk,mk->njm",
+            wigner_inv,
+            self.mappingReduced.to_m.to(wigner_inv.dtype),
         )
         return wigner_and_M_mapping, wigner_and_M_mapping_inv
 

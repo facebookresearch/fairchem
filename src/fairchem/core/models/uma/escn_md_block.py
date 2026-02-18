@@ -20,12 +20,16 @@ from fairchem.core.models.uma.nn.activation import (
     GateActivation,
     SeparableS2Activation_M,
 )
+from fairchem.core.models.uma.nn.execution_backends import (
+    BaseExecutionBackend,
+    ExecutionMode,
+    get_execution_backend,
+)
 from fairchem.core.models.uma.nn.layer_norm import (
     get_normalization_layer,
 )
 from fairchem.core.models.uma.nn.mole import MOLE
 from fairchem.core.models.uma.nn.radial import PolynomialEnvelope
-from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
 from fairchem.core.models.uma.nn.so3_layers import SO3_Linear
 
 if TYPE_CHECKING:
@@ -53,6 +57,11 @@ class Edgewise(torch.nn.Module):
         # activation_checkpoint_chunk_size size edge blocks
         activation_checkpoint_chunk_size: int | None,
         act_type: Literal["gate", "s2"] = "gate",
+        # UMA-S execution mode:
+        #   "baseline" - Reference PyTorch (SO2_Convolution)
+        #   "fast_triton" - Triton GPU kernels
+        execution_mode: str = "baseline",
+        triton_backward_impl: str = "scatter_add",
     ):
         super().__init__()
 
@@ -61,6 +70,9 @@ class Edgewise(torch.nn.Module):
         self.lmax = lmax
         self.mmax = mmax
         self.activation_checkpoint_chunk_size = activation_checkpoint_chunk_size
+
+        # UMA-S execution mode
+        self.execution_mode = ExecutionMode(execution_mode)
 
         self.mappingReduced = mappingReduced
         self.SO3_grid = SO3_grid
@@ -87,27 +99,23 @@ class Edgewise(torch.nn.Module):
         else:
             raise ValueError(f"Unknown activation type {self.act_type}")
 
-        self.so2_conv_1 = SO2_Convolution(
-            2 * self.sphere_channels,
-            self.hidden_channels,
-            self.lmax,
-            self.mmax,
-            self.mappingReduced,
-            internal_weights=False,
-            edge_channels_list=self.edge_channels_list,
+        # Create execution backend - handles SO2 module creation
+        # and rotation ops
+        self.backend: BaseExecutionBackend = get_execution_backend(
+            mode=self.execution_mode,
+            sphere_channels=self.sphere_channels,
+            hidden_channels=self.hidden_channels,
+            lmax=self.lmax,
+            mmax=self.mmax,
+            mappingReduced=self.mappingReduced,
             extra_m0_output_channels=extra_m0_output_channels,
+            edge_channels_list=edge_channels_list,
+            backward_impl=triton_backward_impl,
         )
 
-        self.so2_conv_2 = SO2_Convolution(
-            self.hidden_channels,
-            self.sphere_channels,
-            self.lmax,
-            self.mmax,
-            self.mappingReduced,
-            internal_weights=True,
-            edge_channels_list=None,
-            extra_m0_output_channels=None,
-        )
+        # Register hook to remap old checkpoint keys
+        # (so2_conv_* -> backend.so2_conv_*)
+        self._register_load_state_dict_pre_hook(self._remap_so2_keys)
 
         self.cutoff = cutoff
         self.envelope = PolynomialEnvelope(exponent=5)
@@ -115,6 +123,46 @@ class Edgewise(torch.nn.Module):
         self.out_mask = self.SO3_grid["lmax_lmax"].mapping.coefficient_idx(
             self.lmax, self.mmax
         )
+
+    @staticmethod
+    def _remap_so2_keys(
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        """
+        Remap old checkpoint keys: so2_conv_* -> backend.so2_conv_*
+        """
+        keys_to_remap = []
+        for key in list(state_dict.keys()):
+            if key.startswith(prefix):
+                suffix = key[len(prefix) :]
+                if suffix.startswith(("so2_conv_1.", "so2_conv_2.")):
+                    new_key = f"{prefix}backend.{suffix}"
+                    keys_to_remap.append((key, new_key))
+
+        for old_key, new_key in keys_to_remap:
+            state_dict[new_key] = state_dict.pop(old_key)
+
+    @property
+    def so2_conv_1(self):
+        """
+        Access to so2_conv_1 for MOLE conversion and external
+        references.
+        """
+        return self.backend.so2_conv_1
+
+    @property
+    def so2_conv_2(self):
+        """
+        Access to so2_conv_2 for MOLE conversion and external
+        references.
+        """
+        return self.backend.so2_conv_2
 
     def forward(
         self,
@@ -209,27 +257,26 @@ class Edgewise(torch.nn.Module):
         # work properly with MoLE together
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
-        x_source = x_full[edge_index[0]]
-        x_target = x_full[edge_index[1]]
-
-        x_message = torch.cat((x_source, x_target), dim=2)
-
         with record_function("SO2Conv"):
-            # Rotate the irreps to align with the edge
-            x_message = torch.bmm(wigner_and_M_mapping, x_message)
+            # All operations delegated to backend
+            backend = self.backend
 
-            # SO2 convolution
-            x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
+            # Gather + rotate L->M
+            x_message = backend.gather_rotate(x_full, edge_index, wigner_and_M_mapping)
 
-            # M-prime...
+            # SO2 convolution 1 (with radial modulation)
+            x_message, x_0_gating = backend.conv1(x_message, x_edge, None)
+
+            # M-prime activation
             x_message = self.act(x_0_gating, x_message)
 
-            x_message = self.so2_conv_2(x_message, x_edge)
+            # SO2 convolution 2 (internal weights)
+            x_message = backend.conv2(x_message, x_edge)
 
             x_message = x_message * edge_envelope
 
-            # Rotate back the irreps
-            x_message = torch.bmm(wigner_and_M_mapping_inv, x_message)
+            # Rotate back M->L
+            x_message = backend.rotate_back(x_message, wigner_and_M_mapping_inv)
 
         # Compute the sum of the incoming neighboring messages for each target node
         new_embedding = torch.zeros(
@@ -336,6 +383,9 @@ class eSCNMD_Block(torch.nn.Module):
         act_type: Literal["gate", "s2"],
         ff_type: Literal["spectral", "grid"],
         activation_checkpoint_chunk_size: int | None,
+        # UMA-S execution mode
+        execution_mode: str = "baseline",
+        triton_backward_impl: str = "scatter_add",
     ) -> None:
         super().__init__()
         self.sphere_channels = sphere_channels
@@ -358,6 +408,8 @@ class eSCNMD_Block(torch.nn.Module):
             cutoff=cutoff,
             act_type=act_type,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            execution_mode=execution_mode,
+            triton_backward_impl=triton_backward_impl,
         )
 
         self.norm_2 = get_normalization_layer(
