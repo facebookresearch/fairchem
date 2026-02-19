@@ -1167,17 +1167,29 @@ def wigner_d_matrix_real(
     device = ra_re.device
     dtype = ra_re.dtype
 
-    ra = torch.sqrt(ra_re * ra_re + ra_im * ra_im)
-    rb = torch.sqrt(rb_re * rb_re + rb_im * rb_im)
-
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
+    # Compute squared magnitudes and masks first.
+    # sqrt(0) has gradient 1/(2*sqrt(0)) = inf, causing NaN via autograd
+    # even when masked by torch.where (because 0 * inf = NaN in IEEE 754).
+    # Clamping the sqrt input prevents this: torch.clamp gradient is 0
+    # below min, so the NaN-producing gradient path is cut off.
+    _EPS_SQ = EPSILON * EPSILON
+    ra_sq = ra_re * ra_re + ra_im * ra_im
+    rb_sq = rb_re * rb_re + rb_im * rb_im
+    ra_small = ra_sq <= _EPS_SQ
+    rb_small = rb_sq <= _EPS_SQ
+    ra = torch.sqrt(torch.clamp(ra_sq, min=_EPS_SQ))
+    rb = torch.sqrt(torch.clamp(rb_sq, min=_EPS_SQ))
     general_mask = ~ra_small & ~rb_small
     use_case1 = (ra >= rb) & general_mask
     use_case2 = (ra < rb) & general_mask
 
-    phia = torch.atan2(ra_im, ra_re)
-    phib = torch.atan2(rb_im, rb_re)
+    safe_ra_re_phi = torch.where(ra_small, torch.ones_like(ra_re), ra_re)
+    safe_ra_im_phi = torch.where(ra_small, torch.zeros_like(ra_im), ra_im)
+    phia = torch.atan2(safe_ra_im_phi, safe_ra_re_phi)
+
+    safe_rb_re_phi = torch.where(rb_small, torch.ones_like(rb_re), rb_re)
+    safe_rb_im_phi = torch.where(rb_small, torch.zeros_like(rb_im), rb_im)
+    phib = torch.atan2(safe_rb_im_phi, safe_rb_re_phi)
 
     phase = torch.outer(phia, coeffs.mp_plus_m) + torch.outer(phib, coeffs.m_minus_mp)
     exp_phase_re = torch.cos(phase)
@@ -1194,7 +1206,8 @@ def wigner_d_matrix_real(
     # Special Case 1: |Ra| ~ 0 - anti-diagonal elements
     safe_rb_mag = torch.where(rb < EPSILON, torch.ones_like(rb), rb)
     log_safe_rb = torch.log(safe_rb_mag)
-    arg_rb = torch.atan2(rb_im, rb_re)
+    # Reuse the guarded phib (same computation, but safe from atan2(0,0) NaN)
+    arg_rb = phib
 
     log_mag_rb_power = torch.outer(log_safe_rb, coeffs.special_2m)
     rb_power_mag = torch.exp(log_mag_rb_power)
@@ -1212,7 +1225,8 @@ def wigner_d_matrix_real(
     # Special Case 2: |Rb| ~ 0 - diagonal elements
     safe_ra_mag = torch.where(ra < EPSILON, torch.ones_like(ra), ra)
     log_safe_ra = torch.log(safe_ra_mag)
-    arg_ra = torch.atan2(ra_im, ra_re)
+    # Reuse the guarded phia (same computation, but safe from atan2(0,0) NaN)
+    arg_ra = phia
 
     log_mag_ra_power = torch.outer(log_safe_ra, coeffs.special_2m)
     ra_power_mag = torch.exp(log_mag_ra_power)
