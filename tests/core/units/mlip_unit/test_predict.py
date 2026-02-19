@@ -619,6 +619,7 @@ def test_batch_server_predict_unit_with_calculator(
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
+        predict_unit=uma_predict_unit,
     )
 
     atoms = bulk("Cu")
@@ -653,7 +654,9 @@ def test_batch_server_predict_unit_with_calculator(
 
 
 @pytest.mark.gpu()
-def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
+def test_batch_server_predict_unit_multiple_systems(
+    batch_server_handle, uma_predict_unit
+):
     """Test BatchServerPredictUnit with multiple concurrent requests."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -661,6 +664,7 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
+        predict_unit=uma_predict_unit,
     )
 
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]

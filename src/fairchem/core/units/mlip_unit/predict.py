@@ -44,6 +44,8 @@ from fairchem.core.units.mlip_unit.utils import (
 )
 
 if TYPE_CHECKING:
+    from ase import Atoms
+
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
@@ -77,6 +79,8 @@ def collate_predictions(predict_fn):
 
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None: ...
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]: ...
@@ -236,6 +240,14 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Delegates to the model's backbone for model-specific validation.
+        """
+        self.model.module.validate_atoms_data(atoms, task_name)
 
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)
@@ -431,6 +443,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             inference_settings = InferenceSettings()
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
+        self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
@@ -562,6 +575,14 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
 
         return self.local_rank0.predict(self.atomic_data_on_device)
 
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Delegates to the model's validate_atoms_data captured at init time.
+        """
+        self._validate_atoms_data_fn(atoms, task_name)
+
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
         return self._dataset_to_tasks
@@ -578,14 +599,16 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
         server_handle,
+        predict_unit: MLIPPredictUnit,
     ):
         """
         Args:
             server_handle: Ray Serve deployment handle for BatchPredictServer
-            dataset_to_tasks: Mapping from dataset names to their associated tasks
-            atom_refs: Optional atom references dictionary
+            predict_unit: Local MLIPPredictUnit used for input validation.
+                Validation must run locally because it mutates atoms.info.
         """
         self.server_handle = server_handle
+        self._predict_unit = predict_unit
 
     def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
         """
@@ -600,6 +623,14 @@ class BatchServerPredictUnit(MLIPPredictUnitProtocol):
             data, undo_element_references
         ).result()
         return result
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Runs locally (not via Ray Serve) because validation mutates atoms.info.
+        """
+        self._predict_unit.validate_atoms_data(atoms, task_name)
 
     @property
     def dataset_to_tasks(self) -> dict:

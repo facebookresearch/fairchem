@@ -7,11 +7,15 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
 import torch
 import torch.nn as nn
+from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -44,20 +48,41 @@ from fairchem.core.models.uma.outputs import (
     compute_forces,
     compute_forces_and_stress,
     compute_hessian,
+    get_displacement_and_cell,
     get_l_component,
-    prepare_displacement_and_cell,
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
+from fairchem.core.units.mlip_unit.api.inference import (
+    CHARGE_RANGE,
+    DEFAULT_CHARGE,
+    DEFAULT_SPIN,
+    DEFAULT_SPIN_OMOL,
+    SPIN_RANGE,
+    UMATask,
+)
 
 from .escn_md_block import eSCNMD_Block
 
 if TYPE_CHECKING:
+    from ase import Atoms
+
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+
+
+@dataclass
+class GradRegressConfig:
+    """
+    Configuration for gradient-based computation of forces and stress.
+    """
+
+    direct_forces: bool = False
+    forces: bool = False
+    stress: bool = False
 
 
 def add_n_empty_edges(
@@ -84,6 +109,63 @@ def add_n_empty_edges(
     graph_dict["edge_distance"] = torch.cat(
         (edge_distance.expand(edges_to_add), graph_dict["edge_distance"]), dim=0
     )
+
+
+def get_balanced_attribute(
+    emb: torch.Tensor,
+    target_sum: torch.Tensor,
+    natoms: torch.Tensor,
+    batch: torch.Tensor,
+    balance_attribute_offset: float = 0,
+    balance_channel_idx: int = 0,
+) -> torch.Tensor:
+    """Balance per-atom attributes (charge/spin) to sum to system target.
+
+    Args:
+        emb: Node embeddings of shape [num_atoms, sph_features, channels]
+        target_sum: Target sum per system of shape [num_systems]
+        natoms: Number of atoms per system of shape [num_systems]
+        batch: Batch indices mapping atoms to systems of shape [num_atoms]
+        balance_attribute_offset: Offset to subtract from target (e.g., 1 for spin)
+        balance_channel_idx: Which channel index to balance
+
+    Returns:
+        Modified embeddings with the specified channel balanced to sum to target.
+
+    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
+    which provides correct gradients in both forward and backward passes.
+    """
+    out_emb = emb.clone()
+
+    charge_unbalanced = emb[:, 0, balance_channel_idx]
+
+    system_scalars_part = torch.zeros(
+        len(natoms),
+        device=emb.device,
+        dtype=emb.dtype,
+    )
+
+    system_scalars_part.index_add_(0, batch, charge_unbalanced.view(-1))
+
+    # Reduce partial sums across all graph parallel ranks
+    # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
+    # ensuring correct gradient computation when atoms are split across ranks.
+    if gp_utils.initialized():
+        system_scalar = all_reduce_with_grad(
+            system_scalars_part, group=gp_utils.get_gp_group()
+        )
+    else:
+        system_scalar = system_scalars_part
+
+    correction = (system_scalar - (target_sum - balance_attribute_offset)) / natoms
+
+    balanced_node_scalar = charge_unbalanced - correction[batch]
+
+    out_emb[:, 0, balance_channel_idx] = (
+        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
+    )
+
+    return out_emb
 
 
 @torch.compiler.disable
@@ -144,6 +226,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
+        charge_balanced_channels: list[int] | None = None,
+        spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
@@ -160,11 +244,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.always_use_pbc = always_use_pbc
 
         # energy conservation related
-        self.regress_forces = regress_forces
-        self.direct_forces = direct_forces
-        self.regress_stress = regress_stress
-        self.regress_hessian = regress_hessian
-        self.hessian_vmap = hessian_vmap
+        self.regress_config = GradRegressConfig(
+            direct_forces=direct_forces, forces=regress_forces, stress=regress_stress
+        )
+
+        # which channels to balance
+        self.charge_balanced_channels = (
+            charge_balanced_channels if charge_balanced_channels is not None else []
+        )
+        self.spin_balanced_channels = (
+            spin_balanced_channels if spin_balanced_channels is not None else []
+        )
 
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
@@ -315,6 +405,45 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
 
+    @property
+    def direct_forces(self) -> bool:
+        return self.regress_config.direct_forces
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
+
+    def balance_channels(
+        self,
+        x_message_prime: torch.Tensor,
+        charge: torch.Tensor,
+        spin: torch.Tensor,
+        natoms: torch.Tensor,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
+        for channel_idx in self.charge_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=charge,
+                natoms=natoms,
+                batch=batch,
+                balance_channel_idx=channel_idx,
+            )
+        for channel_idx in self.spin_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=spin,
+                natoms=natoms,
+                batch=batch,
+                balance_attribute_offset=1,
+                balance_channel_idx=channel_idx,
+            )
+        return x_message_prime
+
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -460,11 +589,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = prepare_displacement_and_cell(
-                data_dict,
-                regress_stress=self.regress_stress,
-                regress_forces=self.regress_forces,
-                direct_forces=self.direct_forces,
+            displacement, orig_cell = get_displacement_and_cell(
+                data=data_dict,
+                regress_config=self.regress_config,
             )
 
         with record_function("generate_graph"):
@@ -553,6 +680,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    charge=data_dict["charge"],
+                    spin=data_dict["spin"],
+                    natoms=data_dict["natoms"],
+                    batch=data_dict["batch"],
                 )
 
         # Final layer norm
@@ -728,6 +863,61 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         assert merged[3] == current[3], f"Dataset differs: {merged[3]} vs {current[3]}"
 
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        UMA-specific validation: handle charge/spin for OMOL task.
+
+        Sets default values for charge and spin in atoms.info and validates
+        they are within acceptable ranges.
+        """
+        # Set charge defaults
+        if "charge" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                logging.warning(
+                    "task_name='omol' detected, but charge is not set in atoms.info. "
+                    "Defaulting to charge=0. Ensure charge is an integer representing "
+                    "the total charge on the system and is within the range -100 to 100."
+                )
+            atoms.info["charge"] = DEFAULT_CHARGE
+
+        # Set spin defaults (OMOL uses spin=1, others use spin=0)
+        if "spin" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                atoms.info["spin"] = DEFAULT_SPIN_OMOL
+                logging.warning(
+                    "task_name='omol' detected, but spin multiplicity is not set in "
+                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
+                    "representing the spin multiplicity from 0 to 100."
+                )
+            else:
+                atoms.info["spin"] = DEFAULT_SPIN
+
+        # Validate charge range
+        charge = atoms.info["charge"]
+        if not isinstance(charge, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for charge: {type(charge)}. "
+                "Charge must be an integer representing the total charge on the system."
+            )
+        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for charge: {charge}. "
+                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
+            )
+
+        # Validate spin range
+        spin = atoms.info["spin"]
+        if not isinstance(spin, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for spin: {type(spin)}. "
+                "Spin must be an integer representing the spin multiplicity."
+            )
+        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for spin: {spin}. "
+                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+            )
+
 
 class MLP_Energy_Head(nn.Module, HeadInterface):
     def __init__(
@@ -791,35 +981,23 @@ class MLP_EFS_Head(MLP_Energy_Head):
         )
         backbone.energy_block = None
         backbone.force_block = None
-
-        # Store backbone reference without registering it as a submodule
-        # Use object.__setattr__ to bypass PyTorch's module registration
-        object.__setattr__(self, "_backbone_ref", backbone)
-        # self._backbone_ref = lambda: backbone
-
-        # TODO: this is not very clean, bug-prone.
-        # but is currently necessary for finetuning pretrained models that did not have
-        # the direct_forces flag set to False
-        backbone.direct_forces = False
-        assert (
-            not backbone.direct_forces
-        ), "EFS head is only used for gradient-based forces/stress."
-
-    @property
-    def regress_stress(self) -> bool:
-        return self._backbone_ref.regress_stress
+        self.regress_config = backbone.regress_config
 
     @property
     def regress_forces(self) -> bool:
-        return self._backbone_ref.regress_forces
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     @property
     def regress_hessian(self) -> bool:
-        return self._backbone_ref.regress_hessian
+        return self.regress_config.hessian
 
     @property
     def hessian_vmap(self) -> bool:
-        return self._backbone_ref.hessian_vmap
+        return self.regress_config.hessian_vmap
 
     @conditional_grad(torch.enable_grad())
     def forward(
@@ -851,7 +1029,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
         # Hessian computation requires second derivatives, so we need create_graph=True
         create_graph = self.training or self.regress_hessian
 
-        if self.regress_stress:
+        if self.regress_config.stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos_original"],
@@ -863,7 +1041,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
             pos = data["pos_original"]
-        elif self.regress_forces:
+        elif self.regress_config.forces:
             forces = compute_forces(energy_part, data["pos"], training=create_graph)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             pos = data["pos"]
