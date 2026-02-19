@@ -1,6 +1,5 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
-
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
@@ -12,7 +11,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from fairchem.core.models.uma.escn_moe import DatasetSpecificMoEWrapper
+from fairchem.core.models.uma.escn_moe import (
+    DatasetSpecificMoEWrapper,
+    eSCNMDMoeBackbone,
+)
 from fairchem.core.models.uma.nn.mole import MOLE, MOLEGlobals
 
 
@@ -96,6 +98,94 @@ def test_1mole_merge():
     linear_output = linear(x.clone())
 
     assert mole_output.isclose(linear_output, atol=0.0001, rtol=0.001).all()
+
+
+def get_moe_backbone(composition_dropout: float = 0.0):
+    """Create a minimal eSCNMDMoeBackbone for testing."""
+    return eSCNMDMoeBackbone(
+        max_num_elements=100,
+        sphere_channels=16,
+        lmax=2,
+        mmax=2,
+        otf_graph=True,
+        edge_channels=16,
+        num_distance_basis=8,
+        use_dataset_embedding=False,
+        always_use_pbc=False,
+        num_experts=4,
+        use_composition_embedding=True,
+        composition_dropout=composition_dropout,
+    )
+
+
+class TestCompositionDropout:
+    """Tests for composition_dropout feature."""
+
+    def test_dropout_disabled_in_eval_mode(self):
+        """Verify dropout has no effect in eval mode - expert coefficients should match."""
+        torch.manual_seed(42)
+        model_no_dropout = get_moe_backbone(composition_dropout=0.0)
+        torch.manual_seed(42)
+        model_with_dropout = get_moe_backbone(composition_dropout=0.5)
+
+        # Both models in eval mode
+        model_no_dropout.eval()
+        model_with_dropout.eval()
+
+        # Create test inputs for set_MOLE_coefficients
+        atomic_numbers = torch.tensor([6, 1, 1, 1, 1])  # CH4
+        batch = torch.zeros(5, dtype=torch.long)  # single system
+        csd_mixed_emb = torch.randn(1, model_no_dropout.sphere_channels)
+
+        # Call set_MOLE_coefficients directly
+        model_no_dropout.set_MOLE_coefficients(atomic_numbers, batch, csd_mixed_emb)
+        model_with_dropout.set_MOLE_coefficients(atomic_numbers, batch, csd_mixed_emb)
+
+        # In eval mode, expert_mixing_coefficients should be identical
+        assert torch.allclose(
+            model_no_dropout.global_mole_tensors.expert_mixing_coefficients,
+            model_with_dropout.global_mole_tensors.expert_mixing_coefficients,
+        )
+
+    def test_dropout_active_in_train_mode(self):
+        """Verify dropout causes different expert coefficients in train mode."""
+        torch.manual_seed(42)
+        model_no_dropout = get_moe_backbone(composition_dropout=0.0)
+        torch.manual_seed(42)
+        model_with_dropout = get_moe_backbone(composition_dropout=0.5)
+
+        # Both models in train mode
+        model_no_dropout.train()
+        model_with_dropout.train()
+
+        # Create test inputs for set_MOLE_coefficients
+        atomic_numbers = torch.tensor([6, 1, 1, 1, 1])  # CH4
+        batch = torch.zeros(5, dtype=torch.long)  # single system
+        torch.manual_seed(123)
+        csd_mixed_emb = torch.randn(1, model_no_dropout.sphere_channels)
+
+        # Call set_MOLE_coefficients directly
+        model_no_dropout.set_MOLE_coefficients(atomic_numbers, batch, csd_mixed_emb)
+        model_with_dropout.set_MOLE_coefficients(atomic_numbers, batch, csd_mixed_emb)
+
+        # In train mode with dropout, expert_mixing_coefficients should differ
+        assert not torch.allclose(
+            model_no_dropout.global_mole_tensors.expert_mixing_coefficients,
+            model_with_dropout.global_mole_tensors.expert_mixing_coefficients,
+        )
+
+    def test_mask_drops_atoms_statistically(self):
+        """Verify mask drops approximately correct percentage of atoms."""
+        dropout_rate = 0.5
+        n_atoms = 1000
+        atomic_numbers = torch.arange(n_atoms)
+
+        torch.manual_seed(42)
+        mask = torch.rand_like(atomic_numbers, dtype=torch.float) > dropout_rate
+        kept_ratio = mask.sum().item() / n_atoms
+
+        # Should keep approximately 50% (within 10% tolerance)
+        assert 0.4 < kept_ratio < 0.6
 
 
 @patch("fairchem.core.models.uma.escn_moe.registry.get_model_class")

@@ -50,6 +50,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         moe_dropout: float = 0.0,
         use_global_embedding: bool = False,  # obsolete
         use_composition_embedding: bool = False,
+        composition_dropout: float = 0.0,
         moe_expert_coefficient_norm: str = "softmax",
         act=torch.nn.SiLU,
         layers_moe=None,
@@ -72,6 +73,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                 act=act,
                 layers_mole=layers_moe,
                 use_composition_embedding=use_composition_embedding,
+                composition_dropout=composition_dropout,
                 mole_layer_type=moe_layer_type,
                 mole_single=moe_single,
                 mole_type=moe_type,
@@ -114,13 +116,27 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.autocast(device_type=atomic_numbers_full.device.type, enabled=False):
             embeddings = []
             if self.use_composition_embedding:
-                composition_by_atom = self.composition_embedding(atomic_numbers_full)
+                effective_atomic_numbers_full = atomic_numbers_full
+                effective_batch_full = batch_full
+
+                if self.training and self.composition_dropout > 0.0:
+                    # if greater than keep
+                    mask = (
+                        torch.rand_like(atomic_numbers_full, dtype=torch.float)
+                        > self.composition_dropout
+                    )
+                    effective_atomic_numbers_full = atomic_numbers_full[mask]
+                    effective_batch_full = batch_full[mask]
+
+                composition_by_atom = self.composition_embedding(
+                    effective_atomic_numbers_full
+                )
                 composition = composition_by_atom.new_zeros(
                     csd_mixed_emb.shape[0],
                     self.sphere_channels,
                 ).index_reduce_(
                     0,
-                    batch_full,
+                    effective_batch_full,
                     composition_by_atom,
                     reduce="mean",
                     include_self=np.isclose(self.model_version, 1.0).item(),
