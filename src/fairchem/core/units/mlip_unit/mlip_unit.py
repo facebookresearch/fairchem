@@ -43,7 +43,6 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
 )
 from fairchem.core.common.logger import WandBSingletonLogger
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import StrEnum
 from fairchem.core.components.train.train_runner import Checkpointable
 from fairchem.core.datasets.atomic_data import AtomicData
@@ -173,7 +172,9 @@ def initialize_finetuning_model(
                 f"{head_name} head does not specify module to use for the head"
             )
         module_name = head_config.pop("module")
-        model.output_heads[head_name] = registry.get_model_class(module_name)(
+        from fairchem.core.models import get_model_class
+
+        model.output_heads[head_name] = get_model_class(module_name)(
             model.backbone,
             **head_config,
         )

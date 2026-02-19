@@ -17,7 +17,6 @@ import hydra
 import torch
 from torch import nn
 
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import (
     load_model_and_weights_from_checkpoint,
 )
@@ -127,7 +126,13 @@ class BackboneInterface(metaclass=ABCMeta):
         pass  # noqa
 
 
-@registry.register_model("hydra")
+def _get_model_class(name: str) -> type:
+    """Helper to get model class, using lazy import to avoid circular imports."""
+    from fairchem.core.models import get_model_class
+
+    return get_model_class(name)
+
+
 class HydraModel(nn.Module):
     def __init__(
         self,
@@ -171,9 +176,7 @@ class HydraModel(nn.Module):
         if backbone is not None:
             backbone = copy.deepcopy(backbone)
             backbone_model_name = backbone.pop("model")
-            self.backbone: BackboneInterface = registry.get_model_class(
-                backbone_model_name
-            )(
+            self.backbone: BackboneInterface = _get_model_class(backbone_model_name)(
                 **backbone,
             )
         elif starting_model is not None:
@@ -207,7 +210,7 @@ class HydraModel(nn.Module):
                     )
 
                 module_name = head_config.pop("module")
-                self.output_heads[head_name] = registry.get_model_class(module_name)(
+                self.output_heads[head_name] = _get_model_class(module_name)(
                     self.backbone,
                     **head_config,
                 )

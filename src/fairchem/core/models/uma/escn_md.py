@@ -18,7 +18,6 @@ from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
-from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
@@ -166,7 +165,6 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int 
         add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
-@registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
     def __init__(
         self,

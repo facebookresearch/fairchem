@@ -18,7 +18,7 @@ import subprocess
 import sys
 from functools import reduce, wraps
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 from uuid import uuid4
 
 import torch
@@ -26,7 +26,6 @@ import torch.nn as nn
 import yaml
 
 import fairchem.core
-from fairchem.core.common.registry import registry
 
 try:
     from enum import StrEnum
@@ -42,6 +41,8 @@ if TYPE_CHECKING:
 
     from torch.nn.modules.module import _IncompatibleKeys
 
+
+T = TypeVar("T", bound=type)
 
 DEFAULT_ENV_VARS = {
     # Expandable segments is a new cuda feature that helps with memory fragmentation during frequent
@@ -139,49 +140,25 @@ def _get_project_root() -> Path:
     Gets the root folder of the project (the "ocp" folder)
     :return: The absolute path to the project root.
     """
-    from fairchem.core.common.registry import registry
+    # Use Path(__file__) directly instead of registry
+    root_folder = Path(__file__).resolve().absolute().parent.parent
 
-    # Automatically load all of the modules, so that
-    # they register with registry
-    root_folder = registry.get("fairchem_core_root", no_warning=True)
-
-    if root_folder is not None:
-        assert isinstance(root_folder, str), "fairchem_core_root must be a string"
-        root_folder = Path(root_folder).resolve().absolute()
-        assert root_folder.exists(), f"{root_folder} does not exist"
-        assert root_folder.is_dir(), f"{root_folder} is not a directory"
-    else:
-        root_folder = Path(__file__).resolve().absolute().parent.parent
-
-    # root_folder is the "ocpmodes" folder, so we need to go up one more level
+    # root_folder is the "core" folder, so we need to go up one more level
     return root_folder.parent
 
 
 # Copied from https://github.com/facebookresearch/mmf/blob/master/mmf/utils/env.py#L89.
 def setup_imports(config: dict | None = None) -> None:
-    from fairchem.core.common.registry import registry
+    """Import experimental modules if configured.
 
+    Args:
+        config: Optional configuration dictionary. If provided, can contain
+            'skip_experimental_imports' flag to skip importing experimental modules.
+    """
     skip_experimental_imports = (config or {}).get("skip_experimental_imports", False)
-
-    # First, check if imports are already setup
-    has_already_setup = registry.get("imports_setup", no_warning=True)
-    if has_already_setup:
-        return
-
-    try:
+    if not skip_experimental_imports:
         project_root = _get_project_root()
-        logging.info(f"Project root: {project_root}")
-        importlib.import_module("fairchem.core.common.logger")
-
-        import_keys = ["trainers", "datasets", "models", "tasks"]
-        for key in import_keys:
-            for f in (project_root / "core" / key).rglob("*.py"):
-                _import_local_file(f, project_root=project_root)
-
-        if not skip_experimental_imports:
-            setup_experimental_imports(project_root)
-    finally:
-        registry.register("imports_setup", True)
+        setup_experimental_imports(project_root)
 
 
 def debug_log_entry_exit(func):
@@ -379,7 +356,9 @@ def load_model_and_weights_from_checkpoint(checkpoint_path: str) -> nn.Module:
     # TODO: need to schematize how we save and load the config from checkpoint
     config = checkpoint["config"]["model"]
     name = config.pop("name")
-    model = registry.get_model_class(name)(**config)
+    from fairchem.core.models import get_model_class
+
+    model = get_model_class(name)(**config)
     matched_dict = match_state_dict(model.state_dict(), checkpoint["state_dict"])
     load_state_dict(model, matched_dict, strict=True)
     return model
@@ -452,3 +431,83 @@ def get_subdirectories_sorted_by_time(directory: str) -> list:
         ((str(d), d.stat().st_mtime) for d in directory.iterdir() if d.is_dir()),
         key=lambda x: x[1],
     )
+
+
+def resolve_class(name: str, mapping: dict[str, T], kind: str = "class") -> T:
+    """Resolve a class from a name, supporting both short names and full paths.
+
+    This function first looks up the name in the provided mapping dictionary.
+    If not found and the name contains a dot (indicating a module path),
+    it attempts to import the class directly from the fully qualified path.
+
+    Args:
+        name: Short name (e.g., "hydra") or full path
+            (e.g., "fairchem.core.models.base.HydraModel")
+        mapping: Dict mapping short names to classes
+        kind: Human-readable kind for error messages (e.g., "model", "dataset")
+
+    Returns:
+        The resolved class
+
+    Raises:
+        RuntimeError: If the class cannot be found in the mapping or imported
+    """
+    # First check the mapping
+    if name in mapping:
+        return mapping[name]
+
+    # If name contains a dot, try to import it as a fully qualified path
+    if name.count(".") >= 1:
+        try:
+            return _get_absolute_mapping(name)
+        except RuntimeError:
+            pass  # Fall through to error message
+
+    # Build helpful error message
+    existing_keys = list(mapping.keys())
+    if len(existing_keys) == 0:
+        raise RuntimeError(
+            f"Registry for {kind} is empty. No {kind}s have been registered."
+        )
+
+    # Get an example class path for the error message
+    example_cls = mapping.get(existing_keys[-1], None) if existing_keys else None
+    example_path = (
+        f"{example_cls.__module__}.{example_cls.__qualname__}"
+        if example_cls is not None
+        else "fairchem.core.models.base.HydraModel"
+    )
+
+    keys_str = ", ".join(f"'{k}'" for k in existing_keys)
+    raise RuntimeError(
+        f"Failed to find the {kind} '{name}'. "
+        f"You may either use a {kind} from the registry (one of {keys_str}) "
+        f"or provide the full import path to the {kind} (e.g., '{example_path}')."
+    )
+
+
+def _get_absolute_mapping(name: str) -> type:
+    """Import a class from a fully qualified module path.
+
+    Args:
+        name: Fully qualified class path (e.g., "fairchem.core.models.base.HydraModel")
+
+    Returns:
+        The imported class
+    """
+    module_name = ".".join(name.split(".")[:-1])
+    class_name = name.split(".")[-1]
+
+    try:
+        module = importlib.import_module(module_name)
+    except (ModuleNotFoundError, ValueError) as e:
+        raise RuntimeError(
+            f"Could not import module `{module_name}` for import `{name}`"
+        ) from e
+
+    try:
+        return getattr(module, class_name)
+    except AttributeError as e:
+        raise RuntimeError(
+            f"Could not import class `{class_name}` from module `{module_name}`"
+        ) from e
