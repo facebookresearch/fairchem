@@ -36,7 +36,7 @@ jobs:
       max-parallel: 10
       matrix:
         python_version: ['3.10', '3.13']
-        requirements: ['requirements_numpy1.26.txt', 'requirements_numpy2.2.txt']
+        requirements: ['requirements.txt']
 
     steps:
       - name: Checkout code
@@ -130,7 +130,7 @@ jobs:
       max-parallel: 1
       matrix:
         python_version: ['3.13']
-        requirements: ['requirements_numpy1.26.txt', 'requirements_numpy2.2.txt']
+        requirements: ['requirements.txt']
 
     steps:
       - name: Checkout code
@@ -183,7 +183,7 @@ jobs:
       max-parallel: 1
       matrix:
         python_version: ['3.13']
-        requirements: ['requirements_numpy1.26.txt', 'requirements_numpy2.2.txt']
+        requirements: ['requirements.txt']
 
     steps:
       - uses: actions/checkout@v6

@@ -21,15 +21,6 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-# TODO: Remove this warning when we require numpy >= 2.0
-import numpy as np
-
-if np.__version__.split(".")[0] == "1":
-    warnings.warn(
-        f"Numpy version {np.__version__} can result in slower fairchem-core performance. Version 2.0 or higher is recommended.",
-        UserWarning,
-    )
-
 from fairchem.core._config import clear_cache
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import FAIRChemCalculator

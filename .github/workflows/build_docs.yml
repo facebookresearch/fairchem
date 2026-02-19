@@ -74,7 +74,7 @@ jobs:
           packages/fairchem-data-oc[dev] \
           packages/fairchem-applications-cattsunami \
           packages/fairchem-data-omat \
-          -r tests/requirements_numpy2.2.txt # pin test packages
+          -r tests/requirements.txt # pin test packages
 
     # Build the book
     - name: Build the book

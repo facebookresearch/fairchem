@@ -99,11 +99,7 @@ class TestBulk:
             precomputed_slabs_dir=precomputed_slabs_dir
         )
 
-        if (
-            len(precomputed_slabs) == 15
-            or np.__version__.split(".")[0] == "1"
-            and len(precomputed_slabs) == 16
-        ):
+        if len(precomputed_slabs) == 15:
             pytest.xfail(
                 f"Number of generated slabs {len(precomputed_slabs)} is off due to pymatgen bug!"
             )
