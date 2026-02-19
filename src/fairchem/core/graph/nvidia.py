@@ -110,13 +110,11 @@ def get_neighbors_nvidia(
     if natoms is None:
         natoms = torch.tensor([total_atoms], dtype=torch.long, device=device)
 
-    # When not enforcing strictly, request more neighbors to handle degeneracy
+    # Request more neighbors to handle degeneracy to allow our max neighbors filter to work properly
     # The NVIDIA neighbor list doesn't prioritize closest neighbors, so we need
     # a large buffer to ensure we capture all neighbors within the cutoff.
     # This allows the mask to correctly include degenerate edges.
-    # buffer_max_neigh = (
-    #     max_neigh * 4 if not enforce_max_neighbors_strictly else max_neigh
-    # )
+    # note estimate_max_neighbors(cutoff=6.0, safety_factor=2.0) = 640 which should be overly safe.
     buffer_max_neigh = estimate_max_neighbors(cutoff=cutoff, safety_factor=2.0)
 
     # Small epsilon to ensure atoms at exactly cutoff distance are included
