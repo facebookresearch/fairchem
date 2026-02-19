@@ -36,9 +36,9 @@ if TYPE_CHECKING:
     from ase.md.md import MolecularDynamics
 
 
-class _StopcarDetected(Exception):
+class _StopfairDetected(Exception):
     """
-    Raised by the STOPCAR callback to break out of dyn.run().
+    Raised by the STOPFAIR callback to break out of dyn.run().
     """
 
 
@@ -79,9 +79,9 @@ class MDRunner(CalculateRunner):
             trajectory_interval: Interval for writing trajectory frames
             log_interval: Interval for writing thermodynamic data to log
             checkpoint_interval: Interval (in steps) for checking for a
-                STOPCAR file in run_dir. If a STOPCAR file is found, the
+                STOPFAIR file in run_dir. If a STOPFAIR file is found, the
                 simulation saves state and stops gracefully. If None, no
-                STOPCAR checking is performed.
+                STOPFAIR checking is performed.
             trajectory_writer: Trajectory writer class or factory function.
                 Defaults to ParquetTrajectoryWriter if None.
             trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
@@ -247,20 +247,20 @@ class MDRunner(CalculateRunner):
 
         self._dyn.attach(log_with_alignment, interval=1)
 
-        # Attach STOPCAR checker if checkpoint_interval is configured
+        # Attach STOPFAIR checker if checkpoint_interval is configured
         if self.checkpoint_interval is not None and self.checkpoint_interval > 0:
-            stopcar_path = (
-                Path(self.job_config.metadata.checkpoint_dir).parent / "STOPCAR"
+            stopfair_path = (
+                Path(self.job_config.metadata.checkpoint_dir).parent / "STOPFAIR"
             )
 
-            def check_stopcar():
+            def check_stopfair():
                 if self._dyn.get_number_of_steps() == 0:
                     return
-                if stopcar_path.exists():
+                if stopfair_path.exists():
                     current_step = self._dyn.get_number_of_steps() + self._start_step
                     save_path = self.job_config.metadata.preemption_checkpoint_dir
                     logging.info(
-                        f"STOPCAR detected in {stopcar_path.parent}, "
+                        f"STOPFAIR detected in {stopfair_path.parent}, "
                         f"saving state to {save_path} at step {current_step}"
                     )
                     if self.save_state(save_path, is_preemption=True):
@@ -273,19 +273,21 @@ class MDRunner(CalculateRunner):
                             )
                             OmegaConf.save(cfg_copy, resume_config_path)
                             logging.info(f"Resume config saved to {resume_config_path}")
-                    raise _StopcarDetected
+                        stopfair_path.unlink()
+                        logging.info(f"Deleted STOPFAIR file: {stopfair_path}")
+                    raise _StopfairDetected
 
-            self._dyn.attach(check_stopcar, interval=self.checkpoint_interval)
+            self._dyn.attach(check_stopfair, interval=self.checkpoint_interval)
 
         remaining_steps = self.steps - self._start_step
-        stopped_by_stopcar = False
+        stopped_by_stopfair = False
 
         try:
             self._dyn.run(remaining_steps)
-        except _StopcarDetected:
-            stopped_by_stopcar = True
+        except _StopfairDetected:
+            stopped_by_stopfair = True
 
-        if not stopped_by_stopcar:
+        if not stopped_by_stopfair:
             self._trajectory_writer.close()
 
         return {
@@ -294,7 +296,7 @@ class MDRunner(CalculateRunner):
             "total_steps": self.steps,
             "start_step": self._start_step,
             "structure_id": sid,
-            "stopped_by_stopcar": stopped_by_stopcar,
+            "stopped_by_stopfair": stopped_by_stopfair,
         }
 
     def write_results(

@@ -38,6 +38,8 @@ from fairchem.core.components.calculate import (
 class MockMetadata:
     results_dir: str
     checkpoint_dir: str = ""
+    preemption_checkpoint_dir: str = ""
+    config_path: str = ""
     array_job_num: int = 0
 
 
@@ -53,10 +55,18 @@ class MockJobConfig:
 
 
 def _create_mock_job_config(
-    results_dir: str, checkpoint_dir: str = ""
+    results_dir: str,
+    checkpoint_dir: str = "",
+    preemption_checkpoint_dir: str = "",
+    config_path: str = "",
 ) -> MockJobConfig:
     return MockJobConfig(
-        metadata=MockMetadata(results_dir=results_dir, checkpoint_dir=checkpoint_dir),
+        metadata=MockMetadata(
+            results_dir=results_dir,
+            checkpoint_dir=checkpoint_dir,
+            preemption_checkpoint_dir=preemption_checkpoint_dir or checkpoint_dir,
+            config_path=config_path,
+        ),
         scheduler=MockScheduler(num_array_jobs=1),
     )
 
@@ -485,16 +495,17 @@ class TestMDRunner:
                 err_msg=f"Energy mismatch at step {step}",
             )
 
-    def test_stopcar_graceful_stop(self, cu_atoms, results_dir):
+    def test_stopfair_graceful_stop(self, cu_atoms, results_dir):
         """
-        Test that STOPCAR file triggers graceful stop with state saved.
+        Test that STOPFAIR file triggers graceful stop with state saved.
 
         Verifies:
-        1. MD stops when STOPCAR is detected at checkpoint_interval
+        1. MD stops when STOPFAIR is detected at checkpoint_interval
         2. State is saved (checkpoint.xyz, md_state.json, thermostat_state.json)
         3. Trajectory is flushed and readable
-        4. Result dict includes stopped_by_stopcar=True
+        4. Result dict includes stopped_by_stopfair=True
         5. Simulation can be resumed from the saved checkpoint
+        6. STOPFAIR file is deleted after successful save
         """
         run_dir = results_dir / "run_dir"
         md_results_dir = results_dir / "results"
@@ -529,14 +540,14 @@ class TestMDRunner:
             checkpoint_dir=str(checkpoint_dir),
         )
 
-        # Write STOPCAR in checkpoint_dir - should stop at first checkpoint
-        stopcar_path = checkpoint_dir / "STOPCAR"
-        stopcar_path.write_text("")
+        # Write STOPFAIR in parent of checkpoint_dir (where the code looks for it)
+        stopfair_path = checkpoint_dir.parent / "STOPFAIR"
+        stopfair_path.write_text("")
 
         results = runner.calculate(job_num=0, num_jobs=1)
 
         # Should have stopped early
-        assert results["stopped_by_stopcar"] is True
+        assert results["stopped_by_stopfair"] is True
 
         # Checkpoint files should exist
         assert (checkpoint_dir / "checkpoint.xyz").exists()
@@ -554,8 +565,10 @@ class TestMDRunner:
         expected_steps = [0, 10, 20]
         assert steps == expected_steps, f"Expected {expected_steps}, got {steps}"
 
-        # Resume from checkpoint after removing STOPCAR
-        stopcar_path.unlink()
+        # STOPFAIR file should have been deleted after successful save
+        assert not stopfair_path.exists()
+
+        # Resume from checkpoint - no need to manually remove STOPFAIR
         results_dir2 = results_dir / "results2"
         results_dir2.mkdir()
 
@@ -577,7 +590,7 @@ class TestMDRunner:
         assert runner2._start_step == checkpoint_interval
 
         results2 = runner2.calculate(job_num=0, num_jobs=1)
-        assert results2["stopped_by_stopcar"] is False
+        assert results2["stopped_by_stopfair"] is False
 
         # Resumed trajectory continues from checkpoint step (which is re-captured)
         traj_df2 = pd.read_parquet(results2["trajectory_file"])
@@ -585,9 +598,9 @@ class TestMDRunner:
         expected_steps2 = [20, 30, 40, 50, 60, 70, 80, 90, 100]
         assert steps2 == expected_steps2, f"Expected {expected_steps2}, got {steps2}"
 
-    def test_no_stopcar_runs_to_completion(self, cu_atoms, results_dir):
+    def test_no_stopfair_runs_to_completion(self, cu_atoms, results_dir):
         """
-        Test that without STOPCAR, checkpoint_interval runs to completion normally.
+        Test that without STOPFAIR, checkpoint_interval runs to completion normally.
         """
         checkpoint_dir = results_dir / "checkpoints"
         checkpoint_dir.mkdir()
@@ -611,7 +624,7 @@ class TestMDRunner:
         )
         results = runner.calculate(job_num=0, num_jobs=1)
 
-        assert results["stopped_by_stopcar"] is False
+        assert results["stopped_by_stopfair"] is False
 
         traj_df = pd.read_parquet(results["trajectory_file"])
         steps = list(traj_df["step"])
