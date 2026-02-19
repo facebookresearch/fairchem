@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig, ListConfig
 from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
@@ -192,27 +193,41 @@ def resolve_dataset_mapping(
             mapping keys.
     """
     if deprecated_list is not None and dataset_mapping is not None:
-        raise ValueError(
-            f"Both '{deprecated_param_name}' and 'dataset_mapping' provided. "
-            f"Please provide 'dataset_mapping' only as '{deprecated_param_name}' is deprecated."
+        msg = (
+            f"Both '{deprecated_param_name}' (={deprecated_list}) and "
+            f"'dataset_mapping' (={dataset_mapping}) have been provided. "
+            f"Please provide 'dataset_mapping' only in the config as '{deprecated_param_name}' is deprecated."
         )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
     if deprecated_list is None and dataset_mapping is None:
-        raise ValueError(
-            "'dataset_mapping' must be provided to use dataset embeddings."
-        )
+        msg = "'dataset_mapping' must be provided in the config to use dataset embeddings."
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
     if deprecated_list is not None:
+        if not isinstance(deprecated_list, (list, ListConfig)):
+            msg = f"If '{deprecated_param_name}' is provided in the config, it must be a list of dataset names. Got: {deprecated_list!r}"
+            logging.error(msg, stack_info=True)
+            raise ValueError(msg)
         dataset_mapping = {name: name for name in deprecated_list}
         logging.warning(
-            f"If '{deprecated_param_name}' is provided, the code assumes that each dataset "
+            f"If '{deprecated_param_name}' is provided in the config, the code assumes that each dataset "
             f"maps to itself. Please use 'dataset_mapping' as '{deprecated_param_name}' "
             "is deprecated and will be removed in the future."
         )
-    if not isinstance(dataset_mapping, dict) or not dataset_mapping:
-        raise ValueError("'dataset_mapping' must be a non-empty dictionary.")
+    if not isinstance(dataset_mapping, (dict, DictConfig)) or not dataset_mapping:
+        msg = f"'dataset_mapping' must be a non-empty dictionary, got: {dataset_mapping!r}"
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
     if not set(dataset_mapping.values()) <= set(dataset_mapping.keys()):
-        raise ValueError(
-            "'dataset_mapping.values()' must be a subset of 'dataset_mapping.keys()'."
+        missing = set(dataset_mapping.values()) - set(dataset_mapping.keys())
+        msg = (
+            f"dataset_mapping values {missing} are not present in "
+            f"dataset_mapping keys {set(dataset_mapping.keys())}. "
+            f"Values must be a subset of keys. Full mapping provided: {dataset_mapping}"
         )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
     return dataset_mapping
 
 
