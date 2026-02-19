@@ -698,10 +698,14 @@ def _quaternion_chart1_standard(
     z = ex
 
     q = torch.stack([w, x, y, z], dim=-1)
-    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
-    safe_norm = norm.clamp(min=1e-12)
+    eps = 1e-7
+    eps_sq = eps**2
+    q_sq = torch.sum(q**2, dim=-1, keepdim=True)
+    # Only add eps^2 when q is near-zero
+    stabilizer = torch.where(q_sq < eps_sq, eps_sq, torch.zeros_like(q_sq))
+    norm = torch.sqrt(q_sq + stabilizer)
 
-    return q / safe_norm
+    return q / norm
 
 
 def _quaternion_chart2_via_minus_y(
@@ -726,10 +730,14 @@ def _quaternion_chart2_via_minus_y(
     z = torch.zeros_like(ex)
 
     q = torch.stack([w, x, y, z], dim=-1)
-    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
-    safe_norm = norm.clamp(min=1e-12)
+    eps = 1e-7
+    eps_sq = eps**2
+    q_sq = torch.sum(q**2, dim=-1, keepdim=True)
+    # Only add eps^2 when q is near-zero
+    stabilizer = torch.where(q_sq < eps_sq, eps_sq, torch.zeros_like(q_sq))
+    norm = torch.sqrt(q_sq + stabilizer)
 
-    return q / safe_norm
+    return q / norm
 
 
 def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
