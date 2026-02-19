@@ -26,7 +26,76 @@ from fairchem.core.datasets.common_structures import (
     get_water_box,
 )
 from fairchem.core.graph.compute import generate_graph
-from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
+from fairchem.core.graph.radius_graph_pbc import (
+    radius_graph_pbc,
+    radius_graph_pbc_v2,
+    sum_partitions,
+)
+
+
+class TestSumPartitions:
+    """Tests for the sum_partitions helper function."""
+
+    def test_sum_partitions_basic(self):
+        """Test basic partitioning with simple values."""
+        x = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        # Partition indices: [0, 2, 4, 6] means partitions [0:2], [2:4], [4:6]
+        partition_idxs = torch.tensor([0, 2, 4, 6])
+        result = sum_partitions(x, partition_idxs)
+        expected = torch.tensor([3.0, 7.0, 11.0])  # 1+2, 3+4, 5+6
+        assert torch.allclose(result, expected)
+
+    def test_sum_partitions_single_partition(self):
+        """Test with a single partition covering all elements."""
+        x = torch.tensor([1.0, 2.0, 3.0, 4.0])
+        partition_idxs = torch.tensor([0, 4])
+        result = sum_partitions(x, partition_idxs)
+        expected = torch.tensor([10.0])  # 1+2+3+4
+        assert torch.allclose(result, expected)
+
+    def test_sum_partitions_empty_partitions(self):
+        """Test with zero partitions."""
+        x = torch.tensor([1.0, 2.0, 3.0])
+        partition_idxs = torch.tensor([0])  # No partitions (needs at least 2 indices)
+        result = sum_partitions(x, partition_idxs)
+        assert result.shape[0] == 0
+        assert result.dtype == x.dtype
+
+    def test_sum_partitions_uneven_partitions(self):
+        """Test with partitions of different sizes."""
+        x = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+        # Partitions: [0:1], [1:4], [4:7] -> sizes 1, 3, 3
+        partition_idxs = torch.tensor([0, 1, 4, 7])
+        result = sum_partitions(x, partition_idxs)
+        expected = torch.tensor([1.0, 9.0, 18.0])  # 1, 2+3+4, 5+6+7
+        assert torch.allclose(result, expected)
+
+    def test_sum_partitions_integer_dtype(self):
+        """Test that integer dtypes are preserved."""
+        x = torch.tensor([1, 2, 3, 4, 5, 6], dtype=torch.long)
+        partition_idxs = torch.tensor([0, 3, 6])
+        result = sum_partitions(x, partition_idxs)
+        expected = torch.tensor([6, 15], dtype=torch.long)  # 1+2+3, 4+5+6
+        assert torch.equal(result, expected)
+        assert result.dtype == torch.long
+
+    def test_sum_partitions_single_element_partitions(self):
+        """Test with single-element partitions."""
+        x = torch.tensor([10.0, 20.0, 30.0])
+        partition_idxs = torch.tensor([0, 1, 2, 3])
+        result = sum_partitions(x, partition_idxs)
+        expected = torch.tensor([10.0, 20.0, 30.0])
+        assert torch.allclose(result, expected)
+
+    @pytest.mark.parametrize("device", ["cpu"])
+    def test_sum_partitions_device(self, device):
+        """Test that device is preserved."""
+        x = torch.tensor([1.0, 2.0, 3.0, 4.0], device=device)
+        partition_idxs = torch.tensor([0, 2, 4], device=device)
+        result = sum_partitions(x, partition_idxs)
+        assert result.device.type == device
+        expected = torch.tensor([3.0, 7.0], device=device)
+        assert torch.allclose(result, expected)
 
 
 @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])

@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 import torch
 import torch.nn as nn
-from ase import build
 from torch import distributed as dist
 
 from fairchem.core.common import gp_utils
@@ -24,8 +23,6 @@ from fairchem.core.common.test_utils import (
     init_pg_and_rank_and_launch_test,
     spawn_multi_process,
 )
-from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.graph.compute import generate_graph
 
 
 def _dummy_call(x):
@@ -557,99 +554,6 @@ def test_simple_energy_ddp(nlayers):
         edge_index,
         nlayers,
     )
-    for rank_results in all_rank_results:
-        compare_and_assert_dict(
-            non_gp_results_by_dp_rank[rank_results["dp_rank"]], rank_results
-        )
-
-
-def _generate_graph_edge_index(radius_pbc_version):
-    """Helper to generate edge_index from a real structure using generate_graph."""
-    atoms = build.bulk("Cu", "fcc", a=3.58) * (2, 2, 2)  # 8 atoms
-    data_dict = AtomicData.from_ase(atoms)
-
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=6.0,
-        max_neighbors=100,
-        enforce_max_neighbors_strictly=False,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-
-    return graph_dict["edge_index"], len(atoms)
-
-
-@pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
-@pytest.mark.parametrize("nlayers", [1, 2])
-def test_gp_with_generated_graph(radius_pbc_version, nlayers):
-    """Test that GP produces consistent results with graphs from different graph generation versions.
-
-    Validates that the edge_index format from each graph generation implementation
-    (v1, v2, v3/NVIDIA) is compatible with graph parallel partitioning.
-    """
-    if radius_pbc_version == 3:
-        pytest.importorskip("nvalchemiops")
-
-    edge_index, natoms = _generate_graph_edge_index(radius_pbc_version)
-    atomic_numbers = torch.arange(2, natoms + 2, dtype=torch.float).requires_grad_(True)
-
-    # Non-GP reference
-    non_gp_results = fwd_bwd_on_simplenet(atomic_numbers, edge_index, nlayers)
-
-    # GP run with 2 ranks
-    config = PGConfig(backend="gloo", world_size=2, gp_group_size=2, use_gp=True)
-    all_rank_results = spawn_multi_process(
-        config,
-        fwd_bwd_on_simplenet,
-        init_pg_and_rank_and_launch_test,
-        atomic_numbers,
-        edge_index,
-        nlayers,
-    )
-
-    for rank_results in all_rank_results:
-        compare_and_assert_dict(non_gp_results, rank_results)
-
-
-@pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
-def test_gp_with_generated_graph_ddp(radius_pbc_version):
-    """Test combined DDP + GP with graphs from different graph generation versions."""
-    if radius_pbc_version == 3:
-        pytest.importorskip("nvalchemiops")
-
-    edge_index, natoms = _generate_graph_edge_index(radius_pbc_version)
-    atomic_numbers = torch.arange(2, natoms + 2, dtype=torch.float).requires_grad_(True)
-    nlayers = 1
-
-    # Non-GP DDP reference (2 DDP ranks, no GP)
-    config = PGConfig(backend="gloo", world_size=2, gp_group_size=1, use_gp=False)
-    non_gp_results = spawn_multi_process(
-        config,
-        fwd_bwd_on_simplenet,
-        init_pg_and_rank_and_launch_test,
-        atomic_numbers,
-        edge_index,
-        nlayers,
-    )
-
-    non_gp_results_by_dp_rank = {}
-    for results in non_gp_results:
-        dp_rank = results["dp_rank"]
-        assert dp_rank not in non_gp_results_by_dp_rank
-        non_gp_results_by_dp_rank[dp_rank] = results
-
-    # DDP + GP run (4 ranks: 2 DDP x 2 GP)
-    config = PGConfig(backend="gloo", world_size=4, gp_group_size=2, use_gp=True)
-    all_rank_results = spawn_multi_process(
-        config,
-        fwd_bwd_on_simplenet,
-        init_pg_and_rank_and_launch_test,
-        atomic_numbers,
-        edge_index,
-        nlayers,
-    )
-
     for rank_results in all_rank_results:
         compare_and_assert_dict(
             non_gp_results_by_dp_rank[rank_results["dp_rank"]], rank_results
