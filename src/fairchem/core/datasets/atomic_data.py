@@ -24,6 +24,8 @@ from ase.geometry import wrap_positions
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
 from monty.dev import requires
 
+from fairchem.core.common.utils import StrEnum
+
 try:
     from pymatgen.io.ase import AseAtomsAdaptor
 
@@ -42,6 +44,14 @@ except ImportError:
 
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
+
+
+class ExternalGraphMethod(StrEnum):
+    """Enum for external graph generation methods."""
+
+    PYMATGEN = "pymatgen"
+    NVIDIA = "nvidia"
+
 
 # these are all currently certainly output by the current a2g
 # except for tags, all fields are required for network inference.
@@ -318,7 +328,7 @@ class AtomicData:
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
         target_dtype: torch.dtype = torch.float32,
-        external_graph_method: str = "pymatgen",
+        external_graph_method: ExternalGraphMethod | str = ExternalGraphMethod.PYMATGEN,
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -361,9 +371,9 @@ class AtomicData:
                 max_neigh is not None
             ), "max_neigh must be specified for cpu graph construction."
 
-            if external_graph_method == "pymatgen":
+            if external_graph_method == ExternalGraphMethod.PYMATGEN:
                 split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
-            elif external_graph_method == "nvidia":
+            elif external_graph_method == ExternalGraphMethod.NVIDIA:
                 split_idx_dist = get_neighbors_nvidia_atoms(atoms, radius, max_neigh)
             else:
                 raise ValueError(
@@ -435,16 +445,20 @@ class AtomicData:
         # TODO another way to specify this is to spcify a key. maybe total_charge
         charge = torch.LongTensor(
             [
-                atoms.info.get("charge", 0)
-                if r_data_keys is not None and "charge" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("charge", 0)
+                    if r_data_keys is not None and "charge" in r_data_keys
+                    else 0
+                )
             ]
         )
         spin = torch.LongTensor(
             [
-                atoms.info.get("spin", 0)
-                if r_data_keys is not None and "spin" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("spin", 0)
+                    if r_data_keys is not None and "spin" in r_data_keys
+                    else 0
+                )
             ]
         )
 

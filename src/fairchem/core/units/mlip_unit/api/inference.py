@@ -78,10 +78,6 @@ class InferenceSettings:
     # will be used.
     external_graph_gen: bool | None = None
 
-    # Method to use for external graph generation when external_graph_gen is True.
-    # Options: "pymatgen", "nvidia-cell", "nvidia-naive", or "nvidia" (defaults to cell)
-    external_graph_method: str = "pymatgen"
-
     # Deprecated
     # Not recommended using! manually selects the version of graph gen
     # code if external_graph_gen is false, if set of None, will default

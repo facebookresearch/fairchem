@@ -205,6 +205,7 @@ def get_neighbors_nvidia(
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@torch.inference_mode()
 def radius_graph_pbc_nvidia(
     data,
     radius: float,
@@ -274,6 +275,7 @@ def radius_graph_pbc_nvidia(
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@torch.inference_mode()
 def get_neighbors_nvidia_atoms(
     atoms, cutoff: float, max_neigh: int
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
