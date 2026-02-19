@@ -126,6 +126,34 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore
 
+    @classmethod
+    def build_inference_settings(cls, settings) -> dict:
+        """EScAIP has no inference-time config overrides."""
+        return {}
+
+    def validate_tasks(self, dataset_to_tasks: dict) -> None:
+        """
+        Validate that task datasets are compatible with this backbone.
+        """
+        # EScAIP has no dataset_list validation
+        pass  # noqa
+
+    def prepare_for_inference(self, data, settings):
+        """
+        Prepare model for inference. EScAIP has no special preparation.
+        """
+        return self
+
+    def on_predict_check(self, data) -> None:
+        """
+        Called before each prediction. EScAIP has no per-prediction checks.
+        """
+        pass  # noqa
+
+    def validate_atoms_data(self, atoms, task_name: str) -> None:
+        """EScAIP has no special calculator data requirements."""
+        pass  # noqa
+
     def compiled_forward(self, data: GraphAttentionData):
         # input block
         node_features, edge_features = self.input_block(data)

@@ -182,7 +182,7 @@ def test_no_task_name_single_task():
 
 
 def test_calculator_unknown_task_raises_error():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         FAIRChemCalculator.from_model_checkpoint(
             pretrained_mlip.available_models[0], task_name="ommmmmol"
         )
@@ -444,13 +444,10 @@ def test_external_graph_generation_molecular_system():
 
 
 @pytest.mark.gpu()
-@pytest.mark.parametrize("external_graph_method", ["pymatgen", "nvidia"])
-def test_external_graph_gen_vs_internal(external_graph_method):
+def test_external_graph_gen_vs_internal():
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-    inference_settings_external = InferenceSettings(
-        external_graph_gen=True, external_graph_method=external_graph_method
-    )
+    inference_settings_external = InferenceSettings(external_graph_gen=True)
     predict_unit_external = pretrained_mlip.get_predict_unit(
         "uma-s-1", device="cuda", inference_settings=inference_settings_external
     )

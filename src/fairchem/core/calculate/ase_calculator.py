@@ -20,11 +20,6 @@ from ase.stress import full_3x3_to_voigt_6_stress
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.units.mlip_unit.api.inference import (
-    CHARGE_RANGE,
-    DEFAULT_CHARGE,
-    DEFAULT_SPIN,
-    DEFAULT_SPIN_OMOL,
-    SPIN_RANGE,
     InferenceSettings,
     UMATask,
 )
@@ -72,12 +67,13 @@ class FAIRChemCalculator(Calculator):
 
         valid_datasets = list(predict_unit.dataset_to_tasks.keys())
         if task_name is not None:
-            assert (
-                task_name in valid_datasets
-            ), f"Given: {task_name}, Valid options are {valid_datasets}"
-            self._task = UMATask(task_name)
+            if task_name not in valid_datasets:
+                raise ValueError(
+                    f"Invalid task_name '{task_name}'. Valid options are {valid_datasets}"
+                )
+            self._task_name = task_name
         elif len(valid_datasets) == 1:
-            self._task = UMATask(valid_datasets[0])
+            self._task_name = valid_datasets[0]
         else:
             raise RuntimeError(
                 f"A task name must be provided. Valid options are {valid_datasets}"
@@ -97,17 +93,13 @@ class FAIRChemCalculator(Calculator):
             r_edges = True
             max_neigh = 300
             radius = 6.0  # Default radius for edge generation
-            external_graph_method = (
-                predict_unit.inference_settings.external_graph_method
-            )
             logging.warning(
-                f"External graph generation is enabled using method '{external_graph_method}', limiting neighbors to 300."
+                "External graph generation is enabled, limiting neighbors to 300."
             )
         else:
             r_edges = False
             max_neigh = None
             radius = 6.0  # Still need radius even for internal graph gen
-            external_graph_method = "pymatgen"
 
         self.a2g = partial(
             AtomicData.from_ase,
@@ -116,12 +108,11 @@ class FAIRChemCalculator(Calculator):
             r_data_keys=["spin", "charge"],
             max_neigh=max_neigh,
             radius=radius,
-            external_graph_method=external_graph_method,
         )
 
     @property
     def task_name(self) -> str:
-        return self._task.value
+        return self._task_name
 
     @classmethod
     def from_model_checkpoint(
@@ -211,8 +202,8 @@ class FAIRChemCalculator(Calculator):
         # Check if the atoms object has periodic boundary conditions (PBC) set correctly
         self._check_atoms_pbc(atoms)
 
-        # Validate that charge/spin are set correctly for omol, or default to 0 otherwise
-        self._validate_charge_and_spin(atoms)
+        # Validate input data
+        self.predictor.validate_atoms_data(atoms, self.task_name)
 
         # Standard call to check system_changes etc
         Calculator.calculate(self, atoms, properties, system_changes)
@@ -285,54 +276,6 @@ class FAIRChemCalculator(Calculator):
         if np.any(atoms.pbc) and not np.all(atoms.pbc):
             raise MixedPBCError
 
-    def _validate_charge_and_spin(self, atoms: Atoms) -> None:
-        """
-        Validate and set default values for charge and spin.
-
-        Args:
-            atoms (Atoms): The atomic structure containing charge and spin information.
-        """
-
-        if "charge" not in atoms.info:
-            if self.task_name == UMATask.OMOL.value:
-                logging.warning(
-                    "task_name='omol' detected, but charge is not set in atoms.info. Defaulting to charge=0. "
-                    "Ensure charge is an integer representing the total charge on the system and is within the range -100 to 100."
-                )
-            atoms.info["charge"] = DEFAULT_CHARGE
-
-        if "spin" not in atoms.info:
-            if self.task_name == UMATask.OMOL.value:
-                atoms.info["spin"] = DEFAULT_SPIN_OMOL
-                logging.warning(
-                    "task_name='omol' detected, but spin multiplicity is not set in atoms.info. Defaulting to spin=1. "
-                    "Ensure spin is an integer representing the spin multiplicity from 0 to 100."
-                )
-            else:
-                atoms.info["spin"] = DEFAULT_SPIN
-
-        # Validate charge
-        charge = atoms.info["charge"]
-        if not isinstance(charge, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for charge: {type(charge)}. Charge must be an integer representing the total charge on the system."
-            )
-        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for charge: {charge}. Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
-            )
-
-        # Validate spin
-        spin = atoms.info["spin"]
-        if not isinstance(charge, (int, np.integer)):
-            raise TypeError(
-                f"Invalid type for spin: {type(spin)}. Spin must be an integer representing the spin multiplicity."
-            )
-        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
-            raise ValueError(
-                f"Invalid value for spin: {spin}. Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
-            )
-
 
 class FormationEnergyCalculator(Calculator):
     def __init__(
@@ -343,7 +286,7 @@ class FormationEnergyCalculator(Calculator):
         correction_type: Literal["MP2020", "OMat24"] = "OMat24",
     ):
         """
-        A calculator wrapper that computes formation energies.
+        A calculator wrapper that computes formation energies. Assumes task naming matches UMA.
 
         Args:
             calculator (Calculator): The base calculator to wrap.
