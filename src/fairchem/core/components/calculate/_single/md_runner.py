@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -16,6 +17,7 @@ import ase.io
 import numpy as np
 import pandas as pd
 from ase.md import MDLogger
+from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
 from fairchem.core.components.calculate.parquet_trajectory import (
@@ -247,19 +249,30 @@ class MDRunner(CalculateRunner):
 
         # Attach STOPCAR checker if checkpoint_interval is configured
         if self.checkpoint_interval is not None and self.checkpoint_interval > 0:
-            stopcar_path = Path(self.job_config.metadata.checkpoint_dir) / "STOPCAR"
+            stopcar_path = (
+                Path(self.job_config.metadata.checkpoint_dir).parent / "STOPCAR"
+            )
 
             def check_stopcar():
                 if self._dyn.get_number_of_steps() == 0:
                     return
                 if stopcar_path.exists():
                     current_step = self._dyn.get_number_of_steps() + self._start_step
+                    save_path = self.job_config.metadata.preemption_checkpoint_dir
                     logging.info(
                         f"STOPCAR detected in {stopcar_path.parent}, "
-                        f"stopping MD gracefully at step {current_step}"
+                        f"saving state to {save_path} at step {current_step}"
                     )
-                    checkpoint_dir = self.job_config.metadata.checkpoint_dir
-                    self.save_state(checkpoint_dir, is_preemption=True)
+                    if self.save_state(save_path, is_preemption=True):
+                        config_path = self.job_config.metadata.config_path
+                        if os.path.exists(config_path):
+                            cfg_copy = OmegaConf.load(config_path)
+                            cfg_copy.job.runner_state_path = save_path
+                            resume_config_path = os.path.join(
+                                save_path, "resume_config.yaml"
+                            )
+                            OmegaConf.save(cfg_copy, resume_config_path)
+                            logging.info(f"Resume config saved to {resume_config_path}")
                     raise _StopcarDetected
 
             self._dyn.attach(check_stopcar, interval=self.checkpoint_interval)
