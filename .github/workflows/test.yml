@@ -36,7 +36,6 @@ jobs:
       max-parallel: 10
       matrix:
         python_version: ['3.10', '3.13']
-        requirements: ['requirements.txt']
 
     steps:
       - name: Checkout code
@@ -60,7 +59,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles(matrix.requirements) }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
             ${{ runner.os }}-
@@ -74,7 +73,7 @@ jobs:
             packages/fairchem-data-omat \
             packages/fairchem-data-omol[dev] \
             packages/fairchem-demo-ocpapi[dev] \
-            -r tests/${{ matrix.requirements }} # pin test packages
+            -r tests/requirements.txt # pin test packages
 
       - name: Install additional dependencies
         run: |
@@ -89,12 +88,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # --lf flag retries only the subset of tests that failed on the last
-          # pytest invocation. So overall we run all tests but retry individual
-          # test cases that fail up to two times. 
-          shopt -s expand_aliases
-          alias pytest_cmd='NCCL_DEBUG=INFO pytest -n auto tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml'
-          pytest_cmd || pytest_cmd --lf || pytest_cmd --lf
+          NCCL_DEBUG=INFO pytest -n auto tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
         name: codecov-coverage
@@ -130,7 +124,6 @@ jobs:
       max-parallel: 1
       matrix:
         python_version: ['3.13']
-        requirements: ['requirements.txt']
 
     steps:
       - name: Checkout code
@@ -156,17 +149,14 @@ jobs:
           pip install packages/fairchem-core[dev] \
           packages/fairchem-data-omol[dev] \
           packages/fairchem-data-omat \
-          -r tests/${{ matrix.requirements }} # pin test packages
+          -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         # Note: These tests seem to fail if "-n auto" is added
         run: |
-          shopt -s expand_aliases
-          alias pytest_cmd='NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml'
-          pytest_cmd || pytest_cmd --lf || pytest_cmd --lf
-          
+          NCCL_DEBUG=INFO pytest tests/core --durations=0 -vv -m gpu -c ./packages/fairchem-core/pyproject.toml
       - name: Cleanup
         if: always()
         uses: ./.github/actions/multi-trigger-cleanup
@@ -183,7 +173,6 @@ jobs:
       max-parallel: 1
       matrix:
         python_version: ['3.13']
-        requirements: ['requirements.txt']
 
     steps:
       - uses: actions/checkout@v6
@@ -217,16 +206,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install packages/fairchem-core[dev,extras] \
           packages/fairchem-lammps \
-          -r tests/${{ matrix.requirements }} # pin test packages
+          -r tests/requirements.txt # pin test packages
 
       - name: Core GPU tests
         shell: micromamba-shell {0}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          shopt -s expand_aliases
-          alias pytest_cmd='NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu'
-          pytest_cmd || pytest_cmd --lf || pytest_cmd --lf
+          NCCL_DEBUG=INFO pytest tests/lammps --durations=0 -vv -m gpu
 
       - name: Cleanup
         if: always()
