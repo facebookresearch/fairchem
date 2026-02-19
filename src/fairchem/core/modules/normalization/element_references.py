@@ -127,7 +127,7 @@ def create_element_references(
 
 
 @torch.no_grad()
-def fit_linear_references(
+def fit_element_references(
     targets: list[str],
     dataset: Dataset,
     batch_size: int,
@@ -268,7 +268,7 @@ def load_references_from_config(
     return _load_from_config(
         config,
         "element_references",
-        fit_linear_references,
+        fit_element_references,
         create_element_references,
         dataset,
         checkpoint_dir,

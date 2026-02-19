@@ -16,13 +16,13 @@ from fairchem.core.datasets import data_list_collater
 from fairchem.core.modules.normalization.element_references import (
     ElementReferences,
     create_element_references,
-    fit_linear_references,
+    fit_element_references,
 )
 
 
 @pytest.fixture(scope="session")
 def element_refs(dummy_binary_db_dataset, max_num_elements):
-    return fit_linear_references(
+    return fit_element_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
         batch_size=16,
@@ -39,7 +39,7 @@ def test_apply_element_references(
 
     # check that removing element refs keeps only values within max noise
     batch = data_list_collater(list(dummy_binary_db_dataset), otf_graph=True)
-    energy = batch.energy.clone().view(len(batch), -1)
+    energy = batch.energy.clone().squeeze()
     deref_energy = element_refs["energy"].apply_refs(batch, energy)
     assert all(deref_energy <= max_noise)
 
@@ -128,7 +128,7 @@ def test_fit_element_references(
 def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
     batch_size = 4
     num_batches = max(len(dummy_binary_db_dataset) // batch_size - 1, 1)
-    refs_seed = fit_linear_references(
+    refs_seed = fit_element_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
         batch_size=batch_size,
@@ -137,7 +137,7 @@ def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
         max_num_elements=max_num_elements,
         seed=0,
     )
-    refs_seed1 = fit_linear_references(
+    refs_seed1 = fit_element_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
         batch_size=batch_size,
@@ -146,7 +146,7 @@ def test_fit_seed_no_seed(dummy_binary_db_dataset, max_num_elements):
         max_num_elements=max_num_elements,
         seed=0,
     )
-    refs_noseed = fit_linear_references(
+    refs_noseed = fit_element_references(
         ["energy"],
         dataset=dummy_binary_db_dataset,
         batch_size=batch_size,
