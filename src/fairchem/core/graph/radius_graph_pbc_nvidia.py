@@ -176,6 +176,7 @@ def get_neighbors_nvidia(
     filter_max_neighbors = num_neighbors.max() > max_neigh
     distances_sq = None
     if return_distances_sq or filter_max_neighbors:
+        # This could be added in the future so we skip this computation step here: NVIDIA/nvalchemi-toolkit-ops#14.
         # Compute squared distances with PBC corrections
         distance_vectors = positions[n_index] - positions[c_index]
         edge_cells = cell[batch[c_index]]
