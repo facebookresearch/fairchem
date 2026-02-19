@@ -25,6 +25,7 @@ except ImportError:
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@torch.inference_mode()
 def get_neighbors_nvidia(
     positions: torch.Tensor,
     cell: torch.Tensor,
@@ -35,7 +36,8 @@ def get_neighbors_nvidia(
     enforce_max_neighbors_strictly: bool = False,
     batch: torch.Tensor | None = None,
     natoms: torch.Tensor | None = None,
-):
+    return_distances_sq: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """
     Performs nearest neighbor search using NVIDIA nvalchemiops and returns edge index, distances,
     and cell offsets as tensors. Supports both single structure and batched inputs.
@@ -52,13 +54,48 @@ def get_neighbors_nvidia(
         batch: Optional batch tensor (N,) indicating which structure each atom belongs to
         natoms: Optional tensor (B,) with number of atoms per structure. If not provided,
             inferred as single structure with all atoms.
+        return_distances_sq: If True, compute and return pairwise distances squared; if False, return None for distances
 
     Returns:
         c_index: Center atom indices (tensor, int64) - global indices if batched
         n_index: Neighbor atom indices (tensor, int64) - global indices if batched
-        distances: Pairwise distances (tensor) accounting for PBC
         offsets: Cell offsets (tensor, int64, shape [num_edges, 3])
+        distances_sq: Pairwise distances squared (tensor) accounting for PBC if distances_sq is True, otherwise None
     """
+    # Validate input shapes
+    assert (
+        positions.ndim == 2
+    ), f"positions must have shape (N, 3), got {positions.shape}"
+    assert (
+        positions.shape[1] == 3
+    ), f"positions must have shape (N, 3), got {positions.shape}"
+    assert cell.ndim in (
+        2,
+        3,
+    ), f"cell must have shape (3, 3) or (B, 3, 3), got {cell.shape}"
+    if cell.ndim == 2:
+        assert cell.shape == (3, 3), f"cell must have shape (3, 3), got {cell.shape}"
+    else:
+        assert cell.shape[1:] == (
+            3,
+            3,
+        ), f"cell must have shape (B, 3, 3), got {cell.shape}"
+    assert pbc.ndim in (1, 2), f"pbc must have shape (3,) or (B, 3), got {pbc.shape}"
+    if pbc.ndim == 1:
+        assert pbc.shape == (3,), f"pbc must have shape (3,), got {pbc.shape}"
+    else:
+        assert pbc.shape[1] == 3, f"pbc must have shape (B, 3), got {pbc.shape}"
+    if batch is not None:
+        assert (
+            batch.ndim == 1
+        ), f"batch must have shape (N,) where N={positions.shape[0]}, got {batch.shape}"
+        assert (
+            batch.shape[0] == positions.shape[0]
+        ), f"batch must have shape (N,) where N={positions.shape[0]}, got {batch.shape}"
+    if natoms is not None:
+        assert natoms.ndim == 1, f"natoms must have shape (B,), got {natoms.shape}"
+    assert max_neigh > 0
+
     device = positions.device
     dtype = positions.dtype
     total_atoms = positions.shape[0]
@@ -73,16 +110,14 @@ def get_neighbors_nvidia(
     if natoms is None:
         natoms = torch.tensor([total_atoms], dtype=torch.long, device=device)
 
-    if max_neigh < 0:
-        max_neigh = estimate_max_neighbors(cutoff)
     # When not enforcing strictly, request more neighbors to handle degeneracy
     # The NVIDIA neighbor list doesn't prioritize closest neighbors, so we need
     # a large buffer to ensure we capture all neighbors within the cutoff.
     # This allows the mask to correctly include degenerate edges.
-    if not enforce_max_neighbors_strictly:
-        buffer_max_neigh = max(300, max_neigh * 2)
-    else:
-        buffer_max_neigh = max_neigh
+    # buffer_max_neigh = (
+    #     max_neigh * 4 if not enforce_max_neighbors_strictly else max_neigh
+    # )
+    buffer_max_neigh = estimate_max_neighbors(cutoff=cutoff, safety_factor=2.0)
 
     # Small epsilon to ensure atoms at exactly cutoff distance are included
     nvidia_cutoff = cutoff + 1e-6
@@ -109,6 +144,7 @@ def get_neighbors_nvidia(
         method=f"batch_{method}",
         neighbor_matrix=neighbor_matrix,
         neighbor_matrix_shifts=neighbor_matrix_shifts,
+        # max_neighbors=buffer_max_neigh,
         num_neighbors=num_neighbors,
         half_fill=False,
     )
@@ -130,24 +166,25 @@ def get_neighbors_nvidia(
     n_index = neighbor_matrix[valid_mask]
     offsets = neighbor_matrix_shifts[valid_mask]
 
-    # Sort by center atom for consistency
-    sort_idx = torch.argsort(c_index, stable=True)
-    c_index = c_index[sort_idx].long()
-    n_index = n_index[sort_idx].long()
-    offsets = offsets[sort_idx].long()
+    # We used to sort the edges here but the ordering of the edges is no longer required, leaving this comment here for reference
 
-    # Compute squared distances with PBC corrections
-    distance_vectors = positions[n_index] - positions[c_index]
-    edge_cells = cell[batch[c_index]]
-    offsets_cartesian = torch.bmm(
-        offsets.float().unsqueeze(1),
-        edge_cells.float(),
-    ).squeeze(1)
-    distance_vectors.add_(offsets_cartesian)
-    distances_sq = (distance_vectors**2).sum(dim=-1)
+    # if max number of neighbors is less than max_neigh, we can skip the masking steps all together
+    # if we don't need the distances either, then we can skip both of these steps
+    filter_max_neighbors = num_neighbors.max() > max_neigh
+    distances_sq = None
+    if return_distances_sq or filter_max_neighbors:
+        # Compute squared distances with PBC corrections
+        distance_vectors = positions[n_index] - positions[c_index]
+        edge_cells = cell[batch[c_index]]
+        offsets_cartesian = torch.bmm(
+            offsets.float().unsqueeze(1),
+            edge_cells.float(),
+        ).squeeze(1)
+        distance_vectors.add_(offsets_cartesian)
+        distances_sq = (distance_vectors**2).sum(dim=-1)
 
-    # Apply max neighbors mask to handle degeneracy properly
-    if max_neigh > 0 and len(c_index) > 0:
+    if filter_max_neighbors and len(c_index) > 0:
+        # Apply max neighbors mask to handle degeneracy properly
         mask_num_neighbors, _ = get_max_neighbors_mask(
             natoms=natoms,
             index=c_index,
@@ -161,9 +198,7 @@ def get_neighbors_nvidia(
         distances_sq = distances_sq[mask_num_neighbors]
         offsets = offsets[mask_num_neighbors]
 
-    distances = torch.sqrt(distances_sq)
-
-    return c_index, n_index, distances, offsets
+    return c_index, n_index, offsets, distances_sq
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
@@ -173,7 +208,7 @@ def radius_graph_pbc_nvidia(
     max_num_neighbors_threshold: int,
     enforce_max_neighbors_strictly: bool = False,
     pbc: torch.Tensor | None = None,
-):
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """NVIDIA-accelerated radius graph generation with PBC support.
 
     This function has the same interface as radius_graph_pbc and radius_graph_pbc_v2,
@@ -214,7 +249,7 @@ def radius_graph_pbc_nvidia(
     else:
         pbc_tensor = pbc
 
-    c_index, n_index, distances, offsets = get_neighbors_nvidia(
+    c_index, n_index, offsets, _ = get_neighbors_nvidia(
         positions=pos,
         cell=cell,
         pbc=pbc_tensor,
@@ -236,7 +271,9 @@ def radius_graph_pbc_nvidia(
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-def get_neighbors_nvidia_atoms(atoms, cutoff: float, max_neigh: int):
+def get_neighbors_nvidia_atoms(
+    atoms, cutoff: float, max_neigh: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Performs nearest neighbor search using NVIDIA nvalchemiops and returns edge index, distances,
     and cell offsets.
 
@@ -255,7 +292,7 @@ def get_neighbors_nvidia_atoms(atoms, cutoff: float, max_neigh: int):
     cell = torch.from_numpy(np.array(atoms.get_cell(complete=True))).float()
     pbc = torch.from_numpy(np.array(atoms.pbc)).bool()
 
-    c_index, n_index, distances, offsets = get_neighbors_nvidia(
+    c_index, n_index, offsets, distances_sq = get_neighbors_nvidia(
         positions=positions,
         cell=cell,
         pbc=pbc,
@@ -263,11 +300,12 @@ def get_neighbors_nvidia_atoms(atoms, cutoff: float, max_neigh: int):
         max_neigh=max_neigh,
         method="cell_list",
         enforce_max_neighbors_strictly=True,
+        return_distances_sq=True,
     )
 
     return (
         c_index.numpy(),
         n_index.numpy(),
-        distances.numpy(),
+        np.sqrt(distances_sq.numpy()),
         offsets.numpy(),
     )

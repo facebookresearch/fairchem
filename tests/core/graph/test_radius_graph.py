@@ -11,6 +11,10 @@ import pytest
 from ase import build
 
 from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.common_structures import (
+    get_fcc_crystal_by_num_cells,
+    get_water_box,
+)
 from fairchem.core.graph.compute import generate_graph
 
 
@@ -216,6 +220,89 @@ def test_radius_graph_3d(radius_pbc_version):
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 78
+
+
+def _graph_dict_to_edge_set(graph_dict):
+    """Convert a graph dict from generate_graph to a set of edge tuples for comparison."""
+    edges = set()
+    edge_index = graph_dict["edge_index"]
+    cell_offsets = graph_dict["cell_offsets"]
+    num_edges = edge_index.shape[1]
+
+    for i in range(num_edges):
+        edge = (
+            edge_index[0, i].item(),
+            edge_index[1, i].item(),
+            cell_offsets[i, 0].item(),
+            cell_offsets[i, 1].item(),
+            cell_offsets[i, 2].item(),
+        )
+        edges.add(edge)
+
+    return edges
+
+
+@pytest.fixture()
+def copper_bulk_atoms():
+    """Create a copper bulk structure."""
+    return get_fcc_crystal_by_num_cells(
+        n_cells=5, atom_type="Cu", lattice_constant=3.58
+    )
+
+
+@pytest.fixture()
+def water_box_atoms():
+    """Create a random water box structure."""
+    return get_water_box(num_molecules=10, box_size=10.0, seed=42)
+
+
+@pytest.mark.parametrize(
+    "cutoff, max_neighbors",
+    [(6.0, 30), (6.0, 300), (20.0, 30), (12.0, 10000), (1.0, 1)],
+)
+@pytest.mark.parametrize("atoms_fixture", ["copper_bulk_atoms", "water_box_atoms"])
+def test_radius_pbc_version_2_and_3_produce_identical_edges(
+    cutoff, max_neighbors, atoms_fixture, request
+):
+    """Test that radius_pbc_version 2 and 3 produce identical edges after sorting."""
+    atoms = request.getfixturevalue(atoms_fixture)
+    data_dict = AtomicData.from_ase(atoms)
+
+    # Generate graph using version 2
+    graph_v2 = generate_graph(
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=2,
+        pbc=data_dict["pbc"],
+    )
+
+    # Generate graph using version 3
+    graph_v3 = generate_graph(
+        data_dict,
+        cutoff=cutoff,
+        max_neighbors=max_neighbors,
+        enforce_max_neighbors_strictly=False,
+        radius_pbc_version=3,
+        pbc=data_dict["pbc"],
+    )
+
+    # Verify neighbor counts match
+    assert (
+        graph_v2["neighbors"] == graph_v3["neighbors"]
+    ), f"Neighbor counts differ: v2={graph_v2['neighbors']}, v3={graph_v3['neighbors']}"
+
+    # Convert to sets of edges for order-independent comparison
+    edges_v2 = _graph_dict_to_edge_set(graph_v2)
+    edges_v3 = _graph_dict_to_edge_set(graph_v3)
+
+    # Verify edge sets match
+    assert edges_v2 == edges_v3, (
+        f"Edge sets differ between radius_pbc_version 2 and 3.\n"
+        f"Edges only in v2: {edges_v2 - edges_v3}\n"
+        f"Edges only in v3: {edges_v3 - edges_v2}"
+    )
 
 
 def _validate_edges_match(data1, data2):
