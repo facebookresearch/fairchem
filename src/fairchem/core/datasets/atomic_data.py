@@ -35,7 +35,7 @@ except ImportError:
     pmg_installed = False
 
 try:
-    from fairchem.core.graph.nvidia import get_neighbors_nvidia_atoms
+    from fairchem.core.graph.radius_graph_pbc_nvidia import get_neighbors_nvidia_atoms
 
     nvidia_installed = True
 except ImportError:
