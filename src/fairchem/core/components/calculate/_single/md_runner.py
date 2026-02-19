@@ -34,6 +34,12 @@ if TYPE_CHECKING:
     from ase.md.md import MolecularDynamics
 
 
+class _StopcarDetected(Exception):
+    """
+    Raised by the STOPCAR callback to break out of dyn.run().
+    """
+
+
 class MDRunner(CalculateRunner):
     """
     General-purpose molecular dynamics runner for single structures.
@@ -52,6 +58,7 @@ class MDRunner(CalculateRunner):
         steps: int = 1000,
         trajectory_interval: int = 1,
         log_interval: int = 10,
+        checkpoint_interval: int | None = None,
         trajectory_writer: type[TrajectoryWriter]
         | Callable[..., TrajectoryWriter]
         | None = None,
@@ -69,6 +76,10 @@ class MDRunner(CalculateRunner):
             steps: Total number of MD steps to run
             trajectory_interval: Interval for writing trajectory frames
             log_interval: Interval for writing thermodynamic data to log
+            checkpoint_interval: Interval (in steps) for checking for a
+                STOPCAR file in run_dir. If a STOPCAR file is found, the
+                simulation saves state and stops gracefully. If None, no
+                STOPCAR checking is performed.
             trajectory_writer: Trajectory writer class or factory function.
                 Defaults to ParquetTrajectoryWriter if None.
             trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
@@ -79,6 +90,7 @@ class MDRunner(CalculateRunner):
         self.steps = steps
         self.trajectory_interval = trajectory_interval
         self.log_interval = log_interval
+        self.checkpoint_interval = checkpoint_interval
         self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
         self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
 
@@ -233,10 +245,35 @@ class MDRunner(CalculateRunner):
 
         self._dyn.attach(log_with_alignment, interval=1)
 
-        remaining_steps = self.steps - self._start_step
-        self._dyn.run(remaining_steps)
+        # Attach STOPCAR checker if checkpoint_interval is configured
+        if self.checkpoint_interval is not None and self.checkpoint_interval > 0:
+            stopcar_path = Path(self.job_config.metadata.checkpoint_dir) / "STOPCAR"
 
-        self._trajectory_writer.close()
+            def check_stopcar():
+                if self._dyn.get_number_of_steps() == 0:
+                    return
+                if stopcar_path.exists():
+                    current_step = self._dyn.get_number_of_steps() + self._start_step
+                    logging.info(
+                        f"STOPCAR detected in {stopcar_path.parent}, "
+                        f"stopping MD gracefully at step {current_step}"
+                    )
+                    checkpoint_dir = self.job_config.metadata.checkpoint_dir
+                    self.save_state(checkpoint_dir, is_preemption=True)
+                    raise _StopcarDetected
+
+            self._dyn.attach(check_stopcar, interval=self.checkpoint_interval)
+
+        remaining_steps = self.steps - self._start_step
+        stopped_by_stopcar = False
+
+        try:
+            self._dyn.run(remaining_steps)
+        except _StopcarDetected:
+            stopped_by_stopcar = True
+
+        if not stopped_by_stopcar:
+            self._trajectory_writer.close()
 
         return {
             "trajectory_file": str(trajectory_file),
@@ -244,6 +281,7 @@ class MDRunner(CalculateRunner):
             "total_steps": self.steps,
             "start_step": self._start_step,
             "structure_id": sid,
+            "stopped_by_stopcar": stopped_by_stopcar,
         }
 
     def write_results(

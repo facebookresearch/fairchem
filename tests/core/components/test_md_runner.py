@@ -484,3 +484,135 @@ class TestMDRunner:
                 atol=1e-10,
                 err_msg=f"Energy mismatch at step {step}",
             )
+
+    def test_stopcar_graceful_stop(self, cu_atoms, results_dir):
+        """
+        Test that STOPCAR file triggers graceful stop with state saved.
+
+        Verifies:
+        1. MD stops when STOPCAR is detected at checkpoint_interval
+        2. State is saved (checkpoint.xyz, md_state.json, thermostat_state.json)
+        3. Trajectory is flushed and readable
+        4. Result dict includes stopped_by_stopcar=True
+        5. Simulation can be resumed from the saved checkpoint
+        """
+        run_dir = results_dir / "run_dir"
+        md_results_dir = results_dir / "results"
+        checkpoint_dir = results_dir / "checkpoints"
+        run_dir.mkdir()
+        md_results_dir.mkdir()
+        checkpoint_dir.mkdir()
+
+        total_steps = 100
+        checkpoint_interval = 20
+        trajectory_interval = 10
+
+        dynamics = partial(
+            NoseHooverChainNVT,
+            timestep=1.0 * units.fs,
+            temperature_K=300.0,
+            tdamp=25 * units.fs,
+        )
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=dynamics,
+            steps=total_steps,
+            trajectory_interval=trajectory_interval,
+            checkpoint_interval=checkpoint_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner._job_config = _create_mock_job_config(
+            str(md_results_dir),
+            checkpoint_dir=str(checkpoint_dir),
+        )
+
+        # Write STOPCAR in checkpoint_dir - should stop at first checkpoint
+        stopcar_path = checkpoint_dir / "STOPCAR"
+        stopcar_path.write_text("")
+
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        # Should have stopped early
+        assert results["stopped_by_stopcar"] is True
+
+        # Checkpoint files should exist
+        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "md_state.json").exists()
+        assert (checkpoint_dir / "thermostat_state.json").exists()
+
+        # Verify checkpoint step matches checkpoint_interval
+        with open(checkpoint_dir / "md_state.json") as f:
+            md_state = json.load(f)
+        assert md_state["current_step"] == checkpoint_interval
+
+        # Trajectory should be readable with frames up to the stop point
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        steps = list(traj_df["step"])
+        expected_steps = [0, 10, 20]
+        assert steps == expected_steps, f"Expected {expected_steps}, got {steps}"
+
+        # Resume from checkpoint after removing STOPCAR
+        stopcar_path.unlink()
+        results_dir2 = results_dir / "results2"
+        results_dir2.mkdir()
+
+        runner2 = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=dynamics,
+            steps=total_steps,
+            trajectory_interval=trajectory_interval,
+            checkpoint_interval=checkpoint_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner2._job_config = _create_mock_job_config(
+            str(results_dir2),
+            checkpoint_dir=str(checkpoint_dir),
+        )
+        runner2.load_state(str(checkpoint_dir))
+        assert runner2._start_step == checkpoint_interval
+
+        results2 = runner2.calculate(job_num=0, num_jobs=1)
+        assert results2["stopped_by_stopcar"] is False
+
+        # Resumed trajectory continues from checkpoint step (which is re-captured)
+        traj_df2 = pd.read_parquet(results2["trajectory_file"])
+        steps2 = list(traj_df2["step"])
+        expected_steps2 = [20, 30, 40, 50, 60, 70, 80, 90, 100]
+        assert steps2 == expected_steps2, f"Expected {expected_steps2}, got {steps2}"
+
+    def test_no_stopcar_runs_to_completion(self, cu_atoms, results_dir):
+        """
+        Test that without STOPCAR, checkpoint_interval runs to completion normally.
+        """
+        checkpoint_dir = results_dir / "checkpoints"
+        checkpoint_dir.mkdir()
+
+        total_steps = 50
+        checkpoint_interval = 20
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            steps=total_steps,
+            trajectory_interval=10,
+            checkpoint_interval=checkpoint_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner._job_config = _create_mock_job_config(
+            str(results_dir),
+            checkpoint_dir=str(checkpoint_dir),
+        )
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        assert results["stopped_by_stopcar"] is False
+
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        steps = list(traj_df["step"])
+        assert steps == [0, 10, 20, 30, 40, 50]
