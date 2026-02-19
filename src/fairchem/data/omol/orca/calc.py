@@ -10,11 +10,18 @@ from __future__ import annotations
 import re
 from enum import Enum
 from shutil import which
+from typing import TYPE_CHECKING, Optional
 
-from ase import Atoms
 from ase.calculators.orca import ORCA, OrcaProfile
 from ase.optimize import LBFGS
-from sella import Sella
+
+if TYPE_CHECKING:
+    from ase import Atoms
+
+try:
+    from sella import Sella
+except ImportError:
+    Sella = None
 
 # ECP sizes taken from Table 6.5 in the Orca 5.0.3 manual
 ECP_SIZE = {
@@ -253,7 +260,7 @@ def write_orca_inputs(
     orcasimpleinput: str = ORCA_ASE_SIMPLE_INPUT,
     orcablocks: str = " ".join(ORCA_BLOCKS),
     vertical: Enum = Vertical.Default,
-    scf_MaxIter: int = None,
+    scf_MaxIter: Optional[int] = None,
 ):
     """
     One-off method to be used if you wanted to write inputs for an arbitrary

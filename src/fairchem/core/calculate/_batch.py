@@ -31,19 +31,16 @@ def _get_concurrency_backend(
     """Get a backend to run ASE calculations concurrently."""
     if backend == "threads":
         return ThreadPoolExecutor(**options)
-    else:
-        raise ValueError(f"Invalid concurrency backend: {backend}")
+    raise ValueError(f"Invalid concurrency backend: {backend}")
 
 
 class InferenceBatcher:
-    """
-    Batches incoming inference requests.
-    """
+    """Batches incoming inference requests."""
 
     def __init__(
         self,
         predict_unit: MLIPPredictUnit,
-        max_batch_size: int = 16,
+        max_batch_size: int = 512,
         batch_wait_timeout_s: float = 0.1,
         num_replicas: int = 1,
         concurrency_backend: Literal["threads"] = "threads",
@@ -53,7 +50,9 @@ class InferenceBatcher:
         """
         Args:
             predict_unit: The predict unit to use for inference.
-            max_batch_size: The maximum batch size to use for inference.
+            max_batch_size: Maximum number of atoms in a batch.
+                The actual number of atoms will likely be larger than this as batches
+                are split when num atoms exceeds this value.
             batch_wait_timeout_s: The maximum time to wait for a batch to be ready.
             num_replicas: The number of replicas to use for inference.
             concurrency_backend: The concurrency backend to use for inference.
@@ -90,18 +89,21 @@ class InferenceBatcher:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # serve.shutdown()
-        self.executor.shutdown()
+        self.shutdown()
 
     @cached_property
-    def batch_predict_unit(self):
+    def batch_predict_unit(self) -> BatchServerPredictUnit:
         return BatchServerPredictUnit(
             server_handle=self.predict_server_handle,
+            predict_unit=self.predict_unit,
         )
 
-    def shutdown(self, wait: bool = True):
-        """Shutdown the executor."""
-        # serve.shutdown()
+    def shutdown(self, wait: bool = True) -> None:
+        """Shutdown the executor.
+
+        Args:
+            wait: If True, wait for pending tasks to complete before returning.
+        """
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=wait)
 
