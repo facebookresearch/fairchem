@@ -16,7 +16,7 @@ from fairchem.core.graph.radius_graph_pbc import (
 
 # Check for NVIDIA library availability
 try:
-    from fairchem.core.graph.nvidia import radius_graph_pbc_nvidia
+    from fairchem.core.graph.radius_graph_pbc_nvidia import radius_graph_pbc_nvidia
 
     NVIDIA_AVAILABLE = True
 except ImportError:
