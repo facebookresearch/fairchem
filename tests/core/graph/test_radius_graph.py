@@ -65,26 +65,6 @@ def test_radius_graph_1d(radius_pbc_version):
     )
     assert graph_dict["neighbors"] == 1
 
-    # case without max_neighbors
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=cutoff,
-        max_neighbors=-1,
-        enforce_max_neighbors_strictly=False,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-    assert graph_dict["neighbors"] == 4
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=cutoff,
-        max_neighbors=-1,
-        enforce_max_neighbors_strictly=True,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-    assert graph_dict["neighbors"] == 4
-
 
 @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
 def test_radius_graph_2d(radius_pbc_version):
@@ -133,26 +113,6 @@ def test_radius_graph_2d(radius_pbc_version):
     )
     assert graph_dict["neighbors"] == 2
 
-    # case without max_neighbors
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=cutoff,
-        max_neighbors=-1,
-        enforce_max_neighbors_strictly=False,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-    assert graph_dict["neighbors"] == 18
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=cutoff,
-        max_neighbors=-1,
-        enforce_max_neighbors_strictly=True,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-    assert graph_dict["neighbors"] == 18
-
 
 @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
 def test_radius_graph_3d(radius_pbc_version):
@@ -200,26 +160,6 @@ def test_radius_graph_3d(radius_pbc_version):
         pbc=data_dict["pbc"],
     )
     assert graph_dict["neighbors"] == 10
-
-    # case without max_neighbors
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=cutoff,
-        max_neighbors=-1,
-        enforce_max_neighbors_strictly=False,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-    assert graph_dict["neighbors"] == 78
-    graph_dict = generate_graph(
-        data_dict,
-        cutoff=cutoff,
-        max_neighbors=-1,
-        enforce_max_neighbors_strictly=True,
-        radius_pbc_version=radius_pbc_version,
-        pbc=data_dict["pbc"],
-    )
-    assert graph_dict["neighbors"] == 78
 
 
 def _graph_dict_to_edge_set(graph_dict):

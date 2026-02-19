@@ -7,6 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import torch
 from monty.dev import requires
@@ -94,7 +96,7 @@ def get_neighbors_nvidia(
         ), f"batch must have shape (N,) where N={positions.shape[0]}, got {batch.shape}"
     if natoms is not None:
         assert natoms.ndim == 1, f"natoms must have shape (B,), got {natoms.shape}"
-    assert max_neigh > 0
+    assert max_neigh > 0, f"max_neigh must be a positive integer, got {max_neigh}"
 
     device = positions.device
     dtype = positions.dtype
@@ -116,6 +118,10 @@ def get_neighbors_nvidia(
     # This allows the mask to correctly include degenerate edges.
     # note estimate_max_neighbors(cutoff=6.0, safety_factor=2.0) = 640 which should be overly safe.
     buffer_max_neigh = estimate_max_neighbors(cutoff=cutoff, safety_factor=2.0)
+    if max_neigh > buffer_max_neigh:
+        logging.warning(
+            f"max_neigh={max_neigh} is greater than the NVIDIA neighbor list buffer size of {buffer_max_neigh}. The returned neighbors will be limited to buffer_max_neigh"
+        )
 
     # Small epsilon to ensure atoms at exactly cutoff distance are included
     nvidia_cutoff = cutoff + 1e-6
@@ -142,7 +148,6 @@ def get_neighbors_nvidia(
         method=f"batch_{method}",
         neighbor_matrix=neighbor_matrix,
         neighbor_matrix_shifts=neighbor_matrix_shifts,
-        # max_neighbors=buffer_max_neigh,
         num_neighbors=num_neighbors,
         half_fill=False,
     )
