@@ -869,7 +869,7 @@ def test_pymatgen_vs_internal_graph(atoms):
     radius = 10
     max_neigh = 200
 
-    for radius_pbc_version in (1, 2):
+    for radius_pbc_version in (1, 2, 3):
         for pbc in [True, False]:
             atoms_copy = Atoms(
                 symbols=atoms.get_chemical_symbols(),
