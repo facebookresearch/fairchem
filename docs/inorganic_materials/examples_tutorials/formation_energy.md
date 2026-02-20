@@ -96,7 +96,7 @@ form_energy = atoms.get_potential_energy()
 pprint.pprint(f"Total energy: {result['results']['energy']} eV \n Formation energy {form_energy} eV")
 ```
 
-Compare the results to the value of [-3.038 eV/atom reported](https://next-gen.materialsproject.org/materials/mp-1265?chemsys=Mg-O#thermodynamic_stability) in the the Materials Project!
+Compare the results to the value of [-3.038 eV/atom reported](https://next-gen.materialsproject.org/materials/mp-1265?chemsys=Mg-O#thermodynamic_stability) in the Materials Project!
 *Note that we expect differences due to the different DFT settings used to calculate the OMat24 training data.*
 
 Congratulations; you ran your first relaxation and predicted the formation energy of MgO using UMA and `quacc`!

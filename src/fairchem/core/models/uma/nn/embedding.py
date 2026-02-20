@@ -73,8 +73,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x,
         x_edge,
         edge_index,
-        wigner_and_M_mapping_inv,
-        edge_envelope,
+        wigner_and_M_mapping_inv_envelope_for_edge_degree,
         node_offset=0,
     ):
         x_edge_m_0 = self.rad_func(x_edge)
@@ -85,15 +84,19 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             x_edge_m_0,
             (0, 0, 0, (self.m_all_num_coefficents - self.m_0_num_coefficients)),
         )
-        x_edge_embedding = torch.bmm(wigner_and_M_mapping_inv, x_edge_embedding)
-
-        x_edge_embedding = x_edge_embedding * edge_envelope
+        # Envelope is pre-fused into wigner_and_M_mapping_inv_envelope_for_edge_degree,
+        # so no separate multiply needed
+        x_edge_embedding = torch.bmm(
+            wigner_and_M_mapping_inv_envelope_for_edge_degree, x_edge_embedding
+        )
 
         # TODO is this needed?
         x_edge_embedding = x_edge_embedding.to(x.dtype)
 
         return x.index_add(
-            0, edge_index[1] - node_offset, x_edge_embedding / self.rescale_factor
+            0,
+            edge_index[1] - node_offset,
+            x_edge_embedding / self.rescale_factor,
         )
 
     def forward(
@@ -101,8 +104,7 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         x,
         x_edge,
         edge_index,
-        wigner_and_M_mapping_inv,
-        edge_envelope,
+        wigner_and_M_mapping_inv_envelope_for_edge_degree,
         node_offset=0,
     ):
         if self.activation_checkpoint_chunk_size is None:
@@ -110,18 +112,14 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 x,
                 x_edge,
                 edge_index,
-                wigner_and_M_mapping_inv,
-                edge_envelope,
+                wigner_and_M_mapping_inv_envelope_for_edge_degree,
                 node_offset,
             )
 
         edge_index_partitions = edge_index.split(
             self.activation_checkpoint_chunk_size, dim=1
         )
-        wigner_inv_partitions = wigner_and_M_mapping_inv.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        edge_envelope_partitions = edge_envelope.split(
+        wigner_inv_partitions = wigner_and_M_mapping_inv_envelope_for_edge_degree.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -133,7 +131,6 @@ class EdgeDegreeEmbedding(torch.nn.Module):
                 x_edge_partitions[idx],
                 edge_index_partitions[idx],
                 wigner_inv_partitions[idx],
-                edge_envelope_partitions[idx],
                 node_offset,
                 use_reentrant=False,
             )
@@ -217,32 +214,47 @@ class ChgSpinEmbedding(nn.Module):
 
 
 class DatasetEmbedding(nn.Module):
-    def __init__(self, embedding_size, grad, dataset_list):
+    def __init__(self, embedding_size, enable_grad, dataset_mapping) -> None:
         super().__init__()
         self.embedding_size = embedding_size
+        self.enable_grad = enable_grad
+        self.dataset_mapping = dataset_mapping  # mapping from dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         self.dataset_emb_dict = nn.ModuleDict({})
-        for dataset in dataset_list:
+        for dataset in dataset_mapping:
             if dataset not in self.dataset_emb_dict:
                 self.dataset_emb_dict[dataset] = nn.Embedding(1, embedding_size)
-            if not grad:
+            if not self.enable_grad:
                 for param in self.dataset_emb_dict[dataset].parameters():
                     param.requires_grad = False
 
     def forward(self, dataset_list):
         device = list(self.parameters())[0].device
         emb_idx = torch.tensor(0, device=device, dtype=torch.long)
+        # apply dataset mapping
+        dataset_list = [self.dataset_mapping[dataset] for dataset in dataset_list]
 
-        # TODO: this is a hack to accomodate the MPA finetuning
-        # emb_for_datasets = [
-        #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
-        # ]
-        emb_for_datasets = [
-            (
-                self.dataset_emb_dict["omat"](emb_idx)
-                if dataset in ["mptrj", "salex"]
-                else self.dataset_emb_dict[dataset](emb_idx)
-            )
-            for dataset in dataset_list
-        ]
+        if self.enable_grad and self.training:
+            # If gradients are enabled we need to ensure that all embeddings are included
+            # in the graph even if they are missing from the batch
+            safety_loss_emb = torch.stack(
+                [
+                    self.dataset_emb_dict[dataset](emb_idx) * 0.0
+                    for dataset in self.dataset_emb_dict
+                ]
+            ).sum(dim=0)
+
+            emb_for_datasets = [
+                (
+                    self.dataset_emb_dict[dataset](emb_idx) + safety_loss_emb
+                    if i == 0
+                    else self.dataset_emb_dict[dataset](emb_idx)
+                )
+                for i, dataset in enumerate(dataset_list)
+            ]
+
+        else:
+            emb_for_datasets = [
+                (self.dataset_emb_dict[dataset](emb_idx)) for dataset in dataset_list
+            ]
 
         return torch.stack(emb_for_datasets, dim=0)
