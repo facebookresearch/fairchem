@@ -10,6 +10,7 @@ modified from troch_geometric Data class
 from __future__ import annotations
 
 import copy
+import logging
 import re
 from collections.abc import Sequence
 from typing import List, Optional, Union
@@ -56,6 +57,24 @@ _OPTIONAL_KEYS = ["energy", "forces", "stress", "dataset"]
 
 # TODO: potential future keys
 # ["virials", "atom_attr", "edge_attr"]
+
+
+def warn_if_upcasting(source_dtype: torch.dtype, target_dtype: torch.dtype) -> bool:
+    """
+    Log a warning if target_dtype has more precision than source_dtype.
+
+    Returns True if a warning was issued, False otherwise.
+    """
+    if torch.finfo(target_dtype).bits > torch.finfo(source_dtype).bits:
+        logging.warning(
+            "Upcasting atomic coordinates from %s to %s. "
+            "Accuracy may be limited by the precision of the "
+            "input coordinates.",
+            source_dtype,
+            target_dtype,
+        )
+        return True
+    return False
 
 
 def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
@@ -274,11 +293,11 @@ class AtomicData:
         if hasattr(self, "energy"):
             assert self.energy.dim() == 1
             assert self.energy.shape[0] == self.num_graphs
-            assert self.energy.dtype in (torch.float32, torch.float64)
+            assert self.energy.dtype == self.pos.dtype
         if hasattr(self, "forces"):
             assert self.forces.shape[0] == self.pos.shape[0]
             assert self.forces.shape[1] == 3
-            assert self.forces.dtype in (torch.float32, torch.float64)
+            assert self.forces.dtype == self.pos.dtype
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
             assert (
@@ -287,7 +306,7 @@ class AtomicData:
                 or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
             )
             assert self.stress.shape[0] == self.num_graphs
-            assert self.stress.dtype in (torch.float32, torch.float64)
+            assert self.stress.dtype == self.pos.dtype
 
         if self.sid is not None:
             assert isinstance(self.sid, list)
@@ -341,7 +360,9 @@ class AtomicData:
         atoms.set_positions(pos)
 
         atomic_numbers = torch.from_numpy(atomic_numbers).long()
-        pos = torch.from_numpy(pos).to(target_dtype)
+        pos = torch.from_numpy(pos)
+        warn_if_upcasting(pos.dtype, target_dtype)
+        pos = pos.to(target_dtype)
         pbc = torch.from_numpy(pbc).bool().view(1, 3)
         cell = torch.from_numpy(cell).to(target_dtype).view(1, 3, 3)
         natoms = torch.tensor([pos.shape[0]], dtype=torch.long)
@@ -377,23 +398,23 @@ class AtomicData:
         if isinstance(calc, (SinglePointCalculator, SinglePointDFTCalculator)):
             results = calc.results
             energy = (
-                torch.FloatTensor([results["energy"]]).view(1)
+                torch.tensor([results["energy"]], dtype=target_dtype).view(1)
                 if "energy" in results
                 else None
             )
             forces = (
-                torch.FloatTensor(results["forces"]).view(-1, 3)
+                torch.tensor(results["forces"], dtype=target_dtype).view(-1, 3)
                 if "forces" in results
                 else None
             )
             stress = results.get("stress", None)
             if stress is not None and r_stress:
                 if stress.shape == (6,):
-                    stress = torch.FloatTensor(voigt_6_to_full_3x3_stress(stress)).view(
-                        1, 3, 3
-                    )
+                    stress = torch.tensor(
+                        voigt_6_to_full_3x3_stress(stress), dtype=target_dtype
+                    ).view(1, 3, 3)
                 elif stress.shape in ((3, 3), (9,)):
-                    stress = torch.FloatTensor(stress).view(1, 3, 3)
+                    stress = torch.tensor(stress, dtype=target_dtype).view(1, 3, 3)
                 else:
                     raise ValueError(f"Unknown stress shape, {stress.shape}")
             else:
@@ -404,17 +425,17 @@ class AtomicData:
             stress = None
 
         energy = (
-            torch.FloatTensor([atoms.info["energy"]])
+            torch.tensor([atoms.info["energy"]], dtype=target_dtype)
             if "energy" in atoms.info
             else energy
         )
         forces = (
-            torch.FloatTensor(atoms.info["forces"])
+            torch.tensor(atoms.info["forces"], dtype=target_dtype)
             if "forces" in atoms.info
             else forces
         )
         stress = (
-            torch.FloatTensor(atoms.info["stress"]).view(1, 3, 3)
+            torch.tensor(atoms.info["stress"], dtype=target_dtype).view(1, 3, 3)
             if "stress" in atoms.info
             else stress
         )

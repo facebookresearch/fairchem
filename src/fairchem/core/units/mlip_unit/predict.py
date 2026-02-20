@@ -35,7 +35,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
     get_backbone_class_from_checkpoint,
@@ -274,20 +274,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         if self.inference_settings.base_precision_dtype is not None:
             dtype = self.inference_settings.base_precision_dtype
-            # Raising a warning only if we are upcasting the atomic coordinates,
-            # not downcasting
-            if (
-                not self._warned_upcast
-                and torch.finfo(dtype).bits > torch.finfo(data_device.pos.dtype).bits
-            ):
-                logging.warning(
-                    "Upcasting atomic coordinates from %s to %s. "
-                    "Accuracy may be limited by the precision of the "
-                    "input coordinates.",
-                    data_device.pos.dtype,
-                    dtype,
-                )
-                self._warned_upcast = True
+            if not self._warned_upcast:
+                self._warned_upcast = warn_if_upcasting(data_device.pos.dtype, dtype)
             for key, val in data_device:
                 if torch.is_tensor(val) and val.is_floating_point():
                     data_device[key] = val.to(dtype)
