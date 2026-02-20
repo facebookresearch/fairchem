@@ -837,13 +837,17 @@ def quaternion_to_axis_angle(
     w = q[..., 0]
     xyz = q[..., 1:4]
 
-    xyz_norm = torch.linalg.norm(xyz, dim=-1)
+    # Clamp before sqrt to prevent inf gradient at identity rotation
+    # (xyz_sq = 0). The clamp gradient is 0 below min, cutting off
+    # the NaN-producing gradient path from sqrt(0).
+    xyz_sq = torch.sum(xyz * xyz, dim=-1)
+    eps = torch.finfo(q.dtype).eps
+    xyz_norm = torch.sqrt(torch.clamp(xyz_sq, min=eps * eps))
     angle = 2.0 * torch.atan2(xyz_norm, w)
 
-    safe_xyz_norm = xyz_norm.clamp(min=1e-12)
-    axis = xyz / safe_xyz_norm.unsqueeze(-1)
+    axis = xyz / xyz_norm.unsqueeze(-1)
 
-    small_angle = xyz_norm < 1e-8
+    small_angle = xyz_sq < 1e-16
     z_axis = torch.tensor([0.0, 0.0, 1.0], dtype=q.dtype, device=q.device)
     z_axis = z_axis.expand_as(axis)
     axis = torch.where(small_angle.unsqueeze(-1), z_axis, axis)
