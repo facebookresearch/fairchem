@@ -67,9 +67,9 @@ def get_neighbors_nvidia(
         return_distances_sq: If True, compute and return pairwise distances squared; if False, return None for distances
 
     Returns:
-        c_index: Center atom indices (tensor, int64) - global indices if batched
-        n_index: Neighbor atom indices (tensor, int64) - global indices if batched
-        offsets: Cell offsets (tensor, int64, shape [num_edges, 3])
+        c_index: Center atom indices (tensor, int32) - global indices if batched
+        n_index: Neighbor atom indices (tensor, int32) - global indices if batched
+        offsets: Cell offsets (tensor, int32, shape [num_edges, 3])
         distances_sq: Pairwise distances squared (tensor) accounting for PBC if distances_sq is True, otherwise None
     """
     # Validate input shapes
