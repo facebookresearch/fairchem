@@ -150,6 +150,10 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
         """
         pass  # noqa
 
+    def validate_atoms_data(self, atoms, task_name: str) -> None:
+        """EScAIP has no special calculator data requirements."""
+        pass  # noqa
+
     def compiled_forward(self, data: GraphAttentionData):
         # input block
         node_features, edge_features = self.input_block(data)

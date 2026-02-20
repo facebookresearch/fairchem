@@ -7,6 +7,9 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import json
+import os
+import time
 from abc import ABCMeta, abstractmethod
 from typing import Any
 
@@ -46,18 +49,43 @@ class Runner(metaclass=ABCMeta):
 class MockRunner(Runner):
     """Used for testing"""
 
-    def __init__(self, x: int, y: int, z: int):
+    def __init__(self, x: int, y: int, z: int, sleep_seconds: float = 0.0):
         self.x = x
         self.y = y
         self.z = z
+        self.sleep_seconds = sleep_seconds
+        self._loaded_state = None
 
     def run(self) -> Any:
+        if self.sleep_seconds > 0:
+            elapsed = 0.0
+            while elapsed < self.sleep_seconds:
+                time.sleep(0.1)
+                elapsed += 0.1
+
         if self.x + self.y > 1000:
             raise ValueError("sum is greater than 1000!")
         return self.x + self.y
 
     def save_state(self, checkpoint_location: str, is_preemption: bool = False) -> bool:
-        pass
+        os.makedirs(checkpoint_location, exist_ok=True)
+        state = {
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "is_preemption": is_preemption,
+        }
+        with open(os.path.join(checkpoint_location, "mock_state.json"), "w") as f:
+            json.dump(state, f)
+        return True
 
     def load_state(self, checkpoint_location: str | None) -> None:
-        pass
+        if checkpoint_location is None:
+            return
+        state_file = os.path.join(checkpoint_location, "mock_state.json")
+        if os.path.exists(state_file):
+            with open(state_file) as f:
+                self._loaded_state = json.load(f)
+                self.x = self._loaded_state["x"]
+                self.y = self._loaded_state["y"]
+                self.z = self._loaded_state["z"]
