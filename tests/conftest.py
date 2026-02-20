@@ -146,12 +146,14 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
-    ray.shutdown()
+    if ray.is_initialized():
+        ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
     yield
-    ray.shutdown()
+    if ray.is_initialized():
+        ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()

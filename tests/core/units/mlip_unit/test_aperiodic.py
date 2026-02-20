@@ -39,22 +39,21 @@ def test_conserving_mole_aperiodic_on_pt(
     )
 
     n_repeats = 10
+    predictor_v1 = MLIPPredictUnit(
+        inference_checkpoint_path,
+        device=device,
+        overrides={"backbone": {"radius_pbc_version": 1}},
+    )
+    predictor_v1.model = predictor_v1.model.to(dtype)
+
+    predictor_v2 = MLIPPredictUnit(
+        inference_checkpoint_path,
+        device=device,
+        overrides={"backbone": {"radius_pbc_version": 2}},
+    )
+    predictor_v2.model = predictor_v2.model.to(dtype)
     for sample_idx in range(5):
         torch.manual_seed(42)
-        # rotations = [ rand_matrix(dtype=dtype) for _ in range(n_repeats) ]
-        predictor_v1 = MLIPPredictUnit(
-            inference_checkpoint_path,
-            device=device,
-            overrides={"backbone": {"radius_pbc_version": 1}},
-        )
-        predictor_v1.model = predictor_v1.model.to(dtype)
-
-        predictor_v2 = MLIPPredictUnit(
-            inference_checkpoint_path,
-            device=device,
-            overrides={"backbone": {"radius_pbc_version": 2}},
-        )
-        predictor_v2.model = predictor_v2.model.to(dtype)
 
         atoms = db.get_atoms(sample_idx)
 

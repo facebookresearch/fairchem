@@ -84,15 +84,15 @@ def equivariance_on_pt(
         radius=100,
         r_edges=False,
         r_data_keys=["spin", "charge"],
-        target_dtype=dtype
+        target_dtype=dtype,
     )
 
     n_repeats = 10
+    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
+    predictor.model = predictor.model.to(dtype)
     for sample_idx in range(5):
         torch.manual_seed(42)
         rotations = [rand_matrix(dtype=dtype) for _ in range(n_repeats)]
-        predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
-        predictor.model = predictor.model.to(dtype)
 
         sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         sample.pos += 500
