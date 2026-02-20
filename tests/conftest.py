@@ -51,7 +51,8 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
-        "markers", "cpu_and_gpu: mark test to run on both GPU and CPU workers"
+        "markers",
+        "serial: mark test to run serially on the CPU runner (not parallelized with xdist)",
     )
     config.addinivalue_line(
         "markers",
@@ -61,11 +62,7 @@ def pytest_configure(config):
 
 def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
-    if (
-        "gpu" in item.keywords
-        and "cpu_and_gpu" not in item.keywords
-        and not torch.cuda.is_available()
-    ):
+    if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
     if "dgl" in item.keywords:
         # check dgl is installed
@@ -146,12 +143,14 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
-    ray.shutdown()
+    if ray.is_initialized():
+        ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
     yield
-    ray.shutdown()
+    if ray.is_initialized():
+        ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
