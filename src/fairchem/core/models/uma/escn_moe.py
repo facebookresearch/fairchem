@@ -19,7 +19,7 @@ from matplotlib import pyplot as plt
 from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
-from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 from fairchem.core.models.uma.nn.mole import (
     MOLEGlobals,
 )
@@ -212,11 +212,30 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
     def __init__(
         self,
         backbone,
-        dataset_names,
         head_cls,
         wrap_property=True,
         head_kwargs=None,
+        dataset_names: (
+            list[str] | None
+        ) = None,  # deprecated in favor of dataset_mapping
+        dataset_mapping: dict[str, str] | None = None,
     ):
+        """
+        Initialize the DatasetSpecificMoEWrapper.
+
+        Args:
+            backbone: The backbone model providing embeddings.
+            head_cls: Registry name of the head class to instantiate.
+            wrap_property: If True, wrap output tensors in a dict with the key name.
+            head_kwargs: Additional keyword arguments passed to the head constructor.
+            dataset_names: Deprecated. Use dataset_mapping instead.
+            dataset_mapping: A mapping from dataset names to output head identifiers.
+                Allows multiple datasets to share the same head/expert by mapping
+                them to the same identifier. Example:
+                {"omol": "omol", "omat": "omat", "oc20": "oc20", "oc20_subset": "oc20"}
+                Here omol and omat have their own heads while oc20 and oc20_subset
+                share the same oc20 head. Dict values must be a subset of dict keys.
+        """
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
@@ -225,10 +244,9 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
 
         self.wrap_property = wrap_property
 
-        self.dataset_names = sorted(dataset_names)
-        self.dataset_name_to_exp = {
-            value: idx for idx, value in enumerate(self.dataset_names)
-        }
+        self.dataset_names, self.dataset_name_to_exp = self._build_expert_mapping(
+            dataset_names, dataset_mapping
+        )
         self.head = registry.get_model_class(head_cls)(backbone, **head_kwargs)
         # replace all linear layers in the head with MOLE
         self.global_mole_tensors = MOLEGlobals(
@@ -242,6 +260,32 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             cache=None,
         )
         recursive_replace_all_linear(self.head, replacement_factory)
+
+    @staticmethod
+    def _build_expert_mapping(
+        dataset_names: list[str] | None,
+        dataset_mapping: dict[str, str] | None,
+    ) -> tuple[list[str], dict[str, int]]:
+        """
+        Build the dataset-to-expert-index mapping.
+
+        Args:
+            dataset_names: Deprecated list of dataset names.
+            dataset_mapping: Dict mapping dataset names to head identifiers.
+
+        Returns:
+            A tuple of (sorted dataset names list, dict mapping names to expert indices).
+        """
+        dataset_mapping = resolve_dataset_mapping(
+            dataset_names, dataset_mapping, "dataset_names"
+        )
+
+        sorted_names = sorted(dataset_mapping.keys())
+        unique_targets = sorted(set(dataset_mapping.values()))
+        name_to_exp = {
+            name: unique_targets.index(dataset_mapping[name]) for name in sorted_names
+        }
+        return sorted_names, name_to_exp
 
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
