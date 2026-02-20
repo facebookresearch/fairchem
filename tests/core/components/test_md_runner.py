@@ -25,6 +25,7 @@ from ase.io import Trajectory
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
+from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate import (
     ASETrajectoryWriter,
@@ -531,7 +532,7 @@ class TestMDRunner:
             dynamics=dynamics,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
-            checkpoint_interval=checkpoint_interval,
+            heartbeat_interval=checkpoint_interval,
             log_interval=10,
             trajectory_writer_kwargs={"flush_interval": 1000},
         )
@@ -578,7 +579,7 @@ class TestMDRunner:
             dynamics=dynamics,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
-            checkpoint_interval=checkpoint_interval,
+            heartbeat_interval=checkpoint_interval,
             log_interval=10,
             trajectory_writer_kwargs={"flush_interval": 1000},
         )
@@ -600,7 +601,45 @@ class TestMDRunner:
 
     def test_no_stopfair_runs_to_completion(self, cu_atoms, results_dir):
         """
-        Test that without STOPFAIR, checkpoint_interval runs to completion normally.
+        Test that without STOPFAIR, heartbeat_interval runs to completion normally.
+        """
+        checkpoint_dir = results_dir / "checkpoints"
+        checkpoint_dir.mkdir()
+
+        total_steps = 50
+        heartbeat_interval = 20
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            steps=total_steps,
+            trajectory_interval=10,
+            heartbeat_interval=heartbeat_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner._job_config = _create_mock_job_config(
+            str(results_dir),
+            checkpoint_dir=str(checkpoint_dir),
+        )
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        assert results["stopped_by_stopfair"] is False
+
+        traj_df = pd.read_parquet(results["trajectory_file"])
+        steps = list(traj_df["step"])
+        assert steps == [0, 10, 20, 30, 40, 50]
+
+    def test_periodic_checkpoint_saving(self, cu_atoms, results_dir):
+        """
+        Test that checkpoint_interval periodically saves rolling checkpoints.
+
+        Verifies:
+        1. Checkpoint files are created at checkpoint_interval steps
+        2. Checkpoint is overwritten (rolling) each time
+        3. Final checkpoint reflects the last checkpoint step
+        4. Simulation runs to completion normally
         """
         checkpoint_dir = results_dir / "checkpoints"
         checkpoint_dir.mkdir()
@@ -624,8 +663,171 @@ class TestMDRunner:
         )
         results = runner.calculate(job_num=0, num_jobs=1)
 
+        # Simulation should run to completion
         assert results["stopped_by_stopfair"] is False
 
         traj_df = pd.read_parquet(results["trajectory_file"])
         steps = list(traj_df["step"])
         assert steps == [0, 10, 20, 30, 40, 50]
+
+        # Checkpoint files should exist (rolling, overwritten at step 20 and 40)
+        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "md_state.json").exists()
+        assert (checkpoint_dir / "thermostat_state.json").exists()
+
+        # Final checkpoint should be at step 40 (last multiple of 20 before 50)
+        with open(checkpoint_dir / "md_state.json") as f:
+            md_state = json.load(f)
+        assert md_state["current_step"] == 40
+
+    def test_checkpoint_and_heartbeat_together(self, cu_atoms, results_dir):
+        """
+        Test that checkpoint_interval and heartbeat_interval work together.
+
+        checkpoint_interval saves rolling checkpoints, heartbeat_interval
+        checks for STOPFAIR. Both can be set independently.
+        """
+        run_dir = results_dir / "run_dir"
+        md_results_dir = results_dir / "results"
+        checkpoint_dir = results_dir / "checkpoints"
+        run_dir.mkdir()
+        md_results_dir.mkdir()
+        checkpoint_dir.mkdir()
+
+        total_steps = 100
+        checkpoint_interval = 15
+        heartbeat_interval = 25
+        trajectory_interval = 10
+
+        dynamics = partial(
+            NoseHooverChainNVT,
+            timestep=1.0 * units.fs,
+            temperature_K=300.0,
+            tdamp=25 * units.fs,
+        )
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=dynamics,
+            steps=total_steps,
+            trajectory_interval=trajectory_interval,
+            checkpoint_interval=checkpoint_interval,
+            heartbeat_interval=heartbeat_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner._job_config = _create_mock_job_config(
+            str(md_results_dir),
+            checkpoint_dir=str(checkpoint_dir),
+        )
+
+        # Write STOPFAIR - should be detected at step 25 (first heartbeat check)
+        stopfair_path = checkpoint_dir.parent / "STOPFAIR"
+        stopfair_path.write_text("")
+
+        results = runner.calculate(job_num=0, num_jobs=1)
+
+        assert results["stopped_by_stopfair"] is True
+
+        # Periodic checkpoint should have been saved at step 15
+        # (checkpoint_interval fires before heartbeat_interval)
+        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "md_state.json").exists()
+
+        # STOPFAIR should have been deleted
+        assert not stopfair_path.exists()
+
+    def test_save_state_writes_portable_config(self, cu_atoms, results_dir):
+        """
+        Test that save_state writes both resume_config.yaml and portable_config.yaml.
+
+        Verifies:
+        1. resume_config.yaml contains runner_state_path and preserves metadata
+        2. portable_config.yaml contains runner_state_path but strips
+           metadata and timestamp_id so it can run on a new machine
+        """
+        checkpoint_dir = results_dir / "checkpoints"
+        checkpoint_dir.mkdir()
+
+        # Create a canonical config file with system-specific fields
+        canonical_cfg = OmegaConf.create(
+            {
+                "job": {
+                    "run_name": "test_run",
+                    "timestamp_id": "202602-1921-1904-33c1",
+                    "run_dir": str(results_dir),
+                    "device_type": "CPU",
+                    "runner_state_path": None,
+                    "metadata": {
+                        "commit": "core:abc123,experimental:NA",
+                        "log_dir": str(results_dir / "logs"),
+                        "checkpoint_dir": str(checkpoint_dir),
+                        "results_dir": str(results_dir),
+                        "config_path": str(results_dir / "canonical_config.yaml"),
+                        "preemption_checkpoint_dir": str(checkpoint_dir),
+                        "cluster_name": "test-cluster",
+                        "array_job_num": 0,
+                        "slurm_env": {
+                            "job_id": "12345",
+                        },
+                    },
+                },
+                "runner": {
+                    "_target_": "fairchem.core.components.calculate.MDRunner",
+                    "atoms": {
+                        "_target_": "ase.io.read",
+                        "filename": "./sample_structure.xyz",
+                        "format": "extxyz",
+                    },
+                    "steps": 50,
+                    "trajectory_interval": 10,
+                },
+            }
+        )
+        config_path = results_dir / "canonical_config.yaml"
+        OmegaConf.save(canonical_cfg, config_path)
+
+        runner = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            steps=50,
+            trajectory_interval=10,
+            checkpoint_interval=20,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner._job_config = _create_mock_job_config(
+            str(results_dir),
+            checkpoint_dir=str(checkpoint_dir),
+            config_path=str(config_path),
+        )
+        results = runner.calculate(job_num=0, num_jobs=1)
+        assert results["stopped_by_stopfair"] is False
+
+        # Both config files should exist
+        assert (checkpoint_dir / "resume_config.yaml").exists()
+        assert (checkpoint_dir / "portable_config.yaml").exists()
+
+        # resume_config should have metadata, runner_state_path, and no atoms
+        resume_cfg = OmegaConf.load(checkpoint_dir / "resume_config.yaml")
+        assert resume_cfg.job.runner_state_path == str(checkpoint_dir)
+        assert "metadata" in resume_cfg.job
+        assert resume_cfg.job.metadata.cluster_name == "test-cluster"
+        assert resume_cfg.job.timestamp_id == "202602-1921-1904-33c1"
+        assert "atoms" not in resume_cfg.runner
+
+        # portable_config should have "." as runner_state_path, no metadata/timestamp_id
+        portable_cfg = OmegaConf.load(checkpoint_dir / "portable_config.yaml")
+        assert portable_cfg.job.runner_state_path == "."
+        assert portable_cfg.job.run_dir == Path(str(results_dir)).name
+        assert "metadata" not in portable_cfg.job
+        assert "timestamp_id" not in portable_cfg.job
+        assert "atoms" not in portable_cfg.runner
+        # Should still have non-system fields
+        assert portable_cfg.job.run_name == "test_run"
+        assert (
+            portable_cfg.runner._target_
+            == "fairchem.core.components.calculate.MDRunner"
+        )

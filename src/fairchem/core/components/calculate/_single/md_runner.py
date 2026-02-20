@@ -55,12 +55,13 @@ class MDRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        atoms: Atoms,
+        atoms: Atoms | None,
         dynamics: type[MolecularDynamics] | Callable,
         steps: int = 1000,
         trajectory_interval: int = 1,
         log_interval: int = 10,
         checkpoint_interval: int | None = None,
+        heartbeat_interval: int | None = None,
         trajectory_writer: type[TrajectoryWriter]
         | Callable[..., TrajectoryWriter]
         | None = None,
@@ -78,7 +79,10 @@ class MDRunner(CalculateRunner):
             steps: Total number of MD steps to run
             trajectory_interval: Interval for writing trajectory frames
             log_interval: Interval for writing thermodynamic data to log
-            checkpoint_interval: Interval (in steps) for checking for a
+            checkpoint_interval: Interval (in steps) for saving a rolling
+                checkpoint of the simulation state. If None, no periodic
+                checkpointing is performed.
+            heartbeat_interval: Interval (in steps) for checking for a
                 STOPFAIR file in run_dir. If a STOPFAIR file is found, the
                 simulation saves state and stops gracefully. If None, no
                 STOPFAIR checking is performed.
@@ -93,6 +97,7 @@ class MDRunner(CalculateRunner):
         self.trajectory_interval = trajectory_interval
         self.log_interval = log_interval
         self.checkpoint_interval = checkpoint_interval
+        self.heartbeat_interval = heartbeat_interval
         self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
         self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
 
@@ -247,8 +252,8 @@ class MDRunner(CalculateRunner):
 
         self._dyn.attach(log_with_alignment, interval=1)
 
-        # Attach STOPFAIR checker if checkpoint_interval is configured
-        if self.checkpoint_interval is not None and self.checkpoint_interval > 0:
+        # Attach STOPFAIR checker if heartbeat_interval is configured
+        if self.heartbeat_interval is not None and self.heartbeat_interval > 0:
             stopfair_path = (
                 Path(self.job_config.metadata.checkpoint_dir).parent / "STOPFAIR"
             )
@@ -264,20 +269,28 @@ class MDRunner(CalculateRunner):
                         f"saving state to {save_path} at step {current_step}"
                     )
                     if self.save_state(save_path, is_preemption=True):
-                        config_path = self.job_config.metadata.config_path
-                        if os.path.exists(config_path):
-                            cfg_copy = OmegaConf.load(config_path)
-                            cfg_copy.job.runner_state_path = save_path
-                            resume_config_path = os.path.join(
-                                save_path, "resume_config.yaml"
-                            )
-                            OmegaConf.save(cfg_copy, resume_config_path)
-                            logging.info(f"Resume config saved to {resume_config_path}")
                         stopfair_path.unlink()
-                        logging.info(f"Deleted STOPFAIR file: {stopfair_path}")
                     raise _StopfairDetected
 
-            self._dyn.attach(check_stopfair, interval=self.checkpoint_interval)
+            self._dyn.attach(check_stopfair, interval=self.heartbeat_interval)
+
+        # Attach periodic checkpoint saving if checkpoint_interval is configured
+        if self.checkpoint_interval is not None and self.checkpoint_interval > 0:
+            checkpoint_save_path = self.job_config.metadata.preemption_checkpoint_dir
+
+            def save_periodic_checkpoint():
+                if self._dyn.get_number_of_steps() == 0:
+                    return
+                current_step = self._dyn.get_number_of_steps() + self._start_step
+                logging.info(
+                    f"Saving periodic checkpoint at step {current_step} "
+                    f"to {checkpoint_save_path}"
+                )
+                self.save_state(checkpoint_save_path, is_preemption=False)
+
+            self._dyn.attach(
+                save_periodic_checkpoint, interval=self.checkpoint_interval
+            )
 
         remaining_steps = self.steps - self._start_step
         stopped_by_stopfair = False
@@ -363,6 +376,9 @@ class MDRunner(CalculateRunner):
         - Atoms state (positions, velocities) in ExtXYZ format
         - Thermostat/barostat state in JSON format
         - MD metadata (step count, etc.) in JSON format
+        - resume_config.yaml: canonical config with runner_state_path set
+        - portable_config.yaml: config stripped of system-specific fields
+          (metadata, timestamp_id) so it can be run on a new machine
 
         Args:
             checkpoint_location: Directory to save checkpoint files
@@ -407,7 +423,31 @@ class MDRunner(CalculateRunner):
             with open(state_path, "w") as f:
                 json.dump(md_state, f)
 
-            logging.info(f"Saved MD checkpoint to {checkpoint_dir}")
+            # Save resume configs from the canonical config
+            config_path = self.job_config.metadata.config_path
+            if os.path.exists(config_path):
+                cfg = OmegaConf.load(config_path)
+                cfg.job.runner_state_path = checkpoint_location
+                # Remove atoms from runner since state is in checkpoint.xyz
+                if "atoms" in cfg.get("runner", {}):
+                    del cfg.runner.atoms
+
+                # System-specific resume config (same machine)
+                resume_path = checkpoint_dir / "resume_config.yaml"
+                OmegaConf.save(cfg, resume_path)
+
+                # Portable config (new machine): strip auto-generated fields
+                portable_cfg = cfg.copy()
+                portable_cfg.job.runner_state_path = "."
+                if "run_dir" in portable_cfg.get("job", {}):
+                    run_dir = Path(portable_cfg.job.run_dir)
+                    portable_cfg.job.run_dir = run_dir.name
+                if "metadata" in portable_cfg.get("job", {}):
+                    del portable_cfg.job.metadata
+                if "timestamp_id" in portable_cfg.get("job", {}):
+                    del portable_cfg.job.timestamp_id
+                portable_path = checkpoint_dir / "portable_config.yaml"
+                OmegaConf.save(portable_cfg, portable_path)
             return True
         except Exception as e:
             logging.exception(f"Failed to save checkpoint: {e}")
