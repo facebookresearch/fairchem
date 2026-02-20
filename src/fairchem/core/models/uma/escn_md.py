@@ -31,7 +31,6 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
-
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     preload_kernel_caches,
 )
