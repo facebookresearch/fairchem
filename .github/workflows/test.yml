@@ -84,6 +84,9 @@ jobs:
           make
           echo "$(readlink -f .)" >> $GITHUB_PATH
 
+      - name: Download large test files
+        run: python -m fairchem.core.scripts.download_large_files oc
+
       - name: Core tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
