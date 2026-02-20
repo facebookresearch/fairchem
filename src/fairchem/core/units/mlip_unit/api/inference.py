@@ -89,6 +89,11 @@ class InferenceSettings:
 
     edge_chunk_size: int | None = None
 
+    # Execution backend mode for the backbone. If set to None, the
+    # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
+    # to enable block-diagonal SO2 GEMM conversion for faster inference.
+    execution_mode: str | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
