@@ -697,6 +697,9 @@ def _quaternion_chart1_standard(
     q = torch.stack([w, x, y, z], dim=-1)
     q_sq = torch.sum(q**2, dim=-1, keepdim=True)
     eps = torch.finfo(ex.dtype).eps
+    # q_sq → 0 at this chart's singularity (ey = -1), but this chart is
+    # unused there so we don't see the divide by zero. The clamp detaches
+    # the gradients so that NaNs don't flow through the backward pass.
     norm = torch.sqrt(torch.clamp(q_sq, min=eps))
 
     return q / norm
@@ -726,6 +729,9 @@ def _quaternion_chart2_via_minus_y(
     q = torch.stack([w, x, y, z], dim=-1)
     q_sq = torch.sum(q**2, dim=-1, keepdim=True)
     eps = torch.finfo(ex.dtype).eps
+    # q_sq → 0 at this chart's singularity (ey = +1), but this chart is
+    # unused there so we don't see the divide by zero. The clamp detaches
+    # the gradients so that NaNs don't flow through the backward pass.
     norm = torch.sqrt(torch.clamp(q_sq, min=eps))
 
     return q / norm

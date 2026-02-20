@@ -571,5 +571,135 @@ class TestSpecializedKernels:
         assert det_err < _KERNEL_THRESHOLD, f"l={ell} determinant error: {det_err}"
 
 
+# =============================================================================
+# Test Ra/Rb Path (l >= 5)
+# =============================================================================
+
+# Edges that exercise the Ra/Rb special cases: near +Y (Rb ≈ 0),
+# near -Y (Ra ≈ 0), on coordinate planes, and axis-aligned.
+_RARB_TEST_EDGES = [
+    ([1.0, 0.0, 0.0], "+X"),
+    ([0.0, 1.0, 0.0], "+Y (Rb=0)"),
+    ([0.0, -1.0, 0.0], "-Y (Ra=0)"),
+    ([0.0, 0.0, 1.0], "+Z"),
+    ([0.01, 0.9999, 0.01], "near +Y"),
+    ([0.01, -0.9999, 0.01], "near -Y"),
+    ([0.866, 0.5, 0.0], "XY plane (ez=0)"),
+    ([0.0, 0.5, 0.866], "YZ plane (ex=0)"),
+    ([0.866, 0.0, 0.5], "XZ plane (ey=0)"),
+    ([0.3, 0.5, 0.8], "off-axis"),
+]
+
+
+class TestRaRbPath:
+    """
+    Tests for the Ra/Rb polynomial Wigner D path (l >= 5).
+
+    This path uses wigner_d_matrix_real with degree-2l polynomials,
+    log/exp of magnitudes, and Horner evaluation. It is exercised
+    only when lmax >= 5 in the hybrid pipeline.
+    """
+
+    def test_orthogonality(self, dtype, device):
+        """
+        D matrices from the Ra/Rb path are orthogonal with det=1.
+        """
+        edges = torch.tensor(
+            [e for e, _ in _RARB_TEST_EDGES], dtype=dtype, device=device
+        )
+        edges = edges / edges.norm(dim=-1, keepdim=True)
+        gamma = torch.zeros(edges.shape[0], dtype=dtype, device=device)
+        D, _ = axis_angle_wigner_hybrid(edges, 6, gamma=gamma)
+
+        DtD = D @ D.transpose(1, 2)
+        eye = torch.eye(D.shape[1], dtype=dtype, device=device)
+        ortho_err = (DtD - eye).abs().max().item()
+        assert ortho_err < 1e-12, f"Orthogonality error {ortho_err}"
+
+        dets = torch.linalg.det(D)
+        det_err = (dets - 1.0).abs().max().item()
+        assert det_err < 1e-10, f"Determinant error {det_err}"
+
+    def test_gradient_no_nan(self, dtype, device):
+        """
+        Gradients through the Ra/Rb path are finite and bounded.
+        """
+        edges = torch.tensor(
+            [e for e, _ in _RARB_TEST_EDGES], dtype=dtype, device=device
+        )
+        edges = edges / edges.norm(dim=-1, keepdim=True)
+        e = edges.clone().requires_grad_(True)
+        gamma = torch.zeros(e.shape[0], dtype=dtype, device=device)
+        D, _ = axis_angle_wigner_hybrid(e, 6, gamma=gamma)
+        D.sum().backward()
+        assert not torch.isnan(e.grad).any(), "NaN in gradient"
+        assert not torch.isinf(e.grad).any(), "Inf in gradient"
+        assert e.grad.abs().max() < 1000, f"Gradient too large: {e.grad.abs().max()}"
+
+    def test_gradient_no_nan_fp32(self, device):
+        """
+        fp32 gradients through the Ra/Rb path are NaN-free.
+
+        The Ra/Rb path internally upcasts to fp64 to avoid overflow in
+        degree-2l polynomials. This test verifies the upcast works and
+        no NaN leaks through torch.where backward.
+        """
+        edges = torch.tensor(
+            [e for e, _ in _RARB_TEST_EDGES],
+            dtype=torch.float32,
+            device=device,
+        )
+        edges = edges / edges.norm(dim=-1, keepdim=True)
+        for test_lmax in [5, 6]:
+            e = edges.clone().requires_grad_(True)
+            gamma = torch.zeros(e.shape[0], dtype=torch.float32, device=device)
+            D, _ = axis_angle_wigner_hybrid(e, test_lmax, gamma=gamma)
+            D.sum().backward()
+            assert not torch.isnan(
+                e.grad
+            ).any(), f"NaN in fp32 gradient at lmax={test_lmax}"
+            assert not torch.isinf(
+                e.grad
+            ).any(), f"Inf in fp32 gradient at lmax={test_lmax}"
+
+    def test_matches_matexp(self, dtype, device):
+        """
+        Ra/Rb Wigner D matches matrix exponential for l=5 and l=6.
+        """
+        torch.manual_seed(42)
+        q = torch.randn(100, 4, dtype=dtype, device=device)
+        q = q / q.norm(dim=-1, keepdim=True)
+
+        ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
+
+        for test_lmax in [5, 6]:
+            coeffs = precompute_wigner_coefficients(test_lmax, dtype, device)
+            U_blocks = precompute_U_blocks_euler_aligned_real(test_lmax, dtype, device)
+            D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
+            D_real = wigner_d_pair_to_real(D_re, D_im, U_blocks, test_lmax)
+
+            # Compare against matrix exponential for each l >= 5
+            axis, angle = quaternion_to_axis_angle(q)
+            generators = get_so3_generators(test_lmax, dtype, device)
+            for ell in range(5, test_lmax + 1):
+                K_x = generators["K_x"][ell]
+                K_y = generators["K_y"][ell]
+                K_z = generators["K_z"][ell]
+                K = (
+                    axis[:, 0:1, None, None] * K_x
+                    + axis[:, 1:2, None, None] * K_y
+                    + axis[:, 2:3, None, None] * K_z
+                ).squeeze(1)
+                D_matexp = torch.linalg.matrix_exp(angle[:, None, None] * K)
+
+                offset = ell * ell
+                size = 2 * ell + 1
+                D_block = D_real[:, offset : offset + size, offset : offset + size]
+                max_err = (D_block - D_matexp).abs().max().item()
+                assert (
+                    max_err < 1e-12
+                ), f"l={ell} Ra/Rb differs from matexp by {max_err}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
