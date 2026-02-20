@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig, ListConfig
+from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
@@ -26,7 +28,7 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
-from fairchem.core.models.uma.nn.embedding_dev import (
+from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
     EdgeDegreeEmbedding,
@@ -89,6 +91,63 @@ def add_n_empty_edges(
     )
 
 
+def get_balanced_attribute(
+    emb: torch.Tensor,
+    target_sum: torch.Tensor,
+    natoms: torch.Tensor,
+    batch: torch.Tensor,
+    balance_attribute_offset: float = 0,
+    balance_channel_idx: int = 0,
+) -> torch.Tensor:
+    """Balance per-atom attributes (charge/spin) to sum to system target.
+
+    Args:
+        emb: Node embeddings of shape [num_atoms, sph_features, channels]
+        target_sum: Target sum per system of shape [num_systems]
+        natoms: Number of atoms per system of shape [num_systems]
+        batch: Batch indices mapping atoms to systems of shape [num_atoms]
+        balance_attribute_offset: Offset to subtract from target (e.g., 1 for spin)
+        balance_channel_idx: Which channel index to balance
+
+    Returns:
+        Modified embeddings with the specified channel balanced to sum to target.
+
+    Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
+    which provides correct gradients in both forward and backward passes.
+    """
+    out_emb = emb.clone()
+
+    charge_unbalanced = emb[:, 0, balance_channel_idx]
+
+    system_scalars_part = torch.zeros(
+        len(natoms),
+        device=emb.device,
+        dtype=emb.dtype,
+    )
+
+    system_scalars_part.index_add_(0, batch, charge_unbalanced.view(-1))
+
+    # Reduce partial sums across all graph parallel ranks
+    # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
+    # ensuring correct gradient computation when atoms are split across ranks.
+    if gp_utils.initialized():
+        system_scalar = all_reduce_with_grad(
+            system_scalars_part, group=gp_utils.get_gp_group()
+        )
+    else:
+        system_scalar = system_scalars_part
+
+    correction = (system_scalar - (target_sum - balance_attribute_offset)) / natoms
+
+    balanced_node_scalar = charge_unbalanced - correction[batch]
+
+    out_emb[:, 0, balance_channel_idx] = (
+        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
+    )
+
+    return out_emb
+
+
 @torch.compiler.disable
 def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int = 0):
     n_edges = n_edges_post = graph_dict["edge_index"].shape[1]
@@ -106,6 +165,70 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int 
         # is a multiple of edge_chunk_size (or at least one edge), aiding chunked
         # activation checkpointing and avoiding empty tensor edge cases.
         add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
+
+
+def resolve_dataset_mapping(
+    deprecated_list: list[str] | None,
+    dataset_mapping: dict[str, str] | None,
+    deprecated_param_name: str = "dataset_list",
+) -> dict[str, str]:
+    """
+    Validate and resolve dataset mapping from either a deprecated list or a mapping dict.
+
+    Args:
+        deprecated_list: Deprecated list of dataset names. If provided, it is
+            converted to a mapping where each name maps to itself.
+        dataset_mapping: Mapping from the config dataset name to desired dataset name for embeddings and heads.
+            Allows multiple subsets to share the same dataset embedding and/or output head by mapping
+            them to the same identifier.
+        deprecated_param_name: Name of the deprecated parameter, used in
+            warning/error messages.
+
+    Returns:
+        The resolved dataset mapping dict.
+
+    Raises:
+        ValueError: If both or neither arguments are provided, if the mapping
+            is not a non-empty dict, or if mapping values are not a subset of
+            mapping keys.
+    """
+    if deprecated_list is not None and dataset_mapping is not None:
+        msg = (
+            f"Both '{deprecated_param_name}' (={deprecated_list}) and "
+            f"'dataset_mapping' (={dataset_mapping}) have been provided. "
+            f"Please provide 'dataset_mapping' only in the config as '{deprecated_param_name}' is deprecated."
+        )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if deprecated_list is None and dataset_mapping is None:
+        msg = "'dataset_mapping' must be provided in the config to use dataset embeddings."
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if deprecated_list is not None:
+        if not isinstance(deprecated_list, (list, ListConfig)):
+            msg = f"If '{deprecated_param_name}' is provided in the config, it must be a list of dataset names. Got: {deprecated_list!r}"
+            logging.error(msg, stack_info=True)
+            raise ValueError(msg)
+        dataset_mapping = {name: name for name in deprecated_list}
+        logging.warning(
+            f"If '{deprecated_param_name}' is provided in the config, the code assumes that each dataset "
+            f"maps to itself. Please use 'dataset_mapping' as '{deprecated_param_name}' "
+            "is deprecated and will be removed in the future."
+        )
+    if not isinstance(dataset_mapping, (dict, DictConfig)) or not dataset_mapping:
+        msg = f"'dataset_mapping' must be a non-empty dictionary, got: {dataset_mapping!r}"
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if not set(dataset_mapping.values()) <= set(dataset_mapping.keys()):
+        missing = set(dataset_mapping.values()) - set(dataset_mapping.keys())
+        msg = (
+            f"dataset_mapping values {missing} are not present in "
+            f"dataset_mapping keys {set(dataset_mapping.keys())}. "
+            f"Values must be a subset of keys. Full mapping provided: {dataset_mapping}"
+        )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    return dataset_mapping
 
 
 @registry.register_model("escnmd_backbone")
@@ -140,11 +263,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
-        dataset_list: list[str] | None = None,
+        dataset_list: (
+            list[str] | None
+        ) = None,  # deprecated, use dataset_mapping instead
+        dataset_mapping: (
+            dict[str, str] | None
+        ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
+        charge_balanced_channels: list[int] | None = None,
+        spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
     ) -> None:
         super().__init__()
@@ -165,6 +295,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
 
+        # which channels to balance
+        self.charge_balanced_channels = (
+            charge_balanced_channels if charge_balanced_channels is not None else []
+        )
+        self.spin_balanced_channels = (
+            spin_balanced_channels if spin_balanced_channels is not None else []
+        )
+
         # NOTE: graph construction related, to remove, except for cutoff
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
@@ -183,13 +321,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
+        self.dataset_mapping = dataset_mapping
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
-            assert (
-                self.dataset_list
-            ), "the dataset list is empty, please add it to the model backbone config"
-
+            self.dataset_mapping = resolve_dataset_mapping(
+                self.dataset_list, dataset_mapping, "dataset_list"
+            )
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
@@ -229,8 +367,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.use_dataset_embedding:
             self.dataset_embedding = DatasetEmbedding(
                 self.sphere_channels,
-                grad=self.dataset_emb_grad,
-                dataset_list=self.dataset_list,
+                enable_grad=self.dataset_emb_grad,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
@@ -313,6 +451,33 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             self.lmax, self.mmax
         )
         self.register_buffer("coefficient_index", coefficient_index, persistent=False)
+
+    def balance_channels(
+        self,
+        x_message_prime: torch.Tensor,
+        charge: torch.Tensor,
+        spin: torch.Tensor,
+        natoms: torch.Tensor,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
+        for channel_idx in self.charge_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=charge,
+                natoms=natoms,
+                batch=batch,
+                balance_channel_idx=channel_idx,
+            )
+        for channel_idx in self.spin_balanced_channels:
+            x_message_prime = get_balanced_attribute(
+                emb=x_message_prime,
+                target_sum=spin,
+                natoms=natoms,
+                batch=batch,
+                balance_attribute_offset=1,
+                balance_channel_idx=channel_idx,
+            )
+        return x_message_prime
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -560,16 +725,25 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 data_dict["atomic_numbers_full"][graph_dict["edge_index"][1]]
             )
             x_edge = torch.cat(
-                (edge_distance_embedding, source_embedding, target_embedding), dim=1
+                (edge_distance_embedding, source_embedding, target_embedding),
+                dim=1,
             )
+
+            # Pre-fuse envelope into wigner_inv for edge degree embedding
+            wigner_and_M_mapping_inv_envelope_for_edge_degree = (
+                wigner_and_M_mapping_inv * edge_envelope
+            )
+
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv,
-                edge_envelope,
+                wigner_and_M_mapping_inv_envelope_for_edge_degree,
                 data_dict["gp_node_offset"],
             )
+
+        # Pre-fuse envelope into wigner_inv for block message passing
+        wigner_and_M_mapping_inv_envelope = wigner_and_M_mapping_inv * edge_envelope
 
         ###############################################################
         # Update spherical node embeddings
@@ -582,13 +756,20 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     graph_dict["edge_distance"],
                     graph_dict["edge_index"],
                     wigner_and_M_mapping,
-                    wigner_and_M_mapping_inv,
-                    edge_envelope,
+                    wigner_and_M_mapping_inv_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                )
+                # balance any channels requested
+                x_message = self.balance_channels(
+                    x_message,
+                    charge=data_dict["charge"],
+                    spin=data_dict["spin"],
+                    natoms=data_dict["natoms"],
+                    batch=data_dict["batch"],
                 )
 
         # Final layer norm
@@ -657,9 +838,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         Validate that task datasets are compatible with this backbone.
         """
-        assert set(dataset_to_tasks.keys()).issubset(
-            set(self.dataset_list)
-        ), "Datasets in tasks is not a strict subset of datasets in backbone."
+        if self.use_dataset_embedding:
+            assert set(dataset_to_tasks.keys()).issubset(
+                set(self.dataset_mapping.values())
+            ), "Datasets in tasks is not a strict subset of datasets in backbone."
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """
