@@ -101,7 +101,7 @@ def get_cfg_from_yaml():
     assert cfg.keys() == ALLOWED_TOP_LEVEL_KEYS
 
 
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize("num_ranks", [1, 4])
 def test_cli_ray(num_ranks):
     distutils.cleanup()
