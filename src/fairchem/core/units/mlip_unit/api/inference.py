@@ -89,6 +89,11 @@ class InferenceSettings:
 
     edge_chunk_size: int | None = None
 
+    # Execution backend mode for the backbone. If set to None, the
+    # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
+    # to enable block-diagonal SO2 GEMM conversion for faster inference.
+    execution_mode: str | None = None
+
     # New fields for untrained derivative properties
     # These flags request computation of properties NOT in the checkpoint's task list.
     # If a property is already in the checkpoint (e.g., omol_forces task exists),

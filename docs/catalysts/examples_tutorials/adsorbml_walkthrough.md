@@ -63,13 +63,13 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 from __future__ import annotations
 
 import pandas as pd
-from fairchem.data.oc.core import Adsorbate, Bulk, Slab
+from fairchem.data.oc.core import Bulk, Slab
 
 bulk_src_id = "mp-30"
-adsorbate_smiles = "*CO"
+# adsorbate smiles string from our database https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/data/oc/databases/pkls/adsorbates.pkl
+adsorbate = "*CO"
 
 bulk = Bulk(bulk_src_id_from_db=bulk_src_id)
-adsorbate = Adsorbate(adsorbate_smiles_from_db=adsorbate_smiles)
 slabs = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1, 1, 1))
 
 # There may be multiple slabs with this miller index.
