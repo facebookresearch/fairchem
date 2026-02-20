@@ -96,7 +96,7 @@ jobs:
       - name: Subprocess-spawning tests
         run: |
           NUM_WORKERS=$(( ($(nproc) / 5) > 0 ? $(nproc) / 5 : 1 ))
-          pytest -n $NUM_WORKERS -m subprocess tests -vv --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-subprocess.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          pytest -n $NUM_WORKERS -m subprocess tests -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-subprocess.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
       - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
