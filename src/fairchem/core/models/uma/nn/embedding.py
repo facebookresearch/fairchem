@@ -214,32 +214,47 @@ class ChgSpinEmbedding(nn.Module):
 
 
 class DatasetEmbedding(nn.Module):
-    def __init__(self, embedding_size, grad, dataset_list):
+    def __init__(self, embedding_size, enable_grad, dataset_mapping) -> None:
         super().__init__()
         self.embedding_size = embedding_size
+        self.enable_grad = enable_grad
+        self.dataset_mapping = dataset_mapping  # mapping from dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         self.dataset_emb_dict = nn.ModuleDict({})
-        for dataset in dataset_list:
+        for dataset in dataset_mapping:
             if dataset not in self.dataset_emb_dict:
                 self.dataset_emb_dict[dataset] = nn.Embedding(1, embedding_size)
-            if not grad:
+            if not self.enable_grad:
                 for param in self.dataset_emb_dict[dataset].parameters():
                     param.requires_grad = False
 
     def forward(self, dataset_list):
         device = list(self.parameters())[0].device
         emb_idx = torch.tensor(0, device=device, dtype=torch.long)
+        # apply dataset mapping
+        dataset_list = [self.dataset_mapping[dataset] for dataset in dataset_list]
 
-        # TODO: this is a hack to accomodate the MPA finetuning
-        # emb_for_datasets = [
-        #     self.dataset_emb_dict[dataset](emb_idx) for dataset in dataset_list
-        # ]
-        emb_for_datasets = [
-            (
-                self.dataset_emb_dict["omat"](emb_idx)
-                if dataset in ["mptrj", "salex"]
-                else self.dataset_emb_dict[dataset](emb_idx)
-            )
-            for dataset in dataset_list
-        ]
+        if self.enable_grad and self.training:
+            # If gradients are enabled we need to ensure that all embeddings are included
+            # in the graph even if they are missing from the batch
+            safety_loss_emb = torch.stack(
+                [
+                    self.dataset_emb_dict[dataset](emb_idx) * 0.0
+                    for dataset in self.dataset_emb_dict
+                ]
+            ).sum(dim=0)
+
+            emb_for_datasets = [
+                (
+                    self.dataset_emb_dict[dataset](emb_idx) + safety_loss_emb
+                    if i == 0
+                    else self.dataset_emb_dict[dataset](emb_idx)
+                )
+                for i, dataset in enumerate(dataset_list)
+            ]
+
+        else:
+            emb_for_datasets = [
+                (self.dataset_emb_dict[dataset](emb_idx)) for dataset in dataset_list
+            ]
 
         return torch.stack(emb_for_datasets, dim=0)
