@@ -7,7 +7,7 @@ file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fairchem.core.common.utils import StrEnum
 
@@ -93,13 +93,11 @@ class InferenceSettings:
     # These flags request computation of properties NOT in the checkpoint's task list.
     # If a property is already in the checkpoint (e.g., omol_forces task exists),
     # it will be computed regardless of these flags.
-    # Can be:
-    #   - False: Don't compute untrained properties (default)
-    #   - True: Compute for ALL datasets with energy tasks but no corresponding property task
-    #   - set[str]: Compute for specific datasets only (e.g., {"omol", "oc20"})
-    compute_untrained_forces: bool | set[str] = False
-    compute_untrained_stress: bool | set[str] = False
-    compute_untrained_hessian: bool | set[str] = False
+    # Specify datasets as a set of strings (e.g., {"omol", "oc20"}).
+    # Empty set means no untrained properties will be computed (default).
+    compute_untrained_forces: set[str] = field(default_factory=set)
+    compute_untrained_stress: set[str] = field(default_factory=set)
+    compute_untrained_hessian: set[str] = field(default_factory=set)
     hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
 
