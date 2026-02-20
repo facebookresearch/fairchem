@@ -15,18 +15,26 @@ from monty.dev import requires
 
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 
+# Try to import nvalchemiops at module load
 try:
     from nvalchemiops.neighborlist.neighbor_utils import estimate_max_neighbors
     from nvalchemiops.neighborlist.neighborlist import neighbor_list
 
-    nvidia_installed = True
+    def nvalchemiops_installed() -> bool:
+        return True
 
-except ImportError:
-    get_neighbors_nvidia_atoms = None
-    nvidia_installed = False
+except ImportError as e:
+    logging.debug(
+        f"nvalchemiops not available: {e}. Install with `pip install nvalchemiops`"
+    )
+    estimate_max_neighbors = None
+    neighbor_list = None
+
+    def nvalchemiops_installed() -> bool:
+        return False
 
 
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
 @torch.no_grad()
 def get_neighbors_nvidia(
     positions: torch.Tensor,
@@ -195,7 +203,7 @@ def get_neighbors_nvidia(
     return c_index, n_index, offsets, distances_sq
 
 
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
 @torch.no_grad()
 def radius_graph_pbc_nvidia(
     data,
@@ -265,7 +273,7 @@ def radius_graph_pbc_nvidia(
     return edge_index, offsets, num_neighbors_image
 
 
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
 @torch.inference_mode()
 def get_neighbors_nvidia_atoms(
     atoms, cutoff: float, max_neigh: int

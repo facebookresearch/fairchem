@@ -34,14 +34,7 @@ except ImportError:
     AseAtomsAdaptor = None
     pmg_installed = False
 
-try:
-    from fairchem.core.graph.radius_graph_pbc_nvidia import get_neighbors_nvidia_atoms
-
-    nvidia_installed = True
-except ImportError:
-    get_neighbors_nvidia_atoms = None
-    nvidia_installed = False
-
+from fairchem.core.graph.radius_graph_pbc_nvidia import get_neighbors_nvidia_atoms
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
 
