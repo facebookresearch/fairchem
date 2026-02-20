@@ -82,7 +82,7 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     ]
     for sample in samples:
         sample.pos += 500
-        sample.cell *= 2000
+        sample.cell *= 10
 
     batch = data_list_collater(samples, otf_graph=True)
     out = predictor.predict(batch)

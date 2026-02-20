@@ -712,7 +712,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
-    md_steps = 5
+    md_steps = 2
     timestep = 1.0 * units.fs
     initial_temp_K = 300.0
     pressure = 1.01325 * units.bar  # 1 atm

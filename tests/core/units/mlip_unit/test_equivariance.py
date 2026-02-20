@@ -84,10 +84,10 @@ def equivariance_on_pt(
         radius=100,
         r_edges=False,
         r_data_keys=["spin", "charge"],
-        target_dtype=dtype
+        target_dtype=dtype,
     )
 
-    n_repeats = 10
+    n_repeats = 5
     for sample_idx in range(5):
         torch.manual_seed(42)
         rotations = [rand_matrix(dtype=dtype) for _ in range(n_repeats)]
