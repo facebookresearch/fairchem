@@ -1,0 +1,670 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
+from __future__ import annotations
+
+import torch
+
+try:
+    import triton
+    import triton.language as tl
+
+    HAS_TRITON = True
+except ImportError:
+    HAS_TRITON = False
+
+
+# =============================================================================
+# Constants for lmax=2 L<->M permutation
+# =============================================================================
+
+# L-major order: [l=0, l=1 m=-1, l=1 m=0, l=1 m=1, l=2 m=-2, l=2 m=-1, l=2 m=0, l=2 m=1, l=2 m=2]
+# M-major order: [m=0 (l=0,1,2), m=1 (l=1,2), m=-1 (l=1,2), m=2 (l=2), m=-2 (l=2)]
+#                positions: [0,1,2] [3,4] [5,6] [7] [8]
+
+# L_TO_M_GATHER_IDX[i] = j means: M-major position i gets L-major position j
+# When reordering L->M: out_m[i] = inp_l[L_TO_M_GATHER_IDX[i]]
+L_TO_M_GATHER_IDX = [0, 2, 6, 3, 7, 1, 5, 8, 4]
+
+# M_TO_L_GATHER_IDX[i] = j means: L-major position i gets M-major position j
+# When reordering M->L: out_l[i] = inp_m[M_TO_L_GATHER_IDX[i]]
+M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
+
+
+if HAS_TRITON:
+    # =========================================================================
+    # Kernel 1: Block-diagonal Wigner multiply (lmax=2) - Forward
+    # =========================================================================
+
+    @triton.jit
+    def wigner_lmax2_fwd_kernel(
+        X_ptr,
+        W_ptr,
+        OUT_ptr,
+        E: tl.constexpr,
+        C: tl.constexpr,
+    ):
+        """
+        Block-diagonal Wigner multiply for lmax=2.
+
+        Wigner D-matrix for lmax=2 is block-diagonal:
+            - L=0 block: 1x1
+            - L=1 block: 3x3
+            - L=2 block: 5x5
+
+        Total: 1 + 9 + 25 = 35 non-zero entries (vs 81 for dense 9x9)
+        """
+        edge_id = tl.program_id(0)
+
+        c_range = tl.arange(0, 128)
+        c_mask = c_range < C
+
+        w_base = edge_id * 81
+        x_base = edge_id * 9 * C
+        out_base = edge_id * 9 * C
+
+        # L=0 block (1x1)
+        w00 = tl.load(W_ptr + w_base + 0)
+        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)
+        tl.store(OUT_ptr + out_base + 0 * C + c_range, w00 * x0, mask=c_mask)
+
+        # L=1 block (3x3) - indices 1,2,3
+        x1 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)
+        x2 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)
+        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)
+
+        w11 = tl.load(W_ptr + w_base + 1 * 9 + 1)
+        w12 = tl.load(W_ptr + w_base + 1 * 9 + 2)
+        w13 = tl.load(W_ptr + w_base + 1 * 9 + 3)
+        w21 = tl.load(W_ptr + w_base + 2 * 9 + 1)
+        w22 = tl.load(W_ptr + w_base + 2 * 9 + 2)
+        w23 = tl.load(W_ptr + w_base + 2 * 9 + 3)
+        w31 = tl.load(W_ptr + w_base + 3 * 9 + 1)
+        w32 = tl.load(W_ptr + w_base + 3 * 9 + 2)
+        w33 = tl.load(W_ptr + w_base + 3 * 9 + 3)
+
+        y1 = w11 * x1 + w12 * x2 + w13 * x3
+        y2 = w21 * x1 + w22 * x2 + w23 * x3
+        y3 = w31 * x1 + w32 * x2 + w33 * x3
+
+        tl.store(OUT_ptr + out_base + 1 * C + c_range, y1, mask=c_mask)
+        tl.store(OUT_ptr + out_base + 2 * C + c_range, y2, mask=c_mask)
+        tl.store(OUT_ptr + out_base + 3 * C + c_range, y3, mask=c_mask)
+
+        # L=2 block (5x5) - indices 4,5,6,7,8
+        x4 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)
+        x5 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)
+        x6 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)
+        x7 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)
+        x8 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)
+
+        w44 = tl.load(W_ptr + w_base + 4 * 9 + 4)
+        w45 = tl.load(W_ptr + w_base + 4 * 9 + 5)
+        w46 = tl.load(W_ptr + w_base + 4 * 9 + 6)
+        w47 = tl.load(W_ptr + w_base + 4 * 9 + 7)
+        w48 = tl.load(W_ptr + w_base + 4 * 9 + 8)
+        y4 = w44 * x4 + w45 * x5 + w46 * x6 + w47 * x7 + w48 * x8
+
+        w54 = tl.load(W_ptr + w_base + 5 * 9 + 4)
+        w55 = tl.load(W_ptr + w_base + 5 * 9 + 5)
+        w56 = tl.load(W_ptr + w_base + 5 * 9 + 6)
+        w57 = tl.load(W_ptr + w_base + 5 * 9 + 7)
+        w58 = tl.load(W_ptr + w_base + 5 * 9 + 8)
+        y5 = w54 * x4 + w55 * x5 + w56 * x6 + w57 * x7 + w58 * x8
+
+        w64 = tl.load(W_ptr + w_base + 6 * 9 + 4)
+        w65 = tl.load(W_ptr + w_base + 6 * 9 + 5)
+        w66 = tl.load(W_ptr + w_base + 6 * 9 + 6)
+        w67 = tl.load(W_ptr + w_base + 6 * 9 + 7)
+        w68 = tl.load(W_ptr + w_base + 6 * 9 + 8)
+        y6 = w64 * x4 + w65 * x5 + w66 * x6 + w67 * x7 + w68 * x8
+
+        w74 = tl.load(W_ptr + w_base + 7 * 9 + 4)
+        w75 = tl.load(W_ptr + w_base + 7 * 9 + 5)
+        w76 = tl.load(W_ptr + w_base + 7 * 9 + 6)
+        w77 = tl.load(W_ptr + w_base + 7 * 9 + 7)
+        w78 = tl.load(W_ptr + w_base + 7 * 9 + 8)
+        y7 = w74 * x4 + w75 * x5 + w76 * x6 + w77 * x7 + w78 * x8
+
+        w84 = tl.load(W_ptr + w_base + 8 * 9 + 4)
+        w85 = tl.load(W_ptr + w_base + 8 * 9 + 5)
+        w86 = tl.load(W_ptr + w_base + 8 * 9 + 6)
+        w87 = tl.load(W_ptr + w_base + 8 * 9 + 7)
+        w88 = tl.load(W_ptr + w_base + 8 * 9 + 8)
+        y8 = w84 * x4 + w85 * x5 + w86 * x6 + w87 * x7 + w88 * x8
+
+        tl.store(OUT_ptr + out_base + 4 * C + c_range, y4, mask=c_mask)
+        tl.store(OUT_ptr + out_base + 5 * C + c_range, y5, mask=c_mask)
+        tl.store(OUT_ptr + out_base + 6 * C + c_range, y6, mask=c_mask)
+        tl.store(OUT_ptr + out_base + 7 * C + c_range, y7, mask=c_mask)
+        tl.store(OUT_ptr + out_base + 8 * C + c_range, y8, mask=c_mask)
+
+    # =========================================================================
+    # Kernel 1b: Block-diagonal Wigner multiply (lmax=2) - Backward dx
+    # dx = W^T @ dy (transpose multiply for input gradient)
+    # =========================================================================
+
+    @triton.jit
+    def wigner_lmax2_bwd_dx_kernel(
+        DY_ptr,
+        W_ptr,
+        DX_ptr,
+        E: tl.constexpr,
+        C: tl.constexpr,
+    ):
+        """
+        Backward for Wigner: compute dx = W^T @ dy.
+
+        Same structure as forward but uses transposed blocks.
+        """
+        edge_id = tl.program_id(0)
+
+        c_range = tl.arange(0, 128)
+        c_mask = c_range < C
+
+        w_base = edge_id * 81
+        dy_base = edge_id * 9 * C
+        dx_base = edge_id * 9 * C
+
+        # L=0 block (1x1) - transpose is same
+        w00 = tl.load(W_ptr + w_base + 0)
+        dy0 = tl.load(DY_ptr + dy_base + 0 * C + c_range, mask=c_mask, other=0.0)
+        tl.store(DX_ptr + dx_base + 0 * C + c_range, w00 * dy0, mask=c_mask)
+
+        # L=1 block (3x3) - transpose
+        dy1 = tl.load(DY_ptr + dy_base + 1 * C + c_range, mask=c_mask, other=0.0)
+        dy2 = tl.load(DY_ptr + dy_base + 2 * C + c_range, mask=c_mask, other=0.0)
+        dy3 = tl.load(DY_ptr + dy_base + 3 * C + c_range, mask=c_mask, other=0.0)
+
+        # Load W and compute W^T @ dy
+        w11 = tl.load(W_ptr + w_base + 1 * 9 + 1)
+        w12 = tl.load(W_ptr + w_base + 1 * 9 + 2)
+        w13 = tl.load(W_ptr + w_base + 1 * 9 + 3)
+        w21 = tl.load(W_ptr + w_base + 2 * 9 + 1)
+        w22 = tl.load(W_ptr + w_base + 2 * 9 + 2)
+        w23 = tl.load(W_ptr + w_base + 2 * 9 + 3)
+        w31 = tl.load(W_ptr + w_base + 3 * 9 + 1)
+        w32 = tl.load(W_ptr + w_base + 3 * 9 + 2)
+        w33 = tl.load(W_ptr + w_base + 3 * 9 + 3)
+
+        # W^T @ dy means: dx[j] = sum_i W[i,j] * dy[i]
+        dx1 = w11 * dy1 + w21 * dy2 + w31 * dy3
+        dx2 = w12 * dy1 + w22 * dy2 + w32 * dy3
+        dx3 = w13 * dy1 + w23 * dy2 + w33 * dy3
+
+        tl.store(DX_ptr + dx_base + 1 * C + c_range, dx1, mask=c_mask)
+        tl.store(DX_ptr + dx_base + 2 * C + c_range, dx2, mask=c_mask)
+        tl.store(DX_ptr + dx_base + 3 * C + c_range, dx3, mask=c_mask)
+
+        # L=2 block (5x5) - transpose
+        dy4 = tl.load(DY_ptr + dy_base + 4 * C + c_range, mask=c_mask, other=0.0)
+        dy5 = tl.load(DY_ptr + dy_base + 5 * C + c_range, mask=c_mask, other=0.0)
+        dy6 = tl.load(DY_ptr + dy_base + 6 * C + c_range, mask=c_mask, other=0.0)
+        dy7 = tl.load(DY_ptr + dy_base + 7 * C + c_range, mask=c_mask, other=0.0)
+        dy8 = tl.load(DY_ptr + dy_base + 8 * C + c_range, mask=c_mask, other=0.0)
+
+        w44 = tl.load(W_ptr + w_base + 4 * 9 + 4)
+        w45 = tl.load(W_ptr + w_base + 4 * 9 + 5)
+        w46 = tl.load(W_ptr + w_base + 4 * 9 + 6)
+        w47 = tl.load(W_ptr + w_base + 4 * 9 + 7)
+        w48 = tl.load(W_ptr + w_base + 4 * 9 + 8)
+
+        w54 = tl.load(W_ptr + w_base + 5 * 9 + 4)
+        w55 = tl.load(W_ptr + w_base + 5 * 9 + 5)
+        w56 = tl.load(W_ptr + w_base + 5 * 9 + 6)
+        w57 = tl.load(W_ptr + w_base + 5 * 9 + 7)
+        w58 = tl.load(W_ptr + w_base + 5 * 9 + 8)
+
+        w64 = tl.load(W_ptr + w_base + 6 * 9 + 4)
+        w65 = tl.load(W_ptr + w_base + 6 * 9 + 5)
+        w66 = tl.load(W_ptr + w_base + 6 * 9 + 6)
+        w67 = tl.load(W_ptr + w_base + 6 * 9 + 7)
+        w68 = tl.load(W_ptr + w_base + 6 * 9 + 8)
+
+        w74 = tl.load(W_ptr + w_base + 7 * 9 + 4)
+        w75 = tl.load(W_ptr + w_base + 7 * 9 + 5)
+        w76 = tl.load(W_ptr + w_base + 7 * 9 + 6)
+        w77 = tl.load(W_ptr + w_base + 7 * 9 + 7)
+        w78 = tl.load(W_ptr + w_base + 7 * 9 + 8)
+
+        w84 = tl.load(W_ptr + w_base + 8 * 9 + 4)
+        w85 = tl.load(W_ptr + w_base + 8 * 9 + 5)
+        w86 = tl.load(W_ptr + w_base + 8 * 9 + 6)
+        w87 = tl.load(W_ptr + w_base + 8 * 9 + 7)
+        w88 = tl.load(W_ptr + w_base + 8 * 9 + 8)
+
+        # W^T @ dy for L=2 block
+        dx4 = w44 * dy4 + w54 * dy5 + w64 * dy6 + w74 * dy7 + w84 * dy8
+        dx5 = w45 * dy4 + w55 * dy5 + w65 * dy6 + w75 * dy7 + w85 * dy8
+        dx6 = w46 * dy4 + w56 * dy5 + w66 * dy6 + w76 * dy7 + w86 * dy8
+        dx7 = w47 * dy4 + w57 * dy5 + w67 * dy6 + w77 * dy7 + w87 * dy8
+        dx8 = w48 * dy4 + w58 * dy5 + w68 * dy6 + w78 * dy7 + w88 * dy8
+
+        tl.store(DX_ptr + dx_base + 4 * C + c_range, dx4, mask=c_mask)
+        tl.store(DX_ptr + dx_base + 5 * C + c_range, dx5, mask=c_mask)
+        tl.store(DX_ptr + dx_base + 6 * C + c_range, dx6, mask=c_mask)
+        tl.store(DX_ptr + dx_base + 7 * C + c_range, dx7, mask=c_mask)
+        tl.store(DX_ptr + dx_base + 8 * C + c_range, dx8, mask=c_mask)
+
+    # =========================================================================
+    # Kernel 1c: Block-diagonal Wigner multiply (lmax=2) - Backward dW
+    # dW[e,i,j] = sum_c dy[e,i,c] * x[e,j,c]  (outer product per edge)
+    # Required for force computation!
+    # =========================================================================
+
+    @triton.jit
+    def wigner_lmax2_bwd_dw_kernel(
+        DY_ptr,
+        X_ptr,
+        DW_ptr,
+        E: tl.constexpr,
+        C: tl.constexpr,
+    ):
+        """
+        Backward for Wigner: compute dW = dy @ x^T (block-diagonal).
+
+        dW[e,i,j] = sum_c dy[e,i,c] * x[e,j,c]
+
+        Only compute non-zero blocks:
+        - L=0: dW[0,0]
+        - L=1: dW[1:4, 1:4]
+        - L=2: dW[4:9, 4:9]
+
+        Each thread block handles one edge.
+        Load all channels at once (assuming C <= 128).
+        """
+        edge_id = tl.program_id(0)
+
+        dy_base = edge_id * 9 * C
+        x_base = edge_id * 9 * C
+        dw_base = edge_id * 81
+
+        c_range = tl.arange(0, 128)
+        c_mask = c_range < C
+
+        # Load all 9 coefficients for dy and x
+        dy0 = tl.load(DY_ptr + dy_base + 0 * C + c_range, mask=c_mask, other=0.0)
+        dy1 = tl.load(DY_ptr + dy_base + 1 * C + c_range, mask=c_mask, other=0.0)
+        dy2 = tl.load(DY_ptr + dy_base + 2 * C + c_range, mask=c_mask, other=0.0)
+        dy3 = tl.load(DY_ptr + dy_base + 3 * C + c_range, mask=c_mask, other=0.0)
+        dy4 = tl.load(DY_ptr + dy_base + 4 * C + c_range, mask=c_mask, other=0.0)
+        dy5 = tl.load(DY_ptr + dy_base + 5 * C + c_range, mask=c_mask, other=0.0)
+        dy6 = tl.load(DY_ptr + dy_base + 6 * C + c_range, mask=c_mask, other=0.0)
+        dy7 = tl.load(DY_ptr + dy_base + 7 * C + c_range, mask=c_mask, other=0.0)
+        dy8 = tl.load(DY_ptr + dy_base + 8 * C + c_range, mask=c_mask, other=0.0)
+
+        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)
+        x1 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)
+        x2 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)
+        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)
+        x4 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)
+        x5 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)
+        x6 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)
+        x7 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)
+        x8 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)
+
+        # L=0 block (1x1): dW[0,0] = sum_c dy[0,c] * x[0,c]
+        dw_00 = tl.sum(dy0 * x0)
+        tl.store(DW_ptr + dw_base + 0, dw_00)
+
+        # L=1 block (3x3): dW[1:4, 1:4]
+        dw_11 = tl.sum(dy1 * x1)
+        dw_12 = tl.sum(dy1 * x2)
+        dw_13 = tl.sum(dy1 * x3)
+        dw_21 = tl.sum(dy2 * x1)
+        dw_22 = tl.sum(dy2 * x2)
+        dw_23 = tl.sum(dy2 * x3)
+        dw_31 = tl.sum(dy3 * x1)
+        dw_32 = tl.sum(dy3 * x2)
+        dw_33 = tl.sum(dy3 * x3)
+
+        tl.store(DW_ptr + dw_base + 1 * 9 + 1, dw_11)
+        tl.store(DW_ptr + dw_base + 1 * 9 + 2, dw_12)
+        tl.store(DW_ptr + dw_base + 1 * 9 + 3, dw_13)
+        tl.store(DW_ptr + dw_base + 2 * 9 + 1, dw_21)
+        tl.store(DW_ptr + dw_base + 2 * 9 + 2, dw_22)
+        tl.store(DW_ptr + dw_base + 2 * 9 + 3, dw_23)
+        tl.store(DW_ptr + dw_base + 3 * 9 + 1, dw_31)
+        tl.store(DW_ptr + dw_base + 3 * 9 + 2, dw_32)
+        tl.store(DW_ptr + dw_base + 3 * 9 + 3, dw_33)
+
+        # L=2 block (5x5): dW[4:9, 4:9]
+        # Row 4
+        dw_44 = tl.sum(dy4 * x4)
+        dw_45 = tl.sum(dy4 * x5)
+        dw_46 = tl.sum(dy4 * x6)
+        dw_47 = tl.sum(dy4 * x7)
+        dw_48 = tl.sum(dy4 * x8)
+        tl.store(DW_ptr + dw_base + 4 * 9 + 4, dw_44)
+        tl.store(DW_ptr + dw_base + 4 * 9 + 5, dw_45)
+        tl.store(DW_ptr + dw_base + 4 * 9 + 6, dw_46)
+        tl.store(DW_ptr + dw_base + 4 * 9 + 7, dw_47)
+        tl.store(DW_ptr + dw_base + 4 * 9 + 8, dw_48)
+
+        # Row 5
+        dw_54 = tl.sum(dy5 * x4)
+        dw_55 = tl.sum(dy5 * x5)
+        dw_56 = tl.sum(dy5 * x6)
+        dw_57 = tl.sum(dy5 * x7)
+        dw_58 = tl.sum(dy5 * x8)
+        tl.store(DW_ptr + dw_base + 5 * 9 + 4, dw_54)
+        tl.store(DW_ptr + dw_base + 5 * 9 + 5, dw_55)
+        tl.store(DW_ptr + dw_base + 5 * 9 + 6, dw_56)
+        tl.store(DW_ptr + dw_base + 5 * 9 + 7, dw_57)
+        tl.store(DW_ptr + dw_base + 5 * 9 + 8, dw_58)
+
+        # Row 6
+        dw_64 = tl.sum(dy6 * x4)
+        dw_65 = tl.sum(dy6 * x5)
+        dw_66 = tl.sum(dy6 * x6)
+        dw_67 = tl.sum(dy6 * x7)
+        dw_68 = tl.sum(dy6 * x8)
+        tl.store(DW_ptr + dw_base + 6 * 9 + 4, dw_64)
+        tl.store(DW_ptr + dw_base + 6 * 9 + 5, dw_65)
+        tl.store(DW_ptr + dw_base + 6 * 9 + 6, dw_66)
+        tl.store(DW_ptr + dw_base + 6 * 9 + 7, dw_67)
+        tl.store(DW_ptr + dw_base + 6 * 9 + 8, dw_68)
+
+        # Row 7
+        dw_74 = tl.sum(dy7 * x4)
+        dw_75 = tl.sum(dy7 * x5)
+        dw_76 = tl.sum(dy7 * x6)
+        dw_77 = tl.sum(dy7 * x7)
+        dw_78 = tl.sum(dy7 * x8)
+        tl.store(DW_ptr + dw_base + 7 * 9 + 4, dw_74)
+        tl.store(DW_ptr + dw_base + 7 * 9 + 5, dw_75)
+        tl.store(DW_ptr + dw_base + 7 * 9 + 6, dw_76)
+        tl.store(DW_ptr + dw_base + 7 * 9 + 7, dw_77)
+        tl.store(DW_ptr + dw_base + 7 * 9 + 8, dw_78)
+
+        # Row 8
+        dw_84 = tl.sum(dy8 * x4)
+        dw_85 = tl.sum(dy8 * x5)
+        dw_86 = tl.sum(dy8 * x6)
+        dw_87 = tl.sum(dy8 * x7)
+        dw_88 = tl.sum(dy8 * x8)
+        tl.store(DW_ptr + dw_base + 8 * 9 + 4, dw_84)
+        tl.store(DW_ptr + dw_base + 8 * 9 + 5, dw_85)
+        tl.store(DW_ptr + dw_base + 8 * 9 + 6, dw_86)
+        tl.store(DW_ptr + dw_base + 8 * 9 + 7, dw_87)
+        tl.store(DW_ptr + dw_base + 8 * 9 + 8, dw_88)
+
+    # =========================================================================
+    # Kernel 2: L->M permutation (lmax=2)
+    # =========================================================================
+
+    @triton.jit
+    def l_to_m_kernel(
+        X_ptr,
+        OUT_ptr,
+        E: tl.constexpr,
+        C: tl.constexpr,
+    ):
+        """
+        Permute L-major to M-major for lmax=2.
+
+        L_TO_M_GATHER_IDX = [0, 2, 6, 3, 7, 1, 5, 8, 4]
+        out[i] = x[L_TO_M_GATHER_IDX[i]]
+        """
+        edge_id = tl.program_id(0)
+
+        c_range = tl.arange(0, 128)
+        c_mask = c_range < C
+
+        x_base = edge_id * 9 * C
+        out_base = edge_id * 9 * C
+
+        # Load all 9 coefficients
+        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)
+        x1 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)
+        x2 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)
+        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)
+        x4 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)
+        x5 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)
+        x6 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)
+        x7 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)
+        x8 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)
+
+        # Scatter using L_TO_M_GATHER_IDX = [0, 2, 6, 3, 7, 1, 5, 8, 4]
+        # out[i] = x[idx[i]]
+        tl.store(OUT_ptr + out_base + 0 * C + c_range, x0, mask=c_mask)  # out[0] = x[0]
+        tl.store(OUT_ptr + out_base + 1 * C + c_range, x2, mask=c_mask)  # out[1] = x[2]
+        tl.store(OUT_ptr + out_base + 2 * C + c_range, x6, mask=c_mask)  # out[2] = x[6]
+        tl.store(OUT_ptr + out_base + 3 * C + c_range, x3, mask=c_mask)  # out[3] = x[3]
+        tl.store(OUT_ptr + out_base + 4 * C + c_range, x7, mask=c_mask)  # out[4] = x[7]
+        tl.store(OUT_ptr + out_base + 5 * C + c_range, x1, mask=c_mask)  # out[5] = x[1]
+        tl.store(OUT_ptr + out_base + 6 * C + c_range, x5, mask=c_mask)  # out[6] = x[5]
+        tl.store(OUT_ptr + out_base + 7 * C + c_range, x8, mask=c_mask)  # out[7] = x[8]
+        tl.store(OUT_ptr + out_base + 8 * C + c_range, x4, mask=c_mask)  # out[8] = x[4]
+
+    # =========================================================================
+    # Kernel 3: M->L permutation (lmax=2)
+    # =========================================================================
+
+    @triton.jit
+    def m_to_l_kernel(
+        X_ptr,
+        OUT_ptr,
+        E: tl.constexpr,
+        C: tl.constexpr,
+    ):
+        """
+        Permute M-major to L-major for lmax=2.
+
+        M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
+        out[i] = x[M_TO_L_GATHER_IDX[i]]
+        """
+        edge_id = tl.program_id(0)
+
+        c_range = tl.arange(0, 128)
+        c_mask = c_range < C
+
+        x_base = edge_id * 9 * C
+        out_base = edge_id * 9 * C
+
+        # Load all 9 coefficients
+        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)
+        x1 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)
+        x2 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)
+        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)
+        x4 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)
+        x5 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)
+        x6 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)
+        x7 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)
+        x8 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)
+
+        # Scatter using M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
+        # out[i] = x[idx[i]]
+        tl.store(OUT_ptr + out_base + 0 * C + c_range, x0, mask=c_mask)  # out[0] = x[0]
+        tl.store(OUT_ptr + out_base + 1 * C + c_range, x5, mask=c_mask)  # out[1] = x[5]
+        tl.store(OUT_ptr + out_base + 2 * C + c_range, x1, mask=c_mask)  # out[2] = x[1]
+        tl.store(OUT_ptr + out_base + 3 * C + c_range, x3, mask=c_mask)  # out[3] = x[3]
+        tl.store(OUT_ptr + out_base + 4 * C + c_range, x8, mask=c_mask)  # out[4] = x[8]
+        tl.store(OUT_ptr + out_base + 5 * C + c_range, x6, mask=c_mask)  # out[5] = x[6]
+        tl.store(OUT_ptr + out_base + 6 * C + c_range, x2, mask=c_mask)  # out[6] = x[2]
+        tl.store(OUT_ptr + out_base + 7 * C + c_range, x4, mask=c_mask)  # out[7] = x[4]
+        tl.store(OUT_ptr + out_base + 8 * C + c_range, x7, mask=c_mask)  # out[8] = x[7]
+
+
+# =============================================================================
+# Python Wrappers for lmax=2 kernels
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Low-level forward/backward functions (used by autograd)
+# Channel tiling: kernels process 128 channels at a time, so we tile for C > 128
+# -----------------------------------------------------------------------------
+
+BLOCK_C = 128  # Channel block size for Triton kernels
+
+
+def _wigner_lmax2_fwd(x: torch.Tensor, wigner: torch.Tensor) -> torch.Tensor:
+    """Forward pass for Wigner multiply."""
+    E, num_coeffs, C = x.shape
+
+    if C <= BLOCK_C:
+        out = torch.empty_like(x)
+        wigner_lmax2_fwd_kernel[(E,)](x, wigner, out, E, C)
+        return out
+
+    # Tile over channel blocks
+    out = torch.empty_like(x)
+    for c_start in range(0, C, BLOCK_C):
+        c_end = min(c_start + BLOCK_C, C)
+        block_c = c_end - c_start
+        x_block = x[:, :, c_start:c_end].contiguous()
+        out_block = torch.empty_like(x_block)
+        wigner_lmax2_fwd_kernel[(E,)](x_block, wigner, out_block, E, block_c)
+        out[:, :, c_start:c_end] = out_block
+    return out
+
+
+def _wigner_lmax2_bwd_dx(dy: torch.Tensor, wigner: torch.Tensor) -> torch.Tensor:
+    """Backward pass for Wigner: compute dx = W^T @ dy."""
+    dy = dy.contiguous()  # Grad tensors from autograd may not be contiguous
+    E, num_coeffs, C = dy.shape
+
+    if C <= BLOCK_C:
+        dx = torch.empty_like(dy)
+        wigner_lmax2_bwd_dx_kernel[(E,)](dy, wigner, dx, E, C)
+        return dx
+
+    # Tile over channel blocks
+    dx = torch.empty_like(dy)
+    for c_start in range(0, C, BLOCK_C):
+        c_end = min(c_start + BLOCK_C, C)
+        block_c = c_end - c_start
+        dy_block = dy[:, :, c_start:c_end].contiguous()
+        dx_block = torch.empty_like(dy_block)
+        wigner_lmax2_bwd_dx_kernel[(E,)](dy_block, wigner, dx_block, E, block_c)
+        dx[:, :, c_start:c_end] = dx_block
+    return dx
+
+
+def _wigner_lmax2_bwd_dw(dy: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    """Backward pass for Wigner: compute dW = dy @ x^T (block-diagonal)."""
+    dy = dy.contiguous()  # Grad tensors from autograd may not be contiguous
+    E, num_coeffs, C = dy.shape
+    dw = torch.zeros(E, 9, 9, device=dy.device, dtype=dy.dtype)
+
+    if C <= BLOCK_C:
+        wigner_lmax2_bwd_dw_kernel[(E,)](dy, x, dw, E, C)
+        return dw
+
+    # Tile over channel blocks and accumulate gradients
+    # Each kernel call computes partial sum over a channel block
+    # We use a temporary buffer and accumulate to get the full sum
+    dw_temp = torch.empty(E, 9, 9, device=dy.device, dtype=dy.dtype)
+    for c_start in range(0, C, BLOCK_C):
+        c_end = min(c_start + BLOCK_C, C)
+        block_c = c_end - c_start
+        dy_block = dy[:, :, c_start:c_end].contiguous()
+        x_block = x[:, :, c_start:c_end].contiguous()
+        wigner_lmax2_bwd_dw_kernel[(E,)](dy_block, x_block, dw_temp, E, block_c)
+        dw += dw_temp  # Accumulate partial gradient
+    return dw
+
+
+def _l_to_m_lmax2_fwd(x: torch.Tensor) -> torch.Tensor:
+    """Forward pass for L->M permutation."""
+    x = x.contiguous()
+    E, num_coeffs, C = x.shape
+
+    if C <= BLOCK_C:
+        out = torch.empty_like(x)
+        l_to_m_kernel[(E,)](x, out, E, C)
+        return out
+
+    # Tile over channel blocks
+    out = torch.empty_like(x)
+    for c_start in range(0, C, BLOCK_C):
+        c_end = min(c_start + BLOCK_C, C)
+        block_c = c_end - c_start
+        x_block = x[:, :, c_start:c_end].contiguous()
+        out_block = torch.empty_like(x_block)
+        l_to_m_kernel[(E,)](x_block, out_block, E, block_c)
+        out[:, :, c_start:c_end] = out_block
+    return out
+
+
+def _m_to_l_lmax2_fwd(x: torch.Tensor) -> torch.Tensor:
+    """Forward pass for M->L permutation."""
+    x = x.contiguous()
+    E, num_coeffs, C = x.shape
+
+    if C <= BLOCK_C:
+        out = torch.empty_like(x)
+        m_to_l_kernel[(E,)](x, out, E, C)
+        return out
+
+    # Tile over channel blocks
+    out = torch.empty_like(x)
+    for c_start in range(0, C, BLOCK_C):
+        c_end = min(c_start + BLOCK_C, C)
+        block_c = c_end - c_start
+        x_block = x[:, :, c_start:c_end].contiguous()
+        out_block = torch.empty_like(x_block)
+        m_to_l_kernel[(E,)](x_block, out_block, E, block_c)
+        out[:, :, c_start:c_end] = out_block
+    return out
+
+
+# Autograd Function Classes
+# -----------------------------------------------------------------------------
+
+
+class MToLThenWignerLmax2Function(torch.autograd.Function):
+    """
+    Autograd function for M->L + Wigner (lmax=2).
+
+    Forward: y_l = W @ permute_M_to_L(x_m)
+    Backward:
+        dx_l = W^T @ dy_l
+        dx_m = permute_L_to_M(dx_l)
+        dW = dy_l @ x_l^T where x_l = permute_M_to_L(x_m)
+
+    Uses separate kernels for M->L permutation and Wigner multiply.
+    Saves x_l in forward to avoid recomputation in backward.
+    """
+
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, wigner: torch.Tensor) -> torch.Tensor:
+        # Convert M-major to L-major, then apply Wigner
+        x_l = _m_to_l_lmax2_fwd(x)
+        ctx.save_for_backward(x_l, wigner)
+        return _wigner_lmax2_fwd(x_l, wigner)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x_l, wigner = ctx.saved_tensors
+        # Gradient w.r.t. x_l: W^T @ dy
+        grad_x_l = _wigner_lmax2_bwd_dx(grad_output, wigner)
+        # Gradient w.r.t. x_m: permute L->M
+        grad_x = _l_to_m_lmax2_fwd(grad_x_l)
+        # Gradient w.r.t. wigner: dy @ x_l^T
+        grad_wigner = _wigner_lmax2_bwd_dw(grad_output, x_l)
+        return grad_x, grad_wigner
+
+
+# -----------------------------------------------------------------------------
+# Public API (autograd-enabled)
+# -----------------------------------------------------------------------------
+
+
+def m_to_l_then_wigner_lmax2(x: torch.Tensor, wigner: torch.Tensor) -> torch.Tensor:
+    """
+    Fused M->L permutation then Wigner @ x for lmax=2 with autograd support.
+
+    Args:
+        x: [E, 9, C] tensor in M-major order
+        wigner: [E, 9, 9] block-diagonal Wigner D-matrices (typically wigner_inv)
+
+    Returns:
+        [E, 9, C] tensor in L-major order
+    """
+    assert x.shape[1] == 9
+    return MToLThenWignerLmax2Function.apply(x, wigner)
