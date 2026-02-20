@@ -89,6 +89,19 @@ class InferenceSettings:
 
     edge_chunk_size: int | None = None
 
+    # New fields for untrained derivative properties
+    # These flags request computation of properties NOT in the checkpoint's task list.
+    # If a property is already in the checkpoint (e.g., omol_forces task exists),
+    # it will be computed regardless of these flags.
+    # Can be:
+    #   - False: Don't compute untrained properties (default)
+    #   - True: Compute for ALL datasets with energy tasks but no corresponding property task
+    #   - set[str]: Compute for specific datasets only (e.g., {"omol", "oc20"})
+    compute_untrained_forces: bool | set[str] = False
+    compute_untrained_stress: bool | set[str] = False
+    compute_untrained_hessian: bool | set[str] = False
+    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
