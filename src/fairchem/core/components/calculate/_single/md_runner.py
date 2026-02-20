@@ -55,8 +55,8 @@ class MDRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        atoms: Atoms | None,
         dynamics: type[MolecularDynamics] | Callable,
+        atoms: Atoms | None = None,
         steps: int = 1000,
         trajectory_interval: int = 1,
         log_interval: int = 10,
@@ -205,6 +205,11 @@ class MDRunner(CalculateRunner):
         Returns:
             Dictionary containing MD results and metadata
         """
+        assert self._atoms is not None, (
+            "No atoms provided. Pass atoms= to MDRunner or set runner_state_path "
+            "in the config to resume from a checkpoint."
+        )
+
         results_dir = Path(self.job_config.metadata.results_dir)
         sid = self._atoms.info.get("sid", job_num)
 
