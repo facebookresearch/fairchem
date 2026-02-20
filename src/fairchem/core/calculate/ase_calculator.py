@@ -105,7 +105,6 @@ class FAIRChemCalculator(Calculator):
             AtomicData.from_ase,
             task_name=self.task_name,
             r_edges=r_edges,
-            r_data_keys=["spin", "charge"],
             max_neigh=max_neigh,
             radius=radius,
         )

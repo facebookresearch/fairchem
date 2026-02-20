@@ -420,14 +420,14 @@ class AtomicData:
         charge = torch.LongTensor(
             [
                 atoms.info.get("charge", 0)
-                if r_data_keys is not None and "charge" in r_data_keys
+                if (r_data_keys is not None and "charge" in r_data_keys) or (r_data_keys is None and task_name == "omol")
                 else 0
             ]
         )
         spin = torch.LongTensor(
             [
                 atoms.info.get("spin", 0)
-                if r_data_keys is not None and "spin" in r_data_keys
+                if (r_data_keys is not None and "spin" in r_data_keys) or (r_data_keys is None and task_name == "omol")
                 else 0
             ]
         )
