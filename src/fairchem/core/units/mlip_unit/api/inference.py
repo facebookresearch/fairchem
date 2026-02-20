@@ -7,7 +7,7 @@ file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fairchem.core.common.utils import StrEnum
 
@@ -93,6 +93,17 @@ class InferenceSettings:
     # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
     # to enable block-diagonal SO2 GEMM conversion for faster inference.
     execution_mode: str | None = None
+
+    # New fields for untrained derivative properties
+    # These flags request computation of properties NOT in the checkpoint's task list.
+    # If a property is already in the checkpoint (e.g., omol_forces task exists),
+    # it will be computed regardless of these flags.
+    # Specify datasets as a set of strings (e.g., {"omol", "oc20"}).
+    # Empty set means no untrained properties will be computed (default).
+    compute_untrained_forces: set[str] = field(default_factory=set)
+    compute_untrained_stress: set[str] = field(default_factory=set)
+    compute_untrained_hessian: set[str] = field(default_factory=set)
+    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
 
 # this is most general setting that works for most systems and models,

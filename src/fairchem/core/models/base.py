@@ -145,6 +145,8 @@ class HydraModel(nn.Module):
         # the old config system at some point, this will prevent the need to make major modifications to the trainer
         # because they all expect the name of the outputs directly instead of the head_name.property_name
         self.pass_through_head_outputs = pass_through_head_outputs
+        self._tasks = None
+        self._dataset_to_tasks = None
 
         # if finetune_config is provided, then attempt to load the model from the given finetune checkpoint
         starting_model = None
@@ -249,6 +251,13 @@ class HydraModel(nn.Module):
         return out
 
     @property
+    def tasks(self) -> dict[str, Task]:
+        """
+        Mapping from task names to their associated Task objects.
+        """
+        return self._tasks
+
+    @property
     def direct_forces(self) -> bool:
         """
         Whether this model uses direct force prediction.
@@ -310,10 +319,36 @@ class HydraModel(nn.Module):
             tasks_config: List of task configurations from checkpoint
         """
         tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
-        self.tasks = {t.name: t for t in tasks}
+        self._tasks = {t.name: t for t in tasks}
         self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
 
         # Let backbone validate tasks
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    def add_tasks(self, tasks: Sequence[Task]) -> None:
+        """
+        Add additional tasks to the model.
+
+        This is useful for adding inference-only tasks that weren't in the
+        original checkpoint, such as untrained derivative properties.
+
+        Args:
+            tasks: List of Task objects to add
+        """
+        if not hasattr(self, "tasks"):
+            raise RuntimeError("setup_tasks() must be called before add_tasks()")
+
+        # Add new tasks to the tasks dict
+        for task in tasks:
+            if task.name in self.tasks:
+                logging.warning(f"Task '{task.name}' already exists, skipping addition")
+                continue
+            self.tasks[task.name] = task
+
+        # Rebuild dataset_to_tasks map
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(self.tasks.values())
+
+        # Let backbone validate the updated task set
         self.backbone.validate_tasks(self._dataset_to_tasks)
 
     @property
@@ -339,6 +374,9 @@ class HydraModelV2(nn.Module):
         self.backbone = backbone
         self.output_heads = torch.nn.ModuleDict(heads)
         self.device = None
+        self._tasks = None
+        self._dataset_to_tasks = None
+
         if freeze_backbone:
             for param in self.backbone.parameters():
                 param.requires_grad = False
@@ -363,6 +401,13 @@ class HydraModelV2(nn.Module):
             ):
                 out[k] = self.output_heads[k](data, emb)
         return out
+
+    @property
+    def tasks(self) -> dict[str, Task]:
+        """
+        Mapping from task names to their associated Task objects.
+        """
+        return self._tasks
 
     @property
     def direct_forces(self) -> bool:
@@ -423,10 +468,33 @@ class HydraModelV2(nn.Module):
             tasks_config: List of task configurations from checkpoint
         """
         tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
-        self.tasks = {t.name: t for t in tasks}
+        self._tasks = {t.name: t for t in tasks}
         self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
 
         # Let backbone validate tasks
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    def add_tasks(self, tasks: Sequence[Task]) -> None:
+        """
+        Add additional tasks to the model.
+
+        This is useful for adding inference-only tasks that weren't in the
+        original checkpoint, such as untrained derivative properties.
+
+        Args:
+            tasks: List of Task objects to add
+        """
+        # Add new tasks to the tasks dict
+        for task in tasks:
+            if task.name in self.tasks:
+                logging.warning(f"Task '{task.name}' already exists, skipping addition")
+                continue
+            self._tasks[task.name] = task
+
+        # Rebuild dataset_to_tasks map
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(self.tasks.values())
+
+        # Let backbone validate the updated task set
         self.backbone.validate_tasks(self._dataset_to_tasks)
 
     @property
