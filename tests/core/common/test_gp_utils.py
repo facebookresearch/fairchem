@@ -24,6 +24,8 @@ from fairchem.core.common.test_utils import (
     spawn_multi_process,
 )
 
+pytestmark = pytest.mark.subprocess
+
 
 def _dummy_call(x):
     return x
