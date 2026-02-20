@@ -193,9 +193,6 @@ class WignerCoefficients:
 # Constants
 # =============================================================================
 
-# Threshold for detecting near-zero magnitudes
-EPSILON = 1e-14
-
 # Blend region parameters for two-chart quaternion computation
 # The blend region is ey in [_BLEND_START, _BLEND_START + _BLEND_WIDTH]
 # which corresponds to ey in [-0.9, 0.9]
@@ -618,7 +615,7 @@ def _smooth_step_cinf(t: torch.Tensor) -> torch.Tensor:
         Smooth step values in [0, 1]
     """
     t_clamped = t.clamp(0, 1)
-    eps = 1e-7
+    eps = torch.finfo(t.dtype).eps
 
     numerator = 2.0 * t_clamped - 1.0
     denominator = t_clamped * (1.0 - t_clamped)
@@ -736,10 +733,14 @@ def _quaternion_chart1_standard(
     z = ex
 
     q = torch.stack([w, x, y, z], dim=-1)
-    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
-    safe_norm = norm.clamp(min=1e-12)
+    q_sq = torch.sum(q**2, dim=-1, keepdim=True)
+    eps = torch.finfo(ex.dtype).eps
+    # q_sq → 0 at this chart's singularity (ey = -1), but this chart is
+    # unused there so we don't see the divide by zero. The clamp detaches
+    # the gradients so that NaNs don't flow through the backward pass.
+    norm = torch.sqrt(torch.clamp(q_sq, min=eps))
 
-    return q / safe_norm
+    return q / norm
 
 
 def _quaternion_chart2_via_minus_y(
@@ -764,10 +765,14 @@ def _quaternion_chart2_via_minus_y(
     z = torch.zeros_like(ex)
 
     q = torch.stack([w, x, y, z], dim=-1)
-    norm = torch.linalg.norm(q, dim=-1, keepdim=True)
-    safe_norm = norm.clamp(min=1e-12)
+    q_sq = torch.sum(q**2, dim=-1, keepdim=True)
+    eps = torch.finfo(ex.dtype).eps
+    # q_sq → 0 at this chart's singularity (ey = +1), but this chart is
+    # unused there so we don't see the divide by zero. The clamp detaches
+    # the gradients so that NaNs don't flow through the backward pass.
+    norm = torch.sqrt(torch.clamp(q_sq, min=eps))
 
-    return q / safe_norm
+    return q / norm
 
 
 def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
@@ -1382,33 +1387,51 @@ def wigner_d_matrix_complex(
     """
     N = Ra.shape[0]
     device = Ra.device
-    complex_dtype = Ra.dtype
+    input_dtype = Ra.dtype
 
-    ra = torch.abs(Ra)
-    rb = torch.abs(Rb)
+    # Upcast to fp64 for numerical stability: this function evaluates
+    # degree-2l polynomials (up to degree 12 for lmax=6) and exp/log of
+    # magnitudes that can span 100+ orders. Lower precisions overflow in
+    # masked-out branches, leaking NaN through torch.where backward.
+    # This is a no-op (same tensor object, no copy) when already fp64.
+    Ra = Ra.to(torch.complex128)
+    Rb = Rb.to(torch.complex128)
+    complex_dtype = torch.complex128
 
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
+    eps = torch.finfo(torch.float64).eps
+    eps_sq = eps * eps
+
+    ra_sq = Ra.real * Ra.real + Ra.imag * Ra.imag
+    rb_sq = Rb.real * Rb.real + Rb.imag * Rb.imag
+    ra_small = ra_sq <= eps_sq
+    rb_small = rb_sq <= eps_sq
+    ra = torch.sqrt(torch.clamp(ra_sq, min=eps_sq))
+    rb = torch.sqrt(torch.clamp(rb_sq, min=eps_sq))
     general_mask = ~ra_small & ~rb_small
     use_case1 = (ra >= rb) & general_mask
     use_case2 = (ra < rb) & general_mask
 
-    phia = torch.angle(Ra)
-    phib = torch.angle(Rb)
+    # Guard angle inputs: angle(0+0j) produces NaN gradient; path is masked,
+    # prevents gradient NaN propagation
+    safe_Ra_phi = torch.where(ra_small, torch.ones_like(Ra), Ra)
+    safe_Rb_phi = torch.where(rb_small, torch.ones_like(Rb), Rb)
+    phia = torch.angle(safe_Ra_phi)
+    phib = torch.angle(safe_Rb_phi)
     phase = torch.outer(phia, coeffs.mp_plus_m) + torch.outer(phib, coeffs.m_minus_mp)
     exp_phase = torch.exp(1j * phase)
 
-    safe_ra = torch.clamp(ra, min=EPSILON)
-    safe_rb = torch.clamp(rb, min=EPSILON)
+    safe_ra = torch.clamp(ra, min=eps)
+    safe_rb = torch.clamp(rb, min=eps)
     log_ra = torch.log(safe_ra)
     log_rb = torch.log(safe_rb)
 
     result = torch.zeros(N, coeffs.n_primary, dtype=complex_dtype, device=device)
 
     # Special Case 1: |Ra| ~ 0 - anti-diagonal elements
-    safe_Rb = torch.where(rb < EPSILON, torch.ones_like(Rb), Rb)
-    log_abs_Rb = torch.log(torch.abs(safe_Rb))
-    arg_Rb = torch.angle(safe_Rb)
+    # phib used since path is masked when rb_small, prevents gradient NaN
+    arg_Rb = phib
+    log_abs_Rb = log_rb
+
     exponent = torch.outer(log_abs_Rb, coeffs.special_2m) + 1j * torch.outer(
         arg_Rb, coeffs.special_2m
     )
@@ -1420,9 +1443,10 @@ def wigner_d_matrix_complex(
     result = torch.where(mask_antidiag, special_val_antidiag, result)
 
     # Special Case 2: |Rb| ~ 0 - diagonal elements
-    safe_Ra = torch.where(ra < EPSILON, torch.ones_like(Ra), Ra)
-    log_abs_Ra = torch.log(torch.abs(safe_Ra))
-    arg_Ra = torch.angle(safe_Ra)
+    # phia used since path is masked when ra_small, prevents gradient NaN
+    arg_Ra = phia
+    log_abs_Ra = log_ra
+
     exponent = torch.outer(log_abs_Ra, coeffs.special_2m) + 1j * torch.outer(
         arg_Ra, coeffs.special_2m
     )
@@ -1471,7 +1495,7 @@ def wigner_d_matrix_complex(
 
         D[batch_indices_d, row_expanded_d, col_expanded_d] = derived_vals
 
-    return D
+    return D.to(input_dtype)
 
 
 # =============================================================================
@@ -1502,26 +1526,52 @@ def wigner_d_matrix_real(
     """
     N = ra_re.shape[0]
     device = ra_re.device
-    dtype = ra_re.dtype
+    input_dtype = ra_re.dtype
 
-    ra = torch.sqrt(ra_re * ra_re + ra_im * ra_im)
-    rb = torch.sqrt(rb_re * rb_re + rb_im * rb_im)
+    # Upcast to fp64 for numerical stability: this function evaluates
+    # degree-2l polynomials (up to degree 12 for lmax=6) and exp/log of
+    # magnitudes that can span 100+ orders. Lower precisions overflow in
+    # masked-out branches, leaking NaN through torch.where backward.
+    # This is a no-op (same tensor object, no copy) when already fp64.
+    ra_re = ra_re.to(torch.float64)
+    ra_im = ra_im.to(torch.float64)
+    rb_re = rb_re.to(torch.float64)
+    rb_im = rb_im.to(torch.float64)
+    dtype = torch.float64
 
-    ra_small = ra <= EPSILON
-    rb_small = rb <= EPSILON
+    # Compute squared magnitudes and masks first.
+    # sqrt(0) has gradient 1/(2*sqrt(0)) = inf, causing NaN via autograd
+    # even when masked by torch.where (because 0 * inf = NaN in IEEE 754).
+    # Clamping the sqrt input prevents this: torch.clamp gradient is 0
+    # below min, so the NaN-producing gradient path is cut off.
+    eps = torch.finfo(dtype).eps
+    eps_sq = eps * eps
+    ra_sq = ra_re * ra_re + ra_im * ra_im
+    rb_sq = rb_re * rb_re + rb_im * rb_im
+    ra_small = ra_sq <= eps_sq
+    rb_small = rb_sq <= eps_sq
+    ra = torch.sqrt(torch.clamp(ra_sq, min=eps_sq))
+    rb = torch.sqrt(torch.clamp(rb_sq, min=eps_sq))
     general_mask = ~ra_small & ~rb_small
     use_case1 = (ra >= rb) & general_mask
     use_case2 = (ra < rb) & general_mask
 
-    phia = torch.atan2(ra_im, ra_re)
-    phib = torch.atan2(rb_im, rb_re)
+    # Guard atan2 inputs: (0,0) produces NaN gradient; path is masked,
+    # prevents gradient NaN propagation
+    safe_ra_re_phi = torch.where(ra_small, torch.ones_like(ra_re), ra_re)
+    safe_ra_im_phi = torch.where(ra_small, torch.zeros_like(ra_im), ra_im)
+    phia = torch.atan2(safe_ra_im_phi, safe_ra_re_phi)
+
+    safe_rb_re_phi = torch.where(rb_small, torch.ones_like(rb_re), rb_re)
+    safe_rb_im_phi = torch.where(rb_small, torch.zeros_like(rb_im), rb_im)
+    phib = torch.atan2(safe_rb_im_phi, safe_rb_re_phi)
 
     phase = torch.outer(phia, coeffs.mp_plus_m) + torch.outer(phib, coeffs.m_minus_mp)
     exp_phase_re = torch.cos(phase)
     exp_phase_im = torch.sin(phase)
 
-    safe_ra = torch.clamp(ra, min=EPSILON)
-    safe_rb = torch.clamp(rb, min=EPSILON)
+    safe_ra = torch.clamp(ra, min=eps)
+    safe_rb = torch.clamp(rb, min=eps)
     log_ra = torch.log(safe_ra)
     log_rb = torch.log(safe_rb)
 
@@ -1529,11 +1579,10 @@ def wigner_d_matrix_real(
     result_im = torch.zeros(N, coeffs.n_primary, dtype=dtype, device=device)
 
     # Special Case 1: |Ra| ~ 0 - anti-diagonal elements
-    safe_rb_mag = torch.where(rb < EPSILON, torch.ones_like(rb), rb)
-    log_safe_rb = torch.log(safe_rb_mag)
-    arg_rb = torch.atan2(rb_im, rb_re)
+    # phib used since path is masked when rb_small, prevents gradient NaN
+    arg_rb = phib
 
-    log_mag_rb_power = torch.outer(log_safe_rb, coeffs.special_2m)
+    log_mag_rb_power = torch.outer(log_rb, coeffs.special_2m)
     rb_power_mag = torch.exp(log_mag_rb_power)
     rb_power_phase = torch.outer(arg_rb, coeffs.special_2m)
     rb_power_re = rb_power_mag * torch.cos(rb_power_phase)
@@ -1547,11 +1596,10 @@ def wigner_d_matrix_real(
     result_im = torch.where(mask_antidiag, special_val_antidiag_im, result_im)
 
     # Special Case 2: |Rb| ~ 0 - diagonal elements
-    safe_ra_mag = torch.where(ra < EPSILON, torch.ones_like(ra), ra)
-    log_safe_ra = torch.log(safe_ra_mag)
-    arg_ra = torch.atan2(ra_im, ra_re)
+    # phia used since path is masked when ra_small, prevents gradient NaN
+    arg_ra = phia
 
-    log_mag_ra_power = torch.outer(log_safe_ra, coeffs.special_2m)
+    log_mag_ra_power = torch.outer(log_ra, coeffs.special_2m)
     ra_power_mag = torch.exp(log_mag_ra_power)
     ra_power_phase = torch.outer(arg_ra, coeffs.special_2m)
     ra_power_re = ra_power_mag * torch.cos(ra_power_phase)
@@ -1611,7 +1659,7 @@ def wigner_d_matrix_real(
         D_re[batch_indices_d, row_expanded_d, col_expanded_d] = derived_re
         D_im[batch_indices_d, row_expanded_d, col_expanded_d] = derived_im
 
-    return D_re, D_im
+    return D_re.to(input_dtype), D_im.to(input_dtype)
 
 
 # =============================================================================
