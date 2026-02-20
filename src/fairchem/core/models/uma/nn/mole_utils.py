@@ -173,6 +173,7 @@ def convert_model_to_MOLE_model(
     act=torch.nn.SiLU,
     layers_mole=None,
     use_composition_embedding: bool = False,
+    composition_dropout: float = 0.0,
     mole_layer_type: str = "pytorch",
     mole_single: bool = False,
     mole_type: str = "so2",
@@ -210,6 +211,7 @@ def convert_model_to_MOLE_model(
 
     #
     model.use_composition_embedding = use_composition_embedding
+    model.composition_dropout = composition_dropout
     model.global_mole_tensors = MOLEGlobals(
         expert_mixing_coefficients=None, mole_sizes=None
     )
