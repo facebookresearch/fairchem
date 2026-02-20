@@ -27,7 +27,7 @@ except ImportError:
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-@torch.inference_mode()
+@torch.no_grad()
 def get_neighbors_nvidia(
     positions: torch.Tensor,
     cell: torch.Tensor,
@@ -99,7 +99,6 @@ def get_neighbors_nvidia(
     assert max_neigh > 0, f"max_neigh must be a positive integer, got {max_neigh}"
 
     device = positions.device
-    dtype = positions.dtype
     total_atoms = positions.shape[0]
 
     # Normalize inputs to batched format
@@ -152,14 +151,6 @@ def get_neighbors_nvidia(
         half_fill=False,
     )
 
-    if num_neighbors.sum() == 0:
-        return (
-            torch.empty(0, dtype=torch.int64, device=device),
-            torch.empty(0, dtype=torch.int64, device=device),
-            torch.empty(0, dtype=dtype, device=device),
-            torch.empty((0, 3), dtype=torch.int64, device=device),
-        )
-
     # Conversion from neighbor matrix to edge list
     atom_indices = torch.arange(total_atoms, device=device).unsqueeze(1)
     neigh_indices = torch.arange(buffer_max_neigh, device=device).unsqueeze(0)
@@ -173,7 +164,7 @@ def get_neighbors_nvidia(
 
     # if max number of neighbors is less than max_neigh, we can skip the masking steps all together
     # if we don't need the distances either, then we can skip both of these steps
-    filter_max_neighbors = num_neighbors.max() > max_neigh
+    filter_max_neighbors = torch.any(num_neighbors > max_neigh)
     distances_sq = None
     if return_distances_sq or filter_max_neighbors:
         # Compute squared distances with PBC corrections
@@ -186,7 +177,7 @@ def get_neighbors_nvidia(
         distance_vectors.add_(offsets_cartesian)
         distances_sq = (distance_vectors**2).sum(dim=-1)
 
-    if filter_max_neighbors and len(c_index) > 0:
+    if filter_max_neighbors and c_index.shape[0] > 0:
         # Apply max neighbors mask to handle degeneracy properly
         mask_num_neighbors, _ = get_max_neighbors_mask(
             natoms=natoms,
@@ -205,7 +196,7 @@ def get_neighbors_nvidia(
 
 
 @requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-@torch.inference_mode()
+@torch.no_grad()
 def radius_graph_pbc_nvidia(
     data,
     radius: float,
