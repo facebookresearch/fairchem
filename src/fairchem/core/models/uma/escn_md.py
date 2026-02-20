@@ -850,7 +850,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         if self.use_dataset_embedding:
             assert set(dataset_to_tasks.keys()).issubset(
-                set(self.dataset_mapping.values())
+                set(self.dataset_mapping.keys())
             ), "Datasets in tasks is not a strict subset of datasets in backbone."
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
