@@ -51,6 +51,7 @@ class ExecutionMode(str, Enum):
     TRITON_SO2_AND_ROTATE_IN = "triton_so2_and_rotate_in"
     TRITON_SO2_AND_ROTATE_IN_OUTFUSED = "triton_so2_and_rotate_in_outfused"
     TRITON_SO2_AND_ROTATE_IN_ALL_FUSED = "triton_so2_and_rotate_in_all_fused"
+    TRITON_SO2_AND_ROTATE_IN_EMIT = "triton_so2_and_rotate_in_emit"
 
 
 # Set of all triton execution modes for easy membership testing
@@ -65,6 +66,7 @@ TRITON_MODES = frozenset(
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN,
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN_OUTFUSED,
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN_ALL_FUSED,
+        ExecutionMode.TRITON_SO2_AND_ROTATE_IN_EMIT,
     }
 )
 
@@ -524,6 +526,30 @@ class TritonSO2AndRotateAllFused(TritonSO2AndRotateOutfused):
         )
 
 
+class TritonSO2AndRotateEmit(TritonSO2AndRotateOutfused):
+    """
+    Extends TritonSO2AndRotateOutfused with emit forward kernel.
+
+    The forward kernel emits x_src/x_tgt as side outputs (free — values
+    are already in registers). Backward uses PyTorch bmm for grad_wigner
+    with the saved x_src/x_tgt instead of re-gathering from x.
+    """
+
+    @staticmethod
+    def gather_rotate(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            FusedEdgeGatherWignerL2MTritonBwdEmitFunction,
+        )
+
+        return FusedEdgeGatherWignerL2MTritonBwdEmitFunction.apply(
+            x_full, edge_index, wigner
+        )
+
+
 class TritonBackend(TritonBackendEdgeDegree):
     """
     Full Triton backend with SO2 conversion, gating, and V2 backward.
@@ -676,6 +702,7 @@ _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN: TritonSO2AndRotate,
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN_OUTFUSED: TritonSO2AndRotateOutfused,
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN_ALL_FUSED: TritonSO2AndRotateAllFused,
+    ExecutionMode.TRITON_SO2_AND_ROTATE_IN_EMIT: TritonSO2AndRotateEmit,
 }
 
 

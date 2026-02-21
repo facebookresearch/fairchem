@@ -15,6 +15,7 @@ MODES=(
     #"general"
     #"umas_fast_pytorch"
     #"triton_so2_and_rotate_in"
+    "triton_so2_and_rotate_in_emit"
     "triton_so2_and_rotate_in_all_fused"
     #"triton_so2_and_rotate_in_outfused"
     #"triton_rotate_in"

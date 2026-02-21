@@ -19,6 +19,7 @@ if HAS_TRITON:
         FusedEdgeGatherWignerL2MAllFusedBwdFunction,
         FusedEdgeGatherWignerL2MPyTorchBwdFunction,
         FusedEdgeGatherWignerL2MRecomputeFunction,
+        FusedEdgeGatherWignerL2MTritonBwdEmitFunction,
         FusedEdgeGatherWignerL2MTritonBwdFunction,
         FusedEdgeGatherWignerL2MTritonV2BwdFunction,
     )
@@ -29,6 +30,7 @@ __all__ = [
     "HAS_TRITON",
     "FusedEdgeGatherWignerL2MAllFusedBwdFunction",
     "FusedEdgeGatherWignerL2MTritonBwdFunction",
+    "FusedEdgeGatherWignerL2MTritonBwdEmitFunction",
     "FusedEdgeGatherWignerL2MTritonV2BwdFunction",
     "FusedEdgeGatherWignerL2MPyTorchBwdFunction",
     "FusedEdgeGatherWignerL2MRecomputeFunction",
