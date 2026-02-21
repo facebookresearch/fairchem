@@ -101,14 +101,16 @@ class FAIRChemCalculator(Calculator):
             max_neigh = None
             radius = 6.0  # Still need radius even for internal graph gen
 
-        self.a2g = partial(
-            AtomicData.from_ase,
-            task_name=self.task_name,
-            r_edges=r_edges,
-            r_data_keys=["spin", "charge"],
-            max_neigh=max_neigh,
-            radius=radius,
-        )
+        a2g_kwargs = {
+            "task_name": self.task_name,
+            "r_edges": r_edges,
+            "r_data_keys": ["spin", "charge"],
+            "max_neigh": max_neigh,
+            "radius": radius,
+            "target_dtype": predict_unit.inference_settings.base_precision_dtype,
+        }
+
+        self.a2g = partial(AtomicData.from_ase, **a2g_kwargs)
 
     @property
     def task_name(self) -> str:

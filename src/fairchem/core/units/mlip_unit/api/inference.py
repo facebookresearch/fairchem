@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import torch  # - needed at runtime for dataclass field type resolution
+
 from fairchem.core.common.utils import StrEnum
 
 
@@ -88,6 +90,11 @@ class InferenceSettings:
     torch_num_threads: int | None = None
 
     edge_chunk_size: int | None = None
+
+    # Base precision dtype for model parameters and input data.
+    # All model parameters, buffers, and float input tensors will be
+    # cast to this dtype. Set to torch.float64 for higher precision.
+    base_precision_dtype: torch.dtype = torch.float32
 
     # Execution backend mode for the backbone. If set to None, the
     # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
