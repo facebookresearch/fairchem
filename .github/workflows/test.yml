@@ -84,13 +84,22 @@ jobs:
           make
           echo "$(readlink -f .)" >> $GITHUB_PATH
 
+      - name: Download large test files
+        run: coverage run -m fairchem.core.scripts.download_large_files oc
+
       - name: Core tests
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          NCCL_DEBUG=INFO pytest -n auto tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+          NCCL_DEBUG=INFO pytest -n auto -m "not subprocess and not serial and not gpu" tests --durations=0 -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --cov-append --junitxml=junit.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
 
-      - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+      - name: Serial CPU tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pytest -m "serial and not gpu" tests -vv --ignore=tests/demo/ocpapi/tests/integration/ --ignore=tests/applications/ --ignore=tests/perf --ignore=tests/lammps --cov-report=xml --cov=fairchem --cov-append --junitxml=junit-serial.xml -o junit_family=legacy -c ./packages/fairchem-core/pyproject.toml
+
+      - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-coverage
         uses: codecov/codecov-action@v5
         with:
@@ -99,11 +108,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
-      - if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+      - if: ${{ matrix.python_version == '3.13' }}
         name: codecov-test-results
         uses: codecov/test-results-action@v1
         with:
-          files: ./junit.xml,./junit-gpu.xml
+          files: ./junit.xml,./junit-serial.xml,./junit-gpu.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           commit_parent: ${{ env.HEAD_SHA }}
           verbose: true
