@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 import numpy as np
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig, ListConfig
 from torch.distributed.nn.functional import all_reduce as all_reduce_with_grad
 from torch.profiler import record_function
 
@@ -27,10 +28,13 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
-from fairchem.core.models.uma.nn.embedding_dev import (
+from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
     EdgeDegreeEmbedding,
+)
+from fairchem.core.models.uma.nn.execution_backends import (
+    get_execution_backend,
 )
 from fairchem.core.models.uma.nn.layer_norm import (
     EquivariantLayerNormArray,
@@ -166,6 +170,70 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int 
         add_n_empty_edges(graph_dict, n_edges_post - n_edges, cutoff, node_offset)
 
 
+def resolve_dataset_mapping(
+    deprecated_list: list[str] | None,
+    dataset_mapping: dict[str, str] | None,
+    deprecated_param_name: str = "dataset_list",
+) -> dict[str, str]:
+    """
+    Validate and resolve dataset mapping from either a deprecated list or a mapping dict.
+
+    Args:
+        deprecated_list: Deprecated list of dataset names. If provided, it is
+            converted to a mapping where each name maps to itself.
+        dataset_mapping: Mapping from the config dataset name to desired dataset name for embeddings and heads.
+            Allows multiple subsets to share the same dataset embedding and/or output head by mapping
+            them to the same identifier.
+        deprecated_param_name: Name of the deprecated parameter, used in
+            warning/error messages.
+
+    Returns:
+        The resolved dataset mapping dict.
+
+    Raises:
+        ValueError: If both or neither arguments are provided, if the mapping
+            is not a non-empty dict, or if mapping values are not a subset of
+            mapping keys.
+    """
+    if deprecated_list is not None and dataset_mapping is not None:
+        msg = (
+            f"Both '{deprecated_param_name}' (={deprecated_list}) and "
+            f"'dataset_mapping' (={dataset_mapping}) have been provided. "
+            f"Please provide 'dataset_mapping' only in the config as '{deprecated_param_name}' is deprecated."
+        )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if deprecated_list is None and dataset_mapping is None:
+        msg = "'dataset_mapping' must be provided in the config to use dataset embeddings."
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if deprecated_list is not None:
+        if not isinstance(deprecated_list, (list, ListConfig)):
+            msg = f"If '{deprecated_param_name}' is provided in the config, it must be a list of dataset names. Got: {deprecated_list!r}"
+            logging.error(msg, stack_info=True)
+            raise ValueError(msg)
+        dataset_mapping = {name: name for name in deprecated_list}
+        logging.warning(
+            f"If '{deprecated_param_name}' is provided in the config, the code assumes that each dataset "
+            f"maps to itself. Please use 'dataset_mapping' as '{deprecated_param_name}' "
+            "is deprecated and will be removed in the future."
+        )
+    if not isinstance(dataset_mapping, (dict, DictConfig)) or not dataset_mapping:
+        msg = f"'dataset_mapping' must be a non-empty dictionary, got: {dataset_mapping!r}"
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    if not set(dataset_mapping.values()) <= set(dataset_mapping.keys()):
+        missing = set(dataset_mapping.values()) - set(dataset_mapping.keys())
+        msg = (
+            f"dataset_mapping values {missing} are not present in "
+            f"dataset_mapping keys {set(dataset_mapping.keys())}. "
+            f"Values must be a subset of keys. Full mapping provided: {dataset_mapping}"
+        )
+        logging.error(msg, stack_info=True)
+        raise ValueError(msg)
+    return dataset_mapping
+
+
 @registry.register_model("escnmd_backbone")
 class eSCNMDBackbone(nn.Module, MOLEInterface):
     def __init__(
@@ -198,7 +266,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         chg_spin_emb_type: Literal["pos_emb", "lin_emb", "rand_emb"] = "pos_emb",
         cs_emb_grad: bool = False,
         dataset_emb_grad: bool = False,
-        dataset_list: list[str] | None = None,
+        dataset_list: (
+            list[str] | None
+        ) = None,  # deprecated, use dataset_mapping instead
+        dataset_mapping: (
+            dict[str, str] | None
+        ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
         radius_pbc_version: int = 2,
@@ -206,6 +279,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
+        execution_mode: str = "general",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -247,17 +321,19 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
         self.edge_chunk_size = edge_chunk_size
 
+        self.backend = get_execution_backend(execution_mode)
+
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
         self.cs_emb_grad = cs_emb_grad
         self.dataset_emb_grad = dataset_emb_grad
+        self.dataset_mapping = dataset_mapping
         self.dataset_list = dataset_list
         self.use_dataset_embedding = use_dataset_embedding
         if self.use_dataset_embedding:
-            assert (
-                self.dataset_list
-            ), "the dataset list is empty, please add it to the model backbone config"
-
+            self.dataset_mapping = resolve_dataset_mapping(
+                self.dataset_list, dataset_mapping, "dataset_list"
+            )
         # rotation utils
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
@@ -297,8 +373,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         if self.use_dataset_embedding:
             self.dataset_embedding = DatasetEmbedding(
                 self.sphere_channels,
-                grad=self.dataset_emb_grad,
-                dataset_list=self.dataset_list,
+                enable_grad=self.dataset_emb_grad,
+                dataset_mapping=self.dataset_mapping,
             )
             # mix charge, spin, dataset embeddings
             self.mix_csd = nn.Linear(3 * self.sphere_channels, self.sphere_channels)
@@ -342,6 +418,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            backend=self.backend,
         )
 
         self.envelope = PolynomialEnvelope(exponent=5)
@@ -368,6 +445,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                backend=self.backend,
             )
             self.blocks.append(block)
 
@@ -763,6 +841,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.execution_mode is not None:
+            overrides["execution_mode"] = settings.execution_mode
 
         return overrides
 
@@ -770,9 +850,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         Validate that task datasets are compatible with this backbone.
         """
-        assert set(dataset_to_tasks.keys()).issubset(
-            set(self.dataset_list)
-        ), "Datasets in tasks is not a strict subset of datasets in backbone."
+        if self.use_dataset_embedding:
+            assert set(dataset_to_tasks.keys()).issubset(
+                set(self.dataset_mapping.keys())
+            ), "Datasets in tasks is not a strict subset of datasets in backbone."
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
         """
@@ -788,6 +869,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._inference_settings = settings
         self._merged_composition = None
 
+        # Validate settings against backend requirements (fail early)
+        self.backend.validate(settings)
+
         if settings.merge_mole:
             assert (
                 data.natoms.numel() == 1
@@ -799,8 +883,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Transfer inference state to new backbone
             new_backbone._inference_settings = settings
             new_backbone._merged_composition = self._merged_composition
+            self.backend.prepare_model_for_inference(new_backbone)
             return new_backbone
 
+        self.backend.prepare_model_for_inference(self)
         return self
 
     def on_predict_check(self, data: AtomicData) -> None:

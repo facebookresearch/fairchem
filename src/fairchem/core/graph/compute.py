@@ -13,14 +13,7 @@ from fairchem.core.graph.radius_graph_pbc import (
     radius_graph_pbc,
     radius_graph_pbc_v2,
 )
-
-# Check for NVIDIA library availability
-try:
-    from fairchem.core.graph.radius_graph_pbc_nvidia import radius_graph_pbc_nvidia
-
-    NVIDIA_AVAILABLE = True
-except ImportError:
-    NVIDIA_AVAILABLE = False
+from fairchem.core.graph.radius_graph_pbc_nvidia import radius_graph_pbc_nvidia
 
 
 def filter_edges_by_node_partition(
@@ -94,7 +87,7 @@ def get_pbc_distances(
     # correct for pbc
     neighbors = neighbors.to(cell.device)
     cell = torch.repeat_interleave(cell, neighbors, dim=0)
-    offsets = cell_offsets.float().view(-1, 1, 3).bmm(cell.float()).view(-1, 3)
+    offsets = cell_offsets.to(dtype=cell.dtype).view(-1, 1, 3).bmm(cell).view(-1, 3)
     distance_vectors += offsets
 
     # compute distances
@@ -159,11 +152,6 @@ def generate_graph(
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
     elif radius_pbc_version == 3:
-        if not NVIDIA_AVAILABLE:
-            raise RuntimeError(
-                "radius_pbc_version=3 requires NVIDIA nvalchemiops library. "
-                "Install with: pip install nvalchemiops"
-            )
         radius_graph_pbc_fn = radius_graph_pbc_nvidia
     else:
         raise ValueError(f"Invalid radius_pbc version {radius_pbc_version}")

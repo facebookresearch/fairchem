@@ -15,19 +15,27 @@ from monty.dev import requires
 
 from fairchem.core.graph.radius_graph_pbc import get_max_neighbors_mask
 
+# Try to import nvalchemiops at module load
 try:
     from nvalchemiops.neighborlist.neighbor_utils import estimate_max_neighbors
     from nvalchemiops.neighborlist.neighborlist import neighbor_list
 
-    nvidia_installed = True
+    def nvalchemiops_installed() -> bool:
+        return True
 
-except ImportError:
-    get_neighbors_nvidia_atoms = None
-    nvidia_installed = False
+except ImportError as e:
+    logging.debug(
+        f"nvalchemiops not available: {e}. Install with `pip install nvalchemiops`"
+    )
+    estimate_max_neighbors = None
+    neighbor_list = None
+
+    def nvalchemiops_installed() -> bool:
+        return False
 
 
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-@torch.inference_mode()
+@requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
+@torch.no_grad()
 def get_neighbors_nvidia(
     positions: torch.Tensor,
     cell: torch.Tensor,
@@ -59,9 +67,9 @@ def get_neighbors_nvidia(
         return_distances_sq: If True, compute and return pairwise distances squared; if False, return None for distances
 
     Returns:
-        c_index: Center atom indices (tensor, int64) - global indices if batched
-        n_index: Neighbor atom indices (tensor, int64) - global indices if batched
-        offsets: Cell offsets (tensor, int64, shape [num_edges, 3])
+        c_index: Center atom indices (tensor, int32) - global indices if batched
+        n_index: Neighbor atom indices (tensor, int32) - global indices if batched
+        offsets: Cell offsets (tensor, int32, shape [num_edges, 3])
         distances_sq: Pairwise distances squared (tensor) accounting for PBC if distances_sq is True, otherwise None
     """
     # Validate input shapes
@@ -99,7 +107,6 @@ def get_neighbors_nvidia(
     assert max_neigh > 0, f"max_neigh must be a positive integer, got {max_neigh}"
 
     device = positions.device
-    dtype = positions.dtype
     total_atoms = positions.shape[0]
 
     # Normalize inputs to batched format
@@ -152,14 +159,6 @@ def get_neighbors_nvidia(
         half_fill=False,
     )
 
-    if num_neighbors.sum() == 0:
-        return (
-            torch.empty(0, dtype=torch.int64, device=device),
-            torch.empty(0, dtype=torch.int64, device=device),
-            torch.empty(0, dtype=dtype, device=device),
-            torch.empty((0, 3), dtype=torch.int64, device=device),
-        )
-
     # Conversion from neighbor matrix to edge list
     atom_indices = torch.arange(total_atoms, device=device).unsqueeze(1)
     neigh_indices = torch.arange(buffer_max_neigh, device=device).unsqueeze(0)
@@ -173,7 +172,7 @@ def get_neighbors_nvidia(
 
     # if max number of neighbors is less than max_neigh, we can skip the masking steps all together
     # if we don't need the distances either, then we can skip both of these steps
-    filter_max_neighbors = num_neighbors.max() > max_neigh
+    filter_max_neighbors = torch.any(num_neighbors > max_neigh)
     distances_sq = None
     if return_distances_sq or filter_max_neighbors:
         # This could be added in the future so we skip this computation step here: NVIDIA/nvalchemi-toolkit-ops#14.
@@ -187,7 +186,7 @@ def get_neighbors_nvidia(
         distance_vectors.add_(offsets_cartesian)
         distances_sq = (distance_vectors**2).sum(dim=-1)
 
-    if filter_max_neighbors and len(c_index) > 0:
+    if filter_max_neighbors and c_index.shape[0] > 0:
         # Apply max neighbors mask to handle degeneracy properly
         mask_num_neighbors, _ = get_max_neighbors_mask(
             natoms=natoms,
@@ -205,8 +204,8 @@ def get_neighbors_nvidia(
     return c_index, n_index, offsets, distances_sq
 
 
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
-@torch.inference_mode()
+@requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
+@torch.no_grad()
 def radius_graph_pbc_nvidia(
     data,
     radius: float,
@@ -275,7 +274,7 @@ def radius_graph_pbc_nvidia(
     return edge_index, offsets, num_neighbors_image
 
 
-@requires(nvidia_installed, message="Requires `nvalchemiops` to be installed")
+@requires(nvalchemiops_installed(), message="Requires `nvalchemiops` to be installed")
 @torch.inference_mode()
 def get_neighbors_nvidia_atoms(
     atoms, cutoff: float, max_neigh: int
