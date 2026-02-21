@@ -142,19 +142,8 @@ def test_multiple_dataset_predict(internal_graph_gen_version):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-@pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "workers, device, checkpointing",
-    [
-        (1, "cpu", False),
-        (2, "cpu", False),
-        (1, "cuda", False),
-        (1, "cuda", True),
-        # (2, "cuda", False),
-        # (2, "cuda", True),
-    ],
-)
-def test_parallel_predict_unit(workers, device, checkpointing):
+def _test_parallel_predict_unit_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit test."""
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -202,19 +191,34 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     )
 
 
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, device, checkpointing",
+    "workers, checkpointing",
     [
-        (1, "cpu", False),
-        (2, "cpu", True),
-        (1, "cuda", True),
-        (1, "cuda", False),
-        # (2, "cuda", True),
-        # (2, "cuda", False),
+        (1, False),
+        (2, False),
     ],
 )
-def test_parallel_predict_unit_batch(workers, device, checkpointing):
+def test_parallel_predict_unit(workers, checkpointing):
+    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (1, True),
+        # (2, False),
+        # (2, True),
+    ],
+)
+def test_parallel_predict_unit_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing)
+
+
+def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit batch test."""
     seed = 42
     runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -277,6 +281,32 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
         normal_results["forces"].detach().cpu(),
         atol=FORCE_TOL,
     )
+
+
+@pytest.mark.serial()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (2, True),
+    ],
+)
+def test_parallel_predict_unit_batch(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, True),
+        (1, False),
+        # (2, True),
+        # (2, False),
+    ],
+)
+def test_parallel_predict_unit_batch_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing)
 
 
 @pytest.mark.gpu()
