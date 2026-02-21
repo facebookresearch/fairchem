@@ -33,6 +33,9 @@ from fairchem.core.models.uma.nn.embedding import (
     DatasetEmbedding,
     EdgeDegreeEmbedding,
 )
+from fairchem.core.models.uma.nn.execution_backends import (
+    get_execution_backend,
+)
 from fairchem.core.models.uma.nn.layer_norm import (
     EquivariantLayerNormArray,
     EquivariantLayerNormArraySphericalHarmonics,
@@ -276,6 +279,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
         edge_chunk_size: int | None = None,
+        execution_mode: str = "general",
     ) -> None:
         super().__init__()
         self.max_num_elements = max_num_elements
@@ -316,6 +320,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE
             )
         self.edge_chunk_size = edge_chunk_size
+
+        self.backend = get_execution_backend(execution_mode)
 
         # related to charge spin dataset system embedding
         self.chg_spin_emb_type = chg_spin_emb_type
@@ -412,6 +418,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             rescale_factor=5.0,  # NOTE: sqrt avg degree
             mappingReduced=self.mappingReduced,
             activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+            backend=self.backend,
         )
 
         self.envelope = PolynomialEnvelope(exponent=5)
@@ -438,6 +445,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 self.act_type,
                 self.ff_type,
                 activation_checkpoint_chunk_size=activation_checkpoint_chunk_size,
+                backend=self.backend,
             )
             self.blocks.append(block)
 
@@ -831,6 +839,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.execution_mode is not None:
+            overrides["execution_mode"] = settings.execution_mode
 
         return overrides
 
@@ -840,7 +850,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         if self.use_dataset_embedding:
             assert set(dataset_to_tasks.keys()).issubset(
-                set(self.dataset_mapping.values())
+                set(self.dataset_mapping.keys())
             ), "Datasets in tasks is not a strict subset of datasets in backbone."
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
@@ -857,6 +867,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._inference_settings = settings
         self._merged_composition = None
 
+        # Validate settings against backend requirements (fail early)
+        self.backend.validate(settings)
+
         if settings.merge_mole:
             assert (
                 data.natoms.numel() == 1
@@ -868,8 +881,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Transfer inference state to new backbone
             new_backbone._inference_settings = settings
             new_backbone._merged_composition = self._merged_composition
+            self.backend.prepare_model_for_inference(new_backbone)
             return new_backbone
 
+        self.backend.prepare_model_for_inference(self)
         return self
 
     def on_predict_check(self, data: AtomicData) -> None:

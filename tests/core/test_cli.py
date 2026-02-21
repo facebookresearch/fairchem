@@ -32,6 +32,7 @@ def test_cli():
     main()
 
 
+@pytest.mark.serial()
 def test_cli_multi_rank_cpu():
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
@@ -100,6 +101,7 @@ def get_cfg_from_yaml():
     assert cfg.keys() == ALLOWED_TOP_LEVEL_KEYS
 
 
+@pytest.mark.serial()
 @pytest.mark.parametrize("num_ranks", [1, 4])
 def test_cli_ray(num_ranks):
     distutils.cleanup()

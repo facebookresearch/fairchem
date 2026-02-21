@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import random
 from contextlib import suppress
-import ray
+
 import numpy as np
 import pytest
+import ray
 import torch
+
 import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core.common import distutils
+
 
 @pytest.fixture()
 def command_line_inference_checkpoint(request):
@@ -48,17 +51,18 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
-        "markers", "cpu_and_gpu: mark test to run on both GPU and CPU workers"
+        "markers",
+        "serial: mark test to run serially on the CPU runner (not parallelized with xdist)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "subprocess: mark test that spawns subprocesses (excluded from parallel xdist run)",
     )
 
 
 def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
-    if (
-        "gpu" in item.keywords
-        and "cpu_and_gpu" not in item.keywords
-        and not torch.cuda.is_available()
-    ):
+    if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
     if "dgl" in item.keywords:
         # check dgl is installed
@@ -105,12 +109,12 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def seed_fixture():
     seed_everywhere(42)  # You can set your desired seed value here
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def compile_reset_state():
     torch.compiler.reset()
     yield
@@ -139,12 +143,14 @@ def water_xyz_file(tmp_path_factory):
 
 @pytest.fixture(autouse=True)
 def setup_before_each_test():
-    ray.shutdown()
+    if ray.is_initialized():
+        ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
     yield
-    ray.shutdown()
+    if ray.is_initialized():
+        ray.shutdown()
     if gp_utils.initialized():
         gp_utils.cleanup_gp()
     distutils.cleanup()
