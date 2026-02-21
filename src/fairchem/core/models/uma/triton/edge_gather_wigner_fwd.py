@@ -418,15 +418,8 @@ def fused_edge_gather_wigner_l2m_lmax2(
     num_edges = edge_index.shape[1]
     num_nodes, num_coeffs, sphere_channels = x.shape
 
-    assert (
-        num_coeffs == 9
-    ), f"This kernel only supports lmax=2 (9 coefficients), got {num_coeffs}"
-
     # Flatten wigner if needed
     wigner_flat = wigner.reshape(num_edges, -1) if wigner.ndim == 3 else wigner
-    assert (
-        wigner_flat.shape[1] == 81
-    ), f"Wigner must be [E, 81] or [E, 9, 9], got {wigner.shape}"
 
     out = torch.empty(
         num_edges, num_coeffs, 2 * sphere_channels, device=x.device, dtype=x.dtype

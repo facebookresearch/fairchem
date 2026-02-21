@@ -712,6 +712,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
+
         # edge degree embedding
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff

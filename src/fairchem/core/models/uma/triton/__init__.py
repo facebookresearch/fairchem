@@ -22,7 +22,7 @@ if HAS_TRITON:
         FusedEdgeGatherWignerL2MTritonV2BwdFunction,
     )
     from .gate_activation import gate_activation_triton
-    from .wigner_ops import m_to_l_then_wigner_lmax2
+    from .wigner_ops import fused_m_to_l_then_wigner_lmax2, m_to_l_then_wigner_lmax2
 
 __all__ = [
     "HAS_TRITON",
@@ -31,5 +31,6 @@ __all__ = [
     "FusedEdgeGatherWignerL2MPyTorchBwdFunction",
     "FusedEdgeGatherWignerL2MRecomputeFunction",
     "m_to_l_then_wigner_lmax2",
+    "fused_m_to_l_then_wigner_lmax2",
     "gate_activation_triton",
 ]

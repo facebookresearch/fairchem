@@ -1363,7 +1363,7 @@ class FusedEdgeGatherWignerL2MTritonV2BwdFunction(torch.autograd.Function):
         # Step 2: Compute grad_wigner = M_to_L(grad) @ x_edge^T
         grad_l = _m_to_l_pytorch(grad_output)  # [E, 9, 2C]
 
-        E, _, C2 = x_edge.shape
+        E, _, _ = x_edge.shape
         grad_wigner = torch.zeros(E, 9, 9, device=wigner.device, dtype=wigner.dtype)
 
         # L=0 block (1x1): index 0
