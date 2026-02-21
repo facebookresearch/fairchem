@@ -32,7 +32,7 @@ def test_cli():
     main()
 
 
-@pytest.mark.subprocess()
+@pytest.mark.serial()
 def test_cli_multi_rank_cpu():
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()

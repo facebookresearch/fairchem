@@ -368,7 +368,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
-@pytest.mark.subprocess()
+@pytest.mark.serial()
 @pytest.mark.parametrize(
     "train_config, dataset_config, num_ddps, backbone_overrides",
     [
