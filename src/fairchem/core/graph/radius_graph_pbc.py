@@ -435,13 +435,13 @@ def radius_graph_pbc_v2(
     offset = 0
     for i in range(batch_size):
         cells_x = torch.arange(
-            -rep[i][0], rep[i][0] + 1, device=device, dtype=torch.float
+            -rep[i][0], rep[i][0] + 1, device=device, dtype=data.cell.dtype
         )
         cells_y = torch.arange(
-            -rep[i][1], rep[i][1] + 1, device=device, dtype=torch.float
+            -rep[i][1], rep[i][1] + 1, device=device, dtype=data.cell.dtype
         )
         cells_z = torch.arange(
-            -rep[i][2], rep[i][2] + 1, device=device, dtype=torch.float
+            -rep[i][2], rep[i][2] + 1, device=device, dtype=data.cell.dtype
         )
         unit_cell[offset : cells_per_image[i] + offset] = torch.cartesian_prod(
             cells_x, cells_y, cells_z
