@@ -71,13 +71,16 @@ def get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: in
         timefunc()
         logging.info(f"memory allocated: {torch.cuda.memory_allocated()/(1024**3)}")
 
+    torch.cuda.reset_peak_memory_stats()
     result = timeit.repeat(timefunc, number=timeiters, repeat=repeats)
+    peak_memory_gb = torch.cuda.max_memory_allocated() / (1024**3)
     logging.info(
         f"Timing results over {repeats} repeats: {result}, mean: {np.mean(result)}, std: {np.std(result)}"
     )
+    logging.info(f"Peak CUDA memory during timed iterations: {peak_memory_gb:.3f} GB")
     qps = timeiters / np.mean(result)
     ns_per_day = qps * 24 * 3600 / 1e6
-    return qps, ns_per_day
+    return qps, ns_per_day, peak_memory_gb
 
 
 def trace_handler(p, name, save_loc):
@@ -199,12 +202,14 @@ class InferenceBenchRunner(Runner):
                 inp = data.clone()
                 if self.generate_traces:
                     make_profile(inp, predictor, name=name, save_loc=self.run_dir)
-                qps, ns_per_day = get_qps(
+                qps, ns_per_day, peak_memory_gb = get_qps(
                     inp, predictor, timeiters=self.timeiters, repeats=self.repeats
                 )
-                model_to_qps_data[model_name].append([num_atoms, ns_per_day])
+                model_to_qps_data[model_name].append(
+                    [num_atoms, ns_per_day, peak_memory_gb]
+                )
                 logging.info(
-                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
+                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}, peak_memory_gb: {peak_memory_gb:.3f}"
                 )
 
     def save_state(self, _):

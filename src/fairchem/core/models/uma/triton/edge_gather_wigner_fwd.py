@@ -460,8 +460,7 @@ def fused_edge_gather_wigner_l2m_emit_kernel(
     edge_index_ptr,
     wigner_ptr,
     out_ptr,
-    x_src_ptr,
-    x_tgt_ptr,
+    x_edge_ptr,
     num_edges,
     sphere_channels,
     x_stride_n,
@@ -471,17 +470,18 @@ def fused_edge_gather_wigner_l2m_emit_kernel(
     out_stride_e,
     out_stride_l,
     out_stride_c,
-    side_stride_e,
-    side_stride_l,
-    side_stride_c,
+    x_edge_stride_e,
+    x_edge_stride_l,
+    x_edge_stride_c,
     BLOCK_C: tl.constexpr,
 ):
-    """Fused edge gather + Wigner + L→M with x_src/x_tgt side outputs.
+    """Fused edge gather + Wigner + L→M with x_edge side output.
 
     Same as fused_edge_gather_wigner_l2m_kernel but additionally
-    stores the pre-Wigner gathered features x_src [E, 9, C] and
-    x_tgt [E, 9, C] as side outputs. These values are already in
-    registers so the extra stores are free in terms of compute.
+    stores the pre-Wigner gathered features as a concatenated
+    x_edge [E, 9, 2C] tensor (src at [:C], tgt at [C:2C]).
+    These values are already in registers so the extra stores
+    are free in terms of compute.
     """
     edge_id = tl.program_id(0)
     c_block_id = tl.program_id(1)
@@ -605,99 +605,143 @@ def fused_edge_gather_wigner_l2m_emit_kernel(
     )
 
     # =========================================================================
-    # Store x_src and x_tgt side outputs (L-major, no permutation)
+    # Store x_edge side output (L-major, no permutation)
+    # src at channels [0:C], tgt at channels [C:2C]
     # Values are already in registers — stores are free in terms of compute
     # =========================================================================
-    side_src_base = edge_id * side_stride_e
+    x_edge_base = edge_id * x_edge_stride_e
+
     tl.store(
-        x_src_ptr + side_src_base + 0 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr + x_edge_base + 0 * x_edge_stride_l + c_range * x_edge_stride_c,
         x0_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 1 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 0 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x0_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 1 * x_edge_stride_l + c_range * x_edge_stride_c,
         x1_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 2 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 1 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x1_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 2 * x_edge_stride_l + c_range * x_edge_stride_c,
         x2_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 3 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 2 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x2_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 3 * x_edge_stride_l + c_range * x_edge_stride_c,
         x3_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 4 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 3 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x3_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 4 * x_edge_stride_l + c_range * x_edge_stride_c,
         x4_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 5 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 4 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x4_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 5 * x_edge_stride_l + c_range * x_edge_stride_c,
         x5_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 6 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 5 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x5_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 6 * x_edge_stride_l + c_range * x_edge_stride_c,
         x6_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 7 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 6 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
+        x6_tgt,
+        mask=c_mask,
+    )
+
+    tl.store(
+        x_edge_ptr + x_edge_base + 7 * x_edge_stride_l + c_range * x_edge_stride_c,
         x7_src,
         mask=c_mask,
     )
     tl.store(
-        x_src_ptr + side_src_base + 8 * side_stride_l + c_range * side_stride_c,
-        x8_src,
-        mask=c_mask,
-    )
-
-    side_tgt_base = edge_id * side_stride_e
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 0 * side_stride_l + c_range * side_stride_c,
-        x0_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 1 * side_stride_l + c_range * side_stride_c,
-        x1_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 2 * side_stride_l + c_range * side_stride_c,
-        x2_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 3 * side_stride_l + c_range * side_stride_c,
-        x3_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 4 * side_stride_l + c_range * side_stride_c,
-        x4_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 5 * side_stride_l + c_range * side_stride_c,
-        x5_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 6 * side_stride_l + c_range * side_stride_c,
-        x6_tgt,
-        mask=c_mask,
-    )
-    tl.store(
-        x_tgt_ptr + side_tgt_base + 7 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr
+        + x_edge_base
+        + 7 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
         x7_tgt,
         mask=c_mask,
     )
+
     tl.store(
-        x_tgt_ptr + side_tgt_base + 8 * side_stride_l + c_range * side_stride_c,
+        x_edge_ptr + x_edge_base + 8 * x_edge_stride_l + c_range * x_edge_stride_c,
+        x8_src,
+        mask=c_mask,
+    )
+    tl.store(
+        x_edge_ptr
+        + x_edge_base
+        + 8 * x_edge_stride_l
+        + sphere_channels * x_edge_stride_c
+        + c_range * x_edge_stride_c,
         x8_tgt,
         mask=c_mask,
     )
@@ -926,12 +970,13 @@ def fused_edge_gather_wigner_l2m_lmax2_emit(
     x: torch.Tensor,
     edge_index: torch.Tensor,
     wigner: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Fused edge gather + Wigner + L→M with x_src/x_tgt side outputs.
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Fused edge gather + Wigner + L→M with x_edge side output.
 
     Same as fused_edge_gather_wigner_l2m_lmax2 but additionally returns
-    the pre-Wigner gathered features as side outputs, eliminating the
-    need for a separate edge gather pass in the autograd forward.
+    the pre-Wigner gathered features as a concatenated x_edge [E, 9, 2C]
+    tensor (src at [:C], tgt at [C:2C]), eliminating the need for a
+    separate edge gather pass in the autograd forward.
 
     Args:
         x: Node features [num_nodes, 9, sphere_channels] in L-major ordering
@@ -941,8 +986,7 @@ def fused_edge_gather_wigner_l2m_lmax2_emit(
     Returns:
         Tuple of:
         - out: Rotated edge features [E, 9, 2*C] in M-major ordering
-        - x_src: Source node features [E, 9, C] in L-major ordering
-        - x_tgt: Target node features [E, 9, C] in L-major ordering
+        - x_edge: Gathered features [E, 9, 2*C] (src at [:C], tgt at [C:2C])
     """
     num_edges = edge_index.shape[1]
     num_nodes, num_coeffs, sphere_channels = x.shape
@@ -953,11 +997,8 @@ def fused_edge_gather_wigner_l2m_lmax2_emit(
     out = torch.empty(
         num_edges, num_coeffs, 2 * sphere_channels, device=x.device, dtype=x.dtype
     )
-    x_src = torch.empty(
-        num_edges, num_coeffs, sphere_channels, device=x.device, dtype=x.dtype
-    )
-    x_tgt = torch.empty(
-        num_edges, num_coeffs, sphere_channels, device=x.device, dtype=x.dtype
+    x_edge = torch.empty(
+        num_edges, num_coeffs, 2 * sphere_channels, device=x.device, dtype=x.dtype
     )
 
     # Use 2D grid: (edges, channel_blocks) to handle channels > BLOCK_C
@@ -969,8 +1010,7 @@ def fused_edge_gather_wigner_l2m_lmax2_emit(
         edge_index,
         wigner_flat,
         out,
-        x_src,
-        x_tgt,
+        x_edge,
         num_edges,
         sphere_channels,
         x.stride(0),
@@ -980,10 +1020,10 @@ def fused_edge_gather_wigner_l2m_lmax2_emit(
         out.stride(0),
         out.stride(1),
         out.stride(2),
-        x_src.stride(0),
-        x_src.stride(1),
-        x_src.stride(2),
+        x_edge.stride(0),
+        x_edge.stride(1),
+        x_edge.stride(2),
         BLOCK_C=BLOCK_C,
     )
 
-    return out, x_src, x_tgt
+    return out, x_edge

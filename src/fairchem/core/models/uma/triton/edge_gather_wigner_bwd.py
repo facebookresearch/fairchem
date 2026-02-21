@@ -2027,13 +2027,13 @@ class FusedEdgeGatherWignerL2MAllFusedBwdFunction(torch.autograd.Function):
 class FusedEdgeGatherWignerL2MTritonBwdEmitFunction(torch.autograd.Function):
     """Autograd function using the emit kernel that produces side outputs.
 
-    The forward kernel emits x_src [E, 9, C] and x_tgt [E, 9, C] as
-    side outputs alongside the main rotated output [E, 9, 2C].
+    The forward kernel emits x_edge [E, 9, 2C] (src at [:C], tgt at [C:2C])
+    as a side output alongside the main rotated output [E, 9, 2C].
     This eliminates the redundant edge gather and torch.cat that the
     V2 forward does explicitly.
 
-    Backward uses two bmm calls per L-block (K=C each) instead of one
-    with K=2C. Same total FLOPs, potentially better cache behavior.
+    Backward uses two bmm calls per L-block (K=2C) instead of four
+    with K=C. Same total FLOPs, fewer kernel launches.
     """
 
     @staticmethod
@@ -2048,20 +2048,18 @@ class FusedEdgeGatherWignerL2MTritonBwdEmitFunction(torch.autograd.Function):
         Single kernel call does gather + Wigner + L→M + side output writes.
         No explicit x[edge_index[0]], x[edge_index[1]], or torch.cat.
         """
-        out, x_src, x_tgt = fused_edge_gather_wigner_l2m_lmax2_emit(
-            x, edge_index, wigner
-        )
-        ctx.save_for_backward(x_src, x_tgt, edge_index, wigner)
+        out, x_edge = fused_edge_gather_wigner_l2m_lmax2_emit(x, edge_index, wigner)
+        ctx.save_for_backward(x_edge, edge_index, wigner)
         ctx.num_nodes = x.shape[0]
         return out
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor) -> tuple:
-        """Backward using split src/tgt instead of concatenated x_edge.
+        """Backward using concatenated x_edge [E, 9, 2C].
 
-        Uses two bmm calls per L-block with K=C instead of one with K=2C.
+        Uses two bmm calls per L-block with K=2C instead of four with K=C.
         """
-        x_src, x_tgt, edge_index, wigner = ctx.saved_tensors
+        x_edge, edge_index, wigner = ctx.saved_tensors
         num_nodes = ctx.num_nodes
 
         # Step 1: grad_x via two-phase scatter_add (unchanged)
@@ -2069,29 +2067,23 @@ class FusedEdgeGatherWignerL2MTritonBwdEmitFunction(torch.autograd.Function):
             grad_output, edge_index, wigner, num_nodes
         )
 
-        # Step 2: grad_wigner using split src/tgt
+        # Step 2: grad_wigner using concatenated x_edge
         grad_l = _m_to_l_pytorch(grad_output)  # [E, 9, 2C]
 
-        E = edge_index.shape[1]
-        C = x_src.shape[2]
-        grad_l_src = grad_l[:, :, :C]  # [E, 9, C] view
-        grad_l_tgt = grad_l[:, :, C:]  # [E, 9, C] view
-
+        E, _, _ = x_edge.shape
         grad_wigner = torch.zeros(E, 9, 9, device=wigner.device, dtype=wigner.dtype)
 
         # L=0 block (1x1)
-        grad_wigner[:, 0, 0] = (grad_l_src[:, 0, :] * x_src[:, 0, :]).sum(dim=-1) + (
-            grad_l_tgt[:, 0, :] * x_tgt[:, 0, :]
-        ).sum(dim=-1)
+        grad_wigner[:, 0, 0] = (grad_l[:, 0, :] * x_edge[:, 0, :]).sum(dim=-1)
 
         # L=1 block (3x3)
         grad_wigner[:, 1:4, 1:4] = torch.bmm(
-            grad_l_src[:, 1:4, :], x_src[:, 1:4, :].transpose(1, 2)
-        ) + torch.bmm(grad_l_tgt[:, 1:4, :], x_tgt[:, 1:4, :].transpose(1, 2))
+            grad_l[:, 1:4, :], x_edge[:, 1:4, :].transpose(1, 2)
+        )
 
         # L=2 block (5x5)
         grad_wigner[:, 4:9, 4:9] = torch.bmm(
-            grad_l_src[:, 4:9, :], x_src[:, 4:9, :].transpose(1, 2)
-        ) + torch.bmm(grad_l_tgt[:, 4:9, :], x_tgt[:, 4:9, :].transpose(1, 2))
+            grad_l[:, 4:9, :], x_edge[:, 4:9, :].transpose(1, 2)
+        )
 
         return grad_x, None, grad_wigner
