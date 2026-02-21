@@ -26,6 +26,7 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "system_type,task_name,noise,fmax,max_steps",
     [
