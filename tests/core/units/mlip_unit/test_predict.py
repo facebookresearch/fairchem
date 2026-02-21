@@ -716,6 +716,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
+@pytest.mark.gpu()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
