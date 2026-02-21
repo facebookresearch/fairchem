@@ -16,6 +16,7 @@ except ImportError:
 
 if HAS_TRITON:
     from .edge_gather_wigner_bwd import (
+        FusedEdgeGatherWignerL2MAllFusedBwdFunction,
         FusedEdgeGatherWignerL2MPyTorchBwdFunction,
         FusedEdgeGatherWignerL2MRecomputeFunction,
         FusedEdgeGatherWignerL2MTritonBwdFunction,
@@ -26,6 +27,7 @@ if HAS_TRITON:
 
 __all__ = [
     "HAS_TRITON",
+    "FusedEdgeGatherWignerL2MAllFusedBwdFunction",
     "FusedEdgeGatherWignerL2MTritonBwdFunction",
     "FusedEdgeGatherWignerL2MTritonV2BwdFunction",
     "FusedEdgeGatherWignerL2MPyTorchBwdFunction",

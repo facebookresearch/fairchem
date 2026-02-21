@@ -50,6 +50,7 @@ class ExecutionMode(str, Enum):
     TRITON_GATING = "triton_gating"
     TRITON_SO2_AND_ROTATE_IN = "triton_so2_and_rotate_in"
     TRITON_SO2_AND_ROTATE_IN_OUTFUSED = "triton_so2_and_rotate_in_outfused"
+    TRITON_SO2_AND_ROTATE_IN_ALL_FUSED = "triton_so2_and_rotate_in_all_fused"
 
 
 # Set of all triton execution modes for easy membership testing
@@ -63,6 +64,7 @@ TRITON_MODES = frozenset(
         ExecutionMode.TRITON_GATING,
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN,
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN_OUTFUSED,
+        ExecutionMode.TRITON_SO2_AND_ROTATE_IN_ALL_FUSED,
     }
 )
 
@@ -75,7 +77,7 @@ class ExecutionBackend:
     operations. Subclass and override methods with optimized kernels
     (e.g. Triton) for specific execution modes.
 
-    All methods are static — backends carry no instance state.
+    All methods are static -- backends carry no instance state.
 
     Methods (override for optimization):
         - prepare_wigner: Transform raw Wigner matrices for this backend
@@ -268,9 +270,7 @@ class ExecutionBackend:
 
 class UMASFastPytorchBackend(ExecutionBackend):
     """
-    Optimized PyTorch backend using block-diagonal SO2 convolutions.
-
-    Requires merge_mole=True and activation_checkpointing=False.
+    UMA-S fast PyTorch backend with SO2 block conversion.
     """
 
     @staticmethod
@@ -278,9 +278,6 @@ class UMASFastPytorchBackend(ExecutionBackend):
         model: torch.nn.Module,
         settings: InferenceSettings | None = None,
     ) -> None:
-        """
-        Validate that settings are compatible with fast pytorch mode.
-        """
         if settings is not None and settings.activation_checkpointing:
             raise ValueError(
                 "UMASFastPytorchBackend requires activation_checkpointing=False"
@@ -288,13 +285,6 @@ class UMASFastPytorchBackend(ExecutionBackend):
 
     @staticmethod
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
-        """
-        Convert SO2_Convolution modules to block-diagonal GEMM variants.
-
-        Replaces so2_conv_1 with SO2_Conv1_WithRadialBlock and
-        so2_conv_2 with SO2_Conv2_InternalBlock in each block's
-        Edgewise module.
-        """
         from fairchem.core.models.uma.nn.so2_layers import (
             convert_so2_conv1,
             convert_so2_conv2,
@@ -305,370 +295,10 @@ class UMASFastPytorchBackend(ExecutionBackend):
             block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
 
 
-from fairchem.core.models.uma.triton import (
-    FusedEdgeGatherWignerL2MTritonV2BwdFunction,
-)
-from fairchem.core.models.uma.triton.wigner_ops import MToLThenWignerLmax2Function
-
-
-class TritonGating(ExecutionBackend):
+class TritonBackendEdgeDegree(ExecutionBackend):
     """
-    Triton-accelerated backend using fused kernels for gather+rotate.
-
-    Uses raw Wigner matrices (handles M-mapping internally in kernels).
-    Requires lmax=mmax=2, sphere_channels % 128 == 0, and no activation
-    checkpointing.
-
-    Default backward uses two-phase scatter_add (no atomics).
-    Subclasses override only ``gather_rotate`` to select a different
-    backward strategy.
-
-    All methods are static — no instance state.
+    Base for Triton backends with L-ordered edge degree scatter.
     """
-
-    @staticmethod
-    def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
-    ) -> None:
-        """
-        Validate that Triton is available and model/settings are compatible.
-        """
-        from fairchem.core.models.uma.triton import HAS_TRITON
-
-        if not HAS_TRITON:
-            raise ValueError(
-                "Triton is required for TritonBackend but is not installed."
-            )
-        if model.lmax != 2 or model.mmax != 2:
-            raise ValueError("Triton backends require lmax=mmax=2")
-        if model.sphere_channels % 128 != 0:
-            raise ValueError("Triton backends require sphere_channels divisible by 128")
-        if settings is not None and settings.activation_checkpointing:
-            raise ValueError("TritonBackend requires activation_checkpointing=False")
-
-    @staticmethod
-    def gate_activation(
-        x_0_gating: torch.Tensor,
-        x_message: torch.Tensor,
-        act: torch.nn.Module,
-    ) -> torch.Tensor:
-        """
-        Fused gate activation using Triton.
-        """
-        from fairchem.core.models.uma.triton import gate_activation_triton
-
-        return gate_activation_triton(x_0_gating, x_message)
-
-
-class TritonRotateIn(ExecutionBackend):
-    """
-    Triton-accelerated backend using fused kernels for gather+rotate.
-
-    Uses raw Wigner matrices (handles M-mapping internally in kernels).
-    Requires lmax=mmax=2, sphere_channels % 128 == 0, and no activation
-    checkpointing.
-
-    Default backward uses two-phase scatter_add (no atomics).
-    Subclasses override only ``gather_rotate`` to select a different
-    backward strategy.
-
-    All methods are static — no instance state.
-    """
-
-    @staticmethod
-    def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
-    ) -> None:
-        """
-        Validate that Triton is available and model/settings are compatible.
-        """
-        from fairchem.core.models.uma.triton import HAS_TRITON
-
-        if not HAS_TRITON:
-            raise ValueError(
-                "Triton is required for TritonBackend but is not installed."
-            )
-        if model.lmax != 2 or model.mmax != 2:
-            raise ValueError("Triton backends require lmax=mmax=2")
-        if model.sphere_channels % 128 != 0:
-            raise ValueError("Triton backends require sphere_channels divisible by 128")
-        if settings is not None and settings.activation_checkpointing:
-            raise ValueError("TritonBackend requires activation_checkpointing=False")
-
-    @staticmethod
-    def prepare_wigner(
-        wigner: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        mappingReduced,
-        coefficient_index: torch.Tensor | None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Return raw Wigner matrices unchanged.
-
-        Triton kernels handle M-mapping internally.
-        """
-        return wigner, wigner_inv
-
-    @staticmethod
-    def gather_rotate(
-        x_full: torch.Tensor,
-        edge_index: torch.Tensor,
-        wigner: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M using Triton.
-
-        Uses scatter_add (two-phase, no atomics) backward by default.
-        """
-
-        return FusedEdgeGatherWignerL2MTritonV2BwdFunction.apply(
-            x_full, edge_index, wigner
-        )
-
-    @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
-        wigner_inv: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Rotate M->L using Triton.
-        """
-
-        return MToLThenWignerLmax2Function.apply(x, wigner_inv)
-
-
-class TritonSO2AndRotate(ExecutionBackend):
-    """
-    Triton-accelerated backend using fused kernels for gather+rotate.
-
-    Uses raw Wigner matrices (handles M-mapping internally in kernels).
-    Requires lmax=mmax=2, sphere_channels % 128 == 0, and no activation
-    checkpointing.
-
-    Default backward uses two-phase scatter_add (no atomics).
-    Subclasses override only ``gather_rotate`` to select a different
-    backward strategy.
-
-    All methods are static — no instance state.
-    """
-
-    @staticmethod
-    def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
-    ) -> None:
-        """
-        Validate that Triton is available and model/settings are compatible.
-        """
-        from fairchem.core.models.uma.triton import HAS_TRITON
-
-        if not HAS_TRITON:
-            raise ValueError(
-                "Triton is required for TritonBackend but is not installed."
-            )
-        if model.lmax != 2 or model.mmax != 2:
-            raise ValueError("Triton backends require lmax=mmax=2")
-        if model.sphere_channels % 128 != 0:
-            raise ValueError("Triton backends require sphere_channels divisible by 128")
-        if settings is not None and settings.activation_checkpointing:
-            raise ValueError("TritonBackend requires activation_checkpointing=False")
-
-    @staticmethod
-    def prepare_model_for_inference(model: torch.nn.Module) -> None:
-        """
-        Convert SO2_Convolution modules to block-diagonal GEMM variants.
-
-        Replaces so2_conv_1 with SO2_Conv1_WithRadialBlock and
-        so2_conv_2 with SO2_Conv2_InternalBlock in each block's
-        Edgewise module.
-        """
-        from fairchem.core.models.uma.nn.so2_layers import (
-            convert_so2_conv1,
-            convert_so2_conv2,
-        )
-
-        for block in model.blocks:
-            block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
-            block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
-
-    @staticmethod
-    def prepare_wigner(
-        wigner: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        mappingReduced,
-        coefficient_index: torch.Tensor | None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Return raw Wigner matrices unchanged.
-
-        Triton kernels handle M-mapping internally.
-        """
-        return wigner, wigner_inv
-
-    @staticmethod
-    def gather_rotate(
-        x_full: torch.Tensor,
-        edge_index: torch.Tensor,
-        wigner: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M using Triton.
-
-        Uses scatter_add (two-phase, no atomics) backward by default.
-        """
-
-        return FusedEdgeGatherWignerL2MTritonV2BwdFunction.apply(
-            x_full, edge_index, wigner
-        )
-
-    @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
-        wigner_inv: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Rotate M->L using Triton.
-        """
-
-        return MToLThenWignerLmax2Function.apply(x, wigner_inv)
-
-
-class TritonSO2AndRotateOutfused(TritonSO2AndRotate):
-    """
-    Triton-accelerated backend with fused M->L + Wigner rotate_back.
-
-    Inherits from TritonSO2AndRotate. Overrides only ``rotate_back``
-    to use fused Triton kernels that inline the permutation into
-    load/store, eliminating separate permutation kernel launches.
-
-    Reduces rotate_back kernel launches from 5 to 3 total
-    (forward: 2->1, backward: 3->2).
-    """
-
-    @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
-        wigner_inv: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Rotate M->L using fused Triton kernel.
-        """
-        from fairchem.core.models.uma.triton.wigner_ops import (
-            FusedMToLThenWignerLmax2Function,
-        )
-
-        return FusedMToLThenWignerLmax2Function.apply(x, wigner_inv)
-
-
-class TritonBackend(ExecutionBackend):
-    """
-    Triton-accelerated backend using fused kernels for gather+rotate.
-
-    Uses raw Wigner matrices (handles M-mapping internally in kernels).
-    Requires lmax=mmax=2, sphere_channels % 128 == 0, and no activation
-    checkpointing.
-
-    Default backward uses two-phase scatter_add (no atomics).
-    Subclasses override only ``gather_rotate`` to select a different
-    backward strategy.
-
-    All methods are static — no instance state.
-    """
-
-    @staticmethod
-    def validate(
-        model: torch.nn.Module,
-        settings: InferenceSettings | None = None,
-    ) -> None:
-        """
-        Validate that Triton is available and model/settings are compatible.
-        """
-        from fairchem.core.models.uma.triton import HAS_TRITON
-
-        if not HAS_TRITON:
-            raise ValueError(
-                "Triton is required for TritonBackend but is not installed."
-            )
-        if model.lmax != 2 or model.mmax != 2:
-            raise ValueError("Triton backends require lmax=mmax=2")
-        if model.sphere_channels % 128 != 0:
-            raise ValueError("Triton backends require sphere_channels divisible by 128")
-        if settings is not None and settings.activation_checkpointing:
-            raise ValueError("TritonBackend requires activation_checkpointing=False")
-
-    @staticmethod
-    def prepare_wigner(
-        wigner: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        mappingReduced,
-        coefficient_index: torch.Tensor | None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Return raw Wigner matrices unchanged.
-
-        Triton kernels handle M-mapping internally.
-        """
-        return wigner, wigner_inv
-
-    @staticmethod
-    def gather_rotate(
-        x_full: torch.Tensor,
-        edge_index: torch.Tensor,
-        wigner: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M using Triton.
-
-        Uses scatter_add (two-phase, no atomics) backward by default.
-        """
-        from fairchem.core.models.uma.triton import (
-            FusedEdgeGatherWignerL2MTritonV2BwdFunction,
-        )
-
-        return FusedEdgeGatherWignerL2MTritonV2BwdFunction.apply(
-            x_full, edge_index, wigner
-        )
-
-    @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
-        wigner_inv: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Rotate M->L using Triton.
-        """
-        from fairchem.core.models.uma.triton import m_to_l_then_wigner_lmax2
-
-        return m_to_l_then_wigner_lmax2(x, wigner_inv)
-
-    @staticmethod
-    def gate_activation(
-        x_0_gating: torch.Tensor,
-        x_message: torch.Tensor,
-        act: torch.nn.Module,
-    ) -> torch.Tensor:
-        """
-        Fused gate activation using Triton.
-        """
-        from fairchem.core.models.uma.triton import gate_activation_triton
-
-        return gate_activation_triton(x_0_gating, x_message)
-
-    @staticmethod
-    def prepare_model_for_inference(model: torch.nn.Module) -> None:
-        """
-        Convert SO2_Convolution modules to block-diagonal GEMM variants.
-        """
-        from fairchem.core.models.uma.nn.so2_layers import (
-            convert_so2_conv1,
-            convert_so2_conv2,
-        )
-
-        for block in model.blocks:
-            block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
-            block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
 
     @staticmethod
     def edge_degree_scatter(
@@ -681,13 +311,6 @@ class TritonBackend(ExecutionBackend):
         rescale_factor: float,
         node_offset: int = 0,
     ) -> torch.Tensor:
-        """
-        Edge degree embedding with L-ordered wigner_inv.
-
-        Triton backends use raw (L-ordered) wigner_inv. The m=0 columns
-        are at indices [0, 2, 6] in L-ordering, not the first 3 columns
-        as assumed by the base class with M-ordered wigner_inv.
-        """
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
 
         # Select m=0 columns from L-ordered wigner_inv
@@ -703,11 +326,187 @@ class TritonBackend(ExecutionBackend):
         )
 
 
-class TritonAtomicBackend(TritonBackend):
+class TritonGating(TritonBackendEdgeDegree):
     """
-    Triton backend using atomic-based backward.
+    Triton backend with fused gating activation.
+    """
 
-    Overrides only ``gather_rotate`` to use the atomic scatter backward.
+    @staticmethod
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
+        from fairchem.core.models.uma.triton import HAS_TRITON
+
+        if not HAS_TRITON:
+            raise ValueError(
+                "Triton is required for TritonBackend but is not installed."
+            )
+        if model.lmax != 2 or model.mmax != 2:
+            raise ValueError("Triton backends require lmax=mmax=2")
+        if model.sphere_channels % 128 != 0:
+            raise ValueError("Triton backends require sphere_channels divisible by 128")
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError("TritonBackend requires activation_checkpointing=False")
+
+    @staticmethod
+    def gate_activation(
+        x_0_gating: torch.Tensor,
+        x_message: torch.Tensor,
+        act: torch.nn.Module,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import gate_activation_triton
+
+        return gate_activation_triton(x_0_gating, x_message)
+
+
+class TritonRotateIn(TritonBackendEdgeDegree):
+    """
+    Triton backend with fused edge gather and Wigner rotation.
+    """
+
+    @staticmethod
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
+        from fairchem.core.models.uma.triton import HAS_TRITON
+
+        if not HAS_TRITON:
+            raise ValueError(
+                "Triton is required for TritonBackend but is not installed."
+            )
+        if model.lmax != 2 or model.mmax != 2:
+            raise ValueError("Triton backends require lmax=mmax=2")
+        if model.sphere_channels % 128 != 0:
+            raise ValueError("Triton backends require sphere_channels divisible by 128")
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError("TritonBackend requires activation_checkpointing=False")
+
+    @staticmethod
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return wigner, wigner_inv
+
+    @staticmethod
+    def gather_rotate(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            FusedEdgeGatherWignerL2MTritonBwdFunction,
+        )
+
+        return FusedEdgeGatherWignerL2MTritonBwdFunction.apply(
+            x_full, edge_index, wigner
+        )
+
+    @staticmethod
+    def rotate_back(
+        x: torch.Tensor,
+        wigner_inv: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton.wigner_ops import (
+            MToLThenWignerLmax2Function,
+        )
+
+        return MToLThenWignerLmax2Function.apply(x, wigner_inv)
+
+
+class TritonSO2AndRotate(TritonBackendEdgeDegree):
+    """
+    Triton backend with SO2 block conversion and fused rotation.
+    """
+
+    @staticmethod
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
+        from fairchem.core.models.uma.triton import HAS_TRITON
+
+        if not HAS_TRITON:
+            raise ValueError(
+                "Triton is required for TritonBackend but is not installed."
+            )
+        if model.lmax != 2 or model.mmax != 2:
+            raise ValueError("Triton backends require lmax=mmax=2")
+        if model.sphere_channels % 128 != 0:
+            raise ValueError("Triton backends require sphere_channels divisible by 128")
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError("TritonBackend requires activation_checkpointing=False")
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        from fairchem.core.models.uma.nn.so2_layers import (
+            convert_so2_conv1,
+            convert_so2_conv2,
+        )
+
+        for block in model.blocks:
+            block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
+            block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
+
+    @staticmethod
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return wigner, wigner_inv
+
+    @staticmethod
+    def gather_rotate(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            FusedEdgeGatherWignerL2MTritonV2BwdFunction,
+        )
+
+        return FusedEdgeGatherWignerL2MTritonV2BwdFunction.apply(
+            x_full, edge_index, wigner
+        )
+
+    @staticmethod
+    def rotate_back(
+        x: torch.Tensor,
+        wigner_inv: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton.wigner_ops import (
+            MToLThenWignerLmax2Function,
+        )
+
+        return MToLThenWignerLmax2Function.apply(x, wigner_inv)
+
+
+class TritonSO2AndRotateOutfused(TritonSO2AndRotate):
+    """
+    Extends TritonSO2AndRotate with fused M->L rotate_back.
+    """
+
+    @staticmethod
+    def rotate_back(
+        x: torch.Tensor,
+        wigner_inv: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton.wigner_ops import (
+            FusedMToLThenWignerLmax2Function,
+        )
+
+        return FusedMToLThenWignerLmax2Function.apply(x, wigner_inv)
+
+
+class TritonSO2AndRotateAllFused(TritonSO2AndRotateOutfused):
+    """
+    Extends TritonSO2AndRotateOutfused with fully-fused backward.
     """
 
     @staticmethod
@@ -716,11 +515,106 @@ class TritonAtomicBackend(TritonBackend):
         edge_index: torch.Tensor,
         wigner: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M using Triton.
+        from fairchem.core.models.uma.triton import (
+            FusedEdgeGatherWignerL2MAllFusedBwdFunction,
+        )
 
-        Uses atomic-based Triton backward.
+        return FusedEdgeGatherWignerL2MAllFusedBwdFunction.apply(
+            x_full, edge_index, wigner
+        )
+
+
+class TritonBackend(TritonBackendEdgeDegree):
+    """
+    Full Triton backend with SO2 conversion, gating, and V2 backward.
+    """
+
+    @staticmethod
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
         """
+        Validate that Triton is available and model/settings are compatible.
+        """
+        from fairchem.core.models.uma.triton import HAS_TRITON
+
+        if not HAS_TRITON:
+            raise ValueError(
+                "Triton is required for TritonBackend but is not installed."
+            )
+        if model.lmax != 2 or model.mmax != 2:
+            raise ValueError("Triton backends require lmax=mmax=2")
+        if model.sphere_channels % 128 != 0:
+            raise ValueError("Triton backends require sphere_channels divisible by 128")
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError("TritonBackend requires activation_checkpointing=False")
+
+    @staticmethod
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return wigner, wigner_inv
+
+    @staticmethod
+    def gather_rotate(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            FusedEdgeGatherWignerL2MTritonV2BwdFunction,
+        )
+
+        return FusedEdgeGatherWignerL2MTritonV2BwdFunction.apply(
+            x_full, edge_index, wigner
+        )
+
+    @staticmethod
+    def rotate_back(
+        x: torch.Tensor,
+        wigner_inv: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import m_to_l_then_wigner_lmax2
+
+        return m_to_l_then_wigner_lmax2(x, wigner_inv)
+
+    @staticmethod
+    def gate_activation(
+        x_0_gating: torch.Tensor,
+        x_message: torch.Tensor,
+        act: torch.nn.Module,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import gate_activation_triton
+
+        return gate_activation_triton(x_0_gating, x_message)
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        from fairchem.core.models.uma.nn.so2_layers import (
+            convert_so2_conv1,
+            convert_so2_conv2,
+        )
+
+        for block in model.blocks:
+            block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
+            block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
+
+
+class TritonAtomicBackend(TritonBackendEdgeDegree):
+    """
+    Triton backend using atomic scatter in backward.
+    """
+
+    @staticmethod
+    def gather_rotate(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
         from fairchem.core.models.uma.triton import (
             FusedEdgeGatherWignerL2MTritonBwdFunction,
         )
@@ -730,11 +624,9 @@ class TritonAtomicBackend(TritonBackend):
         )
 
 
-class TritonPytorchBwdBackend(TritonBackend):
+class TritonPytorchBwdBackend(TritonBackendEdgeDegree):
     """
-    Triton backend using PyTorch backward.
-
-    Triton forward, PyTorch backward. Overrides only ``gather_rotate``.
+    Triton forward with PyTorch backward.
     """
 
     @staticmethod
@@ -743,11 +635,6 @@ class TritonPytorchBwdBackend(TritonBackend):
         edge_index: torch.Tensor,
         wigner: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M using Triton.
-
-        Uses PyTorch backward.
-        """
         from fairchem.core.models.uma.triton import (
             FusedEdgeGatherWignerL2MPyTorchBwdFunction,
         )
@@ -757,13 +644,9 @@ class TritonPytorchBwdBackend(TritonBackend):
         )
 
 
-class TritonRecomputeBackend(TritonBackend):
+class TritonRecomputeBackend(TritonBackendEdgeDegree):
     """
-    Triton backend using memory-optimized recompute backward.
-
-    Saves ~670MB for typical 2000 node, 74K edge graphs by
-    recomputing edge features in backward instead of saving them.
-    Overrides only ``gather_rotate``.
+    Memory-optimized Triton backend that recomputes edge features.
     """
 
     @staticmethod
@@ -772,11 +655,6 @@ class TritonRecomputeBackend(TritonBackend):
         edge_index: torch.Tensor,
         wigner: torch.Tensor,
     ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M using Triton.
-
-        Uses memory-optimized recompute backward.
-        """
         from fairchem.core.models.uma.triton import (
             FusedEdgeGatherWignerL2MRecomputeFunction,
         )
@@ -797,6 +675,7 @@ _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.TRITON_GATING: TritonGating,
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN: TritonSO2AndRotate,
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN_OUTFUSED: TritonSO2AndRotateOutfused,
+    ExecutionMode.TRITON_SO2_AND_ROTATE_IN_ALL_FUSED: TritonSO2AndRotateAllFused,
 }
 
 

@@ -1475,3 +1475,489 @@ class FusedEdgeGatherWignerL2MRecomputeFunction(torch.autograd.Function):
         ) + torch.bmm(grad_l_tgt[:, 4:9, :], x_tgt[:, 4:9, :].transpose(1, 2))
 
         return grad_x, None, grad_wigner
+
+
+# =============================================================================
+# Fused grad_wigner Triton Kernel — single-launch backward for grad_wigner
+# =============================================================================
+
+
+@triton.jit
+def fused_grad_wigner_kernel(
+    grad_out_ptr,  # [E, 9, 2C] gradient from downstream (M-major)
+    x_ptr,  # [N, 9, C] node features
+    edge_index_ptr,  # [2, E] edge indices
+    grad_wigner_ptr,  # [E, 81] output (flat 9x9, only 35 entries written)
+    num_edges,
+    sphere_channels,
+    grad_stride_e,
+    grad_stride_l,
+    grad_stride_c,
+    x_stride_n,
+    x_stride_l,
+    x_stride_c,
+    edge_stride,
+    BLOCK_C: tl.constexpr,
+):
+    """Fused grad_wigner backward kernel.
+
+    Computes grad_wigner = sum_c (grad_l_src * x_src + grad_l_tgt * x_tgt)
+    for block-diagonal entries only, with M->L permutation and edge gather
+    fused into a single kernel launch.
+
+    Grid: (num_edges,) -- one program per edge.
+    Tiles over channels in BLOCK_C chunks.
+    """
+    edge_id = tl.program_id(0)
+    if edge_id >= num_edges:
+        return
+
+    # Load node indices for this edge
+    src_node = tl.load(edge_index_ptr + edge_id).to(tl.int64)
+    tgt_node = tl.load(edge_index_ptr + edge_stride + edge_id).to(tl.int64)
+
+    # Initialize 35 accumulators (block-diagonal entries)
+    # L=0 block: 1 entry
+    dw_00 = tl.zeros([], dtype=tl.float32)
+
+    # L=1 block: 9 entries (3x3)
+    dw_11 = tl.zeros([], dtype=tl.float32)
+    dw_12 = tl.zeros([], dtype=tl.float32)
+    dw_13 = tl.zeros([], dtype=tl.float32)
+    dw_21 = tl.zeros([], dtype=tl.float32)
+    dw_22 = tl.zeros([], dtype=tl.float32)
+    dw_23 = tl.zeros([], dtype=tl.float32)
+    dw_31 = tl.zeros([], dtype=tl.float32)
+    dw_32 = tl.zeros([], dtype=tl.float32)
+    dw_33 = tl.zeros([], dtype=tl.float32)
+
+    # L=2 block: 25 entries (5x5)
+    dw_44 = tl.zeros([], dtype=tl.float32)
+    dw_45 = tl.zeros([], dtype=tl.float32)
+    dw_46 = tl.zeros([], dtype=tl.float32)
+    dw_47 = tl.zeros([], dtype=tl.float32)
+    dw_48 = tl.zeros([], dtype=tl.float32)
+    dw_54 = tl.zeros([], dtype=tl.float32)
+    dw_55 = tl.zeros([], dtype=tl.float32)
+    dw_56 = tl.zeros([], dtype=tl.float32)
+    dw_57 = tl.zeros([], dtype=tl.float32)
+    dw_58 = tl.zeros([], dtype=tl.float32)
+    dw_64 = tl.zeros([], dtype=tl.float32)
+    dw_65 = tl.zeros([], dtype=tl.float32)
+    dw_66 = tl.zeros([], dtype=tl.float32)
+    dw_67 = tl.zeros([], dtype=tl.float32)
+    dw_68 = tl.zeros([], dtype=tl.float32)
+    dw_74 = tl.zeros([], dtype=tl.float32)
+    dw_75 = tl.zeros([], dtype=tl.float32)
+    dw_76 = tl.zeros([], dtype=tl.float32)
+    dw_77 = tl.zeros([], dtype=tl.float32)
+    dw_78 = tl.zeros([], dtype=tl.float32)
+    dw_84 = tl.zeros([], dtype=tl.float32)
+    dw_85 = tl.zeros([], dtype=tl.float32)
+    dw_86 = tl.zeros([], dtype=tl.float32)
+    dw_87 = tl.zeros([], dtype=tl.float32)
+    dw_88 = tl.zeros([], dtype=tl.float32)
+
+    grad_base = edge_id * grad_stride_e
+    x_src_base = src_node * x_stride_n
+    x_tgt_base = tgt_node * x_stride_n
+
+    # Tile over channels
+    for c_start in range(0, sphere_channels, BLOCK_C):
+        c_range = c_start + tl.arange(0, BLOCK_C)
+        c_mask = c_range < sphere_channels
+
+        # =============================================================
+        # Load grad_output with M->L permutation (src half: 0..C-1)
+        # M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
+        # =============================================================
+        gs0 = tl.load(
+            grad_out_ptr + grad_base + 0 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs1 = tl.load(
+            grad_out_ptr + grad_base + 5 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs2 = tl.load(
+            grad_out_ptr + grad_base + 1 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs3 = tl.load(
+            grad_out_ptr + grad_base + 3 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs4 = tl.load(
+            grad_out_ptr + grad_base + 8 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs5 = tl.load(
+            grad_out_ptr + grad_base + 6 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs6 = tl.load(
+            grad_out_ptr + grad_base + 2 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs7 = tl.load(
+            grad_out_ptr + grad_base + 4 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gs8 = tl.load(
+            grad_out_ptr + grad_base + 7 * grad_stride_l + c_range * grad_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+
+        # =============================================================
+        # Load grad_output with M->L permutation (tgt half: C..2C-1)
+        # =============================================================
+        c_tgt = sphere_channels + c_range * grad_stride_c
+        gt0 = tl.load(
+            grad_out_ptr + grad_base + 0 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt1 = tl.load(
+            grad_out_ptr + grad_base + 5 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt2 = tl.load(
+            grad_out_ptr + grad_base + 1 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt3 = tl.load(
+            grad_out_ptr + grad_base + 3 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt4 = tl.load(
+            grad_out_ptr + grad_base + 8 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt5 = tl.load(
+            grad_out_ptr + grad_base + 6 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt6 = tl.load(
+            grad_out_ptr + grad_base + 2 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt7 = tl.load(
+            grad_out_ptr + grad_base + 4 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        gt8 = tl.load(
+            grad_out_ptr + grad_base + 7 * grad_stride_l + c_tgt,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+
+        # =============================================================
+        # Load x[src_node] (L-major, 9 components)
+        # =============================================================
+        xs0 = tl.load(
+            x_ptr + x_src_base + 0 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs1 = tl.load(
+            x_ptr + x_src_base + 1 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs2 = tl.load(
+            x_ptr + x_src_base + 2 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs3 = tl.load(
+            x_ptr + x_src_base + 3 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs4 = tl.load(
+            x_ptr + x_src_base + 4 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs5 = tl.load(
+            x_ptr + x_src_base + 5 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs6 = tl.load(
+            x_ptr + x_src_base + 6 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs7 = tl.load(
+            x_ptr + x_src_base + 7 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xs8 = tl.load(
+            x_ptr + x_src_base + 8 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+
+        # =============================================================
+        # Load x[tgt_node] (L-major, 9 components)
+        # =============================================================
+        xt0 = tl.load(
+            x_ptr + x_tgt_base + 0 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt1 = tl.load(
+            x_ptr + x_tgt_base + 1 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt2 = tl.load(
+            x_ptr + x_tgt_base + 2 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt3 = tl.load(
+            x_ptr + x_tgt_base + 3 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt4 = tl.load(
+            x_ptr + x_tgt_base + 4 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt5 = tl.load(
+            x_ptr + x_tgt_base + 5 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt6 = tl.load(
+            x_ptr + x_tgt_base + 6 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt7 = tl.load(
+            x_ptr + x_tgt_base + 7 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+        xt8 = tl.load(
+            x_ptr + x_tgt_base + 8 * x_stride_l + c_range * x_stride_c,
+            mask=c_mask,
+            other=0.0,
+        ).to(tl.float32)
+
+        # =============================================================
+        # Accumulate block-diagonal outer products
+        # dw[i,j] += sum_c (gs_i * xs_j + gt_i * xt_j)
+        # =============================================================
+
+        # L=0 block (1x1): row 0, col 0
+        dw_00 += tl.sum(gs0 * xs0) + tl.sum(gt0 * xt0)
+
+        # L=1 block (3x3): rows 1-3, cols 1-3
+        dw_11 += tl.sum(gs1 * xs1) + tl.sum(gt1 * xt1)
+        dw_12 += tl.sum(gs1 * xs2) + tl.sum(gt1 * xt2)
+        dw_13 += tl.sum(gs1 * xs3) + tl.sum(gt1 * xt3)
+        dw_21 += tl.sum(gs2 * xs1) + tl.sum(gt2 * xt1)
+        dw_22 += tl.sum(gs2 * xs2) + tl.sum(gt2 * xt2)
+        dw_23 += tl.sum(gs2 * xs3) + tl.sum(gt2 * xt3)
+        dw_31 += tl.sum(gs3 * xs1) + tl.sum(gt3 * xt1)
+        dw_32 += tl.sum(gs3 * xs2) + tl.sum(gt3 * xt2)
+        dw_33 += tl.sum(gs3 * xs3) + tl.sum(gt3 * xt3)
+
+        # L=2 block (5x5): rows 4-8, cols 4-8
+        dw_44 += tl.sum(gs4 * xs4) + tl.sum(gt4 * xt4)
+        dw_45 += tl.sum(gs4 * xs5) + tl.sum(gt4 * xt5)
+        dw_46 += tl.sum(gs4 * xs6) + tl.sum(gt4 * xt6)
+        dw_47 += tl.sum(gs4 * xs7) + tl.sum(gt4 * xt7)
+        dw_48 += tl.sum(gs4 * xs8) + tl.sum(gt4 * xt8)
+        dw_54 += tl.sum(gs5 * xs4) + tl.sum(gt5 * xt4)
+        dw_55 += tl.sum(gs5 * xs5) + tl.sum(gt5 * xt5)
+        dw_56 += tl.sum(gs5 * xs6) + tl.sum(gt5 * xt6)
+        dw_57 += tl.sum(gs5 * xs7) + tl.sum(gt5 * xt7)
+        dw_58 += tl.sum(gs5 * xs8) + tl.sum(gt5 * xt8)
+        dw_64 += tl.sum(gs6 * xs4) + tl.sum(gt6 * xt4)
+        dw_65 += tl.sum(gs6 * xs5) + tl.sum(gt6 * xt5)
+        dw_66 += tl.sum(gs6 * xs6) + tl.sum(gt6 * xt6)
+        dw_67 += tl.sum(gs6 * xs7) + tl.sum(gt6 * xt7)
+        dw_68 += tl.sum(gs6 * xs8) + tl.sum(gt6 * xt8)
+        dw_74 += tl.sum(gs7 * xs4) + tl.sum(gt7 * xt4)
+        dw_75 += tl.sum(gs7 * xs5) + tl.sum(gt7 * xt5)
+        dw_76 += tl.sum(gs7 * xs6) + tl.sum(gt7 * xt6)
+        dw_77 += tl.sum(gs7 * xs7) + tl.sum(gt7 * xt7)
+        dw_78 += tl.sum(gs7 * xs8) + tl.sum(gt7 * xt8)
+        dw_84 += tl.sum(gs8 * xs4) + tl.sum(gt8 * xt4)
+        dw_85 += tl.sum(gs8 * xs5) + tl.sum(gt8 * xt5)
+        dw_86 += tl.sum(gs8 * xs6) + tl.sum(gt8 * xt6)
+        dw_87 += tl.sum(gs8 * xs7) + tl.sum(gt8 * xt7)
+        dw_88 += tl.sum(gs8 * xs8) + tl.sum(gt8 * xt8)
+
+    # =================================================================
+    # Store 35 block-diagonal entries to grad_wigner[e] (flat [E, 81])
+    # =================================================================
+    w_base = edge_id * 81
+
+    # L=0 block
+    tl.store(grad_wigner_ptr + w_base + 0 * 9 + 0, dw_00)
+
+    # L=1 block (3x3 at [1:4, 1:4])
+    tl.store(grad_wigner_ptr + w_base + 1 * 9 + 1, dw_11)
+    tl.store(grad_wigner_ptr + w_base + 1 * 9 + 2, dw_12)
+    tl.store(grad_wigner_ptr + w_base + 1 * 9 + 3, dw_13)
+    tl.store(grad_wigner_ptr + w_base + 2 * 9 + 1, dw_21)
+    tl.store(grad_wigner_ptr + w_base + 2 * 9 + 2, dw_22)
+    tl.store(grad_wigner_ptr + w_base + 2 * 9 + 3, dw_23)
+    tl.store(grad_wigner_ptr + w_base + 3 * 9 + 1, dw_31)
+    tl.store(grad_wigner_ptr + w_base + 3 * 9 + 2, dw_32)
+    tl.store(grad_wigner_ptr + w_base + 3 * 9 + 3, dw_33)
+
+    # L=2 block (5x5 at [4:9, 4:9])
+    tl.store(grad_wigner_ptr + w_base + 4 * 9 + 4, dw_44)
+    tl.store(grad_wigner_ptr + w_base + 4 * 9 + 5, dw_45)
+    tl.store(grad_wigner_ptr + w_base + 4 * 9 + 6, dw_46)
+    tl.store(grad_wigner_ptr + w_base + 4 * 9 + 7, dw_47)
+    tl.store(grad_wigner_ptr + w_base + 4 * 9 + 8, dw_48)
+    tl.store(grad_wigner_ptr + w_base + 5 * 9 + 4, dw_54)
+    tl.store(grad_wigner_ptr + w_base + 5 * 9 + 5, dw_55)
+    tl.store(grad_wigner_ptr + w_base + 5 * 9 + 6, dw_56)
+    tl.store(grad_wigner_ptr + w_base + 5 * 9 + 7, dw_57)
+    tl.store(grad_wigner_ptr + w_base + 5 * 9 + 8, dw_58)
+    tl.store(grad_wigner_ptr + w_base + 6 * 9 + 4, dw_64)
+    tl.store(grad_wigner_ptr + w_base + 6 * 9 + 5, dw_65)
+    tl.store(grad_wigner_ptr + w_base + 6 * 9 + 6, dw_66)
+    tl.store(grad_wigner_ptr + w_base + 6 * 9 + 7, dw_67)
+    tl.store(grad_wigner_ptr + w_base + 6 * 9 + 8, dw_68)
+    tl.store(grad_wigner_ptr + w_base + 7 * 9 + 4, dw_74)
+    tl.store(grad_wigner_ptr + w_base + 7 * 9 + 5, dw_75)
+    tl.store(grad_wigner_ptr + w_base + 7 * 9 + 6, dw_76)
+    tl.store(grad_wigner_ptr + w_base + 7 * 9 + 7, dw_77)
+    tl.store(grad_wigner_ptr + w_base + 7 * 9 + 8, dw_78)
+    tl.store(grad_wigner_ptr + w_base + 8 * 9 + 4, dw_84)
+    tl.store(grad_wigner_ptr + w_base + 8 * 9 + 5, dw_85)
+    tl.store(grad_wigner_ptr + w_base + 8 * 9 + 6, dw_86)
+    tl.store(grad_wigner_ptr + w_base + 8 * 9 + 7, dw_87)
+    tl.store(grad_wigner_ptr + w_base + 8 * 9 + 8, dw_88)
+
+
+def fused_grad_wigner(
+    grad_output: torch.Tensor,
+    x: torch.Tensor,
+    edge_index: torch.Tensor,
+) -> torch.Tensor:
+    """Compute grad_wigner using a single fused Triton kernel.
+
+    Fuses M->L permutation + edge gather + block-diagonal outer product.
+    Eliminates all intermediate tensors (grad_l, x_src, x_tgt).
+
+    Args:
+        grad_output: Gradient from downstream [E, 9, 2C] in M-major order
+        x: Node features [N, 9, C]
+        edge_index: Edge indices [2, E]
+
+    Returns:
+        grad_wigner: [E, 81] (flat), only block-diagonal entries are nonzero
+    """
+    num_edges = edge_index.shape[1]
+    sphere_channels = grad_output.shape[2] // 2
+
+    grad_output = grad_output.contiguous()
+    x = x.contiguous()
+    edge_index = edge_index.contiguous()
+
+    # Allocate output with zeros (only 35/81 entries written by kernel)
+    grad_wigner_flat = torch.zeros(
+        num_edges, 81, device=grad_output.device, dtype=grad_output.dtype
+    )
+
+    BLOCK_C = triton.next_power_of_2(min(sphere_channels, 128))
+
+    fused_grad_wigner_kernel[(num_edges,)](
+        grad_output,
+        x,
+        edge_index,
+        grad_wigner_flat,
+        num_edges,
+        sphere_channels,
+        grad_output.stride(0),
+        grad_output.stride(1),
+        grad_output.stride(2),
+        x.stride(0),
+        x.stride(1),
+        x.stride(2),
+        edge_index.stride(0),
+        BLOCK_C=BLOCK_C,
+    )
+
+    return grad_wigner_flat
+
+
+class FusedEdgeGatherWignerL2MAllFusedBwdFunction(torch.autograd.Function):
+    """Fully fused autograd function with Triton backward for grad_x and grad_wigner.
+
+    Key optimization: Saves x [N, 9, C] instead of x_edge [E, 9, 2C],
+    and computes grad_wigner in a single Triton kernel launch instead of
+    ~6 PyTorch kernel launches.
+
+    Memory comparison for typical case (N=2000, E=74000, C=128):
+    - Original (save x_edge): 74000 * 9 * 256 * 4 bytes = 682 MB
+    - This version (save x):  2000 * 9 * 128 * 4 bytes = 9 MB
+
+    grad_wigner computation:
+    - Before: ~6 kernel launches (_m_to_l, 2x gather, 2x bmm, add)
+    - After: 1 fused Triton kernel launch, zero intermediates
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        """Forward pass using Triton kernel.
+
+        Saves x [N, 9, C] instead of x_edge [E, 9, 2C].
+        """
+        ctx.save_for_backward(x, edge_index, wigner)
+        ctx.num_nodes = x.shape[0]
+        return fused_edge_gather_wigner_l2m_lmax2(x, edge_index, wigner)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> tuple:
+        """Backward with fused Triton kernels for both grad_x and grad_wigner.
+
+        Computes:
+        1. grad_x via W^T @ grad (scattered to nodes) using Triton
+        2. grad_wigner via fused Triton kernel (M->L + gather + outer product)
+        """
+        x, edge_index, wigner = ctx.saved_tensors
+
+        # Step 1: grad_x using Triton two-phase scatter_add
+        grad_x = fused_wigner_backward_scatter_add(
+            grad_output, edge_index, wigner, ctx.num_nodes
+        )
+
+        # Step 2: grad_wigner using fused Triton kernel
+        grad_wigner = fused_grad_wigner(grad_output, x, edge_index)
+        grad_wigner = grad_wigner.view_as(wigner)
+
+        return grad_x, None, grad_wigner
