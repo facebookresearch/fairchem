@@ -388,7 +388,6 @@ def test_pymatgen_vs_internal_graph(atoms):
                 )
 
 
-@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "num_atoms, num_partitions, pbc, device",
     [
@@ -396,11 +395,29 @@ def test_pymatgen_vs_internal_graph(atoms):
         (20, 4, True, "cpu"),
         (30, 3, True, "cpu"),
         (101, 8, True, "cpu"),
+    ],
+)
+def test_partitioned_radius_graph_pbc(
+    num_atoms: int, num_partitions: int, pbc: bool, device: str
+):
+    _test_partitioned_radius_graph_pbc(num_atoms, num_partitions, pbc, device)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_atoms, num_partitions, pbc, device",
+    [
         (101, 2, False, "cuda"),
         (105, 2, True, "cuda"),
     ],
 )
-def test_partitioned_radius_graph_pbc(
+def test_partitioned_radius_graph_pbc_gpu(
+    num_atoms: int, num_partitions: int, pbc: bool, device: str
+):
+    _test_partitioned_radius_graph_pbc(num_atoms, num_partitions, pbc, device)
+
+
+def _test_partitioned_radius_graph_pbc(
     num_atoms: int, num_partitions: int, pbc: bool, device: str
 ):
     radius = 6
@@ -435,7 +452,6 @@ def test_partitioned_radius_graph_pbc(
     ), "Partitioned edges don't match non-partitioned edges"
 
 
-@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "num_systems, num_partitions, pbc, device",
     [
@@ -502,7 +518,6 @@ def test_generate_graph_h2o_partition(
     ), "Partitioned edges don't match non-partitioned edges"
 
 
-@pytest.mark.gpu()
 @pytest.mark.parametrize(
     "num_atoms, num_systems, num_partitions, radius, max_neighbors, device",
     [
@@ -513,11 +528,43 @@ def test_generate_graph_h2o_partition(
         (10, 4, 4, 5, 20, "cpu"),
         (34, 2, 2, 6, 1, "cpu"),
         (100, 7, 3, 6, 300, "cpu"),
+    ],
+)
+def test_generate_graph_batch_partition(
+    num_atoms: int,
+    num_systems: int,
+    num_partitions: int,
+    radius: float,
+    max_neighbors: int,
+    device: str,
+):
+    _test_generate_graph_batch_partition(
+        num_atoms, num_systems, num_partitions, radius, max_neighbors, device
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "num_atoms, num_systems, num_partitions, radius, max_neighbors, device",
+    [
         (100, 7, 1, 6, 300, "cuda"),
         (100, 7, 2, 6, 300, "cuda"),
     ],
 )
-def test_generate_graph_batch_partition(
+def test_generate_graph_batch_partition_gpu(
+    num_atoms: int,
+    num_systems: int,
+    num_partitions: int,
+    radius: float,
+    max_neighbors: int,
+    device: str,
+):
+    _test_generate_graph_batch_partition(
+        num_atoms, num_systems, num_partitions, radius, max_neighbors, device
+    )
+
+
+def _test_generate_graph_batch_partition(
     num_atoms: int,
     num_systems: int,
     num_partitions: int,

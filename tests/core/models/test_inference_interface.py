@@ -208,3 +208,103 @@ class TestBackboneInterface:
         assert "always_use_pbc" in result
         assert result["always_use_pbc"] is False
         assert result.get("activation_checkpointing") is True
+
+
+class TestSO2ConversionInPrepareForInference:
+    """
+    Tests that prepare_for_inference converts SO2_Convolution modules
+    to block-diagonal GEMM variants only with UMASFastPytorchBackend.
+    """
+
+    def test_general_backend_does_not_convert(self):
+        """
+        With GENERAL backend, SO2 convolutions should NOT be converted.
+        """
+        from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+        from fairchem.core.models.uma.nn.so2_layers import SO2_Convolution
+
+        torch.manual_seed(42)
+        backbone = eSCNMDBackbone(
+            max_num_elements=100,
+            sphere_channels=4,
+            lmax=2,
+            mmax=2,
+            otf_graph=True,
+            edge_channels=5,
+            num_distance_basis=7,
+            use_dataset_embedding=False,
+            always_use_pbc=False,
+        )
+
+        settings = InferenceSettings()
+        data = MagicMock()
+        backbone.prepare_for_inference(data, settings)
+
+        for block in backbone.blocks:
+            assert isinstance(block.edge_wise.so2_conv_1, SO2_Convolution)
+            assert isinstance(block.edge_wise.so2_conv_2, SO2_Convolution)
+
+    def test_umas_fast_pytorch_backend_converts(self):
+        """
+        With UMAS_FAST_PYTORCH backend, SO2 convolutions should be converted.
+        """
+        from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+        from fairchem.core.models.uma.nn.so2_layers import (
+            SO2_Conv1_WithRadialBlock,
+            SO2_Conv2_InternalBlock,
+            SO2_Convolution,
+        )
+
+        torch.manual_seed(42)
+        backbone = eSCNMDBackbone(
+            max_num_elements=100,
+            sphere_channels=4,
+            lmax=2,
+            mmax=2,
+            otf_graph=True,
+            edge_channels=5,
+            num_distance_basis=7,
+            use_dataset_embedding=False,
+            always_use_pbc=False,
+            execution_mode="umas_fast_pytorch",
+        )
+
+        # Before: original SO2_Convolution
+        for block in backbone.blocks:
+            assert isinstance(block.edge_wise.so2_conv_1, SO2_Convolution)
+            assert isinstance(block.edge_wise.so2_conv_2, SO2_Convolution)
+
+        settings = InferenceSettings(activation_checkpointing=False)
+        data = MagicMock()
+        result = backbone.prepare_for_inference(data, settings)
+
+        # After: converted to block GEMM variants
+        assert result is backbone
+        for block in backbone.blocks:
+            assert isinstance(block.edge_wise.so2_conv_1, SO2_Conv1_WithRadialBlock)
+            assert isinstance(block.edge_wise.so2_conv_2, SO2_Conv2_InternalBlock)
+
+    def test_umas_fast_pytorch_validates_activation_checkpointing(self):
+        """
+        UMASFastPytorchBackend should reject activation_checkpointing=True.
+        """
+        from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+
+        torch.manual_seed(42)
+        backbone = eSCNMDBackbone(
+            max_num_elements=100,
+            sphere_channels=4,
+            lmax=2,
+            mmax=2,
+            otf_graph=True,
+            edge_channels=5,
+            num_distance_basis=7,
+            use_dataset_embedding=False,
+            always_use_pbc=False,
+            execution_mode="umas_fast_pytorch",
+        )
+
+        settings = InferenceSettings(activation_checkpointing=True)
+        data = MagicMock()
+        with pytest.raises(ValueError, match="activation_checkpointing"):
+            backbone.prepare_for_inference(data, settings)
