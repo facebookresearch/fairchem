@@ -237,6 +237,7 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
         self,
         x: torch.Tensor,
         x_edge: torch.Tensor,
+        precomputed_radial: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass.
@@ -244,12 +245,17 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
         Args:
             x: Input features [E, coeffs, channels]
             x_edge: Edge embeddings [E, edge_features]
+            precomputed_radial: If provided, skip rad_func and use
+                this tensor directly [E, radial_features].
 
         Returns:
             (output, gating): output [E, coeffs, m_output_channels],
                 gating [E, extra_m0_output_channels]
         """
-        x_edge_by_m = self.rad_func(x_edge).split(self.edge_split_sizes, dim=1)
+        if precomputed_radial is not None:
+            x_edge_by_m = precomputed_radial.split(self.edge_split_sizes, dim=1)
+        else:
+            x_edge_by_m = self.rad_func(x_edge).split(self.edge_split_sizes, dim=1)
         x_by_m = x.split(self.m_split_sizes, dim=1)
         num_edges = len(x_edge)
 
@@ -512,9 +518,12 @@ class SO2_Convolution(torch.nn.Module):
         self,
         x: torch.Tensor,
         x_edge: torch.Tensor,
+        precomputed_radial: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         # radial function
-        if self.rad_func is not None:
+        if precomputed_radial is not None and self.rad_func is not None:
+            x_edge_by_m = precomputed_radial.split(self.edge_split_sizes, dim=1)
+        elif self.rad_func is not None:
             x_edge_by_m = self.rad_func(x_edge).split(self.edge_split_sizes, dim=1)
 
         x_by_m = x.split(self.m_split_sizes, dim=1)

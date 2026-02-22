@@ -19,10 +19,12 @@ __all__ = [
     "ExecutionMode",
     "ExecutionBackend",
     "UMASFastPytorchBackend",
+    "UnifiedRadialBackend",
     "TritonBackend",
     "TritonAtomicBackend",
     "TritonPytorchBwdBackend",
     "TritonRecomputeBackend",
+    "TritonSO2AndRotateEmitUnifiedRadial",
     "get_execution_backend",
 ]
 
@@ -52,6 +54,10 @@ class ExecutionMode(str, Enum):
     TRITON_SO2_AND_ROTATE_IN_OUTFUSED = "triton_so2_and_rotate_in_outfused"
     TRITON_SO2_AND_ROTATE_IN_ALL_FUSED = "triton_so2_and_rotate_in_all_fused"
     TRITON_SO2_AND_ROTATE_IN_EMIT = "triton_so2_and_rotate_in_emit"
+    UNIFIED_RADIAL = "unified_radial"
+    TRITON_SO2_AND_ROTATE_IN_EMIT_UNIFIED_RADIAL = (
+        "triton_so2_and_rotate_in_emit_unified_radial"
+    )
 
 
 # Set of all triton execution modes for easy membership testing
@@ -67,6 +73,7 @@ TRITON_MODES = frozenset(
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN_OUTFUSED,
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN_ALL_FUSED,
         ExecutionMode.TRITON_SO2_AND_ROTATE_IN_EMIT,
+        ExecutionMode.TRITON_SO2_AND_ROTATE_IN_EMIT_UNIFIED_RADIAL,
     }
 )
 
@@ -690,6 +697,43 @@ class TritonRecomputeBackend(TritonBackendEdgeDegree):
         )
 
 
+def _initialize_unified_radial(model: torch.nn.Module) -> None:
+    """
+    Create a UnifiedRadialMLP from the model's block rad_funcs.
+
+    Extracts rad_func from each block's SO2 conv1 and creates a single
+    unified module that batches the first linear layer across all layers.
+    """
+    from fairchem.core.models.uma.nn.unified_radial import (
+        create_unified_radial_mlp,
+    )
+
+    rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
+    model._unified_radial_mlp = create_unified_radial_mlp(rad_funcs)
+
+
+class UnifiedRadialBackend(UMASFastPytorchBackend):
+    """
+    UMA-S fast PyTorch + unified radial MLP.
+    """
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        UMASFastPytorchBackend.prepare_model_for_inference(model)
+        _initialize_unified_radial(model)
+
+
+class TritonSO2AndRotateEmitUnifiedRadial(TritonSO2AndRotateEmit):
+    """
+    Fastest Triton backend + unified radial MLP.
+    """
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        TritonSO2AndRotateEmit.prepare_model_for_inference(model)
+        _initialize_unified_radial(model)
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
@@ -703,6 +747,8 @@ _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN_OUTFUSED: TritonSO2AndRotateOutfused,
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN_ALL_FUSED: TritonSO2AndRotateAllFused,
     ExecutionMode.TRITON_SO2_AND_ROTATE_IN_EMIT: TritonSO2AndRotateEmit,
+    ExecutionMode.UNIFIED_RADIAL: UnifiedRadialBackend,
+    ExecutionMode.TRITON_SO2_AND_ROTATE_IN_EMIT_UNIFIED_RADIAL: TritonSO2AndRotateEmitUnifiedRadial,
 }
 
 

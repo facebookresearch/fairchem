@@ -712,7 +712,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
         self.log_MOLE_stats()
 
-
         # edge degree embedding
         with record_function("edge embedding"):
             dist_scaled = graph_dict["edge_distance"] / self.cutoff
@@ -745,8 +744,21 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+
+        # Precompute unified radial if available
+        radial_per_layer = None
+        if (
+            hasattr(self, "_unified_radial_mlp")
+            and self._unified_radial_mlp is not None
+        ):
+            with record_function("unified_radial"):
+                radial_per_layer = self._unified_radial_mlp(x_edge)
+
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
+                precomputed_radial = (
+                    radial_per_layer[i] if radial_per_layer is not None else None
+                )
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
@@ -759,6 +771,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     ],
                     sys_node_embedding=sys_node_embedding,
                     node_offset=data_dict["gp_node_offset"],
+                    precomputed_radial=precomputed_radial,
                 )
                 # balance any channels requested
                 x_message = self.balance_channels(

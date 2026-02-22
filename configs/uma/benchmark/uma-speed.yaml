@@ -32,7 +32,7 @@ job:
 
 runner:
   _target_: fairchem.core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner
-  timeiters: 20
+  timeiters: 40
   repeats: 7
   natoms_list: [2000]
   model_checkpoints: {

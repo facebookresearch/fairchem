@@ -35,7 +35,8 @@ MODES = [
         "triton_so2_and_rotate_in",
     "triton_so2_and_rotate_in_outfused",
     "triton_rotate_in",
-    "triton_so2_and_rotate_in_all_fused"
+    "triton_so2_and_rotate_in_all_fused",
+    "triton_so2_and_rotate_in_emit_unified_radial"
 ]
 
 
