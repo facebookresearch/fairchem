@@ -113,7 +113,7 @@ def get_pbc_distances(
 
 
 # TODO: compiling internal graph gen is not supported right now
-# @torch.compiler.disable()
+@torch.compiler.disable()
 def generate_graph(
     data: dict,  # this is still a torch geometric batch object currently, turn this into a dict
     cutoff: float,
