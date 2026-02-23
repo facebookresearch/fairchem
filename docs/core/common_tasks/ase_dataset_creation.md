@@ -1,25 +1,35 @@
 
-# FAIRChem & Custom Datasets
+# FAIRChem and Custom Datasets
 
-## Datasets in `fairchem`:
-`fairchem` provides training and evaluation code for tasks and models that take arbitrary
-chemical structures as input to predict energies / forces / positions / stresses,
-and can be used as a base scaffold for research projects. For an overview of
-tasks, data, and metrics, please read the documentations and respective papers:
- - [OC20](catalysts/datasets/oc20)
- - [OC22](catalysts/datasets/oc22)
- - [ODAC23](dac/datasets/odac)
- - [OC20Dense](catalysts/datasets/oc20dense)
- - [OC20NEB](catalysts/datasets/oc20neb)
- - [OMat24](inorganic_materials/datasets/omat24)
- - [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
+## Datasets in FAIRChem
 
+`fairchem` provides training and evaluation code for tasks and models that take arbitrary chemical structures as input to predict energies, forces, positions, and stresses. It can be used as a base scaffold for research projects. For an overview of tasks, data, and metrics, please read the documentation and respective papers:
 
+- [OC20](catalysts/datasets/oc20)
+- [OC22](catalysts/datasets/oc22)
+- [ODAC23](dac/datasets/odac)
+- [OC20Dense](catalysts/datasets/oc20dense)
+- [OC20NEB](catalysts/datasets/oc20neb)
+- [OMat24](inorganic_materials/datasets/omat24)
+- [OMol25](https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/)
+- [OMC25](molecules/datasets/omc25)
+
+:::{note}
 There are multiple ways to train and evaluate FAIRChem models on data other than OC20 and OC22. Writing an LMDB is the most performant option. However, ASE-based dataset formats are also included as a convenience for people with existing data who simply want to try fairchem tools without needing to learn about LMDBs.
+:::
 
 ## Custom ASE Databases
 
-If your data is already in an [ASE Database](https://databases.fysik.dtu.dk/ase/ase/db/db.html), no additional preprocessing is necessary before running training/prediction! Although the ASE DB backends may not be sufficiently high throughput for all use cases, they are generally considered "fast enough" to train on a reasonably-sized dataset with 1-2 GPUs or predict with a single GPU. If you want to effictively utilize more resources than this, please be aware of the potential for this bottleneck and consider writing your data to an LMDB. If your dataset is small enough to fit in CPU memory, use the `keep_in_memory: True` option to avoid this bottleneck.
+If your data is already in an [ASE Database](https://databases.fysik.dtu.dk/ase/ase/db/db.html), no additional preprocessing is necessary before running training/prediction!
+
+:::{tip}
+Although the ASE DB backends may not be sufficiently high throughput for all use cases, they are generally considered "fast enough" to train on a reasonably-sized dataset with 1-2 GPUs or predict with a single GPU. If you want to effectively utilize more resources than this, consider writing your data to an LMDB.
+:::
+
+:::{admonition} Performance Tip
+:class: dropdown
+If your dataset is small enough to fit in CPU memory, use the `keep_in_memory: True` option to avoid I/O bottlenecks and significantly speed up training.
+:::
 
 To use this dataset, we will just have to change our config files to use the ASE DB Dataset rather than the LMDB Dataset:
 
@@ -54,7 +64,13 @@ dataset:
 ```
 ## Using ASE-Readable Files
 
-It is possible to train/predict directly on ASE-readable files. This is only recommended for smaller datasets, as directories of many small files do not scale efficiently on all computing infrastructures. There are two options for loading data with the ASE reader:
+It is possible to train/predict directly on ASE-readable files.
+
+:::{warning}
+This is only recommended for smaller datasets, as directories of many small files do not scale efficiently on all computing infrastructures.
+:::
+
+There are two options for loading data with the ASE reader:
 
 ### Single-Structure Files
 This dataset assumes a single structure will be obtained from each file:
@@ -78,7 +94,12 @@ dataset:
 ```
 
 ### Multi-structure Files
-This dataset supports reading files that each contain multiple structure (for example, an ASE .traj file). Using an index file, which tells the dataset how many structures each file contains, is recommended. Otherwise, the dataset is forced to load every file at startup and count the number of structures!
+
+This dataset supports reading files that each contain multiple structures (for example, an ASE .traj file).
+
+:::{tip}
+Using an index file, which tells the dataset how many structures each file contains, is recommended. Otherwise, the dataset is forced to load every file at startup and count the number of structures!
+:::
 
 ```yaml
 dataset:

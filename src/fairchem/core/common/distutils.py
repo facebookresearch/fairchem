@@ -10,14 +10,17 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import time
 from datetime import timedelta
 from typing import Any, TypeVar
 
+import ray
 import torch
 import torch.distributed as dist
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.utils.distributed import get_file_init_method, get_tcp_init_method
 
+from fairchem.core.common import gp_utils
 from fairchem.core.common.typing import none_throws
 
 T = TypeVar("T")
@@ -127,20 +130,39 @@ def setup(config) -> None:
             except FileNotFoundError:  # Slurm is not installed
                 pass
     else:  # local mode
-        if "MASTER_ADDR" not in os.environ:
-            assert (
-                config["world_size"] == 1
-            ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
-            setup_env_local()
-        local_rank = int(os.environ["LOCAL_RANK"])
-        assign_device_for_local_rank(config["cpu"], local_rank)
+        if config.get("init_method") == "file":
+            local_rank = int(os.environ.get("LOCAL_RANK", 0))
+            rank = int(os.environ.get("RANK", 0))
+            assign_device_for_local_rank(config["cpu"], local_rank)
+            assert os.path.isdir(config["shared_file_dir"])
+            shared_filename = os.path.join(
+                config["shared_file_dir"],
+                ".distributed-shared-file",
+            )
 
-        dist.init_process_group(
-            backend=config["distributed_backend"],
-            rank=int(os.environ["RANK"]),
-            world_size=config["world_size"],
-            timeout=timeout,
-        )
+            init_method = get_file_init_method(
+                world_size=config["world_size"], rank=rank, filename=shared_filename
+            )
+            dist.init_process_group(
+                backend=config["distributed_backend"],
+                init_method=init_method,
+                timeout=timeout,
+            )
+        else:
+            if "MASTER_ADDR" not in os.environ:
+                assert (
+                    config["world_size"] == 1
+                ), "Can only setup master address and port at this point for a single rank, otherwise we assume the processes and the comm addr/port have already been setup"
+                setup_env_local()
+            local_rank = int(os.environ["LOCAL_RANK"])
+            assign_device_for_local_rank(config["cpu"], local_rank)
+
+            dist.init_process_group(
+                backend=config["distributed_backend"],
+                rank=int(os.environ["RANK"]),
+                world_size=config["world_size"],
+                timeout=timeout,
+            )
 
 
 def cleanup() -> None:
@@ -148,6 +170,17 @@ def cleanup() -> None:
         dist.destroy_process_group()
     if CURRENT_DEVICE_TYPE_STR in os.environ:
         os.environ.pop(CURRENT_DEVICE_TYPE_STR)
+    time.sleep(0.5)  # Give OS time to release ports
+
+
+def cleanup_gp_ray():
+    """Useful for cleaning up GP with ray"""
+    if ray.is_initialized():
+        ray.shutdown()
+    cleanup()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    time.sleep(0.5)  # Give OS time to release ports
 
 
 def initialized() -> bool:
@@ -270,3 +303,10 @@ def setup_env_local():
     os.environ["LOCAL_RANK"] = "0"
     os.environ["RANK"] = "0"
     os.environ["MASTER_PORT"] = str(get_free_port())
+
+
+def setup_env_local_multi_gpu(rank: int, port: int, address: str = "localhost"):
+    os.environ["MASTER_ADDR"] = address
+    os.environ["LOCAL_RANK"] = str(rank)
+    os.environ["RANK"] = str(rank)
+    os.environ["MASTER_PORT"] = str(port)

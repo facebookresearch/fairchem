@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
+from fairchem.core.graph.radius_graph_pbc import (
+    radius_graph_pbc,
+    radius_graph_pbc_v2,
+)
+from fairchem.core.graph.radius_graph_pbc_nvidia import radius_graph_pbc_nvidia
 
 
 def get_pbc_distances(
@@ -28,7 +32,7 @@ def get_pbc_distances(
     # correct for pbc
     neighbors = neighbors.to(cell.device)
     cell = torch.repeat_interleave(cell, neighbors, dim=0)
-    offsets = cell_offsets.float().view(-1, 1, 3).bmm(cell.float()).view(-1, 3)
+    offsets = cell_offsets.to(dtype=cell.dtype).view(-1, 1, 3).bmm(cell).view(-1, 3)
     distance_vectors += offsets
 
     # compute distances
@@ -74,7 +78,7 @@ def generate_graph(
         cutoff (float): The maximum distance between atoms to consider them as neighbors.
         max_neighbors (int): The maximum number of neighbors to consider for each atom.
         enforce_max_neighbors_strictly (bool): Whether to strictly enforce the maximum number of neighbors.
-        radius_pbc_version: the version of radius_pbc impl
+        radius_pbc_version: the version of radius_pbc impl (1, 2, or 3 for NVIDIA)
         pbc (list[bool]): The periodic boundary conditions in 3 dimensions, defaults to [True,True,True] for 3D pbc
 
     Returns:
@@ -86,44 +90,22 @@ def generate_graph(
             - 'offset_distances' (torch.Tensor): Distances between the atoms connected by the edges, including the cell offsets.
             - 'neighbors' (torch.Tensor): Number of neighbors for each atom.
     """
-
     if radius_pbc_version == 1:
         radius_graph_pbc_fn = radius_graph_pbc
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
+    elif radius_pbc_version == 3:
+        radius_graph_pbc_fn = radius_graph_pbc_nvidia
     else:
         raise ValueError(f"Invalid radius_pbc version {radius_pbc_version}")
 
-    (
-        edge_index_per_system,
-        cell_offsets_per_system,
-        neighbors_per_system,
-    ) = list(
-        zip(
-            *[
-                radius_graph_pbc_fn(
-                    data[idx],  # loop over the batches?
-                    cutoff,
-                    max_neighbors,
-                    enforce_max_neighbors_strictly,
-                    pbc=pbc[idx],
-                )
-                for idx in range(len(data))
-            ]
-        )
+    edge_index, cell_offsets, neighbors = radius_graph_pbc_fn(
+        data,
+        cutoff,
+        max_neighbors,
+        enforce_max_neighbors_strictly,
+        pbc=pbc,
     )
-
-    # atom indexs in the edge_index need to be offset
-    atom_index_offset = data.natoms.cumsum(dim=0).roll(1)
-    atom_index_offset[0] = 0
-    edge_index = torch.hstack(
-        [
-            edge_index_per_system[idx] + atom_index_offset[idx]
-            for idx in range(len(data))
-        ]
-    )
-    cell_offsets = torch.vstack(cell_offsets_per_system)
-    neighbors = torch.hstack(neighbors_per_system)
 
     out = get_pbc_distances(
         data.pos,

@@ -15,10 +15,21 @@ import torch
 
 
 def sum_partitions(x: torch.Tensor, partition_idxs: torch.Tensor) -> torch.Tensor:
-    sums = torch.zeros(partition_idxs.shape[0] - 1, device=x.device, dtype=x.dtype)
-    for idx in range(partition_idxs.shape[0] - 1):
-        sums[idx] = x[partition_idxs[idx] : partition_idxs[idx + 1]].sum()
-    return sums
+    """
+    Sum values within partitions defined by indices.
+    """
+    num_partitions = partition_idxs.shape[0] - 1
+    if num_partitions == 0:
+        return torch.zeros(0, device=x.device, dtype=x.dtype)
+
+    # Use cumsum-based approach for vectorization
+    cumsum = torch.zeros(len(x) + 1, device=x.device, dtype=x.dtype)
+    cumsum[1:] = torch.cumsum(x, dim=0)
+
+    # Gather cumsum at partition boundaries and compute differences
+    starts = cumsum[partition_idxs[:-1]]
+    ends = cumsum[partition_idxs[1:]]
+    return ends - starts
 
 
 def get_counts(x: torch.Tensor, length: int):
@@ -74,7 +85,10 @@ def get_max_neighbors_mask(
     num_neighbors = get_counts(index, num_atoms)
 
     max_num_neighbors = num_neighbors.max()
-    num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
+    if max_num_neighbors_threshold > 0:
+        num_neighbors_thresholded = num_neighbors.clamp(max=max_num_neighbors_threshold)
+    else:
+        num_neighbors_thresholded = num_neighbors
 
     # Get number of (thresholded) neighbors per image
     image_indptr = torch.zeros(natoms.shape[0] + 1, device=device, dtype=torch.long)
@@ -317,6 +331,7 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     assert hasattr(data, "pbc"), "AtomicData does not have pbc set"
     if pbc is None and hasattr(data, "pbc"):
         data.pbc = torch.atleast_2d(data.pbc)
+        pbc = torch.BoolTensor([True, True, True])
         for i in range(3):
             if not torch.any(data.pbc[:, i]).item():
                 pbc[i] = False
@@ -333,6 +348,16 @@ def canonical_pbc(data, pbc: torch.Tensor | None):
     elif pbc is None:
         pbc = torch.BoolTensor([True, True, True])
 
+    # We only supports only the same pbc for all systems in the batch
+    # so we must check that all pbc are the same if we are given a list of them
+    # if this is ok, we just take the first pbc in the batch to represent
+    if pbc.ndim > 1:
+        # check all pbc are the same along each pbc dimension
+        if not torch.all(pbc == pbc[0], dim=0).all():
+            raise ValueError(
+                "All pbc values must be the same for all systems in the batch"
+            )
+        pbc = pbc[0]
     assert isinstance(pbc, torch.Tensor)
     assert pbc.ndim == 1
     assert pbc.shape[0] == 3
@@ -421,13 +446,13 @@ def radius_graph_pbc_v2(
     offset = 0
     for i in range(batch_size):
         cells_x = torch.arange(
-            -rep[i][0], rep[i][0] + 1, device=device, dtype=torch.float
+            -rep[i][0], rep[i][0] + 1, device=device, dtype=data.cell.dtype
         )
         cells_y = torch.arange(
-            -rep[i][1], rep[i][1] + 1, device=device, dtype=torch.float
+            -rep[i][1], rep[i][1] + 1, device=device, dtype=data.cell.dtype
         )
         cells_z = torch.arange(
-            -rep[i][2], rep[i][2] + 1, device=device, dtype=torch.float
+            -rep[i][2], rep[i][2] + 1, device=device, dtype=data.cell.dtype
         )
         unit_cell[offset : cells_per_image[i] + offset] = torch.cartesian_prod(
             cells_x, cells_y, cells_z
@@ -439,9 +464,15 @@ def radius_graph_pbc_v2(
     cell_matrix = torch.repeat_interleave(cell_matrix, cells_per_image, dim=0)
     pbc_cell_offsets = torch.bmm(cell_matrix, unit_cell.view(-1, 3, 1)).squeeze(-1)
 
-    # Position of the target atoms for the edges
-    target_atom_pos = atom_pos
-    target_atom_image = data_batch_idxs
+    # If node_partition exists, this means we want to generate only a partial graph
+    # from a subset of target atoms to the entire set of source atoms
+    if hasattr(data, "node_partition"):
+        node_partition = data.node_partition
+        target_atom_pos = atom_pos[node_partition]
+        target_atom_image = data_batch_idxs[node_partition]
+    else:
+        target_atom_pos = atom_pos
+        target_atom_image = data_batch_idxs
 
     # Compute the position of the source atoms for the edges. There are
     # more source atoms than target atoms, since the source atoms are
@@ -707,9 +738,18 @@ def radius_graph_pbc_v2(
 
     # Reduce the number of neighbors for each atom to the
     # desired threshold max_num_neighbors_threshold
+
+    # need to map the target_idx back to the reference frame of the original data before indexing
+    # otherwise the neighbor count will be wrong
+    # this will fail the test test_generate_graph_batch_partition in test_radius_graph_pbc.py
+    if hasattr(data, "node_partition"):
+        target_idx_for_num_neighbors = data.node_partition[target_idx]
+    else:
+        target_idx_for_num_neighbors = target_idx
+
     mask_num_neighbors, num_neighbors_image = get_max_neighbors_mask(
         natoms=data.natoms,
-        index=target_idx,
+        index=target_idx_for_num_neighbors,
         atom_distance=atom_distance_sqr,
         max_num_neighbors_threshold=max_num_neighbors_threshold,
         enforce_max_strictly=enforce_max_neighbors_strictly,
@@ -725,5 +765,9 @@ def radius_graph_pbc_v2(
         source_cell = source_cell.view(-1, 3)
 
     edge_index = torch.stack((source_idx, target_idx))
+
+    # if we used node_partition, we need to map target indexs back to original indices
+    if hasattr(data, "node_partition"):
+        edge_index[1] = data.node_partition[edge_index[1]]
 
     return edge_index, source_cell, num_neighbors_image

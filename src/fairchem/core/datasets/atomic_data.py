@@ -10,9 +10,10 @@ modified from troch_geometric Data class
 from __future__ import annotations
 
 import copy
+import logging
 import re
 from collections.abc import Sequence
-from typing import List, Optional, Union
+from typing import Union
 
 import ase
 import ase.db.sqlite
@@ -22,9 +23,29 @@ from ase.calculators.singlepoint import SinglePointCalculator, SinglePointDFTCal
 from ase.constraints import FixAtoms
 from ase.geometry import wrap_positions
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
-from pymatgen.io.ase import AseAtomsAdaptor
+from monty.dev import requires
+
+from fairchem.core.common.utils import StrEnum
+
+try:
+    from pymatgen.io.ase import AseAtomsAdaptor
+
+    pmg_installed = True
+except ImportError:
+    AseAtomsAdaptor = None
+    pmg_installed = False
+
+from fairchem.core.graph.radius_graph_pbc_nvidia import get_neighbors_nvidia_atoms
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
+
+
+class ExternalGraphMethod(StrEnum):
+    """Enum for external graph generation methods."""
+
+    PYMATGEN = "pymatgen"
+    NVIDIA = "nvidia"
+
 
 # these are all currently certainly output by the current a2g
 # except for tags, all fields are required for network inference.
@@ -49,13 +70,31 @@ _OPTIONAL_KEYS = ["energy", "forces", "stress", "dataset"]
 # ["virials", "atom_attr", "edge_attr"]
 
 
+def warn_if_upcasting(source_dtype: torch.dtype, target_dtype: torch.dtype) -> bool:
+    """
+    Log a warning if target_dtype has more precision than source_dtype.
+
+    Returns True if a warning was issued, False otherwise.
+    """
+    if torch.finfo(target_dtype).bits > torch.finfo(source_dtype).bits:
+        logging.warning(
+            "Upcasting atomic coordinates from %s to %s. "
+            "Accuracy may be limited by the precision of the "
+            "input coordinates.",
+            source_dtype,
+            target_dtype,
+        )
+        return True
+    return False
+
+
 def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
     indent_str = " " * indent
     if torch.is_tensor(item) and item.dim() == 0:
         out = item.item()
     elif torch.is_tensor(item):
         out = str(list(item.size()))
-    elif isinstance(item, (List, tuple)):
+    elif isinstance(item, (list, tuple)):
         out = str([len(item)])
     elif isinstance(item, dict):
         lines = [indent_str + size_repr(k, v, 2) for k, v in item.items()]
@@ -68,14 +107,10 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
     return f"{indent_str}{key}={out}"
 
 
+@requires(pmg_installed, message="Requires `pymatgen` to be installed")
 def get_neighbors_pymatgen(atoms: ase.Atoms, cutoff, max_neigh):
-    """Preforms nearest neighbor search and returns edge index, distances,
+    """Performs nearest neighbor search and returns edge index, distances,
     and cell offsets"""
-    if AseAtomsAdaptor is None:
-        raise RuntimeError(
-            "Unable to import pymatgen.io.ase.AseAtomsAdaptor. Make sure pymatgen is properly installed."
-        )
-
     struct = AseAtomsAdaptor.get_structure(atoms)
 
     # tol of 1e-8 should remove all self loops
@@ -103,12 +138,13 @@ def reshape_features(
     n_index: np.ndarray,
     n_distance: np.ndarray,
     offsets: np.ndarray,
+    target_dtype: torch.dtype = torch.float32,
 ):
     """Stack center and neighbor index and reshapes distances,
     takes in np.arrays and returns torch tensors"""
     edge_index = torch.LongTensor(np.vstack((n_index, c_index)))
-    edge_distances = torch.FloatTensor(n_distance)
-    cell_offsets = torch.FloatTensor(offsets)
+    edge_distances = torch.tensor(n_distance, dtype=target_dtype)
+    cell_offsets = torch.tensor(offsets, dtype=target_dtype)
 
     # remove distances smaller than a tolerance ~ 0. The small tolerance is
     # needed to correct for pymatgen's neighbor_list returning self atoms
@@ -146,7 +182,7 @@ class AtomicData:
 
         # this conversion must have been done somewhere in
         # pytorch geoemtric data
-        self.pos = pos.to(torch.float32)
+        self.pos = pos
         self.atomic_numbers = atomic_numbers
         self.cell = cell.to(self.pos.dtype)
         self.pbc = pbc
@@ -160,8 +196,16 @@ class AtomicData:
         self.tags = tags
         self.sid = sid if sid is not None else [""]
 
+        # Always normalize dataset to a list for consistent batching
         if dataset is not None:
-            self.dataset = dataset
+            if isinstance(dataset, str):
+                self.dataset = [dataset]
+            elif isinstance(dataset, list):
+                self.dataset = dataset
+            else:
+                raise ValueError(
+                    f"dataset must be a string or list of strings, got {type(dataset)}"
+                )
 
         # tagets
         if energy is not None:
@@ -237,16 +281,17 @@ class AtomicData:
         assert len(self.sid) == self.num_graphs
 
         if "dataset" in self.__keys__:
-            if isinstance(self.dataset, list):
-                assert len(self.dataset) == self.num_graphs
-            else:
-                assert isinstance(self.dataset, str)
-                assert self.num_graphs == 1
+            assert isinstance(self.dataset, list), "dataset must always be a list"
+            assert len(self.dataset) == self.num_graphs
 
         # dtype checks
         assert (
-            self.pos.dtype == self.cell.dtype == self.cell_offsets.dtype == torch.float
-        ), "Positions, cell, cell_offsets are all expected to be float32. Check data going into AtomicData is correct dtype"
+            self.pos.dtype == self.cell.dtype == self.cell_offsets.dtype
+        ), "Positions, cell, cell_offsets are all expected to be same. Check data going into AtomicData is correct dtype"
+        assert self.pos.dtype in (
+            torch.float32,
+            torch.float64,
+        ), "Positions, cell, cell_offsets are all expected to be f32/f64"
         assert self.atomic_numbers.dtype == torch.long
         assert self.edge_index.dtype == torch.long
         assert self.pbc.dtype == torch.bool
@@ -259,20 +304,18 @@ class AtomicData:
         if hasattr(self, "energy"):
             assert self.energy.dim() == 1
             assert self.energy.shape[0] == self.num_graphs
-            assert self.energy.dtype == torch.float
+            assert self.energy.dtype == self.pos.dtype
         if hasattr(self, "forces"):
             assert self.forces.shape[0] == self.pos.shape[0]
             assert self.forces.shape[1] == 3
-            assert self.forces.dtype == torch.float
+            assert self.forces.dtype == self.pos.dtype
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
-            assert (
-                self.stress.dim() == 3
-                and self.stress.shape[1:] == (3, 3)
-                or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
+            assert (self.stress.dim() == 3 and self.stress.shape[1:] == (3, 3)) or (
+                self.stress.dim() == 2 and self.stress.shape[1:] == (9,)
             )
             assert self.stress.shape[0] == self.num_graphs
-            assert self.stress.dtype == torch.float
+            assert self.stress.dtype == self.pos.dtype
 
         if self.sid is not None:
             assert isinstance(self.sid, list)
@@ -297,6 +340,8 @@ class AtomicData:
         r_stress: bool = True,
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
+        target_dtype: torch.dtype = torch.float32,
+        external_graph_method: ExternalGraphMethod | str = ExternalGraphMethod.PYMATGEN,
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -325,9 +370,11 @@ class AtomicData:
         atoms.set_positions(pos)
 
         atomic_numbers = torch.from_numpy(atomic_numbers).long()
-        pos = torch.from_numpy(pos).float()
+        pos = torch.from_numpy(pos)
+        warn_if_upcasting(pos.dtype, target_dtype)
+        pos = pos.to(target_dtype)
         pbc = torch.from_numpy(pbc).bool().view(1, 3)
-        cell = torch.from_numpy(cell).float().view(1, 3, 3)
+        cell = torch.from_numpy(cell).to(target_dtype).view(1, 3, 3)
         natoms = torch.tensor([pos.shape[0]], dtype=torch.long)
 
         # graph construction
@@ -338,13 +385,24 @@ class AtomicData:
             assert (
                 max_neigh is not None
             ), "max_neigh must be specified for cpu graph construction."
-            split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
-            edge_index, cell_offsets = reshape_features(*split_idx_dist)
+
+            if external_graph_method == ExternalGraphMethod.PYMATGEN:
+                split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+            elif external_graph_method == ExternalGraphMethod.NVIDIA:
+                split_idx_dist = get_neighbors_nvidia_atoms(atoms, radius, max_neigh)
+            else:
+                raise ValueError(
+                    f"external_graph_method must be 'pymatgen' or 'nvidia', got {external_graph_method}"
+                )
+
+            edge_index, cell_offsets = reshape_features(
+                *split_idx_dist, target_dtype=target_dtype
+            )
             nedges = torch.tensor([edge_index.shape[1]], dtype=torch.long)
         else:
             # empty graph
             edge_index = torch.empty((2, 0), dtype=torch.long)
-            cell_offsets = torch.empty((0, 3), dtype=torch.float)
+            cell_offsets = torch.empty((0, 3), dtype=target_dtype)
             nedges = torch.tensor([0], dtype=torch.long)
 
         # initialized to torch.zeros(natoms) if tags missing.
@@ -359,23 +417,23 @@ class AtomicData:
         if isinstance(calc, (SinglePointCalculator, SinglePointDFTCalculator)):
             results = calc.results
             energy = (
-                torch.FloatTensor([results["energy"]]).view(1)
+                torch.tensor([results["energy"]], dtype=target_dtype).view(1)
                 if "energy" in results
                 else None
             )
             forces = (
-                torch.FloatTensor(results["forces"]).view(-1, 3)
+                torch.tensor(results["forces"], dtype=target_dtype).view(-1, 3)
                 if "forces" in results
                 else None
             )
             stress = results.get("stress", None)
             if stress is not None and r_stress:
                 if stress.shape == (6,):
-                    stress = torch.FloatTensor(voigt_6_to_full_3x3_stress(stress)).view(
-                        1, 3, 3
-                    )
+                    stress = torch.tensor(
+                        voigt_6_to_full_3x3_stress(stress), dtype=target_dtype
+                    ).view(1, 3, 3)
                 elif stress.shape in ((3, 3), (9,)):
-                    stress = torch.FloatTensor(stress).view(1, 3, 3)
+                    stress = torch.tensor(stress, dtype=target_dtype).view(1, 3, 3)
                 else:
                     raise ValueError(f"Unknown stress shape, {stress.shape}")
             else:
@@ -386,17 +444,17 @@ class AtomicData:
             stress = None
 
         energy = (
-            torch.FloatTensor([atoms.info["energy"]])
+            torch.tensor([atoms.info["energy"]], dtype=target_dtype)
             if "energy" in atoms.info
             else energy
         )
         forces = (
-            torch.FloatTensor(atoms.info["forces"])
+            torch.tensor(atoms.info["forces"], dtype=target_dtype)
             if "forces" in atoms.info
             else forces
         )
         stress = (
-            torch.FloatTensor(atoms.info["stress"]).view(1, 3, 3)
+            torch.tensor(atoms.info["stress"], dtype=target_dtype).view(1, 3, 3)
             if "stress" in atoms.info
             else stress
         )
@@ -404,16 +462,20 @@ class AtomicData:
         # TODO another way to specify this is to spcify a key. maybe total_charge
         charge = torch.LongTensor(
             [
-                atoms.info.get("charge", 0)
-                if r_data_keys is not None and "charge" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("charge", 0)
+                    if r_data_keys is not None and "charge" in r_data_keys
+                    else 0
+                )
             ]
         )
         spin = torch.LongTensor(
             [
-                atoms.info.get("spin", 0)
-                if r_data_keys is not None and "spin" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("spin", 0)
+                    if r_data_keys is not None and "spin" in r_data_keys
+                    else 0
+                )
             ]
         )
 
@@ -446,24 +508,24 @@ class AtomicData:
         assert self.num_graphs == 1, "Data object must contain a single graph."
 
         atoms = ase.Atoms(
-            numbers=self.atomic_numbers.numpy(),
-            positions=self.pos.numpy(),
-            cell=self.cell.squeeze().numpy(),
+            numbers=self.atomic_numbers.cpu().numpy(),
+            positions=self.pos.cpu().numpy(),
+            cell=self.cell.squeeze().cpu().numpy(),
             pbc=self.pbc.squeeze().tolist(),
-            constraint=FixAtoms(mask=self.fixed.tolist()),
-            tags=self.tags.numpy(),
+            constraint=FixAtoms(mask=self.fixed.bool().tolist()),
+            tags=self.tags.cpu().numpy(),
         )
 
         if self.__keys__.intersection(["energy", "forces", "stress"]):
             fields = {}
-            if self.energy is not None:
-                fields["energy"] = self.energy.numpy()
-            if self.forces is not None:
-                fields["forces"] = self.forces.numpy()
-            if self.stress is not None:
+            if hasattr(self, "energy") and self.energy is not None:
+                fields["energy"] = self.energy.cpu().numpy()
+            if hasattr(self, "forces") and self.forces is not None:
+                fields["forces"] = self.forces.cpu().numpy()
+            if hasattr(self, "stress") and self.stress is not None:
                 if self.stress.shape == (3, 3):
                     fields["stress"] = full_3x3_to_voigt_6_stress(
-                        self.stress.squeeze().numpy()
+                        self.stress.squeeze().cpu().numpy()
                     )
                 elif self.stress.shape == (6,):
                     fields["stress"] = self.stress.squeeze().numpy()
@@ -782,9 +844,30 @@ class AtomicData:
         order to be able to reconstruct the initial objects."""
         return [self.get_example(i) for i in range(self.num_graphs)]
 
+    def update_batch_edges(
+        self, edge_index: torch.Tensor, cell_offsets: torch.Tensor, nedges: torch.Tensor
+    ) -> AtomicData:
+        r"""Update the connectivity of each batched AtomicData sample.
+
+        Args:
+            edge_index (torch.Tensor): New batch edge_index (shape [2, total_edges]).
+            cell_offsets (torch.Tensor): Cell offsets per edge (shape [total_edges, 3]).
+            nedges (torch.Tensor): Number of edges per system (shape [num_systems]).
+
+        Returns:
+            AtomicData: The updated batch object.
+        """
+        self.edge_index = edge_index
+        self.cell_offsets = cell_offsets
+        self.nedges = nedges
+        edge_slices = [0] + torch.cumsum(nedges, dim=0).tolist()
+        self.__slices__["edge_index"] = edge_slices
+        self.__slices__["cell_offsets"] = edge_slices
+        return self
+
 
 def atomicdata_list_to_batch(
-    data_list: list[AtomicData], exclude_keys: Optional[list] = None
+    data_list: list[AtomicData], exclude_keys: list | None = None
 ) -> AtomicData:
     """
     all data points must be single graphs and have the same set of keys.
@@ -864,7 +947,15 @@ def atomicdata_list_to_batch(
         # TODO: this allows non-tensor fields to be batched.
         # we might want to remove support for that.
         else:
-            batched_data_dict[key] = items
+            # For list attributes, flatten nested lists to maintain consistency
+            # This handles cases where already-batched data is re-batched
+            if items and all(isinstance(item, list) for item in items):
+                flattened = []
+                for item in items:
+                    flattened.extend(item)
+                batched_data_dict[key] = flattened
+            else:
+                batched_data_dict[key] = items
 
     batched_data_dict["batch"] = torch.cat(batch, dim=-1)
     batched_data_dict["sid"] = sid_list

@@ -36,7 +36,7 @@ class ElementReferences(nn.Module):
 
     @staticmethod
     def compute_references(batch, tensor, elem_refs, operation):
-        assert tensor.shape[0] == len(batch)
+        assert tensor.shape[0] == len(batch.natoms)
         with torch.autocast(elem_refs.device.type, enabled=False):
             refs = torch.zeros(
                 tensor.shape, dtype=elem_refs.dtype, device=tensor.device
@@ -133,6 +133,7 @@ class LinearReferences(nn.Module):
         return target.index_add(0, batch.batch, elemrefs, alpha=sign)
 
     @torch.autocast(device_type="cuda", enabled=False)
+    @torch.autocast(device_type="cpu", enabled=False)
     def dereference(
         self, target: torch.Tensor, batch: AtomicData, reshaped: bool = True
     ) -> torch.Tensor:
@@ -140,6 +141,7 @@ class LinearReferences(nn.Module):
         return self._apply_refs(target, batch, -1, reshaped=reshaped)
 
     @torch.autocast(device_type="cuda", enabled=False)
+    @torch.autocast(device_type="cpu", enabled=False)
     def forward(
         self, target: torch.Tensor, batch: AtomicData, reshaped: bool = True
     ) -> torch.Tensor:

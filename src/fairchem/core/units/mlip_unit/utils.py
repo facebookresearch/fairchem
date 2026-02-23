@@ -15,10 +15,25 @@ import hydra
 import torch
 from omegaconf import DictConfig
 
+from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import load_state_dict, match_state_dict
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
+    from fairchem.core.units.mlip_unit.mlip_unit import Task
+
+
+def get_backbone_class_from_checkpoint(
+    checkpoint: MLIPInferenceCheckpoint,
+) -> type:
+    """Extract the backbone class from a checkpoint's config."""
+    backbone_config = checkpoint.model_config.get("backbone", {})
+    backbone_model_name = backbone_config.get("model")
+
+    if backbone_model_name is None:
+        raise ValueError("Cannot determine backbone class from checkpoint config")
+
+    return registry.get_model_class(backbone_model_name)
 
 
 def load_inference_model(
@@ -26,10 +41,15 @@ def load_inference_model(
     overrides: dict | None = None,
     use_ema: bool = False,
     return_checkpoint: bool = True,
+    strict: bool = True,
+    preloaded_checkpoint: MLIPInferenceCheckpoint | None = None,
 ) -> tuple[torch.nn.Module, MLIPInferenceCheckpoint] | torch.nn.Module:
-    checkpoint: MLIPInferenceCheckpoint = torch.load(
-        checkpoint_location, map_location="cpu", weights_only=False
-    )
+    if preloaded_checkpoint is not None:
+        checkpoint = preloaded_checkpoint
+    else:
+        checkpoint = torch.load(
+            checkpoint_location, map_location="cpu", weights_only=False
+        )
 
     if overrides is not None:
         checkpoint.model_config = update_configs(checkpoint.model_config, overrides)
@@ -48,11 +68,29 @@ def load_inference_model(
 
         matched_dict["n_averaged"] = n_averaged
 
-        load_state_dict(model, matched_dict, strict=True)
+        load_state_dict(model, matched_dict, strict=strict)
     else:
-        load_state_dict(model, checkpoint.model_state_dict, strict=True)
+        load_state_dict(model, checkpoint.model_state_dict, strict=strict)
 
     return (model, checkpoint) if return_checkpoint is True else model
+
+
+def load_tasks(checkpoint_location: str) -> list[Task]:
+    """
+    Load tasks from a checkpoint file.
+
+    Args:
+        checkpoint_location (str): Path to the checkpoint file.
+
+    Returns:
+        list[Task]: A list of instantiated Task objects from the checkpoint's tasks_config.
+    """
+    checkpoint: MLIPInferenceCheckpoint = torch.load(
+        checkpoint_location, map_location="cpu", weights_only=False
+    )
+    return [
+        hydra.utils.instantiate(task_config) for task_config in checkpoint.tasks_config
+    ]
 
 
 @contextmanager

@@ -11,10 +11,15 @@ kernelspec:
   name: python3
 ---
 
-Workflows
-------------------
+# Calculation Workflows with FAIRChem Models
 
-This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc) and simply specify the `fairchem` model type. Below is an example that uses the default elastic_tensor_flow flow.
+This repo is integrated with workflow tools like [QuAcc](https://github.com/Quantum-Accelerators/quacc) to make complex molecular simulation workflows easy. You can use any MLP recipe (relaxations, single-points, elastic calculations, etc.) and simply specify the `fairchem` model type.
+
+:::{tip}
+One of the nice things about QuAcc is that you can use plugins for whatever your favorite workflow engine is (Fireworks, Parsl, Prefect, etc.). Some of these methods can scale to hundreds of thousands of parallel calculations and are used by the FAIR chemistry team regularly!
+:::
+
+Below is an example that uses the default `elastic_tensor_flow` flow:
 
 ```{code-cell} ipython3
 from __future__ import annotations
@@ -31,11 +36,9 @@ result = elastic_tensor_flow(
     job_params={
         "all": dict(
             method="fairchem",
-            name_or_path="uma-s-1",
+            name_or_path="uma-s-1p1",
             task_name="omat",
         ),
     },
 )
 ```
-
-One of the nice things about QuAcc is that you can use plugins for whatever your favorite workflow engine is (fireworks, parssl, prefect, etc). Some of these methods can scale to hundreds of thousands of parallel calculations and are used by the FAIR chemistry team regularly!

@@ -11,10 +11,21 @@ kernelspec:
   name: python3
 ---
 
-Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
-======================================================
+# Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
+
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 932 NEB relaxation trajectories |
+| **Reaction Types** | Desorptions, Dissociations, Transfers |
+| **Purpose** | Transition state energy calculations |
+| **Paper** | [CatTSunami (arXiv)](https://arxiv.org/abs/2405.02078) |
+| **License** | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+:::
 
 ## Overview
+
 This is a validation dataset which was used to assess model performance in [CatTSunami: Accelerating Transition State Energy Calculations with Pre-trained Graph Neural Networks](https://arxiv.org/abs/2405.02078). It is comprised of 932 NEB relaxation trajectories. There are three different types of reactions represented: desorptions, dissociations, and transfers. NEB calculations allow us to find transition states. The rate of reaction is determined by the transition state energy, so access to transition states is very important for catalysis research. For more information, check out the paper.
 
 ## File Structure and Contents
@@ -45,7 +56,7 @@ unrelaxed_frames = traj[0:10]
 relaxed_frames = traj[-10:]
 ```
 
-## Download 
+## Download
 |Splits |Size of compressed version (in bytes)  |Size of uncompressed version (in bytes)    | MD5 checksum (download link)   |
 |---    |---    |---    |---    |
 |ASE Trajectories   |1.5G  |6.3G   | [52af34a93758c82fae951e52af445089](https://dl.fbaipublicfiles.com/opencatalystproject/data/oc20neb/oc20neb_dft_trajectories_04_23_24.tar.gz)   |
@@ -56,7 +67,7 @@ relaxed_frames = traj[-10:]
 One more note: We have not prepared an lmdb for this dataset. This is because it is NEB calculations are not supported directly in ocp. You must use the ase native OCP class along with ase infrastructure to run NEB calculations. Here is an example of a use:
 
 ```{code-cell} ipython3
-import os 
+import os
 
 from ase.io import read
 from ase.mep import DyNEB
@@ -65,7 +76,7 @@ from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
 traj = read("desorption_id_83_2409_9_111-4_neb1.0.traj", ":")
 images = traj[0:10]
-predictor = pretrained_mlip.get_predict_unit("uma-s-1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
 
 neb = DyNEB(images, k=1)
 for image in images:

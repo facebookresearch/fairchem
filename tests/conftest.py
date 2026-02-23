@@ -13,7 +13,11 @@ from contextlib import suppress
 
 import numpy as np
 import pytest
+import ray
 import torch
+
+import fairchem.core.common.gp_utils as gp_utils
+from fairchem.core.common import distutils
 
 
 @pytest.fixture()
@@ -47,17 +51,18 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "ocpapi_integration: ocpapi integration test")
     config.addinivalue_line("markers", "gpu: mark test to run only on GPU workers")
     config.addinivalue_line(
-        "markers", "cpu_and_gpu: mark test to run on both GPU and CPU workers"
+        "markers",
+        "serial: mark test to run serially on the CPU runner (not parallelized with xdist)",
+    )
+    config.addinivalue_line(
+        "markers",
+        "subprocess: mark test that spawns subprocesses (excluded from parallel xdist run)",
     )
 
 
 def pytest_runtest_setup(item):
     # Check if the test has the 'gpu' marker
-    if (
-        "gpu" in item.keywords
-        and "cpu_and_gpu" not in item.keywords
-        and not torch.cuda.is_available()
-    ):
+    if "gpu" in item.keywords and not torch.cuda.is_available():
         pytest.skip("CUDA not available, skipping GPU test")
     if "dgl" in item.keywords:
         # check dgl is installed
@@ -104,13 +109,48 @@ def seed_everywhere(seed=0):
     torch.cuda.manual_seed_all(seed)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def seed_fixture():
     seed_everywhere(42)  # You can set your desired seed value here
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def compile_reset_state():
     torch.compiler.reset()
     yield
     torch.compiler.reset()
+
+
+@pytest.fixture(scope="session")
+def water_xyz_file(tmp_path_factory):
+    """Provide a reusable minimal water molecule XYZ file path.
+
+    Returns the filesystem path to a temporary XYZ file containing a 3-atom
+    water cluster suitable for quick inference / graph generation tests.
+    """
+    contents = (
+        "3\n"
+        "water\n"
+        "O 0.000000 0.000000 0.000000\n"
+        "H 0.758602 0.000000 0.504284\n"
+        "H -0.758602 0.000000 0.504284\n"
+    )
+    d = tmp_path_factory.mktemp("xyz_inputs")
+    fpath = d / "water.xyz"
+    fpath.write_text(contents)
+    return str(fpath)
+
+
+@pytest.fixture(autouse=True)
+def setup_before_each_test():
+    if ray.is_initialized():
+        ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()
+    yield
+    if ray.is_initialized():
+        ray.shutdown()
+    if gp_utils.initialized():
+        gp_utils.cleanup_gp()
+    distutils.cleanup()

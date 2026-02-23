@@ -1,5 +1,5 @@
 data_root_dir: /checkpoint/ocp/shared
-run_dir: /checkpoint/ocp/shared/run_dir
+run_dir: /checkpoint/ocp/shared/uma
 checkpoint_root_dir: /checkpoint/ocp/shared/uma_checkpoints
 account: ocp
 qos: ocp
@@ -9,3 +9,4 @@ ranks_per_node: 1
 dataloader_workers: 0
 debug: True
 mem_gb: 1500
+cpus_per_task: 1

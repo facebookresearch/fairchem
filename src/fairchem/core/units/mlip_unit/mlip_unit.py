@@ -12,7 +12,6 @@ import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import numpy as np
@@ -45,6 +44,7 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.common.logger import WandBSingletonLogger
 from fairchem.core.common.registry import registry
+from fairchem.core.common.utils import StrEnum
 from fairchem.core.components.train.train_runner import Checkpointable
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.mt_collater import MTCollater
@@ -75,7 +75,7 @@ class OutputSpec:
     dtype: str
 
 
-class TrainStrategy(str, Enum):
+class TrainStrategy(StrEnum):
     DDP = "ddp"
     FSDP = "fsdp"
 
@@ -85,14 +85,34 @@ class Task:
     name: str
     level: str
     property: str
-    loss_fn: torch.nn.Module
     out_spec: OutputSpec
     normalizer: Normalizer
     datasets: list[str]
+    loss_fn: torch.nn.Module | None = None
     element_references: Optional[ElementReferences] = None
     metrics: list[str] = field(default_factory=list)
     train_on_free_atoms: bool = True
     eval_on_free_atoms: bool = True
+    inference_only: bool = False
+
+
+DEFAULT_EXCLUDE_KEYS = [
+    "id",  # only oc20,oc22 have this
+    "fid",  # only oc20,oc22 have this
+    "absolute_idx",  # only ani has this
+    "target_pos",  # only ani has this
+    "ref_energy",  # only ani/geom have this
+    "pbc",  # only ani/transition1x have this
+    "nads",  # oc22
+    "oc22",  # oc22
+    "formation_energy",  # spice
+    "total_charge",  # spice
+]
+
+
+def filter_inference_only_tasks(tasks: Sequence[Task]) -> list[Task]:
+    """Filter out tasks that are marked as inference_only."""
+    return [task for task in tasks if not task.inference_only]
 
 
 def convert_train_checkpoint_to_inference_checkpoint(
@@ -117,13 +137,23 @@ def convert_train_checkpoint_to_inference_checkpoint(
 
 
 def initialize_finetuning_model(
-    checkpoint_location: str, overrides: dict | None = None, heads: dict | None = None
+    checkpoint_location: str,
+    overrides: dict | None = None,
+    heads: dict | None = None,
+    strict: bool = True,
 ) -> torch.nn.Module:
-    model, checkpoint = load_inference_model(checkpoint_location, overrides)
+    model, checkpoint = load_inference_model(
+        checkpoint_location, overrides, strict=strict
+    )
 
     logging.warning(
         f"initialize_finetuning_model starting from checkpoint_location: {checkpoint_location}"
     )
+
+    # if no heads are provided use heads from the checkpoint
+    if heads is None:
+        model.finetune_model_full_config = checkpoint.model_config
+        return model
 
     checkpoint.model_config["heads"] = deepcopy(heads)
     model.finetune_model_full_config = checkpoint.model_config
@@ -370,9 +400,12 @@ def compute_metrics(
     return metrics
 
 
-def mt_collater_adapter(tasks: list[Task], exclude_keys: list[str]):
+def mt_collater_adapter(
+    tasks: list[Task], exclude_keys: list[str] = DEFAULT_EXCLUDE_KEYS
+):
     # this is required because the MTCollater needs the old json formated task config so we need to convert it here
     task_config_old = {}
+    tasks = filter_inference_only_tasks(tasks)
     for task in tasks:
         task_config_old[task.name] = {
             "level": task.level,
@@ -403,7 +436,9 @@ def _get_consine_lr_scheduler(
     scheduler_steps = int(epochs * n_iters_per_epoch) if steps is None else steps
     # fixed function for constructing a LambdaLR scheduler
     lambda_fn = CosineLRLambda(
-        warmup_epochs=int(warmup_epochs * n_iters_per_epoch),
+        warmup_epochs=max(
+            int(warmup_epochs * n_iters_per_epoch), 1
+        ),  # this cannot be 0
         warmup_factor=warmup_factor,
         epochs=scheduler_steps,
         lr_min_factor=lr_min_factor,
@@ -494,11 +529,12 @@ class MLIPTrainEvalUnit(
     ):
         super().__init__()
         self.job_config = job_config
-        self.tasks = tasks
+        # throw out tasks that are inference_only (don't use them for training/eval)
+        self.tasks = filter_inference_only_tasks(tasks)
         self.profile_flops = profile_flops
         self.save_inference_ckpt = save_inference_ckpt
 
-        for task in tasks:
+        for task in self.tasks:
             if task.element_references is not None:
                 task.element_references.to(torch.device(get_device_for_local_rank()))
 
@@ -892,9 +928,9 @@ class MLIPEvalUnit(EvalUnit[AtomicData]):
         super().__init__()
         self.job_config = job_config
         self.model = model
-        self.tasks = tasks
+        self.tasks = filter_inference_only_tasks(tasks)
 
-        for task in tasks:
+        for task in self.tasks:
             if task.element_references is not None:
                 task.element_references.to(torch.device(get_device_for_local_rank()))
 

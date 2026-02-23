@@ -8,14 +8,18 @@ file in the root directory of this source tree.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+
+import torch  # - needed at runtime for dataclass field type resolution
+
+from fairchem.core.common.utils import StrEnum
 
 
-class UMATask(str, Enum):
+class UMATask(StrEnum):
     OMOL = "omol"
     OMAT = "omat"
     ODAC = "odac"
     OC20 = "oc20"
+    OC25 = "oc25"
     OMC = "omc"
 
 
@@ -68,11 +72,7 @@ class InferenceSettings:
     compile: bool = False
 
     # Flag to enable or disable the use of CUDA Graphs for compute
-    # Wigner matrices during inference, reducing overhead and increases
-    # speed This is recommended for simulation use cases, if the input
-    # shapes changes frequently, it will need to rebuild the CUDA graphs
-    # If set to None, the setting from the model checkpoint will be
-    # used.
+    # This flag is no longer used and will be removed in future versions
     wigner_cuda: bool | None = None
 
     # Flag to enable or disable the generation of external graphs during
@@ -86,6 +86,21 @@ class InferenceSettings:
     # to whatever is in the checkpoint
     internal_graph_gen_version: int | None = None
 
+    # Number of internal torch threads to use for inference
+    torch_num_threads: int | None = None
+
+    edge_chunk_size: int | None = None
+
+    # Base precision dtype for model parameters and input data.
+    # All model parameters, buffers, and float input tensors will be
+    # cast to this dtype. Set to torch.float64 for higher precision.
+    base_precision_dtype: torch.dtype = torch.float32
+
+    # Execution backend mode for the backbone. If set to None, the
+    # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
+    # to enable block-diagonal SO2 GEMM conversion for faster inference.
+    execution_mode: str | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed
@@ -95,7 +110,6 @@ def inference_settings_default():
         activation_checkpointing=True,
         merge_mole=False,
         compile=False,
-        wigner_cuda=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
@@ -108,10 +122,9 @@ def inference_settings_default():
 def inference_settings_turbo():
     return InferenceSettings(
         tf32=True,
-        activation_checkpointing=True,
+        activation_checkpointing=False,
         merge_mole=True,
         compile=True,
-        wigner_cuda=True,
         external_graph_gen=False,
         internal_graph_gen_version=2,
     )
@@ -124,7 +137,6 @@ def inference_settings_traineval():
         activation_checkpointing=False,
         merge_mole=False,
         compile=False,
-        wigner_cuda=False,
         internal_graph_gen_version=1,
     )
 
