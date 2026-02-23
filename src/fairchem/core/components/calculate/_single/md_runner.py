@@ -114,6 +114,7 @@ class MDRunner(CalculateRunner):
         "VelocityVerlet",
         "NoseHooverChainNVT",
         "Bussi",
+        "Langevin",
     )
 
     def _get_trajectory_extension(self) -> str:
@@ -145,7 +146,8 @@ class MDRunner(CalculateRunner):
 
         Supports VelocityVerlet (NVE, no thermostat state),
         NoseHooverChainNVT (saves chain positions and momenta),
-        and Bussi (saves RNG state and transferred energy).
+        Bussi (saves RNG state and transferred energy),
+        and Langevin (saves RNG state).
 
         Args:
             dyn: The ASE dynamics object
@@ -166,7 +168,7 @@ class MDRunner(CalculateRunner):
             thermostat = dyn._thermostat
             state["eta"] = thermostat._eta.tolist()
             state["p_eta"] = thermostat._p_eta.tolist()
-        elif class_name == "Bussi":
+        elif class_name in ("Bussi", "Langevin"):
             rng_state = dyn.rng.get_state()
             state["rng_state"] = {
                 "algorithm": rng_state[0],
@@ -175,7 +177,8 @@ class MDRunner(CalculateRunner):
                 "has_gauss": int(rng_state[3]),
                 "cached_gaussian": float(rng_state[4]),
             }
-            state["transferred_energy"] = float(dyn.transferred_energy)
+            if hasattr(dyn, "transferred_energy"):
+                state["transferred_energy"] = float(dyn.transferred_energy)
 
         return state
 
@@ -186,8 +189,9 @@ class MDRunner(CalculateRunner):
         Restore thermostat state to dynamics object.
 
         Supports VelocityVerlet (NVE, no-op), NoseHooverChainNVT
-        (restores chain positions and momenta), and Bussi
-        (restores RNG state and transferred energy).
+        (restores chain positions and momenta), Bussi
+        (restores RNG state and transferred energy),
+        and Langevin (restores RNG state).
 
         Args:
             dyn: The ASE dynamics object
@@ -206,7 +210,7 @@ class MDRunner(CalculateRunner):
             thermostat = dyn._thermostat
             thermostat._eta = np.array(state["eta"])
             thermostat._p_eta = np.array(state["p_eta"])
-        elif current_class == "Bussi":
+        elif current_class in ("Bussi", "Langevin"):
             rng_state = state["rng_state"]
             dyn.rng.set_state(
                 (
@@ -217,7 +221,8 @@ class MDRunner(CalculateRunner):
                     rng_state["cached_gaussian"],
                 )
             )
-            dyn.transferred_energy = state["transferred_energy"]
+            if "transferred_energy" in state:
+                dyn.transferred_energy = state["transferred_energy"]
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> dict[str, Any]:
         """
@@ -248,6 +253,9 @@ class MDRunner(CalculateRunner):
         if self._thermostat_state_to_restore is not None:
             self._restore_thermostat_state(self._dyn, self._thermostat_state_to_restore)
 
+        # Restore the step counter so get_time() returns global time
+        self._dyn.nsteps = self._start_step
+
         self._trajectory_writer = self._trajectory_writer_class(
             trajectory_file, **self._trajectory_writer_kwargs
         )
@@ -255,7 +263,7 @@ class MDRunner(CalculateRunner):
         # Attach trajectory collector with global step alignment
         # We use interval=1 and check alignment manually to handle checkpoint resume correctly
         def collect_frame():
-            global_step = self._dyn.get_number_of_steps() + self._start_step
+            global_step = self._dyn.get_number_of_steps()
             self._atoms.info["md_step"] = global_step
             if global_step % self.trajectory_interval == 0:
                 frame = TrajectoryFrame.from_atoms(
@@ -271,12 +279,12 @@ class MDRunner(CalculateRunner):
             dyn=self._dyn,
             atoms=self._atoms,
             logfile=log_file,
-            header=self._start_step == 0,
+            header=True,
             mode="a" if self._start_step > 0 else "w",
         )
 
         def log_with_alignment():
-            global_step = self._dyn.get_number_of_steps() + self._start_step
+            global_step = self._dyn.get_number_of_steps()
             if global_step % self.log_interval == 0:
                 logger()
 
@@ -289,10 +297,10 @@ class MDRunner(CalculateRunner):
             )
 
             def check_stopfair():
-                if self._dyn.get_number_of_steps() == 0:
+                if self._dyn.get_number_of_steps() == self._start_step:
                     return
                 if stopfair_path.exists():
-                    current_step = self._dyn.get_number_of_steps() + self._start_step
+                    current_step = self._dyn.get_number_of_steps()
                     save_path = self.job_config.metadata.preemption_checkpoint_dir
                     logging.info(
                         f"STOPFAIR detected in {stopfair_path.parent}, "
@@ -309,9 +317,9 @@ class MDRunner(CalculateRunner):
             checkpoint_save_path = self.job_config.metadata.preemption_checkpoint_dir
 
             def save_periodic_checkpoint():
-                if self._dyn.get_number_of_steps() == 0:
+                if self._dyn.get_number_of_steps() == self._start_step:
                     return
-                current_step = self._dyn.get_number_of_steps() + self._start_step
+                current_step = self._dyn.get_number_of_steps()
                 logging.info(
                     f"Saving periodic checkpoint at step {current_step} "
                     f"to {checkpoint_save_path}"
@@ -324,6 +332,12 @@ class MDRunner(CalculateRunner):
 
         remaining_steps = self.steps - self._start_step
         stopped_by_stopfair = False
+
+        # On resume, ASE's irun() skips the initial call_observers() because
+        # nsteps != 0. Manually trigger it so the resume-step frame is captured
+        # and the logger records the initial state.
+        if self._start_step > 0:
+            self._dyn.call_observers()
 
         try:
             self._dyn.run(remaining_steps)
@@ -431,7 +445,7 @@ class MDRunner(CalculateRunner):
                     self._trajectory_writer.flush()
 
             atoms_path = checkpoint_dir / "checkpoint.xyz"
-            current_step = self._dyn.get_number_of_steps() + self._start_step
+            current_step = self._dyn.get_number_of_steps()
             self._atoms.info["md_step"] = current_step
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 

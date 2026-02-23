@@ -32,6 +32,7 @@ class TrajectoryFrame:
     energy: float
     forces: np.ndarray  # (N, 3)
     stress: np.ndarray | None = None  # (6,) Voigt notation
+    sid: str | int | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for Parquet serialization."""
@@ -47,6 +48,7 @@ class TrajectoryFrame:
             "energy": self.energy,
             "forces": self.forces.tolist(),
             "stress": self.stress.tolist() if self.stress is not None else None,
+            "sid": self.sid,
         }
 
     @classmethod
@@ -78,6 +80,7 @@ class TrajectoryFrame:
             energy=atoms.get_potential_energy(),
             forces=atoms.get_forces().copy(),
             stress=stress,
+            sid=atoms.info.get("sid"),
         )
 
 
