@@ -489,7 +489,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         Jd_buffers = [
             getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
             for l in range(self.lmax + 1)
@@ -505,18 +505,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
             wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        # select subset of coefficients we are using
-        if self.mmax != self.lmax:
-            wigner = wigner.index_select(1, self.coefficient_index)
-            wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
-
-        wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
-        )
-        wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
-        )
-        return wigner_and_M_mapping, wigner_and_M_mapping_inv
+        return wigner, wigner_inv
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -685,10 +674,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
-                self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec"],
-                )
+            wigner, wigner_inv = self._get_rotmat_and_wigner(
+                graph_dict["edge_distance_vec"],
+            )
+            coefficient_index = (
+                self.coefficient_index if self.mmax != self.lmax else None
+            )
+            wigner, wigner_inv = self.backend.prepare_wigner(
+                wigner,
+                wigner_inv,
+                self.mappingReduced,
+                coefficient_index,
             )
 
         ###############################################################
@@ -737,21 +733,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 dim=1,
             )
 
-            # Pre-fuse envelope into wigner_inv for edge degree embedding
-            wigner_and_M_mapping_inv_envelope_for_edge_degree = (
-                wigner_and_M_mapping_inv * edge_envelope
-            )
+            # Pre-fuse envelope into wigner_inv
+            wigner_inv_envelope = wigner_inv * edge_envelope
 
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv_envelope_for_edge_degree,
+                wigner_inv_envelope,
                 data_dict["gp_node_offset"],
             )
-
-        # Pre-fuse envelope into wigner_inv for block message passing
-        wigner_and_M_mapping_inv_envelope = wigner_and_M_mapping_inv * edge_envelope
 
         ###############################################################
         # Update spherical node embeddings
@@ -763,8 +754,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                     x_edge,
                     graph_dict["edge_distance"],
                     graph_dict["edge_index"],
-                    wigner_and_M_mapping,
-                    wigner_and_M_mapping_inv_envelope,
+                    wigner,
+                    wigner_inv_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
@@ -868,7 +859,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._merged_composition = None
 
         # Validate settings against backend requirements (fail early)
-        self.backend.validate(settings)
+        self.backend.validate(self, settings)
 
         if settings.merge_mole:
             assert (
