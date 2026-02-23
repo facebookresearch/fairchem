@@ -512,7 +512,7 @@ class MDRunner(CalculateRunner):
         if checkpoint_location is None:
             return
 
-        checkpoint_dir = Path(checkpoint_location)
+        checkpoint_dir = Path(checkpoint_location).absolute()
         atoms_path = checkpoint_dir / "checkpoint.xyz"
         state_path = checkpoint_dir / "md_state.json"
 
