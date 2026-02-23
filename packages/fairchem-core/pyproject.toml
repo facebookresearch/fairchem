@@ -7,11 +7,12 @@ name = "fairchem-core"
 description = "Machine learning models for chemistry and materials science by the FAIR Chemistry team"
 license = {text = "MIT License"}
 dynamic = ["version", "readme"]
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.11, <3.14"
 dependencies = [
     "torch~=2.8.0",
-    "ray[serve]>=2.50.0",
+    "ray[serve]>=2.53.0",
     "numpy>=2.0,<2.4",
+    "scipy>=1.15.0",
     "lmdb>=1.6.2,<=1.7.3",
     "numba>=0.62.0",
     "e3nn>=0.5",
@@ -20,6 +21,7 @@ dependencies = [
     "ase-db-backends>=0.10.0",
     "monty>=v2025.1.3",
     "clusterscope==0.0.18",
+    "setuptools<81.0.0",
     "requests",
     "orjson",
     "tqdm",
@@ -33,9 +35,10 @@ dependencies = [
 
 [project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
 dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"]
-docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4", "umap-learn", "vdict", "ipywidgets", "jupyter_book==1.0.4", "sphinxcontrib-mermaid", "torch-dftd"]
+docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4", "umap-learn", "vdict", "ipywidgets", "jupyter_book>=2.0", "torch-dftd"]
 adsorbml = ["dscribe", "x3dase", "scikit-image"]
-extras = ["pymatgen", "quacc[phonons]>=0.15.3", "pandas"]
+extras = ["ray[default]", "pymatgen", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops"]
+
 
 [project.scripts]
 fairchem = "fairchem.core._cli:main"

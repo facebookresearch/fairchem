@@ -193,14 +193,14 @@ from ase.md.langevin import Langevin
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 import time
 
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
     "uma-s-1p1", inference_settings="turbo", device="cuda", workers=8
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
-atoms = get_fcc_carbon_xtal(8000)
+atoms = get_fcc_crystal_by_num_atoms(8000)
 atoms.calc = calc
 
 dyn = Langevin(

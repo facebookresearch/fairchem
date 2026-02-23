@@ -11,7 +11,17 @@ kernelspec:
   name: python3
 ---
 
-# AdsorbML tutorial
+# AdsorbML Tutorial
+
+:::{card} Tutorial Overview
+
+| Property | Value |
+|----------|-------|
+| **Difficulty** | Intermediate |
+| **Time** | 20-30 minutes |
+| **Prerequisites** | Basic Python, ASE |
+| **Goal** | Find optimal adsorption sites using ML-accelerated relaxations |
+:::
 
 The [AdsorbML](https://arxiv.org/abs/2211.16486) paper showed that pre-trained machine learning potentials were now viable to find and prioritize the best adsorption sites for a given surface. The results were quite impressive, especially if you were willing to do a DFT single-point calculation on the best calculations.
 
@@ -53,13 +63,13 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 from __future__ import annotations
 
 import pandas as pd
-from fairchem.data.oc.core import Adsorbate, Bulk, Slab
+from fairchem.data.oc.core import Bulk, Slab
 
 bulk_src_id = "mp-30"
-adsorbate_smiles = "*CO"
+# adsorbate smiles string from our database https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/data/oc/databases/pkls/adsorbates.pkl
+adsorbate = "*CO"
 
 bulk = Bulk(bulk_src_id_from_db=bulk_src_id)
-adsorbate = Adsorbate(adsorbate_smiles_from_db=adsorbate_smiles)
 slabs = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1, 1, 1))
 
 # There may be multiple slabs with this miller index.

@@ -7,15 +7,22 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
+
 import ase
 import pytest
 import torch
 from ase.build import molecule
 
-from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.atomic_data import (
+    AtomicData,
+    atomicdata_list_to_batch,
+    warn_if_upcasting,
+)
+from fairchem.core.graph.compute import get_pbc_distances
 
 
-@pytest.fixture
+@pytest.fixture()
 def ase_atoms():
     return molecule("H2O")
 
@@ -25,14 +32,14 @@ def test_to_ase_single(ase_atoms):
     assert atoms.get_chemical_formula() == "H2O"
 
 
-@pytest.mark.gpu
+@pytest.mark.gpu()
 def test_to_ase_single_cuda(ase_atoms):
     atomic_data = AtomicData.from_ase(ase_atoms).cuda()
     atoms = atomic_data.to_ase_single()
     assert atoms.get_chemical_formula() == "H2O"
 
-    
-@pytest.fixture
+
+@pytest.fixture()
 def batch_edgeless():
     # Create AtomicData batch of two ase.Atoms molecules without edges
     ase_atoms = ase.Atoms(positions=[[0.5, 0, 0], [1, 0, 0]], cell=(2, 2, 2), pbc=True)
@@ -68,3 +75,58 @@ def test_to_ase_batch(batch_edgeless):
     atomicdata_list = batch.batch_to_atomicdata_list()
     assert (atomicdata_list[0].edge_index == edge_index[:, :2]).all()
     assert (atomicdata_list[1].edge_index == edge_index[:, :2]).all()
+
+
+def test_warn_if_upcasting(caplog):
+    """
+    Test that warn_if_upcasting logs when upcasting and is silent otherwise.
+    """
+    # Upcasting float32 -> float64 should warn
+    with caplog.at_level(logging.WARNING):
+        caplog.clear()
+        result = warn_if_upcasting(torch.float32, torch.float64)
+        assert result is True
+        assert "Upcasting atomic coordinates" in caplog.text
+
+    # Same dtype should not warn
+    with caplog.at_level(logging.WARNING):
+        caplog.clear()
+        result = warn_if_upcasting(torch.float64, torch.float64)
+        assert result is False
+        assert caplog.text == ""
+
+    # Downcasting float64 -> float32 should not warn
+    with caplog.at_level(logging.WARNING):
+        caplog.clear()
+        result = warn_if_upcasting(torch.float64, torch.float32)
+        assert result is False
+        assert caplog.text == ""
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_get_pbc_distances_preserves_dtype(dtype):
+    """
+    Test that get_pbc_distances returns distances and vectors
+    in the same dtype as the inputs, verifying the change from
+    hardcoded .float() to .to(dtype=cell.dtype).
+    """
+    pos = torch.tensor([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0]], dtype=dtype)
+    cell = torch.eye(3, dtype=dtype).unsqueeze(0) * 5.0
+    edge_index = torch.tensor([[0, 1], [1, 0]])
+    # cell_offsets: second edge wraps through the periodic boundary
+    cell_offsets = torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=dtype)
+    neighbors = torch.tensor([2])
+
+    out = get_pbc_distances(
+        pos,
+        edge_index,
+        cell,
+        cell_offsets,
+        neighbors,
+        return_distance_vec=True,
+        return_offsets=True,
+    )
+
+    assert out["distances"].dtype == dtype
+    assert out["distance_vec"].dtype == dtype
+    assert out["offsets"].dtype == dtype

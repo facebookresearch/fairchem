@@ -368,20 +368,34 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "train_config, dataset_config, num_ddps",
+    "train_config, dataset_config, num_ddps, backbone_overrides",
     [
-        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1),
-        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2),
+        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1, []),
+        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, []),
+        # test charge balancing GP support
+        (
+            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "aselmdb",
+            2,
+            ["++backbone.charge_balanced_channels=[0]"],
+        ),
         (
             "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
             "aselmdb_conserving",
             2,
+            [],
         ),
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, num_ddps, fake_uma_dataset, torch_deterministic
+    train_config,
+    dataset_config,
+    num_ddps,
+    backbone_overrides,
+    fake_uma_dataset,
+    torch_deterministic,
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -396,7 +410,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
             "runner.max_steps=1",
-        ]
+        ] + backbone_overrides
 
         gp_size = 2
 

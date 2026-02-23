@@ -182,7 +182,7 @@ def test_no_task_name_single_task():
 
 
 def test_calculator_unknown_task_raises_error():
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         FAIRChemCalculator.from_model_checkpoint(
             pretrained_mlip.available_models[0], task_name="ommmmmol"
         )
@@ -195,7 +195,7 @@ def test_calculator_setup(all_calculators):
 
         # all conservative UMA checkpoints should support E/F/S!
         if not calc.predictor.direct_forces and (
-            len(datasets) > 1 or calc.task_name != "omol"
+            len(datasets) > 1 or (calc.task_name != "omol" and calc.task_name != "odac")
         ):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
