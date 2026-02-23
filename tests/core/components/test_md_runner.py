@@ -22,6 +22,7 @@ from ase import units
 from ase.build import bulk
 from ase.calculators.emt import EMT
 from ase.io import Trajectory
+from ase.md.bussi import Bussi
 from ase.md.nose_hoover_chain import NoseHooverChainNVT
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
@@ -831,3 +832,125 @@ class TestMDRunner:
             portable_cfg.runner._target_
             == "fairchem.core.components.calculate.MDRunner"
         )
+
+    def test_bussi_checkpoint_resume(self, cu_atoms, results_dir):
+        """
+        Test checkpoint/resume with Bussi stochastic velocity rescaling.
+
+        Verifies:
+        1. Bussi thermostat state (RNG + transferred_energy) is saved
+        2. State is correctly restored on resume
+        3. Trajectory steps are aligned across runs
+        """
+        results_dir1 = results_dir / "results1"
+        results_dir2 = results_dir / "results2"
+        checkpoint_dir = results_dir / "checkpoint"
+        results_dir1.mkdir()
+        results_dir2.mkdir()
+
+        trajectory_interval = 10
+        interrupt_at_step = 36
+        total_steps = 100
+
+        dynamics = partial(
+            Bussi,
+            timestep=1.0 * units.fs,
+            temperature_K=300.0,
+            taut=25 * units.fs,
+        )
+
+        # Run 1: Run until interrupted at step 36
+        runner1 = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=dynamics,
+            steps=total_steps,
+            trajectory_interval=trajectory_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner1._job_config = _create_mock_job_config(str(results_dir1))
+
+        class SimulatedInterrupt(Exception):
+            pass
+
+        def interrupt_callback():
+            if runner1._dyn.get_number_of_steps() >= interrupt_at_step:
+                raise SimulatedInterrupt
+
+        try:
+            runner1._atoms.calc = runner1.calculator
+            runner1._dyn = runner1.dynamics(atoms=runner1._atoms)
+
+            parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
+            runner1._trajectory_writer = ParquetTrajectoryWriter(
+                parquet_file1, flush_interval=1000
+            )
+
+            def collect_frame():
+                global_step = runner1._dyn.get_number_of_steps() + runner1._start_step
+                if global_step % trajectory_interval == 0:
+                    frame = TrajectoryFrame.from_atoms(
+                        runner1._atoms,
+                        step=global_step,
+                        time=runner1._dyn.get_time(),
+                    )
+                    runner1._trajectory_writer.append(frame)
+
+            runner1._dyn.attach(collect_frame, interval=1)
+            runner1._dyn.attach(interrupt_callback, interval=1)
+            runner1._dyn.run(total_steps)
+        except SimulatedInterrupt:
+            transferred_energy_before = runner1._dyn.transferred_energy
+            final_positions = runner1._atoms.get_positions().copy()
+            final_velocities = runner1._atoms.get_velocities().copy()
+
+            saved = runner1.save_state(str(checkpoint_dir), is_preemption=True)
+            assert saved, "save_state failed"
+
+        df1 = pd.read_parquet(parquet_file1)
+        steps1 = list(df1["step"])
+        assert steps1 == [0, 10, 20, 30]
+
+        # Verify checkpoint files
+        assert (checkpoint_dir / "checkpoint.xyz").exists()
+        assert (checkpoint_dir / "thermostat_state.json").exists()
+        assert (checkpoint_dir / "md_state.json").exists()
+
+        with open(checkpoint_dir / "thermostat_state.json") as f:
+            saved_state = json.load(f)
+        assert saved_state["class_name"] == "Bussi"
+        assert "rng_state" in saved_state
+        npt.assert_allclose(
+            saved_state["transferred_energy"], transferred_energy_before
+        )
+
+        # Run 2: Resume from checkpoint
+        runner2 = MDRunner(
+            calculator=EMT(),
+            atoms=cu_atoms.copy(),
+            dynamics=dynamics,
+            steps=total_steps,
+            trajectory_interval=trajectory_interval,
+            log_interval=10,
+            trajectory_writer_kwargs={"flush_interval": 1000},
+        )
+        runner2._job_config = _create_mock_job_config(str(results_dir2))
+        runner2.load_state(str(checkpoint_dir))
+
+        assert runner2._start_step == interrupt_at_step
+        npt.assert_allclose(runner2._atoms.get_positions(), final_positions, atol=1e-8)
+        npt.assert_allclose(
+            runner2._atoms.get_velocities(), final_velocities, atol=1e-8
+        )
+
+        results2 = runner2.calculate(job_num=0, num_jobs=1)
+        df2 = pd.read_parquet(results2["trajectory_file"])
+        steps2 = list(df2["step"])
+
+        expected_steps2 = [40, 50, 60, 70, 80, 90, 100]
+        assert steps2 == expected_steps2
+
+        all_steps = sorted(steps1 + steps2)
+        expected_all = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        assert all_steps == expected_all

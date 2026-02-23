@@ -113,6 +113,7 @@ class MDRunner(CalculateRunner):
     _SUPPORTED_DYNAMICS: ClassVar[tuple[str, ...]] = (
         "VelocityVerlet",
         "NoseHooverChainNVT",
+        "Bussi",
     )
 
     def _get_trajectory_extension(self) -> str:
@@ -142,8 +143,9 @@ class MDRunner(CalculateRunner):
         """
         Extract thermostat state from dynamics object.
 
-        Supports VelocityVerlet (NVE, no thermostat state) and
-        NoseHooverChainNVT (saves chain positions and momenta).
+        Supports VelocityVerlet (NVE, no thermostat state),
+        NoseHooverChainNVT (saves chain positions and momenta),
+        and Bussi (saves RNG state and transferred energy).
 
         Args:
             dyn: The ASE dynamics object
@@ -164,6 +166,16 @@ class MDRunner(CalculateRunner):
             thermostat = dyn._thermostat
             state["eta"] = thermostat._eta.tolist()
             state["p_eta"] = thermostat._p_eta.tolist()
+        elif class_name == "Bussi":
+            rng_state = dyn.rng.get_state()
+            state["rng_state"] = {
+                "algorithm": rng_state[0],
+                "keys": rng_state[1].tolist(),
+                "pos": int(rng_state[2]),
+                "has_gauss": int(rng_state[3]),
+                "cached_gaussian": float(rng_state[4]),
+            }
+            state["transferred_energy"] = float(dyn.transferred_energy)
 
         return state
 
@@ -173,8 +185,9 @@ class MDRunner(CalculateRunner):
         """
         Restore thermostat state to dynamics object.
 
-        Supports VelocityVerlet (NVE, no-op) and NoseHooverChainNVT
-        (restores chain positions and momenta).
+        Supports VelocityVerlet (NVE, no-op), NoseHooverChainNVT
+        (restores chain positions and momenta), and Bussi
+        (restores RNG state and transferred energy).
 
         Args:
             dyn: The ASE dynamics object
@@ -193,6 +206,18 @@ class MDRunner(CalculateRunner):
             thermostat = dyn._thermostat
             thermostat._eta = np.array(state["eta"])
             thermostat._p_eta = np.array(state["p_eta"])
+        elif current_class == "Bussi":
+            rng_state = state["rng_state"]
+            dyn.rng.set_state(
+                (
+                    rng_state["algorithm"],
+                    np.array(rng_state["keys"], dtype=np.uint32),
+                    rng_state["pos"],
+                    rng_state["has_gauss"],
+                    rng_state["cached_gaussian"],
+                )
+            )
+            dyn.transferred_energy = state["transferred_energy"]
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> dict[str, Any]:
         """
