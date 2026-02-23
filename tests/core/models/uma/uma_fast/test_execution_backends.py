@@ -105,3 +105,23 @@ def test_umas_fast_gpu_validation_accepts_512_channels():
 
     # Should not raise
     UMASFastGPUBackend.validate(MockModel())
+
+
+@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+def test_umas_fast_gpu_validation_requires_merge_mole():
+    """
+    Verify that umas_fast_gpu raises ValueError when merge_mole=False.
+    """
+    from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
+
+    class MockModel:
+        lmax = 2
+        mmax = 2
+        sphere_channels = 128
+
+    class MockSettings:
+        activation_checkpointing = False
+        merge_mole = False  # Wrong - should be True
+
+    with pytest.raises(ValueError, match="merge_mole=True"):
+        UMASFastGPUBackend.validate(MockModel(), MockSettings())
