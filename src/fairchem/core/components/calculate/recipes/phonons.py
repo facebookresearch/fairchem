@@ -96,7 +96,7 @@ def run_mdr_phonon_benchmark(
         final_energy_per_atom = primcell.get_potential_energy() / natoms
         final_volume_per_atom = primcell.get_volume() / natoms
         if mdr_phonon.primitive_matrix is not None:
-            P = np.asarray(np.linalg.inv(mdr_phonon.primitive_matrix.T), dtype=np.intc)
+            P = np.asarray(np.linalg.inv(mdr_phonon.primitive_matrix.T), dtype=np.int32)
             unitcell = make_supercell(primcell, P)
         else:  # assume prim is the same as unit
             # can always check for good measure

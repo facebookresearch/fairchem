@@ -49,10 +49,12 @@ class Normalizer(nn.Module):
         self.register_buffer(name="rmsd", tensor=rmsd)
 
     @torch.autocast(device_type="cuda", enabled=False)
+    @torch.autocast(device_type="cpu", enabled=False)
     def norm(self, tensor: torch.Tensor) -> torch.Tensor:
         return (tensor - self.mean) / self.rmsd
 
     @torch.autocast(device_type="cuda", enabled=False)
+    @torch.autocast(device_type="cpu", enabled=False)
     def denorm(self, normed_tensor: torch.Tensor) -> torch.Tensor:
         return normed_tensor * self.rmsd + self.mean
 
