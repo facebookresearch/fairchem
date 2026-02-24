@@ -30,7 +30,6 @@ from ase.md.verlet import VelocityVerlet
 from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate import (
-    ASETrajectoryWriter,
     MDRunner,
     ParquetTrajectoryWriter,
     TrajectoryFrame,
@@ -180,52 +179,6 @@ class TestParquetTrajectoryWriter:
         assert list(traj_df["step"]) == [0, 1, 2, 3]
 
 
-class TestASETrajectoryWriter:
-    """Tests for ASETrajectoryWriter."""
-
-    def test_write_and_read(self, results_dir):
-        """Test ASETrajectoryWriter writes valid ASE trajectory files."""
-        path = results_dir / "test.traj"
-
-        frames = []
-        for step in range(5):
-            frame = TrajectoryFrame(
-                step=step,
-                time=float(step) * 0.5,
-                atomic_numbers=np.array([29, 29], dtype=np.int64),
-                positions=np.array(
-                    [[0, 0, 0], [1 + step * 0.1, 1, 1]], dtype=np.float64
-                ),
-                velocities=np.array(
-                    [[0.1, 0.1, 0.1], [0.2, 0.2, 0.2]], dtype=np.float64
-                ),
-                cell=np.eye(3) * 10,
-                pbc=np.array([True, True, True]),
-                energy=-5.0 + step,
-                forces=np.array(
-                    [[0.01, 0.02, 0.03], [0.04, 0.05, 0.06]], dtype=np.float64
-                ),
-            )
-            frames.append(frame)
-
-        writer = ASETrajectoryWriter(path)
-        for frame in frames:
-            writer.append(frame)
-        writer.close()
-
-        assert path.exists()
-        assert writer.total_frames == 5
-
-        # Read back and verify
-        traj = Trajectory(str(path), "r")
-        assert len(traj) == 5
-
-        for i, atoms in enumerate(traj):
-            npt.assert_allclose(atoms.get_positions(), frames[i].positions)
-            assert atoms.info["step"] == i
-            npt.assert_allclose(atoms.info["energy"], frames[i].energy)
-
-
 class TestMDRunner:
     """Tests for MDRunner class."""
 
@@ -287,30 +240,6 @@ class TestMDRunner:
         # Verify write_results works
         runner.write_results(results, str(mdrunner_dir), job_num=0, num_jobs=1)
         assert (mdrunner_dir / "metadata_1-0.json").exists()
-
-    def test_md_with_ase_trajectory_writer(self, cu_atoms, results_dir):
-        """Test MDRunner with ASETrajectoryWriter."""
-        runner = MDRunner(
-            calculator=EMT(),
-            atoms=cu_atoms.copy(),
-            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
-            steps=10,
-            trajectory_interval=2,
-            log_interval=5,
-            trajectory_writer=ASETrajectoryWriter,
-        )
-        runner._job_config = _create_mock_job_config(str(results_dir))
-        results = runner.calculate(job_num=0, num_jobs=1)
-
-        trajectory_file = Path(results["trajectory_file"])
-        assert trajectory_file.exists()
-        assert trajectory_file.suffix == ".traj"
-
-        traj = Trajectory(str(trajectory_file), "r")
-        assert len(traj) == 6  # steps 0, 2, 4, 6, 8, 10
-
-        steps = [atoms.info["step"] for atoms in traj]
-        assert steps == [0, 2, 4, 6, 8, 10]
 
     def test_checkpoint_resume_and_trajectory_alignment(self, cu_atoms, results_dir):
         """

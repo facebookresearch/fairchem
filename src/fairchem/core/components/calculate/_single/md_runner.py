@@ -122,23 +122,9 @@ class MDRunner(CalculateRunner):
         Get the file extension for the trajectory based on writer type.
 
         Returns:
-            File extension string (e.g., ".parquet", ".traj")
+            File extension string (e.g., ".parquet")
         """
-        writer_name = getattr(
-            self._trajectory_writer_class,
-            "__name__",
-            getattr(
-                self._trajectory_writer_class,
-                "func",
-                type(self._trajectory_writer_class),
-            ).__name__,
-        )
-        if "Parquet" in writer_name:
-            return ".parquet"
-        elif "ASE" in writer_name:
-            return ".traj"
-        else:
-            return ".traj"
+        return ".parquet"
 
     def _save_thermostat_state(self, dyn: MolecularDynamics) -> dict:
         """
@@ -383,13 +369,8 @@ class MDRunner(CalculateRunner):
         if not log_file.exists():
             raise FileNotFoundError(f"Log file not found: {log_file}")
 
-        if trajectory_file.suffix == ".parquet":
-            traj_df = pd.read_parquet(trajectory_file)
-            num_frames = len(traj_df)
-        else:
-            num_frames = (
-                self._trajectory_writer.total_frames if self._trajectory_writer else 0
-            )
+        traj_df = pd.read_parquet(trajectory_file)
+        num_frames = len(traj_df)
 
         dynamics_name = getattr(
             self.dynamics,

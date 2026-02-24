@@ -19,7 +19,6 @@ from ._single.pairwise_ct_runner import PairwiseCountRunner
 from ._single.phonon_runner import MDRPhononRunner
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
-from .ase_trajectory import ASETrajectoryWriter
 from .md_utils import register_md_resolvers
 from .parquet_trajectory import ParquetTrajectoryWriter
 from .trajectory import TrajectoryFrame, TrajectoryWriter
@@ -28,7 +27,6 @@ from .trajectory import TrajectoryFrame, TrajectoryWriter
 register_md_resolvers()
 
 __all__ = [
-    "ASETrajectoryWriter",
     "AdsorbMLRunner",
     "AdsorptionRunner",
     "AdsorptionSinglePointRunner",
