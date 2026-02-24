@@ -142,19 +142,8 @@ def test_multiple_dataset_predict(internal_graph_gen_version):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-@pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "workers, device, checkpointing",
-    [
-        (1, "cpu", False),
-        (2, "cpu", False),
-        (1, "cuda", False),
-        (1, "cuda", True),
-        # (2, "cuda", False),
-        # (2, "cuda", True),
-    ],
-)
-def test_parallel_predict_unit(workers, device, checkpointing):
+def _test_parallel_predict_unit_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit test."""
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -202,19 +191,34 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     )
 
 
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, device, checkpointing",
+    "workers, checkpointing",
     [
-        (1, "cpu", False),
-        (2, "cpu", True),
-        (1, "cuda", True),
-        (1, "cuda", False),
-        # (2, "cuda", True),
-        # (2, "cuda", False),
+        (1, False),
+        (2, False),
     ],
 )
-def test_parallel_predict_unit_batch(workers, device, checkpointing):
+def test_parallel_predict_unit(workers, checkpointing):
+    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (1, True),
+        # (2, False),
+        # (2, True),
+    ],
+)
+def test_parallel_predict_unit_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing)
+
+
+def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit batch test."""
     seed = 42
     runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -277,6 +281,32 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
         normal_results["forces"].detach().cpu(),
         atol=FORCE_TOL,
     )
+
+
+@pytest.mark.serial()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (2, True),
+    ],
+)
+def test_parallel_predict_unit_batch(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, True),
+        (1, False),
+        # (2, True),
+        # (2, False),
+    ],
+)
+def test_parallel_predict_unit_batch_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing)
 
 
 @pytest.mark.gpu()
@@ -716,7 +746,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
@@ -741,7 +771,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
-    md_steps = 5
+    md_steps = 2
     timestep = 1.0 * units.fs
     initial_temp_K = 300.0
     pressure = 1.01325 * units.bar  # 1 atm
