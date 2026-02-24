@@ -568,28 +568,104 @@ def test_nvidia_graph_larger_system(external_graph_method):
 class TestFilterEdgesByNodePartition:
     """Test filter_edges_by_node_partition function."""
 
-    def test_filter_keeps_correct_edges(self):
+    @pytest.mark.parametrize(
+        "edge_index, node_partition, num_atoms, expected_edges, expected_count",
+        [
+            # Basic case: 4 atoms, 6 edges, partition {0, 1}
+            (
+                torch.tensor([[0, 0, 1, 1, 2, 3], [1, 2, 0, 3, 3, 2]]),
+                torch.tensor([0, 1]),
+                4,
+                {(0, 1), (1, 0)},
+                2,
+            ),
+            # Larger system: 8 atoms, 12 edges, partition {0, 2, 4, 6} (even atoms)
+            (
+                torch.tensor(
+                    [
+                        [0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3],
+                        [1, 0, 3, 2, 5, 4, 7, 6, 2, 3, 4, 5],
+                    ]
+                ),
+                torch.tensor([0, 2, 4, 6]),
+                8,
+                {(1, 0), (3, 2), (5, 4), (7, 6), (0, 2), (2, 4)},
+                6,
+            ),
+            # Dense connectivity: 5 atoms, all-to-all edges (20 edges), partition {1, 3}
+            (
+                torch.tensor(
+                    [
+                        [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
+                        [1, 2, 3, 4, 0, 2, 3, 4, 0, 1, 3, 4, 0, 1, 2, 4, 0, 1, 2, 3],
+                    ]
+                ),
+                torch.tensor([1, 3]),
+                5,
+                {(0, 1), (0, 3), (2, 1), (2, 3), (4, 1), (4, 3), (1, 3), (3, 1)},
+                8,
+            ),
+            # Single atom partition: 6 atoms, 10 edges, partition {3}
+            (
+                torch.tensor(
+                    [
+                        [0, 1, 2, 3, 4, 5, 0, 1, 2, 4],
+                        [1, 2, 3, 4, 5, 0, 3, 3, 4, 3],
+                    ]
+                ),
+                torch.tensor([3]),
+                6,
+                {(2, 3), (0, 3), (1, 3), (4, 3)},
+                4,
+            ),
+            # Non-contiguous partition: 10 atoms, 15 edges, partition {0, 3, 7, 9}
+            (
+                torch.tensor(
+                    [
+                        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4],
+                        [1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 3, 7, 9, 0, 7],
+                    ]
+                ),
+                torch.tensor([0, 3, 7, 9]),
+                10,
+                {
+                    (9, 0),
+                    (2, 3),
+                    (6, 7),
+                    (8, 9),
+                    (0, 3),
+                    (1, 7),
+                    (2, 9),
+                    (3, 0),
+                    (4, 7),
+                },
+                9,
+            ),
+        ],
+    )
+    def test_filter_keeps_correct_edges(
+        self, edge_index, node_partition, num_atoms, expected_edges, expected_count
+    ):
         """Test that only edges with target atoms in node_partition are kept."""
-        # 4 atoms, edges: 0->1, 0->2, 1->0, 1->3, 2->3, 3->2
-        edge_index = torch.tensor([[0, 0, 1, 1, 2, 3], [1, 2, 0, 3, 3, 2]])
-        cell_offsets = torch.zeros(6, 3, dtype=torch.long)
-        neighbors = torch.tensor([6])  # single system with 6 edges
-        node_partition = torch.tensor([0, 1])  # only atoms 0 and 1
+        cell_offsets = torch.zeros(edge_index.shape[1], 3, dtype=torch.long)
+        neighbors = torch.tensor([edge_index.shape[1]])  # single system
 
         new_edge_index, new_cell_offsets, new_neighbors = (
             filter_edges_by_node_partition(
-                node_partition, edge_index, cell_offsets, neighbors, num_atoms=4
+                node_partition, edge_index, cell_offsets, neighbors, num_atoms=num_atoms
             )
         )
 
-        # Should keep edges where target (row 1) is in {0, 1}: edges 0->1, 1->0
-        assert new_edge_index.shape[1] == 2
+        # Check edge count matches expected
+        assert new_edge_index.shape[1] == expected_count
+
+        # Check exact edges match
         edge_pairs = {
             (new_edge_index[0, i].item(), new_edge_index[1, i].item())
             for i in range(new_edge_index.shape[1])
         }
-        assert edge_pairs == {(0, 1), (1, 0)}
-        assert new_neighbors.sum().item() == 2
+        assert edge_pairs == expected_edges
+        assert new_neighbors.sum().item() == expected_count
 
     def test_filter_with_multiple_systems(self):
         """Test filtering with batched systems."""

@@ -38,11 +38,10 @@ def filter_edges_by_node_partition(
     Returns:
         Filtered edge_index, cell_offsets, and neighbors tensors.
     """
-    source_atoms = edge_index[1]
-    # Create a boolean mask for O(1) lookup
-    node_mask = torch.zeros(num_atoms, dtype=torch.bool, device=source_atoms.device)
+    target_atoms = edge_index[1]
+    node_mask = torch.zeros(num_atoms, dtype=torch.bool, device=target_atoms.device)
     node_mask[node_partition] = True
-    local_edge_mask = node_mask[source_atoms]
+    local_edge_mask = node_mask[target_atoms]
 
     # Create system index for each edge to track which system each edge belongs to
     num_systems = neighbors.shape[0]
@@ -53,6 +52,11 @@ def filter_edges_by_node_partition(
     # Filter edges
     edge_index = edge_index[:, local_edge_mask]
     cell_offsets = cell_offsets[local_edge_mask]
+    if neighbors.shape[0] == 1:
+        # If there's only one system, we can skip the scatter_add step and just return the count of remaining edges
+        new_neighbors = local_edge_mask.sum(dtype=neighbors.dtype).unsqueeze(0)
+        return edge_index, cell_offsets, new_neighbors
+
     filtered_edge_system_idx = edge_system_idx[local_edge_mask]
 
     # Count edges per system after filtering
@@ -64,9 +68,6 @@ def filter_edges_by_node_partition(
         filtered_edge_system_idx,
         torch.ones_like(filtered_edge_system_idx, dtype=neighbors.dtype),
     )
-
-    # Remove systems with zero edges
-    # new_neighbors = new_neighbors[new_neighbors > 0]
 
     return edge_index, cell_offsets, new_neighbors
 
