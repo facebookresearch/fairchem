@@ -51,7 +51,6 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
-    get_displacement_and_cell,
     get_l_component_range,
     reduce_node_to_system,
 )
@@ -604,9 +603,16 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
-            cell_per_edge = data_dict["cell"].repeat_interleave(
-                data_dict["nedges"], dim=0
-            )
+
+            if data_dict["cell"].shape[0] == 1:
+                cell_per_edge = data_dict["cell"].expand(
+                    data_dict["edge_index"].shape[1], -1, -1
+                )
+            else:
+                cell_per_edge = data_dict["cell"].repeat_interleave(
+                    data_dict["nedges"], dim=0
+                )
+
             shifts = torch.einsum(
                 "ij,ijk->ik",
                 data_dict["cell_offsets"].to(cell_per_edge.dtype),
@@ -662,12 +668,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             batch_full=data_dict["batch_full"],
             csd_mixed_emb=csd_mixed_emb,
         )
-
-        with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = get_displacement_and_cell(
-                data=data_dict,
-                regress_config=self.regress_config,
-            )
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
@@ -777,8 +777,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         x_message = self.norm(x_message)
         out = {
             "node_embedding": x_message,
-            "displacement": displacement,
-            "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
         return out

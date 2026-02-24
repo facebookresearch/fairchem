@@ -239,8 +239,7 @@ def compute_forces(
 
 def compute_forces_and_stress(
     energy_part: torch.Tensor,
-    pos_original: torch.Tensor,
-    displacement: torch.Tensor,
+    pos: torch.Tensor,
     cell: torch.Tensor,
     training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -252,8 +251,7 @@ def compute_forces_and_stress(
 
     Args:
         energy_part: System-level energy before GP reduction, shape [num_systems].
-        pos_original: Original atomic positions (before strain applied), shape [N, 3].
-        displacement: Strain displacement tensor, shape [num_systems, 3, 3].
+        pos: Original atomic positions (before strain applied), shape [N, 3].
         cell: Unit cell vectors, shape [num_systems, 3, 3].
         training: Whether to create graph for higher-order gradients.
 
@@ -264,7 +262,7 @@ def compute_forces_and_stress(
     """
     grads = torch.autograd.grad(
         [energy_part.sum()],
-        [pos_original, displacement],
+        [pos, cell],
         create_graph=training,
     )
 
@@ -275,7 +273,10 @@ def compute_forces_and_stress(
         )
 
     forces = torch.neg(grads[0])
-    virial = grads[1].view(-1, 3, 3)
+    atomic_potential = grads[0].T @ pos
+    virial = (grads[1] @ cell + (atomic_potential + atomic_potential.T) / 2).view(
+        -1, 3, 3
+    )
     volume = torch.det(cell).abs().unsqueeze(-1)
     stress = virial / volume.view(-1, 1, 1)
     stress = stress.view(-1, 9)
