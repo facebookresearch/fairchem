@@ -52,7 +52,7 @@ from fairchem.core.models.uma.outputs import (
     compute_forces,
     compute_forces_and_stress,
     get_displacement_and_cell,
-    get_l_component,
+    get_l_component_range,
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
@@ -1037,18 +1037,14 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
         energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
-        energy, _ = compute_energy(node_energy, data["batch"], len(data["natoms"]))
-
-        if self.reduce == "sum":
-            pass  # energy is already sum
-        elif self.reduce == "mean":
-            energy = energy / data["natoms"]
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
+        energy, _ = compute_energy(
+            emb,
+            self.energy_block,
+            data["batch"],
+            len(data["natoms"]),
+            natoms=data["natoms"],
+            reduce=self.reduce,
+        )
 
         return {energy_key: {"energy": energy} if self.wrap_property else energy}
 
@@ -1093,10 +1089,8 @@ class MLP_EFS_Head(MLP_Energy_Head):
         outputs = {}
 
         # Use shared energy computation from parent class
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
         energy, energy_part = compute_energy(
-            node_energy, data["batch"], len(data["natoms"])
+            emb, self.energy_block, data["batch"], len(data["natoms"])
         )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
@@ -1134,23 +1128,15 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        # Extract L=0 (scalar) component and compute per-node energy
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
-
-        # Reduce to system-level energy
         energy, _ = compute_energy(
-            node_energy, data_dict["batch"], len(data_dict["natoms"])
+            emb,
+            self.energy_block,
+            data_dict["batch"],
+            len(data_dict["natoms"]),
+            natoms=data_dict["natoms"],
+            reduce=self.reduce,
         )
-
-        if self.reduce == "sum":
-            return {"energy": energy}
-        elif self.reduce == "mean":
-            return {"energy": energy / data_dict["natoms"]}
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
+        return {"energy": energy}
 
 
 class Linear_Force_Head(nn.Module, HeadInterface):
@@ -1159,13 +1145,12 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
 
     def forward(self, data_dict: AtomicData, emb: dict[str, torch.Tensor]):
-        # Extract L=0 and L=1 components (first 4 spherical harmonic components)
         # SO3_Linear with lmax=1 requires both L=0 and L=1 as input
-        l0_l1_embedding = emb["node_embedding"].narrow(1, 0, 4)  # (lmax=1)^2 = 4
+        l0_l1_embedding = get_l_component_range(emb["node_embedding"], l_min=0, l_max=1)
         forces_output = self.linear(l0_l1_embedding)
 
         # Extract L=1 (vector) component from the output
-        forces = get_l_component(forces_output, l=1)
+        forces = get_l_component_range(forces_output, l_min=1, l_max=1)
         forces = forces.view(-1, 3).contiguous()
 
         if gp_utils.initialized():
@@ -1246,7 +1231,9 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
         batch = data_dict["batch"]
 
         # Compute isotropic (L=0) part of stress using MLP on scalar embedding
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        scalar_embedding = get_l_component_range(
+            emb["node_embedding"], l_min=0, l_max=0
+        ).squeeze(1)
         node_scalar = self.scalar_block(scalar_embedding).view(-1)
         iso_stress, _ = reduce_node_to_system(node_scalar, batch, num_systems)
 
@@ -1254,10 +1241,14 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
             iso_stress = iso_stress / data_dict["natoms"]
 
         # Compute anisotropic (L=2) part of stress using SO3_Linear
-        l0l1l2_embedding = emb["node_embedding"].narrow(1, 0, 9)  # (lmax=2)^2 = 9
+        l0l1l2_embedding = get_l_component_range(
+            emb["node_embedding"], l_min=0, l_max=2
+        )
         l2_output = self.l2_linear(l0l1l2_embedding)
 
-        node_l2 = get_l_component(l2_output, l=2).view(-1, 5).contiguous()
+        node_l2 = (
+            get_l_component_range(l2_output, l_min=2, l_max=2).view(-1, 5).contiguous()
+        )
         aniso_stress, _ = reduce_node_to_system(node_l2, batch, num_systems)
 
         if self.reduce == "mean":

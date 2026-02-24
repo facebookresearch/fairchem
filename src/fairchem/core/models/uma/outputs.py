@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import torch
 
@@ -95,8 +95,8 @@ def get_displacement_and_cell(
     return displacement, orig_cell
 
 
-def get_l_component(x: torch.Tensor, l: int) -> torch.Tensor:
-    """Extract the (2L+1) spherical harmonic components for a specific L from node embeddings.
+def get_l_component_range(x: torch.Tensor, l_min: int, l_max: int) -> torch.Tensor:
+    """Extract spherical harmonic components for L in [l_min, l_max] from node embeddings.
 
     The node embeddings are assumed to be organized as [N, (lmax+1)^2, C] where the
     second dimension contains spherical harmonic coefficients ordered by L:
@@ -107,13 +107,15 @@ def get_l_component(x: torch.Tensor, l: int) -> torch.Tensor:
 
     Args:
         x: Node embeddings tensor of shape [N, (lmax+1)^2, C].
-        l: The angular momentum quantum number (0, 1, 2, ...).
+        l_min: Lowest angular momentum quantum number to include (0, 1, 2, ...).
+        l_max: Highest angular momentum quantum number to include (>= l_min).
 
     Returns:
-        Tensor of shape [N, 2L+1, C] containing the L-th spherical harmonic components.
+        Tensor of shape [N, (l_max+1)^2 - l_min^2, C] containing the concatenated
+        spherical harmonic components for all L in [l_min, l_max].
     """
-    start_idx = l * l  # Sum of (2k+1) for k=0 to l-1 equals l^2
-    num_components = 2 * l + 1
+    start_idx = l_min * l_min
+    num_components = (l_max + 1) ** 2 - l_min**2
     return x.narrow(1, start_idx, num_components)
 
 
@@ -161,25 +163,49 @@ def reduce_node_to_system(
 
 
 def compute_energy(
-    node_energy: torch.Tensor,
+    emb: dict[str, torch.Tensor],
+    energy_block: torch.nn.Module,
     batch: torch.Tensor,
     num_systems: int,
+    natoms: torch.Tensor | None = None,
+    reduce: Literal["sum", "mean"] = "sum",
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Compute system-level energy from node-level energy predictions.
+    """Compute system-level energy from node embeddings and an energy block.
+
+    Extracts the L=0 (scalar) component from node embeddings, applies the energy
+    block to produce per-node energies, reduces to system-level energies, and
+    optionally normalizes by the number of atoms per system.
 
     Args:
-        node_energy: Per-node energy predictions, shape [N] or [N, 1].
+        emb: Embedding dictionary containing "node_embedding" of shape [N, (lmax+1)^2, C].
+        energy_block: Module that maps scalar node features [N, C] to per-node energies [N, 1].
         batch: Batch indices mapping each node to its system, shape [N].
         num_systems: Total number of systems in the batch.
+        natoms: Number of atoms per system, shape [num_systems]. Required when reduce="mean".
+        reduce: How to aggregate node energies into system energies. "sum" returns the total
+            energy; "mean" divides by natoms to return the average energy per atom.
 
     Returns:
         A tuple of (energy, energy_part) where:
-        - energy: System-level energy after GP reduction, shape [num_systems].
+        - energy: System-level energy after GP reduction and reduce, shape [num_systems].
         - energy_part: System-level energy before GP reduction (for autograd), shape [num_systems].
     """
-    # Flatten to 1D if needed
+    scalar_embedding = get_l_component_range(
+        emb["node_embedding"], l_min=0, l_max=0
+    ).squeeze(1)
+    node_energy = energy_block(scalar_embedding)
     node_energy_flat = node_energy.view(-1)
     energy, energy_part = reduce_node_to_system(node_energy_flat, batch, num_systems)
+
+    if reduce == "sum":
+        pass
+    elif reduce == "mean":
+        if natoms is None:
+            raise ValueError("natoms must be provided when reduce='mean'")
+        energy = energy / natoms
+    else:
+        raise ValueError(f"reduce can only be sum or mean, got: {reduce}")
+
     return energy, energy_part
 
 

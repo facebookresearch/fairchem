@@ -9,26 +9,26 @@ from __future__ import annotations
 
 import pytest
 import torch
+import torch.nn as nn
 
 from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
-    get_l_component,
+    get_l_component_range,
     reduce_node_to_system,
 )
 
 
-class TestGetLComponent:
-    """Tests for get_l_component function."""
+class TestGetLComponentRange:
+    """Tests for get_l_component_range function."""
 
     def test_l0_extraction(self):
         """Test extraction of L=0 (scalar) component."""
-        # Create tensor with shape [N, 9, C] for lmax=2
         N, C = 5, 8
         x = torch.randn(N, 9, C)
 
-        result = get_l_component(x, l=0)
+        result = get_l_component_range(x, l_min=0, l_max=0)
 
         assert result.shape == (N, 1, C)
         assert torch.allclose(result, x[:, 0:1, :])
@@ -38,7 +38,7 @@ class TestGetLComponent:
         N, C = 5, 8
         x = torch.randn(N, 9, C)
 
-        result = get_l_component(x, l=1)
+        result = get_l_component_range(x, l_min=1, l_max=1)
 
         assert result.shape == (N, 3, C)
         assert torch.allclose(result, x[:, 1:4, :])
@@ -48,7 +48,7 @@ class TestGetLComponent:
         N, C = 5, 8
         x = torch.randn(N, 9, C)
 
-        result = get_l_component(x, l=2)
+        result = get_l_component_range(x, l_min=2, l_max=2)
 
         assert result.shape == (N, 5, C)
         assert torch.allclose(result, x[:, 4:9, :])
@@ -56,25 +56,65 @@ class TestGetLComponent:
     def test_l3_extraction(self):
         """Test extraction of L=3 component from larger tensor."""
         N, C = 5, 8
-        # lmax=3 means (3+1)^2 = 16 components
         x = torch.randn(N, 16, C)
 
-        result = get_l_component(x, l=3)
+        result = get_l_component_range(x, l_min=3, l_max=3)
 
         # L=3 starts at index 9 (= 3^2) and has 7 components (= 2*3+1)
         assert result.shape == (N, 7, C)
         assert torch.allclose(result, x[:, 9:16, :])
 
+    def test_range_l0_to_l1(self):
+        """Test extraction of L=0 through L=1 components."""
+        N, C = 5, 8
+        x = torch.randn(N, 9, C)
+
+        result = get_l_component_range(x, l_min=0, l_max=1)
+
+        # L=0 (1 component) + L=1 (3 components) = 4 components
+        assert result.shape == (N, 4, C)
+        assert torch.allclose(result, x[:, 0:4, :])
+
+    def test_range_l1_to_l2(self):
+        """Test extraction of L=1 through L=2 components."""
+        N, C = 5, 8
+        x = torch.randn(N, 9, C)
+
+        result = get_l_component_range(x, l_min=1, l_max=2)
+
+        # L=1 (3 components) + L=2 (5 components) = 8 components
+        assert result.shape == (N, 8, C)
+        assert torch.allclose(result, x[:, 1:9, :])
+
+    def test_range_l0_to_l2(self):
+        """Test extraction of all components up to L=2."""
+        N, C = 5, 8
+        x = torch.randn(N, 9, C)
+
+        result = get_l_component_range(x, l_min=0, l_max=2)
+
+        assert result.shape == (N, 9, C)
+        assert torch.allclose(result, x)
+
     @pytest.mark.parametrize("l", [0, 1, 2, 3, 4])
-    def test_component_size_formula(self, l):
-        """Test that extracted component has correct size 2L+1."""
+    def test_single_l_size_formula(self, l):
+        """Test that a single-L extraction has size 2L+1."""
         N, C = 3, 4
-        max_idx = (l + 1) ** 2
-        x = torch.randn(N, max_idx, C)
+        x = torch.randn(N, (l + 1) ** 2, C)
 
-        result = get_l_component(x, l=l)
+        result = get_l_component_range(x, l_min=l, l_max=l)
 
-        expected_size = 2 * l + 1
+        assert result.shape[1] == 2 * l + 1
+
+    @pytest.mark.parametrize("l_min,l_max", [(0, 1), (0, 2), (1, 3), (2, 4)])
+    def test_range_size_formula(self, l_min, l_max):
+        """Test that a range extraction has size (l_max+1)^2 - l_min^2."""
+        N, C = 3, 4
+        x = torch.randn(N, (l_max + 1) ** 2, C)
+
+        result = get_l_component_range(x, l_min=l_min, l_max=l_max)
+
+        expected_size = (l_max + 1) ** 2 - l_min**2
         assert result.shape[1] == expected_size
 
 
@@ -147,52 +187,108 @@ class TestReduceNodeToSystem:
         assert reduced.dtype == torch.float64
 
 
+def _make_emb_and_block(node_energies: torch.Tensor) -> tuple:
+    """Helper to build a minimal emb dict and identity energy_block from 1D node energies.
+
+    node_energies: 1D tensor of shape [N] representing per-node scalar energy values.
+    Returns (emb, energy_block) where emb["node_embedding"] has shape [N, 1, 1].
+    """
+    node_embedding = node_energies.view(-1, 1, 1)
+    return {"node_embedding": node_embedding}, nn.Identity()
+
+
 class TestComputeEnergy:
     """Tests for compute_energy function."""
 
     def test_single_system(self):
         """Test energy computation for a single system."""
-        node_energy = torch.tensor([0.5, 1.0, 1.5])
+        emb, energy_block = _make_emb_and_block(torch.tensor([0.5, 1.0, 1.5]))
         batch = torch.tensor([0, 0, 0])
 
-        energy, energy_part = compute_energy(node_energy, batch, num_systems=1)
+        energy, energy_part = compute_energy(emb, energy_block, batch, num_systems=1)
 
         assert energy.shape == (1,)
         assert torch.allclose(energy, torch.tensor([3.0]))
 
     def test_multiple_systems(self):
         """Test energy computation for multiple systems."""
-        node_energy = torch.tensor([1.0, 2.0, 3.0, 4.0])
+        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0, 3.0, 4.0]))
         batch = torch.tensor([0, 0, 1, 1])
 
-        energy, energy_part = compute_energy(node_energy, batch, num_systems=2)
+        energy, energy_part = compute_energy(emb, energy_block, batch, num_systems=2)
 
         assert energy.shape == (2,)
         assert torch.allclose(energy, torch.tensor([3.0, 7.0]))
 
-    def test_2d_input_flattening(self):
-        """Test that 2D input [N, 1] is properly flattened."""
-        node_energy = torch.tensor([[1.0], [2.0], [3.0]])
+    def test_node_energy_flattening(self):
+        """Test that energy_block output [N, 1] is properly flattened to [N]."""
+        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0, 3.0]))
         batch = torch.tensor([0, 0, 0])
 
-        energy, _ = compute_energy(node_energy, batch, num_systems=1)
+        energy, _ = compute_energy(emb, energy_block, batch, num_systems=1)
 
         assert energy.shape == (1,)
         assert torch.allclose(energy, torch.tensor([6.0]))
 
     def test_energy_part_for_gradients(self):
         """Test that energy_part can be used for gradient computation."""
-        node_energy = torch.tensor([1.0, 2.0], requires_grad=True)
+        node_embedding = torch.tensor([[[1.0]], [[2.0]]], requires_grad=True)
+        emb = {"node_embedding": node_embedding}
+        energy_block = nn.Identity()
         batch = torch.tensor([0, 0])
 
-        energy, energy_part = compute_energy(node_energy, batch, num_systems=1)
+        energy, energy_part = compute_energy(emb, energy_block, batch, num_systems=1)
 
         # energy_part should allow gradient computation
         loss = energy_part.sum()
         loss.backward()
 
-        assert node_energy.grad is not None
-        assert torch.allclose(node_energy.grad, torch.tensor([1.0, 1.0]))
+        assert node_embedding.grad is not None
+        assert torch.allclose(node_embedding.grad, torch.ones_like(node_embedding))
+
+    def test_reduce_mean(self):
+        """Test that reduce='mean' divides energy by natoms per system."""
+        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 3.0, 2.0, 6.0]))
+        batch = torch.tensor([0, 0, 1, 1])
+        natoms = torch.tensor([2, 2])
+
+        energy, _ = compute_energy(
+            emb, energy_block, batch, num_systems=2, natoms=natoms, reduce="mean"
+        )
+
+        assert energy.shape == (2,)
+        assert torch.allclose(energy, torch.tensor([2.0, 4.0]))
+
+    def test_reduce_sum_is_default(self):
+        """Test that reduce defaults to 'sum'."""
+        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0, 3.0]))
+        batch = torch.tensor([0, 0, 0])
+
+        energy_default, _ = compute_energy(emb, energy_block, batch, num_systems=1)
+        energy_sum, _ = compute_energy(
+            emb, energy_block, batch, num_systems=1, reduce="sum"
+        )
+
+        assert torch.allclose(energy_default, energy_sum)
+
+    def test_reduce_mean_requires_natoms(self):
+        """Test that reduce='mean' raises when natoms is not provided."""
+        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0]))
+        batch = torch.tensor([0, 0])
+
+        with pytest.raises(ValueError, match="natoms must be provided"):
+            compute_energy(emb, energy_block, batch, num_systems=1, reduce="mean")
+
+    def test_reduce_invalid(self):
+        """Test that an invalid reduce value raises ValueError."""
+        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0]))
+        batch = torch.tensor([0, 0])
+        natoms = torch.tensor([2])
+
+        with pytest.raises(ValueError, match="reduce can only be sum or mean"):
+            compute_energy(
+                emb, energy_block, batch, num_systems=1, natoms=natoms, reduce="max"
+            )
 
 
 class TestComputeForces:
