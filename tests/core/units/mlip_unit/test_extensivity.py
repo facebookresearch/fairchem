@@ -15,6 +15,7 @@ from fairchem.core.datasets.ase_datasets import AseDBDataset
 from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 @pytest.mark.parametrize(
@@ -65,8 +66,10 @@ def test_extensivity_nonpbc(
     sample1 = a2g(atoms1, task_name="oc20")
     sample2 = a2g(atoms2, task_name="oc20")
 
-    predictor = MLIPPredictUnit(direct_inference_checkpoint_pt, device="cpu")
-    predictor.model = predictor.model.to(dtype)
+    settings = InferenceSettings(base_precision_dtype=dtype)
+    predictor = MLIPPredictUnit(
+        direct_inference_checkpoint_pt, device="cpu", inference_settings=settings
+    )
 
     batch1 = data_list_collater([sample1], otf_graph=True)
     batch2 = data_list_collater([sample2], otf_graph=True)
@@ -123,8 +126,10 @@ def test_extensivity_pbc(dtype, num_tol, direct_checkpoint, fake_uma_dataset):
     sample_pbc = a2g(atoms_pbc, task_name="oc20")
     sample_supercell = a2g(atoms_supercell, task_name="oc20")
 
-    predictor = MLIPPredictUnit(direct_inference_checkpoint_pt, device="cpu")
-    predictor.model = predictor.model.to(dtype)
+    settings = InferenceSettings(base_precision_dtype=dtype)
+    predictor = MLIPPredictUnit(
+        direct_inference_checkpoint_pt, device="cpu", inference_settings=settings
+    )
 
     batch_pbc = data_list_collater([sample_pbc], otf_graph=True)
     batch_supercell = data_list_collater([sample_supercell], otf_graph=True)
