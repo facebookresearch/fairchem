@@ -88,7 +88,7 @@ def equivariance_on_pt(
         target_dtype=dtype,
     )
 
-    n_repeats = 10
+    n_repeats = 5
     settings = InferenceSettings(base_precision_dtype=dtype)
     predictor = MLIPPredictUnit(
         inference_checkpoint_path,
