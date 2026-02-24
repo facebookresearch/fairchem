@@ -1,4 +1,13 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
+
+import logging
 
 import pytest
 import torch
@@ -8,7 +17,7 @@ from e3nn.math import direct_sum
 from e3nn.o3 import matrix_to_angles, spherical_harmonics, wigner_D
 
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.models.uma.escn_md import eSCNMDBackbone
+from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 
 
 @pytest.mark.parametrize(
@@ -123,6 +132,55 @@ def test_escnmd_backbone_symmetries(
     )
 
     assert (
-        (out0["node_embedding"] - out1["node_embedding"]).abs().max()
-        < 5e-4  # high tolerance due to low precision
-    ), f"For this molecule {atoms.positions=}, node embeddings should be invariant under this symmetry transformation {symmetry_matrix=}."
+        (out0["node_embedding"] - out1["node_embedding"]).abs().max() < 5e-4
+    ), f"For this molecule {atoms.positions=}, node embeddings should be invariant under this symmetry transformation {symmetry_matrix=}."  # high tolerance due to low precision
+
+
+def test_resolve_dataset_mapping_valid_mapping():
+    mapping = {"oc20": "oc20", "oc20_subset": "oc20"}
+    result = resolve_dataset_mapping(deprecated_list=None, dataset_mapping=mapping)
+    assert result == {"oc20": "oc20", "oc20_subset": "oc20"}
+
+
+def test_resolve_dataset_mapping_deprecated_list(caplog):
+    with caplog.at_level(logging.WARNING):
+        result = resolve_dataset_mapping(
+            deprecated_list=["omol", "omat"], dataset_mapping=None
+        )
+    assert result == {"omol": "omol", "omat": "omat"}
+    assert "deprecated" in caplog.text.lower()
+
+
+def test_resolve_dataset_mapping_both_raises():
+    with pytest.raises(ValueError, match="Both"):
+        resolve_dataset_mapping(
+            deprecated_list=["oc20"], dataset_mapping={"oc20": "oc20"}
+        )
+
+
+def test_resolve_dataset_mapping_neither_raises():
+    with pytest.raises(ValueError, match="dataset_mapping"):
+        resolve_dataset_mapping(deprecated_list=None, dataset_mapping=None)
+
+
+def test_resolve_dataset_mapping_empty_dict_raises():
+    with pytest.raises(ValueError, match="non-empty"):
+        resolve_dataset_mapping(deprecated_list=None, dataset_mapping={})
+
+
+def test_resolve_dataset_mapping_values_not_subset_raises():
+    with pytest.raises(ValueError, match="subset"):
+        resolve_dataset_mapping(
+            deprecated_list=None,
+            dataset_mapping={"oc20_subset1": "oc20", "oc20subset2": "oc20"},
+        )
+
+
+def test_resolve_dataset_mapping_custom_param_name(caplog):
+    with caplog.at_level(logging.WARNING):
+        resolve_dataset_mapping(
+            deprecated_list=["omol"],
+            dataset_mapping=None,
+            deprecated_param_name="dataset_names",
+        )
+    assert "dataset_names" in caplog.text

@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.graph.radius_graph_pbc import radius_graph_pbc, radius_graph_pbc_v2
+from fairchem.core.graph.radius_graph_pbc import (
+    radius_graph_pbc,
+    radius_graph_pbc_v2,
+)
+from fairchem.core.graph.radius_graph_pbc_nvidia import radius_graph_pbc_nvidia
 
 
 def get_pbc_distances(
@@ -28,7 +32,7 @@ def get_pbc_distances(
     # correct for pbc
     neighbors = neighbors.to(cell.device)
     cell = torch.repeat_interleave(cell, neighbors, dim=0)
-    offsets = cell_offsets.float().view(-1, 1, 3).bmm(cell.float()).view(-1, 3)
+    offsets = cell_offsets.to(dtype=cell.dtype).view(-1, 1, 3).bmm(cell).view(-1, 3)
     distance_vectors += offsets
 
     # compute distances
@@ -74,7 +78,7 @@ def generate_graph(
         cutoff (float): The maximum distance between atoms to consider them as neighbors.
         max_neighbors (int): The maximum number of neighbors to consider for each atom.
         enforce_max_neighbors_strictly (bool): Whether to strictly enforce the maximum number of neighbors.
-        radius_pbc_version: the version of radius_pbc impl
+        radius_pbc_version: the version of radius_pbc impl (1, 2, or 3 for NVIDIA)
         pbc (list[bool]): The periodic boundary conditions in 3 dimensions, defaults to [True,True,True] for 3D pbc
 
     Returns:
@@ -90,6 +94,8 @@ def generate_graph(
         radius_graph_pbc_fn = radius_graph_pbc
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
+    elif radius_pbc_version == 3:
+        radius_graph_pbc_fn = radius_graph_pbc_nvidia
     else:
         raise ValueError(f"Invalid radius_pbc version {radius_pbc_version}")
 
