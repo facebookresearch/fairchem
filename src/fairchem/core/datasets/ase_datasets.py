@@ -491,6 +491,9 @@ class AseDBDataset(AseAtomsDataset):
         idlens = [len(ids) for ids in self.db_ids]
         self._idlen_cumulative = np.cumsum(idlens).tolist()
 
+        # Add dataset_names attribute from config for compatibility with evaluation
+        self.dataset_names = config.get("dataset_names", [])
+
         return list(range(sum(idlens)))
 
     def get_atoms(self, idx: int) -> ase.Atoms:
