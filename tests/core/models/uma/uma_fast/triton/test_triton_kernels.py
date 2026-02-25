@@ -137,7 +137,7 @@ class TestEdgeGatherWignerForward:
         """
         Base forward kernel matches PyTorch gather + concat + bmm + permute.
         """
-        from fairchem.core.models.uma.triton.edge_gather_wigner_fwd import (
+        from fairchem.core.models.uma.triton._kernels.gather_wigner_fwd import (
             fused_edge_gather_wigner_l2m_lmax2,
         )
 
@@ -188,7 +188,7 @@ class TestEmitForwardKernel:
         """
         Emit kernel main output exactly matches base kernel output.
         """
-        from fairchem.core.models.uma.triton.edge_gather_wigner_fwd import (
+        from fairchem.core.models.uma.triton._kernels.gather_wigner_fwd import (
             fused_edge_gather_wigner_l2m_lmax2,
             fused_edge_gather_wigner_l2m_lmax2_emit,
         )
@@ -215,7 +215,7 @@ class TestEmitForwardKernel:
         """
         Emit kernel side outputs match PyTorch gather.
         """
-        from fairchem.core.models.uma.triton.edge_gather_wigner_fwd import (
+        from fairchem.core.models.uma.triton._kernels.gather_wigner_fwd import (
             fused_edge_gather_wigner_l2m_lmax2_emit,
         )
 
@@ -270,7 +270,7 @@ class TestWignerOpsForward:
         """
         MToLThenWignerLmax2Function matches PyTorch permute + bmm.
         """
-        from fairchem.core.models.uma.triton.wigner_ops import (
+        from fairchem.core.models.uma.triton._kernels.wigner_transform import (
             MToLThenWignerLmax2Function,
         )
 
@@ -294,7 +294,7 @@ class TestWignerOpsForward:
         """
         FusedMToLThenWignerLmax2Function exactly matches non-fused variant.
         """
-        from fairchem.core.models.uma.triton.wigner_ops import (
+        from fairchem.core.models.uma.triton._kernels.wigner_transform import (
             FusedMToLThenWignerLmax2Function,
             MToLThenWignerLmax2Function,
         )
@@ -523,7 +523,7 @@ class TestWignerOpsBackward:
         """
         FusedMToLThenWignerLmax2Function backward matches PyTorch autograd.
         """
-        from fairchem.core.models.uma.triton.wigner_ops import (
+        from fairchem.core.models.uma.triton._kernels.wigner_transform import (
             FusedMToLThenWignerLmax2Function,
         )
 

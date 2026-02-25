@@ -16,10 +16,15 @@ import pytest
 
 from fairchem.core.models.uma.triton import HAS_TRITON
 
-
 # =============================================================================
 # Tests: Validation Errors
 # =============================================================================
+
+
+class MockEdgeDegreeEmbedding:
+    """Mock edge_degree_embedding with activation_checkpoint_chunk_size=None."""
+
+    activation_checkpoint_chunk_size = None
 
 
 @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
@@ -34,6 +39,7 @@ def test_umas_fast_gpu_validation_requires_correct_lmax():
         lmax = 3  # Wrong - should be 2
         mmax = 2
         sphere_channels = 128
+        edge_degree_embedding = MockEdgeDegreeEmbedding()
 
     with pytest.raises(ValueError, match="lmax==2 and mmax==2"):
         UMASFastGPUBackend.validate(MockModelWrongLmax())
@@ -51,6 +57,7 @@ def test_umas_fast_gpu_validation_requires_correct_mmax():
         lmax = 2
         mmax = 1  # Wrong - should be 2
         sphere_channels = 128
+        edge_degree_embedding = MockEdgeDegreeEmbedding()
 
     with pytest.raises(ValueError, match="lmax==2 and mmax==2"):
         UMASFastGPUBackend.validate(MockModelWrongMmax())
@@ -68,6 +75,7 @@ def test_umas_fast_gpu_validation_requires_sphere_channels_divisible_by_128():
         lmax = 2
         mmax = 2
         sphere_channels = 100  # Wrong - should be divisible by 128
+        edge_degree_embedding = MockEdgeDegreeEmbedding()
 
     with pytest.raises(ValueError, match="divisible by 128"):
         UMASFastGPUBackend.validate(MockModelWrongChannels())
@@ -85,6 +93,7 @@ def test_umas_fast_gpu_validation_accepts_correct_config():
         lmax = 2
         mmax = 2
         sphere_channels = 128
+        edge_degree_embedding = MockEdgeDegreeEmbedding()
 
     # Should not raise
     UMASFastGPUBackend.validate(MockModel())
@@ -102,6 +111,7 @@ def test_umas_fast_gpu_validation_accepts_512_channels():
         lmax = 2
         mmax = 2
         sphere_channels = 512
+        edge_degree_embedding = MockEdgeDegreeEmbedding()
 
     # Should not raise
     UMASFastGPUBackend.validate(MockModel())
@@ -118,6 +128,7 @@ def test_umas_fast_gpu_validation_requires_merge_mole():
         lmax = 2
         mmax = 2
         sphere_channels = 128
+        edge_degree_embedding = MockEdgeDegreeEmbedding()
 
     class MockSettings:
         activation_checkpointing = False
