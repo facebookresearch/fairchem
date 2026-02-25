@@ -669,6 +669,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             csd_mixed_emb=csd_mixed_emb,
         )
 
+        # Enable gradients for autograd-based force/stress computation.
+        # Must be set before graph generation so the computation graph
+        # tracks positions and cell through edge distance calculations.
+        if not self.regress_config.direct_forces:
+            if self.regress_config.forces or self.regress_config.stress:
+                data_dict["pos"].requires_grad_(True)
+            if self.regress_config.stress:
+                data_dict["cell"].requires_grad_(True)
+
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
 
@@ -1102,14 +1111,14 @@ class MLP_EFS_Head(MLP_Energy_Head):
         if self.regress_config.stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
-                data["pos_original"],
-                emb["displacement"],
+                data["pos"],
                 data["cell"],
+                batch=data["batch"],
+                num_systems=len(data["natoms"]),
                 training=self.training,
             )
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
-            data["cell"] = emb["orig_cell"]
         elif self.regress_config.forces:
             forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces

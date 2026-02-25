@@ -241,18 +241,28 @@ def compute_forces_and_stress(
     energy_part: torch.Tensor,
     pos: torch.Tensor,
     cell: torch.Tensor,
+    batch: torch.Tensor,
+    num_systems: int,
     training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute forces and stress from energy using autograd.
 
     Forces are computed as the negative gradient of energy with respect to positions.
-    Stress is computed from the virial (gradient with respect to strain/displacement)
-    divided by the cell volume.
+    Stress is computed by reconstructing the virial tensor from the position and cell
+    gradients, equivalent to the strain-derivative approach.
+
+    The virial is:
+        V = (g_r^T r + r^T g_r) / 2 + (cell^T g_h + g_h^T cell) / 2
+
+    where g_r = dE/dpos and g_h = dE/dcell. This matches dE/dε for a symmetric
+    strain ε applied as r' = r(I + ε), h' = h(I + ε).
 
     Args:
         energy_part: System-level energy before GP reduction, shape [num_systems].
-        pos: Original atomic positions (before strain applied), shape [N, 3].
+        pos: Atomic positions, shape [N, 3].
         cell: Unit cell vectors, shape [num_systems, 3, 3].
+        batch: Batch indices mapping each node to its system, shape [N].
+        num_systems: Total number of systems in the batch.
         training: Whether to create graph for higher-order gradients.
 
     Returns:
@@ -273,10 +283,16 @@ def compute_forces_and_stress(
         )
 
     forces = torch.neg(grads[0])
-    atomic_potential = grads[0].T @ pos
-    virial = (grads[1] @ cell + (atomic_potential + atomic_potential.T) / 2).view(
-        -1, 3, 3
-    )
+
+    # Per-system position virial: Σ_{n∈s} g_r[n,i] * r[n,j]
+    pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
+    pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
+
+    # Cell virial: cell^T @ g_cell per system
+    cell_virial = cell.mT @ grads[1]  # [B, 3, 3]
+
+    # Symmetrized total virial
+    virial = (pos_virial + pos_virial.mT + cell_virial + cell_virial.mT) / 2
     volume = torch.det(cell).abs().unsqueeze(-1)
     stress = virial / volume.view(-1, 1, 1)
     stress = stress.view(-1, 9)
