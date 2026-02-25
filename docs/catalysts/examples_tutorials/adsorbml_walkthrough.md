@@ -63,12 +63,13 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 from __future__ import annotations
 
 import pandas as pd
-from fairchem.data.oc.core import Bulk, Slab
+from fairchem.data.oc.core import Bulk, Slab, Adsorbate
+
+co_molecule = molecule("CO")
+adsorbate = Adsorbate(adsorbate_atoms=co_molecule, adsorbate_binding_indices=[1]) # 1 corresponds to the carbon atom
+# adsorbate = [Adsorbate(adsorbate_atoms=co_molecule, adsorbate_binding_indices=[1]) for _ in range(2)] # 2 COs
 
 bulk_src_id = "mp-30"
-# adsorbate smiles string from our database https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/data/oc/databases/pkls/adsorbates.pkl
-adsorbate = "*CO"
-
 bulk = Bulk(bulk_src_id_from_db=bulk_src_id)
 slabs = Slab.from_bulk_get_specific_millers(bulk=bulk, specific_millers=(1, 1, 1))
 
