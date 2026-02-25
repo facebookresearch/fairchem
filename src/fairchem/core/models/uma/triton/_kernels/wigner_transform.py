@@ -112,7 +112,6 @@ if HAS_TRITON:
         X_ptr,
         W_ptr,
         OUT_ptr,
-        E: tl.constexpr,
         C: tl.constexpr,
     ):
         """
@@ -122,7 +121,6 @@ if HAS_TRITON:
             X_ptr: Input tensor [E, 9, C] - spherical harmonic coefficients
             W_ptr: Wigner matrix [E, 9, 9] flattened to [E, 81]
             OUT_ptr: Output tensor [E, 9, C]
-            E: Number of edges
             C: Number of channels (must equal BLOCK_C=128)
 
         Grid: (E,) - one thread block per edge
@@ -235,7 +233,6 @@ if HAS_TRITON:
         DY_ptr,
         W_ptr,
         DX_ptr,
-        E: tl.constexpr,
         C: tl.constexpr,
     ):
         """
@@ -245,7 +242,6 @@ if HAS_TRITON:
             DY_ptr: Upstream gradient [E, 9, C]
             W_ptr: Wigner matrix [E, 81] (same as forward)
             DX_ptr: Input gradient [E, 9, C]
-            E: Number of edges
             C: Number of channels
 
         Grid: (E,) - one thread block per edge
@@ -363,7 +359,6 @@ if HAS_TRITON:
         DY_ptr,
         X_ptr,
         DW_ptr,
-        E: tl.constexpr,
         C: tl.constexpr,
     ):
         """
@@ -373,7 +368,6 @@ if HAS_TRITON:
             DY_ptr: Upstream gradient [E, 9, C]
             X_ptr: Forward input (saved) [E, 9, C]
             DW_ptr: Wigner gradient [E, 81] (only non-zero blocks computed)
-            E: Number of edges
             C: Number of channels
 
         Grid: (E,) - one thread block per edge
@@ -514,7 +508,6 @@ if HAS_TRITON:
     def l_to_m_kernel(
         X_ptr,
         OUT_ptr,
-        E: tl.constexpr,
         C: tl.constexpr,
     ):
         """
@@ -523,7 +516,6 @@ if HAS_TRITON:
         Args:
             X_ptr: Input [E, 9, C] in L-major order
             OUT_ptr: Output [E, 9, C] in M-major order
-            E: Number of edges
             C: Number of channels
 
         Grid: (E,) - one thread block per edge
@@ -573,7 +565,6 @@ if HAS_TRITON:
     def m_to_l_kernel(
         X_ptr,
         OUT_ptr,
-        E: tl.constexpr,
         C: tl.constexpr,
     ):
         """
@@ -582,7 +573,6 @@ if HAS_TRITON:
         Args:
             X_ptr: Input [E, 9, C] in M-major order
             OUT_ptr: Output [E, 9, C] in L-major order
-            E: Number of edges
             C: Number of channels
 
         Grid: (E,) - one thread block per edge
@@ -972,7 +962,7 @@ def _wigner_lmax2_fwd(x: torch.Tensor, wigner: torch.Tensor) -> torch.Tensor:
     E, num_coeffs, C = x.shape
     assert C == BLOCK_C, f"Only C={BLOCK_C} supported, got {C}"
     out = torch.empty_like(x)
-    wigner_lmax2_fwd_kernel[(E,)](x, wigner, out, E, C)
+    wigner_lmax2_fwd_kernel[(E,)](x, wigner, out, C)
     return out
 
 
@@ -982,7 +972,7 @@ def _wigner_lmax2_bwd_dx(dy: torch.Tensor, wigner: torch.Tensor) -> torch.Tensor
     E, num_coeffs, C = dy.shape
     assert C == BLOCK_C, f"Only C={BLOCK_C} supported, got {C}"
     dx = torch.empty_like(dy)
-    wigner_lmax2_bwd_dx_kernel[(E,)](dy, wigner, dx, E, C)
+    wigner_lmax2_bwd_dx_kernel[(E,)](dy, wigner, dx, C)
     return dx
 
 
@@ -992,7 +982,7 @@ def _wigner_lmax2_bwd_dw(dy: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
     E, num_coeffs, C = dy.shape
     assert C == BLOCK_C, f"Only C={BLOCK_C} supported, got {C}"
     dw = torch.zeros(E, 9, 9, device=dy.device, dtype=dy.dtype)
-    wigner_lmax2_bwd_dw_kernel[(E,)](dy, x, dw, E, C)
+    wigner_lmax2_bwd_dw_kernel[(E,)](dy, x, dw, C)
     return dw
 
 
@@ -1002,7 +992,7 @@ def _l_to_m_lmax2_fwd(x: torch.Tensor) -> torch.Tensor:
     E, num_coeffs, C = x.shape
     assert C == BLOCK_C, f"Only C={BLOCK_C} supported, got {C}"
     out = torch.empty_like(x)
-    l_to_m_kernel[(E,)](x, out, E, C)
+    l_to_m_kernel[(E,)](x, out, C)
     return out
 
 
@@ -1012,7 +1002,7 @@ def _m_to_l_lmax2_fwd(x: torch.Tensor) -> torch.Tensor:
     E, num_coeffs, C = x.shape
     assert C == BLOCK_C, f"Only C={BLOCK_C} supported, got {C}"
     out = torch.empty_like(x)
-    m_to_l_kernel[(E,)](x, out, E, C)
+    m_to_l_kernel[(E,)](x, out, C)
     return out
 
 
