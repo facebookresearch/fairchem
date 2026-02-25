@@ -58,6 +58,16 @@ CHECKPOINTS = {
         "model": "uma-s-1p1",
         "task_name": "omol",
     },
+    "uma_sm_1p2_omc": {  # UMA 1p2 w/ OMC task
+        "checkpoint": "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt",
+        "model": "uma-s-1p2",
+        "task_name": "omc",
+    },
+    "uma_sm_1p2_omol": {  # UMA 1p2 w/ OMol task
+        "checkpoint": "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt",
+        "model": "uma-s-1p2",
+        "task_name": "omol",
+    },
 }
 
 
@@ -124,6 +134,7 @@ def get_relax_config_and_dir(
         "relax_cell": relax_config.get("relax-cell", True),
         "write_traj": relax_config.get("write-traj", False),
         "traj_interval": relax_config.get("traj-interval", 1),
+        "slurm": relax_config.get("slurm", {}),
     }
 
     relax_output_dir = f"{relax_params['calculator']}_{relax_params['optimizer']}_{relax_params['fmax']}_{relax_params['max_steps']}"

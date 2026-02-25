@@ -207,6 +207,10 @@ def get_slurm_config(
         "time",
         "cpus_per_task",
         "gpus_per_node",
+        "mem_gb",
+        "num_ranks",
+        "job_name",
+        "array_parallelism",
     }
     if executor_type == "submitit_executor":
         executor_params = {}

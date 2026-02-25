@@ -103,7 +103,6 @@ def main(args: argparse.Namespace) -> None:
 
     # Reorder stages based on dependencies
     args.stages = reorder_stages_by_dependencies(args.stages)
-
     # Set up logging to FastCSP.log in root directory
     log_file = root / "FastCSP.log"
     is_restart = logging.detect_restart(root)
