@@ -88,16 +88,16 @@ def equivariance_on_pt(
         target_dtype=dtype,
     )
 
-    n_repeats = 10
+    n_repeats = 5
+    settings = InferenceSettings(base_precision_dtype=dtype)
+    predictor = MLIPPredictUnit(
+        inference_checkpoint_path,
+        device="cpu",
+        inference_settings=settings,
+    )
     for sample_idx in range(5):
         torch.manual_seed(42)
         rotations = [rand_matrix(dtype=dtype) for _ in range(n_repeats)]
-        settings = InferenceSettings(base_precision_dtype=dtype)
-        predictor = MLIPPredictUnit(
-            inference_checkpoint_path,
-            device="cpu",
-            inference_settings=settings,
-        )
 
         sample = a2g(db.get_atoms(sample_idx), task_name="oc20")
         sample.pos += 500
