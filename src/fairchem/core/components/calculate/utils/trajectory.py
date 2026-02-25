@@ -7,12 +7,13 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -20,7 +21,9 @@ if TYPE_CHECKING:
 
 @dataclass
 class TrajectoryFrame:
-    """Single frame of MD trajectory data."""
+    """
+    Single frame of MD trajectory data.
+    """
 
     step: int
     time: float
@@ -35,7 +38,9 @@ class TrajectoryFrame:
     sid: str | int | None = None
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for Parquet serialization."""
+        """
+        Convert to dictionary for Parquet serialization.
+        """
         return {
             "step": self.step,
             "time": self.time,
@@ -84,36 +89,66 @@ class TrajectoryFrame:
         )
 
 
-class TrajectoryWriter(ABC):
+class ParquetTrajectoryWriter:
     """
-    Abstract base class for trajectory writers.
+    Buffered writer for MD trajectory data in parquet format.
 
-    Trajectory writers are responsible for saving MD simulation frames
-    to disk in various formats (parquet, ASE trajectory, etc.).
+    Uses PyArrow's ParquetWriter for efficient incremental writes
+    without read-modify-write overhead.
     """
 
-    def __init__(self, path: Path | str):
+    def __init__(self, path: Path | str, flush_interval: int = 1000):
         """
-        Initialize the trajectory writer.
+        Initialize the parquet trajectory writer.
 
         Args:
-            path: Path to the output trajectory file
+            path: Path to the output parquet file
+            flush_interval: Number of frames to buffer before writing to disk
         """
         self.path = Path(path)
         self.total_frames = 0
+        self.flush_interval = flush_interval
+        self.buffer: list[dict] = []
+        self._writer = None
+        self._schema = None
 
-    @abstractmethod
     def append(self, frame: TrajectoryFrame) -> None:
         """
-        Append a frame to the trajectory.
+        Add frame to buffer, flush if interval reached.
 
         Args:
             frame: TrajectoryFrame to append
         """
+        self.buffer.append(frame.to_dict())
+        if len(self.buffer) >= self.flush_interval:
+            self.flush()
 
-    @abstractmethod
+    def flush(self) -> None:
+        """
+        Write buffered frames as a new row group.
+        """
+        if not self.buffer:
+            return
+
+        table = pa.Table.from_pydict(
+            {k: [row[k] for row in self.buffer] for k in self.buffer[0]}
+        )
+
+        if self._writer is None:
+            self._schema = table.schema
+            self._writer = pq.ParquetWriter(self.path, self._schema, compression="zstd")
+
+        self._writer.write_table(table)
+        self.total_frames += len(self.buffer)
+        self.buffer.clear()
+
     def close(self) -> None:
-        """Finalize and close the trajectory file."""
+        """
+        Flush remaining buffer and finalize.
+        """
+        self.flush()
+        if self._writer is not None:
+            self._writer.close()
 
     def __enter__(self):
         return self

@@ -19,8 +19,7 @@ from ._single.pairwise_ct_runner import PairwiseCountRunner
 from ._single.phonon_runner import MDRPhononRunner
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
-from .parquet_trajectory import ParquetTrajectoryWriter
-from .trajectory import TrajectoryFrame, TrajectoryWriter
+from .utils.trajectory import ParquetTrajectoryWriter, TrajectoryFrame
 
 __all__ = [
     "AdsorbMLRunner",
@@ -37,5 +36,4 @@ __all__ = [
     "RelaxationRunner",
     "SinglePointRunner",
     "TrajectoryFrame",
-    "TrajectoryWriter",
 ]

@@ -21,12 +21,9 @@ from ase.md import MDLogger
 from omegaconf import OmegaConf
 
 from fairchem.core.components.calculate._calculate_runner import CalculateRunner
-from fairchem.core.components.calculate.parquet_trajectory import (
+from fairchem.core.components.calculate.utils.trajectory import (
     ParquetTrajectoryWriter,
-)
-from fairchem.core.components.calculate.trajectory import (
     TrajectoryFrame,
-    TrajectoryWriter,
 )
 
 if TYPE_CHECKING:
@@ -67,8 +64,8 @@ class MDRunner(CalculateRunner):
         tdamp_fs: float | None = None,
         taut_fs: float | None = None,
         friction_per_fs: float | None = None,
-        trajectory_writer: type[TrajectoryWriter]
-        | Callable[..., TrajectoryWriter]
+        trajectory_writer: type[ParquetTrajectoryWriter]
+        | Callable[..., ParquetTrajectoryWriter]
         | None = None,
         trajectory_writer_kwargs: dict[str, Any] | None = None,
     ):
@@ -116,7 +113,7 @@ class MDRunner(CalculateRunner):
 
         # State tracking
         self._dyn: MolecularDynamics | None = None
-        self._trajectory_writer: TrajectoryWriter | None = None
+        self._trajectory_writer: ParquetTrajectoryWriter | None = None
         self._start_step = 0
         self._thermostat_state_to_restore: dict | None = None
 
