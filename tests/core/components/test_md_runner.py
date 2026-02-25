@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import tempfile
 from dataclasses import dataclass
-from functools import partial
 from pathlib import Path
 
 import ase.io
@@ -22,14 +21,15 @@ from ase import units
 from ase.build import bulk
 from ase.calculators.emt import EMT
 from ase.io import Trajectory
-from ase.md.nose_hoover_chain import NoseHooverChainNVT
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 
 from fairchem.core.components.calculate import (
     MDRunner,
+    NoseHooverNVT,
     ParquetTrajectoryWriter,
     TrajectoryFrame,
+    VelocityVerletThermostat,
 )
 
 
@@ -102,7 +102,7 @@ class TestMDRunner:
         runner = MDRunner(
             calculator=EMT(),
             atoms=atoms_mdrunner,
-            dynamics=VelocityVerlet,
+            thermostat=VelocityVerletThermostat(),
             timestep_fs=1.0,
             steps=steps,
             trajectory_interval=interval,
@@ -152,14 +152,13 @@ class TestMDRunner:
         interrupt_at_step = 36
         total_steps = 100
 
-        dynamics = partial(NoseHooverChainNVT, temperature_K=300.0)
+        thermostat = NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0)
 
         runner1 = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
-            dynamics=dynamics,
+            thermostat=thermostat,
             timestep_fs=1.0,
-            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -177,12 +176,7 @@ class TestMDRunner:
         # Run 1: manually drive dynamics so we can attach an interrupt
         try:
             runner1._atoms.calc = runner1.calculator
-            runner1._dyn = NoseHooverChainNVT(
-                atoms=runner1._atoms,
-                timestep=1.0 * units.fs,
-                temperature_K=300.0,
-                tdamp=25.0 * units.fs,
-            )
+            runner1._dyn = thermostat.build(runner1._atoms, timestep_fs=1.0)
             parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
             runner1._trajectory_writer = ParquetTrajectoryWriter(
                 parquet_file1, flush_interval=1000
@@ -218,9 +212,8 @@ class TestMDRunner:
         runner2 = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
-            dynamics=dynamics,
+            thermostat=thermostat,
             timestep_fs=1.0,
-            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -253,14 +246,11 @@ class TestMDRunner:
         md_results_dir.mkdir()
         checkpoint_dir.mkdir()
 
-        dynamics = partial(NoseHooverChainNVT, temperature_K=300.0)
-
         runner = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
-            dynamics=dynamics,
+            thermostat=NoseHooverNVT(temperature_K=300.0, tdamp_fs=25.0),
             timestep_fs=1.0,
-            tdamp_fs=25.0,
             steps=100,
             trajectory_interval=10,
             heartbeat_interval=20,

@@ -14,9 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import ase.io
-import numpy as np
 import pandas as pd
-from ase import units
 from ase.md import MDLogger
 from omegaconf import OmegaConf
 
@@ -27,11 +25,16 @@ from fairchem.core.components.calculate.utils.trajectory import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from ase import Atoms
     from ase.calculators.calculator import Calculator
     from ase.md.md import MolecularDynamics
+
+    from fairchem.core.components.calculate.utils.thermostats import (
+        BussiThermostat,
+        LangevinThermostat,
+        NoseHooverNVT,
+        VelocityVerletThermostat,
+    )
 
 
 class _StopfairDetected(Exception):
@@ -53,7 +56,10 @@ class MDRunner(CalculateRunner):
     def __init__(
         self,
         calculator: Calculator,
-        dynamics: type[MolecularDynamics] | Callable,
+        thermostat: VelocityVerletThermostat
+        | NoseHooverNVT
+        | BussiThermostat
+        | LangevinThermostat,
         atoms: Atoms | None = None,
         timestep_fs: float = 1.0,
         steps: int = 1000,
@@ -61,12 +67,7 @@ class MDRunner(CalculateRunner):
         log_interval: int = 10,
         checkpoint_interval: int | None = None,
         heartbeat_interval: int | None = None,
-        tdamp_fs: float | None = None,
-        taut_fs: float | None = None,
-        friction_per_fs: float | None = None,
-        trajectory_writer: type[ParquetTrajectoryWriter]
-        | Callable[..., ParquetTrajectoryWriter]
-        | None = None,
+        trajectory_writer: type[ParquetTrajectoryWriter] | None = None,
         trajectory_writer_kwargs: dict[str, Any] | None = None,
     ):
         """
@@ -74,10 +75,11 @@ class MDRunner(CalculateRunner):
 
         Args:
             calculator: ASE calculator for energy/force calculations
+            thermostat: Thermostat dataclass that knows how to build its ASE
+                dynamics object, save state, and restore state. One of
+                VelocityVerletThermostat, NoseHooverNVT, BussiThermostat,
+                or LangevinThermostat.
             atoms: Single Atoms object to run MD on
-            dynamics: ASE dynamics class or partial function. When using Hydra
-                configs with _partial_: true, this will be a partial function with
-                all parameters except 'atoms' and time-unit parameters already bound.
             timestep_fs: MD timestep in femtoseconds.
             steps: Total number of MD steps to run
             trajectory_interval: Interval for writing trajectory frames
@@ -89,25 +91,19 @@ class MDRunner(CalculateRunner):
                 STOPFAIR file in run_dir. If a STOPFAIR file is found, the
                 simulation saves state and stops gracefully. If None, no
                 STOPFAIR checking is performed.
-            tdamp_fs: Thermostat damping time in femtoseconds (NoseHooverChainNVT).
-            taut_fs: Thermostat time constant in femtoseconds (Bussi).
-            friction_per_fs: Friction coefficient in 1/fs (Langevin).
             trajectory_writer: Trajectory writer class or factory function.
                 Defaults to ParquetTrajectoryWriter if None.
             trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
                 writer constructor (e.g., flush_interval for parquet).
         """
         self._atoms = atoms
-        self.dynamics = dynamics
+        self.thermostat = thermostat
         self.timestep_fs = timestep_fs
         self.steps = steps
         self.trajectory_interval = trajectory_interval
         self.log_interval = log_interval
         self.checkpoint_interval = checkpoint_interval
         self.heartbeat_interval = heartbeat_interval
-        self.tdamp_fs = tdamp_fs
-        self.taut_fs = taut_fs
-        self.friction_per_fs = friction_per_fs
         self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
         self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
 
@@ -119,14 +115,6 @@ class MDRunner(CalculateRunner):
 
         super().__init__(calculator=calculator, input_data=[atoms])
 
-    # Supported dynamics classes for checkpoint save/restore
-    _SUPPORTED_DYNAMICS: ClassVar[tuple[str, ...]] = (
-        "VelocityVerlet",
-        "NoseHooverChainNVT",
-        "Bussi",
-        "Langevin",
-    )
-
     def _get_trajectory_extension(self) -> str:
         """
         Get the file extension for the trajectory based on writer type.
@@ -135,90 +123,6 @@ class MDRunner(CalculateRunner):
             File extension string (e.g., ".parquet")
         """
         return ".parquet"
-
-    def _save_thermostat_state(self, dyn: MolecularDynamics) -> dict:
-        """
-        Extract thermostat state from dynamics object.
-
-        Supports VelocityVerlet (NVE, no thermostat state),
-        NoseHooverChainNVT (saves chain positions and momenta),
-        Bussi (saves RNG state and transferred energy),
-        and Langevin (saves RNG state).
-
-        Args:
-            dyn: The ASE dynamics object
-
-        Returns:
-            Dictionary containing saved state (JSON-serializable)
-        """
-        class_name = type(dyn).__name__
-        if class_name not in self._SUPPORTED_DYNAMICS:
-            raise ValueError(
-                f"Unsupported dynamics class '{class_name}' for checkpointing. "
-                f"Supported: {self._SUPPORTED_DYNAMICS}"
-            )
-
-        state: dict[str, Any] = {"class_name": class_name}
-
-        if class_name == "NoseHooverChainNVT":
-            thermostat = dyn._thermostat
-            state["eta"] = thermostat._eta.tolist()
-            state["p_eta"] = thermostat._p_eta.tolist()
-        elif class_name in ("Bussi", "Langevin"):
-            rng_state = dyn.rng.get_state()
-            state["rng_state"] = {
-                "algorithm": rng_state[0],
-                "keys": rng_state[1].tolist(),
-                "pos": int(rng_state[2]),
-                "has_gauss": int(rng_state[3]),
-                "cached_gaussian": float(rng_state[4]),
-            }
-            if hasattr(dyn, "transferred_energy"):
-                state["transferred_energy"] = float(dyn.transferred_energy)
-
-        return state
-
-    def _restore_thermostat_state(
-        self, dyn: MolecularDynamics, state: dict | None
-    ) -> None:
-        """
-        Restore thermostat state to dynamics object.
-
-        Supports VelocityVerlet (NVE, no-op), NoseHooverChainNVT
-        (restores chain positions and momenta), Bussi
-        (restores RNG state and transferred energy),
-        and Langevin (restores RNG state).
-
-        Args:
-            dyn: The ASE dynamics object
-            state: Previously saved state dictionary, or None
-        """
-        if state is None:
-            return
-
-        saved_class = state.get("class_name", "")
-        current_class = type(dyn).__name__
-        assert (
-            saved_class == current_class
-        ), f"Restoring state from {saved_class} to {current_class}"
-
-        if current_class == "NoseHooverChainNVT":
-            thermostat = dyn._thermostat
-            thermostat._eta = np.array(state["eta"])
-            thermostat._p_eta = np.array(state["p_eta"])
-        elif current_class in ("Bussi", "Langevin"):
-            rng_state = state["rng_state"]
-            dyn.rng.set_state(
-                (
-                    rng_state["algorithm"],
-                    np.array(rng_state["keys"], dtype=np.uint32),
-                    rng_state["pos"],
-                    rng_state["has_gauss"],
-                    rng_state["cached_gaussian"],
-                )
-            )
-            if "transferred_energy" in state:
-                dyn.transferred_energy = state["transferred_energy"]
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> dict[str, Any]:
         """
@@ -245,21 +149,10 @@ class MDRunner(CalculateRunner):
 
         self._atoms.calc = self.calculator
 
-        dyn_kwargs: dict[str, Any] = {
-            "atoms": self._atoms,
-            "timestep": self.timestep_fs * units.fs,
-        }
-        if self.tdamp_fs is not None:
-            dyn_kwargs["tdamp"] = self.tdamp_fs * units.fs
-        if self.taut_fs is not None:
-            dyn_kwargs["taut"] = self.taut_fs * units.fs
-        if self.friction_per_fs is not None:
-            dyn_kwargs["friction"] = self.friction_per_fs / units.fs
-
-        self._dyn = self.dynamics(**dyn_kwargs)
+        self._dyn = self.thermostat.build(self._atoms, self.timestep_fs)
 
         if self._thermostat_state_to_restore is not None:
-            self._restore_thermostat_state(self._dyn, self._thermostat_state_to_restore)
+            self.thermostat.restore_state(self._dyn, self._thermostat_state_to_restore)
 
         # Restore the step counter so get_time() returns global time
         self._dyn.nsteps = self._start_step
@@ -394,12 +287,6 @@ class MDRunner(CalculateRunner):
         traj_df = pd.read_parquet(trajectory_file)
         num_frames = len(traj_df)
 
-        dynamics_name = getattr(
-            self.dynamics,
-            "__name__",
-            getattr(self.dynamics, "func", type(self.dynamics)).__name__,
-        )
-
         metadata = {
             "trajectory_file": str(trajectory_file),
             "log_file": str(log_file),
@@ -407,7 +294,7 @@ class MDRunner(CalculateRunner):
             "num_frames": num_frames,
             "trajectory_interval": self.trajectory_interval,
             "log_interval": self.log_interval,
-            "dynamics_class": dynamics_name,
+            "thermostat_class": type(self.thermostat).__name__,
             "structure_id": results["structure_id"],
         }
 
@@ -452,7 +339,7 @@ class MDRunner(CalculateRunner):
             self._atoms.info["md_step"] = current_step
             ase.io.write(str(atoms_path), self._atoms, format="extxyz")
 
-            thermostat_state = self._save_thermostat_state(self._dyn)
+            thermostat_state = self.thermostat.save_state(self._dyn)
             thermostat_path = checkpoint_dir / "thermostat_state.json"
             with open(thermostat_path, "w") as f:
                 json.dump(thermostat_state, f)

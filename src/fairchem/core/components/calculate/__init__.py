@@ -19,21 +19,31 @@ from ._single.pairwise_ct_runner import PairwiseCountRunner
 from ._single.phonon_runner import MDRPhononRunner
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
+from .utils.thermostats import (
+    BussiThermostat,
+    LangevinThermostat,
+    NoseHooverNVT,
+    VelocityVerletThermostat,
+)
 from .utils.trajectory import ParquetTrajectoryWriter, TrajectoryFrame
 
 __all__ = [
     "AdsorbMLRunner",
     "AdsorptionRunner",
     "AdsorptionSinglePointRunner",
+    "BussiThermostat",
     "ElasticityRunner",
     "KappaRunner",
+    "LangevinThermostat",
     "MDRPhononRunner",
     "MDRunner",
     "NVEMDRunner",
+    "NoseHooverNVT",
     "OMolRunner",
     "PairwiseCountRunner",
     "ParquetTrajectoryWriter",
     "RelaxationRunner",
     "SinglePointRunner",
     "TrajectoryFrame",
+    "VelocityVerletThermostat",
 ]
