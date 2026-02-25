@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import ase.io
 import numpy as np
 import pandas as pd
+from ase import units
 from ase.md import MDLogger
 from omegaconf import OmegaConf
 
@@ -57,11 +58,15 @@ class MDRunner(CalculateRunner):
         calculator: Calculator,
         dynamics: type[MolecularDynamics] | Callable,
         atoms: Atoms | None = None,
+        timestep_fs: float = 1.0,
         steps: int = 1000,
         trajectory_interval: int = 1,
         log_interval: int = 10,
         checkpoint_interval: int | None = None,
         heartbeat_interval: int | None = None,
+        tdamp_fs: float | None = None,
+        taut_fs: float | None = None,
+        friction_per_fs: float | None = None,
         trajectory_writer: type[TrajectoryWriter]
         | Callable[..., TrajectoryWriter]
         | None = None,
@@ -75,7 +80,8 @@ class MDRunner(CalculateRunner):
             atoms: Single Atoms object to run MD on
             dynamics: ASE dynamics class or partial function. When using Hydra
                 configs with _partial_: true, this will be a partial function with
-                all parameters except 'atoms' already bound.
+                all parameters except 'atoms' and time-unit parameters already bound.
+            timestep_fs: MD timestep in femtoseconds.
             steps: Total number of MD steps to run
             trajectory_interval: Interval for writing trajectory frames
             log_interval: Interval for writing thermodynamic data to log
@@ -86,6 +92,9 @@ class MDRunner(CalculateRunner):
                 STOPFAIR file in run_dir. If a STOPFAIR file is found, the
                 simulation saves state and stops gracefully. If None, no
                 STOPFAIR checking is performed.
+            tdamp_fs: Thermostat damping time in femtoseconds (NoseHooverChainNVT).
+            taut_fs: Thermostat time constant in femtoseconds (Bussi).
+            friction_per_fs: Friction coefficient in 1/fs (Langevin).
             trajectory_writer: Trajectory writer class or factory function.
                 Defaults to ParquetTrajectoryWriter if None.
             trajectory_writer_kwargs: Additional kwargs to pass to the trajectory
@@ -93,11 +102,15 @@ class MDRunner(CalculateRunner):
         """
         self._atoms = atoms
         self.dynamics = dynamics
+        self.timestep_fs = timestep_fs
         self.steps = steps
         self.trajectory_interval = trajectory_interval
         self.log_interval = log_interval
         self.checkpoint_interval = checkpoint_interval
         self.heartbeat_interval = heartbeat_interval
+        self.tdamp_fs = tdamp_fs
+        self.taut_fs = taut_fs
+        self.friction_per_fs = friction_per_fs
         self._trajectory_writer_class = trajectory_writer or ParquetTrajectoryWriter
         self._trajectory_writer_kwargs = trajectory_writer_kwargs or {}
 
@@ -234,7 +247,19 @@ class MDRunner(CalculateRunner):
         log_file = results_dir / f"thermo_{num_jobs}-{job_num}.log"
 
         self._atoms.calc = self.calculator
-        self._dyn = self.dynamics(atoms=self._atoms)
+
+        dyn_kwargs: dict[str, Any] = {
+            "atoms": self._atoms,
+            "timestep": self.timestep_fs * units.fs,
+        }
+        if self.tdamp_fs is not None:
+            dyn_kwargs["tdamp"] = self.tdamp_fs * units.fs
+        if self.taut_fs is not None:
+            dyn_kwargs["taut"] = self.taut_fs * units.fs
+        if self.friction_per_fs is not None:
+            dyn_kwargs["friction"] = self.friction_per_fs / units.fs
+
+        self._dyn = self.dynamics(**dyn_kwargs)
 
         if self._thermostat_state_to_restore is not None:
             self._restore_thermostat_state(self._dyn, self._thermostat_state_to_restore)

@@ -16,7 +16,6 @@ import hydra
 from omegaconf import OmegaConf
 from omegaconf.errors import InterpolationKeyError
 
-from fairchem.core.components.calculate.md_utils import register_md_resolvers
 from fairchem.core.launchers.api import (
     ALLOWED_TOP_LEVEL_KEYS,
     JobConfig,
@@ -27,9 +26,6 @@ if TYPE_CHECKING:
     from omegaconf import DictConfig
 
     from fairchem.core.components.runner import Runner
-
-# Register custom OmegaConf resolvers
-register_md_resolvers()
 
 # this effects the cli only since the actual job will be run in subprocesses or remoe
 logging.basicConfig(level=logging.INFO)

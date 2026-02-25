@@ -19,12 +19,8 @@ from ._single.pairwise_ct_runner import PairwiseCountRunner
 from ._single.phonon_runner import MDRPhononRunner
 from ._single.relaxation_runner import RelaxationRunner
 from ._single.singlepoint_runner import SinglePointRunner
-from .md_utils import register_md_resolvers
 from .parquet_trajectory import ParquetTrajectoryWriter
 from .trajectory import TrajectoryFrame, TrajectoryWriter
-
-# Register custom OmegaConf resolvers for MD configurations
-register_md_resolvers()
 
 __all__ = [
     "AdsorbMLRunner",

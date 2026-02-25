@@ -201,7 +201,8 @@ class TestMDRunner:
         runner = MDRunner(
             calculator=EMT(),
             atoms=atoms_mdrunner,
-            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            dynamics=VelocityVerlet,
+            timestep_fs=1.0,
             steps=steps,
             trajectory_interval=interval,
             log_interval=10,
@@ -265,9 +266,7 @@ class TestMDRunner:
 
         dynamics = partial(
             NoseHooverChainNVT,
-            timestep=1.0 * units.fs,
             temperature_K=300.0,
-            tdamp=25 * units.fs,
         )
 
         # Run 1: Run until interrupted at step 36
@@ -275,6 +274,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -291,7 +292,12 @@ class TestMDRunner:
 
         try:
             runner1._atoms.calc = runner1.calculator
-            runner1._dyn = runner1.dynamics(atoms=runner1._atoms)
+            runner1._dyn = NoseHooverChainNVT(
+                atoms=runner1._atoms,
+                timestep=1.0 * units.fs,
+                temperature_K=300.0,
+                tdamp=25.0 * units.fs,
+            )
 
             parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
             runner1._trajectory_writer = ParquetTrajectoryWriter(
@@ -352,6 +358,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -389,6 +397,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -452,15 +462,15 @@ class TestMDRunner:
 
         dynamics = partial(
             NoseHooverChainNVT,
-            timestep=1.0 * units.fs,
             temperature_K=300.0,
-            tdamp=25 * units.fs,
         )
 
         runner = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             heartbeat_interval=checkpoint_interval,
@@ -508,6 +518,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             heartbeat_interval=checkpoint_interval,
@@ -543,7 +555,8 @@ class TestMDRunner:
         runner = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
-            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            dynamics=VelocityVerlet,
+            timestep_fs=1.0,
             steps=total_steps,
             trajectory_interval=10,
             heartbeat_interval=heartbeat_interval,
@@ -581,7 +594,8 @@ class TestMDRunner:
         runner = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
-            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            dynamics=VelocityVerlet,
+            timestep_fs=1.0,
             steps=total_steps,
             trajectory_interval=10,
             checkpoint_interval=checkpoint_interval,
@@ -632,15 +646,15 @@ class TestMDRunner:
 
         dynamics = partial(
             NoseHooverChainNVT,
-            timestep=1.0 * units.fs,
             temperature_K=300.0,
-            tdamp=25 * units.fs,
         )
 
         runner = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            tdamp_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             checkpoint_interval=checkpoint_interval,
@@ -722,7 +736,8 @@ class TestMDRunner:
         runner = MDRunner(
             calculator=EMT(),
             atoms=cu_atoms.copy(),
-            dynamics=partial(VelocityVerlet, timestep=1.0 * units.fs),
+            dynamics=VelocityVerlet,
+            timestep_fs=1.0,
             steps=50,
             trajectory_interval=10,
             checkpoint_interval=20,
@@ -784,9 +799,7 @@ class TestMDRunner:
 
         dynamics = partial(
             Bussi,
-            timestep=1.0 * units.fs,
             temperature_K=300.0,
-            taut=25 * units.fs,
         )
 
         # Run 1: Run until interrupted at step 36
@@ -794,6 +807,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            taut_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -810,7 +825,12 @@ class TestMDRunner:
 
         try:
             runner1._atoms.calc = runner1.calculator
-            runner1._dyn = runner1.dynamics(atoms=runner1._atoms)
+            runner1._dyn = Bussi(
+                atoms=runner1._atoms,
+                timestep=1.0 * units.fs,
+                temperature_K=300.0,
+                taut=25.0 * units.fs,
+            )
 
             parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
             runner1._trajectory_writer = ParquetTrajectoryWriter(
@@ -860,6 +880,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            taut_fs=25.0,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -906,9 +928,7 @@ class TestMDRunner:
 
         dynamics = partial(
             Langevin,
-            timestep=1.0 * units.fs,
             temperature_K=300.0,
-            friction=0.01 / units.fs,
         )
 
         # Run 1: Run until interrupted at step 36
@@ -916,6 +936,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            friction_per_fs=0.01,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
@@ -932,7 +954,12 @@ class TestMDRunner:
 
         try:
             runner1._atoms.calc = runner1.calculator
-            runner1._dyn = runner1.dynamics(atoms=runner1._atoms)
+            runner1._dyn = Langevin(
+                atoms=runner1._atoms,
+                timestep=1.0 * units.fs,
+                temperature_K=300.0,
+                friction=0.01 / units.fs,
+            )
 
             parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
             runner1._trajectory_writer = ParquetTrajectoryWriter(
@@ -979,6 +1006,8 @@ class TestMDRunner:
             calculator=EMT(),
             atoms=cu_atoms.copy(),
             dynamics=dynamics,
+            timestep_fs=1.0,
+            friction_per_fs=0.01,
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
