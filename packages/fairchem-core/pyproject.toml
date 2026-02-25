@@ -37,7 +37,7 @@ dependencies = [
 dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"]
 docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4", "umap-learn", "vdict", "ipywidgets", "jupyter_book>=2.0", "torch-dftd"]
 adsorbml = ["dscribe", "x3dase", "scikit-image"]
-extras = ["ray[default]", "pymatgen", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops"]
+extras = ["pymatgen", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops", "pyarrow"]
 
 
 [project.scripts]
