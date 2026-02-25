@@ -197,7 +197,7 @@ class Edgewise(torch.nn.Module):
             x_message = self.backend.gather_rotate(x_full, edge_index, wigner)
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
             x_message = self.act(x_0_gating, x_message)
-            x_message = self.so2_conv_2(x_message, x_edge)
+            x_message = self.so2_conv_2(x_message)
             x_message = self.backend.rotate_back(x_message, wigner_inv_envelope)
 
         # Compute the sum of the incoming neighboring messages for each target node

@@ -243,15 +243,15 @@ class SO2_Conv1_WithRadialBlock(torch.nn.Module):
 
         Args:
             x: Input features [E, coeffs, channels]
-            x_edge: Edge embeddings [E, edge_features]
+            x_edge: Precomputed radial embeddings [E, radial_features]
 
         Returns:
             (output, gating): output [E, coeffs, m_output_channels],
                 gating [E, extra_m0_output_channels]
         """
-        x_edge_by_m = self.rad_func(x_edge).split(self.edge_split_sizes, dim=1)
+        x_edge_by_m = x_edge.split(self.edge_split_sizes, dim=1)
         x_by_m = x.split(self.m_split_sizes, dim=1)
-        num_edges = len(x_edge)
+        num_edges = x.shape[0]
 
         # m=0: apply radial, linear, split gating
         x_0 = x_by_m[0].view(num_edges, -1) * x_edge_by_m[0]
@@ -511,18 +511,22 @@ class SO2_Convolution(torch.nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        x_edge: torch.Tensor,
+        x_edge: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-        # radial function
+        # Compute radial embedding from raw x_edge if we have external weights
         if self.rad_func is not None:
-            x_edge_by_m = self.rad_func(x_edge).split(self.edge_split_sizes, dim=1)
+            x_edge = self.rad_func(x_edge)
 
         x_by_m = x.split(self.m_split_sizes, dim=1)
 
-        num_edges = len(x_edge)
+        # Split radial embeddings if provided (external weights mode)
+        if x_edge is not None:
+            x_edge_by_m = x_edge.split(self.edge_split_sizes, dim=1)
+
+        num_edges = x.shape[0]
         # Compute m=0 coefficients separately since they only have real values (no imaginary)
         x_0 = x_by_m[0].view(num_edges, -1)
-        if self.rad_func is not None:
+        if x_edge is not None:
             x_0 = x_0 * x_edge_by_m[0]
         x_0 = self.fc_m0(x_0)
 
@@ -541,7 +545,7 @@ class SO2_Convolution(torch.nn.Module):
         # Compute the values for the m > 0 coefficients
         for m in range(1, self.mmax + 1):
             x_m = x_by_m[m].view(num_edges, 2, -1)
-            if self.rad_func is not None:
+            if x_edge is not None:
                 x_m = x_m * x_edge_by_m[m].unsqueeze(1)
             x_m = self.so2_m_conv[m - 1](x_m)
             out.extend(x_m)

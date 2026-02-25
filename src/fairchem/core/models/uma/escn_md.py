@@ -747,11 +747,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+
+        # Get edge embeddings for each layer
+        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
+        # Fast backends: precomputed radials
+        with record_function("layer_radial_emb"):
+            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
+
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
                     x_message,
-                    x_edge,
+                    x_edge_per_layer[i],
                     graph_dict["edge_distance"],
                     graph_dict["edge_index"],
                     wigner,
