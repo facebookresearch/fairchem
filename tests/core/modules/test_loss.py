@@ -172,6 +172,7 @@ def world_size():
     # batch size = 4
     return 4
 
+
 @pytest.mark.serial()
 def test_ddp_mae(energy, natoms, world_size):
     pred, target = energy
