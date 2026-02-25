@@ -237,6 +237,11 @@ class UMASFastPytorchBackend(ExecutionBackend):
             raise ValueError(
                 "UMASFastPytorchBackend requires activation_checkpointing=False"
             )
+        # Also reject if user tries to enable it via inference settings
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError(
+                "UMASFastPytorchBackend requires activation_checkpointing=False"
+            )
 
     @staticmethod
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
