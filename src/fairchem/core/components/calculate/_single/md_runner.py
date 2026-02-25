@@ -280,9 +280,9 @@ class MDRunner(CalculateRunner):
         log_file = Path(results["log_file"])
 
         if not trajectory_file.exists():
-            raise FileNotFoundError(f"Trajectory file not found: {trajectory_file}")
+            return
         if not log_file.exists():
-            raise FileNotFoundError(f"Log file not found: {log_file}")
+            return
 
         traj_df = pd.read_parquet(trajectory_file)
         num_frames = len(traj_df)
