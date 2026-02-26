@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
+
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
@@ -84,6 +86,28 @@ class ExecutionBackend:
         Args:
             model: The backbone model to prepare.
         """
+
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        """
+        Get edge embeddings for each layer.
+
+        Default implementation returns the same raw x_edge for all layers.
+        SO2_Convolution will compute rad_func(x_edge) internally.
+
+        Override in fast backends to precompute radials.
+
+        Args:
+            x_edge: Edge embeddings [E, edge_features]
+            model: The backbone model
+
+        Returns:
+            List of edge embeddings, one per layer
+        """
+        return [x_edge] * len(model.blocks)
 
     @staticmethod
     def prepare_wigner(
@@ -276,6 +300,23 @@ class UMASFastPytorchBackend(ExecutionBackend):
             block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
             block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
 
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        """
+        Compute radial embeddings for all layers.
+
+        Args:
+            x_edge: Edge embeddings [E, edge_features]
+            model: The backbone model with blocks containing rad_funcs
+
+        Returns:
+            List of radial embeddings, one per layer [E, radial_features]
+        """
+        return [block.edge_wise.so2_conv_1.rad_func(x_edge) for block in model.blocks]
+
 
 class UMASFastGPUBackend(UMASFastPytorchBackend):
     """
@@ -301,6 +342,35 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("sphere_channels must be divisible by 128")
         if settings is not None and not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
+
+    @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        """
+        Prepare model for inference: SO2 block conversion + unified radial.
+
+        Calls parent class for SO2 conversion, then creates a UnifiedRadialMLP
+        from all radial functions for batched computation.
+        """
+        UMASFastPytorchBackend.prepare_model_for_inference(model)
+        rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
+        model._unified_radial_mlp = UnifiedRadialMLP(rad_funcs)
+
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        """
+        Compute radial embeddings for all layers using batched UnifiedRadialMLP.
+
+        Args:
+            x_edge: Edge embeddings [E, edge_features]
+            model: The backbone model with _unified_radial_mlp
+
+        Returns:
+            List of radial embeddings, one per layer [E, radial_features]
+        """
+        return model._unified_radial_mlp(x_edge)
 
     @staticmethod
     def prepare_wigner(
