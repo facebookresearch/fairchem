@@ -39,18 +39,23 @@ def test_conserving_mole_aperiodic_on_pt(
     )
 
     n_repeats = 10
-    settings = InferenceSettings(base_precision_dtype=dtype)
+    settings = InferenceSettings(
+        base_precision_dtype=dtype, internal_graph_gen_version=1
+    )
     predictor_v1 = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
-        overrides={"backbone": {"radius_pbc_version": 1}},
+        # overrides={"backbone": {"radius_pbc_version": 1}},
         inference_settings=settings,
     )
 
+    settings = InferenceSettings(
+        base_precision_dtype=dtype, internal_graph_gen_version=2
+    )
     predictor_v2 = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
-        overrides={"backbone": {"radius_pbc_version": 2}},
+        # overrides={"backbone": {"radius_pbc_version": 2}},
         inference_settings=settings,
     )
     for sample_idx in range(5):
