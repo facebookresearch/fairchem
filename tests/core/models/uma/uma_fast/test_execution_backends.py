@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import pytest
 
-from fairchem.core.models.uma.triton import HAS_TRITON
-
 # =============================================================================
 # Tests: Validation Errors
 # =============================================================================
@@ -27,7 +25,7 @@ class MockEdgeDegreeEmbedding:
     activation_checkpoint_chunk_size = None
 
 
-@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_requires_correct_lmax():
     """
     Verify that umas_fast_gpu raises ValueError for incorrect lmax.
@@ -45,7 +43,7 @@ def test_umas_fast_gpu_validation_requires_correct_lmax():
         UMASFastGPUBackend.validate(MockModelWrongLmax())
 
 
-@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_requires_correct_mmax():
     """
     Verify that umas_fast_gpu raises ValueError for incorrect mmax.
@@ -63,7 +61,7 @@ def test_umas_fast_gpu_validation_requires_correct_mmax():
         UMASFastGPUBackend.validate(MockModelWrongMmax())
 
 
-@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_requires_sphere_channels_divisible_by_128():
     """
     Verify that umas_fast_gpu raises ValueError for incorrect sphere_channels.
@@ -81,7 +79,7 @@ def test_umas_fast_gpu_validation_requires_sphere_channels_divisible_by_128():
         UMASFastGPUBackend.validate(MockModelWrongChannels())
 
 
-@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_accepts_correct_config():
     """
     Verify that umas_fast_gpu validation passes for correct model config.
@@ -99,7 +97,7 @@ def test_umas_fast_gpu_validation_accepts_correct_config():
     UMASFastGPUBackend.validate(MockModel())
 
 
-@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_accepts_512_channels():
     """
     Verify that umas_fast_gpu validation passes for sphere_channels=512.
@@ -117,7 +115,7 @@ def test_umas_fast_gpu_validation_accepts_512_channels():
     UMASFastGPUBackend.validate(MockModel())
 
 
-@pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_requires_merge_mole():
     """
     Verify that umas_fast_gpu raises ValueError when merge_mole=False.
