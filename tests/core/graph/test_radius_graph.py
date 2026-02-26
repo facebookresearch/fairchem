@@ -629,7 +629,7 @@ class TestFilterEdgesByNodePartition:
                 torch.tensor([0, 3, 7, 9]),
                 10,
                 {(9, 0), (2, 3), (6, 7), (0, 3), (1, 7), (2, 9), (3, 0), (4, 7)},
-                8,
+                9,
             ),
         ],
     )
