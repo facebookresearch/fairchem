@@ -603,11 +603,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
-            
+
             # Compute shifts from cell offsets
             if len(data_dict["natoms"]) == 1:
                 # Single system: use matmul (compile-friendly, no data-dependent ops)
-                shifts = data_dict["cell_offsets"].to(data_dict["cell"].dtype) @ data_dict["cell"].squeeze(0)
+                shifts = data_dict["cell_offsets"].to(
+                    data_dict["cell"].dtype
+                ) @ data_dict["cell"].squeeze(0)
             else:
                 # Batched: need repeat_interleave for variable edges per system
                 cell_per_edge = data_dict["cell"].repeat_interleave(
