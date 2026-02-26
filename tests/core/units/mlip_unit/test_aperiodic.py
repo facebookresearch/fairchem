@@ -45,7 +45,6 @@ def test_conserving_mole_aperiodic_on_pt(
     predictor_v1 = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
-        # overrides={"backbone": {"radius_pbc_version": 1}},
         inference_settings=settings,
     )
 
@@ -55,7 +54,6 @@ def test_conserving_mole_aperiodic_on_pt(
     predictor_v2 = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
-        # overrides={"backbone": {"radius_pbc_version": 2}},
         inference_settings=settings,
     )
     for sample_idx in range(5):
