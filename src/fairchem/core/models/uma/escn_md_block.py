@@ -113,7 +113,6 @@ class Edgewise(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
         edge_index,
         wigner,
         wigner_inv_envelope,
@@ -133,7 +132,6 @@ class Edgewise(torch.nn.Module):
                 x_full,
                 x.shape[0],
                 x_edge,
-                edge_distance,
                 edge_index,
                 wigner,
                 wigner_inv_envelope,
@@ -144,9 +142,6 @@ class Edgewise(torch.nn.Module):
         )
         wigner_partitions = wigner.split(self.activation_checkpoint_chunk_size, dim=0)
         wigner_inv_partitions = wigner_inv_envelope.split(
-            self.activation_checkpoint_chunk_size, dim=0
-        )
-        edge_distance_parititons = edge_distance.split(
             self.activation_checkpoint_chunk_size, dim=0
         )
         x_edge_partitions = x_edge.split(self.activation_checkpoint_chunk_size, dim=0)
@@ -162,7 +157,6 @@ class Edgewise(torch.nn.Module):
                     x_full,
                     x.shape[0],
                     x_edge_partitions[idx],
-                    edge_distance_parititons[idx],
                     edge_index_partitions[idx],
                     wigner_partitions[idx],
                     wigner_inv_partitions[idx],
@@ -182,7 +176,6 @@ class Edgewise(torch.nn.Module):
         x_full,
         x_original_shape,
         x_edge,
-        edge_distance,
         edge_index,
         wigner,
         wigner_inv_envelope,
@@ -194,20 +187,20 @@ class Edgewise(torch.nn.Module):
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         with record_function("SO2Conv"):
-            x_message = self.backend.gather_rotate(x_full, edge_index, wigner)
+            x_message = self.backend.node_to_edge_wigner_permute(
+                x_full, edge_index, wigner
+            )
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
             x_message = self.act(x_0_gating, x_message)
             x_message = self.so2_conv_2(x_message, x_edge)
-            x_message = self.backend.rotate_back(x_message, wigner_inv_envelope)
+            new_embedding = self.backend.permute_wigner_inv_edge_to_node(
+                x_message,
+                wigner_inv_envelope,
+                edge_index,
+                x_original_shape,
+                node_offset,
+            )
 
-        # Compute the sum of the incoming neighboring messages for each target node
-        new_embedding = torch.zeros(
-            (x_original_shape,) + x_message.shape[1:],
-            dtype=x_message.dtype,
-            device=x_message.device,
-        )
-
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_message)
         # reset ac start index
         set_mole_ac_start_index(self, 0)
         return new_embedding
@@ -356,7 +349,6 @@ class eSCNMD_Block(torch.nn.Module):
         self,
         x,
         x_edge,
-        edge_distance,
         edge_index,
         wigner,
         wigner_inv_envelope,
@@ -374,7 +366,6 @@ class eSCNMD_Block(torch.nn.Module):
             x = self.edge_wise(
                 x,
                 x_edge,
-                edge_distance,
                 edge_index,
                 wigner,
                 wigner_inv_envelope,

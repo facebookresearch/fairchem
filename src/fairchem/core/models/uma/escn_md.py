@@ -752,7 +752,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 x_message = self.blocks[i](
                     x_message,
                     x_edge,
-                    graph_dict["edge_distance"],
                     graph_dict["edge_index"],
                     wigner,
                     wigner_inv_envelope,

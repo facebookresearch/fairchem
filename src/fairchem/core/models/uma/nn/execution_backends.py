@@ -48,8 +48,8 @@ class ExecutionBackend:
     All methods are static — backends carry no instance state.
 
     Methods (override for optimization):
-        - gather_rotate: Gather node features and rotate L->M
-        - rotate_back: Rotate M->L
+        - node_to_edge_wigner_permute: Gather node features and rotate L->M
+        - permute_wigner_inv_edge_to_node: Rotate M->L and scatter to nodes
         - edge_degree_scatter: Rotate radial and scatter to nodes
         - prepare_model_for_inference: Apply backend-specific model transforms
     """
@@ -125,7 +125,7 @@ class ExecutionBackend:
         return wigner, wigner_inv
 
     @staticmethod
-    def gather_rotate(
+    def node_to_edge_wigner_permute(
         x_full: torch.Tensor,
         edge_index: torch.Tensor,
         wigner: torch.Tensor,
@@ -149,23 +149,38 @@ class ExecutionBackend:
         return torch.bmm(wigner, x_message)
 
     @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
     ) -> torch.Tensor:
         """
-        Rotate M->L.
+        Rotate M->L and scatter edge messages to nodes.
 
-        Default: PyTorch BMM.
+        Default: PyTorch BMM + index_add.
 
         Args:
-            x: Message features [E, M, C]
+            x_message: Edge message features [E, M, C]
             wigner_inv: Inverse Wigner matrices [E, L, M]
+            edge_index: Edge indices [2, E]
+            num_nodes: Total number of nodes (output size)
+            node_offset: Offset for node indices (for chunking)
 
         Returns:
-            Rotated features [E, L, C]
+            Node embeddings [N, L, C] accumulated from edge messages
         """
-        return torch.bmm(wigner_inv, x)
+        # Rotate M->L
+        x_rotated = torch.bmm(wigner_inv, x_message)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
 
     @staticmethod
     def edge_degree_scatter(
@@ -267,7 +282,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
     GPU-optimized backend: SO2 block conversion + Triton kernels.
 
     Extends UMASFastPytorchBackend with Triton-accelerated
-    gather_rotate, rotate_back, and edge_degree_scatter.
+    node_to_edge_wigner_permute, permute_wigner_inv_edge_to_node, and edge_degree_scatter.
     Requires lmax==2, mmax==2, sphere_channels divisible by 128,
     and merge_mole=True.
     """
@@ -278,10 +293,8 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         settings: InferenceSettings | None = None,
     ) -> None:
         UMASFastPytorchBackend.validate(model, settings)
-        from fairchem.core.models.uma.triton import HAS_TRITON
-
-        if not HAS_TRITON:
-            raise ValueError("umas_fast_gpu requires Triton")
+        if not torch.cuda.is_available():
+            raise ValueError("umas_fast_gpu requires CUDA")
         if model.lmax != 2 or model.mmax != 2:
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if model.sphere_channels % 128 != 0:
@@ -300,29 +313,39 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         return wigner, wigner_inv
 
     @staticmethod
-    def gather_rotate(
+    def node_to_edge_wigner_permute(
         x_full: torch.Tensor,
         edge_index: torch.Tensor,
         wigner: torch.Tensor,
     ) -> torch.Tensor:
         from fairchem.core.models.uma.triton import (
-            FusedEdgeGatherWignerL2MTritonBwdEmitFunction,
+            UMASFastGPUNodeToEdgeWignerPermute,
         )
 
-        return FusedEdgeGatherWignerL2MTritonBwdEmitFunction.apply(
-            x_full, edge_index, wigner
-        )
+        return UMASFastGPUNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
 
     @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
     ) -> torch.Tensor:
         from fairchem.core.models.uma.triton import (
-            FusedMToLThenWignerLmax2Function,
+            UMASFastGPUPermuteWignerInvEdgeToNode,
         )
 
-        return FusedMToLThenWignerLmax2Function.apply(x, wigner_inv)
+        # Rotate M->L using Triton kernel
+        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(x_message, wigner_inv)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
 
     @staticmethod
     def edge_degree_scatter(

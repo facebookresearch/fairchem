@@ -14,25 +14,12 @@ Structure:
 
 from __future__ import annotations
 
-try:
-    import triton  # noqa: F401
-
-    HAS_TRITON = True
-except ImportError:
-    HAS_TRITON = False
-
-if HAS_TRITON:
-    from .ops import (
-        FusedEdgeGatherWignerL2MTritonBwdEmitFunction,
-        FusedEdgeGatherWignerL2MTritonV2BwdFunction,
-        FusedMToLThenWignerLmax2Function,
-        MToLThenWignerLmax2Function,
-    )
+from .ops import (
+    UMASFastGPUNodeToEdgeWignerPermute,
+    UMASFastGPUPermuteWignerInvEdgeToNode,
+)
 
 __all__ = [
-    "HAS_TRITON",
-    "FusedEdgeGatherWignerL2MTritonBwdEmitFunction",
-    "FusedEdgeGatherWignerL2MTritonV2BwdFunction",
-    "FusedMToLThenWignerLmax2Function",
-    "MToLThenWignerLmax2Function",
+    "UMASFastGPUNodeToEdgeWignerPermute",
+    "UMASFastGPUPermuteWignerInvEdgeToNode",
 ]
