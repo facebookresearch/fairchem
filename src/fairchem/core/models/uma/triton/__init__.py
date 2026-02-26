@@ -15,21 +15,15 @@ except ImportError:
     HAS_TRITON = False
 
 if HAS_TRITON:
-    from .edge_gather_wigner_bwd import (
-        FusedEdgeGatherWignerL2MTritonBwdEmitFunction,
+    from .node_to_edge_wigner_permute import (
+        NodeToEdgeWignerPermuteFunction as UMASFastGPUNodeToEdgeWignerPermute,
     )
-    from .wigner_ops import (
-        FusedMToLThenWignerLmax2Function,
+    from .permute_wigner_inv_edge_to_node import (
+        PermuteWignerInvEdgeToNodeFunction as UMASFastGPUPermuteWignerInvEdgeToNode,
     )
-
-    # Export with new names (same underlying classes)
-    UMASFastGPUNodeToEdgeWignerPermute = FusedEdgeGatherWignerL2MTritonBwdEmitFunction
-    UMASFastGPUPermuteWignerInvEdgeToNode = FusedMToLThenWignerLmax2Function
 
 __all__ = [
     "HAS_TRITON",
-    "FusedEdgeGatherWignerL2MTritonBwdEmitFunction",
-    "FusedMToLThenWignerLmax2Function",
     "UMASFastGPUNodeToEdgeWignerPermute",
     "UMASFastGPUPermuteWignerInvEdgeToNode",
 ]
