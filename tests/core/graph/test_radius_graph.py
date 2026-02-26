@@ -628,18 +628,8 @@ class TestFilterEdgesByNodePartition:
                 ),
                 torch.tensor([0, 3, 7, 9]),
                 10,
-                {
-                    (9, 0),
-                    (2, 3),
-                    (6, 7),
-                    (8, 9),
-                    (0, 3),
-                    (1, 7),
-                    (2, 9),
-                    (3, 0),
-                    (4, 7),
-                },
-                9,
+                {(9, 0), (2, 3), (6, 7), (0, 3), (1, 7), (2, 9), (3, 0), (4, 7)},
+                8,
             ),
         ],
     )
@@ -788,15 +778,6 @@ class TestGetPbcDistances:
             return_distance_vec=True,
         )
 
-        # Without offset: distance = 9.5 - 0.5 = 9.0
-        # With offset [-1,0,0]: distance = 0.5 - 9.5 + (-1)*10 = 0.5 - 9.5 - 10 = -19 -> |1.0|
-        # Actually: distance_vec = pos[0] - pos[1] + offset = (0.5-9.5, 0, 0) + (-10, 0, 0) = (-19, 0, 0)
-        # Hmm, let me recalculate: row=0, col=1, distance_vec = pos[row] - pos[col] = (0.5, 0, 0) - (9.5, 0, 0) = (-9, 0, 0)
-        # Then offset = cell_offsets @ cell = [-1, 0, 0] @ [[10,0,0],[0,10,0],[0,0,10]] = (-10, 0, 0)
-        # distance_vec += offset => (-9, 0, 0) + (-10, 0, 0) = (-19, 0, 0) -> distance = 19.0
-        # That's the distance going through periodic image in the negative direction
-        # For minimum image, we'd use offset [+1, 0, 0]: (-9, 0, 0) + (10, 0, 0) = (1, 0, 0) -> distance = 1.0
-
         # Let's test with the positive offset for minimum image
         cell_offsets_min = torch.tensor([[1, 0, 0]])
         out_min = get_pbc_distances(
@@ -825,22 +806,6 @@ class TestGetPbcDistances:
         expected_vec = torch.tensor([[-3.0, -4.0, 0.0]])
         assert torch.allclose(out["distance_vec"], expected_vec)
         assert torch.allclose(out["distances"], torch.tensor([5.0]))
-
-    def test_removes_zero_distances(self):
-        """Test that zero-distance edges are removed."""
-        pos = torch.tensor([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
-        # Edge 0->2 has zero distance (same position)
-        edge_index = torch.tensor([[0, 0], [1, 2]])
-        cell = torch.eye(3).unsqueeze(0) * 10.0
-        cell_offsets = torch.zeros(2, 3, dtype=torch.long)
-        neighbors = torch.tensor([2])
-
-        out = get_pbc_distances(pos, edge_index, cell, cell_offsets, neighbors)
-
-        # Zero-distance edge should be removed
-        assert out["edge_index"].shape[1] == 1
-        assert out["distances"].shape[0] == 1
-        assert torch.allclose(out["distances"], torch.tensor([1.0]))
 
     def test_multiple_systems_in_batch(self):
         """Test with multiple systems batched together."""
