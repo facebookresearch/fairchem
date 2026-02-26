@@ -3,6 +3,19 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Backward: M→L permutation + W^T transform (per-edge, no scatter).
+
+This is used in the backward pass of node_to_edge_wigner_l2m_kernel to compute
+gradients w.r.t. the input features. The inverse of the forward operation:
+    Forward: x_l → W @ x → y_l → permute L→M → y_m
+    Backward: dy_m → permute M→L → dy_l → W^T @ dy → dx_l
+
+The scatter step (edge→node aggregation) is handled separately by PyTorch's
+index_add_, which uses segment reduction and is ~2x faster than Triton atomics.
+
+Data flow:
+    grad_out[E, 9, 2C] (M-major) → permute M→L → W^T @ dy → grad_edge[E, 9, 2C]
 """
 
 from __future__ import annotations
@@ -10,16 +23,12 @@ from __future__ import annotations
 import triton
 import triton.language as tl
 
-# =============================================================================
-# Triton Backward Kernel (transform only, no scatter) - V2 OPTIMIZED
-# =============================================================================
-
 
 @triton.jit
-def wigner_transform_bwd_kernel(
-    grad_out_ptr,  # [E, 9, 2C] gradient from downstream (M-major)
-    wigner_ptr,  # [E, 81] Wigner matrices (flattened 9x9)
-    grad_edge_ptr,  # [E, 9, 2C] output gradient per edge (no scatter)
+def wigner_m2l_bwd_kernel(
+    grad_out_ptr,
+    wigner_ptr,
+    grad_edge_ptr,
     num_edges,
     sphere_channels,
     grad_stride_e,
@@ -30,33 +39,43 @@ def wigner_transform_bwd_kernel(
     out_stride_c,
     BLOCK_C: tl.constexpr,
 ):
-    """Triton backward kernel: M→L + W^T @ grad (NO scatter).
+    """
+    Backward: M→L permutation + W^T @ grad (per-edge output).
 
-    V2 optimized: Writes to per-edge buffer instead of atomic scatter.
-    The scatter step is done separately using PyTorch's index_add_.
+    Writes per-edge gradients without scatter. The scatter step is handled
+    by PyTorch's index_add_ which uses segment reduction (faster than atomics).
 
-    This avoids atomic contention which is the main bottleneck in the
-    original fused_wigner_scatter_bwd_kernel.
+    Args:
+        grad_out_ptr: Upstream gradient [E, 9, 2C] in M-major order
+        wigner_ptr: Per-edge Wigner matrices [E, 81] (flattened 9x9)
+        grad_edge_ptr: Output gradient [E, 9, 2C] per edge (no scatter)
+        num_edges: Number of edges E
+        sphere_channels: Number of channels C
+        *_stride_*: Tensor strides for flexible memory layouts
+        BLOCK_C: Channel block size for vectorization
+
+    Grid: (num_edges,)
+        - One thread block per edge (all channels processed by one block)
     """
     edge_id = tl.program_id(0)
     if edge_id >= num_edges:
         return
 
-    # Channel vectorization
+    # Channel vectorization (process all channels in one block)
     c_range = tl.arange(0, BLOCK_C)
     c_mask = c_range < sphere_channels
 
-    # Wigner and gradient base pointers
     w_base = edge_id * 81
     grad_base = edge_id * grad_stride_e
     out_base = edge_id * out_stride_e
 
     # =========================================================================
-    # Load gradient (M-major) and apply M→L permutation inline
-    # M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
+    # Step 1: Load gradient and apply M→L permutation inline
+    # M_TO_L_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
+    # dy_l[i] = dy_m[M_TO_L_IDX[i]]
     # =========================================================================
 
-    # L=0 <- M=0
+    # L=0 ← M=0
     dy_l0_src = tl.load(
         grad_out_ptr + grad_base + 0 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -72,7 +91,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=1 <- M=5
+    # L=1 ← M=5
     dy_l1_src = tl.load(
         grad_out_ptr + grad_base + 5 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -88,7 +107,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=2 <- M=1
+    # L=2 ← M=1
     dy_l2_src = tl.load(
         grad_out_ptr + grad_base + 1 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -104,7 +123,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=3 <- M=3
+    # L=3 ← M=3
     dy_l3_src = tl.load(
         grad_out_ptr + grad_base + 3 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -120,7 +139,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=4 <- M=8
+    # L=4 ← M=8
     dy_l4_src = tl.load(
         grad_out_ptr + grad_base + 8 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -136,7 +155,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=5 <- M=6
+    # L=5 ← M=6
     dy_l5_src = tl.load(
         grad_out_ptr + grad_base + 6 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -152,7 +171,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=6 <- M=2
+    # L=6 ← M=2
     dy_l6_src = tl.load(
         grad_out_ptr + grad_base + 2 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -168,7 +187,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=7 <- M=4
+    # L=7 ← M=4
     dy_l7_src = tl.load(
         grad_out_ptr + grad_base + 4 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -184,7 +203,7 @@ def wigner_transform_bwd_kernel(
         other=0.0,
     )
 
-    # L=8 <- M=7
+    # L=8 ← M=7
     dy_l8_src = tl.load(
         grad_out_ptr + grad_base + 7 * grad_stride_l + c_range * grad_stride_c,
         mask=c_mask,
@@ -201,15 +220,17 @@ def wigner_transform_bwd_kernel(
     )
 
     # =========================================================================
-    # Apply W^T (transpose Wigner) - block diagonal structure
+    # Step 2: Apply W^T (transpose Wigner) - block diagonal
+    # dx = W^T @ dy (standard backprop through linear layer)
     # =========================================================================
 
-    # L=0 block: 1x1
+    # L=0 block: 1x1 (transpose = same)
     w00 = tl.load(wigner_ptr + w_base + 0)
     dx0_src = w00 * dy_l0_src
     dx0_tgt = w00 * dy_l0_tgt
 
-    # L=1 block: 3x3
+    # L=1 block: 3x3 transpose
+    # dx[i] = sum_j W[j,i] * dy[j]  (transposed indexing)
     w11 = tl.load(wigner_ptr + w_base + 1 * 9 + 1)
     w12 = tl.load(wigner_ptr + w_base + 1 * 9 + 2)
     w13 = tl.load(wigner_ptr + w_base + 1 * 9 + 3)
@@ -228,7 +249,7 @@ def wigner_transform_bwd_kernel(
     dx2_tgt = w12 * dy_l1_tgt + w22 * dy_l2_tgt + w32 * dy_l3_tgt
     dx3_tgt = w13 * dy_l1_tgt + w23 * dy_l2_tgt + w33 * dy_l3_tgt
 
-    # L=2 block: 5x5
+    # L=2 block: 5x5 transpose
     w44 = tl.load(wigner_ptr + w_base + 4 * 9 + 4)
     w45 = tl.load(wigner_ptr + w_base + 4 * 9 + 5)
     w46 = tl.load(wigner_ptr + w_base + 4 * 9 + 6)
@@ -332,10 +353,11 @@ def wigner_transform_bwd_kernel(
     )
 
     # =========================================================================
-    # Store to per-edge buffer (no atomics!) - [E, 9, 2C] with src in [:C], tgt in [C:]
+    # Step 3: Store per-edge output (no scatter)
+    # Layout: [E, 9, 2C] with src at [:C] and tgt at [C:2C]
     # =========================================================================
 
-    # Store source gradients (first C channels)
+    # Source gradients (first C channels)
     tl.store(
         grad_edge_ptr + out_base + 0 * out_stride_l + c_range * out_stride_c,
         dx0_src,
@@ -382,7 +404,7 @@ def wigner_transform_bwd_kernel(
         mask=c_mask,
     )
 
-    # Store target gradients (second C channels)
+    # Target gradients (second C channels)
     tl.store(
         grad_edge_ptr
         + out_base

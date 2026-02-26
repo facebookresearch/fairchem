@@ -3,6 +3,25 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
+
+Forward: Gather node features to edges + Wigner transform + L→M permutation.
+
+This is the main forward kernel for the edge message passing operation.
+Combines three operations to minimize memory traffic:
+    1. Gather: x[node] → x_edge[edge] for both src and tgt nodes
+    2. Rotate: y = W @ x (block-diagonal Wigner D-matrix)
+    3. Permute: L-major → M-major ordering
+
+Data flow:
+    x[N, 9, C] → gather[edge_index] → W @ x_l → permute L→M → out[E, 9, 2C]
+
+Side output:
+    x_edge[E, 9, 2C] - pre-rotation gathered features (for backward dW)
+    Layout: src features at [:, :, :C], tgt features at [:, :, C:2C]
+
+Note: There is no corresponding backward kernel for this operation. The backward
+for dx uses wigner_m2l_bwd_kernel (M→L + W^T), and the scatter is handled by
+PyTorch's index_add_ which is faster than Triton atomics.
 """
 
 from __future__ import annotations
@@ -10,17 +29,9 @@ from __future__ import annotations
 import triton
 import triton.language as tl
 
-# =============================================================================
-# Fused Edge Gather + Block-Diagonal Wigner + L→M Permutation
-# =============================================================================
-
-# =============================================================================
-# Emit variant: same as above but also writes x_src, x_tgt side outputs
-# =============================================================================
-
 
 @triton.jit
-def fused_node_to_edge_wigner_permute_kernel(
+def node_to_edge_wigner_l2m_kernel(
     x_ptr,
     edge_index_ptr,
     wigner_ptr,
@@ -40,13 +51,23 @@ def fused_node_to_edge_wigner_permute_kernel(
     x_edge_stride_c,
     BLOCK_C: tl.constexpr,
 ):
-    """Fused edge gather + Wigner + L→M with x_edge side output.
+    """
+    Fused gather + Wigner rotation + L→M permutation.
 
-    Same as fused_edge_gather_wigner_l2m_kernel but additionally
-    stores the pre-Wigner gathered features as a concatenated
-    x_edge [E, 9, 2C] tensor (src at [:C], tgt at [C:2C]).
-    These values are already in registers so the extra stores
-    are free in terms of compute.
+    Args:
+        x_ptr: Node features [N, 9, C]
+        edge_index_ptr: Edge indices [2, E] (row 0 = src, row 1 = tgt)
+        wigner_ptr: Per-edge Wigner matrices [E, 81] (flattened 9x9)
+        out_ptr: Output [E, 9, 2C] in M-major order (rotated)
+        x_edge_ptr: Side output [E, 9, 2C] in L-major order (pre-rotation)
+        num_edges: Number of edges E
+        sphere_channels: Number of channels C
+        *_stride_*: Tensor strides for flexible memory layouts
+        BLOCK_C: Channel block size for vectorization
+
+    Grid: (num_edges, num_c_blocks)
+        - Each thread block handles one edge and BLOCK_C channels
+        - 2D grid allows processing more channels than BLOCK_C
     """
     edge_id = tl.program_id(0)
     c_block_id = tl.program_id(1)
@@ -68,7 +89,7 @@ def fused_node_to_edge_wigner_permute_kernel(
     out_base = edge_id * out_stride_e
 
     # =========================================================================
-    # Load all 9 coefficients from both nodes
+    # Step 1: Gather features from both nodes (src and tgt)
     # =========================================================================
     x0_src = tl.load(
         x_ptr + idx0 * x_stride_n + 0 * x_stride_m + c_range * x_stride_c,
@@ -170,9 +191,9 @@ def fused_node_to_edge_wigner_permute_kernel(
     )
 
     # =========================================================================
-    # Store x_edge side output (L-major, no permutation)
-    # src at channels [0:C], tgt at channels [C:2C]
-    # Values are already in registers — stores are free in terms of compute
+    # Step 2: Store x_edge side output for backward dW computation
+    # Layout: [E, 9, 2C] with src at [:C] and tgt at [C:2C]
+    # These stores are essentially free since values are already in registers
     # =========================================================================
     x_edge_base = edge_id * x_edge_stride_e
 
@@ -312,15 +333,16 @@ def fused_node_to_edge_wigner_permute_kernel(
     )
 
     # =========================================================================
-    # L=0 block: 1x1 scalar at position (0,0)
+    # Step 3: Apply Wigner rotation (y = W @ x)
+    # Block-diagonal structure: L=0 (1x1), L=1 (3x3), L=2 (5x5)
     # =========================================================================
+
+    # L=0 block: scalar multiply
     w00 = tl.load(wigner_ptr + w_base + 0)
     y0_src = w00 * x0_src
     y0_tgt = w00 * x0_tgt
 
-    # =========================================================================
-    # L=1 block: 3x3 at positions [1:4, 1:4]
-    # =========================================================================
+    # L=1 block: 3x3 matrix multiply
     w11 = tl.load(wigner_ptr + w_base + 1 * 9 + 1)
     w12 = tl.load(wigner_ptr + w_base + 1 * 9 + 2)
     w13 = tl.load(wigner_ptr + w_base + 1 * 9 + 3)
@@ -339,9 +361,7 @@ def fused_node_to_edge_wigner_permute_kernel(
     y2_tgt = w21 * x1_tgt + w22 * x2_tgt + w23 * x3_tgt
     y3_tgt = w31 * x1_tgt + w32 * x2_tgt + w33 * x3_tgt
 
-    # =========================================================================
-    # L=2 block: 5x5 at positions [4:9, 4:9]
-    # =========================================================================
+    # L=2 block: 5x5 matrix multiply
     w44 = tl.load(wigner_ptr + w_base + 4 * 9 + 4)
     w45 = tl.load(wigner_ptr + w_base + 4 * 9 + 5)
     w46 = tl.load(wigner_ptr + w_base + 4 * 9 + 6)
@@ -383,10 +403,12 @@ def fused_node_to_edge_wigner_permute_kernel(
     y8_tgt = w84 * x4_tgt + w85 * x5_tgt + w86 * x6_tgt + w87 * x7_tgt + w88 * x8_tgt
 
     # =========================================================================
-    # L→M permutation and store (identical to base kernel)
-    # L_TO_M_GATHER_IDX = [0, 2, 6, 3, 7, 1, 5, 8, 4]
+    # Step 4: L→M permutation and store output
+    # L_TO_M_IDX = [0, 2, 6, 3, 7, 1, 5, 8, 4]
+    # out_m[i] = y_l[L_TO_M_IDX[i]]
     # =========================================================================
-    # M-pos 0 <- L-pos 0
+
+    # M=0 ← L=0
     tl.store(
         out_ptr + out_base + 0 * out_stride_l + c_range * out_stride_c,
         y0_src,
@@ -402,7 +424,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 1 <- L-pos 2
+    # M=1 ← L=2
     tl.store(
         out_ptr + out_base + 1 * out_stride_l + c_range * out_stride_c,
         y2_src,
@@ -418,7 +440,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 2 <- L-pos 6
+    # M=2 ← L=6
     tl.store(
         out_ptr + out_base + 2 * out_stride_l + c_range * out_stride_c,
         y6_src,
@@ -434,7 +456,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 3 <- L-pos 3
+    # M=3 ← L=3
     tl.store(
         out_ptr + out_base + 3 * out_stride_l + c_range * out_stride_c,
         y3_src,
@@ -450,7 +472,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 4 <- L-pos 7
+    # M=4 ← L=7
     tl.store(
         out_ptr + out_base + 4 * out_stride_l + c_range * out_stride_c,
         y7_src,
@@ -466,7 +488,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 5 <- L-pos 1
+    # M=5 ← L=1
     tl.store(
         out_ptr + out_base + 5 * out_stride_l + c_range * out_stride_c,
         y1_src,
@@ -482,7 +504,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 6 <- L-pos 5
+    # M=6 ← L=5
     tl.store(
         out_ptr + out_base + 6 * out_stride_l + c_range * out_stride_c,
         y5_src,
@@ -498,7 +520,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 7 <- L-pos 8
+    # M=7 ← L=8
     tl.store(
         out_ptr + out_base + 7 * out_stride_l + c_range * out_stride_c,
         y8_src,
@@ -514,7 +536,7 @@ def fused_node_to_edge_wigner_permute_kernel(
         mask=c_mask,
     )
 
-    # M-pos 8 <- L-pos 4
+    # M=8 ← L=4
     tl.store(
         out_ptr + out_base + 8 * out_stride_l + c_range * out_stride_c,
         y4_src,

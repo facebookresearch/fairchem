@@ -13,9 +13,11 @@ import os
 import random
 import timeit
 from collections import defaultdict
+from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch._dynamo as dynamo
 from ase.build import make_supercell
 from ase.io import read
 from torch.profiler import ProfilerActivity, profile, record_function
@@ -106,6 +108,115 @@ def make_profile(data, predictor, name, save_loc):
             p.step()
 
 
+@dataclass
+class CompileDebugSettings:
+    """
+    Settings for debugging torch.compile graph breaks and compilation issues.
+
+    Attributes:
+        enabled: Enable compile debugging (default: False)
+        log_graph_breaks: Log graph break reasons (default: True)
+        run_dynamo_explain: Run torch._dynamo.explain() for detailed analysis
+        verbose: Enable verbose dynamo logging
+        fullgraph: Test with fullgraph=True to find breaks (will error if breaks exist)
+    """
+
+    enabled: bool = False
+    log_graph_breaks: bool = True
+    run_dynamo_explain: bool = False
+    verbose: bool = False
+    fullgraph: bool = False
+
+
+def _setup_compile_debug_logging(settings: CompileDebugSettings) -> None:
+    """
+    Configure torch._dynamo logging for debugging compilation issues.
+
+    Args:
+        settings: CompileDebugSettings instance with debug configuration
+    """
+    if not settings.enabled:
+        return
+
+    logging.info("Enabling torch.compile debug logging...")
+
+    # Enable dynamo verbose mode
+    if settings.verbose:
+        dynamo.config.verbose = True
+        logging.getLogger("torch._dynamo").setLevel(logging.DEBUG)
+
+    # Log graph breaks
+    if settings.log_graph_breaks:
+        # Set environment-like logging via torch internal config
+        # This is equivalent to TORCH_LOGS="graph_breaks"
+        torch._logging.set_logs(graph_breaks=True)
+        logging.info("Graph break logging enabled")
+
+    logging.info(f"Compile debug settings: {settings}")
+
+
+def _run_dynamo_explain(model, data, name: str) -> None:
+    """
+    Run torch._dynamo.explain() to analyze graph breaks.
+
+    Args:
+        model: The model to analyze
+        data: Sample input data
+        name: Name for logging
+    """
+    logging.info(f"Running torch._dynamo.explain() for {name}...")
+    try:
+        explanation = dynamo.explain(model)(data)
+        logging.info("=" * 60)
+        logging.info(f"DYNAMO EXPLAIN RESULTS for {name}")
+        logging.info("=" * 60)
+        logging.info(f"Graph count: {explanation.graph_count}")
+        logging.info(f"Graph break count: {explanation.graph_break_count}")
+        logging.info(f"Ops per graph: {explanation.ops_per_graph}")
+
+        if explanation.break_reasons:
+            logging.info("-" * 60)
+            logging.info("GRAPH BREAK REASONS:")
+            logging.info("-" * 60)
+            for i, reason in enumerate(explanation.break_reasons):
+                logging.info(f"\n[Break {i + 1}]")
+                logging.info(str(reason))
+        else:
+            logging.info("No graph breaks detected!")
+        logging.info("=" * 60)
+    except Exception as e:
+        logging.error(f"Error during dynamo.explain(): {e}")
+        import traceback
+
+        traceback.print_exc()
+
+
+def _to_compile_debug_settings(
+    value: CompileDebugSettings | dict | None,
+) -> CompileDebugSettings:
+    """
+    Convert a dict or DictConfig to CompileDebugSettings.
+
+    Args:
+        value: CompileDebugSettings, dict, or None
+
+    Returns:
+        CompileDebugSettings instance with defaults for missing fields
+    """
+    if value is None:
+        return CompileDebugSettings()
+    if isinstance(value, CompileDebugSettings):
+        return value
+    # Handle dict or DictConfig from Hydra
+    return CompileDebugSettings(
+        enabled=value.get("enabled", False),
+        log_graph_breaks=value.get("log_graph_breaks", True),
+        run_dynamo_explain=value.get("run_dynamo_explain", False),
+        verbose=value.get("verbose", False),
+        fullgraph=value.get("fullgraph", False),
+    )
+
+
 class InferenceBenchRunner(Runner):
     def __init__(
         self,
@@ -121,6 +232,7 @@ class InferenceBenchRunner(Runner):
         generate_traces: bool = False,  # takes additional memory and time
         expand_supercells: int | None = None,
         dataset_name: str = "omat",
+        debug_compile: CompileDebugSettings | None = None,
     ):
         self.natoms_list = natoms_list
         self.input_system = input_system
@@ -137,11 +249,15 @@ class InferenceBenchRunner(Runner):
         self.expand_supercells = expand_supercells
         self.dataset_name = dataset_name
         self.repeats = repeats
+        self.debug_compile = _to_compile_debug_settings(debug_compile)
 
     def run(self) -> None:
         self.run_dir = self.job_config.metadata.results_dir
         os.makedirs(self.run_dir, exist_ok=True)
         seed_everywhere(self.seed)
+
+        # Setup compile debug logging if enabled
+        _setup_compile_debug_logging(self.debug_compile)
 
         model_to_qps_data = defaultdict(list)
 
@@ -197,6 +313,11 @@ class InferenceBenchRunner(Runner):
                     print_info += f" num edges compute on: {num_edges}"
                 logging.info(print_info)
                 inp = data.clone()
+
+                # Run dynamo.explain() if debug enabled
+                if self.debug_compile.enabled and self.debug_compile.run_dynamo_explain:
+                    _run_dynamo_explain(predictor.model, inp, f"{model_name}_{name}")
+
                 if self.generate_traces:
                     make_profile(inp, predictor, name=name, save_loc=self.run_dir)
                 qps, ns_per_day = get_qps(
