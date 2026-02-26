@@ -281,7 +281,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
-        use_quaternion_wigner: bool = False,
+        use_quaternion_wigner: bool = True,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         charge_balanced_channels: list[int] | None = None,
