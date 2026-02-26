@@ -17,11 +17,9 @@ except ImportError:
 if HAS_TRITON:
     from .edge_gather_wigner_bwd import (
         FusedEdgeGatherWignerL2MTritonBwdEmitFunction,
-        FusedEdgeGatherWignerL2MTritonV2BwdFunction,
     )
     from .wigner_ops import (
         FusedMToLThenWignerLmax2Function,
-        MToLThenWignerLmax2Function,
     )
 
     # Export with new names (same underlying classes)
@@ -31,9 +29,7 @@ if HAS_TRITON:
 __all__ = [
     "HAS_TRITON",
     "FusedEdgeGatherWignerL2MTritonBwdEmitFunction",
-    "FusedEdgeGatherWignerL2MTritonV2BwdFunction",
     "FusedMToLThenWignerLmax2Function",
-    "MToLThenWignerLmax2Function",
     "UMASFastGPUNodeToEdgeWignerPermute",
     "UMASFastGPUPermuteWignerInvEdgeToNode",
 ]
