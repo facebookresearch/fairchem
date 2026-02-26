@@ -284,14 +284,11 @@ def compute_forces_and_stress(
 
     forces = torch.neg(grads[0])
 
-    # Per-system position virial: Σ_{n∈s} g_r[n,i] * r[n,j]
     pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
     pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
 
-    # Cell virial: cell^T @ g_cell per system
     cell_virial = cell.mT @ grads[1]  # [B, 3, 3]
 
-    # Symmetrized total virial
     virial = (pos_virial + pos_virial.mT + cell_virial + cell_virial.mT) / 2
     volume = torch.det(cell).abs().unsqueeze(-1)
     stress = virial / volume.view(-1, 1, 1)
