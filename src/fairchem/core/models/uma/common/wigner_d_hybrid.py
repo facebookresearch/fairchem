@@ -23,14 +23,16 @@ from typing import Optional
 
 import torch
 
-from fairchem.core.models.uma.common.quaternion_wigner_utils import (
-    WignerCoefficients,
+from fairchem.core.models.uma.common.quaternion_utils import (
     compute_euler_matching_gamma,
-    get_ra_rb_coefficients_real,
     quaternion_edge_to_y_stable,
     quaternion_multiply,
-    quaternion_to_ra_rb_real,
     quaternion_y_rotation,
+)
+from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    WignerCoefficients,
+    get_ra_rb_coefficients_real,
+    quaternion_to_ra_rb_real,
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )

@@ -64,13 +64,6 @@ def _load_coefficients() -> dict:
     return result
 
 
-def clear_memory_caches() -> None:
-    """Clear all in-memory caches for this module."""
-    _KERNEL_CACHE.clear()
-    _BATCHED_L3L4_CACHE.clear()
-    _load_coefficients.cache_clear()
-
-
 def _get_kernel_data(ell: int, dtype: torch.dtype, device: torch.device) -> object:
     """Get cached kernel data for l=2, 3, or 4.
 

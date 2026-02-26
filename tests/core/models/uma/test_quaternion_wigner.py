@@ -15,17 +15,18 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
 import torch
 
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    _build_euler_transform,
+    _build_u_matrix,
     get_ra_rb_coefficients_real,
-    get_so3_generators,
     precompute_U_blocks_euler_aligned_real,
     precompute_wigner_coefficients,
-    quaternion_to_axis_angle,
     quaternion_to_ra_rb_real,
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
@@ -42,6 +43,167 @@ from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
 from fairchem.core.models.uma.common.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
 )
+
+# =============================================================================
+# Reference Implementation for Testing (Not Used at Runtime)
+#
+# These functions provide a mathematically principled reference implementation
+# for computing Wigner D matrices via matrix exponential of SO(3) Lie algebra
+# generators. They validate that the optimized polynomial kernels in
+# wigner_d_custom_kernels.py produce correct results.
+# =============================================================================
+
+
+def quaternion_to_axis_angle(
+    q: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Convert quaternion to axis-angle representation.
+
+    Uses the stable formula:
+        angle = 2 * atan2(|xyz|, w)
+        axis = xyz / |xyz|
+
+    For small angles (|xyz| ~ 0), axis is undefined but angle ~ 0.
+
+    Args:
+        q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+
+    Returns:
+        (axis, angle) where:
+        - axis has shape (N, 3), unit vectors
+        - angle has shape (N,), in radians
+    """
+    w = q[..., 0]
+    xyz = q[..., 1:4]
+
+    xyz_norm = torch.linalg.norm(xyz, dim=-1)
+    angle = 2.0 * torch.atan2(xyz_norm, w)
+
+    safe_xyz_norm = xyz_norm.clamp(min=1e-12)
+    axis = xyz / safe_xyz_norm.unsqueeze(-1)
+
+    small_angle = xyz_norm < 1e-8
+    z_axis = torch.tensor([0.0, 0.0, 1.0], dtype=q.dtype, device=q.device)
+    z_axis = z_axis.expand_as(axis)
+    axis = torch.where(small_angle.unsqueeze(-1), z_axis, axis)
+
+    return axis, angle
+
+
+def _build_so3_generators(
+    ell: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """
+    Build SO(3) Lie algebra generators K_x, K_y, K_z for representation ell.
+
+    These are real antisymmetric (2*ell+1) x (2*ell+1) matrices satisfying:
+        D^ell(n, theta) = exp(theta * (n_x K_x + n_y K_y + n_z K_z))
+
+    Args:
+        ell: Angular momentum quantum number
+
+    Returns:
+        (K_x, K_y, K_z) tuple of generator matrices in float64
+    """
+    size = 2 * ell + 1
+
+    if ell == 0:
+        z = torch.zeros(1, 1, dtype=torch.float64)
+        return z, z.clone(), z.clone()
+
+    m_values = torch.arange(-ell, ell + 1, dtype=torch.float64)
+    J_z = torch.diag(m_values.to(torch.complex128))
+
+    J_plus = torch.zeros(size, size, dtype=torch.complex128)
+    J_minus = torch.zeros(size, size, dtype=torch.complex128)
+
+    for m in range(-ell, ell):
+        coeff = math.sqrt(ell * (ell + 1) - m * (m + 1))
+        J_plus[m + 1 + ell, m + ell] = coeff
+
+    for m in range(-ell + 1, ell + 1):
+        coeff = math.sqrt(ell * (ell + 1) - m * (m - 1))
+        J_minus[m - 1 + ell, m + ell] = coeff
+
+    J_x = (J_plus + J_minus) / 2
+    J_y = (J_plus - J_minus) / 2j
+
+    U = _build_u_matrix(ell)
+    U_dag = U.conj().T
+
+    K_x = (U @ (1j * J_x) @ U_dag).real
+    K_y = -(U @ (1j * J_y) @ U_dag).real
+    K_z = (U @ (1j * J_z) @ U_dag).real
+
+    return K_x, K_y, K_z
+
+
+def get_so3_generators(
+    lmax: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> dict[str, list[torch.Tensor]]:
+    """
+    Compute K_x, K_y, K_z lists for l=0..lmax.
+
+    For l >= 2, the generators include the Euler-matching transformation folded in,
+    so the matrix exponential produces output directly in the Euler basis.
+
+    For l=1, a permutation matrix P is also returned to convert to Cartesian basis.
+
+    Args:
+        lmax: Maximum angular momentum
+        dtype: Data type for the generators
+        device: Device for the generators
+
+    Returns:
+        Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
+    """
+    jd_path = (
+        Path(__file__).parents[4]
+        / "src"
+        / "fairchem"
+        / "core"
+        / "models"
+        / "uma"
+        / "Jd.pt"
+    )
+    Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
+
+    K_x_list = []
+    K_y_list = []
+    K_z_list = []
+
+    for ell in range(lmax + 1):
+        K_x, K_y, K_z = _build_so3_generators(ell)
+        K_x = K_x.to(device=device, dtype=dtype)
+        K_y = K_y.to(device=device, dtype=dtype)
+        K_z = K_z.to(device=device, dtype=dtype)
+
+        if ell >= 2:
+            Jd = Jd_list[ell].to(dtype=dtype, device=device)
+            U = _build_euler_transform(ell, Jd)
+            K_x = U @ K_x @ U.T
+            K_y = U @ K_y @ U.T
+            K_z = U @ K_z @ U.T
+
+        K_x_list.append(K_x)
+        K_y_list.append(K_y)
+        K_z_list.append(K_z)
+
+    P = torch.tensor(
+        [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=dtype,
+        device=device,
+    )
+
+    return {
+        "K_x": K_x_list,
+        "K_y": K_y_list,
+        "K_z": K_z_list,
+        "P": P,
+    }
 
 
 @pytest.fixture()
