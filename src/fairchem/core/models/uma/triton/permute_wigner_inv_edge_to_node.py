@@ -159,9 +159,7 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         return out
 
     @staticmethod
-    def backward(
-        ctx, grad_out: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def backward(ctx, grad_out: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Backward pass.
 
