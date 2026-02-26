@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import pandas as pd
 from fairchem.data.oc.core import Bulk, Slab, Adsorbate
+from ase.build import molecule
 
 co_molecule = molecule("CO")
 adsorbate = Adsorbate(adsorbate_atoms=co_molecule, adsorbate_binding_indices=[1]) # 1 corresponds to the carbon atom
