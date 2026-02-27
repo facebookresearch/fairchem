@@ -158,39 +158,39 @@ def quaternion_to_wigner_d_cg(
     device = q.device
     size = (lmax + 1) ** 2
 
-    D = torch.zeros(N, size, size, dtype=dtype, device=device)
-
-    # l=0: identity
-    D[:, 0, 0] = 1.0
+    # Build each block as a separate contiguous tensor, then assemble.
+    # This keeps CG recursion inputs contiguous for optimal einsum performance.
+    blocks: dict[int, torch.Tensor] = {}
+    blocks[0] = torch.ones(N, 1, 1, dtype=dtype, device=device)
 
     # l=1: direct quaternion to rotation matrix
     if lmax >= 1:
-        D[:, 1:4, 1:4] = quaternion_to_rotation_matrix(q)
+        blocks[1] = quaternion_to_rotation_matrix(q)
 
     # l=2: einsum tensor contraction
     if lmax >= 2:
-        D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
+        blocks[2] = quaternion_to_wigner_d_l2_einsum(q)
 
     # l=3,4: batched matmul (single kernel dispatch for both)
     if lmax >= 4:
-        D_l3, D_l4 = quaternion_to_wigner_d_l3l4_batched(q)
-        D[:, 9:16, 9:16] = D_l3
-        D[:, 16:25, 16:25] = D_l4
+        blocks[3], blocks[4] = quaternion_to_wigner_d_l3l4_batched(q)
     elif lmax >= 3:
-        D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(q, 3)
+        blocks[3] = quaternion_to_wigner_d_matmul(q, 3)
 
-    # l>=5: CG recursion
+    # l>=5: CG recursion (inputs are contiguous kernel outputs)
     if lmax >= 5:
-        D_1 = D[:, 1:4, 1:4]  # l=1 block (Cartesian)
-        D_prev = D[:, 16:25, 16:25]  # l=4 block (Euler basis)
-
-        start = 25  # offset for l=5
+        D_prev = blocks[4]
         for ell in range(5, lmax + 1):
-            D_next = _cg_combine(D_prev, D_1, ell, coeffs.w3j[ell])
-            end = start + 2 * ell + 1
-            D[:, start:end, start:end] = D_next
-            D_prev = D_next
-            start = end
+            D_prev = _cg_combine(D_prev, blocks[1], ell, coeffs.w3j[ell])
+            blocks[ell] = D_prev
+
+    # Assemble block-diagonal output
+    D = torch.zeros(N, size, size, dtype=dtype, device=device)
+    start = 0
+    for ell in range(lmax + 1):
+        end = start + 2 * ell + 1
+        D[:, start:end, start:end] = blocks[ell]
+        start = end
 
     return D
 
