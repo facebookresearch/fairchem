@@ -1066,13 +1066,19 @@ def get_so3_generators(
 
     For l=1, a permutation matrix P is also cached to convert to Cartesian basis.
 
+    The basis transforms used to fold into the generators are also cached
+    under 'basis_transforms': a dict mapping l -> orthogonal transform matrix
+    (P for l=1, U_euler for l>=2). These can be used by other methods (e.g.
+    CG recursion) that need to convert from m-ordering to the output basis.
+
     Args:
         lmax: Maximum angular momentum
         dtype: Data type for the generators
         device: Device for the generators
 
     Returns:
-        Dictionary with 'K_x', 'K_y', 'K_z' lists and 'P' for l=1 permutation
+        Dictionary with 'K_x', 'K_y', 'K_z' lists, 'P' for l=1 permutation,
+        and 'basis_transforms' mapping l -> transform matrix for l>=1
     """
     key = (lmax, dtype, device)
 
@@ -1083,6 +1089,7 @@ def get_so3_generators(
         K_x_list = []
         K_y_list = []
         K_z_list = []
+        basis_transforms: dict[int, torch.Tensor] = {}
 
         P = torch.tensor(
             [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
@@ -1100,12 +1107,14 @@ def get_so3_generators(
                 K_x = P @ K_x @ P.T
                 K_y = P @ K_y @ P.T
                 K_z = P @ K_z @ P.T
+                basis_transforms[ell] = P
             elif ell >= 2:
                 Jd = Jd_list[ell].to(dtype=dtype, device=device)
                 U = _build_euler_transform(ell, Jd)
                 K_x = U @ K_x @ U.T
                 K_y = U @ K_y @ U.T
                 K_z = U @ K_z @ U.T
+                basis_transforms[ell] = U
 
             K_x_list.append(K_x)
             K_y_list.append(K_y)
@@ -1116,6 +1125,7 @@ def get_so3_generators(
             "K_y": K_y_list,
             "K_z": K_z_list,
             "P": P,
+            "basis_transforms": basis_transforms,
         }
 
     return _GENERATOR_CACHE[key]
