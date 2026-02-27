@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import tempfile
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import ase.io
@@ -107,7 +108,7 @@ class TestMDRunner:
             steps=steps,
             trajectory_interval=interval,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 100},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=100),
         )
         runner._job_config = _create_mock_job_config(str(mdrunner_dir))
         results = runner.calculate(job_num=0, num_jobs=1)
@@ -162,7 +163,7 @@ class TestMDRunner:
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 1000},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
         )
         runner1._job_config = _create_mock_job_config(str(results_dir1))
 
@@ -217,7 +218,7 @@ class TestMDRunner:
             steps=total_steps,
             trajectory_interval=trajectory_interval,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 1000},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
         )
         runner2._job_config = _create_mock_job_config(str(results_dir2))
         runner2.load_state(str(checkpoint_dir))
@@ -255,7 +256,7 @@ class TestMDRunner:
             trajectory_interval=10,
             heartbeat_interval=20,
             log_interval=10,
-            trajectory_writer_kwargs={"flush_interval": 1000},
+            trajectory_writer=partial(ParquetTrajectoryWriter, flush_interval=1000),
         )
         runner._job_config = _create_mock_job_config(
             str(md_results_dir), checkpoint_dir=str(checkpoint_dir)
