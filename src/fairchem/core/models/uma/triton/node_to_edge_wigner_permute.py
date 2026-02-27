@@ -155,14 +155,9 @@ def node_to_edge_wigner_permute_bwd_dx_launcher(
         device=grad_out.device,
     )
 
-    # Reshape for scatter: [E, 9*C] for src, [E, 9*C] for tgt
-    grad_edge_flat = grad_edge.view(num_edges, 9 * sphere_channels * 2)
-    grad_src = grad_edge_flat[:, : 9 * sphere_channels].reshape(
-        num_edges, 9 * sphere_channels
-    )
-    grad_tgt = grad_edge_flat[:, 9 * sphere_channels :].reshape(
-        num_edges, 9 * sphere_channels
-    )
+    # Slice along channel dim: grad_edge is [E, 9, 2C] with src at [:C], tgt at [C:]
+    grad_src = grad_edge[:, :, :sphere_channels].reshape(num_edges, 9 * sphere_channels)
+    grad_tgt = grad_edge[:, :, sphere_channels:].reshape(num_edges, 9 * sphere_channels)
 
     src_idx = edge_index[0]  # [E]
     tgt_idx = edge_index[1]  # [E]
