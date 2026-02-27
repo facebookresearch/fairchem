@@ -32,11 +32,17 @@ def _smooth_step_cinf(t: torch.Tensor) -> torch.Tensor:
     Uses f(x) = exp(-1/x) for x > 0 (0 otherwise), then:
     step(t) = f(t) / (f(t) + f(1-t)) = sigmoid((2t-1)/(t*(1-t)))
 
+    Evaluated via a mirror trick: always compute sigmoid with a non-positive
+    argument (the underflow-to-zero regime), then use 1-val for the upper
+    half.  This makes the autograd derivatives exactly symmetric:
+    f'(t) == f'(1-t) for all t.
+
     Properties:
     - C-infinity smooth everywhere
     - All derivatives are exactly zero at t=0 and t=1
     - Values: f(0)=0, f(1)=1
     - Symmetric: f(t) + f(1-t) = 1
+    - Gradient-symmetric: f'(t) = f'(1-t)
 
     Args:
         t: Input tensor, will be clamped to [0, 1]
@@ -47,14 +53,20 @@ def _smooth_step_cinf(t: torch.Tensor) -> torch.Tensor:
     t_clamped = t.clamp(0, 1)
     eps = torch.finfo(t.dtype).eps
 
-    numerator = 2.0 * t_clamped - 1.0
-    denominator = t_clamped * (1.0 - t_clamped)
-    denom_safe = denominator.clamp(min=eps)
-    arg = numerator / denom_safe
-    result = torch.sigmoid(arg)
+    # Always evaluate sigmoid in the [0, 0.5] to ensure symmetric gradient behaviour
+    is_upper = t_clamped >= 0.5
+    t_lo = torch.where(is_upper, 1.0 - t_clamped, t_clamped)
 
-    result = torch.where(t_clamped < eps, torch.zeros_like(result), result)
-    result = torch.where(t_clamped > 1 - eps, torch.ones_like(result), result)
+    numerator = 2.0 * t_lo - 1.0  # always <= 0
+    denominator = t_lo * (1.0 - t_lo)
+    denom_safe = denominator.clamp(min=eps)
+    arg = numerator / denom_safe  # always <= 0
+    val = torch.sigmoid(arg)  # always in [0, 0.5]
+
+    val = torch.where(t_lo < eps, torch.zeros_like(val), val)
+
+    # Mirror for the upper half: f(t) = 1 - f(1-t)
+    result = torch.where(is_upper, 1.0 - val, val)
 
     return result
 
