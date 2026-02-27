@@ -1,4 +1,9 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree
+
 Tests for Wigner D matrix computation.
 
 Tests verify:
@@ -9,8 +14,6 @@ Tests verify:
 5. torch.compile compatibility
 6. Range functions (lmin support)
 7. Specialized kernels (l=2 polynomial, l=3/4 matmul)
-
-Copyright (c) Meta Platforms, Inc. and affiliates.
 """
 
 from __future__ import annotations
@@ -21,6 +24,11 @@ from pathlib import Path
 import pytest
 import torch
 
+from fairchem.core.models.uma.common.quaternion_utils import (
+    BLEND_START,
+    BLEND_WIDTH,
+    _smooth_step_cinf,
+)
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     _build_euler_transform,
     _build_u_matrix,
@@ -204,6 +212,48 @@ def get_so3_generators(
         "K_z": K_z_list,
         "P": P,
     }
+
+
+def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
+    """
+    Compute gamma to match the Euler convention.
+
+    Uses a two-chart approach matching the quaternion_edge_to_y_stable function:
+    - Chart 1 (ey >= 0.9): gamma = -atan2(ex, ez)
+    - Chart 2 (ey <= -0.9): gamma = +atan2(ex, ez)
+    - Blend region (-0.9 < ey < 0.9): smooth interpolation
+
+    For edges on Y-axis (ex = ez ~ 0): gamma = 0 (degenerate case).
+
+    Note: In the blend region, there is inherent approximation error
+    due to the NLERP quaternion blending. This is acceptable for the intended
+    use case of matching Euler output for testing/validation. Properly determined
+    gamma values are used in the test.
+
+    Args:
+        edge_vec: Edge vectors of shape (N, 3), assumed normalized
+
+    Returns:
+        Gamma angles of shape (N,)
+    """
+    ex = edge_vec[..., 0]
+    ey = edge_vec[..., 1]
+    ez = edge_vec[..., 2]
+
+    # Chart 1 gamma (used for ey >= 0.9)
+    gamma_chart1 = -torch.atan2(ex, ez)
+
+    # Chart 2 gamma (used for ey <= -0.9)
+    gamma_chart2 = torch.atan2(ex, ez)
+
+    # Blend factor (same as quaternion_edge_to_y_stable)
+    t = (ey - BLEND_START) / BLEND_WIDTH
+    t_smooth = _smooth_step_cinf(t)
+
+    # Interpolate: t_smooth=0 -> chart2, t_smooth=1 -> chart1
+    gamma = t_smooth * gamma_chart1 + (1 - t_smooth) * gamma_chart2
+
+    return gamma
 
 
 @pytest.fixture()
@@ -419,7 +469,9 @@ class TestEulerAgreement:
             edge_t = torch.tensor([edge], dtype=dtype, device=device)
 
             # Compute with axis-angle using Euler gamma
-            D_axis, _ = axis_angle_wigner_hybrid(edge_t, lmax, use_euler_gamma=True)
+            edge_normalized = torch.nn.functional.normalize(edge_t, dim=-1)
+            gamma = compute_euler_matching_gamma(edge_normalized)
+            D_axis, _ = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
 
             # Get Euler angles from production code, zero out random gamma
             gamma, beta, alpha = init_edge_rot_euler_angles(edge_t)

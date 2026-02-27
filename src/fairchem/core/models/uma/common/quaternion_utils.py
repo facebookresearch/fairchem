@@ -14,10 +14,10 @@ import torch
 # =============================================================================
 
 # Blend region parameters for two-chart quaternion computation
-# The blend region is ey in [_BLEND_START, _BLEND_START + _BLEND_WIDTH]
+# The blend region is ey in [BLEND_START, BLEND_START + BLEND_WIDTH]
 # which corresponds to ey in [-0.9, 0.9]
-_BLEND_START = -0.9
-_BLEND_WIDTH = 1.8
+BLEND_START = -0.9
+BLEND_WIDTH = 1.8
 
 
 # =============================================================================
@@ -231,7 +231,7 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
     q_chart1 = _quaternion_chart1_standard(ex, ey, ez)
     q_chart2 = _quaternion_chart2_via_minus_y(ex, ey, ez)
 
-    t = (ey - _BLEND_START) / _BLEND_WIDTH
+    t = (ey - BLEND_START) / BLEND_WIDTH
     t_smooth = _smooth_step_cinf(t)
 
     q = quaternion_nlerp(q_chart2, q_chart1, t_smooth)
@@ -242,45 +242,3 @@ def quaternion_edge_to_y_stable(edge_vec: torch.Tensor) -> torch.Tensor:
 # =============================================================================
 # Gamma Computation for Euler Matching
 # =============================================================================
-
-
-def compute_euler_matching_gamma(edge_vec: torch.Tensor) -> torch.Tensor:
-    """
-    Compute gamma to match the Euler convention.
-
-    Uses a two-chart approach matching the quaternion_edge_to_y_stable function:
-    - Chart 1 (ey >= 0.9): gamma = -atan2(ex, ez)
-    - Chart 2 (ey <= -0.9): gamma = +atan2(ex, ez)
-    - Blend region (-0.9 < ey < 0.9): smooth interpolation
-
-    For edges on Y-axis (ex = ez ~ 0): gamma = 0 (degenerate case).
-
-    Note: In the blend region, there is inherent approximation error
-    due to the NLERP quaternion blending. This is acceptable for the intended
-    use case of matching Euler output for testing/validation. Properly determined
-    gamma values are used in the test.
-
-    Args:
-        edge_vec: Edge vectors of shape (N, 3), assumed normalized
-
-    Returns:
-        Gamma angles of shape (N,)
-    """
-    ex = edge_vec[..., 0]
-    ey = edge_vec[..., 1]
-    ez = edge_vec[..., 2]
-
-    # Chart 1 gamma (used for ey >= 0.9)
-    gamma_chart1 = -torch.atan2(ex, ez)
-
-    # Chart 2 gamma (used for ey <= -0.9)
-    gamma_chart2 = torch.atan2(ex, ez)
-
-    # Blend factor (same as quaternion_edge_to_y_stable)
-    t = (ey - _BLEND_START) / _BLEND_WIDTH
-    t_smooth = _smooth_step_cinf(t)
-
-    # Interpolate: t_smooth=0 -> chart2, t_smooth=1 -> chart1
-    gamma = t_smooth * gamma_chart1 + (1 - t_smooth) * gamma_chart2
-
-    return gamma

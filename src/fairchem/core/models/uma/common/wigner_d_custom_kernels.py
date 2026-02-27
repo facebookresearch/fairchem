@@ -1,4 +1,8 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
 Custom Wigner D computation kernels for l=1, 2, 3, 4.
 
 This module contains specialized, optimized kernels for computing Wigner D
@@ -9,14 +13,10 @@ Primary kernels (recommended for use):
 - l=2: quaternion_to_wigner_d_l2_einsum - tensor contraction (~20x faster on GPU)
 - l=3,4: quaternion_to_wigner_d_matmul - polynomial coefficient approach
 
-These kernels are used by both wigner_d_matexp.py and wigner_d_hybrid.py
-to accelerate the most common angular momentum blocks.
+These kernels are used by wigner_d_hybrid.py to accelerate the most common
+angular momentum blocks.
 
 Coefficient matrices are loaded from wigner_d_coefficients.pt at runtime.
-
-Copyright (c) Meta Platforms, Inc. and affiliates.
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations

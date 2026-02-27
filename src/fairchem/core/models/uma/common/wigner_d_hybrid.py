@@ -1,4 +1,8 @@
 """
+Copyright (c) Meta Platforms, Inc. and affiliates.
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+
 Wigner D matrices via hybrid approach (fastest method per l).
 
 This module provides Wigner D computation using the optimal method for each l:
@@ -10,21 +14,15 @@ This module provides Wigner D computation using the optimal method for each l:
 
 Entry point:
 - axis_angle_wigner_hybrid: Main function using real arithmetic throughout
-
-Copyright (c) Meta Platforms, Inc. and affiliates.
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import torch
 
 from fairchem.core.models.uma.common.quaternion_utils import (
-    compute_euler_matching_gamma,
     quaternion_edge_to_y_stable,
     quaternion_multiply,
     quaternion_y_rotation,
@@ -51,8 +49,8 @@ from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
 def wigner_d_from_quaternion_hybrid(
     q: torch.Tensor,
     lmax: int,
-    coeffs: Optional[WignerCoefficients] = None,
-    U_blocks: Optional[list[tuple[torch.Tensor, torch.Tensor]]] = None,
+    coeffs: WignerCoefficients | None = None,
+    U_blocks: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices from quaternion using hybrid approach.
@@ -129,10 +127,9 @@ def wigner_d_from_quaternion_hybrid(
 def axis_angle_wigner_hybrid(
     edge_distance_vec: torch.Tensor,
     lmax: int,
-    gamma: Optional[torch.Tensor] = None,
-    use_euler_gamma: bool = False,
-    coeffs: Optional[WignerCoefficients] = None,
-    U_blocks: Optional[list[tuple[torch.Tensor, torch.Tensor]]] = None,
+    gamma: torch.Tensor | None = None,
+    coeffs: WignerCoefficients | None = None,
+    U_blocks: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D using hybrid approach (optimal method per l).
@@ -155,8 +152,6 @@ def axis_angle_wigner_hybrid(
         lmax: Maximum angular momentum
         gamma: Optional roll angles of shape (N,).
                If None, uses random gamma (for SO(2) equivariance during training).
-        use_euler_gamma: If True and gamma is None, use -atan2(ex, ez) instead
-               of random gamma. This makes output exactly match Euler code.
         coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
                skips the cache lookup for better performance in hot paths.
         U_blocks: Optional pre-computed U transformation blocks.
@@ -178,10 +173,7 @@ def axis_angle_wigner_hybrid(
 
     # Step 2: Compute gamma if not provided
     if gamma is None:
-        if use_euler_gamma:
-            gamma = compute_euler_matching_gamma(edge_normalized)
-        else:
-            gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
+        gamma = torch.rand(N, dtype=dtype, device=device) * 2 * math.pi
 
     # Step 3: Compute quaternion (edge -> +Y)
     q_edge_to_y = quaternion_edge_to_y_stable(edge_normalized)
