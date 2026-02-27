@@ -104,6 +104,20 @@ def permute_wigner_inv_edge_to_node_bwd_dw_launcher(
     Returns:
         grad_wigner: Gradient w.r.t. Wigner [E, 9, 9]
     """
+    # grad_out: [E, 9, C] - gradient with 9 coefficients (lmax=2)
+    assert grad_out.ndim == 3, "grad_out must be 3D [E, 9, C]"
+    assert grad_out.shape[1] == 9, "grad_out must have 9 coefficients (lmax=2)"
+    # x_l: [E, 9, C] - saved permuted input
+    assert x_l.ndim == 3, "x_l must be 3D [E, 9, C]"
+    assert x_l.shape[1] == 9, "x_l must have 9 coefficients (lmax=2)"
+    # Shapes must match (kernel accesses both identically)
+    assert grad_out.shape == x_l.shape, "grad_out and x_l must have same shape"
+    # C must be <= 128 (kernel loads all channels in single pass via tl.arange(0, 128))
+    assert grad_out.shape[2] <= 128, "sphere_channels must be <= 128"
+    # Contiguity required for memory access pattern
+    assert grad_out.is_contiguous(), "grad_out must be contiguous"
+    assert x_l.is_contiguous(), "x_l must be contiguous"
+
     num_edges = grad_out.shape[0]
     sphere_channels = grad_out.shape[2]
 
