@@ -74,16 +74,28 @@ def precompute_cg_coefficients(
     Returns:
         CG3jCoefficients containing precomputed 3j symbols and basis transforms
     """
-    w3j = {}
-    for ell in range(2, lmax + 1):
-        # wigner_3j(l-1, 1, l) gives symbols for combining D^{l-1} ⊗ D^1 -> D^l
-        w3j[ell] = o3.wigner_3j(ell - 1, 1, ell).to(dtype=dtype, device=device)
-
     # Basis transforms from get_so3_generators (cached, loads Jd.pt once)
     # l=1: P matrix (m-ordering -> Cartesian)
     # l>=2: U_euler matrix (m-ordering -> Euler-matching)
     gens = get_so3_generators(lmax, dtype, device)
     basis_transforms = gens["basis_transforms"]
+
+    # Pre-transform w3j to absorb all basis changes. This way the CG
+    # recursion directly produces output in the correct basis (Cartesian
+    # for l=1, Euler-matching for l>=2) without any post-transform.
+    #
+    # w3j_t[x,y,z] = T_prev[x,X] * P[y,Y] * w3j_raw[X,Y,Z] * T_l[z,Z]
+    #
+    # where T_prev converts D_prev indices from its output basis to m-ordering,
+    # P converts D_1 indices from Cartesian to m-ordering, and T_l converts
+    # the output from m-ordering to the target basis for level l.
+    w3j = {}
+    P = basis_transforms[1]
+    for ell in range(2, lmax + 1):
+        w3j_raw = o3.wigner_3j(ell - 1, 1, ell).to(dtype=dtype, device=device)
+        T_prev = basis_transforms[ell - 1]
+        T_l = basis_transforms[ell]
+        w3j[ell] = torch.einsum("xX,yY,XYZ,zZ->xyz", T_prev, P, w3j_raw, T_l)
 
     return CG3jCoefficients(lmax=lmax, w3j=w3j, basis_transforms=basis_transforms)
 
@@ -119,9 +131,9 @@ def quaternion_to_wigner_d_cg(
     """
     Compute block-diagonal Wigner-D matrices via CG recursion.
 
-    The recursion operates in e3nn's m-ordering basis, then each block
-    is transformed to the output basis (Cartesian for l=1, Euler-matching
-    for l>=2) to be consistent with the other Wigner D methods.
+    The w3j coefficients have basis transforms pre-folded in, so the
+    recursion directly produces each block in the output basis (Cartesian
+    for l=1, Euler-matching for l>=2), consistent with other Wigner D methods.
 
     Args:
         q: (N, 4) quaternions in (w, x, y, z) convention
@@ -137,30 +149,24 @@ def quaternion_to_wigner_d_cg(
     device = q.device
     size = (lmax + 1) ** 2
 
-    # Build D matrices recursively in e3nn's m-ordering basis
+    # Build D matrices recursively. The w3j coefficients have basis
+    # transforms pre-folded in, so D[1] stays in Cartesian and each
+    # D[ell] is produced directly in the output basis.
     D = {}
     D[0] = torch.ones(N, 1, 1, dtype=dtype, device=device)
 
     if lmax >= 1:
-        # Get D^1 in Cartesian basis, then convert to m-ordering
-        # P maps m-ordering (y,z,x) -> Cartesian (x,y,z), so P^T is inverse
-        D_1_cart = quaternion_to_rotation_matrix(q)  # (N, 3, 3)
-        P = coeffs.basis_transforms[1]
-        D[1] = P.T @ D_1_cart @ P
+        D[1] = quaternion_to_rotation_matrix(q)  # (N, 3, 3) Cartesian
 
         for ell in range(2, lmax + 1):
             D[ell] = _cg_combine(D[ell - 1], D[1], ell, coeffs.w3j[ell])
 
-    # Assemble block-diagonal output, transforming each block to output basis
+    # Assemble block-diagonal output (already in correct basis)
     wigner = torch.zeros(N, size, size, dtype=dtype, device=device)
-    wigner[:, 0, 0] = 1.0  # l=0: trivial
-
-    start = 1  # skip l=0 block
-    for ell in range(1, lmax + 1):
+    start = 0
+    for ell in range(lmax + 1):
         end = start + 2 * ell + 1
-        T = coeffs.basis_transforms[ell]
-        # D_output = T @ D_m_ordering @ T^T
-        wigner[:, start:end, start:end] = T @ D[ell] @ T.T
+        wigner[:, start:end, start:end] = D[ell]
         start = end
 
     return wigner
