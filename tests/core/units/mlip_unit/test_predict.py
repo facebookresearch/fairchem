@@ -142,7 +142,7 @@ def test_multiple_dataset_predict(internal_graph_gen_version):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-def _test_parallel_predict_unit_impl(workers, device, checkpointing):
+def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_version):
     """Implementation of parallel predict unit test."""
     seed = 42
     runs = 2
@@ -152,7 +152,7 @@ def _test_parallel_predict_unit_impl(workers, device, checkpointing):
         tf32=False,
         merge_mole=True,
         activation_checkpointing=checkpointing,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=graph_gen_version,
         external_graph_gen=False,
     )
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
@@ -193,28 +193,33 @@ def _test_parallel_predict_unit_impl(workers, device, checkpointing):
 
 @pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, checkpointing",
+    "workers, checkpointing, graph_gen_version",
     [
-        (1, False),
-        (2, False),
+        (1, False, 2),
+        (2, False, 2),
+        (1, False, 3),
+        (1, True, 3),
+        (2, False, 3),
     ],
 )
-def test_parallel_predict_unit(workers, checkpointing):
-    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing)
+def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing, graph_gen_version)
 
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize(
-    "workers, checkpointing",
+    "workers, checkpointing, graph_gen_version",
     [
-        (1, False),
-        (1, True),
+        (1, False, 2),
+        (1, True, 2),
+        (1, True, 3),
+        (1, False, 3),
         # (2, False),
         # (2, True),
     ],
 )
-def test_parallel_predict_unit_gpu(workers, checkpointing):
-    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing)
+def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing, graph_gen_version)
 
 
 def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
