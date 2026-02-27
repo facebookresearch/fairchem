@@ -18,14 +18,12 @@ from __future__ import annotations
 
 import torch
 
+from fairchem.core.models.uma.triton.constants import BLOCK_C
 from fairchem.core.models.uma.triton.kernels import (
     permute_wigner_inv_edge_to_node_bwd_dw_kernel,
     permute_wigner_inv_edge_to_node_bwd_dx_kernel,
     permute_wigner_inv_edge_to_node_kernel,
 )
-
-# Block size for channel vectorization
-BLOCK_C = 128
 
 
 def permute_wigner_inv_edge_to_node_launcher(

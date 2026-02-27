@@ -19,16 +19,11 @@ from __future__ import annotations
 
 import torch
 
+from fairchem.core.models.uma.triton.constants import BLOCK_C, M_TO_L_GATHER_IDX
 from fairchem.core.models.uma.triton.kernels import (
     node_to_edge_wigner_permute_bwd_dx_kernel,
     node_to_edge_wigner_permute_kernel,
 )
-
-# Block size for channel vectorization
-BLOCK_C = 128
-
-# M→L permutation index (used in backward)
-M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
 
 
 def node_to_edge_wigner_permute_launcher(
