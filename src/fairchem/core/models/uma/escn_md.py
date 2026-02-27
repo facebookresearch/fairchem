@@ -575,6 +575,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
+        node_partition = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -587,7 +588,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-            data_dict["node_partition"] = node_partition
 
         if self.otf_graph:
             pbc = None
@@ -601,6 +601,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
+            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
+            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -608,6 +610,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
+                node_partition=node_partition,
             )
         else:
             # this assume edge_index is provided
