@@ -163,22 +163,41 @@ def make_forward_fn(method, lmax, Jd, generators, cg_coeffs, use_real):
 
     The returned callable takes (edges) and returns (W, extra) where
     extra is None for euler (to unify the interface).
-    """
 
-    def forward(edges):
-        if method == "euler":
+    Each method gets its own distinct function definition so that
+    torch.compile treats them as separate code objects (avoiding
+    recompilation guards on the method string).
+    """
+    if method == "euler":
+
+        def forward(edges):
             angles = init_edge_rot_euler_angles(edges)
             W = eulers_to_wigner(angles, 0, lmax, Jd)
             return W, None
-        elif method == "hybrid":
+
+    elif method == "hybrid":
+
+        def forward(edges):
             return axis_angle_wigner_hybrid(edges, lmax, use_real_arithmetic=use_real)
-        elif method == "matexp":
+
+    elif method == "matexp":
+
+        def forward(edges):
             return axis_angle_wigner_matexp(edges, lmax, generators=generators)
-        elif method == "hybrid_matexp":
+
+    elif method == "hybrid_matexp":
+
+        def forward(edges):
             return axis_angle_wigner_hybrid_matexp(edges, lmax, generators=generators)
-        elif method == "cg":
+
+    elif method == "cg":
+
+        def forward(edges):
             return axis_angle_wigner_cg(edges, lmax, cg_coeffs)
-        else:  # polynomial
+
+    else:  # polynomial
+
+        def forward(edges):
             return axis_angle_wigner_polynomial(
                 edges, lmax, use_real_arithmetic=use_real
             )
@@ -291,7 +310,6 @@ def main():
         W2, label2, test_batch, lmax, test_edges, device, dtype
     )
 
-    breakpoint()
     if not (ok1 and ok2):
         print("\nWARNING: Some correctness checks failed!")
     print()
