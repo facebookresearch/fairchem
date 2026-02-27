@@ -29,24 +29,33 @@ from fairchem.core.models.uma.triton.kernels import (
 def permute_wigner_inv_edge_to_node_launcher(
     x: torch.Tensor,
     wigner: torch.Tensor,
-    save_xl: bool = False,
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Forward launcher: M→L permute + Wigner inverse.
 
     Args:
         x: Edge features [E, 9, C] in M-major order
         wigner: Wigner inverse matrices [E, 9, 9]
-        save_xl: Whether to save the permuted x_l for backward dW
 
     Returns:
         out: Rotated features [E, 9, C] in L-major order
-        x_l: Permuted input [E, 9, C] if save_xl else None (for backward dW)
+        x_l: Permuted input [E, 9, C] (saved for backward dW computation)
     """
+    # x: [E, 9, C] - edge features with 9 coefficients (lmax=2)
+    assert x.ndim == 3, "x must be 3D [E, 9, C]"
+    assert x.shape[1] == 9, "x must have 9 coefficients (lmax=2)"
+    # wigner: [E, 9, 9] - block-diagonal Wigner inverse matrices
+    assert wigner.ndim == 3, "wigner must be 3D [E, 9, 9]"
+    assert wigner.shape[1] == 9, "wigner must have shape [E, 9, 9]"
+    assert wigner.shape[2] == 9, "wigner must have shape [E, 9, 9]"
+    # Contiguity required for memory access pattern
+    assert x.is_contiguous(), "x must be contiguous"
+    assert wigner.is_contiguous(), "wigner must be contiguous"
+
     E, num_coeffs, C = x.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
     out = torch.empty_like(x)
-    x_l = torch.empty_like(x) if save_xl else x  # dummy if not saving
+    x_l = torch.empty_like(x)
 
     permute_wigner_inv_edge_to_node_kernel[(E, num_c_blocks)](
         x,
@@ -56,9 +65,9 @@ def permute_wigner_inv_edge_to_node_launcher(
         E,
         C,
         BLOCK_C=BLOCK_C,
-        SAVE_XL=save_xl,
+        SAVE_XL=True,
     )
-    return out, x_l if save_xl else None
+    return out, x_l
 
 
 def permute_wigner_inv_edge_to_node_bwd_dx_launcher(
@@ -75,6 +84,16 @@ def permute_wigner_inv_edge_to_node_bwd_dx_launcher(
     Returns:
         grad_x: Gradient w.r.t. input [E, 9, C] in M-major order
     """
+    # grad_out: [E, 9, C] - gradient with 9 coefficients (lmax=2)
+    assert grad_out.ndim == 3, "grad_out must be 3D [E, 9, C]"
+    assert grad_out.shape[1] == 9, "grad_out must have 9 coefficients (lmax=2)"
+    # wigner: [E, 9, 9] - block-diagonal Wigner inverse matrices
+    assert wigner.ndim == 3, "wigner must be 3D [E, 9, 9]"
+    assert wigner.shape[1] == 9, "wigner must have shape [E, 9, 9]"
+    assert wigner.shape[2] == 9, "wigner must have shape [E, 9, 9]"
+    # Wigner must be contiguous for memory access pattern
+    assert wigner.is_contiguous(), "wigner must be contiguous"
+
     grad_out = grad_out.contiguous()
     E, num_coeffs, C = grad_out.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
@@ -166,7 +185,7 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         Returns:
             out: [E, 9, C] rotated features in L-major order
         """
-        out, x_l = permute_wigner_inv_edge_to_node_launcher(x, wigner, save_xl=True)
+        out, x_l = permute_wigner_inv_edge_to_node_launcher(x, wigner)
         ctx.save_for_backward(x_l, wigner)
         return out
 

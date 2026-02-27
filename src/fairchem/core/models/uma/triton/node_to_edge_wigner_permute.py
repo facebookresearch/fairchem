@@ -43,11 +43,21 @@ def node_to_edge_wigner_permute_launcher(
         out: Rotated edge features [E, 9, 2C] in M-major order (src||tgt)
         x_edge: Pre-Wigner gathered features [E, 9, 2C] for backward dW
     """
+    # x: [N, 9, C] - node features with 9 coefficients (lmax=2)
+    assert x.ndim == 3, "x must be 3D [N, 9, C]"
+    assert x.shape[1] == 9, "x must have 9 coefficients (lmax=2)"
+    # wigner: [E, 9, 9] - block-diagonal Wigner matrices
+    assert wigner.ndim == 3, "wigner must be 3D [E, 9, 9]"
+    assert wigner.shape[1] == 9, "wigner must have shape [E, 9, 9]"
+    assert wigner.shape[2] == 9, "wigner must have shape [E, 9, 9]"
+    # Wigner must be contiguous for flattening
+    assert wigner.is_contiguous(), "wigner must be contiguous"
+
     num_edges = edge_index.shape[1]
     sphere_channels = x.shape[2]
 
-    # Flatten wigner if needed
-    wigner_flat = wigner.reshape(num_edges, -1) if wigner.ndim == 3 else wigner
+    # Flatten wigner [E, 9, 9] -> [E, 81]
+    wigner_flat = wigner.reshape(num_edges, -1)
 
     # Allocate outputs
     out = torch.empty(
@@ -110,9 +120,8 @@ def node_to_edge_wigner_permute_bwd_dx_launcher(
     num_edges = edge_index.shape[1]
     sphere_channels = grad_out.shape[2] // 2
 
-    # Flatten wigner if needed
-    wigner_flat = wigner.reshape(num_edges, -1) if wigner.ndim == 3 else wigner
-    wigner_flat = wigner_flat.contiguous()
+    # Flatten wigner [E, 9, 9] -> [E, 81]
+    wigner_flat = wigner.reshape(num_edges, -1).contiguous()
 
     # Per-edge gradient buffer (no atomic contention)
     grad_edge = torch.empty(
