@@ -281,8 +281,8 @@ def main():
 
     if args.compile:
         print("Applying torch.compile to both methods...")
-        forward1_fn = torch.compile(forward1)
-        forward2_fn = torch.compile(forward2)
+        forward1_fn = torch.compile(forward1, dynamic=True)
+        forward2_fn = torch.compile(forward2, dynamic=True)
     else:
         forward1_fn = forward1
         forward2_fn = forward2
