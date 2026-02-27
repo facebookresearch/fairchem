@@ -1,17 +1,14 @@
 """
-Wigner-D computation via specialized kernels + Clebsch-Gordan recursion.
+Wigner-D computation via Clebsch-Gordan recursion.
 
-Uses the same optimized kernels as the hybrid method for l=0-4, then
-CG recursion for l>=5:
-    l=0: identity
-    l=1: quaternion to rotation matrix
-    l=2: einsum tensor contraction
-    l=3,4: batched quaternion matmul
-    l>=5: D^l = D^{l-1} x D^1 via Clebsch-Gordan decomposition
+Uses the recursive formula D^l = D^{l-1} x D^1 with Wigner 3j symbols:
+    D^0 = 1 (scalar identity)
+    D^1 = R (rotation matrix from quaternion)
+    D^l = D^{l-1} x D^1 via Clebsch-Gordan decomposition
 
-The CG tensor product is computed using Wigner 3j symbols with basis
+The tensor product is computed using Wigner 3j symbols with basis
 transforms pre-folded in, so the recursion directly produces output in
-the Euler-matching basis (consistent with all other Wigner D methods):
+the correct basis (Cartesian for l=1, Euler-matching for l>=2):
     D^l[L,M] = (2l+1) * sum_{a,b,A,B} w3j[a,b,M] * w3j[A,B,L] * D^{l-1}[A,a] * D^1[B,b]
 """
 
@@ -31,12 +28,7 @@ from .quaternion_wigner_utils import (
     quaternion_multiply,
     quaternion_y_rotation,
 )
-from .wigner_d_custom_kernels import (
-    quaternion_to_rotation_matrix,
-    quaternion_to_wigner_d_l2_einsum,
-    quaternion_to_wigner_d_l3l4_batched,
-    quaternion_to_wigner_d_matmul,
-)
+from .wigner_d_custom_kernels import quaternion_to_rotation_matrix
 
 
 @dataclass
@@ -80,12 +72,9 @@ def precompute_cg_coefficients(
     gens = get_so3_generators(lmax, dtype, device)
     basis_transforms = gens["basis_transforms"]
 
-    # l=0-4 use specialized kernels (same as hybrid method).
-    # CG recursion is only used for l>=5.
-    #
     # Pre-transform w3j to absorb all basis changes. This way the CG
-    # recursion directly produces output in the correct basis without
-    # any post-transform.
+    # recursion directly produces output in the correct basis (Cartesian
+    # for l=1, Euler-matching for l>=2) without any post-transform.
     #
     # w3j_t[x,y,z] = T_prev[x,X] * P[y,Y] * w3j_raw[X,Y,Z] * T_l[z,Z]
     #
@@ -93,14 +82,12 @@ def precompute_cg_coefficients(
     # P converts D_1 indices from Cartesian to m-ordering, and T_l converts
     # the output from m-ordering to the target basis for level l.
     w3j = {}
-    lmin_cg = 5
-    if lmax >= lmin_cg:
-        P = basis_transforms[1]
-        for ell in range(lmin_cg, lmax + 1):
-            w3j_raw = o3.wigner_3j(ell - 1, 1, ell).to(dtype=dtype, device=device)
-            T_prev = basis_transforms[ell - 1]
-            T_l = basis_transforms[ell]
-            w3j[ell] = torch.einsum("xX,yY,XYZ,zZ->xyz", T_prev, P, w3j_raw, T_l)
+    P = basis_transforms[1]
+    for ell in range(2, lmax + 1):
+        w3j_raw = o3.wigner_3j(ell - 1, 1, ell).to(dtype=dtype, device=device)
+        T_prev = basis_transforms[ell - 1]
+        T_l = basis_transforms[ell]
+        w3j[ell] = torch.einsum("xX,yY,XYZ,zZ->xyz", T_prev, P, w3j_raw, T_l)
 
     return CG3jCoefficients(lmax=lmax, w3j=w3j, basis_transforms=basis_transforms)
 
@@ -134,15 +121,11 @@ def quaternion_to_wigner_d_cg(
     coeffs: CG3jCoefficients,
 ) -> torch.Tensor:
     """
-    Compute block-diagonal Wigner-D matrices using specialized kernels
-    for l=0-4 and CG recursion for l>=5.
+    Compute block-diagonal Wigner-D matrices via CG recursion.
 
-    Uses the same optimized kernels as the hybrid method:
-    - l=0: identity
-    - l=1: quaternion to rotation matrix
-    - l=2: einsum tensor contraction
-    - l=3,4: batched quaternion matmul
-    - l>=5: CG recursion (w3j has basis transforms pre-folded in)
+    The w3j coefficients have basis transforms pre-folded in, so the
+    recursion directly produces each block in the output basis (Cartesian
+    for l=1, Euler-matching for l>=2), consistent with other Wigner D methods.
 
     Args:
         q: (N, 4) quaternions in (w, x, y, z) convention
@@ -158,41 +141,27 @@ def quaternion_to_wigner_d_cg(
     device = q.device
     size = (lmax + 1) ** 2
 
-    # Build each block as a separate contiguous tensor, then assemble.
-    # This keeps CG recursion inputs contiguous for optimal einsum performance.
-    blocks: dict[int, torch.Tensor] = {}
-    blocks[0] = torch.ones(N, 1, 1, dtype=dtype, device=device)
+    # Build D matrices recursively. The w3j coefficients have basis
+    # transforms pre-folded in, so D[1] stays in Cartesian and each
+    # D[ell] is produced directly in the output basis.
+    D = {}
+    D[0] = torch.ones(N, 1, 1, dtype=dtype, device=device)
 
-    # l=1: direct quaternion to rotation matrix
     if lmax >= 1:
-        blocks[1] = quaternion_to_rotation_matrix(q)
+        D[1] = quaternion_to_rotation_matrix(q)  # (N, 3, 3) Cartesian
 
-    # l=2: einsum tensor contraction
-    if lmax >= 2:
-        blocks[2] = quaternion_to_wigner_d_l2_einsum(q)
+        for ell in range(2, lmax + 1):
+            D[ell] = _cg_combine(D[ell - 1], D[1], ell, coeffs.w3j[ell])
 
-    # l=3,4: batched matmul (single kernel dispatch for both)
-    if lmax >= 4:
-        blocks[3], blocks[4] = quaternion_to_wigner_d_l3l4_batched(q)
-    elif lmax >= 3:
-        blocks[3] = quaternion_to_wigner_d_matmul(q, 3)
-
-    # l>=5: CG recursion (inputs are contiguous kernel outputs)
-    if lmax >= 5:
-        D_prev = blocks[4]
-        for ell in range(5, lmax + 1):
-            D_prev = _cg_combine(D_prev, blocks[1], ell, coeffs.w3j[ell])
-            blocks[ell] = D_prev
-
-    # Assemble block-diagonal output
-    D = torch.zeros(N, size, size, dtype=dtype, device=device)
+    # Assemble block-diagonal output (already in correct basis)
+    wigner = torch.zeros(N, size, size, dtype=dtype, device=device)
     start = 0
     for ell in range(lmax + 1):
         end = start + 2 * ell + 1
-        D[:, start:end, start:end] = blocks[ell]
+        wigner[:, start:end, start:end] = D[ell]
         start = end
 
-    return D
+    return wigner
 
 
 def axis_angle_wigner_cg(
