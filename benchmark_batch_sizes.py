@@ -30,6 +30,10 @@ from fairchem.core.models.uma.common.wigner_d_hybrid_matexp import (
 from fairchem.core.models.uma.common.wigner_d_matexp import (
     axis_angle_wigner as axis_angle_wigner_matexp,
 )
+from fairchem.core.models.uma.common.wigner_d_cg import (
+    axis_angle_wigner_cg,
+    precompute_cg_coefficients,
+)
 from fairchem.core.models.uma.common.wigner_d_polynomial import (
     axis_angle_wigner_polynomial,
 )
@@ -49,7 +53,7 @@ def parse_args():
     )
     parser.add_argument(
         "--method",
-        choices=["hybrid", "matexp", "polynomial", "hybrid_matexp"],
+        choices=["hybrid", "matexp", "polynomial", "hybrid_matexp", "cg"],
         default="hybrid",
         help="Axis-angle method to use (default: hybrid)",
     )
@@ -192,6 +196,12 @@ def main():
         else None
     )
 
+    cg_coeffs = (
+        precompute_cg_coefficients(lmax, dtype, device)
+        if args.method == "cg"
+        else None
+    )
+
     def axis_forward(edges):
         if args.method == "hybrid":
             return axis_angle_wigner_hybrid(
@@ -203,6 +213,8 @@ def main():
             return axis_angle_wigner_matexp(edges, lmax, generators=generators)
         elif args.method == "hybrid_matexp":
             return axis_angle_wigner_hybrid_matexp(edges, lmax, generators=generators)
+        elif args.method == "cg":
+            return axis_angle_wigner_cg(edges, lmax, cg_coeffs)
         else:  # polynomial
             return axis_angle_wigner_polynomial(
                 edges,
