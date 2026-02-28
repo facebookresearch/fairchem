@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
@@ -16,105 +17,24 @@ Primary kernels (recommended for use):
 These kernels are used by wigner_d_hybrid.py to accelerate the most common
 angular momentum blocks.
 
-Coefficient matrices are loaded from wigner_d_coefficients.pt at runtime.
+Coefficient matrices are loaded from wigner_d_coefficients.pt and stored as
+nn.Module buffers via CustomKernelModule.
 """
 
 from __future__ import annotations
 
-import functools
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 
 # Precomputed coefficients file path
 _COEFFICIENTS_FILE = Path(__file__).parent / "wigner_d_coefficients.pt"
 
-# =============================================================================
-# Module-Level Caches
-# =============================================================================
-
-# Processed kernel data cache: {(ell, dtype, device): data}
-# - l=2: coefficient tensor of shape (5, 5, 4, 4, 4, 4)
-# - l=3: (coefficient matrix (49, 84), monomials list)
-# - l=4: (coefficient matrix (81, 165), monomials list)
-_KERNEL_CACHE: dict[tuple[int, torch.dtype, torch.device], object] = {}
-
-# Batched l=3,4 combined coefficient cache: {(dtype, device): tensor}
-_BATCHED_L3L4_CACHE: dict[tuple[torch.dtype, torch.device], torch.Tensor] = {}
-
-
-@functools.lru_cache(maxsize=1)
-def _load_coefficients() -> dict:
-    """Load precomputed coefficients from file (cached after first load).
-
-    Coefficients are stored in palette-compressed format for smaller file size.
-    Each matrix is stored as (palette, indices, shape) and decompressed here.
-    """
-    raw = torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
-
-    # Decompress palette format
-    result = {}
-    for ell in [2, 3, 4]:
-        key = f"C_l{ell}"
-        palette = raw[f"{key}_palette"]
-        indices = raw[f"{key}_indices"]
-        shape = tuple(raw[f"{key}_shape"].tolist())
-        result[key] = palette[indices.long()].reshape(shape)
-
-    return result
-
-
-def _get_kernel_data(ell: int, dtype: torch.dtype, device: torch.device) -> object:
-    """Get cached kernel data for l=2, 3, or 4.
-
-    Loads coefficient tensor from precomputed file and (for l>=3) generates
-    monomials deterministically. Caches by (ell, dtype, device).
-
-    Args:
-        ell: Angular momentum (2, 3, or 4)
-        dtype: Data type for the coefficients
-        device: Device for the tensors
-
-    Returns:
-        - For l=2: coefficient tensor of shape (5, 5, 4, 4, 4, 4)
-        - For l=3: tuple of (coefficient matrix (49, 84), monomials list of 84 tuples)
-        - For l=4: tuple of (coefficient matrix (81, 165), monomials list of 165 tuples)
-    """
-    key = (ell, dtype, device)
-    if key not in _KERNEL_CACHE:
-        coeffs = _load_coefficients()
-        C = coeffs[f"C_l{ell}"].to(dtype=dtype, device=device)
-        if ell == 2:
-            _KERNEL_CACHE[key] = C
-        else:
-            monomials = _generate_monomials(4, 2 * ell)
-            _KERNEL_CACHE[key] = (C, monomials)
-    return _KERNEL_CACHE[key]
-
-
-def preload_kernel_caches(
-    dtype: torch.dtype = torch.float64,
-    device: torch.device | None = None,
-) -> None:
-    """Pre-load all kernel coefficient caches for torch.compile compatibility.
-
-    torch.compile cannot trace through torch.load, so this function must be
-    called before compiling any code that uses the Wigner D kernels. Typically
-    this should be called during model initialization.
-
-    Args:
-        dtype: Data type for the coefficients
-        device: Device for the tensors (default: CPU)
-    """
-    if device is None:
-        device = torch.device("cpu")
-    for ell in (2, 3, 4):
-        _get_kernel_data(ell, dtype, device)
-    _get_batched_l3l4_kernel_data(dtype, device)
-
 
 def _generate_monomials(n_vars: int, total_degree: int) -> list[tuple[int, ...]]:
-    """Generate all monomials of given degree in n_vars variables.
+    """
+    Generate all monomials of given degree in n_vars variables.
 
     Returns a list of tuples (a, b, c, d) representing w^a * x^b * y^c * z^d
     where a + b + c + d = total_degree.
@@ -130,6 +50,106 @@ def _generate_monomials(n_vars: int, total_degree: int) -> list[tuple[int, ...]]
 
     generate(n_vars, total_degree, [])
     return monomials
+
+
+def _load_and_decompress_coefficients() -> dict[str, torch.Tensor]:
+    """
+    Load and decompress precomputed coefficients from file.
+
+    Coefficients are stored in palette-compressed format for smaller file size.
+    Each matrix is stored as (palette, indices, shape) and decompressed here.
+    """
+    raw = torch.load(_COEFFICIENTS_FILE, map_location="cpu", weights_only=True)
+
+    result = {}
+    for ell in [2, 3, 4]:
+        key = f"C_l{ell}"
+        palette = raw[f"{key}_palette"]
+        indices = raw[f"{key}_indices"]
+        shape = tuple(raw[f"{key}_shape"].tolist())
+        result[key] = palette[indices.long()].reshape(shape)
+
+    return result
+
+
+# =============================================================================
+# CustomKernelModule - holds all l=2,3,4 kernel data as nn.Module buffers
+# =============================================================================
+
+
+class CustomKernelModule(nn.Module):
+    """
+    Precomputed coefficient tensors for l=2,3,4 Wigner D kernels.
+
+    Stores all coefficient data as non-persistent nn.Module buffers so they
+    automatically move with the parent model via .to(device) / .to(dtype).
+
+    Buffers:
+        C_l2: Coefficient tensor of shape (5, 5, 4, 4, 4, 4) for l=2 einsum.
+        C_l3: Coefficient matrix of shape (49, 84) for standalone l=3 matmul.
+        C_l4: Coefficient matrix of shape (81, 165) for standalone l=4 matmul.
+        C_combined_l3l4: Combined coefficient matrix of shape (130, 165) for
+            batched l=3,4 computation.
+
+    Attributes:
+        monomials_l3: List of 84 degree-6 monomial tuples (device-independent).
+        monomials_l4: List of 165 degree-8 monomial tuples (device-independent).
+    """
+
+    def __init__(self):
+        super().__init__()
+
+        # Load coefficients from disk (only happens at init, not during forward)
+        coeffs = _load_and_decompress_coefficients()
+
+        # Register coefficient tensors as non-persistent buffers
+        self.register_buffer("C_l2", coeffs["C_l2"], persistent=False)
+        self.register_buffer("C_l3", coeffs["C_l3"], persistent=False)
+        self.register_buffer("C_l4", coeffs["C_l4"], persistent=False)
+
+        # Monomials are pure Python tuples, device-independent
+        self.monomials_l3: list[tuple[int, ...]] = _generate_monomials(4, 6)
+        self.monomials_l4: list[tuple[int, ...]] = _generate_monomials(4, 8)
+
+        # Build and register combined l3l4 coefficient matrix
+        self.register_buffer(
+            "C_combined_l3l4",
+            self._build_combined_l3l4(),
+            persistent=False,
+        )
+
+    def _build_combined_l3l4(self) -> torch.Tensor:
+        """
+        Build combined coefficient matrix for batched l=3,4 computation.
+
+        Lifts the l=3 degree-6 coefficients to degree-8 by multiplying each
+        monomial by |q|^2 = w^2 + x^2 + y^2 + z^2 = 1, then stacks with l=4
+        coefficients for a single matmul.
+
+        Returns:
+            Combined coefficient matrix of shape (130, 165).
+        """
+        C_l3 = self.C_l3
+        C_l4 = self.C_l4
+
+        mono8_to_idx = {m: i for i, m in enumerate(self.monomials_l4)}
+        n_mono8 = len(self.monomials_l4)  # 165
+        C_l3_lifted = torch.zeros(
+            C_l3.shape[0], n_mono8, dtype=C_l3.dtype, device=C_l3.device
+        )
+
+        for j, (a, b, c, d) in enumerate(self.monomials_l3):
+            lifted = [
+                (a + 2, b, c, d),
+                (a, b + 2, c, d),
+                (a, b, c + 2, d),
+                (a, b, c, d + 2),
+            ]
+            for mono8 in lifted:
+                idx = mono8_to_idx[mono8]
+                C_l3_lifted[:, idx] += C_l3[:, j]
+
+        return torch.cat([C_l3_lifted, C_l4], dim=0)  # (130, 165)
 
 
 # =============================================================================
@@ -173,7 +193,10 @@ def quaternion_to_rotation_matrix(q: torch.Tensor) -> torch.Tensor:
 # =============================================================================
 
 
-def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
+def quaternion_to_wigner_d_l2_einsum(
+    q: torch.Tensor,
+    C_l2: torch.Tensor,
+) -> torch.Tensor:
     """
     Convert quaternion to 5x5 l=2 Wigner D matrix using einsum tensor contraction.
 
@@ -184,11 +207,13 @@ def quaternion_to_wigner_d_l2_einsum(q: torch.Tensor) -> torch.Tensor:
 
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+        C_l2: Coefficient tensor of shape (5, 5, 4, 4, 4, 4)
 
     Returns:
         Wigner D matrices of shape (N, 5, 5) for l=2
     """
-    C = _get_kernel_data(2, q.dtype, q.device)
+    # Cast coefficients to match input dtype/device
+    C = C_l2.to(dtype=q.dtype, device=q.device)
 
     # Build q x q, then (q x q) x (q x q) = q x q x q x q
     q2 = q.unsqueeze(-1) * q.unsqueeze(-2)  # (N, 4, 4)
@@ -214,7 +239,8 @@ def _precompute_powers(
     z: torch.Tensor,
     max_power: int,
 ) -> dict[int, dict[int, torch.Tensor]]:
-    """Precompute powers 0..max_power for quaternion components.
+    """
+    Precompute powers 0..max_power for quaternion components.
 
     Uses optimal multiplication tree: p[i] = p[i//2] * p[(i+1)//2]
     which minimizes the number of multiplications.
@@ -242,8 +268,14 @@ def _precompute_powers(
     }
 
 
-def quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
-    """Matmul-based Wigner D computation for l=3 or l=4.
+def quaternion_to_wigner_d_matmul(
+    q: torch.Tensor,
+    ell: int,
+    C: torch.Tensor,
+    monomials: list[tuple[int, ...]],
+) -> torch.Tensor:
+    """
+    Matmul-based Wigner D computation for l=3 or l=4.
 
     Computes D = M @ C^T where:
     - M[n, k] = product of quaternion powers for monomial k
@@ -252,11 +284,14 @@ def quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
         ell: Angular momentum (3 or 4)
+        C: Coefficient matrix of shape ((2*ell+1)^2, n_monomials)
+        monomials: List of monomial exponent tuples
 
     Returns:
         Wigner D matrices of shape (N, 7, 7) for l=3 or (N, 9, 9) for l=4
     """
-    C, monomials = _get_kernel_data(ell, q.dtype, q.device)
+    # Cast coefficients to match input dtype/device
+    C_cast = C.to(dtype=q.dtype, device=q.device)
 
     w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
     powers = _precompute_powers(w, x, y, z, 2 * ell)
@@ -271,81 +306,33 @@ def quaternion_to_wigner_d_matmul(q: torch.Tensor, ell: int) -> torch.Tensor:
     )
 
     # D_flat = M @ C^T
-    D_flat = M @ C.T
+    D_flat = M @ C_cast.T
     size = 2 * ell + 1
 
     return D_flat.view(q.shape[0], size, size)
 
 
-def _get_batched_l3l4_kernel_data(
-    dtype: torch.dtype, device: torch.device
-) -> torch.Tensor:
-    """Get cached combined coefficient matrix for batched l=3,4 computation.
-
-    Lifts the l=3 degree-6 coefficients to degree-8 by multiplying each
-    monomial by |q|^2 = w^2 + x^2 + y^2 + z^2 = 1, then stacks with l=4
-    coefficients for a single matmul.
-
-    Args:
-        dtype: Data type for the coefficients
-        device: Device for the tensors
-
-    Returns:
-        Combined coefficient matrix of shape (130, 165) where the first 49
-        rows correspond to l=3 and the remaining 81 rows to l=4.
-    """
-    key = (dtype, device)
-    if key not in _BATCHED_L3L4_CACHE:
-        # Get existing kernel data
-        C_l3, monomials_l3 = _get_kernel_data(3, dtype, device)  # (49, 84), 84 tuples
-        C_l4, monomials_l4 = _get_kernel_data(4, dtype, device)  # (81, 165), 165 tuples
-
-        # Build lookup from degree-8 monomial tuple to column index
-        mono8_to_idx = {m: i for i, m in enumerate(monomials_l4)}
-
-        # Lift l=3 coefficients from degree-6 to degree-8
-        # Each degree-6 monomial (a,b,c,d) maps to four degree-8 monomials:
-        #   (a+2,b,c,d), (a,b+2,c,d), (a,b,c+2,d), (a,b,c,d+2)
-        # since |q|^2 = w^2 + x^2 + y^2 + z^2 = 1
-        n_mono8 = len(monomials_l4)  # 165
-        C_l3_lifted = torch.zeros(49, n_mono8, dtype=dtype, device=device)
-
-        for j, (a, b, c, d) in enumerate(monomials_l3):
-            # For each degree-6 monomial, distribute its coefficients
-            # to the four degree-8 monomials
-            lifted = [
-                (a + 2, b, c, d),
-                (a, b + 2, c, d),
-                (a, b, c + 2, d),
-                (a, b, c, d + 2),
-            ]
-            for mono8 in lifted:
-                idx = mono8_to_idx[mono8]
-                C_l3_lifted[:, idx] += C_l3[:, j]
-
-        # Stack: first 49 rows = l=3, next 81 rows = l=4
-        C_combined = torch.cat([C_l3_lifted, C_l4], dim=0)  # (130, 165)
-        _BATCHED_L3L4_CACHE[key] = C_combined
-
-    return _BATCHED_L3L4_CACHE[key]
-
-
 def quaternion_to_wigner_d_l3l4_batched(
     q: torch.Tensor,
+    C_combined: torch.Tensor,
+    monomials_l4: list[tuple[int, ...]],
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Compute l=3 and l=4 Wigner D matrices in a single matmul.
+    """
+    Compute l=3 and l=4 Wigner D matrices in a single matmul.
 
     Builds degree-8 monomials once and multiplies by the combined (130, 165)
     coefficient matrix to get both D_l3 and D_l4 from one kernel dispatch.
 
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
+        C_combined: Combined coefficient matrix of shape (130, 165)
+        monomials_l4: List of 165 degree-8 monomial tuples
 
     Returns:
         Tuple of (D_l3, D_l4) with shapes (N, 7, 7) and (N, 9, 9)
     """
-    C_combined = _get_batched_l3l4_kernel_data(q.dtype, q.device)
-    _, monomials_l4 = _get_kernel_data(4, q.dtype, q.device)
+    # Cast coefficients to match input dtype/device
+    C_cast = C_combined.to(dtype=q.dtype, device=q.device)
 
     w, x, y, z = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
     powers = _precompute_powers(w, x, y, z, 8)
@@ -360,7 +347,7 @@ def quaternion_to_wigner_d_l3l4_batched(
     )
 
     # Single matmul: (N, 165) @ (165, 130) -> (N, 130)
-    D_flat = M @ C_combined.T
+    D_flat = M @ C_cast.T
 
     N = q.shape[0]
     D_l3 = D_flat[:, :49].reshape(N, 7, 7)

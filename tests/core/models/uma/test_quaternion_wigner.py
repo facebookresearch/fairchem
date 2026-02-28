@@ -32,7 +32,7 @@ from fairchem.core.models.uma.common.quaternion_utils import (
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     _build_euler_transform,
     _build_u_matrix,
-    get_ra_rb_coefficients_real,
+    create_wigner_data_module,
     precompute_U_blocks_euler_aligned_real,
     precompute_wigner_coefficients,
     quaternion_to_ra_rb_real,
@@ -44,7 +44,7 @@ from fairchem.core.models.uma.common.rotation import (
     wigner_D,
 )
 from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
-    preload_kernel_caches,
+    CustomKernelModule,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_matmul,
 )
@@ -286,13 +286,19 @@ def Jd_matrices(lmax, dtype, device):
 
 
 @pytest.fixture()
-def preload_kernel_coefficients(dtype, device):
-    """Pre-load kernel coefficients to avoid torch.load during torch.compile.
-
-    torch.compile cannot trace through torch.load, so we must ensure all
-    coefficient caches are populated before running compiled functions.
+def wigner_data(lmax):
     """
-    preload_kernel_caches(dtype, device)
+    Create a WignerDataModule with all precomputed data for the given lmax.
+    """
+    return create_wigner_data_module(lmax=max(lmax, 5), lmin=5)
+
+
+@pytest.fixture()
+def custom_kernels():
+    """
+    Create a CustomKernelModule with l=2,3,4 coefficient buffers.
+    """
+    return CustomKernelModule()
 
 
 # =============================================================================
@@ -332,12 +338,21 @@ class TestWignerDProperties:
             ([1.0, 1.0, 1.0], "diagonal"),
         ],
     )
-    def test_orthogonality_and_determinant(self, lmax, dtype, device, edge, desc):
+    def test_orthogonality_and_determinant(
+        self, lmax, dtype, device, wigner_data, edge, desc
+    ):
         """Wigner D matrices are orthogonal with determinant 1."""
         edge_t = torch.tensor([edge], dtype=dtype, device=device)
         gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        D, D_inv = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
+        D, D_inv = axis_angle_wigner_hybrid(
+            edge_t,
+            lmax,
+            gamma=gamma,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
+        )
 
         size = (lmax + 1) ** 2
         I = torch.eye(size, dtype=dtype, device=device)
@@ -353,13 +368,20 @@ class TestWignerDProperties:
         ), f"det != 1 for {desc}"
 
     @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
-    def test_edge_to_y(self, lmax, dtype, device, edge, desc):
+    def test_edge_to_y(self, lmax, dtype, device, wigner_data, edge, desc):
         """The l=1 block rotates edge -> +Y."""
         edge_t = torch.tensor([edge], dtype=dtype, device=device)
         edge_t = torch.nn.functional.normalize(edge_t, dim=-1)
         gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        D, _ = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
+        D, _ = axis_angle_wigner_hybrid(
+            edge_t,
+            lmax,
+            gamma=gamma,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
+        )
         D_l1 = D[0, 1:4, 1:4]
 
         y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
@@ -370,13 +392,20 @@ class TestWignerDProperties:
         ), f"Edge {edge} did not map to +Y, got {result}"
 
     @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
-    def test_y_to_edge(self, lmax, dtype, device, edge, desc):
+    def test_y_to_edge(self, lmax, dtype, device, wigner_data, edge, desc):
         """D_inv l=1 block rotates +Y -> edge (inverse of edge -> +Y)."""
         edge_t = torch.tensor([edge], dtype=dtype, device=device)
         edge_t = torch.nn.functional.normalize(edge_t, dim=-1)
         gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        _, D_inv = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
+        _, D_inv = axis_angle_wigner_hybrid(
+            edge_t,
+            lmax,
+            gamma=gamma,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
+        )
         D_inv_l1 = D_inv[0, 1:4, 1:4]
 
         y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
@@ -386,7 +415,7 @@ class TestWignerDProperties:
             result, edge_t[0], atol=1e-5
         ), f"+Y did not map to edge {edge}, got {result}"
 
-    def test_composition_law(self, lmax, dtype, device):
+    def test_composition_law(self, lmax, dtype, device, wigner_data):
         """D(R1) @ D(R2) = D(R1 @ R2) - the fundamental group composition property."""
         torch.manual_seed(123)
         n_samples = 10
@@ -395,8 +424,20 @@ class TestWignerDProperties:
         edges1 = torch.randn(n_samples, 3, dtype=dtype, device=device)
         edges2 = torch.randn(n_samples, 3, dtype=dtype, device=device)
 
-        D1, _ = axis_angle_wigner_hybrid(edges1, lmax)
-        D2, _ = axis_angle_wigner_hybrid(edges2, lmax)
+        D1, _ = axis_angle_wigner_hybrid(
+            edges1,
+            lmax,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
+        )
+        D2, _ = axis_angle_wigner_hybrid(
+            edges2,
+            lmax,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
+        )
 
         # Compose the Wigner D matrices
         D_product = D1 @ D2
@@ -412,6 +453,9 @@ class TestWignerDProperties:
             edge_composed,
             lmax,
             gamma=torch.zeros(n_samples, dtype=dtype, device=device),
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
         )
         R_canonical = D_canonical[:, 1:4, 1:4]
 
@@ -426,7 +470,12 @@ class TestWignerDProperties:
 
         # Compute D for the composed rotation
         D_composed, _ = axis_angle_wigner_hybrid(
-            edge_composed, lmax, gamma=gamma_composed
+            edge_composed,
+            lmax,
+            gamma=gamma_composed,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
         )
 
         # Check that the product equals the composed Wigner D
@@ -451,7 +500,7 @@ class TestEntryPointAgreement:
 class TestEulerAgreement:
     """Tests for agreement with Euler-based rotation.py."""
 
-    def test_matches_euler_code(self, lmax, dtype, device, Jd_matrices):
+    def test_matches_euler_code(self, lmax, dtype, device, wigner_data, Jd_matrices):
         """Axis-angle with use_euler_gamma matches Euler implementation exactly.
 
         Note: Only tests edges outside the blend region (|ey| > 0.9) where
@@ -471,7 +520,14 @@ class TestEulerAgreement:
             # Compute with axis-angle using Euler gamma
             edge_normalized = torch.nn.functional.normalize(edge_t, dim=-1)
             gamma = compute_euler_matching_gamma(edge_normalized)
-            D_axis, _ = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
+            D_axis, _ = axis_angle_wigner_hybrid(
+                edge_t,
+                lmax,
+                gamma=gamma,
+                coeffs=wigner_data.coeffs,
+                U_blocks=wigner_data.U_blocks,
+                custom_kernels=wigner_data.custom_kernels,
+            )
 
             # Get Euler angles from production code, zero out random gamma
             gamma, beta, alpha = init_edge_rot_euler_angles(edge_t)
@@ -487,7 +543,9 @@ class TestEulerAgreement:
                     D_euler, D_axis_block, atol=1e-10
                 ), f"l={ell} mismatch for edge {edge}"
 
-    def test_blend_region_matches_euler(self, lmax, dtype, device, Jd_matrices):
+    def test_blend_region_matches_euler(
+        self, lmax, dtype, device, wigner_data, Jd_matrices
+    ):
         """Blend region edges (ey in [-0.9, 0.9]) match Euler with correct gamma."""
         blend_region_edges = [
             # yz-plane (ex=0), ey=-0.8
@@ -516,7 +574,14 @@ class TestEulerAgreement:
             gamma_t = torch.tensor([gamma], dtype=dtype, device=device)
 
             # Compute with axis-angle hybrid using pre-computed gamma
-            D_hybrid, _ = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma_t)
+            D_hybrid, _ = axis_angle_wigner_hybrid(
+                edge_t,
+                lmax,
+                gamma=gamma_t,
+                coeffs=wigner_data.coeffs,
+                U_blocks=wigner_data.U_blocks,
+                custom_kernels=wigner_data.custom_kernels,
+            )
 
             # Get Euler angles from production code, zero out random gamma
             _, beta, alpha = init_edge_rot_euler_angles(edge_t)
@@ -542,12 +607,19 @@ class TestGradientStability:
     """Tests for gradient stability including near singularities."""
 
     @pytest.mark.parametrize("edge,desc", STANDARD_TEST_EDGES)
-    def test_gradient_flow(self, lmax, dtype, device, edge, desc):
+    def test_gradient_flow(self, lmax, dtype, device, wigner_data, edge, desc):
         """Gradients flow without NaN/Inf and are reasonably bounded."""
         edge_t = torch.tensor([edge], dtype=dtype, device=device, requires_grad=True)
         gamma = torch.zeros(1, dtype=dtype, device=device)
 
-        D, _ = axis_angle_wigner_hybrid(edge_t, lmax, gamma=gamma)
+        D, _ = axis_angle_wigner_hybrid(
+            edge_t,
+            lmax,
+            gamma=gamma,
+            coeffs=wigner_data.coeffs,
+            U_blocks=wigner_data.U_blocks,
+            custom_kernels=wigner_data.custom_kernels,
+        )
         loss = D.sum()
         loss.backward()
 
@@ -559,7 +631,9 @@ class TestGradientStability:
         ), f"Gradient too large for {desc}: {grad.abs().max()}"
 
     @pytest.mark.parametrize("epsilon", [1e-4, 1e-6, 1e-8])
-    def test_near_singularity_correctness(self, lmax, dtype, device, epsilon):
+    def test_near_singularity_correctness(
+        self, lmax, dtype, device, wigner_data, epsilon
+    ):
         """Edges near +/-Y still correctly map to +Y with bounded gradients."""
         y_axis = torch.tensor([0.0, 1.0, 0.0], dtype=dtype, device=device)
 
@@ -572,7 +646,13 @@ class TestGradientStability:
             )
             edge_norm = torch.nn.functional.normalize(edge, dim=-1)
 
-            D, _ = axis_angle_wigner_hybrid(edge_norm, lmax)
+            D, _ = axis_angle_wigner_hybrid(
+                edge_norm,
+                lmax,
+                coeffs=wigner_data.coeffs,
+                U_blocks=wigner_data.U_blocks,
+                custom_kernels=wigner_data.custom_kernels,
+            )
             D_l1 = D[0, 1:4, 1:4]
             result = D_l1 @ edge_norm[0]
 
@@ -600,16 +680,29 @@ class TestTorchCompileCompatibility:
     @pytest.mark.skipif(
         not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
-    def test_hybrid_compiles(self, lmax, dtype, device, preload_kernel_coefficients):
+    def test_hybrid_compiles(
+        self, lmax, dtype, device, wigner_data, compile_reset_state
+    ):
         """axis_angle_wigner_hybrid should compile without graph breaks."""
         import torch._dynamo as dynamo
 
         edges = torch.randn(10, 3, dtype=dtype, device=device)
         gamma = torch.rand(10, dtype=dtype, device=device) * 6.28
 
+        coeffs = wigner_data.coeffs
+        U_blocks = wigner_data.U_blocks
+        ck = wigner_data.custom_kernels
+
         # Define function to compile
         def fn(edge_vec, lmax_val, g):
-            return axis_angle_wigner_hybrid(edge_vec, lmax_val, gamma=g)
+            return axis_angle_wigner_hybrid(
+                edge_vec,
+                lmax_val,
+                gamma=g,
+                coeffs=coeffs,
+                U_blocks=U_blocks,
+                custom_kernels=ck,
+            )
 
         # Try to compile and run
         try:
@@ -617,7 +710,14 @@ class TestTorchCompileCompatibility:
             D, D_inv = compiled_fn(edges, lmax, gamma)
 
             # Verify output matches uncompiled version
-            D_ref, D_inv_ref = axis_angle_wigner_hybrid(edges, lmax, gamma=gamma)
+            D_ref, D_inv_ref = axis_angle_wigner_hybrid(
+                edges,
+                lmax,
+                gamma=gamma,
+                coeffs=wigner_data.coeffs,
+                U_blocks=wigner_data.U_blocks,
+                custom_kernels=wigner_data.custom_kernels,
+            )
             assert torch.allclose(D, D_ref, atol=1e-10)
         except Exception as e:
             # If fullgraph=True fails, check with explanation
@@ -631,7 +731,9 @@ class TestTorchCompileCompatibility:
     @pytest.mark.skipif(
         not hasattr(torch, "_dynamo"), reason="torch.compile not available"
     )
-    def test_wigner_d_matrix_real_compiles(self, lmax, dtype, device):
+    def test_wigner_d_matrix_real_compiles(
+        self, lmax, dtype, device, compile_reset_state
+    ):
         """wigner_d_matrix_real should compile without graph breaks."""
         import torch._dynamo as dynamo
 
@@ -686,9 +788,11 @@ class TestRangeFunctions:
         D_real_full = wigner_d_pair_to_real(D_re_full, D_im_full, U_blocks_full, lmax)
 
         # Range computation
-        coeffs_range, U_blocks_range = get_ra_rb_coefficients_real(
-            lmax, dtype, device, lmin=lmin
+        coeffs_range = precompute_wigner_coefficients(lmax, dtype, device, lmin=lmin)
+        full_U_blocks_real = precompute_U_blocks_euler_aligned_real(
+            lmax, dtype=dtype, device=device
         )
+        U_blocks_range = full_U_blocks_real[lmin:]
         D_re_range, D_im_range = wigner_d_matrix_real(
             ra_re, ra_im, rb_re, rb_im, coeffs_range
         )
@@ -709,36 +813,35 @@ class TestRangeFunctions:
 # Test Specialized Kernels
 # =============================================================================
 
-# Kernel test configuration: (ell, kernel_fn)
-_KERNEL_TEST_PARAMS = [
-    (2, quaternion_to_wigner_d_l2_einsum),
-    (3, lambda q: quaternion_to_wigner_d_matmul(q, 3)),
-    (4, lambda q: quaternion_to_wigner_d_matmul(q, 4)),
-]
-
-# Threshold for all kernel tests (all kernels achieve ~1e-15 accuracy)
-_KERNEL_THRESHOLD = 5e-14
-
 
 class TestSpecializedKernels:
     """Tests for the specialized l=2 polynomial and l=3/4 matmul kernels."""
 
     @pytest.mark.parametrize(
-        "ell,kernel_fn,n_samples",
+        "ell,n_samples",
         [
-            (2, quaternion_to_wigner_d_l2_einsum, 500),
-            (3, lambda q: quaternion_to_wigner_d_matmul(q, 3), 100),
-            (4, lambda q: quaternion_to_wigner_d_matmul(q, 4), 100),
+            (2, 500),
+            (3, 100),
+            (4, 100),
         ],
     )
-    def test_kernel_matches_matexp(self, dtype, device, ell, kernel_fn, n_samples):
+    def test_kernel_matches_matexp(self, dtype, device, custom_kernels, ell, n_samples):
         """Specialized kernels match matrix exponential method."""
         torch.manual_seed(42)
         q = torch.randn(n_samples, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
 
         # Kernel method
-        D_kernel = kernel_fn(q)
+        if ell == 2:
+            D_kernel = quaternion_to_wigner_d_l2_einsum(q, custom_kernels.C_l2)
+        elif ell == 3:
+            D_kernel = quaternion_to_wigner_d_matmul(
+                q, 3, custom_kernels.C_l3, custom_kernels.monomials_l3
+            )
+        else:
+            D_kernel = quaternion_to_wigner_d_matmul(
+                q, 4, custom_kernels.C_l4, custom_kernels.monomials_l4
+            )
 
         # Matrix exponential method
         axis, angle = quaternion_to_axis_angle(q)
@@ -760,29 +863,53 @@ class TestSpecializedKernels:
             max_err < _KERNEL_THRESHOLD
         ), f"l={ell} kernel differs from matexp by {max_err}"
 
-    @pytest.mark.parametrize("ell,kernel_fn", _KERNEL_TEST_PARAMS)
-    def test_kernel_orthogonality(self, dtype, device, ell, kernel_fn):
+    @pytest.mark.parametrize("ell", [2, 3, 4])
+    def test_kernel_orthogonality(self, dtype, device, custom_kernels, ell):
         """Specialized kernels produce orthogonal matrices."""
         torch.manual_seed(123)
         q = torch.randn(100, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
 
-        D = kernel_fn(q)
+        if ell == 2:
+            D = quaternion_to_wigner_d_l2_einsum(q, custom_kernels.C_l2)
+        elif ell == 3:
+            D = quaternion_to_wigner_d_matmul(
+                q, 3, custom_kernels.C_l3, custom_kernels.monomials_l3
+            )
+        else:
+            D = quaternion_to_wigner_d_matmul(
+                q, 4, custom_kernels.C_l4, custom_kernels.monomials_l4
+            )
+
         size = 2 * ell + 1
         I = torch.eye(size, dtype=dtype, device=device)
         orth_err = (D @ D.transpose(-1, -2) - I).abs().max().item()
         assert orth_err < _KERNEL_THRESHOLD, f"l={ell} orthogonality error: {orth_err}"
 
-    @pytest.mark.parametrize("ell,kernel_fn", _KERNEL_TEST_PARAMS)
-    def test_kernel_determinant_one(self, dtype, device, ell, kernel_fn):
+    @pytest.mark.parametrize("ell", [2, 3, 4])
+    def test_kernel_determinant_one(self, dtype, device, custom_kernels, ell):
         """Specialized kernels produce matrices with determinant 1."""
         torch.manual_seed(456)
         q = torch.randn(100, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)
 
-        D = kernel_fn(q)
+        if ell == 2:
+            D = quaternion_to_wigner_d_l2_einsum(q, custom_kernels.C_l2)
+        elif ell == 3:
+            D = quaternion_to_wigner_d_matmul(
+                q, 3, custom_kernels.C_l3, custom_kernels.monomials_l3
+            )
+        else:
+            D = quaternion_to_wigner_d_matmul(
+                q, 4, custom_kernels.C_l4, custom_kernels.monomials_l4
+            )
+
         det_err = (torch.linalg.det(D) - 1.0).abs().max().item()
         assert det_err < _KERNEL_THRESHOLD, f"l={ell} determinant error: {det_err}"
+
+
+# Threshold for all kernel tests (all kernels achieve ~1e-15 accuracy)
+_KERNEL_THRESHOLD = 5e-14
 
 
 # =============================================================================
@@ -814,16 +941,26 @@ class TestRaRbPath:
     only when lmax >= 5 in the hybrid pipeline.
     """
 
-    def test_orthogonality(self, dtype, device):
-        """
-        D matrices from the Ra/Rb path are orthogonal with det=1.
-        """
+    @pytest.fixture()
+    def wigner_data_lmax6(self):
+        """Create WignerDataModule for lmax=6 tests."""
+        return create_wigner_data_module(lmax=6, lmin=5)
+
+    def test_orthogonality(self, dtype, device, wigner_data_lmax6):
+        """D matrices from the Ra/Rb path are orthogonal with det=1."""
         edges = torch.tensor(
             [e for e, _ in _RARB_TEST_EDGES], dtype=dtype, device=device
         )
         edges = edges / edges.norm(dim=-1, keepdim=True)
         gamma = torch.zeros(edges.shape[0], dtype=dtype, device=device)
-        D, _ = axis_angle_wigner_hybrid(edges, 6, gamma=gamma)
+        D, _ = axis_angle_wigner_hybrid(
+            edges,
+            6,
+            gamma=gamma,
+            coeffs=wigner_data_lmax6.coeffs,
+            U_blocks=wigner_data_lmax6.U_blocks,
+            custom_kernels=wigner_data_lmax6.custom_kernels,
+        )
 
         DtD = D @ D.transpose(1, 2)
         eye = torch.eye(D.shape[1], dtype=dtype, device=device)
@@ -834,23 +971,28 @@ class TestRaRbPath:
         det_err = (dets - 1.0).abs().max().item()
         assert det_err < 1e-10, f"Determinant error {det_err}"
 
-    def test_gradient_no_nan(self, dtype, device):
-        """
-        Gradients through the Ra/Rb path are finite and bounded.
-        """
+    def test_gradient_no_nan(self, dtype, device, wigner_data_lmax6):
+        """Gradients through the Ra/Rb path are finite and bounded."""
         edges = torch.tensor(
             [e for e, _ in _RARB_TEST_EDGES], dtype=dtype, device=device
         )
         edges = edges / edges.norm(dim=-1, keepdim=True)
         e = edges.clone().requires_grad_(True)
         gamma = torch.zeros(e.shape[0], dtype=dtype, device=device)
-        D, _ = axis_angle_wigner_hybrid(e, 6, gamma=gamma)
+        D, _ = axis_angle_wigner_hybrid(
+            e,
+            6,
+            gamma=gamma,
+            coeffs=wigner_data_lmax6.coeffs,
+            U_blocks=wigner_data_lmax6.U_blocks,
+            custom_kernels=wigner_data_lmax6.custom_kernels,
+        )
         D.sum().backward()
         assert not torch.isnan(e.grad).any(), "NaN in gradient"
         assert not torch.isinf(e.grad).any(), "Inf in gradient"
         assert e.grad.abs().max() < 1000, f"Gradient too large: {e.grad.abs().max()}"
 
-    def test_gradient_no_nan_fp32(self, device):
+    def test_gradient_no_nan_fp32(self, device, wigner_data_lmax6):
         """
         fp32 gradients through the Ra/Rb path are NaN-free.
 
@@ -865,9 +1007,17 @@ class TestRaRbPath:
         )
         edges = edges / edges.norm(dim=-1, keepdim=True)
         for test_lmax in [5, 6]:
+            wd = create_wigner_data_module(lmax=test_lmax, lmin=5)
             e = edges.clone().requires_grad_(True)
             gamma = torch.zeros(e.shape[0], dtype=torch.float32, device=device)
-            D, _ = axis_angle_wigner_hybrid(e, test_lmax, gamma=gamma)
+            D, _ = axis_angle_wigner_hybrid(
+                e,
+                test_lmax,
+                gamma=gamma,
+                coeffs=wd.coeffs,
+                U_blocks=wd.U_blocks,
+                custom_kernels=wd.custom_kernels,
+            )
             D.sum().backward()
             assert not torch.isnan(
                 e.grad
@@ -877,9 +1027,7 @@ class TestRaRbPath:
             ).any(), f"Inf in fp32 gradient at lmax={test_lmax}"
 
     def test_matches_matexp(self, dtype, device):
-        """
-        Ra/Rb Wigner D matches matrix exponential for l=5 and l=6.
-        """
+        """Ra/Rb Wigner D matches matrix exponential for l=5 and l=6."""
         torch.manual_seed(42)
         q = torch.randn(100, 4, dtype=dtype, device=device)
         q = q / q.norm(dim=-1, keepdim=True)

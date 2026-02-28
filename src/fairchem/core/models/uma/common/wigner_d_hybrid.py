@@ -1,5 +1,6 @@
 """
 Copyright (c) Meta Platforms, Inc. and affiliates.
+
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
@@ -19,6 +20,7 @@ Entry point:
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -29,7 +31,6 @@ from fairchem.core.models.uma.common.quaternion_utils import (
 )
 from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     WignerCoefficients,
-    get_ra_rb_coefficients_real,
     quaternion_to_ra_rb_real,
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
@@ -41,6 +42,11 @@ from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
     quaternion_to_wigner_d_matmul,
 )
 
+if TYPE_CHECKING:
+    from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+        CustomKernelModule,
+    )
+
 # =============================================================================
 # Hybrid Wigner D Computation
 # =============================================================================
@@ -49,8 +55,9 @@ from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
 def wigner_d_from_quaternion_hybrid(
     q: torch.Tensor,
     lmax: int,
-    coeffs: WignerCoefficients | None = None,
-    U_blocks: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+    coeffs: WignerCoefficients,
+    U_blocks: list[tuple[torch.Tensor, torch.Tensor]],
+    custom_kernels: CustomKernelModule,
 ) -> torch.Tensor:
     """
     Compute Wigner D matrices from quaternion using hybrid approach.
@@ -68,9 +75,9 @@ def wigner_d_from_quaternion_hybrid(
     Args:
         q: Quaternions of shape (N, 4) in (w, x, y, z) convention
         lmax: Maximum angular momentum
-        coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
-                skips the cache lookup for better performance in hot paths.
-        U_blocks: Optional pre-computed U transformation blocks.
+        coeffs: Pre-computed WignerCoefficients for l>=5 Ra/Rb path.
+        U_blocks: Pre-computed U transformation blocks for l>=5.
+        custom_kernels: CustomKernelModule holding l=2,3,4 coefficient buffers.
 
     Returns:
         Block-diagonal Wigner D matrices of shape (N, size, size)
@@ -92,23 +99,23 @@ def wigner_d_from_quaternion_hybrid(
 
     # l=2: einsum tensor contraction
     if lmax >= 2:
-        D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q)
+        D[:, 4:9, 4:9] = quaternion_to_wigner_d_l2_einsum(q, custom_kernels.C_l2)
 
     # l=3,4: batched matmul when both needed, l=3 only matmul otherwise
     if lmax >= 4:
-        D_l3, D_l4 = quaternion_to_wigner_d_l3l4_batched(q)
+        D_l3, D_l4 = quaternion_to_wigner_d_l3l4_batched(
+            q, custom_kernels.C_combined_l3l4, custom_kernels.monomials_l4
+        )
         D[:, 9:16, 9:16] = D_l3
         D[:, 16:25, 16:25] = D_l4
     elif lmax >= 3:
-        D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(q, 3)
+        D[:, 9:16, 9:16] = quaternion_to_wigner_d_matmul(
+            q, 3, custom_kernels.C_l3, custom_kernels.monomials_l3
+        )
 
     # l>=5: Ra/Rb polynomial with real-pair arithmetic
     lmin = 5
     if lmax >= lmin:
-        if coeffs is None or U_blocks is None:
-            coeffs, U_blocks = get_ra_rb_coefficients_real(
-                lmax, dtype, device, lmin=lmin
-            )
         ra_re, ra_im, rb_re, rb_im = quaternion_to_ra_rb_real(q)
         D_re, D_im = wigner_d_matrix_real(ra_re, ra_im, rb_re, rb_im, coeffs)
         D_range = wigner_d_pair_to_real(D_re, D_im, U_blocks, lmin=lmin, lmax=lmax)
@@ -130,6 +137,7 @@ def axis_angle_wigner_hybrid(
     gamma: torch.Tensor | None = None,
     coeffs: WignerCoefficients | None = None,
     U_blocks: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+    custom_kernels: CustomKernelModule | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Compute Wigner D using hybrid approach (optimal method per l).
@@ -152,9 +160,9 @@ def axis_angle_wigner_hybrid(
         lmax: Maximum angular momentum
         gamma: Optional roll angles of shape (N,).
                If None, uses random gamma (for SO(2) equivariance during training).
-        coeffs: Optional pre-computed WignerCoefficients. If provided with U_blocks,
-               skips the cache lookup for better performance in hot paths.
-        U_blocks: Optional pre-computed U transformation blocks.
+        coeffs: Pre-computed WignerCoefficients for l>=5 Ra/Rb path.
+        U_blocks: Pre-computed U transformation blocks for l>=5.
+        custom_kernels: CustomKernelModule holding l=2,3,4 coefficient buffers.
 
     Returns:
         Tuple of (wigner_edge_to_y, wigner_y_to_edge) where each has shape
@@ -188,6 +196,7 @@ def axis_angle_wigner_hybrid(
         lmax,
         coeffs=coeffs,
         U_blocks=U_blocks,
+        custom_kernels=custom_kernels,
     )
 
     # Step 6: Inverse is transpose (orthogonal matrix)
