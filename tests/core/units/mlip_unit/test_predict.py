@@ -477,7 +477,6 @@ def test_rotational_invariance_out_of_plane(mol_name, uma_predict_unit_cuda):
 
 
 @pytest.mark.gpu()
-@pytest.mark.xfail(reason="Y-aligned edges cause problems in eSCN family", strict=False)
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
 def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
     calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
@@ -487,6 +486,119 @@ def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
     forces = atoms.get_forces()
     print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
     assert np.abs(forces[:, 0]).max() < FORCE_TOL
+
+
+# ---------------------------------------------------------------------------
+# Euler vs Quaternion Wigner D agreement tests
+# ---------------------------------------------------------------------------
+
+
+def _get_predict_unit_with_wigner_mode(use_quaternion: bool):
+    """
+    Create a predict unit with the specified Wigner D computation mode.
+    """
+    settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        use_quaternion_wigner=use_quaternion,
+    )
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(
+        uma_models[0], device="cuda", inference_settings=settings
+    )
+
+
+@pytest.mark.gpu()
+def test_euler_vs_quaternion_random_molecule():
+    """
+    Euler and quaternion Wigner D paths produce identical energy and forces
+    for a random molecule with no Y-aligned edges.
+    """
+    # Methanol (CH3OH) - 6 atoms, no edges along Y axis
+    atoms = molecule("CH3OH")
+    # Apply a rotation to ensure no edges are Y-aligned
+    rng = np.random.default_rng(seed=42)
+    R = _random_rotation_matrix(rng)
+    atoms.set_positions(atoms.get_positions() @ R.T)
+    atoms.info.update({"charge": 0, "spin": 1})
+    atoms.pbc = True
+
+    predict_euler = _get_predict_unit_with_wigner_mode(use_quaternion=False)
+    predict_quat = _get_predict_unit_with_wigner_mode(use_quaternion=True)
+
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    preds_euler = predict_euler.predict(batch)
+    seed_everywhere(42)
+    preds_quat = predict_quat.predict(batch)
+
+    npt.assert_allclose(
+        preds_euler["energy"].detach().cpu().numpy(),
+        preds_quat["energy"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Energy differs between Euler and quaternion paths",
+    )
+    npt.assert_allclose(
+        preds_euler["forces"].detach().cpu().numpy(),
+        preds_quat["forces"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces differ between Euler and quaternion paths",
+    )
+
+
+@pytest.mark.gpu()
+def test_euler_vs_quaternion_bulk():
+    """
+    Euler and quaternion Wigner D paths produce identical energy, forces,
+    and stress for a bulk crystal with no Y-aligned edges.
+    """
+    # FCC Cu 2x2x2 supercell with a random perturbation to avoid symmetry
+    atoms = bulk("Cu")
+    atoms = atoms.repeat((2, 2, 2))
+    rng = np.random.default_rng(seed=99)
+    atoms.set_positions(
+        atoms.get_positions() + rng.normal(0, 0.05, atoms.positions.shape)
+    )
+
+    predict_euler = _get_predict_unit_with_wigner_mode(use_quaternion=False)
+    predict_quat = _get_predict_unit_with_wigner_mode(use_quaternion=True)
+
+    data = AtomicData.from_ase(atoms, task_name="omat")
+    batch = atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    preds_euler = predict_euler.predict(batch)
+    seed_everywhere(42)
+    preds_quat = predict_quat.predict(batch)
+
+    npt.assert_allclose(
+        preds_euler["energy"].detach().cpu().numpy(),
+        preds_quat["energy"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Energy differs between Euler and quaternion paths (bulk)",
+    )
+    npt.assert_allclose(
+        preds_euler["forces"].detach().cpu().numpy(),
+        preds_quat["forces"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces differ between Euler and quaternion paths (bulk)",
+    )
+    npt.assert_allclose(
+        preds_euler["stress"].detach().cpu().numpy(),
+        preds_quat["stress"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Stress differs between Euler and quaternion paths (bulk)",
+    )
 
 
 @pytest.mark.gpu()
