@@ -37,6 +37,9 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    handle_single_atom_prediction,
+)
 from fairchem.core.units.mlip_unit.utils import (
     get_backbone_class_from_checkpoint,
     load_inference_model,
@@ -86,21 +89,6 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
-def merge_uma_model(model, data):
-    logging.info("Calling merge_uma_model")
-    # merge the backbone
-    model.backbone = model.backbone.merge_MOLE_model(data)
-
-    # merge any heads
-    new_output_heads = torch.nn.ModuleDict()
-    for head_name, head in model.output_heads.items():
-        if hasattr(head, "merge_MOLE_model"):
-            new_output_heads[head_name] = head.merge_MOLE_model(data)
-        else:
-            new_output_heads[head_name] = head
-    model.output_heads = new_output_heads
-
-
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -131,6 +119,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # Load checkpoint first to get model type
         checkpoint = torch.load(
             inference_model_path, map_location="cpu", weights_only=False
+        )
+
+        # Check if model natively supports single atom predictions
+        self.supports_single_atoms = checkpoint.model_config.get(
+            "supports_single_atoms", False
         )
 
         # Build model-specific overrides
@@ -269,6 +262,20 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if not self.lazy_model_intialized:
             self._lazy_init(data)
 
+        # Handle single-atom systems (natoms==1 and pbc all False)
+        # Skip this check if the model natively supports single atoms
+        if not self.supports_single_atoms:
+            single_atom_result = handle_single_atom_prediction(
+                data=data,
+                atom_refs=self.atom_refs,
+                tasks=self.tasks,
+                device=self.device,
+            )
+            if single_atom_result is not None:
+                return single_atom_result
+
+        # Regular model prediction path
+        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
         dtype = self.inference_settings.base_precision_dtype
