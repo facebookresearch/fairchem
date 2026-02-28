@@ -1053,14 +1053,16 @@ def wigner_d_pair_to_real(
 def _get_cache_path(
     lmax: int,
     lmin: int,
+    dtype: torch.dtype,
     cache_dir: Path | None = None,
 ) -> Path:
     """
-    Get the cache file path for a given lmax, lmin.
+    Get the cache file path for a given lmax, lmin, dtype.
 
     Args:
         lmax: Maximum angular momentum
         lmin: Minimum angular momentum
+        dtype: Data type for coefficients
         cache_dir: Override cache directory (default: ~/.cache/fairchem/wigner_coeffs)
 
     Returns:
@@ -1070,8 +1072,9 @@ def _get_cache_path(
         cache_dir = _DEFAULT_CACHE_DIR
     cache_dir = Path(cache_dir)
 
+    dtype_str = str(dtype).replace("torch.", "")
     version = "v3"
-    return cache_dir / f"wigner_lmin{lmin}_lmax{lmax}_{version}.pt"
+    return cache_dir / f"wigner_lmin{lmin}_lmax{lmax}_{dtype_str}_{version}.pt"
 
 
 def _coeffs_to_dict(coeffs: WignerCoefficients) -> dict:
@@ -1207,12 +1210,10 @@ def get_wigner_coefficients(
         device = torch.device("cpu")
 
     if use_cache:
-        cache_path = _get_cache_path(lmax, lmin, cache_dir)
+        cache_path = _get_cache_path(lmax, lmin, dtype, cache_dir)
         coeffs = _load_coefficients(cache_path, device)
         if coeffs is not None:
-            # nn.Module.to(dtype) converts only floating-point buffers,
-            # leaving int64/bool unchanged — exactly what we need.
-            return coeffs.to(dtype=dtype)
+            return coeffs
 
     coeffs = precompute_wigner_coefficients(lmax, dtype, device, lmin=lmin)
 
