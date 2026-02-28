@@ -106,6 +106,7 @@ train_dataloader:
     shuffle: True
     seed: 0
   num_workers: ${cluster.dataloader_workers}
+  mp_start_method: ${cluster.mp_start_method}
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${tasks}
@@ -121,6 +122,7 @@ eval_dataloader:
     shuffle: False
     seed: 0
   num_workers: ${cluster.dataloader_workers}
+  mp_start_method: ${cluster.mp_start_method}
   collate_fn:
     _target_: fairchem.core.units.mlip_unit.mlip_unit.mt_collater_adapter
     tasks: ${tasks}
