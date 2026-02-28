@@ -26,7 +26,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
 
 if TYPE_CHECKING:
     from ase import Atoms
-
+    from pathlib import Path
     from fairchem.core.units.mlip_unit import MLIPPredictUnit
 
 
@@ -119,7 +119,7 @@ class FAIRChemCalculator(Calculator):
     @classmethod
     def from_model_checkpoint(
         cls,
-        name_or_path: str,
+        name_or_path: str | Path,
         task_name: UMATask | None = None,
         inference_settings: InferenceSettings | str = "default",
         overrides: dict | None = None,
