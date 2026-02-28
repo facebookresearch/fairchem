@@ -3,9 +3,9 @@ name: build and deploy docs
 on:
   workflow_call:
   workflow_dispatch:
-  push:
-    branches: ['main']
-    paths: ['docs/**']
+  #push:
+  #  branches: ['main']
+  #  paths: ['docs/**']
 
 jobs:
   build:
