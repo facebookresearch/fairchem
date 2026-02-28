@@ -239,8 +239,6 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
         self.wrap_property = wrap_property
 
@@ -260,6 +258,22 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             cache=None,
         )
         recursive_replace_all_linear(self.head, replacement_factory)
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.head.regress_stress
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.head.regress_forces
+
+    @property
+    def regress_hessian(self) -> bool:
+        return self.head.regress_hessian
+
+    @property
+    def hessian_vmap(self) -> bool:
+        return self.head.hessian_vmap
 
     @staticmethod
     def _build_expert_mapping(
@@ -350,8 +364,6 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
         self.wrap_property = wrap_property
 
@@ -360,6 +372,22 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.head.regress_stress
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.head.regress_forces
+
+    @property
+    def regress_hessian(self) -> bool:
+        return self.head.regress_hessian
+
+    @property
+    def hessian_vmap(self) -> bool:
+        return self.head.hessian_vmap
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]

@@ -15,6 +15,7 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
+from fairchem.core.models.utils.outputs import get_numerical_hessian
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from tests.conftest import seed_everywhere
@@ -346,6 +347,8 @@ def test_batching_consistency(padding):
 
     # Create system of two oxygen atoms 100 A apart
     from ase import Atoms
+
+    o_atom = Atoms("O2", positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
 
     o_atom = Atoms("O2", positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
     o_atom.info.update({"charge": 0, "spin": 4})  # two triplet oxygens -> quintet
@@ -922,4 +925,127 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
         tolerance_factor * baseline_stress_drift + 1e-6,
         err_msg=f"Stress drift A-C ({stress_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_stress_drift:.2e})",
+    )
+
+
+@pytest.skip(reason="Enable when untrained predictions are implemented")
+@pytest.mark.gpu()
+@pytest.mark.parametrize("vmap", [True, False])
+def test_hessian(vmap):
+    """Test Hessian calculation using MLIPPredictUnit directly."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    # Convert to AtomicData
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    # Enable Hessian computation on the backbone
+    backbone = predict_unit.model.module.backbone
+    backbone.regress_hessian = True
+    backbone.hessian_vmap = vmap
+
+    # Get predictions with Hessian
+    preds = predict_unit.predict(batch)
+    hessian = preds["hessian"].detach().cpu().numpy()
+
+    # Restore original setting
+    backbone.regress_hessian = False
+
+    # Check shape (3 atoms * 3 coords = 9x9 matrix)
+    assert hessian.shape == (9, 9)
+    assert np.isfinite(hessian).all()
+
+
+@pytest.skip(reason="Enable when untrained predictions are implemented")
+@pytest.mark.gpu()
+def test_hessian_vs_numerical():
+    """Test that analytical and numerical Hessians are close."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    # Enable Hessian computation on the backbone
+    backbone = predict_unit.model.module.backbone
+    backbone.regress_hessian = True
+    backbone.hessian_vmap = True
+
+    # Get analytical Hessian
+    preds = predict_unit.predict(batch)
+    hessian_analytical = preds["hessian"].detach().cpu().numpy()
+
+    # Restore original setting
+    backbone.regress_hessian = False
+
+    # Get numerical Hessian
+    hessian_numerical = (
+        get_numerical_hessian(data, predict_unit, eps=1e-4, device="cuda")
+        .detach()
+        .cpu()
+        .numpy()
+    )
+
+    # Analytical and numerical Hessians should be close
+    npt.assert_allclose(
+        hessian_analytical.diagonal(),
+        hessian_numerical.diagonal(),
+        rtol=1e-3,  # 0.1% relative tolerance
+        atol=1e-3,  # Absolute tolerance for small values
+        err_msg="Analytical and numerical Hessians differ significantly",
+    )
+
+
+@pytest.skip(reason="Enable when untrained predictions are implemented")
+@pytest.mark.gpu()
+def test_hessian_symmetry():
+    """Test that the Hessian matrix is symmetric."""
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+
+    atoms = molecule("H2O")
+    atoms.info.update({"charge": 0, "spin": 1})
+
+    # Convert to AtomicData
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    # Enable Hessian computation on the backbone
+    backbone = predict_unit.model.module.backbone
+    backbone.regress_hessian = True
+    backbone.hessian_vmap = True
+
+    # Get predictions with Hessian
+    preds = predict_unit.predict(batch)
+    hessian = preds["hessian"]
+
+    # Restore original setting
+    backbone.regress_hessian = False
+
+    # Hessian should be symmetric
+    npt.assert_allclose(
+        hessian.detach().cpu().numpy(),
+        hessian.T.detach().cpu().numpy(),
+        rtol=1e-5,
+        atol=1e-5,
+        err_msg="Hessian matrix is not symmetric",
     )
