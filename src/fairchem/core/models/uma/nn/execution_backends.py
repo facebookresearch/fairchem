@@ -19,8 +19,12 @@ __all__ = [
     "ExecutionMode",
     "ExecutionBackend",
     "UMASFastPytorchBackend",
+    "UMASFastGPUBackend",
     "get_execution_backend",
 ]
+
+# Indices for m=0 spherical harmonic coefficients in L-major ordering (lmax=2)
+_M0_COL_INDICES_L_ORDER = [0, 2, 6]
 
 
 class ExecutionMode(str, Enum):
@@ -30,6 +34,7 @@ class ExecutionMode(str, Enum):
 
     GENERAL = "general"
     UMAS_FAST_PYTORCH = "umas_fast_pytorch"
+    UMAS_FAST_GPU = "umas_fast_gpu"
 
 
 class ExecutionBackend:
@@ -43,26 +48,29 @@ class ExecutionBackend:
     All methods are static — backends carry no instance state.
 
     Methods (override for optimization):
-        - gather_rotate: Gather node features and rotate L->M
-        - rotate_back: Rotate M->L
+        - node_to_edge_wigner_permute: Gather node features and rotate L->M
+        - permute_wigner_inv_edge_to_node: Rotate M->L and scatter to nodes
         - edge_degree_scatter: Rotate radial and scatter to nodes
         - prepare_model_for_inference: Apply backend-specific model transforms
     """
 
     @staticmethod
-    def validate(settings: InferenceSettings) -> None:
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
         """
-        Validate inference settings against this backend's requirements.
+        Validate that model and settings are compatible with this backend.
 
-        Called once before the first prediction. Override in subclasses
-        to enforce backend-specific constraints (e.g. requiring
-        merge_mole=True or activation_checkpointing=False).
+        Called during model construction (settings=None) and before
+        first inference (settings provided).
 
         Args:
-            settings: The inference settings to validate.
+            model: The backbone model to validate.
+            settings: Inference settings, or None at construction time.
 
         Raises:
-            ValueError: If settings are incompatible with this backend.
+            ValueError: If incompatible with this backend.
         """
 
     @staticmethod
@@ -78,7 +86,46 @@ class ExecutionBackend:
         """
 
     @staticmethod
-    def gather_rotate(
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Transform raw Wigner matrices for this backend.
+
+        Default: Apply coefficient selection (if mmax != lmax) and
+        pre-compose with M-mapping via einsum.
+
+        Args:
+            wigner: Raw Wigner matrices [E, L, L]
+            wigner_inv: Raw inverse Wigner matrices [E, L, L]
+            mappingReduced: CoefficientMapping with to_m matrix
+            coefficient_index: Indices for mmax != lmax selection,
+                or None if mmax == lmax.
+
+        Returns:
+            Transformed (wigner, wigner_inv) ready for this backend.
+        """
+        if coefficient_index is not None:
+            wigner = wigner.index_select(1, coefficient_index)
+            wigner_inv = wigner_inv.index_select(2, coefficient_index)
+
+        wigner = torch.einsum(
+            "mk,nkj->nmj",
+            mappingReduced.to_m.to(wigner.dtype),
+            wigner,
+        )
+        wigner_inv = torch.einsum(
+            "njk,mk->njm",
+            wigner_inv,
+            mappingReduced.to_m.to(wigner_inv.dtype),
+        )
+        return wigner, wigner_inv
+
+    @staticmethod
+    def node_to_edge_wigner_permute(
         x_full: torch.Tensor,
         edge_index: torch.Tensor,
         wigner: torch.Tensor,
@@ -102,23 +149,38 @@ class ExecutionBackend:
         return torch.bmm(wigner, x_message)
 
     @staticmethod
-    def rotate_back(
-        x: torch.Tensor,
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
         wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
     ) -> torch.Tensor:
         """
-        Rotate M->L.
+        Rotate M->L and scatter edge messages to nodes.
 
-        Default: PyTorch BMM.
+        Default: PyTorch BMM + index_add.
 
         Args:
-            x: Message features [E, M, C]
+            x_message: Edge message features [E, M, C]
             wigner_inv: Inverse Wigner matrices [E, L, M]
+            edge_index: Edge indices [2, E]
+            num_nodes: Total number of nodes (output size)
+            node_offset: Offset for node indices (for chunking)
 
         Returns:
-            Rotated features [E, L, C]
+            Node embeddings [N, L, C] accumulated from edge messages
         """
-        return torch.bmm(wigner_inv, x)
+        # Rotate M->L
+        x_rotated = torch.bmm(wigner_inv, x_message)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
 
     @staticmethod
     def edge_degree_scatter(
@@ -178,13 +240,22 @@ class UMASFastPytorchBackend(ExecutionBackend):
     """
 
     @staticmethod
-    def validate(settings: InferenceSettings) -> None:
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
         """
         Validate that settings are compatible with fast pytorch mode.
         """
-        if settings.activation_checkpointing:
+        # Check activation_checkpointing from model (chunk_size is None when disabled)
+        if model.edge_degree_embedding.activation_checkpoint_chunk_size is not None:
             raise ValueError(
-                "UMASFastPytorchBackend requires " "activation_checkpointing=False"
+                "UMASFastPytorchBackend requires activation_checkpointing=False"
+            )
+        # Also reject if user tries to enable it via inference settings
+        if settings is not None and settings.activation_checkpointing:
+            raise ValueError(
+                "UMASFastPytorchBackend requires activation_checkpointing=False"
             )
 
     @staticmethod
@@ -206,9 +277,106 @@ class UMASFastPytorchBackend(ExecutionBackend):
             block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
 
 
+class UMASFastGPUBackend(UMASFastPytorchBackend):
+    """
+    GPU-optimized backend: SO2 block conversion + Triton kernels.
+
+    Extends UMASFastPytorchBackend with Triton-accelerated
+    node_to_edge_wigner_permute, permute_wigner_inv_edge_to_node, and edge_degree_scatter.
+    Requires lmax==2, mmax==2, sphere_channels divisible by 128,
+    and merge_mole=True.
+    """
+
+    @staticmethod
+    def validate(
+        model: torch.nn.Module,
+        settings: InferenceSettings | None = None,
+    ) -> None:
+        UMASFastPytorchBackend.validate(model, settings)
+        if not torch.cuda.is_available():
+            raise ValueError("umas_fast_gpu requires CUDA")
+        if model.lmax != 2 or model.mmax != 2:
+            raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
+        if model.sphere_channels % 128 != 0:
+            raise ValueError("sphere_channels must be divisible by 128")
+        if settings is not None and not settings.merge_mole:
+            raise ValueError("umas_fast_gpu requires merge_mole=True")
+
+    @staticmethod
+    def prepare_wigner(
+        wigner: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        mappingReduced,
+        coefficient_index: torch.Tensor | None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Passthrough — Triton kernels handle L-to-M internally
+        return wigner, wigner_inv
+
+    @staticmethod
+    def node_to_edge_wigner_permute(
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            UMASFastGPUNodeToEdgeWignerPermute,
+        )
+
+        return UMASFastGPUNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
+
+    @staticmethod
+    def permute_wigner_inv_edge_to_node(
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            UMASFastGPUPermuteWignerInvEdgeToNode,
+        )
+
+        # Rotate M->L using Triton kernel
+        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(x_message, wigner_inv)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
+
+    @staticmethod
+    def edge_degree_scatter(
+        x: torch.Tensor,
+        radial_output: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        m_0_num_coefficients: int,
+        sphere_channels: int,
+        rescale_factor: float,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
+
+        # Select m=0 columns from L-ordered wigner_inv
+        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
+        x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
+
+        x_edge_embedding = x_edge_embedding.to(x.dtype)
+
+        return x.index_add(
+            0,
+            edge_index[1] - node_offset,
+            x_edge_embedding / rescale_factor,
+        )
+
+
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {
     ExecutionMode.GENERAL: ExecutionBackend,
     ExecutionMode.UMAS_FAST_PYTORCH: UMASFastPytorchBackend,
+    ExecutionMode.UMAS_FAST_GPU: UMASFastGPUBackend,
 }
 
 
