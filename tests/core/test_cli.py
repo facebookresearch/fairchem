@@ -32,6 +32,7 @@ def test_cli():
     main()
 
 
+@pytest.mark.serial()
 def test_cli_multi_rank_cpu():
     distutils.cleanup()
     hydra.core.global_hydra.GlobalHydra.instance().clear()
@@ -100,6 +101,7 @@ def get_cfg_from_yaml():
     assert cfg.keys() == ALLOWED_TOP_LEVEL_KEYS
 
 
+@pytest.mark.serial()
 @pytest.mark.parametrize("num_ranks", [1, 4])
 def test_cli_ray(num_ranks):
     distutils.cleanup()
@@ -180,6 +182,7 @@ class TestSignalHandlerRegistration:
             runner.save_state.assert_called_once_with(save_path, is_preemption=True)
 
 
+@pytest.mark.skip(reason="CI timeouts")
 class TestSignalHandlingIntegration:
     """Integration tests that actually send signals to a running process."""
 

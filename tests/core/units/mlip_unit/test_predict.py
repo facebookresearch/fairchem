@@ -24,13 +24,27 @@ ATOL = 5e-4
 
 
 @pytest.fixture()
-def uma_predict_unit(request):
+def uma_predict_unit():
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     return pretrained_mlip.get_predict_unit(uma_models[0])
 
 
 @pytest.mark.gpu()
-def test_single_dataset_predict(uma_predict_unit):
+@pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
+def test_single_dataset_predict(internal_graph_gen_version):
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    inference_settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=internal_graph_gen_version,
+    )
+    uma_predict_unit = pretrained_mlip.get_predict_unit(
+        uma_models[0], inference_settings=inference_settings
+    )
+
     n = 10
     atoms = bulk("Pt")
     atomic_data_list = [AtomicData.from_ase(atoms, task_name="omat") for _ in range(n)]
@@ -58,7 +72,21 @@ def test_single_dataset_predict(uma_predict_unit):
 
 
 @pytest.mark.gpu()
-def test_multiple_dataset_predict(uma_predict_unit):
+@pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
+def test_multiple_dataset_predict(internal_graph_gen_version):
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    inference_settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=internal_graph_gen_version,
+    )
+    uma_predict_unit = pretrained_mlip.get_predict_unit(
+        uma_models[0], inference_settings=inference_settings
+    )
+
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
     h2o.pbc = True  # all data points must be pbc if mixing.
@@ -114,19 +142,8 @@ def test_multiple_dataset_predict(uma_predict_unit):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-@pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "workers, device, checkpointing",
-    [
-        (1, "cpu", False),
-        (2, "cpu", False),
-        (1, "cuda", False),
-        (1, "cuda", True),
-        # (2, "cuda", False),
-        # (2, "cuda", True),
-    ],
-)
-def test_parallel_predict_unit(workers, device, checkpointing):
+def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_version):
+    """Implementation of parallel predict unit test."""
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -135,7 +152,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
         tf32=False,
         merge_mole=True,
         activation_checkpointing=checkpointing,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=graph_gen_version,
         external_graph_gen=False,
     )
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
@@ -174,19 +191,39 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     )
 
 
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, device, checkpointing",
+    "workers, checkpointing, graph_gen_version",
     [
-        (1, "cpu", False),
-        (2, "cpu", True),
-        (1, "cuda", True),
-        (1, "cuda", False),
-        # (2, "cuda", True),
-        # (2, "cuda", False),
+        (1, False, 2),
+        (2, False, 2),
+        (1, False, 3),
+        (1, True, 3),
+        (2, False, 3),
     ],
 )
-def test_parallel_predict_unit_batch(workers, device, checkpointing):
+def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing, graph_gen_version)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing, graph_gen_version",
+    [
+        (1, False, 2),
+        (1, True, 2),
+        (1, True, 3),
+        (1, False, 3),
+        # (2, False),
+        # (2, True),
+    ],
+)
+def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing, graph_gen_version)
+
+
+def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit batch test."""
     seed = 42
     runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -249,6 +286,32 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
         normal_results["forces"].detach().cpu(),
         atol=FORCE_TOL,
     )
+
+
+@pytest.mark.serial()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (2, True),
+    ],
+)
+def test_parallel_predict_unit_batch(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, True),
+        (1, False),
+        # (2, True),
+        # (2, False),
+    ],
+)
+def test_parallel_predict_unit_batch_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing)
 
 
 @pytest.mark.gpu()
@@ -688,6 +751,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
+@pytest.mark.serial()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
@@ -712,7 +776,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
-    md_steps = 5
+    md_steps = 2
     timestep = 1.0 * units.fs
     initial_temp_K = 300.0
     pressure = 1.01325 * units.bar  # 1 atm

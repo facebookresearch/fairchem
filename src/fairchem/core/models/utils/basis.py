@@ -243,8 +243,8 @@ class Basis(nn.Module):
 
 
 class SphericalSmearing(nn.Module):
-    m: npt.NDArray[np.int_]
-    n: npt.NDArray[np.int_]
+    m: npt.NDArray[np.intp]
+    n: npt.NDArray[np.intp]
 
     def __init__(self, max_n: int = 10, option: str = "all") -> None:
         super().__init__()

@@ -185,7 +185,7 @@ def per_atom_mae(
     target: dict[str, torch.Tensor],
     key: Hashable = NONE_SLICE,
 ) -> torch.Tensor:
-    return torch.abs(target[key] - prediction[key]) / target["natoms"].unsqueeze(1)
+    return torch.abs(target[key] - prediction[key]) / target["natoms"]
 
 
 @metrics_dict
@@ -194,7 +194,7 @@ def per_atom_mse(
     target: dict[str, torch.Tensor],
     key: Hashable = NONE_SLICE,
 ) -> torch.Tensor:
-    return ((target[key] - prediction[key]) / target["natoms"].unsqueeze(1)) ** 2
+    return ((target[key] - prediction[key]) / target["natoms"]) ** 2
 
 
 @metrics_dict
