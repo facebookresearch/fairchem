@@ -374,7 +374,12 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
         # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1, []),
         ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, []),
         # test charge balancing GP support
-        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, ["++backbone.charge_balanced_channels=[0]"]),
+        (
+            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "aselmdb",
+            2,
+            ["++backbone.charge_balanced_channels=[0]"],
+        ),
         (
             "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
             "aselmdb_conserving",
@@ -384,7 +389,12 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, num_ddps, backbone_overrides, fake_uma_dataset, torch_deterministic
+    train_config,
+    dataset_config,
+    num_ddps,
+    backbone_overrides,
+    fake_uma_dataset,
+    torch_deterministic,
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -465,7 +475,7 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
         "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
         "datasets=aselmdb_conserving",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=86.24614715576172",
+        "+expected_loss=86.25643157958984",
     ]
     if mode == "gp":
         sys_args += [

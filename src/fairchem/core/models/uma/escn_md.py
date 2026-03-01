@@ -51,7 +51,6 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
-    get_displacement_and_cell,
     get_l_component_range,
     reduce_node_to_system,
 )
@@ -604,9 +603,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
+
             cell_per_edge = data_dict["cell"].repeat_interleave(
                 data_dict["nedges"], dim=0
             )
+
             shifts = torch.einsum(
                 "ij,ijk->ik",
                 data_dict["cell_offsets"].to(cell_per_edge.dtype),
@@ -663,11 +664,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             csd_mixed_emb=csd_mixed_emb,
         )
 
-        with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = get_displacement_and_cell(
-                data=data_dict,
-                regress_config=self.regress_config,
-            )
+        # Enable gradients for autograd-based force/stress computation.
+        # Must be set before graph generation so the computation graph
+        # tracks positions and cell through edge distance calculations.
+        if not self.regress_config.direct_forces:
+            if self.regress_config.forces or self.regress_config.stress:
+                data_dict["pos"].requires_grad_(True)
+            if self.regress_config.stress:
+                data_dict["cell"].requires_grad_(True)
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
@@ -777,8 +781,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         x_message = self.norm(x_message)
         out = {
             "node_embedding": x_message,
-            "displacement": displacement,
-            "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
         return out
@@ -1104,14 +1106,14 @@ class MLP_EFS_Head(MLP_Energy_Head):
         if self.regress_config.stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
-                data["pos_original"],
-                emb["displacement"],
+                data["pos"],
                 data["cell"],
+                batch=data["batch"],
+                num_systems=len(data["natoms"]),
                 training=self.training,
             )
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
-            data["cell"] = emb["orig_cell"]
         elif self.regress_config.forces:
             forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces

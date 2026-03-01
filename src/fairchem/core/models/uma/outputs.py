@@ -7,92 +7,11 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import torch
 
 from fairchem.core.common import gp_utils
-
-if TYPE_CHECKING:
-    from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.models.uma.escn_md import GradRegressConfig
-
-
-def get_displacement_and_cell(
-    data: AtomicData,
-    regress_config: GradRegressConfig,
-) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-    """
-    Prepare displacement tensor and cell for gradient-based stress computation.
-
-    This function sets up the displacement tensor and modifies the input data
-    to enable gradient-based computation of forces and stress. When stress
-    regression is enabled with gradient-based forces, it:
-    - Creates a symmetric displacement tensor with gradients enabled
-    - Applies the displacement to atomic positions
-    - Applies the displacement to the unit cell
-    - Stores original positions and cell for later use
-
-    Args:
-        data: Atomic data containing positions, cell, and batch information.
-        regress_config: Configuration for gradient-based computation of forces and stress.
-
-    Returns:
-        A tuple of (displacement, orig_cell) where:
-        - displacement: Symmetric strain displacement tensor of shape [num_systems, 3, 3],
-          or None if stress regression is disabled.
-        - orig_cell: Original unit cell before displacement, shape [num_systems, 3, 3],
-          or None if stress regression is disabled.
-
-    Note:
-        This function modifies the input data dict in place:
-        - Sets data["pos_original"] to original positions
-        - Modifies data["pos"] to include displacement
-        - Modifies data["cell"] to include displacement
-        - Enables gradients on data["pos"] if needed
-    """
-    displacement = None
-    orig_cell = None
-
-    # Set up displacement for stress computation
-    if regress_config.stress and not regress_config.direct_forces:
-        displacement = torch.zeros(
-            (3, 3),
-            dtype=data["pos"].dtype,
-            device=data["pos"].device,
-        )
-        num_batch = len(data["natoms"])
-        displacement = displacement.view(-1, 3, 3).expand(num_batch, 3, 3)
-        displacement.requires_grad = True
-
-        # Create symmetric displacement tensor
-        symmetric_displacement = 0.5 * (displacement + displacement.transpose(-1, -2))
-
-        # Enable gradients on positions if needed
-        if data["pos"].requires_grad is False:
-            data["pos"].requires_grad = True
-
-        # Store original positions and apply displacement
-        data["pos_original"] = data["pos"]
-        data["pos"] = data["pos"] + torch.bmm(
-            data["pos"].unsqueeze(-2),
-            torch.index_select(symmetric_displacement, 0, data["batch"]),
-        ).squeeze(-2)
-
-        # Store original cell and apply displacement
-        orig_cell = data["cell"]
-        data["cell"] = data["cell"] + torch.bmm(data["cell"], symmetric_displacement)
-
-    # Enable gradients for force-only computation
-    if (
-        not regress_config.stress
-        and regress_config.forces
-        and not regress_config.direct_forces
-        and data["pos"].requires_grad is False
-    ):
-        data["pos"].requires_grad = True
-
-    return displacement, orig_cell
 
 
 def get_l_component_range(x: torch.Tensor, l_min: int, l_max: int) -> torch.Tensor:
@@ -239,22 +158,30 @@ def compute_forces(
 
 def compute_forces_and_stress(
     energy_part: torch.Tensor,
-    pos_original: torch.Tensor,
-    displacement: torch.Tensor,
+    pos: torch.Tensor,
     cell: torch.Tensor,
+    batch: torch.Tensor,
+    num_systems: int,
     training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute forces and stress from energy using autograd.
 
     Forces are computed as the negative gradient of energy with respect to positions.
-    Stress is computed from the virial (gradient with respect to strain/displacement)
-    divided by the cell volume.
+    Stress is computed by reconstructing the virial tensor from the position and cell
+    gradients, equivalent to the strain-derivative approach.
+
+    The virial is:
+        V = (g_r^T r + r^T g_r) / 2 + (cell^T g_h + g_h^T cell) / 2
+
+    where g_r = dE/dpos and g_h = dE/dcell. This matches dE/dε for a symmetric
+    strain ε applied as r' = r(I + ε), h' = h(I + ε).
 
     Args:
         energy_part: System-level energy before GP reduction, shape [num_systems].
-        pos_original: Original atomic positions (before strain applied), shape [N, 3].
-        displacement: Strain displacement tensor, shape [num_systems, 3, 3].
+        pos: Atomic positions, shape [N, 3].
         cell: Unit cell vectors, shape [num_systems, 3, 3].
+        batch: Batch indices mapping each node to its system, shape [N].
+        num_systems: Total number of systems in the batch.
         training: Whether to create graph for higher-order gradients.
 
     Returns:
@@ -264,7 +191,7 @@ def compute_forces_and_stress(
     """
     grads = torch.autograd.grad(
         [energy_part.sum()],
-        [pos_original, displacement],
+        [pos, cell],
         create_graph=training,
     )
 
@@ -275,7 +202,13 @@ def compute_forces_and_stress(
         )
 
     forces = torch.neg(grads[0])
-    virial = grads[1].view(-1, 3, 3)
+
+    pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
+    pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
+
+    cell_virial = cell.mT @ grads[1]  # [B, 3, 3]
+
+    virial = (pos_virial + pos_virial.mT + cell_virial + cell_virial.mT) / 2
     volume = torch.det(cell).abs().unsqueeze(-1)
     stress = virial / volume.view(-1, 1, 1)
     stress = stress.view(-1, 9)
