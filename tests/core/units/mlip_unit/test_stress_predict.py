@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
 import numpy.testing as npt
 import pytest
 import torch
-from ase.build import add_adsorbate, bulk, fcc111
+from ase.build import bulk, fcc111
 
 import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core import pretrained_mlip
@@ -24,17 +25,37 @@ if TYPE_CHECKING:
     from fairchem.core.models.uma.escn_md import GradRegressConfig
 
 
+def apply_strain(atoms: Atoms, strain: np.ndarray) -> Atoms:
+    """
+    Apply a strain matrix to an atomic structure.
+
+    Args:
+        atoms: ASE Atoms object to strain.
+        strain: 3x3 strain matrix where strain[i,j] represents the strain
+                in direction i for cell vector j. Diagonal elements are
+                normal strains (e.g., 0.02 for 2% tensile strain),
+                off-diagonal elements are shear strains.
+
+    Returns:
+        The strained Atoms object (modified in place).
+    """
+    cell = atoms.get_cell()
+    strained_cell = cell @ (np.eye(3) + strain)
+    atoms.set_cell(strained_cell, scale_atoms=True)
+    return atoms
+
+
 @pytest.fixture()
 def slab_atoms() -> Atoms:
     atoms = fcc111("Pt", size=(2, 2, 5), vacuum=10.0, periodic=True)
-    add_adsorbate(atoms, "O", height=1.2, position="fcc")
     atoms.pbc = True
     return atoms
 
 
 @pytest.fixture()
 def bulk_atoms() -> Atoms:
-    return bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
+    atoms = bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
+    return atoms
 
 
 @pytest.fixture()
@@ -287,9 +308,9 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
 
     atoms = request.getfixturevalue(atoms_fixture)
 
-    # Prepare data
-    task_name = "omat"
-    atomic_data = AtomicData.from_ase(atoms, task_name=task_name)
+    # Apply biaxial strain: 2% tensile in x, 3% compressive in y
+    strain = np.diag([0.02, -0.03, 0.0])
+    apply_strain(atoms, strain)
 
     # Get the model
     model = uma_predict_unit.model.module
@@ -301,8 +322,9 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
 
     # Compute energy
     energy_block = efs_head.energy_block
-    num_systems = len(atomic_data.natoms)
+    num_systems = 1
 
+    task_name = "omat"
     # Test with gradient computation
     # First, set up for old method
     atomic_data_old = AtomicData.from_ase(atoms, task_name=task_name)
@@ -365,8 +387,9 @@ def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_
     """
     Test that old and new stress implementations give identical results for batch predictions.
 
-    Creates a batch containing multiple atomic structures and compares stress predictions
-    from the old displacement-gradient method with the new virial reconstruction method.
+    Creates a batch containing multiple atomic structures with different strains and compares
+    stress predictions from the old displacement-gradient method with the new virial
+    reconstruction method.
     """
     from fairchem.core.datasets.atomic_data import atomicdata_list_to_batch
     from fairchem.core.models.uma.outputs import (
@@ -374,16 +397,34 @@ def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_
         compute_forces_and_stress,
     )
 
-    # Prepare batch data with multiple systems
+    # Prepare batch data with multiple systems, each with different strains
     task_name = "omat"
-    atoms_list = [
-        bulk_atoms,
-        bulk_atoms,
-        slab_atoms,
-        bulk_atoms,
-        slab_atoms,
-        slab_atoms,
-    ]
+
+    # Create copies and apply different strains to each
+    bulk_1 = bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
+    apply_strain(bulk_1, np.diag([0.03, -0.02, 0.01]))  # anisotropic strain
+
+    bulk_2 = bulk("Cu", "fcc", a=3.61).repeat((2, 2, 2))
+    apply_strain(bulk_2, np.diag([0.05, 0.05, 0.05]))  # isotropic tensile strain
+
+    slab_1 = fcc111("Pt", size=(2, 2, 5), vacuum=10.0, periodic=True)
+    slab_1.pbc = True
+    apply_strain(slab_1, np.diag([0.02, -0.03, 0.0]))  # biaxial strain
+
+    bulk_3 = bulk("Fe", "bcc", a=2.87).repeat((2, 2, 2))
+    # Apply shear strain
+    shear_strain = np.array([[0.0, 0.02, 0.0], [0.02, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    apply_strain(bulk_3, shear_strain)
+
+    slab_2 = fcc111("Pt", size=(2, 2, 5), vacuum=10.0, periodic=True)
+    slab_2.pbc = True
+    apply_strain(slab_2, np.diag([-0.01, -0.01, 0.0]))  # biaxial compression
+
+    slab_3 = fcc111("Pt", size=(2, 2, 5), vacuum=10.0, periodic=True)
+    slab_3.pbc = True
+    apply_strain(slab_3, np.diag([0.04, 0.0, 0.0]))  # uniaxial strain
+
+    atoms_list = [bulk_1, bulk_2, slab_1, bulk_3, slab_2, slab_3]
 
     # Get the model
     model = uma_predict_unit.model.module
