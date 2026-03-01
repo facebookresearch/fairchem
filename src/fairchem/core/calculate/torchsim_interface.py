@@ -11,21 +11,32 @@ import typing
 from pathlib import Path
 
 import torch
-import torch_sim as ts
-from torch_sim.models.interface import ModelInterface
 
 from fairchem.core import pretrained_mlip
 from fairchem.core.calculate.ase_calculator import UMATask
 from fairchem.core.common.utils import setup_imports, setup_logging
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 
+try:
+    import torch_sim as ts
+    from torch_sim.models.interface import ModelInterface
+except ImportError:
+    ts = None
+    ModelInterface = None
+
+
 if typing.TYPE_CHECKING:
     from collections.abc import Callable
 
+    from torch_sim import SimState
     from torch_sim.typing import StateDict
 
+# Use object as fallback base class if ModelInterface is not available
+# The __init__ method will raise ImportError if torch-sim is not installed
+_TSModelInterface = ModelInterface if ModelInterface is not None else object
 
-class FairChemModel(ModelInterface):
+
+class FairChemModel(_TSModelInterface):  # type: ignore[misc]
     """FairChem model wrapper for computing atomistic properties.
 
     Wraps FairChem models to compute energies, forces, and stresses. Can be
@@ -74,9 +85,16 @@ class FairChemModel(ModelInterface):
                 only needed for UMA models)
 
         Raises:
+            ImportError: If torch-sim is not installed
             NotImplementedError: If custom neighbor list function is provided
             ValueError: If model is not a known model name or valid file path
         """
+        if ts is None or ModelInterface is None:
+            raise ImportError(
+                "torch-sim is required to use FairChemModel. "
+                + "Install it with: pip install fairchem-core[torchsim]"
+            )
+
         setup_imports()
         setup_logging()
         super().__init__()
@@ -141,7 +159,7 @@ class FairChemModel(ModelInterface):
         """Return the device where the model is located."""
         return self._device
 
-    def forward(self, state: ts.SimState | StateDict) -> dict:
+    def forward(self, state: SimState | StateDict | dict) -> dict:
         """Compute energies, forces, and other properties.
 
         Args:

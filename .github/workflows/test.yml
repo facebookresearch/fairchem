@@ -75,6 +75,11 @@ jobs:
             packages/fairchem-demo-ocpapi[dev] \
             -r tests/requirements.txt # pin test packages
 
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
+
       - name: Install additional dependencies
         run: |
           wget https://github.com/m3g/packmol/archive/refs/tags/v20.15.0.tar.gz
@@ -150,6 +155,11 @@ jobs:
           packages/fairchem-data-omol[dev] \
           packages/fairchem-data-omat \
           -r tests/requirements.txt # pin test packages
+
+      - name: Install torchsim (Python 3.12+)
+        if: ${{ matrix.python_version == '3.12' || matrix.python_version == '3.13' }}
+        run: |
+          pip install packages/fairchem-core[torchsim]
 
       - name: Core GPU tests
         env:
