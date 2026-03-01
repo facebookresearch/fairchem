@@ -23,11 +23,15 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
+from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+    create_wigner_data_module,
+)
 from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.common.wigner_d_hybrid import axis_angle_wigner_hybrid
 from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
@@ -274,6 +278,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
+        use_quaternion_wigner: bool = True,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         charge_balanced_channels: list[int] | None = None,
@@ -311,6 +316,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
         self.radius_pbc_version = radius_pbc_version
+        self.use_quaternion_wigner = use_quaternion_wigner
         self.enforce_max_neighbors_strictly = False
 
         activation_checkpoint_chunk_size = None
@@ -338,6 +344,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
             self.register_buffer(f"Jd_{l}", Jd_list[l])
+
+        # Precompute Wigner coefficients for quaternion path (like Jd for Euler path)
+        if self.use_quaternion_wigner:
+            # lmin=5 because l=0,1,2,3,4 use custom kernels in the hybrid method
+            self.wigner_data = create_wigner_data_module(lmax=self.lmax, lmin=5)
+
         self.sph_feature_size = int((self.lmax + 1) ** 2)
         self.mappingReduced = CoefficientMapping(self.lmax, self.mmax)
 
@@ -490,20 +502,30 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        Jd_buffers = [
-            getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
-            for l in range(self.lmax + 1)
-        ]
+        if self.use_quaternion_wigner:
+            with record_function("obtain rotmat wigner quaternion"):
+                wigner, wigner_inv = axis_angle_wigner_hybrid(
+                    edge_distance_vecs,
+                    self.lmax,
+                    coeffs=self.wigner_data.coeffs,
+                    U_blocks=self.wigner_data.U_blocks,
+                    custom_kernels=self.wigner_data.custom_kernels,
+                )
+        else:
+            Jd_buffers = [
+                getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
+                for l in range(self.lmax + 1)
+            ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+            with record_function("obtain rotmat wigner original"):
+                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+                wigner = eulers_to_wigner(
+                    euler_angles,
+                    0,
+                    self.lmax,
+                    Jd_buffers,
+                )
+                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
         # select subset of coefficients we are using
         if self.mmax != self.lmax:
@@ -842,6 +864,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.use_quaternion_wigner is not None:
+            overrides["use_quaternion_wigner"] = settings.use_quaternion_wigner
         if settings.execution_mode is not None:
             overrides["execution_mode"] = settings.execution_mode
 
