@@ -134,3 +134,162 @@ def test_umas_fast_gpu_validation_requires_merge_mole():
 
     with pytest.raises(ValueError, match="merge_mole=True"):
         UMASFastGPUBackend.validate(MockModel(), MockSettings())
+
+
+# =============================================================================
+# Tests: E2E Force Correctness
+# =============================================================================
+
+
+@pytest.mark.gpu()
+def test_umas_fast_pytorch_forces_match_baseline(conserving_mole_checkpoint):
+    """
+    E2E test: verify umas_fast_pytorch produces forces matching general backend.
+
+    Uses non-PBC molecule for fast execution. The umas_fast_pytorch backend uses
+    fused SO2 convolutions and validates the overall optimized inference path.
+
+    Note: umas_fast_gpu is tested via gradcheck (below) and compare_forces.py
+    since it requires sphere_channels divisible by 128 (production model config).
+    """
+    import torch
+    from ase import build
+
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+    checkpoint_pt, _ = conserving_mole_checkpoint
+
+    # Create simple non-PBC molecule (fast)
+    atoms = build.molecule("H2O")
+    atoms.pbc = [False, False, False]
+
+    # Baseline (general backend)
+    baseline_settings = InferenceSettings(
+        merge_mole=True,
+        external_graph_gen=False,  # Let model build graph (otf_graph)
+        execution_mode="general",
+    )
+    baseline_predictor = MLIPPredictUnit(
+        checkpoint_pt, "cuda", inference_settings=baseline_settings
+    )
+
+    # Test (umas_fast_pytorch backend)
+    test_settings = InferenceSettings(
+        merge_mole=True,
+        external_graph_gen=False,  # Let model build graph (otf_graph)
+        execution_mode="umas_fast_pytorch",
+    )
+    test_predictor = MLIPPredictUnit(
+        checkpoint_pt, "cuda", inference_settings=test_settings
+    )
+
+    # Build batch (r_edges=False, otf_graph=True)
+    data = AtomicData.from_ase(
+        atoms, max_neigh=50, radius=6, r_edges=False, task_name="oc20"
+    )
+    data.natoms = torch.tensor(len(atoms))
+    data.charge = torch.LongTensor([0])
+    data.spin = torch.LongTensor([0])
+    batch = data_list_collater([data], otf_graph=True)
+
+    # Compare
+    baseline_out = baseline_predictor.predict(batch.clone())
+    test_out = test_predictor.predict(batch.clone())
+
+    # Forces should match within 1e-2 (backend precision difference)
+    assert torch.allclose(
+        baseline_out["forces"], test_out["forces"], rtol=1e-2, atol=1e-2
+    ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
+    assert torch.allclose(
+        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+    ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
+
+
+# =============================================================================
+# Tests: Triton Autograd Gradcheck
+# =============================================================================
+
+
+@pytest.mark.gpu()
+def test_node_to_edge_wigner_permute_gradcheck():
+    """
+    Verify NodeToEdgeWignerPermuteFunction backward pass is correct via gradcheck.
+
+    Uses fast_mode=True for statistical gradient validation (random projections)
+    instead of full Jacobian computation to avoid OOM.
+    """
+    import torch
+
+    from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
+        NodeToEdgeWignerPermuteFunction,
+    )
+
+    torch.manual_seed(42)
+    device = "cuda"
+    num_nodes = 8
+    num_edges = 16
+    sphere_channels = 128  # Minimum for kernel block size
+
+    # Create test inputs
+    x = torch.randn(
+        num_nodes, 9, sphere_channels, device=device, dtype=torch.float64
+    ).requires_grad_(True)
+    wigner = torch.randn(
+        num_edges, 9, 9, device=device, dtype=torch.float64
+    ).requires_grad_(True)
+    edge_src = torch.randint(0, num_nodes, (num_edges,), device=device)
+    edge_tgt = torch.randint(0, num_nodes, (num_edges,), device=device)
+    edge_index = torch.stack([edge_src, edge_tgt], dim=0)
+
+    # Gradcheck with fast_mode to avoid full Jacobian OOM
+    assert torch.autograd.gradcheck(
+        lambda x_in, w_in: NodeToEdgeWignerPermuteFunction.apply(
+            x_in, edge_index, w_in
+        ),
+        (x, wigner),
+        eps=1e-6,
+        atol=1e-4,
+        rtol=1e-3,
+        fast_mode=True,
+    )
+
+
+@pytest.mark.gpu()
+def test_permute_wigner_inv_edge_to_node_gradcheck():
+    """
+    Verify PermuteWignerInvEdgeToNodeFunction backward pass is correct via gradcheck.
+
+    Uses fast_mode=True for statistical gradient validation (random projections)
+    instead of full Jacobian computation to avoid OOM.
+    """
+    import torch
+
+    from fairchem.core.models.uma.triton.permute_wigner_inv_edge_to_node import (
+        PermuteWignerInvEdgeToNodeFunction,
+    )
+
+    torch.manual_seed(42)
+    device = "cuda"
+    num_edges = 16
+    sphere_channels = 128  # Minimum for kernel block size
+
+    # Create test inputs
+    x = torch.randn(
+        num_edges, 9, sphere_channels, device=device, dtype=torch.float64
+    ).requires_grad_(True)
+    wigner = torch.randn(
+        num_edges, 9, 9, device=device, dtype=torch.float64
+    ).requires_grad_(True)
+
+    # Gradcheck with fast_mode to avoid full Jacobian OOM
+    assert torch.autograd.gradcheck(
+        lambda x_in, w_in: PermuteWignerInvEdgeToNodeFunction.apply(x_in, w_in),
+        (x, wigner),
+        eps=1e-6,
+        atol=1e-4,
+        rtol=1e-3,
+        fast_mode=True,
+    )
