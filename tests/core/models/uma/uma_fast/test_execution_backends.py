@@ -13,6 +13,12 @@ E2E accuracy tests are done via run_benchmarks.sh and compare_forces.py scripts.
 from __future__ import annotations
 
 import pytest
+import torch
+
+from fairchem.core.models.uma.triton.constants import (
+    L_TO_M_GATHER_IDX,
+    M_TO_L_GATHER_IDX,
+)
 
 # =============================================================================
 # Tests: Validation Errors
@@ -365,3 +371,145 @@ def test_permute_wigner_inv_edge_to_node_gradcheck():
         rtol=1e-3,
         fast_mode=True,
     )
+
+
+# =============================================================================
+# Tests: Triton Kernel vs PyTorch Reference
+# =============================================================================
+
+
+def _ref_node_to_edge_wigner_permute(
+    x: torch.Tensor,
+    edge_index: torch.Tensor,
+    wigner: torch.Tensor,
+) -> torch.Tensor:
+    """
+    PyTorch reference for node_to_edge_wigner_permute.
+
+    Args:
+        x: Node features [N, 9, C] in L-major order
+        edge_index: [2, E]
+        wigner: [E, 9, 9]
+
+    Returns:
+        out: [E, 9, 2C] in M-major order (rotated src||tgt)
+    """
+    # Gather
+    x_src = x[edge_index[0]]  # [E, 9, C]
+    x_tgt = x[edge_index[1]]  # [E, 9, C]
+
+    # Wigner rotation (on L-order data): [E, 9, 9] @ [E, 9, C] -> [E, 9, C]
+    rot_src = torch.bmm(wigner, x_src)
+    rot_tgt = torch.bmm(wigner, x_tgt)
+
+    # L->M permutation on output
+    rot_src_m = rot_src[:, L_TO_M_GATHER_IDX, :]
+    rot_tgt_m = rot_tgt[:, L_TO_M_GATHER_IDX, :]
+
+    # Concat along channel dim
+    return torch.cat([rot_src_m, rot_tgt_m], dim=-1)
+
+
+def _ref_permute_wigner_inv(
+    x: torch.Tensor,
+    wigner_inv: torch.Tensor,
+) -> torch.Tensor:
+    """
+    PyTorch reference for permute_wigner_inv_edge_to_node.
+
+    Args:
+        x: Edge features [E, 9, C] in M-major order
+        wigner_inv: [E, 9, 9]
+
+    Returns:
+        out: [E, 9, C] in L-major order
+    """
+    # M->L permutation first (inverse of the L->M gather in forward)
+    x_l = x[:, M_TO_L_GATHER_IDX, :]
+
+    # Wigner inverse rotation
+    return torch.bmm(wigner_inv, x_l)
+
+
+def _create_block_diagonal_wigner(num_edges: int, device: str) -> torch.Tensor:
+    """
+    Create block-diagonal Wigner matrix [E, 9, 9].
+
+    Structure: L=0 (1x1), L=1 (3x3), L=2 (5x5)
+    """
+    wigner = torch.zeros(num_edges, 9, 9, device=device)
+    # L=0 block: [0, 0]
+    wigner[:, 0, 0] = torch.randn(num_edges, device=device)
+    # L=1 block: [1:4, 1:4]
+    wigner[:, 1:4, 1:4] = torch.randn(num_edges, 3, 3, device=device)
+    # L=2 block: [4:9, 4:9]
+    wigner[:, 4:9, 4:9] = torch.randn(num_edges, 5, 5, device=device)
+    return wigner
+
+
+@pytest.mark.gpu()
+def test_node_to_edge_wigner_permute_matches_pytorch():
+    """
+    Verify Triton kernel output matches PyTorch reference.
+    """
+    import torch
+
+    from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
+        node_to_edge_wigner_permute_launcher,
+    )
+
+    torch.manual_seed(42)
+    device = "cuda"
+    num_nodes = 16
+    num_edges = 32
+    sphere_channels = 128
+
+    # Create inputs
+    x = torch.randn(num_nodes, 9, sphere_channels, device=device)
+    edge_src = torch.randint(0, num_nodes, (num_edges,), device=device)
+    edge_tgt = torch.randint(0, num_nodes, (num_edges,), device=device)
+    edge_index = torch.stack([edge_src, edge_tgt], dim=0)
+    wigner = _create_block_diagonal_wigner(num_edges, device)
+
+    # PyTorch reference
+    ref_out = _ref_node_to_edge_wigner_permute(x, edge_index, wigner)
+
+    # Triton kernel
+    triton_out, _ = node_to_edge_wigner_permute_launcher(x, edge_index, wigner)
+
+    # Compare
+    assert torch.allclose(
+        ref_out, triton_out, rtol=1e-4, atol=1e-4
+    ), f"Max diff: {(ref_out - triton_out).abs().max()}"
+
+
+@pytest.mark.gpu()
+def test_permute_wigner_inv_matches_pytorch():
+    """
+    Verify Triton kernel output matches PyTorch reference.
+    """
+    import torch
+
+    from fairchem.core.models.uma.triton.permute_wigner_inv_edge_to_node import (
+        permute_wigner_inv_edge_to_node_launcher,
+    )
+
+    torch.manual_seed(42)
+    device = "cuda"
+    num_edges = 32
+    sphere_channels = 128
+
+    # Create inputs
+    x = torch.randn(num_edges, 9, sphere_channels, device=device)
+    wigner_inv = _create_block_diagonal_wigner(num_edges, device)
+
+    # PyTorch reference
+    ref_out = _ref_permute_wigner_inv(x, wigner_inv)
+
+    # Triton kernel
+    triton_out, _ = permute_wigner_inv_edge_to_node_launcher(x, wigner_inv)
+
+    # Compare
+    assert torch.allclose(
+        ref_out, triton_out, rtol=1e-4, atol=1e-4
+    ), f"Max diff: {(ref_out - triton_out).abs().max()}"
