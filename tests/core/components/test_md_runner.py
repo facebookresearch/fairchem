@@ -178,7 +178,7 @@ class TestMDRunner:
         try:
             runner1._atoms.calc = runner1.calculator
             runner1._dyn = thermostat.build(runner1._atoms, timestep_fs=1.0)
-            parquet_file1 = results_dir1 / "trajectory_1-0.parquet"
+            parquet_file1 = results_dir1 / "trajectory.parquet"
             runner1._trajectory_writer = ParquetTrajectoryWriter(
                 parquet_file1, flush_interval=1000
             )

@@ -146,8 +146,8 @@ class MDRunner(CalculateRunner):
         sid = self._atoms.info.get("sid", job_num)
 
         extension = self._get_trajectory_extension()
-        trajectory_file = results_dir / f"trajectory_{num_jobs}-{job_num}{extension}"
-        log_file = results_dir / f"thermo_{num_jobs}-{job_num}.log"
+        trajectory_file = results_dir / f"trajectory{extension}"
+        log_file = results_dir / "thermo.log"
 
         self._atoms.calc = self.calculator
 
@@ -301,7 +301,7 @@ class MDRunner(CalculateRunner):
             "structure_id": results["structure_id"],
         }
 
-        metadata_file = Path(results_dir) / f"metadata_{num_jobs}-{job_num}.json"
+        metadata_file = Path(results_dir) / "metadata.json"
         with open(metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
 
