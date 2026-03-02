@@ -1109,7 +1109,6 @@ class MLP_EFS_Head(MLP_Energy_Head):
                 data["pos"],
                 data["cell"],
                 batch=data["batch"],
-                num_systems=len(data["natoms"]),
                 training=self.training,
             )
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces

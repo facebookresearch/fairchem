@@ -161,7 +161,6 @@ def compute_forces_and_stress(
     pos: torch.Tensor,
     cell: torch.Tensor,
     batch: torch.Tensor,
-    num_systems: int,
     training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute forces and stress from energy using autograd.
@@ -181,7 +180,6 @@ def compute_forces_and_stress(
         pos: Atomic positions, shape [N, 3].
         cell: Unit cell vectors, shape [num_systems, 3, 3].
         batch: Batch indices mapping each node to its system, shape [N].
-        num_systems: Total number of systems in the batch.
         training: Whether to create graph for higher-order gradients.
 
     Returns:
@@ -201,8 +199,8 @@ def compute_forces_and_stress(
             gp_utils.reduce_from_model_parallel_region(grads[1]),
         )
 
+    num_systems = cell.shape[0]
     forces = torch.neg(grads[0])
-
     pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
     pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
 
