@@ -324,8 +324,10 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
 
     Extends UMASFastPytorchBackend with Triton-accelerated
     node_to_edge_wigner_permute, permute_wigner_inv_edge_to_node, and edge_degree_scatter.
-    Requires lmax==2, mmax==2, sphere_channels divisible by 128,
-    and merge_mole=True.
+    Requires lmax==2, mmax==2, and merge_mole=True.
+
+    Note: sphere_channels % 128 == 0 gives optimal GPU utilization.
+    Smaller values work but with reduced efficiency.
     """
 
     @staticmethod
@@ -338,8 +340,6 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_gpu requires CUDA")
         if model.lmax != 2 or model.mmax != 2:
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
-        if model.sphere_channels % 128 != 0:
-            raise ValueError("sphere_channels must be divisible by 128")
         if settings is not None and not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
 

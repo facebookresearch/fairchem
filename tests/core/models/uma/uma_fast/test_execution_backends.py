@@ -68,24 +68,6 @@ def test_umas_fast_gpu_validation_requires_correct_mmax():
 
 
 @pytest.mark.gpu()
-def test_umas_fast_gpu_validation_requires_sphere_channels_divisible_by_128():
-    """
-    Verify that umas_fast_gpu raises ValueError for incorrect sphere_channels.
-    """
-    from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
-
-    # Create a mock model with wrong sphere_channels
-    class MockModelWrongChannels:
-        lmax = 2
-        mmax = 2
-        sphere_channels = 100  # Wrong - should be divisible by 128
-        edge_degree_embedding = MockEdgeDegreeEmbedding()
-
-    with pytest.raises(ValueError, match="divisible by 128"):
-        UMASFastGPUBackend.validate(MockModelWrongChannels())
-
-
-@pytest.mark.gpu()
 def test_umas_fast_gpu_validation_accepts_correct_config():
     """
     Verify that umas_fast_gpu validation passes for correct model config.
@@ -513,3 +495,147 @@ def test_permute_wigner_inv_matches_pytorch():
     assert torch.allclose(
         ref_out, triton_out, rtol=1e-4, atol=1e-4
     ), f"Max diff: {(ref_out - triton_out).abs().max()}"
+
+
+# =============================================================================
+# Tests: E2E umas_fast_gpu Backend
+# =============================================================================
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_forces_match_baseline_pbc(
+    conserving_mole_checkpoint, fake_uma_dataset
+):
+    """
+    E2E test: verify umas_fast_gpu produces forces matching general backend.
+
+    Uses PBC system from fake_uma_dataset (oc20, 5-20 atoms).
+    """
+    import os
+
+    import torch
+
+    from fairchem.core.datasets.ase_datasets import AseDBDataset
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+    checkpoint_pt, _ = conserving_mole_checkpoint
+    db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
+    atoms = db.get_atoms(0)  # PBC system
+
+    # Build batch
+    sample = AtomicData.from_ase(
+        atoms,
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=False,
+        r_data_keys=["spin", "charge"],
+    )
+    sample["dataset"] = "oc20"
+    batch = data_list_collater([sample], otf_graph=True)
+
+    # Baseline (general backend)
+    baseline_settings = InferenceSettings(
+        merge_mole=True,
+        external_graph_gen=False,
+        execution_mode="general",
+    )
+    baseline_predictor = MLIPPredictUnit(
+        checkpoint_pt, "cuda", inference_settings=baseline_settings
+    )
+
+    # Test (umas_fast_gpu backend)
+    test_settings = InferenceSettings(
+        merge_mole=True,
+        external_graph_gen=False,
+        execution_mode="umas_fast_gpu",
+    )
+    test_predictor = MLIPPredictUnit(
+        checkpoint_pt, "cuda", inference_settings=test_settings
+    )
+
+    # Compare
+    baseline_out = baseline_predictor.predict(batch.clone())
+    test_out = test_predictor.predict(batch.clone())
+
+    # Forces should match within tolerance (backend precision difference)
+    assert torch.allclose(
+        baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+    ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
+    assert torch.allclose(
+        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+    ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
+
+
+@pytest.mark.gpu()
+def test_umas_fast_gpu_forces_match_baseline_no_pbc(
+    conserving_mole_checkpoint, fake_uma_dataset
+):
+    """
+    E2E test: verify umas_fast_gpu produces forces matching general backend.
+
+    Uses non-PBC system from fake_uma_dataset (omol, 2-5 atoms).
+    """
+    import os
+
+    import torch
+
+    from fairchem.core.datasets.ase_datasets import AseDBDataset
+    from fairchem.core.datasets.atomic_data import AtomicData
+    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
+    from fairchem.core.units.mlip_unit import MLIPPredictUnit
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+    checkpoint_pt, _ = conserving_mole_checkpoint
+    db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "omol")})
+    atoms = db.get_atoms(0)  # Non-PBC molecule
+    atoms.pbc = [False, False, False]
+
+    # Build batch
+    sample = AtomicData.from_ase(
+        atoms,
+        max_neigh=10,
+        radius=100,
+        r_energy=False,
+        r_forces=False,
+        r_edges=False,
+        r_data_keys=["spin", "charge"],
+    )
+    sample["dataset"] = "omol"
+    batch = data_list_collater([sample], otf_graph=True)
+
+    # Baseline (general backend)
+    baseline_settings = InferenceSettings(
+        merge_mole=True,
+        external_graph_gen=False,
+        execution_mode="general",
+    )
+    baseline_predictor = MLIPPredictUnit(
+        checkpoint_pt, "cuda", inference_settings=baseline_settings
+    )
+
+    # Test (umas_fast_gpu backend)
+    test_settings = InferenceSettings(
+        merge_mole=True,
+        external_graph_gen=False,
+        execution_mode="umas_fast_gpu",
+    )
+    test_predictor = MLIPPredictUnit(
+        checkpoint_pt, "cuda", inference_settings=test_settings
+    )
+
+    # Compare
+    baseline_out = baseline_predictor.predict(batch.clone())
+    test_out = test_predictor.predict(batch.clone())
+
+    # Forces should match within tolerance (backend precision difference)
+    assert torch.allclose(
+        baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+    ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
+    assert torch.allclose(
+        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+    ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
