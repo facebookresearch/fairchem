@@ -207,6 +207,7 @@ class SlurmSPMDProgram(Checkpointable):
         def graceful_shutdown(signum, frame):
             signal_name = signal.Signals(signum).name
             save_path = self.config.job.metadata.preemption_checkpoint_dir
+            os.makedirs(save_path, exist_ok=True)
             logging.info(f"Signal {signal_name} received, saving state to {save_path}")
             if self.runner is not None and self.runner.save_state(
                 save_path, is_preemption=True
