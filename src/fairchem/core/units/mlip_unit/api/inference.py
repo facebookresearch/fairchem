@@ -91,6 +91,9 @@ class InferenceSettings:
 
     edge_chunk_size: int | None = None
 
+    # Flag to enable quaternion-based Wigner D matrix computation.
+    use_quaternion_wigner: bool = True
+
     # Base precision dtype for model parameters and input data.
     # All model parameters, buffers, and float input tensors will be
     # cast to this dtype. Set to torch.float64 for higher precision.
