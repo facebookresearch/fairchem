@@ -152,6 +152,8 @@ def generate_graph(
         radius_graph_pbc_fn = radius_graph_pbc
     elif radius_pbc_version == 2:
         radius_graph_pbc_fn = radius_graph_pbc_v2
+        if node_partition is not None:
+            data["node_partition"] = node_partition
     elif radius_pbc_version == 3:
         radius_graph_pbc_fn = radius_graph_pbc_nvidia
     else:
@@ -165,7 +167,8 @@ def generate_graph(
         pbc=pbc,
     )
 
-    if node_partition is not None:
+    # for v2 it is still faster right now to not do this post filtering, need to investigate further
+    if node_partition is not None and radius_pbc_version != 2:
         edge_index, cell_offsets, neighbors = filter_edges_by_node_partition(
             node_partition,
             edge_index,
