@@ -933,7 +933,7 @@ def _precompute_U_blocks_euler_aligned(
         device=device,
     )
 
-    jd_path = Path(__file__).parent.parent / "Jd.pt"
+    jd_path = Path(__file__).parent.parent.parent / "Jd.pt"
     Jd_list = torch.load(jd_path, map_location=device, weights_only=True)
 
     U_combined = []
