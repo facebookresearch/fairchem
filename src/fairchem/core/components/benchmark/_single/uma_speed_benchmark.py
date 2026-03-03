@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import os
 import random
@@ -318,15 +319,52 @@ class InferenceBenchRunner(Runner):
                 if self.debug_compile.enabled and self.debug_compile.run_dynamo_explain:
                     _run_dynamo_explain(predictor.model, inp, f"{model_name}_{name}")
 
-                if self.generate_traces:
-                    make_profile(inp, predictor, name=name, save_loc=self.run_dir)
-                qps, ns_per_day = get_qps(
-                    inp, predictor, timeiters=self.timeiters, repeats=self.repeats
-                )
-                model_to_qps_data[model_name].append([num_atoms, ns_per_day])
-                logging.info(
-                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
-                )
+                try:
+                    if self.generate_traces:
+                        make_profile(inp, predictor, name=name, save_loc=self.run_dir)
+                    qps, ns_per_day = get_qps(
+                        inp, predictor, timeiters=self.timeiters, repeats=self.repeats
+                    )
+                    model_to_qps_data[model_name].append([num_atoms, ns_per_day])
+                    logging.info(
+                        f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
+                    )
+                except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                    # Check if it's an OOM error
+                    if isinstance(e, torch.cuda.OutOfMemoryError) or (
+                        isinstance(e, RuntimeError)
+                        and "out of memory" in str(e).lower()
+                    ):
+                        logging.warning(
+                            f"GPU OOM: model: {model_checkpoint}, num_atoms: {num_atoms}"
+                        )
+                        # Mark as OOM instead of crashing
+                        model_to_qps_data[model_name].append([num_atoms, "OOM"])
+                        # Clear GPU cache to recover
+                        torch.cuda.empty_cache()
+                        if torch.distributed.is_initialized():
+                            torch.distributed.barrier()
+                    else:
+                        # Re-raise if it's not an OOM error
+                        raise
+
+        # Save results to file
+        if distutils.is_master():
+            results_file = os.path.join(self.run_dir, "benchmark_results.json")
+            results = {
+                "model_to_qps_data": dict(model_to_qps_data),
+                "config": {
+                    "timeiters": self.timeiters,
+                    "repeats": self.repeats,
+                    "natoms_list": list(self.natoms_list) if self.natoms_list else None,
+                    "device": self.device,
+                    "dataset_name": self.dataset_name,
+                    "world_size": distutils.get_world_size(),
+                },
+            }
+            with open(results_file, "w") as f:
+                json.dump(results, f, indent=2)
+            logging.info(f"Saved benchmark results to {results_file}")
 
     def save_state(self, _):
         return
