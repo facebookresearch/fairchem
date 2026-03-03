@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+from fairchem.core.models.uma.common.quaternion.wigner_d_custom_kernels import (
     CustomKernelModule,
 )
 

@@ -24,12 +24,12 @@ from pathlib import Path
 import pytest
 import torch
 
-from fairchem.core.models.uma.common.quaternion_utils import (
+from fairchem.core.models.uma.common.quaternion.quaternion_utils import (
     BLEND_START,
     BLEND_WIDTH,
     _smooth_step_cinf,
 )
-from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
     _build_euler_transform,
     _build_u_matrix,
     create_wigner_data_module,
@@ -39,17 +39,17 @@ from fairchem.core.models.uma.common.quaternion_wigner_utils import (
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
-from fairchem.core.models.uma.common.rotation import (
-    init_edge_rot_euler_angles,
-    wigner_D,
-)
-from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+from fairchem.core.models.uma.common.quaternion.wigner_d_custom_kernels import (
     CustomKernelModule,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_matmul,
 )
-from fairchem.core.models.uma.common.wigner_d_hybrid import (
+from fairchem.core.models.uma.common.quaternion.wigner_d_hybrid import (
     axis_angle_wigner_hybrid,
+)
+from fairchem.core.models.uma.common.rotation import (
+    init_edge_rot_euler_angles,
+    wigner_D,
 )
 
 # =============================================================================

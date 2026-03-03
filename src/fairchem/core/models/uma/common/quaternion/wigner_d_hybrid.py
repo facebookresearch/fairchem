@@ -24,18 +24,18 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from fairchem.core.models.uma.common.quaternion_utils import (
+from fairchem.core.models.uma.common.quaternion.quaternion_utils import (
     quaternion_edge_to_y_stable,
     quaternion_multiply,
     quaternion_y_rotation,
 )
-from fairchem.core.models.uma.common.quaternion_wigner_utils import (
+from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
     WignerCoefficients,
     quaternion_to_ra_rb_real,
     wigner_d_matrix_real,
     wigner_d_pair_to_real,
 )
-from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+from fairchem.core.models.uma.common.quaternion.wigner_d_custom_kernels import (
     quaternion_to_rotation_matrix,
     quaternion_to_wigner_d_l2_einsum,
     quaternion_to_wigner_d_l3l4_batched,
@@ -43,7 +43,7 @@ from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
 )
 
 if TYPE_CHECKING:
-    from fairchem.core.models.uma.common.wigner_d_custom_kernels import (
+    from fairchem.core.models.uma.common.quaternion.wigner_d_custom_kernels import (
         CustomKernelModule,
     )
 

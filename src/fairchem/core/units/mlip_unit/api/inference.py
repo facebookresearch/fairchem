@@ -92,9 +92,7 @@ class InferenceSettings:
     edge_chunk_size: int | None = None
 
     # Flag to enable quaternion-based Wigner D matrix computation.
-    # This is an alternative implementation that may have different
-    # numerical characteristics. If set to None, uses the model's default.
-    use_quaternion_wigner: bool | None = None
+    use_quaternion_wigner: bool = True
 
     # Base precision dtype for model parameters and input data.
     # All model parameters, buffers, and float input tensors will be
