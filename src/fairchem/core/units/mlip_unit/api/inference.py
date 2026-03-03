@@ -57,9 +57,8 @@ class InferenceSettings:
     # Flag to enable or disable activation checkpointing during
     # inference. This will dramatically decrease the memory footprint
     # especially for large number of atoms (ie 10+) at a slight cost to
-    # inference speed. If set to None, the setting from the model
-    # checkpoint will be used.
-    activation_checkpointing: bool | None = None
+    # inference speed.
+    activation_checkpointing: bool = True
 
     # Flag to enable or disable the merging of MOLE experts during
     # inference. If this is used, the input composition, total charge
@@ -76,15 +75,13 @@ class InferenceSettings:
     wigner_cuda: bool | None = None
 
     # Flag to enable or disable the generation of external graphs during
-    # inference. If set to None, the setting from the model checkpoint
-    # will be used.
-    external_graph_gen: bool | None = None
+    # inference.
+    external_graph_gen: bool = False
 
     # Deprecated
     # Not recommended using! manually selects the version of graph gen
-    # code if external_graph_gen is false, if set of None, will default
-    # to whatever is in the checkpoint
-    internal_graph_gen_version: int | None = None
+    # code.
+    internal_graph_gen_version: int = 3
 
     # Number of internal torch threads to use for inference
     torch_num_threads: int | None = None
@@ -111,7 +108,7 @@ def inference_settings_default():
         merge_mole=False,
         compile=False,
         external_graph_gen=False,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=3,
     )
 
 
@@ -126,7 +123,7 @@ def inference_settings_turbo():
         merge_mole=True,
         compile=True,
         external_graph_gen=False,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=3,
     )
 
 
