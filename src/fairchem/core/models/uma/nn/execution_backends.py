@@ -333,6 +333,9 @@ class UMASFastPytorchBackend(ExecutionBackend):
         layer_rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
         model._unified_radial_mlp = UnifiedRadialMLP(edge_degree_rad_func, layer_rad_funcs)
 
+        # Null out rad_func so forward_chunk knows radials are precomputed
+        model.edge_degree_embedding.rad_func = None
+
     @staticmethod
     def get_unified_radial_emb(
         x_edge: torch.Tensor,

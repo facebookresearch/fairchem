@@ -820,24 +820,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             x_edge_per_layer = all_radials[1:]
 
             # Apply edge_degree_embedding
-            # Fast backends: use precomputed radial via forward_with_radial
-            # General backend: compute rad_func internally via forward
-            if hasattr(self, "_unified_radial_mlp"):
-                x_message = self.edge_degree_embedding.forward_with_radial(
-                    x_message,
-                    edge_degree_input,
-                    graph_dict["edge_index"],
-                    wigner_inv_envelope,
-                    data_dict["gp_node_offset"],
-                )
-            else:
-                x_message = self.edge_degree_embedding(
-                    x_message,
-                    edge_degree_input,
-                    graph_dict["edge_index"],
-                    wigner_inv_envelope,
-                    data_dict["gp_node_offset"],
-                )
+            # General backend: rad_func computed internally
+            # Fast backends: rad_func=None, uses precomputed radial from edge_degree_input
+            x_message = self.edge_degree_embedding(
+                x_message,
+                edge_degree_input,
+                graph_dict["edge_index"],
+                wigner_inv_envelope,
+                data_dict["gp_node_offset"],
+            )
 
         ###############################################################
         # Update spherical node embeddings
