@@ -510,7 +510,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def balance_channels(
         self,
-        x_message_prime: torch.Tensor,
+        x_message: torch.Tensor,
         charge: torch.Tensor,
         spin: torch.Tensor,
         natoms: torch.Tensor,
@@ -518,8 +518,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     ) -> torch.Tensor:
         if self.charge_channel_end > self.charge_channel_start:
             # Balance charge channels (target = charge)
-            x_message_prime = balance_channels_batched(
-                emb=x_message_prime,
+            x_message = balance_channels_batched(
+                emb=x_message,
                 target=charge,
                 natoms=natoms,
                 batch=batch,
@@ -529,8 +529,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
         if self.spin_channel_end > self.spin_channel_start:
             # Balance spin channels (target = spin - 1)
-            x_message_prime = balance_channels_batched(
-                emb=x_message_prime,
+            x_message = balance_channels_batched(
+                emb=x_message,
                 target=spin,
                 natoms=natoms,
                 batch=batch,
@@ -538,7 +538,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 end_idx=self.spin_channel_end,
                 target_offset=1.0,
             )
-        return x_message_prime
+        return x_message
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -777,9 +777,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 device=data_dict["pos"].device,
                 dtype=data_dict["pos"].dtype,
             )
-            x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
-
-        x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
+            x_message[:, 0, :] = (
+                self.sphere_embedding(data_dict["atomic_numbers"]) + sys_node_embedding
+            )
 
         ###
         # Hook to allow MOLE
