@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import copy
 from functools import partial
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 from ase.atoms import Atoms
 from monty.dev import requires
@@ -55,11 +55,11 @@ def relax_job(initial_atoms, calc, optimizer_cls, fmax, steps):
 @requires(data_oc_installed, message="Requires `fairchem-data-oc` to be installed")
 def adsorb_ml_pipeline(
     slab: Slab,
-    adsorbates_kwargs: dict[str, Any],
+    adsorbates: list[Adsorbate | dict[str, Any]],
     multiple_adsorbate_slab_config_kwargs: dict[str, Any],
     ml_slab_adslab_relax_job: Callable[..., Any],
     reference_ml_energies: bool = True,
-    atomic_reference_energies: Optional[dict] = None,
+    atomic_reference_energies: dict | None = None,
     relaxed_slab_atoms: Atoms = None,
     place_on_relaxed_slab: bool = False,
 ):
@@ -76,8 +76,9 @@ def adsorb_ml_pipeline(
     ----------
     slab : Slab
         The slab structure to which adsorbates will be added.
-    adsorbates_kwargs : dict[str,Any]
-        Keyword arguments for generating adsorbate configurations.
+    adsorbates : list[Adsorbate | dict[str, Any]]
+        List of Adsorbate objects or keyword argument dicts for
+        constructing them.
     multiple_adsorbate_slab_config_kwargs : dict[str, Any]
         Keyword arguments for generating multiple adsorbate-slab configurations.
     ml_slab_adslab_relax_job : Job
@@ -104,7 +105,7 @@ def adsorb_ml_pipeline(
 
     unrelaxed_adslab_configurations = ocp_adslab_generator(
         ml_relaxed_slab_result["atoms"] if place_on_relaxed_slab else slab.atoms,
-        adsorbates_kwargs,
+        adsorbates,
         multiple_adsorbate_slab_config_kwargs,
     )
 
@@ -150,7 +151,7 @@ def adsorb_ml_pipeline(
 @requires(data_oc_installed, message="Requires `fairchem-data-oc` to be installed")
 def ocp_adslab_generator(
     slab: Slab | Atoms,
-    adsorbates_kwargs: list[dict[str, Any]] | None = None,
+    adsorbates: list[Adsorbate | dict[str, Any]] | None = None,
     multiple_adsorbate_slab_config_kwargs: dict[str, Any] | None = None,
 ) -> list[Atoms]:
     """
@@ -160,8 +161,9 @@ def ocp_adslab_generator(
     ----------
     slab : Slab | Atoms
         The slab structure.
-    adsorbates_kwargs : list[dict[str,Any]], optional
-        List of keyword arguments for generating adsorbates, by default None.
+    adsorbates : list[Adsorbate | dict[str, Any]], optional
+        List of Adsorbate objects or keyword argument dicts for
+        constructing them, by default None.
     multiple_adsorbate_slab_config_kwargs : dict[str,Any], optional
         Keyword arguments for generating multiple adsorbate-slab configurations, by default None.
 
@@ -171,7 +173,7 @@ def ocp_adslab_generator(
         List of generated adsorbate-slab configurations.
     """
     adsorbates = [
-        Adsorbate(**adsorbate_kwargs) for adsorbate_kwargs in adsorbates_kwargs
+        ads if isinstance(ads, Adsorbate) else Adsorbate(**ads) for ads in adsorbates
     ]
 
     if isinstance(slab, Atoms):
@@ -335,6 +337,7 @@ def run_adsorbml(
     reference_ml_energies: bool = True,
     relaxed_slab_atoms: Atoms = None,
     place_on_relaxed_slab: bool = False,
+    atomic_reference_energies: dict | None = None,
 ):
     """
     Run the AdsorbML pipeline for a given slab and adsorbate using a pretrained ML model.
@@ -342,8 +345,9 @@ def run_adsorbml(
     ----------
     slab : ase.Atoms
         The clean slab structure to which the adsorbate will be added.
-    adsorbate : str
-        A string identifier for the adsorbate from the database (e.g., '*O').
+    adsorbate : str | Adsorbate | list[Adsorbate]
+        Either a SMILES string identifier for the adsorbate from the database
+        (e.g., '*O'), a pre-constructed Adsorbate object, or list of Adsorbate objects.
     reference_ml_energies : bool, optional
         If True, assumes the model is a total energy model and references energies
         to gas phase and bare slab, by default True since the default model is a total energy model.
@@ -364,22 +368,30 @@ def run_adsorbml(
         energies, and validation results (matching the AdsorbMLSchema format).
     """
 
-    # if we are using a total energy model, we need to set the DFT atomic reference energies
-    # obtained from the supplementary information of the OC20 paper
-    atomic_reference_energies = {
-        "H": -3.477,  # eV
-        "O": -7.204,  # eV
-        "C": -7.282,  # eV
-        "N": -8.083,  # eV
-    }
+    if atomic_reference_energies is None:
+        # if we are using a total energy model, we need to set the DFT atomic reference energies
+        # obtained from the supplementary information of the OC20 paper
+        atomic_reference_energies = {
+            "H": -3.477,  # eV
+            "O": -7.204,  # eV
+            "C": -7.282,  # eV
+            "N": -8.083,  # eV
+        }
 
     ml_relax_job = partial(
         relax_job, calc=calculator, optimizer_cls=optimizer_cls, fmax=fmax, steps=steps
     )
 
+    if isinstance(adsorbate, str):
+        adsorbates = [{"adsorbate_smiles_from_db": adsorbate}]
+    elif isinstance(adsorbate, Adsorbate):
+        adsorbates = [adsorbate]
+    else:
+        adsorbates = adsorbate
+
     outputs = adsorb_ml_pipeline(
         slab=slab,
-        adsorbates_kwargs=[{"adsorbate_smiles_from_db": adsorbate}],
+        adsorbates=adsorbates,
         multiple_adsorbate_slab_config_kwargs={"num_configurations": num_placements},
         ml_slab_adslab_relax_job=ml_relax_job,
         reference_ml_energies=reference_ml_energies,

@@ -153,7 +153,7 @@ class TestGraphMethodsConsistency:
         return molecules
 
     @pytest.mark.parametrize("mol_name", ["water", "benzene", "ethane", "ammonia"])
-    @pytest.mark.parametrize("radius_pbc_version", [1, 2])
+    @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
     def test_pymatgen_vs_internal(self, test_molecules, mol_name, radius_pbc_version):
         """Verify pymatgen and internal graph generation produce identical graphs."""
         atoms = test_molecules[mol_name]
@@ -189,7 +189,7 @@ class TestGraphMethodsConsistency:
 class TestMaxNeighborsEnforcement:
     """Test max_neighbors parameter behavior."""
 
-    @pytest.mark.parametrize("radius_pbc_version", [1, 2])
+    @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
     def test_max_neighbors_limits_per_atom(
         self, radius_pbc_version, torch_deterministic
     ):
@@ -213,7 +213,7 @@ class TestMaxNeighborsEnforcement:
             num_neighbors = (edge_index[1] == atom_idx).sum().item()
             assert num_neighbors <= 2, f"Atom {atom_idx} has {num_neighbors} neighbors"
 
-    @pytest.mark.parametrize("radius_pbc_version", [1, 2])
+    @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
     def test_max_neighbors_selects_closest(
         self, radius_pbc_version, torch_deterministic
     ):
@@ -253,7 +253,7 @@ class TestMaxNeighborsEnforcement:
         if d_neighbors:
             assert 2 in d_neighbors
 
-    @pytest.mark.parametrize("radius_pbc_version", [1, 2])
+    @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
     def test_enforce_max_neighbors_strictly_with_ties(
         self, radius_pbc_version, torch_deterministic
     ):
@@ -370,7 +370,7 @@ class TestSeparatedSystems:
         )
         assert data.edge_index.shape[1] == expected_edges
 
-    @pytest.mark.parametrize("radius_pbc_version", [1, 2])
+    @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
     def test_two_waters_pymatgen_vs_internal(
         self, two_waters_separated, radius_pbc_version
     ):
@@ -422,7 +422,7 @@ class TestComplexGeometry:
         for src, dst in edge_pairs:
             assert (dst, src) in edge_pairs
 
-    @pytest.mark.parametrize("radius_pbc_version", [1, 2])
+    @pytest.mark.parametrize("radius_pbc_version", [1, 2, 3])
     def test_ethyl_methyl_ether_pymatgen_vs_internal(
         self, ethyl_methyl_ether, radius_pbc_version
     ):

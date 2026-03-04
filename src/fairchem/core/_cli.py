@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
     from fairchem.core.components.runner import Runner
 
-
 # this effects the cli only since the actual job will be run in subprocesses or remoe
 logging.basicConfig(level=logging.INFO)
 
