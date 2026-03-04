@@ -61,7 +61,7 @@ def bulk_atoms() -> Atoms:
 @pytest.fixture()
 def uma_predict_unit(request):
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
-    return pretrained_mlip.get_predict_unit(uma_models[0], device="cuda")
+    return pretrained_mlip.get_predict_unit(uma_models[0])
 
 
 def get_displacement_and_cell(
@@ -297,6 +297,7 @@ def compute_stress_from_cell_displacement(
     return stress
 
 
+@pytest.mark.gpu()
 @pytest.mark.parametrize("atoms_fixture", ["bulk_atoms", "slab_atoms"])
 def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_unit):
     """
@@ -383,6 +384,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
     )
 
 
+@pytest.mark.gpu()
 def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_unit):
     """
     Test that old and new stress implementations give identical results for batch predictions.
