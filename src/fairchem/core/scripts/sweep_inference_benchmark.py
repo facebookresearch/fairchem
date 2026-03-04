@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 import hydra
 import matplotlib.pyplot as plt
 from omegaconf import DictConfig, OmegaConf
+from tqdm import tqdm
 
 from fairchem.core.launchers.api import JobConfig
 from fairchem.core.launchers.slurm_launch import slurm_launch
@@ -84,6 +86,120 @@ def calculate_node_gpu_distribution(num_gpus: int) -> tuple[int, int]:
         raise ValueError(
             f"num_gpus must be between 1-8 or a multiple of 8, got {num_gpus}"
         )
+
+
+def wait_for_jobs(jobs: list, check_interval: int = 30) -> tuple[set[int], set[int]]:
+    """
+    Wait for all jobs to complete, periodically reporting status.
+
+    Args:
+        jobs: List of job objects with done(), results(), and job_id attributes
+        check_interval: Seconds between status checks (default: 30)
+
+    Returns:
+        Tuple of (completed_job_indices, failed_job_indices)
+    """
+    completed_jobs: set[int] = set()
+    failed_jobs: set[int] = set()
+
+    with tqdm(total=len(jobs), desc="Jobs completed", unit="job") as pbar:
+        while len(completed_jobs) + len(failed_jobs) < len(jobs):
+            for i, job in enumerate(jobs):
+                if i in completed_jobs or i in failed_jobs:
+                    continue
+                try:
+                    # Check if job is done (non-blocking check)
+                    if job.done():
+                        try:
+                            job.results()
+                            completed_jobs.add(i)
+                            pbar.update(1)
+                            pbar.set_postfix(
+                                completed=len(completed_jobs), failed=len(failed_jobs)
+                            )
+                            logging.info(f"Job {job.job_id} completed successfully")
+                        except Exception as e:
+                            failed_jobs.add(i)
+                            pbar.update(1)
+                            pbar.set_postfix(
+                                completed=len(completed_jobs), failed=len(failed_jobs)
+                            )
+                            logging.error(f"Job {job.job_id} failed with error: {e}")
+                except Exception as e:
+                    # If done() check fails, mark as failed
+                    failed_jobs.add(i)
+                    pbar.update(1)
+                    pbar.set_postfix(
+                        completed=len(completed_jobs), failed=len(failed_jobs)
+                    )
+                    logging.error(f"Job {job.job_id} status check failed: {e}")
+
+            num_waiting = len(jobs) - len(completed_jobs) - len(failed_jobs)
+            if num_waiting > 0:
+                time.sleep(check_interval)
+
+    return completed_jobs, failed_jobs
+
+
+def collect_and_aggregate_results(
+    job_metadata: list[dict[str, Any]],
+    timestamp: str,
+    num_gpus_list: list[int],
+    natoms_list: list[int],
+    output_dir: str,
+) -> dict[str, Any]:
+    """
+    Collect and aggregate benchmark results from completed jobs.
+
+    Args:
+        job_metadata: List of metadata dictionaries for each job
+        timestamp: Timestamp string for the sweep
+        num_gpus_list: List of GPU counts used in the sweep
+        natoms_list: List of atom counts used in the sweep
+        output_dir: Directory to save aggregated results
+
+    Returns:
+        Dictionary with aggregated results
+    """
+    logging.info("Collecting and aggregating results...")
+    aggregated_results: dict[str, Any] = {
+        "timestamp": timestamp,
+        "num_gpus_list": num_gpus_list,
+        "natoms_list": natoms_list,
+        "configurations": [],
+    }
+
+    for metadata in job_metadata:
+        # Results are saved in results_dir which is run_dir/timestamp_id/results/
+        results_file = os.path.join(metadata["results_dir"], "benchmark_results.json")
+        if os.path.exists(results_file):
+            with open(results_file) as f:
+                results = json.load(f)
+
+            # Add configuration metadata to results
+            config_results = {
+                "num_nodes": metadata["num_nodes"],
+                "num_gpus": metadata["num_gpus"],
+                "run_name": metadata["run_name"],
+                "benchmark_data": results,
+            }
+            aggregated_results["configurations"].append(config_results)
+            logging.info(
+                f"Loaded results for {metadata['num_nodes']} nodes, {metadata['num_gpus']} GPUs from {results_file}"
+            )
+        else:
+            logging.warning(
+                f"Results file not found: {results_file} for {metadata['run_name']}"
+            )
+
+    # Save aggregated results
+    output_file = os.path.join(output_dir, f"aggregated_results_{timestamp}.json")
+    with open(output_file, "w") as f:
+        json.dump(aggregated_results, f, indent=2)
+
+    logging.info(f"Saved aggregated results to {output_file}")
+
+    return aggregated_results
 
 
 def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
@@ -342,55 +458,17 @@ def sweep_nodes_and_atoms(
             }
         )
 
-    # Block on all jobs to complete
-    logging.info(f"Waiting for {len(all_jobs)} jobs to complete...")
-    for i, job in enumerate(all_jobs):
-        logging.info(f"Waiting for job {i+1}/{len(all_jobs)}: {job.job_id}")
-        try:
-            # Use results() for jobs that may have subtasks (array jobs)
-            job.results()  # This blocks until the job completes
-            logging.info(f"Job {job.job_id} completed successfully")
-        except Exception as e:
-            logging.error(f"Job {job.job_id} failed with error: {e}")
+    # Wait for all jobs to complete
+    wait_for_jobs(all_jobs)
 
     # Collect and aggregate results
-    logging.info("All jobs completed. Collecting results...")
-    aggregated_results = {
-        "timestamp": timestamp,
-        "num_gpus_list": num_gpus_list,
-        "natoms_list": natoms_list,
-        "configurations": [],
-    }
-
-    for metadata in job_metadata:
-        # Results are saved in results_dir which is run_dir/timestamp_id/results/
-        results_file = os.path.join(metadata["results_dir"], "benchmark_results.json")
-        if os.path.exists(results_file):
-            with open(results_file) as f:
-                results = json.load(f)
-
-            # Add configuration metadata to results
-            config_results = {
-                "num_nodes": metadata["num_nodes"],
-                "num_gpus": metadata["num_gpus"],
-                "run_name": metadata["run_name"],
-                "benchmark_data": results,
-            }
-            aggregated_results["configurations"].append(config_results)
-            logging.info(
-                f"Loaded results for {metadata['num_nodes']} nodes, {metadata['num_gpus']} GPUs from {results_file}"
-            )
-        else:
-            logging.warning(
-                f"Results file not found: {results_file} for {metadata['run_name']}"
-            )
-
-    # Save aggregated results
-    output_file = os.path.join(output_dir, f"aggregated_results_{timestamp}.json")
-    with open(output_file, "w") as f:
-        json.dump(aggregated_results, f, indent=2)
-
-    logging.info(f"Saved aggregated results to {output_file}")
+    aggregated_results = collect_and_aggregate_results(
+        job_metadata=job_metadata,
+        timestamp=timestamp,
+        num_gpus_list=num_gpus_list,
+        natoms_list=natoms_list,
+        output_dir=output_dir,
+    )
 
     # Generate plots
     generate_plots(aggregated_results, output_dir)
@@ -409,6 +487,7 @@ def main():
         "--config",
         "-c",
         type=str,
+        default="configs/uma/speed/uma-speed.yaml",
         required=True,
         help="Path to base config YAML file",
     )
