@@ -82,7 +82,8 @@ class EdgeDegreeEmbedding(torch.nn.Module):
         wigner_inv_envelope,
         node_offset=0,
     ):
-        radial = self.rad_func(x_edge)
+        # rad_func is None when radials are precomputed by UnifiedRadialMLP
+        radial = self.rad_func(x_edge) if self.rad_func is not None else x_edge
 
         return self.backend.edge_degree_scatter(
             x,
@@ -150,13 +151,6 @@ class ChgSpinEmbedding(nn.Module):
         self.embedding_target = embedding_target
         assert embedding_size % 2 == 0, f"{embedding_size=} must be even"
 
-        if self.embedding_target == "charge":
-            # 100 is a conservative upper bound
-            self.target_dict = {str(x): x + 100 for x in range(-100, 101)}
-        elif self.embedding_target == "spin":
-            # 100 is a conservative upper bound
-            self.target_dict = {str(x): x for x in range(101)}
-
         if self.embedding_type == "pos_emb":
             # dividing by 2 because x_proj multiplies by 2
             if not grad:
@@ -173,7 +167,16 @@ class ChgSpinEmbedding(nn.Module):
                 for param in self.lin_emb.parameters():
                     param.requires_grad = False
         elif self.embedding_type == "rand_emb":
-            self.rand_emb = nn.Embedding(len(self.target_dict), embedding_size)
+            # Embedding table sizes and index offset for tensor-based computation.
+            # Charge: x in [-100, 100] -> idx = x + 100 in [0, 200], so 201 embeddings
+            # Spin:   x in [0, 100]    -> idx = x       in [0, 100], so 101 embeddings
+            if self.embedding_target == "charge":
+                self.idx_offset = 100
+                num_embeddings = 201
+            else:  # spin
+                self.idx_offset = 0
+                num_embeddings = 101
+            self.rand_emb = nn.Embedding(num_embeddings, embedding_size)
             if not grad:
                 for param in self.rand_emb.parameters():
                     param.requires_grad = False
@@ -199,13 +202,12 @@ class ChgSpinEmbedding(nn.Module):
                 x[x == 0] = -100
             return self.lin_emb(x.unsqueeze(-1).float())
         elif self.embedding_type == "rand_emb":
-            return self.rand_emb(
-                torch.tensor(
-                    [self.target_dict[str(i)] for i in x.tolist()],
-                    device=x.device,
-                    dtype=torch.long,
-                )
-            )
+            # Convert charge/spin values to embedding indices via tensor arithmetic.
+            # This avoids the graph break caused by x.tolist() and dict lookup.
+            # For charge: x in [-100, 100] -> idx = x + 100 in [0, 200]
+            # For spin:   x in [0, 100]    -> idx = x       in [0, 100]
+            idx = (x + self.idx_offset).long()
+            return self.rand_emb(idx)
         raise ValueError(f"embedding type {self.embedding_type} not implemented")
 
 

@@ -77,78 +77,122 @@ def _validate_radial_mlp(mlp: RadialMLP, idx: int, reference: RadialMLP | None) 
 
 class UnifiedRadialMLP(nn.Module):
     """
-    Unified radial MLP that batches the first linear layer across N RadialMLPs.
+    Unified radial MLP that batches the first linear layer across all RadialMLPs.
 
-    The first layer uses concatenated weights for a single GEMM (all N layers
-    share the same input). Layers 2+ use stacked weight buffers for fast
-    indexed functional calls.
+    Includes edge_degree_embedding.rad_func and all layer rad_funcs in a single
+    batched GEMM for the first layer. The first layer uses concatenated weights
+    (all share the same input). Layers 2+ use indexed functional calls.
+
+    forward() returns [edge_degree_out, layer_0_out, ..., layer_N-1_out].
     """
 
-    def __init__(self, radial_mlps: list[RadialMLP]) -> None:
+    def __init__(
+        self,
+        edge_degree_mlp: RadialMLP,
+        layer_radial_mlps: list[RadialMLP],
+    ) -> None:
         """
-        Initialize from a list of RadialMLP modules.
+        Initialize from edge_degree and layer RadialMLP modules.
 
         Args:
-            radial_mlps: List of RadialMLP modules with identical architecture.
+            edge_degree_mlp: RadialMLP for edge_degree_embedding.
+            layer_radial_mlps: List of RadialMLP modules for each layer.
         """
         super().__init__()
 
-        assert len(radial_mlps) > 0, "Need at least one RadialMLP"
+        assert len(layer_radial_mlps) > 0, "Need at least one layer RadialMLP"
 
-        # Validate all MLPs have expected structure and match each other
-        for i, mlp in enumerate(radial_mlps):
-            _validate_radial_mlp(mlp, i, radial_mlps[0] if i > 0 else None)
+        # Validate edge_degree MLP has expected structure
+        _validate_radial_mlp(edge_degree_mlp, idx=-1, reference=None)
 
-        self.num_layers = len(radial_mlps)
-        self.hidden_features = radial_mlps[0].net[0].out_features
-        self.ln_eps = radial_mlps[0].net[1].eps
+        # Validate all layer MLPs have expected structure and match each other
+        for i, mlp in enumerate(layer_radial_mlps):
+            _validate_radial_mlp(mlp, i, layer_radial_mlps[0] if i > 0 else None)
 
-        # First layer: concatenated for single GEMM
+        self.num_layers = len(layer_radial_mlps)
+        self.hidden_features = layer_radial_mlps[0].net[0].out_features
+        self.edge_hidden_features = edge_degree_mlp.net[0].out_features
+        self.ln_eps = layer_radial_mlps[0].net[1].eps
+        self.edge_ln_eps = edge_degree_mlp.net[1].eps
+
+        # First layer: concatenated [edge_degree, layer_0, ...] for single GEMM
         self.register_buffer(
             "W1_cat",
-            torch.cat([mlp.net[0].weight.data for mlp in radial_mlps], dim=0),
+            torch.cat(
+                [edge_degree_mlp.net[0].weight.data]
+                + [mlp.net[0].weight.data for mlp in layer_radial_mlps],
+                dim=0,
+            ),
         )
         self.register_buffer(
             "b1_cat",
-            torch.cat([mlp.net[0].bias.data for mlp in radial_mlps], dim=0),
+            torch.cat(
+                [edge_degree_mlp.net[0].bias.data]
+                + [mlp.net[0].bias.data for mlp in layer_radial_mlps],
+                dim=0,
+            ),
         )
 
-        # Remaining layers: stacked [N, ...] for indexed access
+        # Edge degree tail buffers (separate from layers)
+        self.register_buffer("edge_ln1_weight", edge_degree_mlp.net[1].weight.data)
+        self.register_buffer("edge_ln1_bias", edge_degree_mlp.net[1].bias.data)
+        self.register_buffer("edge_fc2_weight", edge_degree_mlp.net[3].weight.data)
+        self.register_buffer("edge_fc2_bias", edge_degree_mlp.net[3].bias.data)
+        self.register_buffer("edge_ln2_weight", edge_degree_mlp.net[4].weight.data)
+        self.register_buffer("edge_ln2_bias", edge_degree_mlp.net[4].bias.data)
+        self.register_buffer("edge_fc3_weight", edge_degree_mlp.net[6].weight.data)
+        self.register_buffer("edge_fc3_bias", edge_degree_mlp.net[6].bias.data)
+
+        # Layer tail buffers: stacked [N, ...] for indexed access
         self.register_buffer(
             "ln1_weight",
-            torch.stack([mlp.net[1].weight.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[1].weight.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "ln1_bias",
-            torch.stack([mlp.net[1].bias.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[1].bias.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "fc2_weight",
-            torch.stack([mlp.net[3].weight.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[3].weight.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "fc2_bias",
-            torch.stack([mlp.net[3].bias.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[3].bias.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "ln2_weight",
-            torch.stack([mlp.net[4].weight.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[4].weight.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "ln2_bias",
-            torch.stack([mlp.net[4].bias.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[4].bias.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "fc3_weight",
-            torch.stack([mlp.net[6].weight.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[6].weight.data for mlp in layer_radial_mlps], dim=0),
         )
         self.register_buffer(
             "fc3_bias",
-            torch.stack([mlp.net[6].bias.data for mlp in radial_mlps], dim=0),
+            torch.stack([mlp.net[6].bias.data for mlp in layer_radial_mlps], dim=0),
         )
 
-    def umas_radial_mlp(self, h: torch.Tensor, i: int) -> torch.Tensor:
-        """Apply layers 2+ (LN -> SiLU -> Linear -> LN -> SiLU -> Linear)."""
+    def edge_degree_tail(self, h: torch.Tensor) -> torch.Tensor:
+        """Apply layers 2+ for edge_degree MLP (LN -> SiLU -> Linear -> ...)."""
+        H = self.edge_hidden_features
+        h = torch.nn.functional.layer_norm(
+            h, (H,), self.edge_ln1_weight, self.edge_ln1_bias, self.edge_ln_eps
+        )
+        h = torch.nn.functional.silu(h)
+        h = torch.nn.functional.linear(h, self.edge_fc2_weight, self.edge_fc2_bias)
+        h = torch.nn.functional.layer_norm(
+            h, (H,), self.edge_ln2_weight, self.edge_ln2_bias, self.edge_ln_eps
+        )
+        h = torch.nn.functional.silu(h)
+        return torch.nn.functional.linear(h, self.edge_fc3_weight, self.edge_fc3_bias)
+
+    def layer_radial_tail(self, h: torch.Tensor, i: int) -> torch.Tensor:
+        """Apply layers 2+ for layer i (LN -> SiLU -> Linear -> ...)."""
         H = self.hidden_features
         h = torch.nn.functional.layer_norm(
             h, (H,), self.ln1_weight[i], self.ln1_bias[i], self.ln_eps
@@ -163,28 +207,41 @@ class UnifiedRadialMLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> list[torch.Tensor]:
         """
-        Compute all N radial outputs.
+        Compute all radial outputs: edge_degree + layer radials.
 
         Args:
             x: Input tensor of shape [E, in_features]
 
         Returns:
-            List of N tensors, each of shape [E, out_features]
+            List [edge_degree_out, layer_0_out, ..., layer_N-1_out]
         """
-        # Single batched GEMM for first layer, then split into per-layer chunks
+        # Single batched GEMM for ALL first layers (edge_degree + N layers)
         h_all = torch.nn.functional.linear(x, self.W1_cat, self.b1_cat)
-        h_per_layer = h_all.split(self.hidden_features, dim=1)
-        return [self.umas_radial_mlp(h_per_layer[i], i) for i in range(self.num_layers)]
+
+        # Split: edge_degree chunk first, then layer chunks
+        splits = [self.edge_hidden_features] + [self.hidden_features] * self.num_layers
+        h_chunks = h_all.split(splits, dim=1)
+
+        # Process edge_degree tail (chunk 0), then layer tails (chunks 1..N)
+        results = [self.edge_degree_tail(h_chunks[0])]
+        results.extend(
+            [self.layer_radial_tail(h_chunks[i + 1], i) for i in range(self.num_layers)]
+        )
+        return results
 
 
-def create_unified_radial_mlp(radial_mlps: list) -> UnifiedRadialMLP:
+def create_unified_radial_mlp(
+    edge_degree_mlp: RadialMLP,
+    layer_radial_mlps: list[RadialMLP],
+) -> UnifiedRadialMLP:
     """
-    Factory function to create a UnifiedRadialMLP from a list of RadialMLPs.
+    Factory function to create a UnifiedRadialMLP.
 
     Args:
-        radial_mlps: List of RadialMLP modules
+        edge_degree_mlp: RadialMLP for edge_degree_embedding.
+        layer_radial_mlps: List of RadialMLP modules for each layer.
 
     Returns:
-        UnifiedRadialMLP instance with shared first layer weights
+        UnifiedRadialMLP instance with concatenated first layer weights.
     """
-    return UnifiedRadialMLP(radial_mlps)
+    return UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)

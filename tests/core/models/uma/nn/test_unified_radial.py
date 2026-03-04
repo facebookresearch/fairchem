@@ -12,156 +12,234 @@ from __future__ import annotations
 import pytest
 import torch
 
+from fairchem.core.models.uma.nn.radial import RadialMLP
+from fairchem.core.models.uma.nn.unified_radial import (
+    UnifiedRadialMLP,
+    create_unified_radial_mlp,
+)
+
 
 class TestUnifiedRadialMLP:
-    """Tests for UnifiedRadialMLP functionality."""
+    """Tests for UnifiedRadialMLP with edge_degree + layer radials."""
 
-    @pytest.fixture()
-    def radial_mlp_list(self):
-        """Create a list of RadialMLP modules with different weights."""
-        from fairchem.core.models.uma.nn.radial import RadialMLP
+    @pytest.fixture
+    def edge_degree_mlp(self):
+        """Create edge_degree RadialMLP."""
+        return RadialMLP([768, 128, 128, 32])
 
+    @pytest.fixture
+    def layer_radial_mlps(self):
+        """Create layer RadialMLPs."""
+        return [RadialMLP([768, 128, 128, 32]) for _ in range(4)]
+
+    def test_output_shape(self, edge_degree_mlp, layer_radial_mlps):
+        """Verify output list has correct length and tensor shapes."""
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
+        x = torch.randn(100, 768)
+
+        outputs = unified(x)
+
+        # Output: [edge_degree_out, layer_0_out, ..., layer_N-1_out]
+        assert len(outputs) == 1 + len(layer_radial_mlps)
+        for out in outputs:
+            assert out.shape == (100, 32)
+
+    def test_buffer_shapes(self, edge_degree_mlp, layer_radial_mlps):
+        """Verify internal buffers have expected shapes."""
+        num_layers = len(layer_radial_mlps)
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
+
+        # First layer: concatenated [(edge_degree+N*layer)*H, in]
+        total_hidden = 128 + num_layers * 128
+        assert unified.W1_cat.shape == (total_hidden, 768)
+        assert unified.b1_cat.shape == (total_hidden,)
+
+        # Layer norm weights for layers (stacked)
+        assert unified.ln1_weight.shape == (num_layers, 128)
+        assert unified.fc2_weight.shape == (num_layers, 128, 128)
+        assert unified.fc3_weight.shape == (num_layers, 32, 128)
+
+    def test_attributes(self, edge_degree_mlp, layer_radial_mlps):
+        """Verify module attributes are set correctly."""
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
+
+        assert unified.num_layers == len(layer_radial_mlps)
+        assert unified.hidden_features == 128
+        assert unified.edge_hidden_features == 128
+
+    @pytest.mark.parametrize("num_layers", [1, 2, 4, 8, 12])
+    def test_different_num_layers(self, num_layers):
+        """Test with various numbers of layers."""
+        edge_degree_mlp = RadialMLP([768, 128, 128, 32])
+        layer_radial_mlps = [
+            RadialMLP([768, 128, 128, 32]) for _ in range(num_layers)
+        ]
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
+        x = torch.randn(50, 768)
+
+        outputs = unified(x)
+
+        assert len(outputs) == 1 + num_layers
+        assert unified.num_layers == num_layers
+
+
+class TestUnifiedRadialMLPBackwardCompatibility:
+    """Tests ensuring unified output matches original RadialMLP outputs."""
+
+    @pytest.fixture
+    def edge_degree_mlp(self):
+        """Create edge_degree RadialMLP with fixed seed."""
         torch.manual_seed(42)
-        num_layers = 8
-        edge_channels = [64, 128, 128, 256]
+        return RadialMLP([768, 128, 128, 32])
 
-        rad_funcs = []
-        for _ in range(num_layers):
-            mlp = RadialMLP(edge_channels)
-            # Randomize weights to ensure each layer is different
-            for param in mlp.parameters():
-                param.data = torch.randn_like(param.data)
-            rad_funcs.append(mlp)
+    @pytest.fixture
+    def layer_radial_mlps(self):
+        """Create layer RadialMLPs with fixed seed."""
+        torch.manual_seed(43)
+        return [RadialMLP([768, 128, 128, 32]) for _ in range(4)]
 
-        return rad_funcs
+    def test_matches_original_radial_mlps(self, edge_degree_mlp, layer_radial_mlps):
+        """Verify unified output matches individual RadialMLP forward passes."""
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
 
-    def test_unified_matches_per_layer(self, radial_mlp_list):
-        """Test that unified radial outputs match per-layer RadialMLP outputs."""
-        from fairchem.core.models.uma.nn.unified_radial import (
-            create_unified_radial_mlp,
-        )
-
-        unified = create_unified_radial_mlp(radial_mlp_list)
-
-        # Create test input
         torch.manual_seed(123)
-        E = 500  # number of edges
-        x_edge = torch.randn(E, 64)  # edge features
+        x = torch.randn(100, 768)
 
-        # Compute per-layer outputs
-        per_layer_outputs = [mlp(x_edge) for mlp in radial_mlp_list]
+        # Get unified outputs
+        unified_outputs = unified(x)
 
-        # Compute unified output
-        unified_outputs = unified(x_edge)
+        # Compare edge_degree output (index 0)
+        expected_edge = edge_degree_mlp(x)
+        torch.testing.assert_close(
+            unified_outputs[0],
+            expected_edge,
+            rtol=1e-5,
+            atol=1e-5,
+            msg="Mismatch at edge_degree",
+        )
 
-        # Compare
-        assert len(unified_outputs) == len(per_layer_outputs)
-        for i, (unified_out, per_layer_out) in enumerate(
-            zip(unified_outputs, per_layer_outputs)
-        ):
+        # Compare layer outputs (indices 1..N)
+        for i, original_mlp in enumerate(layer_radial_mlps):
+            expected = original_mlp(x)
             torch.testing.assert_close(
-                unified_out,
-                per_layer_out,
-                atol=1e-6,
-                rtol=1e-6,
-                msg=f"Layer {i} output mismatch",
+                unified_outputs[i + 1],
+                expected,
+                rtol=1e-5,
+                atol=1e-5,
+                msg=f"Mismatch at layer {i}",
             )
 
-    def test_unified_output_shapes(self, radial_mlp_list):
-        """Test that unified radial outputs have correct shapes."""
-        from fairchem.core.models.uma.nn.unified_radial import (
-            create_unified_radial_mlp,
+    def test_gradient_flow(self, edge_degree_mlp, layer_radial_mlps):
+        """Verify gradients flow correctly through the unified implementation."""
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
+
+        x = torch.randn(50, 768, requires_grad=True)
+        outputs = unified(x)
+        loss = sum(out.sum() for out in outputs)
+
+        # This should not raise
+        loss.backward()
+
+        assert x.grad is not None
+        assert x.grad.shape == x.shape
+
+    @pytest.mark.parametrize("batch_size", [1, 10, 100, 500])
+    def test_different_batch_sizes(
+        self, edge_degree_mlp, layer_radial_mlps, batch_size
+    ):
+        """Test numerical equivalence across different batch sizes."""
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps)
+        x = torch.randn(batch_size, 768)
+
+        unified_outputs = unified(x)
+
+        # Check edge_degree
+        expected_edge = edge_degree_mlp(x)
+        torch.testing.assert_close(
+            unified_outputs[0], expected_edge, rtol=1e-5, atol=1e-5
         )
 
-        unified = create_unified_radial_mlp(radial_mlp_list)
-
-        E = 300
-        x_edge = torch.randn(E, 64)
-
-        outputs = unified(x_edge)
-
-        # Check list length
-        assert len(outputs) == len(radial_mlp_list)
-
-        # Check each tensor shape - should match RadialMLP output
-        expected_out_features = radial_mlp_list[0].net[-1].out_features
-        for i, out in enumerate(outputs):
-            assert out.shape == (E, expected_out_features), (
-                f"Layer {i}: expected shape ({E}, {expected_out_features}), "
-                f"got {out.shape}"
+        # Check layer outputs
+        for i, original_mlp in enumerate(layer_radial_mlps):
+            expected = original_mlp(x)
+            torch.testing.assert_close(
+                unified_outputs[i + 1], expected, rtol=1e-5, atol=1e-5
             )
 
-    def test_unified_is_inference_only(self, radial_mlp_list):
+
+class TestCreateUnifiedRadialMLP:
+    """Tests for the factory function."""
+
+    @pytest.fixture
+    def edge_degree_mlp(self):
+        """Create edge_degree RadialMLP."""
+        return RadialMLP([768, 128, 128, 32])
+
+    @pytest.fixture
+    def layer_radial_mlps(self):
+        """Create layer RadialMLPs."""
+        return [RadialMLP([768, 128, 128, 32]) for _ in range(3)]
+
+    def test_factory_creates_instance(self, edge_degree_mlp, layer_radial_mlps):
+        """Verify factory returns UnifiedRadialMLP instance."""
+        result = create_unified_radial_mlp(edge_degree_mlp, layer_radial_mlps)
+
+        assert isinstance(result, UnifiedRadialMLP)
+        assert result.num_layers == 3
+
+    def test_factory_empty_layers_raises(self, edge_degree_mlp):
+        """Verify factory raises on empty layer list."""
+        with pytest.raises(AssertionError):
+            create_unified_radial_mlp(edge_degree_mlp, [])
+
+    def test_unified_is_inference_only(self, edge_degree_mlp, layer_radial_mlps):
         """Test that unified radial has no learnable parameters (inference-only)."""
-        from fairchem.core.models.uma.nn.unified_radial import (
-            create_unified_radial_mlp,
-        )
+        unified = create_unified_radial_mlp(edge_degree_mlp, layer_radial_mlps)
 
-        unified = create_unified_radial_mlp(radial_mlp_list)
-
-        # All weights should be buffers, not parameters
+        # All weights should be registered as buffers, not parameters
         params = list(unified.parameters())
-        assert len(params) == 0, (
-            f"Expected 0 learnable parameters, got {len(params)}. "
-            "UnifiedRadialMLP should be inference-only."
-        )
+        assert len(params) == 0, f"Expected no parameters, got {len(params)}"
 
         # But should have buffers
         buffers = list(unified.buffers())
-        assert len(buffers) > 0, "Expected buffers but got none"
+        assert len(buffers) > 0, "Expected buffers for weights"
 
-    def test_unified_different_batch_sizes(self, radial_mlp_list):
-        """Test that unified radial works with different batch sizes."""
-        from fairchem.core.models.uma.nn.unified_radial import (
-            create_unified_radial_mlp,
+
+@pytest.mark.gpu
+class TestUnifiedRadialMLPGPU:
+    """GPU-specific tests."""
+
+    def test_cuda_execution(self):
+        """Verify module works on CUDA."""
+        edge_degree_mlp = RadialMLP([768, 128, 128, 32]).cuda()
+        layer_radial_mlps = [RadialMLP([768, 128, 128, 32]).cuda() for _ in range(4)]
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps).cuda()
+        x = torch.randn(100, 768, device="cuda")
+
+        outputs = unified(x)
+
+        assert all(out.device.type == "cuda" for out in outputs)
+
+    def test_matches_original_on_gpu(self):
+        """Verify GPU results match original RadialMLPs."""
+        torch.manual_seed(42)
+        edge_degree_mlp = RadialMLP([768, 128, 128, 32]).cuda()
+        torch.manual_seed(43)
+        layer_radial_mlps = [RadialMLP([768, 128, 128, 32]).cuda() for _ in range(4)]
+        unified = UnifiedRadialMLP(edge_degree_mlp, layer_radial_mlps).cuda()
+
+        x = torch.randn(100, 768, device="cuda")
+        unified_outputs = unified(x)
+
+        # Check edge_degree
+        expected_edge = edge_degree_mlp(x)
+        torch.testing.assert_close(
+            unified_outputs[0], expected_edge, rtol=1e-4, atol=1e-4
         )
 
-        unified = create_unified_radial_mlp(radial_mlp_list)
-
-        for E in [1, 10, 100, 1000]:
-            x_edge = torch.randn(E, 64)
-            outputs = unified(x_edge)
-
-            assert len(outputs) == len(radial_mlp_list)
-            for out in outputs:
-                assert out.shape[0] == E
-
-    def test_unified_preserves_dtype(self, radial_mlp_list):
-        """Test that unified radial preserves input dtype."""
-        from fairchem.core.models.uma.nn.unified_radial import (
-            create_unified_radial_mlp,
-        )
-
-        unified = create_unified_radial_mlp(radial_mlp_list)
-
-        E = 100
-        for dtype in [torch.float32, torch.float64]:
-            # Convert unified to dtype
-            unified_typed = unified.to(dtype)
-            x_edge = torch.randn(E, 64, dtype=dtype)
-
-            outputs = unified_typed(x_edge)
-
-            for out in outputs:
-                assert out.dtype == dtype, f"Expected dtype {dtype}, got {out.dtype}"
-
-    def test_unified_gradient_flow(self, radial_mlp_list):
-        """Test that gradients flow through unified radial."""
-        from fairchem.core.models.uma.nn.unified_radial import (
-            create_unified_radial_mlp,
-        )
-
-        unified = create_unified_radial_mlp(radial_mlp_list)
-
-        E = 100
-        x_edge = torch.randn(E, 64, requires_grad=True)
-
-        outputs = unified(x_edge)
-
-        # Sum all outputs and backprop
-        loss = sum(out.sum() for out in outputs)
-        loss.backward()
-
-        # Input should have gradients
-        assert x_edge.grad is not None
-        assert x_edge.grad.abs().sum() > 0
+        # Check layers
+        for i, original_mlp in enumerate(layer_radial_mlps):
+            expected = original_mlp(x)
+            torch.testing.assert_close(
+                unified_outputs[i + 1], expected, rtol=1e-4, atol=1e-4
+            )

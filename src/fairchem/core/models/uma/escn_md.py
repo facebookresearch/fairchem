@@ -727,6 +727,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # Initialize node embeddings
         ###############################################################
 
+        sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
+
         # Init per node representations using an atomic number based embedding
         with record_function("atom embedding"):
             x_message = torch.zeros(
@@ -736,10 +738,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 device=data_dict["pos"].device,
                 dtype=data_dict["pos"].dtype,
             )
-            x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
-
-        sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
-        x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
+            x_message[:, 0, :] = (
+                self.sphere_embedding(data_dict["atomic_numbers"]) + sys_node_embedding
+            )
 
         ###
         # Hook to allow MOLE
@@ -772,9 +773,19 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Pre-fuse envelope into wigner_inv
             wigner_inv_envelope = wigner_inv * edge_envelope
 
+            # Get all radial embeddings: edge_degree + layer radials
+            # General backend: returns [x_edge] * (1 + N) - rad_func computed internally
+            # Fast backends: returns precomputed [edge_radial, layer_0_radial, ...]
+            all_radial_embeddings = self.backend.get_unified_radial_emb(x_edge, self)
+            edge_degree_input = all_radial_embeddings[0]
+            x_edge_per_layer = all_radial_embeddings[1:]
+
+            # Apply edge_degree_embedding
+            # General backend: rad_func computed internally
+            # Fast backends: rad_func=None, uses precomputed radial from edge_degree_input
             x_message = self.edge_degree_embedding(
                 x_message,
-                x_edge,
+                edge_degree_input,
                 graph_dict["edge_index"],
                 wigner_inv_envelope,
                 data_dict["gp_node_offset"],
@@ -783,12 +794,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
-
-        # Get edge embeddings for each layer
-        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
-        # Fast backends: precomputed radials
-        with record_function("layer_radial_emb"):
-            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
 
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
