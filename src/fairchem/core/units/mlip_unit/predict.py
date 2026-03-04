@@ -35,7 +35,7 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
     get_backbone_class_from_checkpoint,
@@ -138,16 +138,25 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             checkpoint, overrides, inference_settings
         )
 
-        # Load model with overrides, passing pre-loaded checkpoint
-        self.model, checkpoint = load_inference_model(
-            inference_model_path,
-            use_ema=True,
-            overrides=final_overrides,
-            preloaded_checkpoint=checkpoint,
-        )
+        # Set default dtype during model construction so that non-persistent
+        # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
+        # requested precision rather than being cast from float32 later.
+        prev_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(inference_settings.base_precision_dtype)
 
-        # Model sets up tasks
-        self.model.module.setup_tasks(checkpoint.tasks_config)
+        try:
+            # Load model with overrides, passing pre-loaded checkpoint
+            self.model, checkpoint = load_inference_model(
+                inference_model_path,
+                use_ema=True,
+                overrides=final_overrides,
+                preloaded_checkpoint=checkpoint,
+            )
+
+            # Model sets up tasks
+            self.model.module.setup_tasks(checkpoint.tasks_config)
+        finally:
+            torch.set_default_dtype(prev_dtype)
 
         self._setup_device(device)
 
@@ -155,6 +164,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.lazy_model_intialized = False
         self.inference_settings = inference_settings
         self.assert_on_nans = assert_on_nans
+        self._warned_upcast = False
 
         if self.model.module.direct_forces:
             logging.warning(
@@ -261,6 +271,13 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         data_device = data.to(self.device).clone()
 
+        dtype = self.inference_settings.base_precision_dtype
+        if not self._warned_upcast:
+            self._warned_upcast = warn_if_upcasting(data_device.pos.dtype, dtype)
+        for key, val in data_device:
+            if torch.is_tensor(val) and val.is_floating_point():
+                data_device[key] = val.to(dtype)
+
         # Model handles any per-prediction checks (e.g., MOLE consistency)
         self.model.module.on_predict_check(data_device)
 
@@ -272,6 +289,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
+
+        self.model.to(self.inference_settings.base_precision_dtype)
 
         self.move_to_device()
 
