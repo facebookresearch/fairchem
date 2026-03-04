@@ -479,7 +479,6 @@ def test_stress_old_vs_new_batch_prediction(bulk_atoms, slab_atoms, uma_predict_
             batched_data_new["pos"],
             batched_data_new["cell"],
             batched_data_new.batch,
-            num_systems,
             training=False,
         )
 
