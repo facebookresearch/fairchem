@@ -815,9 +815,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Get all radial embeddings: edge_degree + layer radials
             # General backend: returns [x_edge] * (1 + N) - rad_func computed internally
             # Fast backends: returns precomputed [edge_radial, layer_0_radial, ...]
-            all_radials = self.backend.get_unified_radial_emb(x_edge, self)
-            edge_degree_input = all_radials[0]
-            x_edge_per_layer = all_radials[1:]
+            all_radial_embeddings = self.backend.get_unified_radial_emb(x_edge, self)
+            edge_degree_input = all_radial_embeddings[0]
+            x_edge_per_layer = all_radial_embeddings[1:]
 
             # Apply edge_degree_embedding
             # General backend: rad_func computed internally
