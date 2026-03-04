@@ -1108,7 +1108,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
                 energy_part,
                 data["pos"],
                 data["cell"],
-                batch=data["batch"],
+                batch=data["batch_full"],  # use batch_full to work with GP reduction
                 training=self.training,
             )
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
