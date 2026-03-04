@@ -125,18 +125,17 @@ def balance_channels_batched(
     Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
     which provides correct gradients in both forward and backward passes.
     """
-    n_channels = channel_indices.shape[0]
 
     out_emb = emb.clone()
     num_systems = len(natoms)
 
     # Extract all channels to balance at once: [num_atoms, n_channels]
-    channels_to_balance = emb[:, 0, channel_indices]
+    channels_to_balance = emb[:, 0, :3]
 
     # Compute per-system sums for all channels: [num_systems, n_channels]
     system_sums = torch.zeros(
         num_systems,
-        n_channels,
+        3,
         device=emb.device,
         dtype=emb.dtype,
     )
@@ -149,18 +148,12 @@ def balance_channels_batched(
         system_sums = all_reduce_with_grad(system_sums, group=gp_utils.get_gp_group())
 
     # Build target sums (same target for all channels)
-    target_sums = (target - target_offset).unsqueeze(1).expand(-1, n_channels)
+    target_sums = (target - target_offset).unsqueeze(1).expand(-1, 3    )
 
     # Compute corrections: [num_systems, n_channels]
     corrections = (system_sums - target_sums) / natoms.unsqueeze(1)
-
-    updated_values = channels_to_balance - corrections[batch]
-
-    # Update each channel individually (for loop is compile-friendly)
-    for i in range(n_channels):
-        idx = channel_indices[i]
-        out_emb[:, 0, idx] = updated_values[:, i]
-
+        
+    out_emb[:, 0, :3] = channels_to_balance - corrections[batch]  
     return out_emb
 
 
