@@ -102,27 +102,22 @@ def add_n_empty_edges(
 
 def balance_channels_batched(
     emb: torch.Tensor,
-    charge: torch.Tensor,
-    spin: torch.Tensor,
+    target: torch.Tensor,
     natoms: torch.Tensor,
     batch: torch.Tensor,
-    charge_channel_indices: list[int],
-    spin_channel_indices: list[int],
+    channel_indices: torch.Tensor,
+    target_offset: float = 0.0,
 ) -> torch.Tensor:
     """
-    Balance multiple channels for charge and spin in a single batched operation.
-
-    Replaces the loop-based approach with vectorized computation across all channels.
-    Only performs one tensor clone regardless of number of channels to balance.
+    Balance multiple channels to sum to a target value per system.
 
     Args:
         emb: Node embeddings of shape [num_atoms, sph_features, channels]
-        charge: Target charge sum per system [num_systems]
-        spin: Target spin sum per system [num_systems]
+        target: Target sum per system [num_systems]
         natoms: Number of atoms per system [num_systems]
         batch: Batch indices mapping atoms to systems [num_atoms]
-        charge_channel_indices: Channel indices to balance for charge (target=charge)
-        spin_channel_indices: Channel indices to balance for spin (target=spin-1)
+        channel_indices: Tensor of channel indices to balance
+        target_offset: Offset to subtract from target (e.g., 1 for spin)
 
     Returns:
         Modified embeddings with specified channels balanced to their targets.
@@ -130,27 +125,18 @@ def balance_channels_batched(
     Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
     which provides correct gradients in both forward and backward passes.
     """
-    # Convert to plain lists in case they're omegaconf ListConfig
-    charge_channel_indices = list(charge_channel_indices)
-    spin_channel_indices = list(spin_channel_indices)
+    n_channels = channel_indices.shape[0]
 
-    n_charge = len(charge_channel_indices)
-    n_spin = len(spin_channel_indices)
-    n_total = n_charge + n_spin
-
-    if n_total == 0:
-        return emb
-
+    out_emb = emb.clone()
     num_systems = len(natoms)
-    all_indices = charge_channel_indices + spin_channel_indices
 
-    # Extract all channels to balance at once: [num_atoms, n_total]
-    channels_to_balance = emb[:, 0, all_indices]
+    # Extract all channels to balance at once: [num_atoms, n_channels]
+    channels_to_balance = emb[:, 0, channel_indices]
 
-    # Compute per-system sums for all channels: [num_systems, n_total]
+    # Compute per-system sums for all channels: [num_systems, n_channels]
     system_sums = torch.zeros(
         num_systems,
-        n_total,
+        n_channels,
         device=emb.device,
         dtype=emb.dtype,
     )
@@ -158,25 +144,24 @@ def balance_channels_batched(
 
     # Reduce partial sums across graph parallel ranks
     if gp_utils.initialized():
+        # TODO we can do this without the extra all reduce call if its the first thing
+        # the layer, since we get all atom embeddings there
         system_sums = all_reduce_with_grad(system_sums, group=gp_utils.get_gp_group())
 
-    # Build target sums: charge for charge channels, (spin-1) for spin channels
-    target_sums = torch.empty(num_systems, n_total, device=emb.device, dtype=emb.dtype)
-    if n_charge > 0:
-        target_sums[:, :n_charge] = charge.unsqueeze(1)
-    if n_spin > 0:
-        target_sums[:, n_charge:] = (spin - 1).unsqueeze(1)
+    # Build target sums (same target for all channels)
+    target_sums = (target - target_offset).unsqueeze(1).expand(-1, n_channels)
 
-    # Compute corrections: [num_systems, n_total]
+    # Compute corrections: [num_systems, n_channels]
     corrections = (system_sums - target_sums) / natoms.unsqueeze(1)
 
-    # Apply corrections to atoms: [num_atoms, n_total]
-    balanced_values = channels_to_balance - corrections[batch]
+    updated_values = channels_to_balance - corrections[batch]
 
-    # In-place update - safe because fancy indexing created a copy for channels_to_balance
-    emb[:, 0, all_indices] = balanced_values
+    # Update each channel individually (for loop is compile-friendly)
+    for i in range(n_channels):
+        idx = channel_indices[i]
+        out_emb[:, 0, idx] = updated_values[:, i]
 
-    return emb
+    return out_emb
 
 
 @torch.compiler.disable
@@ -328,12 +313,26 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
 
-        # which channels to balance
-        self.charge_balanced_channels = (
-            charge_balanced_channels if charge_balanced_channels is not None else []
+        # which channels to balance (convert to tensor for torch.compile compatibility)
+        self.register_buffer(
+            "charge_balanced_channels",
+            torch.tensor(
+                list(charge_balanced_channels)
+                if charge_balanced_channels is not None
+                else [],
+                dtype=torch.long,
+            ),
+            persistent=False,
         )
-        self.spin_balanced_channels = (
-            spin_balanced_channels if spin_balanced_channels is not None else []
+        self.register_buffer(
+            "spin_balanced_channels",
+            torch.tensor(
+                list(spin_balanced_channels)
+                if spin_balanced_channels is not None
+                else [],
+                dtype=torch.long,
+            ),
+            persistent=False,
         )
 
         # NOTE: graph construction related, to remove, except for cutoff
@@ -504,15 +503,27 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         natoms: torch.Tensor,
         batch: torch.Tensor,
     ) -> torch.Tensor:
-        return balance_channels_batched(
-            emb=x_message_prime,
-            charge=charge,
-            spin=spin,
-            natoms=natoms,
-            batch=batch,
-            charge_channel_indices=self.charge_balanced_channels,
-            spin_channel_indices=self.spin_balanced_channels,
-        )
+        if len(self.charge_balanced_channels) > 0:
+            # Balance charge channels (target = charge)
+            x_message_prime = balance_channels_batched(
+                emb=x_message_prime,
+                target=charge,
+                natoms=natoms,
+                batch=batch,
+                channel_indices=self.charge_balanced_channels,
+                target_offset=0.0,
+            )
+        if len(self.spin_balanced_channels) > 0:
+            # Balance spin channels (target = spin - 1)
+            x_message_prime = balance_channels_batched(
+                emb=x_message_prime,
+                target=spin,
+                natoms=natoms,
+                batch=batch,
+                channel_indices=self.spin_balanced_channels,
+                target_offset=1.0,
+            )
+        return x_message_prime
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -751,8 +762,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 device=data_dict["pos"].device,
                 dtype=data_dict["pos"].dtype,
             )
-            x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"]) + sys_node_embedding
+            x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
 
+        x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
 
         ###
         # Hook to allow MOLE
