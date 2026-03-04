@@ -245,7 +245,7 @@ class ExecutionBackend:
 
         # Slice wigner to m=0 columns and rotate:
         # [E, L, m0] @ [E, m0, C] -> [E, L, C]
-        wigner_inv_m0 = wigner_inv[:, :, :m_0_num_coefficients]
+        wigner_inv_m0 = wigner_inv[:, :, :m_0_num_coefficients] / rescale_factor
         x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
 
         # Type cast if needed
@@ -255,7 +255,7 @@ class ExecutionBackend:
         return x.index_add(
             0,
             edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
+            x_edge_embedding,
         )
 
 
@@ -420,7 +420,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
 
         # Select m=0 columns from L-ordered wigner_inv
-        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
+        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER] / rescale_factor
         x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
 
         x_edge_embedding = x_edge_embedding.to(x.dtype)
@@ -428,7 +428,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         return x.index_add(
             0,
             edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
+            x_edge_embedding,
         )
 
 
