@@ -100,23 +100,52 @@ def add_n_empty_edges(
     )
 
 
+def _validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, int]:
+    """
+    Validate that channel indices form a contiguous range and return (start, end).
+
+    Args:
+        channels: List of channel indices (must be contiguous)
+        name: Name for error messages (e.g., "charge_balanced_channels")
+
+    Returns:
+        (start_idx, end_idx) tuple for slicing [start:end]
+
+    Raises:
+        ValueError: If channels are not contiguous
+    """
+    if not channels:
+        return 0, 0
+
+    sorted_channels = sorted(channels)
+    expected = list(range(sorted_channels[0], sorted_channels[-1] + 1))
+    if sorted_channels != expected:
+        raise ValueError(
+            f"{name} must be contiguous. Got {channels}, "
+            f"expected contiguous range like {expected}"
+        )
+    return sorted_channels[0], sorted_channels[-1] + 1
+
+
 def balance_channels_batched(
     emb: torch.Tensor,
     target: torch.Tensor,
     natoms: torch.Tensor,
     batch: torch.Tensor,
-    channel_indices: torch.Tensor,
+    start_idx: int,
+    end_idx: int,
     target_offset: float = 0.0,
 ) -> torch.Tensor:
     """
-    Balance multiple channels to sum to a target value per system.
+    Balance a contiguous range of channels to sum to a target value per system.
 
     Args:
         emb: Node embeddings of shape [num_atoms, sph_features, channels]
         target: Target sum per system [num_systems]
         natoms: Number of atoms per system [num_systems]
         batch: Batch indices mapping atoms to systems [num_atoms]
-        channel_indices: Tensor of channel indices to balance
+        start_idx: Start index of channel range (inclusive)
+        end_idx: End index of channel range (exclusive)
         target_offset: Offset to subtract from target (e.g., 1 for spin)
 
     Returns:
@@ -125,17 +154,17 @@ def balance_channels_batched(
     Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
     which provides correct gradients in both forward and backward passes.
     """
-
     out_emb = emb.clone()
     num_systems = len(natoms)
+    n_channels = end_idx - start_idx
 
-    # Extract all channels to balance at once: [num_atoms, n_channels]
-    channels_to_balance = emb[:, 0, :3]
+    # Extract channels to balance: [num_atoms, n_channels]
+    channels_to_balance = emb[:, 0, start_idx:end_idx]
 
     # Compute per-system sums for all channels: [num_systems, n_channels]
     system_sums = torch.zeros(
         num_systems,
-        3,
+        n_channels,
         device=emb.device,
         dtype=emb.dtype,
     )
@@ -148,12 +177,12 @@ def balance_channels_batched(
         system_sums = all_reduce_with_grad(system_sums, group=gp_utils.get_gp_group())
 
     # Build target sums (same target for all channels)
-    target_sums = (target - target_offset).unsqueeze(1).expand(-1, 3    )
+    target_sums = (target - target_offset).unsqueeze(1).expand(-1, n_channels)
 
     # Compute corrections: [num_systems, n_channels]
     corrections = (system_sums - target_sums) / natoms.unsqueeze(1)
-        
-    out_emb[:, 0, :3] = channels_to_balance - corrections[batch]  
+
+    out_emb[:, 0, start_idx:end_idx] = channels_to_balance - corrections[batch]
     return out_emb
 
 
@@ -306,26 +335,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
 
-        # which channels to balance (convert to tensor for torch.compile compatibility)
-        self.register_buffer(
-            "charge_balanced_channels",
-            torch.tensor(
-                list(charge_balanced_channels)
-                if charge_balanced_channels is not None
-                else [],
-                dtype=torch.long,
-            ),
-            persistent=False,
+        # Convert channel lists to contiguous slice ranges (validates continuity)
+        charge_channels = (
+            list(charge_balanced_channels) if charge_balanced_channels else []
         )
-        self.register_buffer(
-            "spin_balanced_channels",
-            torch.tensor(
-                list(spin_balanced_channels)
-                if spin_balanced_channels is not None
-                else [],
-                dtype=torch.long,
-            ),
-            persistent=False,
+        spin_channels = list(spin_balanced_channels) if spin_balanced_channels else []
+
+        self.charge_channel_start, self.charge_channel_end = (
+            _validate_contiguous_channels(charge_channels, "charge_balanced_channels")
+        )
+        self.spin_channel_start, self.spin_channel_end = _validate_contiguous_channels(
+            spin_channels, "spin_balanced_channels"
         )
 
         # NOTE: graph construction related, to remove, except for cutoff
@@ -496,24 +516,26 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         natoms: torch.Tensor,
         batch: torch.Tensor,
     ) -> torch.Tensor:
-        if len(self.charge_balanced_channels) > 0:
+        if self.charge_channel_end > self.charge_channel_start:
             # Balance charge channels (target = charge)
             x_message_prime = balance_channels_batched(
                 emb=x_message_prime,
                 target=charge,
                 natoms=natoms,
                 batch=batch,
-                channel_indices=self.charge_balanced_channels,
+                start_idx=self.charge_channel_start,
+                end_idx=self.charge_channel_end,
                 target_offset=0.0,
             )
-        if len(self.spin_balanced_channels) > 0:
+        if self.spin_channel_end > self.spin_channel_start:
             # Balance spin channels (target = spin - 1)
             x_message_prime = balance_channels_batched(
                 emb=x_message_prime,
                 target=spin,
                 natoms=natoms,
                 batch=batch,
-                channel_indices=self.spin_balanced_channels,
+                start_idx=self.spin_channel_start,
+                end_idx=self.spin_channel_end,
                 target_offset=1.0,
             )
         return x_message_prime
