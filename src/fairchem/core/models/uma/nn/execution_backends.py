@@ -113,28 +113,6 @@ class ExecutionBackend:
         return [x_edge] * (1 + len(model.blocks))
 
     @staticmethod
-    def get_layer_radial_emb(
-        x_edge: torch.Tensor,
-        model: torch.nn.Module,
-    ) -> list[torch.Tensor]:
-        """
-        Get edge embeddings for each layer.
-
-        Default implementation returns the same raw x_edge for all layers.
-        SO2_Convolution will compute rad_func(x_edge) internally.
-
-        Override in fast backends to precompute radials.
-
-        Args:
-            x_edge: Edge embeddings [E, edge_features]
-            model: The backbone model
-
-        Returns:
-            List of edge embeddings, one per layer
-        """
-        return [x_edge] * len(model.blocks)
-
-    @staticmethod
     def prepare_wigner(
         wigner: torch.Tensor,
         wigner_inv: torch.Tensor,
@@ -330,8 +308,12 @@ class UMASFastPytorchBackend(ExecutionBackend):
 
         # Create unified radial MLP: edge_degree + layer rad_funcs in one GEMM
         edge_degree_rad_func = model.edge_degree_embedding.rad_func
-        layer_rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
-        model._unified_radial_mlp = UnifiedRadialMLP(edge_degree_rad_func, layer_rad_funcs)
+        layer_rad_funcs = [
+            block.edge_wise.so2_conv_1.rad_func for block in model.blocks
+        ]
+        model._unified_radial_mlp = UnifiedRadialMLP(
+            edge_degree_rad_func, layer_rad_funcs
+        )
 
         # Null out rad_func so forward_chunk knows radials are precomputed
         model.edge_degree_embedding.rad_func = None
@@ -352,27 +334,6 @@ class UMASFastPytorchBackend(ExecutionBackend):
             List [edge_degree_radial, layer_0_radial, ..., layer_N-1_radial]
         """
         return model._unified_radial_mlp(x_edge)
-
-    @staticmethod
-    def get_layer_radial_emb(
-        x_edge: torch.Tensor,
-        model: torch.nn.Module,
-    ) -> list[torch.Tensor]:
-        """
-        Compute radial embeddings for all layers using batched UnifiedRadialMLP.
-
-        Note: This calls _unified_radial_mlp which returns [edge_degree, layer_0, ...].
-        We skip index 0 and return layer radials only.
-
-        Args:
-            x_edge: Edge embeddings [E, edge_features]
-            model: The backbone model with _unified_radial_mlp
-
-        Returns:
-            List of radial embeddings, one per layer [E, radial_features]
-        """
-        # Skip index 0 (edge_degree_radial), return layer radials only
-        return model._unified_radial_mlp(x_edge)[1:]
 
 
 class UMASFastGPUBackend(UMASFastPytorchBackend):
