@@ -9,11 +9,11 @@ regress_stress: ${regress_stress}
 use_compile: ${use_compile}
 use_padding: ${direct_forces}
 dataset_list: ${dataset_list}
-use_global_path: False
+
 use_node_path: True
 use_freq_mask: False
 use_sincx_mask: True
-use_residual_scale: False
+
 
 # Molecular Graph Configs
 max_num_elements: 110
