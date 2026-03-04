@@ -205,13 +205,16 @@ def collect_and_aggregate_results(
     return aggregated_results
 
 
-def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
+def generate_plots(
+    aggregated_results: dict[str, Any], output_dir: str, run_name: str | None = None
+) -> None:
     """
     Generate scaling plots from benchmark results.
 
     Args:
         aggregated_results: Aggregated benchmark results dictionary
         output_dir: Directory to save plots
+        run_name: Optional label included in all plot titles
     """
     if not aggregated_results["configurations"]:
         logging.warning("No configurations to plot")
@@ -240,6 +243,7 @@ def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
                 models_data[model_name][num_gpus].append((natoms, qps, ns_per_day))
 
     # Generate plots for each model
+    title_prefix = f"{run_name}\n" if run_name else ""
     for model_name, gpu_data in models_data.items():
         model_safe_name = model_name.replace("/", "_").replace(" ", "_")
 
@@ -253,7 +257,7 @@ def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
             plt.xlabel("Number of Atoms", fontsize=12)
             plt.ylabel("QPS (Queries Per Second)", fontsize=12)
             plt.title(
-                f"Single GPU Performance: {model_name}\n(GPUs: {min(gpu_data.keys())})",
+                f"{title_prefix}Single GPU Performance: {model_name}\n(GPUs: {min(gpu_data.keys())})",
                 fontsize=14,
             )
             plt.grid(True, alpha=0.3)
@@ -298,7 +302,10 @@ def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
                     )
             plt.xlabel("Number of GPUs", fontsize=12)
             plt.ylabel("QPS (Queries Per Second)", fontsize=12)
-            plt.title(f"Weak Scaling: {model_name}\n(Constant atoms/GPU)", fontsize=14)
+            plt.title(
+                f"{title_prefix}Weak Scaling: {model_name}\n(Constant atoms/GPU)",
+                fontsize=14,
+            )
             plt.legend(fontsize=10)
             plt.grid(True, alpha=0.3)
             plt.tight_layout()
@@ -344,7 +351,8 @@ def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
             plt.xlabel("Number of GPUs", fontsize=12)
             plt.ylabel("QPS (Queries Per Second)", fontsize=12)
             plt.title(
-                f"Strong Scaling: {model_name}\n(Constant total atoms)", fontsize=14
+                f"{title_prefix}Strong Scaling: {model_name}\n(Constant total atoms)",
+                fontsize=14,
             )
             plt.legend(fontsize=10)
             plt.grid(True, alpha=0.3)
@@ -392,6 +400,7 @@ def sweep_nodes_and_atoms(
     natoms_list: list[int] | None = None,
     natoms_per_gpu_list: list[int] | None = None,
     base_overrides: list[str] | None = None,
+    run_name: str | None = None,
 ) -> dict[str, Any]:
     """
     Sweep over different numbers of GPUs and atoms, running inference benchmarks.
@@ -408,6 +417,7 @@ def sweep_nodes_and_atoms(
         natoms_per_gpu_list: List of per-GPU atom counts; total atoms for each
             run is natoms_per_gpu * num_gpus
         base_overrides: Base config overrides to apply to all runs
+        run_name: Optional label included in all plot titles
 
     Returns:
         Dictionary with aggregated results
@@ -425,7 +435,8 @@ def sweep_nodes_and_atoms(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # All sub-runs and outputs for this sweep live under a single sweep directory
-    sweep_dir = os.path.join(output_dir, timestamp)
+    sweep_dir_name = f"{run_name}_{timestamp}" if run_name else timestamp
+    sweep_dir = os.path.join(output_dir, sweep_dir_name)
     os.makedirs(sweep_dir, exist_ok=True)
     logging.info(f"Sweep directory: {sweep_dir}")
 
@@ -511,7 +522,7 @@ def sweep_nodes_and_atoms(
     )
 
     # Generate plots
-    generate_plots(aggregated_results, sweep_dir)
+    generate_plots(aggregated_results, sweep_dir, run_name=run_name)
 
     # Print summary table
     print_summary_table(aggregated_results)
@@ -559,6 +570,12 @@ def main():
         help="Directory to save results (default: ./benchmark_sweep_results)",
     )
     parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Optional label included in all plot titles",
+    )
+    parser.add_argument(
         "--overrides",
         type=str,
         nargs="*",
@@ -592,6 +609,7 @@ def main():
         natoms_per_gpu_list=args.natoms_per_gpu,
         output_dir=args.output_dir,
         base_overrides=args.overrides,
+        run_name=args.run_name,
     )
 
     logging.info("Benchmark sweep completed successfully!")

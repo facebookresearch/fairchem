@@ -13,13 +13,13 @@ defaults:
 
 runner:
   _target_: fairchem.core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner
-  timeiters: 10
+  timeiters: 100
   repeats: 5
   natoms_list: [100000]
   model_checkpoints:
     # uma_s_1p1: ${uma_s_1p1}
-    # uma_s_1p2: "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt"
-    uma_sm_cons: "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt"
+    uma_s_1p2: "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt"
+    # uma_sm_cons: "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt"
     # uma_sm_direct: "/checkpoint/ocp/shared/run_dir/202510-3123-1909-5e5a/checkpoints/final/inference_ckpt.pt"
   # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
   # for profiling, we substract the graph generation time by using external_graph_gen=True
