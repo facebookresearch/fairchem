@@ -13,7 +13,7 @@ import copy
 import logging
 import re
 from collections.abc import Sequence
-from typing import List, Optional, Union
+from typing import Union
 
 import ase
 import ase.db.sqlite
@@ -25,6 +25,8 @@ from ase.geometry import wrap_positions
 from ase.stress import full_3x3_to_voigt_6_stress, voigt_6_to_full_3x3_stress
 from monty.dev import requires
 
+from fairchem.core.common.utils import StrEnum
+
 try:
     from pymatgen.io.ase import AseAtomsAdaptor
 
@@ -33,8 +35,17 @@ except ImportError:
     AseAtomsAdaptor = None
     pmg_installed = False
 
+from fairchem.core.graph.radius_graph_pbc_nvidia import get_neighbors_nvidia_atoms
 
 IndexType = Union[slice, torch.Tensor, np.ndarray, Sequence]
+
+
+class ExternalGraphMethod(StrEnum):
+    """Enum for external graph generation methods."""
+
+    PYMATGEN = "pymatgen"
+    NVIDIA = "nvidia"
+
 
 # these are all currently certainly output by the current a2g
 # except for tags, all fields are required for network inference.
@@ -83,7 +94,7 @@ def size_repr(key: str, item: torch.Tensor, indent=0) -> str:
         out = item.item()
     elif torch.is_tensor(item):
         out = str(list(item.size()))
-    elif isinstance(item, (List, tuple)):
+    elif isinstance(item, (list, tuple)):
         out = str([len(item)])
     elif isinstance(item, dict):
         lines = [indent_str + size_repr(k, v, 2) for k, v in item.items()]
@@ -300,10 +311,8 @@ class AtomicData:
             assert self.forces.dtype == self.pos.dtype
         if hasattr(self, "stress"):
             # NOTE: usually decomposed. for EFS prediction right now we reshape to (9,). need to discuss, perhaps use (1,3,3)
-            assert (
-                self.stress.dim() == 3
-                and self.stress.shape[1:] == (3, 3)
-                or (self.stress.dim() == 2 and self.stress.shape[1:] == (9,))
+            assert (self.stress.dim() == 3 and self.stress.shape[1:] == (3, 3)) or (
+                self.stress.dim() == 2 and self.stress.shape[1:] == (9,)
             )
             assert self.stress.shape[0] == self.num_graphs
             assert self.stress.dtype == self.pos.dtype
@@ -332,6 +341,7 @@ class AtomicData:
         r_data_keys: list[str] | None = None,  # NOT USED, compat for now
         task_name: str | None = None,
         target_dtype: torch.dtype = torch.float32,
+        external_graph_method: ExternalGraphMethod | str = ExternalGraphMethod.PYMATGEN,
     ) -> AtomicData:
         atoms = input_atoms.copy()
         calc = input_atoms.calc
@@ -375,7 +385,16 @@ class AtomicData:
             assert (
                 max_neigh is not None
             ), "max_neigh must be specified for cpu graph construction."
-            split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+
+            if external_graph_method == ExternalGraphMethod.PYMATGEN:
+                split_idx_dist = get_neighbors_pymatgen(atoms, radius, max_neigh)
+            elif external_graph_method == ExternalGraphMethod.NVIDIA:
+                split_idx_dist = get_neighbors_nvidia_atoms(atoms, radius, max_neigh)
+            else:
+                raise ValueError(
+                    f"external_graph_method must be 'pymatgen' or 'nvidia', got {external_graph_method}"
+                )
+
             edge_index, cell_offsets = reshape_features(
                 *split_idx_dist, target_dtype=target_dtype
             )
@@ -443,16 +462,20 @@ class AtomicData:
         # TODO another way to specify this is to spcify a key. maybe total_charge
         charge = torch.LongTensor(
             [
-                atoms.info.get("charge", 0)
-                if r_data_keys is not None and "charge" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("charge", 0)
+                    if r_data_keys is not None and "charge" in r_data_keys
+                    else 0
+                )
             ]
         )
         spin = torch.LongTensor(
             [
-                atoms.info.get("spin", 0)
-                if r_data_keys is not None and "spin" in r_data_keys
-                else 0
+                (
+                    atoms.info.get("spin", 0)
+                    if r_data_keys is not None and "spin" in r_data_keys
+                    else 0
+                )
             ]
         )
 
@@ -844,7 +867,7 @@ class AtomicData:
 
 
 def atomicdata_list_to_batch(
-    data_list: list[AtomicData], exclude_keys: Optional[list] = None
+    data_list: list[AtomicData], exclude_keys: list | None = None
 ) -> AtomicData:
     """
     all data points must be single graphs and have the same set of keys.

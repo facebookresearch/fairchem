@@ -23,6 +23,12 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
+from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
+    create_wigner_data_module,
+)
+from fairchem.core.models.uma.common.quaternion.wigner_d_hybrid import (
+    axis_angle_wigner_hybrid,
+)
 from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
@@ -274,6 +280,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
+        use_quaternion_wigner: bool = True,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         charge_balanced_channels: list[int] | None = None,
@@ -311,6 +318,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
         self.radius_pbc_version = radius_pbc_version
+        self.use_quaternion_wigner = use_quaternion_wigner
         self.enforce_max_neighbors_strictly = False
 
         activation_checkpoint_chunk_size = None
@@ -338,6 +346,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
             self.register_buffer(f"Jd_{l}", Jd_list[l])
+
+        # Precompute Wigner coefficients for quaternion path (like Jd for Euler path)
+        if self.use_quaternion_wigner:
+            # lmin=5 because l=0,1,2,3,4 use custom kernels in the hybrid method
+            self.wigner_data = create_wigner_data_module(lmax=self.lmax, lmin=5)
+
         self.sph_feature_size = int((self.lmax + 1) ** 2)
         self.mappingReduced = CoefficientMapping(self.lmax, self.mmax)
 
@@ -490,33 +504,32 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        Jd_buffers = [
-            getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
-            for l in range(self.lmax + 1)
-        ]
+        if self.use_quaternion_wigner:
+            with record_function("obtain rotmat wigner quaternion"):
+                wigner, wigner_inv = axis_angle_wigner_hybrid(
+                    edge_distance_vecs,
+                    self.lmax,
+                    coeffs=self.wigner_data.coeffs,
+                    U_blocks=self.wigner_data.U_blocks,
+                    custom_kernels=self.wigner_data.custom_kernels,
+                )
+        else:
+            Jd_buffers = [
+                getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
+                for l in range(self.lmax + 1)
+            ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+            with record_function("obtain rotmat wigner original"):
+                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+                wigner = eulers_to_wigner(
+                    euler_angles,
+                    0,
+                    self.lmax,
+                    Jd_buffers,
+                )
+                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        # select subset of coefficients we are using
-        if self.mmax != self.lmax:
-            wigner = wigner.index_select(1, self.coefficient_index)
-            wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
-
-        wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
-        )
-        wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
-        )
-        return wigner_and_M_mapping, wigner_and_M_mapping_inv
+        return wigner, wigner_inv
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData
@@ -575,6 +588,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
+        node_partition = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -587,7 +601,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-            data_dict["node_partition"] = node_partition
 
         if self.otf_graph:
             pbc = None
@@ -601,6 +614,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
+            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
+            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -608,20 +623,30 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
+                node_partition=node_partition,
             )
         else:
             # this assume edge_index is provided
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
-            cell_per_edge = data_dict["cell"].repeat_interleave(
-                data_dict["nedges"], dim=0
-            )
-            shifts = torch.einsum(
-                "ij,ijk->ik",
-                data_dict["cell_offsets"].to(cell_per_edge.dtype),
-                cell_per_edge,
-            )
+
+            # Compute shifts from cell offsets
+            if len(data_dict["natoms"]) == 1:
+                # Single system: use matmul (compile-friendly, no data-dependent ops)
+                shifts = data_dict["cell_offsets"].to(
+                    data_dict["cell"].dtype
+                ) @ data_dict["cell"].squeeze(0)
+            else:
+                # Batched: need repeat_interleave for variable edges per system
+                cell_per_edge = data_dict["cell"].repeat_interleave(
+                    data_dict["nedges"], dim=0
+                )
+                shifts = torch.einsum(
+                    "ij,ijk->ik",
+                    data_dict["cell_offsets"].to(cell_per_edge.dtype),
+                    cell_per_edge,
+                )
             edge_distance_vec = (
                 data_dict["pos"][data_dict["edge_index"][0]]
                 - data_dict["pos"][data_dict["edge_index"][1]]
@@ -685,10 +710,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
-                self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec"],
-                )
+            wigner, wigner_inv = self._get_rotmat_and_wigner(
+                graph_dict["edge_distance_vec"],
+            )
+            coefficient_index = (
+                self.coefficient_index if self.mmax != self.lmax else None
+            )
+            wigner, wigner_inv = self.backend.prepare_wigner(
+                wigner,
+                wigner_inv,
+                self.mappingReduced,
+                coefficient_index,
             )
 
         ###############################################################
@@ -737,34 +769,35 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 dim=1,
             )
 
-            # Pre-fuse envelope into wigner_inv for edge degree embedding
-            wigner_and_M_mapping_inv_envelope_for_edge_degree = (
-                wigner_and_M_mapping_inv * edge_envelope
-            )
+            # Pre-fuse envelope into wigner_inv
+            wigner_inv_envelope = wigner_inv * edge_envelope
 
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv_envelope_for_edge_degree,
+                wigner_inv_envelope,
                 data_dict["gp_node_offset"],
             )
-
-        # Pre-fuse envelope into wigner_inv for block message passing
-        wigner_and_M_mapping_inv_envelope = wigner_and_M_mapping_inv * edge_envelope
 
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+
+        # Get edge embeddings for each layer
+        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
+        # Fast backends: precomputed radials
+        with record_function("layer_radial_emb"):
+            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
+
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
                     x_message,
-                    x_edge,
-                    graph_dict["edge_distance"],
+                    x_edge_per_layer[i],
                     graph_dict["edge_index"],
-                    wigner_and_M_mapping,
-                    wigner_and_M_mapping_inv_envelope,
+                    wigner,
+                    wigner_inv_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
@@ -839,6 +872,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.use_quaternion_wigner is not None:
+            overrides["use_quaternion_wigner"] = settings.use_quaternion_wigner
         if settings.execution_mode is not None:
             overrides["execution_mode"] = settings.execution_mode
 
@@ -868,7 +903,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._merged_composition = None
 
         # Validate settings against backend requirements (fail early)
-        self.backend.validate(settings)
+        self.backend.validate(self, settings)
 
         if settings.merge_mole:
             assert (

@@ -14,8 +14,6 @@ pytest tests/core/models/test_uma.py -vv
 pytest tests/core -m "not gpu"
 
 # Lint & format — REQUIRED for every modified file before committing
-ruff check path/to/modified_file.py --fix
-ruff format path/to/modified_file.py
 pre-commit run --files path/to/modified_file.py
 
 # CLI
@@ -24,7 +22,7 @@ fairchem -c config.yaml [overrides...]
 
 ## Code Style
 
-**IMPORTANT: You MUST run `ruff check --fix` and `ruff format` on every file you modify, before considering the task complete. No exceptions.**
+**IMPORTANT: You MUST run `pre-commit run --files /path/to/modified_file.py` on every file you modify, before considering the task complete. No exceptions.**
 
 **Every file must start with:**
 ```python
