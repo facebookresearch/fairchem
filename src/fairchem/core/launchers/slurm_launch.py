@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import os
 import random
+import signal
+import sys
 from typing import TYPE_CHECKING
 
 import hydra
@@ -13,6 +15,7 @@ from submitit import AutoExecutor
 from submitit.core.utils import JobPaths, cloudpickle_dump
 from submitit.helpers import Checkpointable, DelayedSubmission
 from submitit.slurm.slurm import SlurmJobEnvironment
+from torch.distributed.elastic.utils.distributed import get_free_port
 
 from fairchem.core.common import distutils
 from fairchem.core.common.gp_utils import setup_graph_parallel_groups
@@ -156,6 +159,11 @@ class SlurmSPMDProgram(Checkpointable):
             self.runner.job_config = self.config.job
             # must call resume state AFTER the runner has been initialized
             self.runner.load_state(self.config.job.runner_state_path)
+
+            # Register signal handlers for graceful shutdown in local mode
+            if self.config.job.scheduler.mode == SchedulerType.LOCAL:
+                self._register_signal_handlers()
+
             self.runner.run()
         elif run_type == RunType.REDUCE:
             logging.info("Calling reducer.reduce() ...")
@@ -189,6 +197,36 @@ class SlurmSPMDProgram(Checkpointable):
                 run_name=self.config.job.run_name,
                 log_dir=self.config.job.metadata.log_dir,
             )
+
+    def _register_signal_handlers(self) -> None:
+        """
+        Register signal handlers for graceful shutdown in local mode.
+        Saves runner state on SIGTERM/SIGINT before exiting.
+        """
+
+        def graceful_shutdown(signum, frame):
+            signal_name = signal.Signals(signum).name
+            save_path = self.config.job.metadata.preemption_checkpoint_dir
+            os.makedirs(save_path, exist_ok=True)
+            logging.info(f"Signal {signal_name} received, saving state to {save_path}")
+            if self.runner is not None and self.runner.save_state(
+                save_path, is_preemption=True
+            ):
+                logging.info(f"State saved successfully to {save_path}")
+
+                # Save a config copy with runner_state_path set for easy resume
+                cfg_copy = self.config.copy()
+                cfg_copy.job.runner_state_path = save_path
+                resume_config_path = os.path.join(save_path, "resume_config.yaml")
+                OmegaConf.save(cfg_copy, resume_config_path)
+                logging.info(f"Resume config saved to {resume_config_path}")
+            else:
+                logging.warning("Failed to save state or no runner available")
+            distutils.cleanup()
+            sys.exit(0)
+
+        signal.signal(signal.SIGTERM, graceful_shutdown)
+        signal.signal(signal.SIGINT, graceful_shutdown)
 
     def checkpoint(self, *args, **kwargs) -> DelayedSubmission:
         logging.error("Submitit checkpointing callback is triggered")
@@ -278,6 +316,7 @@ def local_launch(cfg: DictConfig, log_dir: str):
             nproc_per_node=scheduler_cfg.ranks_per_node,
             rdzv_backend="c10d",
             max_restarts=0,
+            rdzv_endpoint=f"127.0.0.1:{get_free_port()}",
         )
         elastic_launch(launch_config, runner_wrapper)(cfg)
         if "reducer" in cfg:

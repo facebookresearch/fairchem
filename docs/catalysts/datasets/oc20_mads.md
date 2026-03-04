@@ -1,8 +1,20 @@
-
 # Open Catalyst 2020 Multi-Adsorbate (mAds) Dataset
 
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 21.8M structures |
+| **Max Adsorbates** | Up to 5 adsorbates per surface |
+| **Purpose** | Multi-adsorbate and coverage effects |
+| **Paper** | [UMA Paper](https://arxiv.org/pdf/2506.23971) |
+| **License** | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+:::
+
 ## Overview
+
 The OC20-mAds dataset is a training set expanding the original OC20 dataset to include multi-adsorbate and coverage effects on catalyst surfaces. Adsorbates are randomly sampled from the list of OC20 adsorbates, up to 5 maximum adsorbates. For a small fraction of the dataset, all adsorbates on the surface may be identical. OC20-mAds is introduced in the [UMA paper](https://arxiv.org/pdf/2506.23971).
+
 ## File Contents and Download
 |Splits |Size | MD5 checksum (download link)   |
 |---     |---    |---     |

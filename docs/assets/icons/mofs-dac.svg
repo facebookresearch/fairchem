@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- MOFs for Direct Air Capture: Porous framework with CO2 molecule -->
+
+  <!-- Main cage structure - outer framework -->
+  <!-- Vertical struts -->
+  <line x1="20" y1="20" x2="20" y2="80" stroke="#4A90A4" stroke-width="2.5"/>
+  <line x1="80" y1="20" x2="80" y2="80" stroke="#4A90A4" stroke-width="2.5"/>
+  <line x1="50" y1="10" x2="50" y2="90" stroke="#4A90A4" stroke-width="2.5"/>
+
+  <!-- Horizontal struts (top) -->
+  <line x1="15" y1="25" x2="50" y2="10" stroke="#4A90A4" stroke-width="2"/>
+  <line x1="50" y1="10" x2="85" y2="25" stroke="#4A90A4" stroke-width="2"/>
+
+  <!-- Horizontal struts (middle) -->
+  <line x1="15" y1="50" x2="50" y2="50" stroke="#4A90A4" stroke-width="2"/>
+  <line x1="50" y1="50" x2="85" y2="50" stroke="#4A90A4" stroke-width="2"/>
+
+  <!-- Horizontal struts (bottom) -->
+  <line x1="15" y1="75" x2="50" y2="90" stroke="#4A90A4" stroke-width="2"/>
+  <line x1="50" y1="90" x2="85" y2="75" stroke="#4A90A4" stroke-width="2"/>
+
+  <!-- Cross braces for 3D effect -->
+  <line x1="20" y1="20" x2="50" y2="50" stroke="#2C5F6D" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <line x1="80" y1="20" x2="50" y2="50" stroke="#2C5F6D" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <line x1="20" y1="80" x2="50" y2="50" stroke="#2C5F6D" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <line x1="80" y1="80" x2="50" y2="50" stroke="#2C5F6D" stroke-width="1.5" stroke-dasharray="4,2"/>
+
+  <!-- Metal nodes (corner joints) -->
+  <circle cx="20" cy="20" r="6" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="80" cy="20" r="6" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="20" cy="80" r="6" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="80" cy="80" r="6" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="50" cy="10" r="5" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="50" cy="90" r="5" fill="#666" stroke="#444" stroke-width="1.5"/>
+  <circle cx="50" cy="50" r="7" fill="#4A90A4" stroke="#2C5F6D" stroke-width="2"/>
+
+  <!-- CO2 molecule inside the pore -->
+  <!-- Central carbon -->
+  <circle cx="35" cy="35" r="5" fill="#444" stroke="#333" stroke-width="1.5"/>
+  <!-- Left oxygen -->
+  <circle cx="24" cy="35" r="4" fill="#E85D04" stroke="#C04D00" stroke-width="1.5"/>
+  <!-- Right oxygen -->
+  <circle cx="46" cy="35" r="4" fill="#E85D04" stroke="#C04D00" stroke-width="1.5"/>
+  <!-- Bonds -->
+  <line x1="29" y1="35" x2="31" y2="35" stroke="#333" stroke-width="2"/>
+  <line x1="39" y1="35" x2="41" y2="35" stroke="#333" stroke-width="2"/>
+</svg>

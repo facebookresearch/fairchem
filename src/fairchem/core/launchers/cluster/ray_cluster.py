@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import os
 import shutil
 import socket
@@ -15,7 +16,9 @@ from contextlib import closing
 from pathlib import Path
 
 import psutil
+from fairchem.core.common.distutils import os_environ_get_or_throw
 import submitit
+from submitit.helpers import Checkpointable, DelayedSubmission
 
 
 def kill_proc_tree(pid, including_parent=True):
@@ -29,11 +32,27 @@ def kill_proc_tree(pid, including_parent=True):
         parent.wait(5)
 
 
-def find_free_port():
+def find_free_port(preferred: int = 0) -> int:
+    """
+    Find an available port.
+
+    Args:
+        preferred: Try this port first. If 0 or unavailable, let the OS pick.
+    """
+    if preferred:
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+                s.bind(("", preferred))
+                return preferred
+        except OSError:
+            pass
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(("", 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
+
+
+RAY_DEFAULT_DASHBOARD_PORT = 8265
 
 
 def scancel(job_ids: list[str]):
@@ -144,6 +163,11 @@ class RayClusterState:
         with self._head_json.open("w") as f:
             json.dump(dataclasses.asdict(head_info), f)
 
+    def reset_state(self):
+        """Resets the head node information by removing the stored JSON file, useful for preemption resumes"""
+        if self._head_json.exists():
+            self._head_json.unlink()
+
     def clean(self):
         """Removes the rendezvous directory and all its contents."""
         shutil.rmtree(self.rendezvous_dir)
@@ -168,6 +192,54 @@ class RayClusterState:
         return [f.stem for f in self.jobs_dir.iterdir()]
 
 
+class CheckpointableRayJob(Checkpointable):
+    """
+    A checkpointable Ray job that can restart itself upon failure or preemption.
+    It gang schedules the head and worker nodes together to keep preemption logic simple.
+    """
+
+    def __init__(
+        self,
+        cluster_state: RayClusterState,
+        worker_wait_timeout_seconds: int,
+        payload: Optional[Callable[..., PayloadReturnT]],
+        **kwargs,
+    ):
+        self.cluster_state = cluster_state
+        self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
+        self.payload = payload
+        self.kwargs = kwargs
+
+    def __call__(self):
+        # if we are the head node, start head
+        # the worker nodes need to get the head address from the cluster state
+        node_id = int(os_environ_get_or_throw("SLURM_NODEID"))
+        if node_id == 0:
+            _ray_head_script(
+                cluster_state=self.cluster_state,
+                worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+                payload=self.payload,
+                **self.kwargs,
+            )
+        else:
+            worker_script(
+                cluster_state=self.cluster_state,
+                worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+            )
+
+    def checkpoint(self) -> DelayedSubmission:
+        logging.error(f"CheckpointableRayJob checkpointing callback is triggered")
+        # reset head info so that on restart we can create a new head
+        self.cluster_state.reset_state()
+        job = CheckpointableRayJob(
+            cluster_state=self.cluster_state,
+            worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+            payload=self.payload,
+            **self.kwargs,
+        )
+        return DelayedSubmission(job)
+
+
 def _ray_head_script(
     cluster_state: RayClusterState,
     worker_wait_timeout_seconds: int,
@@ -182,6 +254,7 @@ def _ray_head_script(
     # using 0 as the port for the head will make ray search for an open port instead of
     # always using the same one.
     port = find_free_port()
+    dashboard_port = find_free_port(preferred=RAY_DEFAULT_DASHBOARD_PORT)
     head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
@@ -205,6 +278,9 @@ def _ray_head_script(
                 "--num-gpus",
                 f"{num_gpus}",
                 "--dashboard-host=0.0.0.0",
+                f"--dashboard-port={dashboard_port}",
+                "--min-worker-port=0",
+                "--max-worker-port=0",
             ],
             env=head_env,
             stdout=subprocess.PIPE,
@@ -267,6 +343,8 @@ def worker_script(
                 f"{num_cpus}",
                 "--num-gpus",
                 f"{num_gpus}",
+                "--min-worker-port=0",
+                "--max-worker-port=0",
             ],
             env=worker_env,
             check=False,
@@ -298,17 +376,6 @@ class RayCluster:
 
     """
 
-    log_dir: Path
-    state: RayClusterState
-
-    jobs: list[submitit.Job] = []
-    is_shutdown = False
-    num_worker_groups = 0
-    num_drivers = 0
-    head_started = False
-
-    # keeping this in a separate object so it's easy to serialize and pass to jobs
-
     def __init__(
         self,
         log_dir: Path = Path("raycluster_logs"),
@@ -318,10 +385,48 @@ class RayCluster:
     ):
         self.state = RayClusterState(rdv_dir, cluster_id)
         print(f"cluster {self.state.cluster_id}")
+        self.output_dir = log_dir
         self.log_dir = Path(log_dir) / self.state.cluster_id
         self.state.rendezvous_dir.mkdir(parents=True, exist_ok=True)
         self.worker_wait_timeout_seconds = worker_wait_timeout_seconds
+        self.is_shutdown = False
+        self.num_worker_groups = 0
+        self.num_drivers = 0
+        self.head_started = False
+        self.jobs: list[submitit.Job] = []
         print(f"logs will be in {self.log_dir.resolve()}")
+
+    def start_head_and_workers(
+        self,
+        requirements: dict[str, int | str],
+        name: str = "default",
+        executor: str = "slurm",
+        payload: Optional[Callable[..., PayloadReturnT]] = None,
+        **kwargs,
+    ):
+        assert not self.head_started, "head already started"
+        # start the head node
+        self.head_started = True
+        s_executor = submitit.AutoExecutor(
+            folder=str(self.log_dir),
+            cluster=executor,
+        )
+        s_executor.update_parameters(
+            name=f"ray_{name}_{self.state.cluster_id}",
+            **requirements,
+        )
+        ray_job = CheckpointableRayJob(
+            cluster_state=self.state,
+            worker_wait_timeout_seconds=self.worker_wait_timeout_seconds,
+            payload=payload,
+            **kwargs,
+        )
+        slurm_job = s_executor.submit(ray_job)
+        self.state.add_job(slurm_job)
+        self.jobs.append(slurm_job)
+        mk_symlinks(self.log_dir, "job", slurm_job.paths)
+        print("slurm job id:", slurm_job.job_id)
+        return slurm_job.job_id
 
     def start_head(
         self,
@@ -342,7 +447,7 @@ class RayCluster:
             cluster=executor,
         )
         s_executor.update_parameters(
-            name=f"ray_head_{name}_{self.state.cluster_id}",  # TODO name should probably include more details (cluster_id)
+            name=f"ray_head_{name}_{self.state.cluster_id}",
             **requirements,
         )
         head_job = s_executor.submit(
@@ -353,6 +458,7 @@ class RayCluster:
             **kwargs,
         )
         self.state.add_job(head_job)
+        self.jobs.append(head_job)
         mk_symlinks(self.log_dir, "head", head_job.paths)
         print("head slurm job id:", head_job.job_id)
         return head_job.job_id
@@ -392,6 +498,7 @@ class RayCluster:
         print("workers slurm job ids:", [job.job_id for job in jobs])
         for j in jobs:
             self.state.add_job(j)
+            self.jobs.append(j)
         self.num_worker_groups += 1
         return [job.job_id for job in jobs]
 

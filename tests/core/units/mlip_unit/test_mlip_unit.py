@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from torchtnt.framework.state import State
     from torchtnt.framework.unit import TEvalUnit, TTrainUnit
 
+
 class TrainEndCallback(Callback):
     def __init__(
         self,
@@ -184,7 +185,7 @@ def test_full_train_from_cli(fake_uma_dataset, torch_deterministic):
         "--config",
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=13.662819862365723",
+        "+expected_loss=13.661060333251953",
     ]
     launch_main(sys_args)
 
@@ -218,7 +219,9 @@ def test_full_train_eval_from_cli_aselmdb(fake_uma_dataset, torch_deterministic)
         "tests/core/units/mlip_unit/test_mlip_train.yaml",
         "datasets=aselmdb",
         f"datasets.data_root_dir={fake_uma_dataset}",
-        "+expected_loss=13.662849426269531",
+        # this is slightly different for the cpu version from radius_pbc v1
+        # v1 value is 13.662849426269531
+        "+expected_loss=13.661477088928223",
     ]
     launch_main(sys_args)
 
@@ -365,18 +368,34 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "train_config, dataset_config",
+    "train_config, dataset_config, num_ddps, backbone_overrides",
     [
-        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb"),
+        # ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 1, []),
+        ("tests/core/units/mlip_unit/test_mlip_train.yaml", "aselmdb", 2, []),
+        # test charge balancing GP support
+        (
+            "tests/core/units/mlip_unit/test_mlip_train.yaml",
+            "aselmdb",
+            2,
+            ["++backbone.charge_balanced_channels=[0]"],
+        ),
         (
             "tests/core/units/mlip_unit/test_mlip_train_conserving.yaml",
             "aselmdb_conserving",
+            2,
+            [],
         ),
     ],
 )
 def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
-    train_config, dataset_config, fake_uma_dataset, torch_deterministic
+    train_config,
+    dataset_config,
+    num_ddps,
+    backbone_overrides,
+    fake_uma_dataset,
+    torch_deterministic,
 ):
     with tempfile.TemporaryDirectory() as tmpdirname:
         no_gp_save_path = os.path.join(tmpdirname, "no_gp")
@@ -391,35 +410,38 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
             "runner.max_steps=1",
-        ]
+        ] + backbone_overrides
+
+        gp_size = 2
 
         no_gp_args = sys_args.copy()
         no_gp_args.append(f"optimizer.save_path={no_gp_save_path}")
-        no_gp_args += ["+job.scheduler.ranks_per_node=2"]
+        no_gp_args += [f"+job.scheduler.ranks_per_node={num_ddps}"]
 
         launch_main(no_gp_args)
 
         gp_args = sys_args.copy()
         gp_args.append(f"optimizer.save_path={gp_save_path}")
         gp_args += [
-            "+job.scheduler.ranks_per_node=4",
-            "+job.graph_parallel_group_size=2",
+            f"+job.scheduler.ranks_per_node={gp_size * num_ddps}",
+            f"+job.graph_parallel_group_size={gp_size}",
         ]
         launch_main(gp_args)
 
         for step in range(1):
-            for ddp_rank in range(4):
-                gp_rank = ddp_rank // 2
+            for ddp_rank in range(gp_size * num_ddps):
+                gp_rank = ddp_rank // gp_size
                 compare_to_non_gp_ddp_rank = gp_rank
                 gp_params_and_grads = torch.load(
                     os.path.join(
-                        gp_save_path, f"ddp4.{ddp_rank}_gp2.{gp_rank}_step{step}.pt"
+                        gp_save_path,
+                        f"ddp{num_ddps * gp_size}.{ddp_rank}_gp{gp_size}.{gp_rank}_step{step}.pt",
                     )
                 )
                 non_gp_params_and_grads = torch.load(
                     os.path.join(
                         no_gp_save_path,
-                        f"ddp2.{compare_to_non_gp_ddp_rank}_gp0.0_step{step}.pt",
+                        f"ddp{num_ddps}.{compare_to_non_gp_ddp_rank}_gp0.0_step{step}.pt",
                     )
                 )
                 relative_diffs = [
@@ -467,9 +489,9 @@ def test_conserve_train_from_cli_aselmdb(mode, fake_uma_dataset, torch_determini
 @pytest.mark.parametrize(
     "checkpoint_step, max_epochs, expected_loss",
     [
-        (3, 2, 6.2054009437561035),
-        (6, 2, 6.2054009437561035),
-        (5, 2, 6.2054009437561035),
+        (3, 2, 6.206212997436523),
+        (6, 2, 6.206212997436523),
+        (5, 2, 6.206212997436523),
         (6, 3, 43.08491516113281),
         (14, 3, 43.08491516113281),
     ],

@@ -1,9 +1,23 @@
 # ODAC25
 
-The Open DAC 2025 (ODAC25) dataset contains nearly 70 million DFT single-point 
-calculations for CO₂, H₂O, N₂, and O₂ adsorption in nearly 15,000 metal-organic frameworks 
-(MOFs). This dataset represents a significant expansion upon ODAC23, introducing 
-greater chemical and configurational diversity through functionalized MOFs, 
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | ~70 million DFT calculations |
+| **Domain** | Metal-organic frameworks (MOFs) |
+| **Adsorbates** | CO2, H2O, N2, O2 |
+| **MOFs** | ~15,000 structures |
+| **Labels** | Total energy (eV), forces (eV/A) |
+| **Level of Theory** | PBE+D3 (VASP) |
+| **License** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+| **Download** | [HuggingFace](https://huggingface.co/facebook/ODAC25) |
+:::
+
+The Open DAC 2025 (ODAC25) dataset contains nearly 70 million DFT single-point
+calculations for CO2, H2O, N2, and O2 adsorption in nearly 15,000 metal-organic frameworks
+(MOFs). This dataset represents a significant expansion upon ODAC23, introducing
+greater chemical and configurational diversity through functionalized MOFs,
 high-energy GCMC-derived placements, and synthetically generated frameworks.
 
 The dataset enables training of state-of-the-art machine-learned interatomic 

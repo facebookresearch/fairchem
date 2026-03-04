@@ -16,13 +16,15 @@ import sys
 from collections import defaultdict
 from contextlib import nullcontext
 from functools import wraps
-from typing import TYPE_CHECKING, Protocol, Sequence
+from typing import TYPE_CHECKING, Protocol
 
 import hydra
 import numpy as np
+import ray
 import torch
 import torch.distributed as dist
-from monty.dev import requires
+from ray import remote
+from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
 
@@ -33,30 +35,18 @@ from fairchem.core.common.distutils import (
     get_device_for_local_rank,
     setup_env_local_multi_gpu,
 )
-from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.utils import (
+    get_backbone_class_from_checkpoint,
     load_inference_model,
     tf32_context_manager,
 )
 
 if TYPE_CHECKING:
-    from fairchem.core.units.mlip_unit.mlip_unit import Task
+    from ase import Atoms
 
-try:
-    import ray
-    from ray import remote
-    from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
-
-    ray_installed = True
-except ImportError:
-    ray = None
-
-    def remote(cls):
-        # dummy
-        return cls
-
-    ray_installed = False
+    from fairchem.core.units.mlip_unit.api.inference import MLIPInferenceCheckpoint
 
 
 def collate_predictions(predict_fn):
@@ -90,8 +80,25 @@ def collate_predictions(predict_fn):
 class MLIPPredictUnitProtocol(Protocol):
     def predict(self, data: AtomicData, undo_element_references: bool) -> dict: ...
 
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None: ...
+
     @property
     def dataset_to_tasks(self) -> dict[str, list]: ...
+
+
+def merge_uma_model(model, data):
+    logging.info("Calling merge_uma_model")
+    # merge the backbone
+    model.backbone = model.backbone.merge_MOLE_model(data)
+
+    # merge any heads
+    new_output_heads = torch.nn.ModuleDict()
+    for head_name, head in model.output_heads.items():
+        if hasattr(head, "merge_MOLE_model"):
+            new_output_heads[head_name] = head.merge_MOLE_model(data)
+        else:
+            new_output_heads[head_name] = head
+    model.output_heads = new_output_heads
 
 
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
@@ -103,96 +110,84 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
     ):
         super().__init__()
         os.environ[CURRENT_DEVICE_TYPE_STR] = device
 
         self.set_seed(seed)
-        # note these are different from the element references used for model training
-        self.atom_refs = (
-            {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
-            if atom_refs is not None
-            else {}
-        )
+        self._setup_refs(atom_refs, form_elem_refs)
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
-        if inference_settings.torch_num_threads is not None:
-            torch.set_num_threads(inference_settings.torch_num_threads)
-            torch.set_num_interop_threads(inference_settings.torch_num_threads)
-
-        if overrides is None:
-            overrides = {}
-        if "backbone" not in overrides:
-            overrides["backbone"] = {}
-        # always disable always_use_pbc for inference
-        overrides["backbone"]["always_use_pbc"] = False
-        if inference_settings.activation_checkpointing is not None:
-            overrides["backbone"]["activation_checkpointing"] = (
-                inference_settings.activation_checkpointing
-            )
-        if inference_settings.edge_chunk_size is not None:
-            overrides["backbone"]["edge_chunk_size"] = (
-                inference_settings.edge_chunk_size
-            )
-        if inference_settings.external_graph_gen is not None:
-            overrides["backbone"][
-                "otf_graph"
-            ] = not inference_settings.external_graph_gen
-
-        if inference_settings.internal_graph_gen_version is not None:
-            overrides["backbone"]["radius_pbc_version"] = (
-                inference_settings.internal_graph_gen_version
-            )
+        self._setup_threads(inference_settings)
 
         if inference_settings.wigner_cuda:
             logging.warning(
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
 
-        self.model, checkpoint = load_inference_model(
-            inference_model_path, use_ema=True, overrides=overrides
+        # Load checkpoint first to get model type
+        checkpoint = torch.load(
+            inference_model_path, map_location="cpu", weights_only=False
         )
-        tasks = [
-            hydra.utils.instantiate(task_config)
-            for task_config in checkpoint.tasks_config
-        ]
-        self.tasks = {t.name: t for t in tasks}
 
-        self._dataset_to_tasks = get_dataset_to_tasks_map(self.tasks.values())
-        assert set(self._dataset_to_tasks.keys()).issubset(
-            set(self.model.module.backbone.dataset_list)
-        ), "Datasets in tasks is not a strict subset of datasets in backbone."
-        assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
+        # Build model-specific overrides
+        final_overrides = self._build_overrides_from_settings(
+            checkpoint, overrides, inference_settings
+        )
 
-        self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
+        # Set default dtype during model construction so that non-persistent
+        # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
+        # requested precision rather than being cast from float32 later.
+        prev_dtype = torch.get_default_dtype()
+        torch.set_default_dtype(inference_settings.base_precision_dtype)
+
+        try:
+            # Load model with overrides, passing pre-loaded checkpoint
+            self.model, checkpoint = load_inference_model(
+                inference_model_path,
+                use_ema=True,
+                overrides=final_overrides,
+                preloaded_checkpoint=checkpoint,
+            )
+
+            # Model sets up tasks
+            self.model.module.setup_tasks(checkpoint.tasks_config)
+        finally:
+            torch.set_default_dtype(prev_dtype)
+
+        self._setup_device(device)
 
         self.model.eval()
-
         self.lazy_model_intialized = False
-        self.inference_mode = inference_settings
-
-        # store composition embedding of system the model was merged on
-        self.merged_on = None
-
+        self.inference_settings = inference_settings
         self.assert_on_nans = assert_on_nans
+        self._warned_upcast = False
 
-        if self.direct_forces:
+        if self.model.module.direct_forces:
             logging.warning(
-                "This is a direct-force model. Direct force predictions may lead to discontinuities in the potential "
-                "energy surface and energy conservation errors."
+                "This is a direct-force model. Direct force predictions may lead to "
+                "discontinuities in the potential energy surface and energy conservation errors."
             )
 
     @property
     def direct_forces(self) -> bool:
-        return self.model.module.backbone.direct_forces
+        return self.model.module.direct_forces
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
-        return self._dataset_to_tasks
+        return self.model.module.dataset_to_tasks
 
-    def set_seed(self, seed: int):
+    @property
+    def tasks(self) -> dict:
+        return self.model.module.tasks
+
+    def set_seed(self, seed: int) -> None:
+        """
+        Initialize random seeds.
+        """
         logging.debug(f"Setting random seed to {seed}")
         self._seed = seed
         random.seed(seed)
@@ -200,133 +195,144 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+    def _setup_refs(self, atom_refs: dict | None, form_elem_refs: dict | None) -> None:
+        """
+        Setup element references.
+        """
+        self.atom_refs = (
+            {task.replace("_elem_refs", ""): refs for task, refs in atom_refs.items()}
+            if atom_refs
+            else {}
+        )
+        self.form_elem_refs = form_elem_refs or {}
+
+    def _setup_threads(self, settings: InferenceSettings) -> None:
+        """
+        Configure thread settings.
+        """
+        if settings.torch_num_threads is not None:
+            torch.set_num_threads(settings.torch_num_threads)
+            torch.set_num_interop_threads(settings.torch_num_threads)
+
+    def _setup_device(self, device: str) -> None:
+        """
+        Setup inference device.
+        """
+        assert device in ["cpu", "cuda"], "device must be either 'cpu' or 'cuda'"
+        self.device = get_device_for_local_rank() if device == "cuda" else "cpu"
+
+    def _build_overrides_from_settings(
+        self,
+        checkpoint: MLIPInferenceCheckpoint,
+        user: dict | None,
+        settings: InferenceSettings,
+    ) -> dict:
+        """Build backbone config overrides by delegating to model-specific logic."""
+        overrides = {} if user is None else dict(user)
+        if "backbone" not in overrides:
+            overrides["backbone"] = {}
+
+        # Delegate to model-specific classmethod
+        backbone_cls = get_backbone_class_from_checkpoint(checkpoint)
+        backbone_overrides = backbone_cls.build_inference_settings(settings)
+
+        overrides["backbone"].update(backbone_overrides)
+
+        # User overrides take precedence
+        if user is not None and "backbone" in user:
+            overrides["backbone"].update(user["backbone"])
+
+        return overrides
+
     def move_to_device(self):
         self.model.to(self.device)
-        for task in self.tasks.values():
+        for task in self.model.module.tasks.values():
             task.normalizer.to(self.device)
             if task.element_references is not None:
                 task.element_references.to(self.device)
 
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Delegates to the model's backbone for model-specific validation.
+        """
+        self.model.module.validate_atoms_data(atoms, task_name)
+
     def predict_step(self, state: State, data: AtomicData) -> dict[str, torch.tensor]:
         return self.predict(data)
-
-    def get_composition_charge_spin_dataset(self, data):
-        composition_sum = data.atomic_numbers.new_zeros(
-            self.model.module.backbone.max_num_elements,
-            dtype=torch.int,
-        ).index_add(
-            0,
-            data.atomic_numbers.to(torch.int),
-            data.atomic_numbers.new_ones(data.atomic_numbers.shape[0], dtype=torch.int),
-        )
-        comp_charge_spin = (
-            composition_sum,
-            getattr(data, "charge", None),
-            getattr(data, "spin", None),
-        )
-        return comp_charge_spin, getattr(data, "dataset", [None])
 
     @collate_predictions
     def predict(
         self, data: AtomicData, undo_element_references: bool = True
     ) -> dict[str, torch.tensor]:
         if not self.lazy_model_intialized:
-            # merge everything on CPU
-            if self.inference_mode.merge_mole:
-                # replace backbone with non MOE version
-                assert (
-                    data.natoms.numel() == 1
-                ), f"Cannot merge model with multiple systems in batch. Must be exactly 1 system, found {data.natoms.numel()}"
-                self.model.module.backbone = (
-                    self.model.module.backbone.merge_MOLE_model(data.clone())
-                )
-                self.model.eval()
-            # move to device
-            self.move_to_device()
-            if self.inference_mode.compile:
-                logging.warning(
-                    "Model is being compiled this might take a while for the first time"
-                )
-                self.model = torch.compile(self.model, dynamic=True)
-            self.lazy_model_intialized = True
+            self._lazy_init(data)
 
-        if self.inference_mode.external_graph_gen and data.edge_index.shape[1] == 0:
-            raise ValueError(
-                "Cannot run inference with external graph generation on empty edge index. "
-                "Please ensure the input data has valid edges."
-            )
-
-        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
-        if self.inference_mode.merge_mole:
-            if self.merged_on is None:
-                # only get embeddings after moved to final device to get right types
-                self.merged_on = self.get_composition_charge_spin_dataset(data_device)
-            else:
-                this_sys = self.get_composition_charge_spin_dataset(data_device)
-                assert (
-                    data_device.natoms.numel() == 1
-                ), f"Cannot run merged model on batch with multiple systems. Must be exactly 1 system, found {data_device.natoms.numel()}"
+        dtype = self.inference_settings.base_precision_dtype
+        if not self._warned_upcast:
+            self._warned_upcast = warn_if_upcasting(data_device.pos.dtype, dtype)
+        for key, val in data_device:
+            if torch.is_tensor(val) and val.is_floating_point():
+                data_device[key] = val.to(dtype)
 
-                # Normalize compositions by total number of atoms to allow same reduced composition
-                merged_comp = self.merged_on[0][0].float()
-                this_comp = this_sys[0][0].float()
-                merged_comp_norm = merged_comp / merged_comp.sum()
-                this_comp_norm = this_comp / this_comp.sum()
+        # Model handles any per-prediction checks (e.g., MOLE consistency)
+        self.model.module.on_predict_check(data_device)
 
-                assert merged_comp_norm.isclose(
-                    this_comp_norm, rtol=1e-5
-                ).all(), "Cannot run on merged model on system. Relative compositions seem different..."
-                assert (
-                    self.merged_on[0][1] == this_sys[0][1]
-                ), f"Cannot run on merged model on system. Charge is different {self.merged_on[0][1]} vs {this_sys[0][1]}"
-                assert (
-                    self.merged_on[0][2] == this_sys[0][2]
-                ), f"Cannot run on merged model on system. Spin is different {self.merged_on[0][2]} vs {this_sys[0][2]}"
-                assert (
-                    self.merged_on[1] == this_sys[1]
-                ), f"Cannot run on merged model on system. Dataset is different {self.merged_on[1]} vs {this_sys[1]}"
+        return self._run_inference(data_device, undo_element_references)
 
+    def _lazy_init(self, data: AtomicData) -> None:
+        """
+        Lazy initialization on first predict call.
+        """
+        # Model handles its own preparation (MOLE merge, eval mode, etc.)
+        self.model.module.prepare_for_inference(data, self.inference_settings)
+
+        self.model.to(self.inference_settings.base_precision_dtype)
+
+        self.move_to_device()
+
+        if self.inference_settings.compile:
+            logging.warning(
+                "Model is being compiled this might take a while for the first time"
+            )
+            self.model = torch.compile(self.model, dynamic=True)
+
+        self.lazy_model_intialized = True
+
+    def _run_inference(self, data: AtomicData, undo_refs: bool) -> dict:
+        """
+        Execute model inference.
+        """
         inference_context = torch.no_grad() if self.direct_forces else nullcontext()
         tf32_context = (
-            tf32_context_manager() if self.inference_mode.tf32 else nullcontext()
+            tf32_context_manager() if self.inference_settings.tf32 else nullcontext()
         )
 
-        pred_output = {}
         with inference_context, tf32_context:
-            output = self.model(data_device)
-            for task_name, task in self.tasks.items():
-                pred_output[task_name] = task.normalizer.denorm(
-                    output[task_name][task.property]
+            output = self.model(data)
+            return self._process_outputs(data, output, undo_refs)
+
+    def _process_outputs(self, data: AtomicData, output: dict, undo_refs: bool) -> dict:
+        """
+        Denormalize and post-process model outputs.
+        """
+        pred_output = {}
+        for task_name, task in self.model.module.tasks.items():
+            pred_output[task_name] = task.normalizer.denorm(
+                output[task_name][task.property]
+            )
+            if self.assert_on_nans:
+                assert (
+                    torch.isfinite(pred_output[task_name]).all()
+                ), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
+            if undo_refs and task.element_references is not None:
+                pred_output[task_name] = task.element_references.undo_refs(
+                    data, pred_output[task_name]
                 )
-                if self.assert_on_nans:
-                    assert torch.isfinite(
-                        pred_output[task_name]
-                    ).all(), f"NaNs/Infs found in prediction for task {task_name}.{task.property}"
-                if undo_element_references and task.element_references is not None:
-                    pred_output[task_name] = task.element_references.undo_refs(
-                        data_device, pred_output[task_name]
-                    )
-
         return pred_output
-
-
-def get_dataset_to_tasks_map(tasks: Sequence[Task]) -> dict[str, list[Task]]:
-    """Create a mapping from dataset names to their associated tasks.
-
-    Args:
-        tasks: A sequence of Task objects to be organized by dataset
-
-    Returns:
-        A dictionary mapping dataset names (str) to lists of Task objects
-        that are associated with that dataset
-    """
-    dset_to_tasks_map = defaultdict(list)
-    for task in tasks:
-        for dataset_name in task.datasets:
-            dset_to_tasks_map[dataset_name].append(task)
-    return dict(dset_to_tasks_map)
 
 
 def move_tensors_to_cpu(data):
@@ -361,9 +367,6 @@ class MLIPWorkerLocal:
         master_port: int | None = None,
         master_address: str | None = None,
     ):
-        if ray_installed is False:
-            raise RuntimeError("Requires `ray` to be installed")
-
         self.worker_id = worker_id
         self.world_size = world_size
         self.predictor_config = predictor_config
@@ -419,6 +422,7 @@ class MLIPWorkerLocal:
             self.last_received_atomic_data = data.to(self.device)
             while True:
                 torch.distributed.broadcast(self.last_received_atomic_data.pos, src=0)
+                torch.distributed.broadcast(self.last_received_atomic_data.cell, src=0)
                 self.predict_unit.predict(self.last_received_atomic_data)
 
         return None
@@ -429,7 +433,6 @@ class MLIPWorker(MLIPWorkerLocal):
     pass
 
 
-@requires(ray_installed, message="Requires `ray` to be installed")
 class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -439,9 +442,11 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         inference_settings: InferenceSettings | None = None,
         seed: int = 41,
         atom_refs: dict | None = None,
+        form_elem_refs: dict | None = None,
         assert_on_nans: bool = False,
         num_workers: int = 1,
         num_workers_per_node: int = 8,
+        log_level: int = logging.INFO,
     ):
         super().__init__()
         _mlip_pred_unit = MLIPPredictUnit(
@@ -451,9 +456,13 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             inference_settings=inference_settings,
             seed=seed,
             atom_refs=atom_refs,
+            form_elem_refs=form_elem_refs,
         )
+        if inference_settings is None:
+            inference_settings = InferenceSettings()
         self.inference_settings = inference_settings
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
+        self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
@@ -463,26 +472,34 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "inference_settings": inference_settings,
             "seed": seed,
             "atom_refs": atom_refs,
+            "form_elem_refs": form_elem_refs,
             "assert_on_nans": assert_on_nans,
         }
 
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             force=True,
             stream=sys.stdout,
             format="%(asctime)s %(levelname)s [%(processName)s] %(name)s: %(message)s",
         )
         # Optional: keep Ray/uvicorn chatty logs in check
-        logging.getLogger("ray").setLevel(logging.INFO)
-        logging.getLogger("uvicorn").setLevel(logging.INFO)
+        logging.getLogger("ray").setLevel(log_level)
+        logging.getLogger("uvicorn").setLevel(log_level)
         if not ray.is_initialized():
-            ray.init(
-                logging_level=logging.INFO,
-                num_cpus=num_workers_per_node,
-                # runtime_env={
-                #     "env_vars": {"RAY_DEBUG": "1"},
-                # },
-            )
+            # in CI envrionment, we want to control the number of CPUs allocated to limit the pool of IDLE ray workers
+            if os.environ.get("CI"):
+                logging.info(
+                    f"CI environment detected, initializing ray with limited CPUs: {num_workers_per_node}"
+                )
+                ray.init(
+                    logging_level=log_level,
+                    num_cpus=num_workers_per_node,
+                    runtime_env={
+                        "env_vars": {"RAY_DEBUG": "1"},
+                    },
+                )
+            else:
+                ray.init(logging_level=log_level)
 
         self.atomic_data_on_device = None
 
@@ -571,10 +588,83 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             self.atomic_data_on_device = data.clone()
         else:
             self.atomic_data_on_device.pos = data.pos.to(self.local_rank0.device)
+            self.atomic_data_on_device.cell = data.cell.to(self.local_rank0.device)
             torch.distributed.broadcast(self.atomic_data_on_device.pos, src=0)
+            torch.distributed.broadcast(self.atomic_data_on_device.cell, src=0)
 
         return self.local_rank0.predict(self.atomic_data_on_device)
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Delegates to the model's validate_atoms_data captured at init time.
+        """
+        self._validate_atoms_data_fn(atoms, task_name)
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
         return self._dataset_to_tasks
+
+
+class BatchServerPredictUnit(MLIPPredictUnitProtocol):
+    """
+    PredictUnit wrapper that uses Ray Serve for batched inference.
+
+    This provides a clean interface compatible with MLIPPredictUnitProtocol
+    while leveraging Ray Serve's batching capabilities under the hood.
+    """
+
+    def __init__(
+        self,
+        server_handle,
+        predict_unit: MLIPPredictUnit,
+    ):
+        """
+        Args:
+            server_handle: Ray Serve deployment handle for BatchPredictServer
+            predict_unit: Local MLIPPredictUnit used for input validation.
+                Validation must run locally because it mutates atoms.info.
+        """
+        self.server_handle = server_handle
+        self._predict_unit = predict_unit
+
+    def predict(self, data: AtomicData, undo_element_references: bool = True) -> dict:
+        """
+        Args:
+            data: AtomicData object (single system)
+            undo_element_references: Whether to undo element references
+
+        Returns:
+            Prediction dictionary
+        """
+        result = self.server_handle.predict.remote(
+            data, undo_element_references
+        ).result()
+        return result
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Runs locally (not via Ray Serve) because validation mutates atoms.info.
+        """
+        self._predict_unit.validate_atoms_data(atoms, task_name)
+
+    @property
+    def dataset_to_tasks(self) -> dict:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "dataset_to_tasks"
+        ).result()
+
+    @property
+    def atom_refs(self) -> dict | None:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "atom_refs"
+        ).result()
+
+    @property
+    def inference_settings(self) -> InferenceSettings:
+        return self.server_handle.get_predict_unit_attribute.remote(
+            "inference_settings"
+        ).result()

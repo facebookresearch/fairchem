@@ -173,6 +173,7 @@ def world_size():
     return 4
 
 
+@pytest.mark.serial()
 def test_ddp_mae(energy, natoms, world_size):
     pred, target = energy
     ddp_pred, ddp_target = split_batch_for_ddp("energy", pred, target, natoms)
@@ -195,6 +196,7 @@ def test_ddp_mae(energy, natoms, world_size):
     assert torch.allclose(ddp_loss, ref_loss(pred, target))
 
 
+@pytest.mark.serial()
 def test_ddp_l2norm(forces, natoms, world_size):
     pred, target = forces
     ddp_pred, ddp_target = split_batch_for_ddp("forces", pred, target, natoms)
@@ -218,6 +220,7 @@ def test_ddp_l2norm(forces, natoms, world_size):
     assert torch.allclose(ddp_loss, ref_loss)
 
 
+@pytest.mark.serial()
 def test_ddp_mse(forces, natoms, world_size):
     pred, target = forces
     ddp_pred, ddp_target = split_batch_for_ddp("forces", pred, target, natoms)

@@ -117,7 +117,11 @@ class MTCollater:
         # set missing attributes to inf for all data objects in the batch
         # according to level, output dim, and dtype
         for data in data_list:
-            for task in missing_tasks[data.dataset]:
+            assert (
+                len(data) == 1
+            ), "data must contain a single element, can not batch batches"
+            assert len(data.dataset) == 1, "dataset name must be a single string"
+            for task in missing_tasks[data.dataset[0]]:
                 dim = task_config[task]["out_spec"]["dim"]
                 dtype = getattr(torch, task_config[task]["out_spec"]["dtype"])
                 if task_config[task]["level"] == "atom":

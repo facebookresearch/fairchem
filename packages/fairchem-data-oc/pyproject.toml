@@ -8,10 +8,10 @@ dynamic = ["version", "readme"]
 description = "Code for generating adsorbate-catalyst input configurations"
 license = {text = "MIT License"}
 dependencies = [
-    "numpy",
-    "scipy",
+    "numpy>=2.0,<2.4",
+    "scipy>=1.15.0",
     "matplotlib",
-    "ase",  #  this was pinned to 3.22.1
+    "ase>=3.27",  #  this was pinned to 3.22.1
     "pymatgen>=2023.10.3",  # this was pinned to 2023.5.10
     "tqdm"
 ]

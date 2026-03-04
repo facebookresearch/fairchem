@@ -1,0 +1,31 @@
+name: Trim Dependabot PR description
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  trim:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const body = context.payload.pull_request.body;
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pull_number,
+              body: `<details>\n<summary>Original Dependabot description</summary>\n\n${body}\n</details>`
+            });
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number,
+              body: ""
+            });

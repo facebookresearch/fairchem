@@ -11,10 +11,21 @@ kernelspec:
   name: python3
 ---
 
-Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
-======================================================
+# Open Catalyst 2020 Nudged Elastic Band (OC20NEB)
+
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 932 NEB relaxation trajectories |
+| **Reaction Types** | Desorptions, Dissociations, Transfers |
+| **Purpose** | Transition state energy calculations |
+| **Paper** | [CatTSunami (arXiv)](https://arxiv.org/abs/2405.02078) |
+| **License** | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+:::
 
 ## Overview
+
 This is a validation dataset which was used to assess model performance in [CatTSunami: Accelerating Transition State Energy Calculations with Pre-trained Graph Neural Networks](https://arxiv.org/abs/2405.02078). It is comprised of 932 NEB relaxation trajectories. There are three different types of reactions represented: desorptions, dissociations, and transfers. NEB calculations allow us to find transition states. The rate of reaction is determined by the transition state energy, so access to transition states is very important for catalysis research. For more information, check out the paper.
 
 ## File Structure and Contents

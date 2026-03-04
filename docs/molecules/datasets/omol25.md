@@ -1,7 +1,19 @@
 # OMol25
 
+:::{card} Dataset Overview
+
+| Property | Value |
+|----------|-------|
+| **Size** | 100+ million DFT calculations |
+| **Domain** | Organic/inorganic molecules, transition metal complexes, electrolytes |
+| **Labels** | Total energy (eV), forces (eV/A) |
+| **Level of Theory** | wB97M-V/def2-TZVPD (ORCA6) |
+| **License** | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode) |
+| **Download** | [HuggingFace](https://huggingface.co/facebook/OMol25) |
+:::
+
 The Open Molecules 2025 (OMol25) dataset contains over 100 million single point calculations of non-equilibrium structures and
-structural relaxations across a wide swath of organic and inorganic molecular space, including things like transition metal complexes and electrolytes. The dataset contains structures labeled with total energy (eV) and forces (eV/A) via ORCA6. A much larger amount of electronic structure data were also stored during generation and we hope to make these available to the community (reach out via github issue). 
+structural relaxations across a wide swath of organic and inorganic molecular space, including things like transition metal complexes and electrolytes. The dataset contains structures labeled with total energy (eV) and forces (eV/A) via ORCA6. A much larger amount of electronic structure data were also stored during generation and we hope to make these available to the community (reach out via github issue).
 
 All information about the dataset is available at the [OMol25 HuggingFace site](https://huggingface.co/facebook/OMol25). If you have issues with the gated model request form, please reach out via a github issue on this repository.  
 

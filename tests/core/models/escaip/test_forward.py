@@ -12,7 +12,7 @@ import pytest
 import torch
 
 from fairchem.core.datasets.atomic_data import AtomicData
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.models.base import HydraModelV2
 from fairchem.core.models.escaip.EScAIP import (
     EScAIPBackbone,
@@ -40,7 +40,7 @@ def seed_everywhere(seed=0):
 
 
 def get_sample_data(num_atoms: int):
-    samples = get_fcc_carbon_xtal(num_atoms)
+    samples = get_fcc_crystal_by_num_atoms(num_atoms)
     return AtomicData.from_ase(samples)
 
 
