@@ -95,6 +95,38 @@ class EdgeDegreeEmbedding(torch.nn.Module):
             node_offset,
         )
 
+    def forward_with_radial(
+        self,
+        x,
+        radial,
+        edge_index,
+        wigner_inv_envelope,
+        node_offset=0,
+    ):
+        """
+        Forward pass using precomputed radial (for fast backends).
+
+        Args:
+            x: Node features [N, L, C]
+            radial: Precomputed radial output [E, m0 * C]
+            edge_index: Edge indices [2, E]
+            wigner_inv_envelope: Wigner inverse with envelope [E, L, m0]
+            node_offset: Node offset for graph parallelism
+
+        Returns:
+            Updated node features [N, L, C]
+        """
+        return self.backend.edge_degree_scatter(
+            x,
+            radial,
+            wigner_inv_envelope,
+            edge_index,
+            self.m_0_num_coefficients,
+            self.sphere_channels,
+            self.rescale_factor,
+            node_offset,
+        )
+
     def forward(
         self,
         x,

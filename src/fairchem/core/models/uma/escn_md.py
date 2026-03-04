@@ -812,23 +812,36 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Pre-fuse envelope into wigner_inv
             wigner_inv_envelope = wigner_inv * edge_envelope
 
-            x_message = self.edge_degree_embedding(
-                x_message,
-                x_edge,
-                graph_dict["edge_index"],
-                wigner_inv_envelope,
-                data_dict["gp_node_offset"],
-            )
+            # Get all radial embeddings: edge_degree + layer radials
+            # General backend: returns [x_edge] * (1 + N) - rad_func computed internally
+            # Fast backends: returns precomputed [edge_radial, layer_0_radial, ...]
+            all_radials = self.backend.get_unified_radial_emb(x_edge, self)
+            edge_degree_input = all_radials[0]
+            x_edge_per_layer = all_radials[1:]
+
+            # Apply edge_degree_embedding
+            # Fast backends: use precomputed radial via forward_with_radial
+            # General backend: compute rad_func internally via forward
+            if hasattr(self, "_unified_radial_mlp"):
+                x_message = self.edge_degree_embedding.forward_with_radial(
+                    x_message,
+                    edge_degree_input,
+                    graph_dict["edge_index"],
+                    wigner_inv_envelope,
+                    data_dict["gp_node_offset"],
+                )
+            else:
+                x_message = self.edge_degree_embedding(
+                    x_message,
+                    edge_degree_input,
+                    graph_dict["edge_index"],
+                    wigner_inv_envelope,
+                    data_dict["gp_node_offset"],
+                )
 
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
-
-        # Get edge embeddings for each layer
-        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
-        # Fast backends: precomputed radials
-        with record_function("layer_radial_emb"):
-            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
 
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
