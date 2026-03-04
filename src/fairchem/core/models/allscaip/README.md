@@ -1,4 +1,4 @@
-# AllScAIP — All-to-all Scaled Attention Interatomic Potential
+# AllScAIP — All-to-all Scalable Attention Interatomic Potential
 
 AllScAIP is an attention-based machine learning interatomic potential model. It predicts energies, forces, and stresses from atomic structures using a combination of neighborhood-level and node-level self-attention mechanisms built on top of a Differentiable kNN radius graph.
 
