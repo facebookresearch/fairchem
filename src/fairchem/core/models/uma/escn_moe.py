@@ -264,7 +264,7 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
 
         # Track merge state for single-dataset inference
         self.merged_on_dataset = None
-        self.non_merged_dataset_names = None
+        self.non_merged_dataset_names: list[str] = []
 
     @staticmethod
     def _build_expert_mapping(
@@ -300,11 +300,12 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         """
         self.merged_on_dataset = data.dataset[0]
         expert_idx = self.dataset_name_to_exp[self.merged_on_dataset]
-        self.global_mole_tensors.expert_mixing_coefficients = (
-            torch.zeros(1, len(self.dataset_name_to_exp), dtype=data.pos.dtype)
-            .scatter_(1, torch.tensor([[expert_idx]]), 1.0)
-            .to(data.pos.device)
-        )
+        self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
+            1,
+            len(self.dataset_name_to_exp),
+            dtype=data.pos.dtype,
+            device=data.pos.device,
+        ).scatter_(1, torch.tensor([[expert_idx]], device=data.pos.device), 1.0)
 
         def replace_mole(module):
             for name, child in list(module.named_children()):
@@ -354,23 +355,21 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         data_batch_full = data.batch_full.cpu()
 
         # generate a one hot mask based on dataset , one for each system
-        self.global_mole_tensors.expert_mixing_coefficients = (
-            torch.zeros(
-                data.natoms.shape[0],
-                len(self.dataset_name_to_exp),
-                dtype=data.pos.dtype,
-            )
-            .scatter(
-                1,
-                torch.tensor(
-                    [
-                        self.dataset_name_to_exp[dataset_name]
-                        for dataset_name in data.dataset
-                    ],
-                ).unsqueeze(1),
-                1.0,
-            )
-            .to(data.pos.device)
+        self.global_mole_tensors.expert_mixing_coefficients = torch.zeros(
+            data.natoms.shape[0],
+            len(self.dataset_name_to_exp),
+            dtype=data.pos.dtype,
+            device=data.pos.device,
+        ).scatter(
+            1,
+            torch.tensor(
+                [
+                    self.dataset_name_to_exp[dataset_name]
+                    for dataset_name in data.dataset
+                ],
+                device=data.pos.device,
+            ).unsqueeze(1),
+            1.0,
         )
 
         # run the internal head
