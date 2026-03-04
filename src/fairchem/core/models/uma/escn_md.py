@@ -66,6 +66,7 @@ class GradRegressConfig:
     """
 
     direct_forces: bool = False
+    direct_stress: bool = False
     forces: bool = False
     stress: bool = False
 
@@ -136,6 +137,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         num_distance_basis: int = 512,
         direct_forces: bool = True,
         regress_forces: bool = True,
+        direct_stress: bool = False,
         regress_stress: bool = False,
         # escnmd specific
         num_layers: int = 2,
@@ -169,7 +171,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         # energy conservation related
         self.regress_config = GradRegressConfig(
-            direct_forces=direct_forces, forces=regress_forces, stress=regress_stress
+            direct_forces=direct_forces,
+            forces=regress_forces,
+            stress=regress_stress,
+            direct_stress=direct_stress,
         )
 
         # NOTE: graph construction related, to remove, except for cutoff
@@ -615,45 +620,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         return set(no_wd_list)
 
 
-class MLP_Energy_Head(nn.Module, HeadInterface):
-    def __init__(
-        self,
-        backbone: eSCNMDBackbone,
-        reduce: str = "sum",
-        prefix: str | None = None,
-        wrap_property: bool = False,
-    ) -> None:
-        super().__init__()
-        self.reduce = reduce
-        self.prefix = prefix
-        self.wrap_property = wrap_property
-
-        self.sphere_channels = backbone.sphere_channels
-        self.hidden_channels = backbone.hidden_channels
-        self.energy_block = nn.Sequential(
-            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
-            nn.SiLU(),
-            nn.Linear(self.hidden_channels, 1, bias=True),
-        )
-
-    def forward(
-        self, data: AtomicData, emb: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
-        energy, _ = compute_energy(
-            emb,
-            self.energy_block,
-            data["batch"],
-            len(data["natoms"]),
-            natoms=data["natoms"],
-            reduce=self.reduce,
-        )
-
-        return {energy_key: {"energy": energy} if self.wrap_property else energy}
-
-
 class MLP_EFS_Head(nn.Module, HeadInterface):
     """MLP head for predicting energy, forces, and stress using autograd derivatives.
 
@@ -669,6 +635,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         wrap_property: bool = True,
     ) -> None:
         super().__init__()
+
         self.reduce = reduce
         self.prefix = prefix
         self.wrap_property = wrap_property
@@ -707,7 +674,12 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         # Use shared energy computation from parent class
         energy, energy_part = compute_energy(
-            emb, self.energy_block, data["batch"], len(data["natoms"])
+            emb,
+            self.energy_block,
+            data["batch"],
+            len(data["natoms"]),
+            natoms=data["natoms"],
+            reduce=self.reduce,
         )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
@@ -718,7 +690,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 {"embeddings": embeddings} if self.wrap_property else embeddings
             )
 
-        if self.regress_config.stress:
+        if self.regress_config.stress and not self.regress_config.direct_stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos_original"],
@@ -726,14 +698,39 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 data["cell"],
                 training=self.training,
             )
+            # TODO should we assume gradient forces always when stress is requested?
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
-        elif self.regress_config.forces:
+        elif self.regress_config.forces and not self.regress_config.direct_forces:
             forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
 
         return outputs
+
+
+# Deprecate this head in favor of MLP_EFS_Head with a regress_config.forces=False and regress_config.stress=False.
+class MLP_Energy_Head(MLP_EFS_Head):
+    """MLP head for predicting energy."""
+
+    def __init__(
+        self,
+        backbone: eSCNMDBackbone,
+        reduce: str = "sum",
+        prefix: str | None = None,
+        wrap_property: bool = False,
+    ) -> None:
+        super().__init__(backbone, reduce, prefix, wrap_property)
+        #  TODO we should add a direct_stress flag?
+        assert (
+            backbone.regress_forces is False
+            and backbone.regress_stress is False
+            or backbone.direct_forces is True
+            or backbone.direct_stress is True
+        ), (
+            "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
+            "Use MLP_EFS_Head if you want to predict gradient forces and stress."
+        )
 
 
 class Linear_Energy_Head(nn.Module, HeadInterface):
