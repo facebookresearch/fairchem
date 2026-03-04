@@ -145,8 +145,9 @@ def collect_and_aggregate_results(
     job_metadata: list[dict[str, Any]],
     timestamp: str,
     num_gpus_list: list[int],
-    natoms_list: list[int],
     output_dir: str,
+    natoms_list: list[int] | None = None,
+    natoms_per_gpu_list: list[int] | None = None,
 ) -> dict[str, Any]:
     """
     Collect and aggregate benchmark results from completed jobs.
@@ -155,8 +156,9 @@ def collect_and_aggregate_results(
         job_metadata: List of metadata dictionaries for each job
         timestamp: Timestamp string for the sweep
         num_gpus_list: List of GPU counts used in the sweep
-        natoms_list: List of atom counts used in the sweep
         output_dir: Directory to save aggregated results
+        natoms_list: List of fixed atom counts used in the sweep, if applicable
+        natoms_per_gpu_list: List of per-GPU atom counts used in the sweep, if applicable
 
     Returns:
         Dictionary with aggregated results
@@ -166,6 +168,7 @@ def collect_and_aggregate_results(
         "timestamp": timestamp,
         "num_gpus_list": num_gpus_list,
         "natoms_list": natoms_list,
+        "natoms_per_gpu_list": natoms_per_gpu_list,
         "configurations": [],
     }
 
@@ -284,6 +287,15 @@ def generate_plots(aggregated_results: dict[str, Any], output_dir: str) -> None:
                     markersize=8,
                     label=f"{int(atoms_per_gpu)} atoms/GPU",
                 )
+                for num_gpus, qps_val in zip(gpus, qps):
+                    total_atoms = int(atoms_per_gpu * num_gpus)
+                    plt.annotate(
+                        f"{total_atoms:,}",
+                        xy=(num_gpus, qps_val),
+                        xytext=(5, 5),
+                        textcoords="offset points",
+                        fontsize=8,
+                    )
             plt.xlabel("Number of GPUs", fontsize=12)
             plt.ylabel("QPS (Queries Per Second)", fontsize=12)
             plt.title(f"Weak Scaling: {model_name}\n(Constant atoms/GPU)", fontsize=14)
@@ -376,25 +388,46 @@ def print_summary_table(aggregated_results: dict[str, Any]) -> None:
 def sweep_nodes_and_atoms(
     base_config_path: str,
     num_gpus_list: list[int],
-    natoms_list: list[int],
     output_dir: str,
+    natoms_list: list[int] | None = None,
+    natoms_per_gpu_list: list[int] | None = None,
     base_overrides: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Sweep over different numbers of GPUs and atoms, running inference benchmarks.
 
+    Exactly one of natoms_list or natoms_per_gpu_list must be provided.
+    When natoms_per_gpu_list is used, the total atom count for each run is
+    scaled by the number of GPUs, keeping atoms-per-GPU constant.
+
     Args:
         base_config_path: Path to base config YAML file
         num_gpus_list: List of total GPU counts to sweep over
-        natoms_list: List of atom counts to benchmark
         output_dir: Directory to save results
+        natoms_list: List of fixed total atom counts to benchmark
+        natoms_per_gpu_list: List of per-GPU atom counts; total atoms for each
+            run is natoms_per_gpu * num_gpus
         base_overrides: Base config overrides to apply to all runs
 
     Returns:
         Dictionary with aggregated results
+
+    Raises:
+        ValueError: If neither or both of natoms_list and natoms_per_gpu_list
+            are provided
     """
+    if (natoms_list is None) == (natoms_per_gpu_list is None):
+        raise ValueError(
+            "Exactly one of natoms_list or natoms_per_gpu_list must be provided"
+        )
+
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # All sub-runs and outputs for this sweep live under a single sweep directory
+    sweep_dir = os.path.join(output_dir, timestamp)
+    os.makedirs(sweep_dir, exist_ok=True)
+    logging.info(f"Sweep directory: {sweep_dir}")
 
     all_jobs = []
     job_metadata = []
@@ -404,9 +437,15 @@ def sweep_nodes_and_atoms(
         num_nodes, gpus_per_node = calculate_node_gpu_distribution(num_gpus)
         graph_parallel_size = num_gpus
 
+        # Resolve effective atom counts for this GPU count
+        if natoms_per_gpu_list is not None:
+            effective_natoms = [n * num_gpus for n in natoms_per_gpu_list]
+        else:
+            effective_natoms = natoms_list  # type: ignore[assignment]
+
         # Create unique run directory for this configuration
         run_name = f"benchmark_n{num_nodes}_g{num_gpus}_{timestamp}"
-        run_dir = os.path.join(output_dir, run_name)
+        run_dir = os.path.join(sweep_dir, run_name)
 
         # Build config overrides
         overrides = base_overrides.copy() if base_overrides else []
@@ -419,7 +458,7 @@ def sweep_nodes_and_atoms(
                 f"job.graph_parallel_group_size={graph_parallel_size}",
                 f"job.run_name={run_name}",
                 f"job.run_dir={run_dir}",
-                f"runner.natoms_list=[{','.join(map(str, natoms_list))}]",
+                f"runner.natoms_list=[{','.join(map(str, effective_natoms))}]",
             ]
         )
 
@@ -452,7 +491,7 @@ def sweep_nodes_and_atoms(
                 "run_dir": run_dir,
                 "run_name": run_name,
                 "job_ids": [job.job_id for job in jobs],
-                "natoms_list": natoms_list,
+                "natoms_list": effective_natoms,
                 "timestamp_id": cfg.job.timestamp_id,
                 "results_dir": cfg.job.metadata.results_dir,
             }
@@ -467,11 +506,12 @@ def sweep_nodes_and_atoms(
         timestamp=timestamp,
         num_gpus_list=num_gpus_list,
         natoms_list=natoms_list,
-        output_dir=output_dir,
+        natoms_per_gpu_list=natoms_per_gpu_list,
+        output_dir=sweep_dir,
     )
 
     # Generate plots
-    generate_plots(aggregated_results, output_dir)
+    generate_plots(aggregated_results, sweep_dir)
 
     # Print summary table
     print_summary_table(aggregated_results)
@@ -498,12 +538,19 @@ def main():
         default=[1, 2, 4, 8, 16, 32, 64],
         help="List of total GPU counts to sweep over (must be 1-8 or multiples of 8, default: 8 16 32 64)",
     )
-    parser.add_argument(
+
+    natoms_group = parser.add_mutually_exclusive_group(required=True)
+    natoms_group.add_argument(
         "--natoms",
         type=int,
         nargs="+",
-        default=[1000, 2000, 4000, 8000],
-        help="List of atom counts to benchmark (default: 1000 2000 4000 8000)",
+        help="List of fixed total atom counts to benchmark (e.g. 1000 2000 4000 8000)",
+    )
+    natoms_group.add_argument(
+        "--natoms-per-gpu",
+        type=int,
+        nargs="+",
+        help="List of per-GPU atom counts; total atoms = natoms_per_gpu * num_gpus for each run",
     )
     parser.add_argument(
         "--output-dir",
@@ -531,7 +578,10 @@ def main():
     logging.info("Starting inference benchmark sweep")
     logging.info(f"Config: {args.config}")
     logging.info(f"GPU counts: {args.num_gpus}")
-    logging.info(f"Atom counts: {args.natoms}")
+    if args.natoms is not None:
+        logging.info(f"Atom counts (fixed total): {args.natoms}")
+    else:
+        logging.info(f"Atom counts (per GPU): {args.natoms_per_gpu}")
     logging.info(f"Output directory: {args.output_dir}")
     logging.info(f"Additional overrides: {args.overrides}")
 
@@ -539,6 +589,7 @@ def main():
         base_config_path=args.config,
         num_gpus_list=args.num_gpus,
         natoms_list=args.natoms,
+        natoms_per_gpu_list=args.natoms_per_gpu,
         output_dir=args.output_dir,
         base_overrides=args.overrides,
     )

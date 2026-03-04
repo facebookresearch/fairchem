@@ -18,19 +18,19 @@ runner:
   natoms_list: [100000]
   model_checkpoints:
     # uma_s_1p1: ${uma_s_1p1}
-    uma_s_1p2: "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt"
-    # uma_sm_cons: "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt"
+    # uma_s_1p2: "/checkpoint/ocp/shared/bwood/prelim_1_2_chkpt/uma-s-1p2-v1.pt"
+    uma_sm_cons: "/checkpoint/ocp/shared/uma/release/uma_sm_osc_name_fix.pt"
     # uma_sm_direct: "/checkpoint/ocp/shared/run_dir/202510-3123-1909-5e5a/checkpoints/final/inference_ckpt.pt"
   # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
   # for profiling, we substract the graph generation time by using external_graph_gen=True
   inference_settings:
     _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
     tf32: True
-    activation_checkpointing: True
+    activation_checkpointing: False
     merge_mole: True
-    compile: False
+    compile: True
     external_graph_gen: False
     internal_graph_gen_version: 2
-    edge_chunk_size: 32
-    execution_mode: "general"
-  generate_traces: True
+    # edge_chunk_size: 32
+    execution_mode: "umas_fast_gpu"
+  # generate_traces: True
