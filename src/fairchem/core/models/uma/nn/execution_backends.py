@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
+
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
@@ -84,6 +86,28 @@ class ExecutionBackend:
         Args:
             model: The backbone model to prepare.
         """
+
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        """
+        Get edge embeddings for each layer.
+
+        Default implementation returns the same raw x_edge for all layers.
+        SO2_Convolution will compute rad_func(x_edge) internally.
+
+        Override in fast backends to precompute radials.
+
+        Args:
+            x_edge: Edge embeddings [E, edge_features]
+            model: The backbone model
+
+        Returns:
+            List of edge embeddings, one per layer
+        """
+        return [x_edge] * len(model.blocks)
 
     @staticmethod
     def prepare_wigner(
@@ -261,11 +285,13 @@ class UMASFastPytorchBackend(ExecutionBackend):
     @staticmethod
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
         """
-        Convert SO2_Convolution modules to block-diagonal GEMM variants.
+        Convert SO2_Convolution modules to block-diagonal GEMM variants
+        and create unified radial MLP for batched computation.
 
         Replaces so2_conv_1 with SO2_Conv1_WithRadialBlock and
         so2_conv_2 with SO2_Conv2_InternalBlock in each block's
-        Edgewise module.
+        Edgewise module. Then creates a UnifiedRadialMLP from all
+        radial functions for efficient batched computation.
         """
         from fairchem.core.models.uma.nn.so2_layers import (
             convert_so2_conv1,
@@ -275,6 +301,27 @@ class UMASFastPytorchBackend(ExecutionBackend):
         for block in model.blocks:
             block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
             block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
+
+        # Create unified radial MLP for batched computation
+        rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
+        model._unified_radial_mlp = UnifiedRadialMLP(rad_funcs)
+
+    @staticmethod
+    def get_layer_radial_emb(
+        x_edge: torch.Tensor,
+        model: torch.nn.Module,
+    ) -> list[torch.Tensor]:
+        """
+        Compute radial embeddings for all layers using batched UnifiedRadialMLP.
+
+        Args:
+            x_edge: Edge embeddings [E, edge_features]
+            model: The backbone model with _unified_radial_mlp
+
+        Returns:
+            List of radial embeddings, one per layer [E, radial_features]
+        """
+        return model._unified_radial_mlp(x_edge)
 
 
 class UMASFastGPUBackend(UMASFastPytorchBackend):

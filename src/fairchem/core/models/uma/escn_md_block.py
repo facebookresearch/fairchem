@@ -192,7 +192,7 @@ class Edgewise(torch.nn.Module):
             )
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
             x_message = self.act(x_0_gating, x_message)
-            x_message = self.so2_conv_2(x_message, x_edge)
+            x_message = self.so2_conv_2(x_message)
             new_embedding = self.backend.permute_wigner_inv_edge_to_node(
                 x_message,
                 wigner_inv_envelope,
