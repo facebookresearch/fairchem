@@ -12,6 +12,7 @@ from fairchem.core.datasets.atomic_data import AtomicData
 from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.modules.normalization.normalizer import Normalizer
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 # Test equivariance in both fp32 and fp64
@@ -24,7 +25,11 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     inference_checkpoint_path, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
 
-    predictor = MLIPPredictUnit(inference_checkpoint_path, device="cpu")
+    predictor = MLIPPredictUnit(
+        inference_checkpoint_path,
+        device="cpu",
+        inference_settings=InferenceSettings(base_precision_dtype=torch.float64),
+    )
     oc20_embeddings_tasks = Task(
         name="oc20_embeddings",
         level="atom",
@@ -36,7 +41,6 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     )
     predictor.tasks["oc20_embeddings"] = oc20_embeddings_tasks
     predictor.dataset_to_tasks["oc20"].append(oc20_embeddings_tasks)
-    predictor.model = predictor.model.to(torch.float64)
 
     a2g = partial(
         AtomicData.from_ase,
@@ -82,7 +86,7 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     ]
     for sample in samples:
         sample.pos += 500
-        sample.cell *= 2000
+        sample.cell *= 10
 
     batch = data_list_collater(samples, otf_graph=True)
     out = predictor.predict(batch)

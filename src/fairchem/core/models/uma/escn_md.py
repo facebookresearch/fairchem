@@ -24,6 +24,12 @@ from fairchem.core.common.registry import registry
 from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
+from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
+    create_wigner_data_module,
+)
+from fairchem.core.models.uma.common.quaternion.wigner_d_hybrid import (
+    axis_angle_wigner_hybrid,
+)
 from fairchem.core.models.uma.common.rotation import (
     eulers_to_wigner,
     init_edge_rot_euler_angles,
@@ -53,7 +59,7 @@ from fairchem.core.models.uma.outputs import (
     compute_forces_and_stress,
     compute_hessian,
     get_displacement_and_cell,
-    get_l_component,
+    get_l_component_range,
     reduce_node_to_system,
 )
 from fairchem.core.models.utils.irreps import cg_change_mat, irreps_sum
@@ -85,6 +91,7 @@ class GradRegressConfig:
     """
 
     direct_forces: bool = False
+    direct_stress: bool = False
     forces: bool = False
     stress: bool = False
     hessian: bool = False
@@ -278,6 +285,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         num_distance_basis: int = 512,
         direct_forces: bool = True,
         regress_forces: bool = True,
+        direct_stress: bool = False,
         regress_stress: bool = False,
         regress_hessian: bool = False,
         hessian_vmap: bool = True,
@@ -299,6 +307,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ) = None,  # mapping from config dataset name to dataset embedding name e.g. {"omol": "omol", "oc20": "oc20", "oc20_subset": "oc20"}, this allows multiple subsets to use the same dataset embedding.
         use_dataset_embedding: bool = True,
         use_cuda_graph_wigner: bool = False,
+        use_quaternion_wigner: bool = True,
         radius_pbc_version: int = 2,
         always_use_pbc: bool = True,
         charge_balanced_channels: list[int] | None = None,
@@ -324,6 +333,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             direct_forces=direct_forces,
             forces=regress_forces,
             stress=regress_stress,
+            direct_stress=direct_stress,
             hessian=regress_hessian,
             hessian_vmap=hessian_vmap,
         )
@@ -340,6 +350,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.otf_graph = otf_graph
         self.max_neighbors = max_neighbors
         self.radius_pbc_version = radius_pbc_version
+        self.use_quaternion_wigner = use_quaternion_wigner
         self.enforce_max_neighbors_strictly = False
 
         activation_checkpoint_chunk_size = None
@@ -367,6 +378,12 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         Jd_list = torch.load(os.path.join(os.path.dirname(__file__), "Jd.pt"))
         for l in range(self.lmax + 1):
             self.register_buffer(f"Jd_{l}", Jd_list[l])
+
+        # Precompute Wigner coefficients for quaternion path (like Jd for Euler path)
+        if self.use_quaternion_wigner:
+            # lmin=5 because l=0,1,2,3,4 use custom kernels in the hybrid method
+            self.wigner_data = create_wigner_data_module(lmax=self.lmax, lmin=5)
+
         self.sph_feature_size = int((self.lmax + 1) ** 2)
         self.mappingReduced = CoefficientMapping(self.lmax, self.mmax)
 
@@ -531,33 +548,32 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        Jd_buffers = [
-            getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
-            for l in range(self.lmax + 1)
-        ]
+        if self.use_quaternion_wigner:
+            with record_function("obtain rotmat wigner quaternion"):
+                wigner, wigner_inv = axis_angle_wigner_hybrid(
+                    edge_distance_vecs,
+                    self.lmax,
+                    coeffs=self.wigner_data.coeffs,
+                    U_blocks=self.wigner_data.U_blocks,
+                    custom_kernels=self.wigner_data.custom_kernels,
+                )
+        else:
+            Jd_buffers = [
+                getattr(self, f"Jd_{l}").type(edge_distance_vecs.dtype)
+                for l in range(self.lmax + 1)
+            ]
 
-        with record_function("obtain rotmat wigner original"):
-            euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
-            wigner = eulers_to_wigner(
-                euler_angles,
-                0,
-                self.lmax,
-                Jd_buffers,
-            )
-            wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
+            with record_function("obtain rotmat wigner original"):
+                euler_angles = init_edge_rot_euler_angles(edge_distance_vecs)
+                wigner = eulers_to_wigner(
+                    euler_angles,
+                    0,
+                    self.lmax,
+                    Jd_buffers,
+                )
+                wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        # select subset of coefficients we are using
-        if self.mmax != self.lmax:
-            wigner = wigner.index_select(1, self.coefficient_index)
-            wigner_inv = wigner_inv.index_select(2, self.coefficient_index)
-
-        wigner_and_M_mapping = torch.einsum(
-            "mk,nkj->nmj", self.mappingReduced.to_m.to(wigner.dtype), wigner
-        )
-        wigner_and_M_mapping_inv = torch.einsum(
-            "njk,mk->njm", wigner_inv, self.mappingReduced.to_m.to(wigner_inv.dtype)
-        )
-        return wigner_and_M_mapping, wigner_and_M_mapping_inv
+        return wigner, wigner_inv
 
     def csd_embedding(self, charge, spin, dataset):
         with record_function("charge spin dataset embeddings"):
@@ -574,6 +590,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def _generate_graph(self, data_dict):
         data_dict["gp_node_offset"] = 0
+        node_partition = None
         if gp_utils.initialized():
             # create the partitions
             atomic_numbers_full = data_dict["atomic_numbers_full"]
@@ -586,7 +603,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
-            data_dict["node_partition"] = node_partition
 
         if self.otf_graph:
             pbc = None
@@ -600,6 +616,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             assert (
                 pbc.all() or (~pbc).all()
             ), "We can only accept pbc that is all true or all false"
+            # for v2 graph gen we used to pass node_partition as part of the data_dict directly to radius_pbc to allow it generate partial graphs
+            # to make it more general to accomodate v3, we scrapped and instead have generate_graph handle the partitioning after the graph has been generated
             graph_dict = generate_graph(
                 data_dict,
                 cutoff=self.cutoff,
@@ -607,20 +625,30 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 enforce_max_neighbors_strictly=self.enforce_max_neighbors_strictly,
                 radius_pbc_version=self.radius_pbc_version,
                 pbc=pbc,
+                node_partition=node_partition,
             )
         else:
             # this assume edge_index is provided
             assert (
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
-            cell_per_edge = data_dict["cell"].repeat_interleave(
-                data_dict["nedges"], dim=0
-            )
-            shifts = torch.einsum(
-                "ij,ijk->ik",
-                data_dict["cell_offsets"].to(cell_per_edge.dtype),
-                cell_per_edge,
-            )
+
+            # Compute shifts from cell offsets
+            if len(data_dict["natoms"]) == 1:
+                # Single system: use matmul (compile-friendly, no data-dependent ops)
+                shifts = data_dict["cell_offsets"].to(
+                    data_dict["cell"].dtype
+                ) @ data_dict["cell"].squeeze(0)
+            else:
+                # Batched: need repeat_interleave for variable edges per system
+                cell_per_edge = data_dict["cell"].repeat_interleave(
+                    data_dict["nedges"], dim=0
+                )
+                shifts = torch.einsum(
+                    "ij,ijk->ik",
+                    data_dict["cell_offsets"].to(cell_per_edge.dtype),
+                    cell_per_edge,
+                )
             edge_distance_vec = (
                 data_dict["pos"][data_dict["edge_index"][0]]
                 - data_dict["pos"][data_dict["edge_index"][1]]
@@ -687,10 +715,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
         with record_function("obtain wigner"):
-            (wigner_and_M_mapping, wigner_and_M_mapping_inv) = (
-                self._get_rotmat_and_wigner(
-                    graph_dict["edge_distance_vec"],
-                )
+            wigner, wigner_inv = self._get_rotmat_and_wigner(
+                graph_dict["edge_distance_vec"],
+            )
+            coefficient_index = (
+                self.coefficient_index if self.mmax != self.lmax else None
+            )
+            wigner, wigner_inv = self.backend.prepare_wigner(
+                wigner,
+                wigner_inv,
+                self.mappingReduced,
+                coefficient_index,
             )
 
         ###############################################################
@@ -739,34 +774,35 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 dim=1,
             )
 
-            # Pre-fuse envelope into wigner_inv for edge degree embedding
-            wigner_and_M_mapping_inv_envelope_for_edge_degree = (
-                wigner_and_M_mapping_inv * edge_envelope
-            )
+            # Pre-fuse envelope into wigner_inv
+            wigner_inv_envelope = wigner_inv * edge_envelope
 
             x_message = self.edge_degree_embedding(
                 x_message,
                 x_edge,
                 graph_dict["edge_index"],
-                wigner_and_M_mapping_inv_envelope_for_edge_degree,
+                wigner_inv_envelope,
                 data_dict["gp_node_offset"],
             )
-
-        # Pre-fuse envelope into wigner_inv for block message passing
-        wigner_and_M_mapping_inv_envelope = wigner_and_M_mapping_inv * edge_envelope
 
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
+
+        # Get edge embeddings for each layer
+        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
+        # Fast backends: precomputed radials
+        with record_function("layer_radial_emb"):
+            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
+
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
                 x_message = self.blocks[i](
                     x_message,
-                    x_edge,
-                    graph_dict["edge_distance"],
+                    x_edge_per_layer[i],
                     graph_dict["edge_index"],
-                    wigner_and_M_mapping,
-                    wigner_and_M_mapping_inv_envelope,
+                    wigner,
+                    wigner_inv_envelope,
                     total_atoms_across_gp_ranks=data_dict["atomic_numbers_full"].shape[
                         0
                     ],
@@ -841,6 +877,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["otf_graph"] = not settings.external_graph_gen
         if settings.internal_graph_gen_version is not None:
             overrides["radius_pbc_version"] = settings.internal_graph_gen_version
+        if settings.use_quaternion_wigner is not None:
+            overrides["use_quaternion_wigner"] = settings.use_quaternion_wigner
         if settings.execution_mode is not None:
             overrides["execution_mode"] = settings.execution_mode
 
@@ -852,7 +890,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         """
         if self.use_dataset_embedding:
             assert set(dataset_to_tasks.keys()).issubset(
-                set(self.dataset_mapping.values())
+                set(self.dataset_mapping.keys())
             ), "Datasets in tasks is not a strict subset of datasets in backbone."
 
     def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
@@ -870,7 +908,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._merged_composition = None
 
         # Validate settings against backend requirements (fail early)
-        self.backend.validate(settings)
+        self.backend.validate(self, settings)
 
         if settings.merge_mole:
             assert (
@@ -1019,15 +1057,22 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             )
 
 
-class MLP_Energy_Head(nn.Module, HeadInterface):
+class MLP_EFS_Head(nn.Module, HeadInterface):
+    """MLP head for predicting energy, forces, and stress using autograd derivatives.
+
+    This head computes forces and stress by taking gradients of the energy with respect to
+    atomic positions and cell displacement.
+    """
+
     def __init__(
         self,
         backbone: eSCNMDBackbone,
         reduce: str = "sum",
         prefix: str | None = None,
-        wrap_property: bool = False,
+        wrap_property: bool = True,
     ) -> None:
         super().__init__()
+
         self.reduce = reduce
         self.prefix = prefix
         self.wrap_property = wrap_property
@@ -1042,43 +1087,6 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
             nn.Linear(self.hidden_channels, 1, bias=True),
         )
 
-    def forward(
-        self, data: AtomicData, emb: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
-        energy, _ = compute_energy(node_energy, data["batch"], len(data["natoms"]))
-
-        if self.reduce == "sum":
-            pass  # energy is already sum
-        elif self.reduce == "mean":
-            energy = energy / data["natoms"]
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
-
-        return {energy_key: {"energy": energy} if self.wrap_property else energy}
-
-
-class MLP_EFS_Head(MLP_Energy_Head):
-    """MLP head for predicting energy, forces, and stress using autograd derivatives.
-
-    This head extends MLP_Energy_Head to compute forces and stress by taking
-    gradients of the energy with respect to atomic positions and cell displacement.
-    """
-
-    def __init__(
-        self,
-        backbone: eSCNMDBackbone,
-        reduce: str = "sum",
-        prefix: str | None = None,
-        wrap_property: bool = True,
-    ) -> None:
-        super().__init__(
-            backbone, reduce=reduce, prefix=prefix, wrap_property=wrap_property
-        )
         backbone.energy_block = None
         backbone.force_block = None
         self.regress_config = backbone.regress_config
@@ -1103,10 +1111,13 @@ class MLP_EFS_Head(MLP_Energy_Head):
         outputs = {}
 
         # Use shared energy computation from parent class
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
         energy, energy_part = compute_energy(
-            node_energy, data["batch"], len(data["natoms"])
+            emb,
+            self.energy_block,
+            data["batch"],
+            len(data["natoms"]),
+            natoms=data["natoms"],
+            reduce=self.reduce,
         )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
@@ -1121,7 +1132,7 @@ class MLP_EFS_Head(MLP_Energy_Head):
         # Hessian computation requires second derivatives, so we need create_graph=True
         create_graph = self.training or self.regress_config.hessian
 
-        if self.regress_config.stress:
+        if self.regress_config.stress and not self.regress_config.direct_stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos_original"],
@@ -1129,12 +1140,13 @@ class MLP_EFS_Head(MLP_Energy_Head):
                 data["cell"],
                 training=create_graph,
             )
+            # TODO should we assume gradient forces always when stress is requested?
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
             data["cell"] = emb["orig_cell"]
             pos = data["pos_original"]
-        elif self.regress_config.forces:
-            forces = compute_forces(energy_part, data["pos"], training=create_graph)
+        elif self.regress_config.forces and not self.regress_config.direct_forces:
+            forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             pos = data["pos"]
         else:
@@ -1167,6 +1179,30 @@ class MLP_EFS_Head(MLP_Energy_Head):
         return outputs
 
 
+# Deprecate this head in favor of MLP_EFS_Head with a regress_config.forces=False and regress_config.stress=False.
+class MLP_Energy_Head(MLP_EFS_Head):
+    """MLP head for predicting energy."""
+
+    def __init__(
+        self,
+        backbone: eSCNMDBackbone,
+        reduce: str = "sum",
+        prefix: str | None = None,
+        wrap_property: bool = False,
+    ) -> None:
+        super().__init__(backbone, reduce, prefix, wrap_property)
+        #  TODO we should add a direct_stress flag?
+        assert (
+            backbone.regress_forces is False
+            and backbone.regress_stress is False
+            or backbone.direct_forces is True
+            or backbone.direct_stress is True
+        ), (
+            "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
+            "Use MLP_EFS_Head if you want to predict gradient forces and stress."
+        )
+
+
 class Linear_Energy_Head(nn.Module, HeadInterface):
     def __init__(self, backbone: eSCNMDBackbone, reduce: str = "sum") -> None:
         super().__init__()
@@ -1176,23 +1212,15 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
     def forward(
         self, data_dict: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
-        # Extract L=0 (scalar) component and compute per-node energy
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
-        node_energy = self.energy_block(scalar_embedding)
-
-        # Reduce to system-level energy
         energy, _ = compute_energy(
-            node_energy, data_dict["batch"], len(data_dict["natoms"])
+            emb,
+            self.energy_block,
+            data_dict["batch"],
+            len(data_dict["natoms"]),
+            natoms=data_dict["natoms"],
+            reduce=self.reduce,
         )
-
-        if self.reduce == "sum":
-            return {"energy": energy}
-        elif self.reduce == "mean":
-            return {"energy": energy / data_dict["natoms"]}
-        else:
-            raise ValueError(
-                f"reduce can only be sum or mean, user provided: {self.reduce}"
-            )
+        return {"energy": energy}
 
 
 class Linear_Force_Head(nn.Module, HeadInterface):
@@ -1201,13 +1229,12 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         self.linear = SO3_Linear(backbone.sphere_channels, 1, lmax=1)
 
     def forward(self, data_dict: AtomicData, emb: dict[str, torch.Tensor]):
-        # Extract L=0 and L=1 components (first 4 spherical harmonic components)
         # SO3_Linear with lmax=1 requires both L=0 and L=1 as input
-        l0_l1_embedding = emb["node_embedding"].narrow(1, 0, 4)  # (lmax=1)^2 = 4
+        l0_l1_embedding = get_l_component_range(emb["node_embedding"], l_min=0, l_max=1)
         forces_output = self.linear(l0_l1_embedding)
 
         # Extract L=1 (vector) component from the output
-        forces = get_l_component(forces_output, l=1)
+        forces = get_l_component_range(forces_output, l_min=1, l_max=1)
         forces = forces.view(-1, 3).contiguous()
 
         if gp_utils.initialized():
@@ -1288,7 +1315,9 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
         batch = data_dict["batch"]
 
         # Compute isotropic (L=0) part of stress using MLP on scalar embedding
-        scalar_embedding = get_l_component(emb["node_embedding"], l=0).squeeze(1)
+        scalar_embedding = get_l_component_range(
+            emb["node_embedding"], l_min=0, l_max=0
+        ).squeeze(1)
         node_scalar = self.scalar_block(scalar_embedding).view(-1)
         iso_stress, _ = reduce_node_to_system(node_scalar, batch, num_systems)
 
@@ -1296,10 +1325,14 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
             iso_stress = iso_stress / data_dict["natoms"]
 
         # Compute anisotropic (L=2) part of stress using SO3_Linear
-        l0l1l2_embedding = emb["node_embedding"].narrow(1, 0, 9)  # (lmax=2)^2 = 9
+        l0l1l2_embedding = get_l_component_range(
+            emb["node_embedding"], l_min=0, l_max=2
+        )
         l2_output = self.l2_linear(l0l1l2_embedding)
 
-        node_l2 = get_l_component(l2_output, l=2).view(-1, 5).contiguous()
+        node_l2 = (
+            get_l_component_range(l2_output, l_min=2, l_max=2).view(-1, 5).contiguous()
+        )
         aniso_stress, _ = reduce_node_to_system(node_l2, batch, num_systems)
 
         if self.reduce == "mean":

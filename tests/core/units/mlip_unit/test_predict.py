@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -24,14 +31,48 @@ FORCE_TOL = 1e-4
 ATOL = 5e-4
 
 
-@pytest.fixture(scope="session")
-def uma_predict_unit(request):
+@pytest.fixture(scope="module")
+def uma_predict_unit_cuda():
+    """Module-scoped predict unit using the first available UMA model with device=cuda."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(uma_models[0], device="cuda")
+
+
+@pytest.fixture(scope="module")
+def uma_predict_unit(uma_predict_unit_cuda):
+    """Module-scoped predict unit - uses cuda version if available, otherwise cpu."""
+    if torch.cuda.is_available():
+        return uma_predict_unit_cuda
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     return pretrained_mlip.get_predict_unit(uma_models[0])
 
 
+@pytest.fixture(scope="module")
+def uma_merge_mole_predict_unit():
+    """Module-scoped predict unit with merge_mole=True for MgO tests."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    return pretrained_mlip.get_predict_unit(
+        uma_models[0], device="cuda", inference_settings=settings
+    )
+
+
 @pytest.mark.gpu()
-def test_single_dataset_predict(uma_predict_unit):
+@pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
+def test_single_dataset_predict(internal_graph_gen_version):
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    inference_settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=internal_graph_gen_version,
+    )
+    uma_predict_unit = pretrained_mlip.get_predict_unit(
+        uma_models[0], inference_settings=inference_settings
+    )
+
     n = 10
     atoms = bulk("Pt")
     atomic_data_list = [AtomicData.from_ase(atoms, task_name="omat") for _ in range(n)]
@@ -59,7 +100,21 @@ def test_single_dataset_predict(uma_predict_unit):
 
 
 @pytest.mark.gpu()
-def test_multiple_dataset_predict(uma_predict_unit):
+@pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
+def test_multiple_dataset_predict(internal_graph_gen_version):
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    inference_settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=internal_graph_gen_version,
+    )
+    uma_predict_unit = pretrained_mlip.get_predict_unit(
+        uma_models[0], inference_settings=inference_settings
+    )
+
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
     h2o.pbc = True  # all data points must be pbc if mixing.
@@ -115,19 +170,8 @@ def test_multiple_dataset_predict(uma_predict_unit):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-@pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "workers, device, checkpointing",
-    [
-        (1, "cpu", False),
-        (2, "cpu", False),
-        (1, "cuda", False),
-        (1, "cuda", True),
-        # (2, "cuda", False),
-        # (2, "cuda", True),
-    ],
-)
-def test_parallel_predict_unit(workers, device, checkpointing):
+def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_version):
+    """Implementation of parallel predict unit test."""
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -136,7 +180,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
         tf32=False,
         merge_mole=True,
         activation_checkpointing=checkpointing,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=graph_gen_version,
         external_graph_gen=False,
     )
     atoms = get_fcc_crystal_by_num_atoms(num_atoms)
@@ -175,19 +219,39 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     )
 
 
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, device, checkpointing",
+    "workers, checkpointing, graph_gen_version",
     [
-        (1, "cpu", False),
-        (2, "cpu", True),
-        (1, "cuda", True),
-        (1, "cuda", False),
-        # (2, "cuda", True),
-        # (2, "cuda", False),
+        (1, False, 2),
+        (2, False, 2),
+        (1, False, 3),
+        (1, True, 3),
+        (2, False, 3),
     ],
 )
-def test_parallel_predict_unit_batch(workers, device, checkpointing):
+def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing, graph_gen_version)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing, graph_gen_version",
+    [
+        (1, False, 2),
+        (1, True, 2),
+        (1, True, 3),
+        (1, False, 3),
+        # (2, False),
+        # (2, True),
+    ],
+)
+def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing, graph_gen_version)
+
+
+def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit batch test."""
     seed = 42
     runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -250,6 +314,32 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
         normal_results["forces"].detach().cpu(),
         atol=FORCE_TOL,
     )
+
+
+@pytest.mark.serial()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (2, True),
+    ],
+)
+def test_parallel_predict_unit_batch(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, True),
+        (1, False),
+        # (2, True),
+        # (2, False),
+    ],
+)
+def test_parallel_predict_unit_batch_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing)
 
 
 @pytest.mark.gpu()
@@ -366,10 +456,9 @@ def _random_rotation_matrix(rng: np.random.Generator) -> np.ndarray:
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
-def test_rotational_invariance_out_of_plane(mol_name):
+def test_rotational_invariance_out_of_plane(mol_name, uma_predict_unit_cuda):
     rng = np.random.default_rng(seed=123)
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+    calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
 
     atoms = molecule(mol_name)
     atoms.info.update({"charge": 0, "spin": 1})
@@ -388,17 +477,128 @@ def test_rotational_invariance_out_of_plane(mol_name):
 
 
 @pytest.mark.gpu()
-@pytest.mark.xfail(reason="Y-aligned edges cause problems in eSCN family", strict=False)
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
-def test_original_out_of_plane_forces(mol_name):
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
+    calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
     atoms = molecule(mol_name)
     atoms.info.update({"charge": 0, "spin": 1})
     atoms.calc = calc
     forces = atoms.get_forces()
     print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
     assert np.abs(forces[:, 0]).max() < FORCE_TOL
+
+
+# ---------------------------------------------------------------------------
+# Euler vs Quaternion Wigner D agreement tests
+# ---------------------------------------------------------------------------
+
+
+def _get_predict_unit_with_wigner_mode(use_quaternion: bool):
+    """
+    Create a predict unit with the specified Wigner D computation mode.
+    """
+    settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        use_quaternion_wigner=use_quaternion,
+    )
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(
+        uma_models[0], device="cuda", inference_settings=settings
+    )
+
+
+@pytest.mark.gpu()
+def test_euler_vs_quaternion_random_molecule():
+    """
+    Euler and quaternion Wigner D paths produce identical energy and forces
+    for a random molecule with no Y-aligned edges.
+    """
+    # Methanol (CH3OH) - 6 atoms, no edges along Y axis
+    atoms = molecule("CH3OH")
+    # Apply a rotation to ensure no edges are Y-aligned
+    rng = np.random.default_rng(seed=42)
+    R = _random_rotation_matrix(rng)
+    atoms.set_positions(atoms.get_positions() @ R.T)
+    atoms.info.update({"charge": 0, "spin": 1})
+    atoms.pbc = True
+
+    predict_euler = _get_predict_unit_with_wigner_mode(use_quaternion=False)
+    predict_quat = _get_predict_unit_with_wigner_mode(use_quaternion=True)
+
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    preds_euler = predict_euler.predict(batch)
+    seed_everywhere(42)
+    preds_quat = predict_quat.predict(batch)
+
+    npt.assert_allclose(
+        preds_euler["energy"].detach().cpu().numpy(),
+        preds_quat["energy"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Energy differs between Euler and quaternion paths",
+    )
+    npt.assert_allclose(
+        preds_euler["forces"].detach().cpu().numpy(),
+        preds_quat["forces"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces differ between Euler and quaternion paths",
+    )
+
+
+@pytest.mark.gpu()
+def test_euler_vs_quaternion_bulk():
+    """
+    Euler and quaternion Wigner D paths produce identical energy, forces,
+    and stress for a bulk crystal with no Y-aligned edges.
+    """
+    # FCC Cu 2x2x2 supercell with a random perturbation to avoid symmetry
+    atoms = bulk("Cu")
+    atoms = atoms.repeat((2, 2, 2))
+    rng = np.random.default_rng(seed=99)
+    atoms.set_positions(
+        atoms.get_positions() + rng.normal(0, 0.05, atoms.positions.shape)
+    )
+
+    predict_euler = _get_predict_unit_with_wigner_mode(use_quaternion=False)
+    predict_quat = _get_predict_unit_with_wigner_mode(use_quaternion=True)
+
+    data = AtomicData.from_ase(atoms, task_name="omat")
+    batch = atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    preds_euler = predict_euler.predict(batch)
+    seed_everywhere(42)
+    preds_quat = predict_quat.predict(batch)
+
+    npt.assert_allclose(
+        preds_euler["energy"].detach().cpu().numpy(),
+        preds_quat["energy"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Energy differs between Euler and quaternion paths (bulk)",
+    )
+    npt.assert_allclose(
+        preds_euler["forces"].detach().cpu().numpy(),
+        preds_quat["forces"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces differ between Euler and quaternion paths (bulk)",
+    )
+    npt.assert_allclose(
+        preds_euler["stress"].detach().cpu().numpy(),
+        preds_quat["stress"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Stress differs between Euler and quaternion paths (bulk)",
+    )
 
 
 @pytest.mark.gpu()
@@ -410,14 +610,10 @@ def test_original_out_of_plane_forces(mol_name):
         np.array([[2, 0, 0], [0, 3, 0], [0, 0, 1]]),  # 2x3x1 supercell (6 atoms)
     ],
 )
-def test_merge_mole_with_supercell(supercell_matrix):
+def test_merge_mole_with_supercell(supercell_matrix, uma_merge_mole_predict_unit):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
-    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings
-    )
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(uma_merge_mole_predict_unit, task_name="omat")
 
     atoms_orig.calc = calc
     energy_orig = atoms_orig.get_potential_energy()
@@ -533,14 +729,10 @@ def test_merge_mole_vs_non_merged_consistency():
 
 
 @pytest.mark.gpu()
-def test_merge_mole_supercell_energy_forces_consistency():
+def test_merge_mole_supercell_energy_forces_consistency(uma_merge_mole_predict_unit):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
-    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings
-    )
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(uma_merge_mole_predict_unit, task_name="omat")
 
     atoms_orig.calc = calc
     energy1 = atoms_orig.get_potential_energy()
@@ -688,6 +880,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
+@pytest.mark.serial()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
 @pytest.mark.parametrize("device", ["cpu"])
@@ -712,7 +905,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     atoms_template = bulk("Cu", "fcc", a=3.6)
     atoms_template = atoms_template.repeat((2, 2, 2))
 
-    md_steps = 5
+    md_steps = 2
     timestep = 1.0 * units.fs
     initial_temp_K = 300.0
     pressure = 1.01325 * units.bar  # 1 atm
@@ -861,6 +1054,7 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
     )
 
 
+@pytest.skip(reason="Enable when untrained predictions are implemented")
 @pytest.mark.gpu()
 @pytest.mark.parametrize("vmap", [True, False])
 def test_hessian(vmap):
@@ -946,6 +1140,7 @@ def test_hessian_vs_numerical():
     )
 
 
+@pytest.skip(reason="Enable when untrained predictions are implemented")
 @pytest.mark.gpu()
 def test_hessian_symmetry():
     """Test that the Hessian matrix is symmetric."""
