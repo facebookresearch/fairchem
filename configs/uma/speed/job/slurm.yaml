@@ -1,0 +1,14 @@
+# SLURM 64 GPU job configuration
+device_type: CUDA
+run_dir: /checkpoint/ocp/rgao/speed
+run_name: test_speed
+scheduler:
+  mode: SLURM
+  num_nodes: 8
+  ranks_per_node: 8
+  slurm:
+    account: ocp
+    qos: h200_ocp_high
+    mem_gb: 0
+    cpus_per_task: 24
+graph_parallel_group_size: 64
