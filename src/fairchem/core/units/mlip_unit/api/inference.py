@@ -59,7 +59,7 @@ class InferenceSettings:
     # especially for large number of atoms (ie 10+) at a slight cost to
     # inference speed. If set to None, the setting from the model
     # checkpoint will be used.
-    activation_checkpointing: bool | None = None
+    activation_checkpointing: bool | None = True
 
     # Flag to enable or disable the merging of MOLE experts during
     # inference. If this is used, the input composition, total charge
@@ -78,7 +78,7 @@ class InferenceSettings:
     # Flag to enable or disable the generation of external graphs during
     # inference. If set to None, the setting from the model checkpoint
     # will be used.
-    external_graph_gen: bool | None = None
+    external_graph_gen: bool | None = False
 
     # Deprecated
     # Not recommended using! manually selects the version of graph gen
