@@ -1049,11 +1049,11 @@ class MLP_Energy_Head(nn.Module, HeadInterface):
         return {energy_key: {"energy": energy} if self.wrap_property else energy}
 
 
-class MLP_EFS_Head(MLP_Energy_Head):
+class MLP_EFS_Head(nn.Module, HeadInterface):
     """MLP head for predicting energy, forces, and stress using autograd derivatives.
 
-    This head extends MLP_Energy_Head to compute forces and stress by taking
-    gradients of the energy with respect to atomic positions and cell displacement.
+    This head computes forces and stress by taking gradients of the energy with respect to
+    atomic positions and cell displacement.
     """
 
     def __init__(
@@ -1063,9 +1063,21 @@ class MLP_EFS_Head(MLP_Energy_Head):
         prefix: str | None = None,
         wrap_property: bool = True,
     ) -> None:
-        super().__init__(
-            backbone, reduce=reduce, prefix=prefix, wrap_property=wrap_property
+        super().__init__()
+        self.reduce = reduce
+        self.prefix = prefix
+        self.wrap_property = wrap_property
+
+        self.sphere_channels = backbone.sphere_channels
+        self.hidden_channels = backbone.hidden_channels
+        self.energy_block = nn.Sequential(
+            nn.Linear(self.sphere_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, self.hidden_channels, bias=True),
+            nn.SiLU(),
+            nn.Linear(self.hidden_channels, 1, bias=True),
         )
+
         backbone.energy_block = None
         backbone.force_block = None
         self.regress_config = backbone.regress_config
