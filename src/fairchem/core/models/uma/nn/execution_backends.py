@@ -88,26 +88,29 @@ class ExecutionBackend:
         """
 
     @staticmethod
-    def get_layer_radial_emb(
+    def get_unified_radial_emb(
         x_edge: torch.Tensor,
         model: torch.nn.Module,
     ) -> list[torch.Tensor]:
         """
-        Get edge embeddings for each layer.
+        Get all radial embeddings: edge_degree + layer radials.
 
-        Default implementation returns the same raw x_edge for all layers.
-        SO2_Convolution will compute rad_func(x_edge) internally.
+        Default implementation returns [x_edge] * (1 + N).
+        x_edge is passed to edge_degree_embedding and layers, which
+        compute rad_func(x_edge) internally.
 
-        Override in fast backends to precompute radials.
+        Override in fast backends to precompute all radials in one GEMM.
 
         Args:
             x_edge: Edge embeddings [E, edge_features]
             model: The backbone model
 
         Returns:
-            List of edge embeddings, one per layer
+            List [edge_degree_input, layer_0_input, ..., layer_N-1_input]
+            For general backend: all are x_edge (raw edge embeddings).
+            For fast backends: all are precomputed radial outputs.
         """
-        return [x_edge] * len(model.blocks)
+        return [x_edge] * (1 + len(model.blocks))
 
     @staticmethod
     def prepare_wigner(
@@ -242,7 +245,7 @@ class ExecutionBackend:
 
         # Slice wigner to m=0 columns and rotate:
         # [E, L, m0] @ [E, m0, C] -> [E, L, C]
-        wigner_inv_m0 = wigner_inv[:, :, :m_0_num_coefficients]
+        wigner_inv_m0 = wigner_inv[:, :, :m_0_num_coefficients] / rescale_factor
         x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
 
         # Type cast if needed
@@ -252,7 +255,7 @@ class ExecutionBackend:
         return x.index_add(
             0,
             edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
+            x_edge_embedding,
         )
 
 
@@ -291,7 +294,8 @@ class UMASFastPytorchBackend(ExecutionBackend):
         Replaces so2_conv_1 with SO2_Conv1_WithRadialBlock and
         so2_conv_2 with SO2_Conv2_InternalBlock in each block's
         Edgewise module. Then creates a UnifiedRadialMLP from all
-        radial functions for efficient batched computation.
+        radial functions (edge_degree + layer rad_funcs) for efficient
+        batched computation.
         """
         from fairchem.core.models.uma.nn.so2_layers import (
             convert_so2_conv1,
@@ -302,24 +306,32 @@ class UMASFastPytorchBackend(ExecutionBackend):
             block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
             block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
 
-        # Create unified radial MLP for batched computation
-        rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
-        model._unified_radial_mlp = UnifiedRadialMLP(rad_funcs)
+        # Create unified radial MLP: edge_degree + layer rad_funcs in one GEMM
+        edge_degree_rad_func = model.edge_degree_embedding.rad_func
+        layer_rad_funcs = [
+            block.edge_wise.so2_conv_1.rad_func for block in model.blocks
+        ]
+        model._unified_radial_mlp = UnifiedRadialMLP(
+            edge_degree_rad_func, layer_rad_funcs
+        )
+
+        # Null out rad_func so forward_chunk knows radials are precomputed
+        model.edge_degree_embedding.rad_func = None
 
     @staticmethod
-    def get_layer_radial_emb(
+    def get_unified_radial_emb(
         x_edge: torch.Tensor,
         model: torch.nn.Module,
     ) -> list[torch.Tensor]:
         """
-        Compute radial embeddings for all layers using batched UnifiedRadialMLP.
+        Compute all radial embeddings using batched UnifiedRadialMLP.
 
         Args:
             x_edge: Edge embeddings [E, edge_features]
             model: The backbone model with _unified_radial_mlp
 
         Returns:
-            List of radial embeddings, one per layer [E, radial_features]
+            List [edge_degree_radial, layer_0_radial, ..., layer_N-1_radial]
         """
         return model._unified_radial_mlp(x_edge)
 
@@ -408,7 +420,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
 
         # Select m=0 columns from L-ordered wigner_inv
-        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
+        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER] / rescale_factor
         x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
 
         x_edge_embedding = x_edge_embedding.to(x.dtype)
@@ -416,7 +428,7 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         return x.index_add(
             0,
             edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
+            x_edge_embedding,
         )
 
 

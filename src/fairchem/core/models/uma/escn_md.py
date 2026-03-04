@@ -100,60 +100,89 @@ def add_n_empty_edges(
     )
 
 
-def get_balanced_attribute(
+def _validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, int]:
+    """
+    Validate that channel indices form a contiguous range and return (start, end).
+
+    Args:
+        channels: List of channel indices (must be contiguous)
+        name: Name for error messages (e.g., "charge_balanced_channels")
+
+    Returns:
+        (start_idx, end_idx) tuple for slicing [start:end]
+
+    Raises:
+        ValueError: If channels are not contiguous
+    """
+    if not channels:
+        return 0, 0
+
+    sorted_channels = sorted(channels)
+    expected = list(range(sorted_channels[0], sorted_channels[-1] + 1))
+    if sorted_channels != expected:
+        raise ValueError(
+            f"{name} must be contiguous. Got {channels}, "
+            f"expected contiguous range like {expected}"
+        )
+    return sorted_channels[0], sorted_channels[-1] + 1
+
+
+def balance_channels_batched(
     emb: torch.Tensor,
-    target_sum: torch.Tensor,
+    target: torch.Tensor,
     natoms: torch.Tensor,
     batch: torch.Tensor,
-    balance_attribute_offset: float = 0,
-    balance_channel_idx: int = 0,
+    start_idx: int,
+    end_idx: int,
+    target_offset: float = 0.0,
 ) -> torch.Tensor:
-    """Balance per-atom attributes (charge/spin) to sum to system target.
+    """
+    Balance a contiguous range of channels to sum to a target value per system.
 
     Args:
         emb: Node embeddings of shape [num_atoms, sph_features, channels]
-        target_sum: Target sum per system of shape [num_systems]
-        natoms: Number of atoms per system of shape [num_systems]
-        batch: Batch indices mapping atoms to systems of shape [num_atoms]
-        balance_attribute_offset: Offset to subtract from target (e.g., 1 for spin)
-        balance_channel_idx: Which channel index to balance
+        target: Target sum per system [num_systems]
+        natoms: Number of atoms per system [num_systems]
+        batch: Batch indices mapping atoms to systems [num_atoms]
+        start_idx: Start index of channel range (inclusive)
+        end_idx: End index of channel range (exclusive)
+        target_offset: Offset to subtract from target (e.g., 1 for spin)
 
     Returns:
-        Modified embeddings with the specified channel balanced to sum to target.
+        Modified embeddings with specified channels balanced to their targets.
 
     Supports graph parallel (GP) mode using torch.distributed.nn.functional.all_reduce
     which provides correct gradients in both forward and backward passes.
     """
     out_emb = emb.clone()
+    num_systems = len(natoms)
+    n_channels = end_idx - start_idx
 
-    charge_unbalanced = emb[:, 0, balance_channel_idx]
+    # Extract channels to balance: [num_atoms, n_channels]
+    channels_to_balance = emb[:, 0, start_idx:end_idx]
 
-    system_scalars_part = torch.zeros(
-        len(natoms),
+    # Compute per-system sums for all channels: [num_systems, n_channels]
+    system_sums = torch.zeros(
+        num_systems,
+        n_channels,
         device=emb.device,
         dtype=emb.dtype,
     )
+    system_sums.index_add_(0, batch, channels_to_balance)
 
-    system_scalars_part.index_add_(0, batch, charge_unbalanced.view(-1))
-
-    # Reduce partial sums across all graph parallel ranks
-    # Use all_reduce_with_grad which has all_reduce in both forward AND backward,
-    # ensuring correct gradient computation when atoms are split across ranks.
+    # Reduce partial sums across graph parallel ranks
     if gp_utils.initialized():
-        system_scalar = all_reduce_with_grad(
-            system_scalars_part, group=gp_utils.get_gp_group()
-        )
-    else:
-        system_scalar = system_scalars_part
+        # TODO we can do this without the extra all reduce call if its the first thing
+        # the layer, since we get all atom embeddings there
+        system_sums = all_reduce_with_grad(system_sums, group=gp_utils.get_gp_group())
 
-    correction = (system_scalar - (target_sum - balance_attribute_offset)) / natoms
+    # Build target sums (same target for all channels)
+    target_sums = (target - target_offset).unsqueeze(1).expand(-1, n_channels)
 
-    balanced_node_scalar = charge_unbalanced - correction[batch]
+    # Compute corrections: [num_systems, n_channels]
+    corrections = (system_sums - target_sums) / natoms.unsqueeze(1)
 
-    out_emb[:, 0, balance_channel_idx] = (
-        out_emb[:, 0, balance_channel_idx] * 0 + balanced_node_scalar
-    )
-
+    out_emb[:, 0, start_idx:end_idx] = channels_to_balance - corrections[batch]
     return out_emb
 
 
@@ -306,12 +335,17 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self.direct_forces = direct_forces
         self.regress_stress = regress_stress
 
-        # which channels to balance
-        self.charge_balanced_channels = (
-            charge_balanced_channels if charge_balanced_channels is not None else []
+        # Convert channel lists to contiguous slice ranges (validates continuity)
+        charge_channels = (
+            list(charge_balanced_channels) if charge_balanced_channels else []
         )
-        self.spin_balanced_channels = (
-            spin_balanced_channels if spin_balanced_channels is not None else []
+        spin_channels = list(spin_balanced_channels) if spin_balanced_channels else []
+
+        self.charge_channel_start, self.charge_channel_end = (
+            _validate_contiguous_channels(charge_channels, "charge_balanced_channels")
+        )
+        self.spin_channel_start, self.spin_channel_end = _validate_contiguous_channels(
+            spin_channels, "spin_balanced_channels"
         )
 
         # NOTE: graph construction related, to remove, except for cutoff
@@ -476,30 +510,35 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
     def balance_channels(
         self,
-        x_message_prime: torch.Tensor,
+        x_message: torch.Tensor,
         charge: torch.Tensor,
         spin: torch.Tensor,
         natoms: torch.Tensor,
         batch: torch.Tensor,
     ) -> torch.Tensor:
-        for channel_idx in self.charge_balanced_channels:
-            x_message_prime = get_balanced_attribute(
-                emb=x_message_prime,
-                target_sum=charge,
+        if self.charge_channel_end > self.charge_channel_start:
+            # Balance charge channels (target = charge)
+            x_message = balance_channels_batched(
+                emb=x_message,
+                target=charge,
                 natoms=natoms,
                 batch=batch,
-                balance_channel_idx=channel_idx,
+                start_idx=self.charge_channel_start,
+                end_idx=self.charge_channel_end,
+                target_offset=0.0,
             )
-        for channel_idx in self.spin_balanced_channels:
-            x_message_prime = get_balanced_attribute(
-                emb=x_message_prime,
-                target_sum=spin,
+        if self.spin_channel_end > self.spin_channel_start:
+            # Balance spin channels (target = spin - 1)
+            x_message = balance_channels_batched(
+                emb=x_message,
+                target=spin,
                 natoms=natoms,
                 batch=batch,
-                balance_attribute_offset=1,
-                balance_channel_idx=channel_idx,
+                start_idx=self.spin_channel_start,
+                end_idx=self.spin_channel_end,
+                target_offset=1.0,
             )
-        return x_message_prime
+        return x_message
 
     def _get_rotmat_and_wigner(
         self, edge_distance_vecs: torch.Tensor
@@ -727,6 +766,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         # Initialize node embeddings
         ###############################################################
 
+        sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
+
         # Init per node representations using an atomic number based embedding
         with record_function("atom embedding"):
             x_message = torch.zeros(
@@ -736,10 +777,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 device=data_dict["pos"].device,
                 dtype=data_dict["pos"].dtype,
             )
-            x_message[:, 0, :] = self.sphere_embedding(data_dict["atomic_numbers"])
-
-        sys_node_embedding = csd_mixed_emb[data_dict["batch"]]
-        x_message[:, 0, :] = x_message[:, 0, :] + sys_node_embedding
+            x_message[:, 0, :] = (
+                self.sphere_embedding(data_dict["atomic_numbers"]) + sys_node_embedding
+            )
 
         ###
         # Hook to allow MOLE
@@ -772,9 +812,19 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             # Pre-fuse envelope into wigner_inv
             wigner_inv_envelope = wigner_inv * edge_envelope
 
+            # Get all radial embeddings: edge_degree + layer radials
+            # General backend: returns [x_edge] * (1 + N) - rad_func computed internally
+            # Fast backends: returns precomputed [edge_radial, layer_0_radial, ...]
+            all_radial_embeddings = self.backend.get_unified_radial_emb(x_edge, self)
+            edge_degree_input = all_radial_embeddings[0]
+            x_edge_per_layer = all_radial_embeddings[1:]
+
+            # Apply edge_degree_embedding
+            # General backend: rad_func computed internally
+            # Fast backends: rad_func=None, uses precomputed radial from edge_degree_input
             x_message = self.edge_degree_embedding(
                 x_message,
-                x_edge,
+                edge_degree_input,
                 graph_dict["edge_index"],
                 wigner_inv_envelope,
                 data_dict["gp_node_offset"],
@@ -783,12 +833,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         ###############################################################
         # Update spherical node embeddings
         ###############################################################
-
-        # Get edge embeddings for each layer
-        # General backend: raw x_edge (rad_func computed inside SO2_Convolution)
-        # Fast backends: precomputed radials
-        with record_function("layer_radial_emb"):
-            x_edge_per_layer = self.backend.get_layer_radial_emb(x_edge, self)
 
         for i in range(self.num_layers):
             with record_function(f"message passing {i}"):
