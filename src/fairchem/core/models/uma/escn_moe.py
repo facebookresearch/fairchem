@@ -21,6 +21,7 @@ from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 from fairchem.core.models.uma.nn.mole import (
+    MOLE,
     MOLEGlobals,
 )
 from fairchem.core.models.uma.nn.mole_utils import (
@@ -261,6 +262,10 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         )
         recursive_replace_all_linear(self.head, replacement_factory)
 
+        # Track merge state for single-dataset inference
+        self.merged_on_dataset = None
+        self.non_merged_dataset_names = None
+
     @staticmethod
     def _build_expert_mapping(
         dataset_names: list[str] | None,
@@ -287,8 +292,61 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         }
         return sorted_names, name_to_exp
 
+    def merge_MOLE_model(self, data):
+        """
+        Merge MOLE layers into single Linear for single-dataset inference.
+
+        Sets one-hot expert coefficients and replaces all MOLE→Linear.
+        """
+        self.merged_on_dataset = data.dataset[0]
+        expert_idx = self.dataset_name_to_exp[self.merged_on_dataset]
+        self.global_mole_tensors.expert_mixing_coefficients = (
+            torch.zeros(1, len(self.dataset_name_to_exp), dtype=data.pos.dtype)
+            .scatter_(1, torch.tensor([[expert_idx]]), 1.0)
+            .to(data.pos.device)
+        )
+
+        def replace_mole(module):
+            for name, child in list(module.named_children()):
+                if isinstance(child, MOLE):
+                    setattr(module, name, child.merged_linear_layer())
+                else:
+                    replace_mole(child)
+
+        replace_mole(self.head)
+
+        self.non_merged_dataset_names = [
+            n for n in self.dataset_names if n != self.merged_on_dataset
+        ]
+        return self
+
+    def prepare_for_inference(self, data, settings):
+        """
+        Prepare head for inference. Handles MOLE merging if needed.
+        """
+        if settings.merge_mole:
+            return self.merge_MOLE_model(data)
+        return self
+
     @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        # Fast path for merged model - skip MOLE routing overhead
+        if self.merged_on_dataset is not None:
+            head_output = self.head(data, emb)
+            full_output = {}
+            for key in head_output:
+                full_output[f"{self.merged_on_dataset}_{key}"] = (
+                    {key: head_output[key]} if self.wrap_property else head_output[key]
+                )
+                nan_tensor = head_output[key].new_full(
+                    head_output[key].shape, float("nan")
+                )
+                for dataset in self.non_merged_dataset_names:
+                    full_output[f"{dataset}_{key}"] = (
+                        {key: nan_tensor} if self.wrap_property else nan_tensor
+                    )
+            return full_output
+
         self.global_mole_tensors.mole_sizes = torch.zeros(
             data.natoms.shape[0], dtype=torch.int, device=emb["batch"].device
         ).scatter(0, emb["batch"], 1, reduce="add")  # data.natoms.cpu()
