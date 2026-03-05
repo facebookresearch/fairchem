@@ -142,6 +142,7 @@ def inference_settings_turbo():
     )
 
 
+# this setting is specific for UMA-S on cuda for maximum speed.
 def inference_settings_turbo_umas():
     return InferenceSettings(
         tf32=True,
@@ -150,6 +151,7 @@ def inference_settings_turbo_umas():
         compile=True,
         external_graph_gen=False,
         internal_graph_gen_version=2,
+        execution_mode="umas_fast_gpu",
     )
 
 
