@@ -137,6 +137,7 @@ class HydraModel(nn.Module):
         otf_graph: bool = True,
         pass_through_head_outputs: bool = False,
         freeze_backbone: bool = False,
+        supports_single_atoms: bool = False,
     ):
         super().__init__()
         self.device = None
