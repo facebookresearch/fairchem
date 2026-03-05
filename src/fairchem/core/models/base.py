@@ -137,6 +137,7 @@ class HydraModel(nn.Module):
         otf_graph: bool = True,
         pass_through_head_outputs: bool = False,
         freeze_backbone: bool = False,
+        model_id: str | None = None,
     ):
         super().__init__()
         self.device = None
@@ -145,6 +146,9 @@ class HydraModel(nn.Module):
         # the old config system at some point, this will prevent the need to make major modifications to the trainer
         # because they all expect the name of the outputs directly instead of the head_name.property_name
         self.pass_through_head_outputs = pass_through_head_outputs
+
+        # model_id string in form of NAME-VERSION e.g. UMA-1.2
+        self.model_id = model_id
 
         # if finetune_config is provided, then attempt to load the model from the given finetune checkpoint
         starting_model = None
