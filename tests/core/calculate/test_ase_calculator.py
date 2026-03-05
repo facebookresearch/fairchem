@@ -422,7 +422,7 @@ def test_random_seed_final_energy(single_mlip_predict_unit):
 def test_external_graph_generation_molecular_system():
     inference_settings = InferenceSettings(external_graph_gen=True)
     predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings
+        "uma-s-1p1", device="cuda", inference_settings=inference_settings
     )
 
     calc_omol = FAIRChemCalculator(predict_unit, task_name="omol")
@@ -449,12 +449,12 @@ def test_external_graph_gen_vs_internal():
 
     inference_settings_external = InferenceSettings(external_graph_gen=True)
     predict_unit_external = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings_external
+        "uma-s-1p1", device="cuda", inference_settings=inference_settings_external
     )
 
     inference_settings_internal = InferenceSettings(external_graph_gen=False)
     predict_unit_internal = pretrained_mlip.get_predict_unit(
-        "uma-s-1", device="cuda", inference_settings=inference_settings_internal
+        "uma-s-1p1", device="cuda", inference_settings=inference_settings_internal
     )
 
     calc_external = FAIRChemCalculator(predict_unit_external, task_name="omat")
@@ -647,7 +647,7 @@ def test_formation_energy_calculator_different_task_types(single_mlip_predict_un
 def test_formation_energy_calculator_predictions_against_known_values(
     atoms_with_formation_energy,
 ):
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1")
     base_calc = FAIRChemCalculator(predict_unit, task_name="omat")
     formation_calc = FormationEnergyCalculator(base_calc)
 
