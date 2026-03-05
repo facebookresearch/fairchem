@@ -107,7 +107,7 @@ class FAIRChemCalculator(Calculator):
             "r_data_keys": ["spin", "charge"],
             "max_neigh": max_neigh,
             "radius": radius,
-            "target_dtype": predict_unit.inference_settings.base_precision_dtype,
+            "target_dtype": InferenceSettings.get_torch_dtype(predict_unit.inference_settings.base_precision_dtype),
         }
 
         self.a2g = partial(AtomicData.from_ase, **a2g_kwargs)

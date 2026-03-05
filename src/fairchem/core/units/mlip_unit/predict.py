@@ -142,7 +142,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
         # requested precision rather than being cast from float32 later.
         prev_dtype = torch.get_default_dtype()
-        torch.set_default_dtype(inference_settings.base_precision_dtype)
+        torch.set_default_dtype(InferenceSettings.get_torch_dtype(inference_settings.base_precision_dtype))
 
         try:
             # Load model with overrides, passing pre-loaded checkpoint
@@ -271,7 +271,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         data_device = data.to(self.device).clone()
 
-        dtype = self.inference_settings.base_precision_dtype
+        dtype = InferenceSettings.get_torch_dtype(self.inference_settings.base_precision_dtype)
         if not self._warned_upcast:
             self._warned_upcast = warn_if_upcasting(data_device.pos.dtype, dtype)
         for key, val in data_device:
@@ -290,7 +290,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
 
-        self.model.to(self.inference_settings.base_precision_dtype)
+        self.model.to(InferenceSettings.get_torch_dtype(self.inference_settings.base_precision_dtype))
 
         self.move_to_device()
 
