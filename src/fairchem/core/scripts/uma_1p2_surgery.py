@@ -50,7 +50,7 @@ def add_omat_rattle_support(checkpoint):
         "module.backbone.dataset_embedding.dataset_emb_dict.omat.weight"
     ].clone()
 
-    checkpoint.model_config["model_id"] = "UMA-1.2"
+    checkpoint.model_config["model_id"] = "UMA-S-1.2"
     return checkpoint
 
 
@@ -112,8 +112,8 @@ def remove_omat_rattle(checkpoint):
     ]
 
     # Add single atom support
-    checkpoint.model_config["backbone"]["supports_single_atoms"] = True
-    checkpoint.model_config["model_id"] = "UMA-1.2"
+    checkpoint.model_config["supports_single_atoms"] = True
+    checkpoint.model_config["model_id"] = "UMA-S-1.2"
     return checkpoint
 
 
