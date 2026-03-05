@@ -28,7 +28,7 @@ def test_embeddings(conserving_mole_checkpoint, fake_uma_dataset):
     predictor = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
-        inference_settings=InferenceSettings(base_precision_dtype=torch.float64),
+        inference_settings=InferenceSettings(base_precision_dtype_str="float64"),
     )
     oc20_embeddings_tasks = Task(
         name="oc20_embeddings",

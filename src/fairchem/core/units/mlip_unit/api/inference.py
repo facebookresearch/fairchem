@@ -142,6 +142,17 @@ def inference_settings_turbo():
     )
 
 
+def inference_settings_turbo_umas():
+    return InferenceSettings(
+        tf32=True,
+        activation_checkpointing=False,
+        merge_mole=True,
+        compile=True,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+
+
 # this mode corresponds to the default settings used for training and evaluation
 def inference_settings_traineval():
     return InferenceSettings(

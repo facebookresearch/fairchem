@@ -20,4 +20,4 @@ def test_default_dtype_is_float32():
 
 def test_invalid_string_raises():
     with pytest.raises(AssertionError):
-        InferenceSettings(base_precision_dtype="int8")
+        InferenceSettings(base_precision_dtype_str="int8")

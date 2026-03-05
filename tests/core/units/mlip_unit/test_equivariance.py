@@ -25,8 +25,8 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        (torch.float32, 1e-8, 1e-5),
-        (torch.float64, 1e-25, 1e-22),
+        ("float32", 1e-8, 1e-5),
+        ("float64", 1e-25, 1e-22),
     ],
 )
 def test_direct_equivariance(
@@ -41,8 +41,8 @@ def test_direct_equivariance(
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        (torch.float32, 1e-8, 1e-5),
-        (torch.float64, 1e-25, 1e-22),
+        ("float32", 1e-8, 1e-5),
+        ("float64", 1e-25, 1e-22),
     ],
 )
 def test_direct_mole_equivariance(
@@ -57,8 +57,8 @@ def test_direct_mole_equivariance(
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        (torch.float32, 1e-8, 1e-5),
-        (torch.float64, 1e-25, 1e-22),
+        ("float32", 1e-8, 1e-5),
+        ("float64", 1e-25, 1e-22),
     ],
 )
 def test_conserving_mole_equivariance(
@@ -89,7 +89,7 @@ def equivariance_on_pt(
     )
 
     n_repeats = 5
-    settings = InferenceSettings(base_precision_dtype=dtype)
+    settings = InferenceSettings(base_precision_dtype_str=dtype)
     predictor = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
