@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.mlip_unit import Task
 
 
-def handle_single_atom_prediction(
+def single_atom_prediction_from_lookup(
     data: AtomicData,
     atom_refs: dict[str, dict],
     tasks: dict[str, Task],

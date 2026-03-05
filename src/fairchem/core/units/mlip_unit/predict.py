@@ -38,7 +38,7 @@ from fairchem.core.common.distutils import (
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.single_atom_patch import (
-    handle_single_atom_prediction,
+    single_atom_prediction_from_lookup,
 )
 from fairchem.core.units.mlip_unit.utils import (
     get_backbone_class_from_checkpoint,
@@ -265,7 +265,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # Handle single-atom systems (natoms==1 and pbc all False)
         # Skip this check if the model natively supports single atoms
         if not self.supports_single_atoms:
-            single_atom_result = handle_single_atom_prediction(
+            single_atom_result = single_atom_prediction_from_lookup(
                 data=data,
                 atom_refs=self.atom_refs,
                 tasks=self.tasks,
