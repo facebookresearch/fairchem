@@ -66,7 +66,7 @@ def test_extensivity_nonpbc(
     sample1 = a2g(atoms1, task_name="oc20")
     sample2 = a2g(atoms2, task_name="oc20")
 
-    settings = InferenceSettings(base_precision_dtype_str=dtype)
+    settings = InferenceSettings(base_precision_dtype=dtype)
     predictor = MLIPPredictUnit(
         direct_inference_checkpoint_pt, device="cpu", inference_settings=settings
     )
@@ -126,7 +126,7 @@ def test_extensivity_pbc(dtype, num_tol, direct_checkpoint, fake_uma_dataset):
     sample_pbc = a2g(atoms_pbc, task_name="oc20")
     sample_supercell = a2g(atoms_supercell, task_name="oc20")
 
-    settings = InferenceSettings(base_precision_dtype_str=dtype)
+    settings = InferenceSettings(base_precision_dtype=dtype)
     predictor = MLIPPredictUnit(
         direct_inference_checkpoint_pt, device="cpu", inference_settings=settings
     )

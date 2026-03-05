@@ -98,19 +98,20 @@ class InferenceSettings:
     # Base precision dtype for model parameters and input data.
     # All model parameters, buffers, and float input tensors will be
     # cast to this dtype. Set to torch.float64 for higher precision.
-    # current accepted values are float32 and float64
-    base_precision_dtype_str: str = "float32"
+    # Accepts a torch.dtype or a string in ALLOWED_DTYPES (e.g. "float32").
+    base_precision_dtype: torch.dtype = torch.float32
 
     # Execution backend mode for the backbone. The default is "general".
     # Set to "umas_fast_pytorch" to enable block-diagonal SO2 GEMM conversion for faster inference.
     # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
     execution_mode: str = "general"
 
-    def base_precision_dtype(self) -> torch.dtype:
-        assert (
-            self.base_precision_dtype_str in ALLOWED_DTYPES
-        ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {self.base_precision_dtype_str}"
-        return getattr(torch, self.base_precision_dtype_str)
+    def __post_init__(self):
+        if isinstance(self.base_precision_dtype, str):
+            assert (
+                self.base_precision_dtype in ALLOWED_DTYPES
+            ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {self.base_precision_dtype}"
+            self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
 
 
 # this is most general setting that works for most systems and models,

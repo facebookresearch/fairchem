@@ -19,8 +19,8 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 @pytest.mark.parametrize(
     "dtype,num_tol,rot_tol",
     [
-        ("float32", 1e-7, 1e-7),
-        # (float64, 1e-29, 1e-29),
+        (torch.float32, 1e-7, 1e-7),
+        # (torch.float64, 1e-29, 1e-29),
     ],
 )
 def test_conserving_mole_aperiodic_on_pt(
@@ -39,7 +39,7 @@ def test_conserving_mole_aperiodic_on_pt(
     )
 
     n_repeats = 10
-    settings = InferenceSettings(base_precision_dtype_str=dtype)
+    settings = InferenceSettings(base_precision_dtype=dtype)
     predictor_v1 = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",

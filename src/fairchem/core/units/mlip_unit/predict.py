@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import copy
-import dataclasses
 import logging
 import math
 import os
@@ -143,7 +142,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
         # requested precision rather than being cast from float32 later.
         prev_dtype = torch.get_default_dtype()
-        torch.set_default_dtype(inference_settings.base_precision_dtype())
+        torch.set_default_dtype(inference_settings.base_precision_dtype)
 
         try:
             # Load model with overrides, passing pre-loaded checkpoint
@@ -272,7 +271,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         data_device = data.to(self.device).clone()
 
-        dtype = self.inference_settings.base_precision_dtype()
+        dtype = self.inference_settings.base_precision_dtype
         if not self._warned_upcast:
             self._warned_upcast = warn_if_upcasting(data_device.pos.dtype, dtype)
         for key, val in data_device:
@@ -291,7 +290,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # Model handles its own preparation (MOLE merge, eval mode, etc.)
         self.model.module.prepare_for_inference(data, self.inference_settings)
 
-        self.model.to(self.inference_settings.base_precision_dtype())
+        self.model.to(self.inference_settings.base_precision_dtype)
 
         self.move_to_device()
 
@@ -465,20 +464,12 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
         self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
-        # Serialize InferenceSettings with _target_ so hydra.utils.instantiate
-        # reconstructs it as an actual InferenceSettings object rather than an
-        # OmegaConf struct
-        inference_settings_config = dataclasses.asdict(inference_settings)
-        inference_settings_config["_target_"] = (
-            "fairchem.core.units.mlip_unit.api.inference.InferenceSettings"
-        )
-
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
             "inference_model_path": inference_model_path,
             "device": device,
             "overrides": overrides,
-            "inference_settings": inference_settings_config,
+            "inference_settings": inference_settings,
             "seed": seed,
             "atom_refs": atom_refs,
             "form_elem_refs": form_elem_refs,

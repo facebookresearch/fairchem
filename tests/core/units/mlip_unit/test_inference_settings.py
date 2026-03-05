@@ -15,9 +15,14 @@ from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 def test_default_dtype_is_float32():
     settings = InferenceSettings()
-    assert settings.get_torch_dtype(settings.base_precision_dtype_str) is torch.float32
+    assert settings.base_precision_dtype is torch.float32
+
+
+def test_string_input_converted_to_dtype():
+    settings = InferenceSettings(base_precision_dtype="float64")
+    assert settings.base_precision_dtype is torch.float64
 
 
 def test_invalid_string_raises():
     with pytest.raises(AssertionError):
-        InferenceSettings(base_precision_dtype_str="int8")
+        InferenceSettings(base_precision_dtype="int8")
