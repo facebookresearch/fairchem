@@ -616,6 +616,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
     # Baseline (general backend)
     baseline_settings = InferenceSettings(
+        activation_checkpointing=False,
         merge_mole=True,
         external_graph_gen=False,
         execution_mode="general",
@@ -626,6 +627,7 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
     # Test (umas_fast_gpu backend)
     test_settings = InferenceSettings(
+        activation_checkpointing=False,
         merge_mole=True,
         external_graph_gen=False,
         execution_mode="umas_fast_gpu",
