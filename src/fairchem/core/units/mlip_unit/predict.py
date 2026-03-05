@@ -259,7 +259,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Handle single-atom systems (natoms==1 and pbc all False)
         # Skip this check if the model natively supports single atoms
-        if not self.model.supports_single_atoms:
+        if not self.model.module.supports_single_atoms:
             single_atom_result = single_atom_prediction_from_lookup(
                 data=data,
                 atom_refs=self.atom_refs,
