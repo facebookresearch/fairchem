@@ -60,7 +60,8 @@ def bulk_atoms() -> Atoms:
 
 @pytest.fixture()
 def uma_predict_unit(request):
-    return pretrained_mlip.get_predict_unit("uma-s-1p1")
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(uma_models[0])
 
 
 def get_displacement_and_cell(
@@ -336,7 +337,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
         emb_old = backbone(atomic_data_old)
         from fairchem.core.models.uma.outputs import compute_energy
 
-        _, energy_part_old = compute_energy(
+        energy_old, energy_part_old = compute_energy(
             emb_old, energy_block, atomic_data_old.batch, num_systems
         )
 
@@ -368,6 +369,7 @@ def test_stress_old_vs_new_single_system(request, atoms_fixture, uma_predict_uni
             atomic_data_new["pos"],
             atomic_data_new["cell"],
             atomic_data_new.batch,
+            num_systems,
             training=False,
         )
         # preds = uma_predict_unit.predict(atomic_data_new)
