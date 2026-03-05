@@ -43,26 +43,8 @@ def test_string_to_dtype_conversion(dtype_str, expected):
     assert settings.base_precision_dtype is expected
 
 
-@pytest.mark.parametrize(
-    ("dtype_str", "expected"),
-    [
-        ("torch.float32", torch.float32),
-        ("torch.float64", torch.float64),
-        ("torch.bfloat16", torch.bfloat16),
-    ],
-)
-def test_torch_prefix_stripped(dtype_str, expected):
-    settings = InferenceSettings(base_precision_dtype=dtype_str)
-    assert settings.base_precision_dtype is expected
-
-
-def test_case_insensitive():
-    settings = InferenceSettings(base_precision_dtype="Float32")
-    assert settings.base_precision_dtype is torch.float32
-
-
 def test_invalid_string_raises():
-    with pytest.raises(ValueError, match="Unsupported dtype string"):
+    with pytest.raises(AssertionError):
         InferenceSettings(base_precision_dtype="int8")
 
 

@@ -29,11 +29,11 @@ DEFAULT_CHARGE = 0
 DEFAULT_SPIN_OMOL = 1
 DEFAULT_SPIN = 0
 
-DTYPE_MAP: dict[str, torch.dtype] = {
-    "float16": torch.float16,
-    "float32": torch.float32,
-    "float64": torch.float64,
-    "bfloat16": torch.bfloat16,
+ALLOWED_DTYPES: set[torch.dtype] = {
+    torch.float16,
+    torch.float32,
+    torch.float64,
+    torch.bfloat16,
 }
 
 
@@ -105,7 +105,7 @@ class InferenceSettings:
     # All model parameters, buffers, and float input tensors will be
     # cast to this dtype. Set to torch.float64 for higher precision.
     # Accepts torch.dtype or a string (e.g. "float32", "float64",
-    # "torch.float64") for Hydra YAML compatibility.
+    # "bfloat16") for Hydra YAML compatibility.
     base_precision_dtype: torch.dtype | str = torch.float32
 
     # Execution backend mode for the backbone. If set to None, the
@@ -114,16 +114,15 @@ class InferenceSettings:
     execution_mode: str | None = None
 
     def __post_init__(self):
-        if isinstance(self.base_precision_dtype, str):
-            dtype_str = self.base_precision_dtype.lower()
-            if dtype_str.startswith("torch."):
-                dtype_str = dtype_str[len("torch.") :]
-            if dtype_str not in DTYPE_MAP:
-                raise ValueError(
-                    f"Unsupported dtype string '{self.base_precision_dtype}'. "
-                    f"Supported values: {list(DTYPE_MAP.keys())}"
-                )
-            self.base_precision_dtype = DTYPE_MAP[dtype_str]
+        self.base_precision_dtype = (
+            getattr(torch, self.base_precision_dtype)
+            if isinstance(self.base_precision_dtype, str)
+            else self.base_precision_dtype
+        )
+        assert self.base_precision_dtype in ALLOWED_DTYPES, (
+            f"Unsupported dtype '{self.base_precision_dtype}'. "
+            f"Supported: {ALLOWED_DTYPES}"
+        )
 
 
 # this is most general setting that works for most systems and models,
