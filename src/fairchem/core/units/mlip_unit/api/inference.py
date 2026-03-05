@@ -59,9 +59,8 @@ class InferenceSettings:
     # Flag to enable or disable activation checkpointing during
     # inference. This will dramatically decrease the memory footprint
     # especially for large number of atoms (ie 10+) at a slight cost to
-    # inference speed. If set to None, the setting from the model
-    # checkpoint will be used.
-    activation_checkpointing: bool | None = None
+    # inference speed.
+    activation_checkpointing: bool = True
 
     # Flag to enable or disable the merging of MOLE experts during
     # inference. If this is used, the input composition, total charge
@@ -73,24 +72,24 @@ class InferenceSettings:
     # Flag to enable or disable the compilation of the inference model.
     compile: bool = False
 
+    # Deprecated
     # Flag to enable or disable the use of CUDA Graphs for compute
     # This flag is no longer used and will be removed in future versions
     wigner_cuda: bool | None = None
 
     # Flag to enable or disable the generation of external graphs during
-    # inference. If set to None, the setting from the model checkpoint
-    # will be used.
-    external_graph_gen: bool | None = None
+    # inference.
+    external_graph_gen: bool = False
 
-    # Deprecated
-    # Not recommended using! manually selects the version of graph gen
-    # code if external_graph_gen is false, if set of None, will default
-    # to whatever is in the checkpoint
-    internal_graph_gen_version: int | None = None
+    # Internal graph generation version to use during inference.
+    # version 2 is the an internal implementation that is optimized for gpu.
+    # version 3 uses Nvidia alchemi library's neighbor list.
+    internal_graph_gen_version: int = 2
 
     # Number of internal torch threads to use for inference
     torch_num_threads: int | None = None
 
+    # Used for padding edges during inference, this is useful to reduce recompiling time during dynamic inference runs
     edge_chunk_size: int | None = None
 
     # Flag to enable quaternion-based Wigner D matrix computation.
@@ -102,16 +101,16 @@ class InferenceSettings:
     # current accepted values are float32 and float64
     base_precision_dtype_str: str = "float32"
 
-    # Execution backend mode for the backbone. If set to None, the
-    # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
-    # to enable block-diagonal SO2 GEMM conversion for faster inference.
-    execution_mode: str | None = None
+    # Execution backend mode for the backbone. The default is "general".
+    # Set to "umas_fast_pytorch" to enable block-diagonal SO2 GEMM conversion for faster inference.
+    # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
+    execution_mode: str = "general"
 
     @classmethod
     def get_torch_dtype(cls, base_precision_dtype_str: str) -> torch.dtype:
-        assert base_precision_dtype in ALLOWED_DTYPES, (
-            f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {base_precision_dtype_str!r}"
-        )
+        assert (
+            base_precision_dtype_str in ALLOWED_DTYPES
+        ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {base_precision_dtype_str!r}"
         return getattr(torch, base_precision_dtype_str)
 
 
@@ -125,6 +124,7 @@ def inference_settings_default():
         compile=False,
         external_graph_gen=False,
         internal_graph_gen_version=2,
+        execution_mode="general",
     )
 
 
@@ -157,6 +157,7 @@ def inference_settings_traineval():
 NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
     "turbo": inference_settings_turbo(),
+    "traineval": inference_settings_traineval(),
 }
 
 
