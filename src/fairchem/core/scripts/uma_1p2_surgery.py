@@ -4,11 +4,6 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-UMA 1.2 Checkpoint Surgery Script
-
-This script performs checkpoint surgery on UMA 1.2 to fix omat_rattle dataset support.
-Stage 1: Add omat_rattle support (matches notebook)
-Stage 2: Remove all omat_rattle mentions entirely
 """
 
 from __future__ import annotations
@@ -16,9 +11,10 @@ from __future__ import annotations
 import argparse
 import os
 
+import numpy as np
 import torch
 
-TASKS = ["oc20", "oc22", "oc25", "omat", "odac", "omc", "omol"]
+from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
 
 
 def add_omat_rattle_support(checkpoint):
@@ -140,10 +136,6 @@ def create_test_systems():
 
 def compare_checkpoints(stage1_path: str, stage2_path: str):
     """Compare stage1 and stage2 checkpoints across all tasks."""
-    import numpy as np
-
-    from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
-
     systems = create_test_systems()
 
     print(
@@ -152,7 +144,7 @@ def compare_checkpoints(stage1_path: str, stage2_path: str):
     print("-" * 100)
 
     all_match = True
-    for task in TASKS:
+    for task in ["oc20", "oc22", "oc25", "omat", "odac", "omc", "omol"]:
         calc1 = FAIRChemCalculator.from_model_checkpoint(stage1_path, task_name=task)
         calc2 = FAIRChemCalculator.from_model_checkpoint(stage2_path, task_name=task)
 
