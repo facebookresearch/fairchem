@@ -106,12 +106,11 @@ class InferenceSettings:
     # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
     execution_mode: str = "general"
 
-    @classmethod
-    def get_torch_dtype(cls, base_precision_dtype_str: str) -> torch.dtype:
+    def base_precision_dtype(self) -> torch.dtype:
         assert (
-            base_precision_dtype_str in ALLOWED_DTYPES
-        ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {base_precision_dtype_str!r}"
-        return getattr(torch, base_precision_dtype_str)
+            self.base_precision_dtype_str in ALLOWED_DTYPES
+        ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {self.base_precision_dtype_str}"
+        return getattr(torch, self.base_precision_dtype_str)
 
 
 # this is most general setting that works for most systems and models,
