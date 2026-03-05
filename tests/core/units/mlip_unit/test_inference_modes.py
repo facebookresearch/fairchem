@@ -471,3 +471,13 @@ def test_ac_with_chunking_and_batching(
     assert torch.allclose(
         result_ac["forces"], result_no_ac["forces"], rtol=1e-5, atol=1e-5
     )
+
+
+def test_supports_single_atoms_in_checkpoint(conserving_mole_checkpoint):
+    """
+    Verify that a checkpoint trained with supports_single_atoms=true in the
+    model config has the flag set on the loaded predict unit.
+    """
+    inference_checkpoint_pt, _ = conserving_mole_checkpoint
+    predictor = MLIPPredictUnit(inference_checkpoint_pt, device="cpu")
+    assert predictor.model.module.supports_single_atoms is True

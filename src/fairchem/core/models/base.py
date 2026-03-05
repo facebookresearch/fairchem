@@ -137,6 +137,7 @@ class HydraModel(nn.Module):
         otf_graph: bool = True,
         pass_through_head_outputs: bool = False,
         freeze_backbone: bool = False,
+        supports_single_atoms: bool = False,
         model_id: str | None = None,
     ):
         super().__init__()
@@ -147,6 +148,8 @@ class HydraModel(nn.Module):
         # because they all expect the name of the outputs directly instead of the head_name.property_name
         self.pass_through_head_outputs = pass_through_head_outputs
 
+        # Does this model support inference on single atom systems
+        self.supports_single_atoms = supports_single_atoms
         # model_id string in form of NAME-VERSION e.g. UMA-1.2
         self.model_id = model_id
 
