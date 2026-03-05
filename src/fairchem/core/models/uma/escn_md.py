@@ -58,7 +58,6 @@ from fairchem.core.models.uma.outputs import (
     compute_forces,
     compute_forces_and_stress,
     compute_hessian,
-    get_displacement_and_cell,
     get_l_component_range,
     reduce_node_to_system,
 )
@@ -122,6 +121,7 @@ def add_n_empty_edges(
     )
 
 
+@torch.compiler.disable
 def get_balanced_attribute(
     emb: torch.Tensor,
     target_sum: torch.Tensor,
@@ -696,11 +696,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             csd_mixed_emb=csd_mixed_emb,
         )
 
-        with record_function("get_displacement_and_cell"):
-            displacement, orig_cell = get_displacement_and_cell(
-                data=data_dict,
-                regress_config=self.regress_config,
-            )
+        # Enable gradients for autograd-based force/stress computation.
+        # Must be set before graph generation so the computation graph
+        # tracks positions and cell through edge distance calculations.
+        if not self.regress_config.direct_forces:
+            if self.regress_config.forces or self.regress_config.stress:
+                data_dict["pos"].requires_grad_(True)
+            if self.regress_config.stress:
+                data_dict["cell"].requires_grad_(True)
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
@@ -818,8 +821,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         x_message = self.norm(x_message)
         out = {
             "node_embedding": x_message,
-            "displacement": displacement,
-            "orig_cell": orig_cell,
             "batch": data_dict["batch"],
         }
         return out
@@ -1139,25 +1140,20 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         if self.regress_config.stress and not self.regress_config.direct_stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
-                data["pos_original"],
-                emb["displacement"],
+                data["pos"],
                 data["cell"],
+                batch=data["batch_full"],  # use batch_full to work with GP reduction
                 training=create_graph,
             )
             # TODO should we assume gradient forces always when stress is requested?
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
             outputs[stress_key] = {"stress": stress} if self.wrap_property else stress
-            data["cell"] = emb["orig_cell"]
-            pos = data["pos_original"]
         elif self.regress_config.forces and not self.regress_config.direct_forces:
             forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
-            pos = data["pos"]
         else:
             forces = None
-            pos = None
 
-        # Compute Hessian if requested
         if self.regress_hessian:
             if forces is None:
                 raise ValueError(
@@ -1171,7 +1167,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 )
 
             hessian = compute_hessian(
-                forces, pos, vmap=self.hessian_vmap, training=self.training
+                forces, data["pos"], vmap=self.hessian_vmap, training=self.training
             )
             outputs[hessian_key] = (
                 {"hessian": hessian} if self.wrap_property else hessian
