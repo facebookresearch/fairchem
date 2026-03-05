@@ -138,6 +138,7 @@ class HydraModel(nn.Module):
         pass_through_head_outputs: bool = False,
         freeze_backbone: bool = False,
         supports_single_atoms: bool = False,
+        model_id: str | None = None,
     ):
         super().__init__()
         self.device = None
@@ -149,6 +150,8 @@ class HydraModel(nn.Module):
 
         # Does this model support inference on single atom systems
         self.supports_single_atoms = supports_single_atoms
+        # model_id string in form of NAME-VERSION e.g. UMA-1.2
+        self.model_id = model_id
 
         # if finetune_config is provided, then attempt to load the model from the given finetune checkpoint
         starting_model = None
