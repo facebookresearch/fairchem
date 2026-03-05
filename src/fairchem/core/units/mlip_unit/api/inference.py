@@ -7,7 +7,7 @@ file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 import torch  # - needed at runtime for dataclass field type resolution
 
@@ -112,6 +112,23 @@ class InferenceSettings:
                 self.base_precision_dtype in ALLOWED_DTYPES
             ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {self.base_precision_dtype}"
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
+
+    def to_omegaconf(self) -> dict:
+        """
+        Return an OmegaConf-compatible dict for use with hydra.utils.instantiate.
+
+        torch.dtype is not natively serializable by OmegaConf, so
+        base_precision_dtype is stored as a string; __post_init__ converts it
+        back to a torch.dtype when InferenceSettings is reinstantiated.
+        """
+        config = asdict(self)
+        config["base_precision_dtype"] = str(self.base_precision_dtype).replace(
+            "torch.", ""
+        )
+        config["_target_"] = (
+            "fairchem.core.units.mlip_unit.api.inference.InferenceSettings"
+        )
+        return config
 
 
 # this is most general setting that works for most systems and models,

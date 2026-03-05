@@ -464,12 +464,15 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
         self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
+        # Serialize InferenceSettings with _target_ so hydra.utils.instantiate
+        # reconstructs it as an actual InferenceSettings object rather than an
+        # OmegaConf struct.
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
             "inference_model_path": inference_model_path,
             "device": device,
             "overrides": overrides,
-            "inference_settings": inference_settings,
+            "inference_settings": inference_settings.to_omegaconf(),
             "seed": seed,
             "atom_refs": atom_refs,
             "form_elem_refs": form_elem_refs,
