@@ -87,14 +87,17 @@ Models are referenced by their name, below are the currently supported models:
 
 | Model Name | Description |
 |---|---|
-| uma-s-1p1 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/150M active/total params) |
+| uma-s-1p2 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/290M active/total params) |
+| uma-s-1p1 | Early version of the UMA small model while still SOTA on most benchmarks (6.6M/150M active/total params) |
 | uma-m-1p1 | Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params) |
 
 ### Set the task for your application and calculate
 
 - **oc20:** use this for catalysis
+- **oc22:** use this for oxide catalysis
+- **oc25:** use this for (electro)catalysis
 - **omat:** use this for inorganic materials
-- **omol:** use this for molecules
+- **omol:** use this for molecules+polymers
 - **odac:** use this for MOFs
 - **omc:** use this for molecular crystals
 
@@ -104,7 +107,7 @@ from ase.build import fcc100, add_adsorbate, molecule
 from ase.optimize import LBFGS
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 # Set up your system as an ASE atoms object
@@ -126,7 +129,7 @@ from ase.optimize import FIRE
 from ase.filters import FrechetCellFilter
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
 atoms = bulk("Fe")
@@ -144,7 +147,7 @@ from ase.md.langevin import Langevin
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="omol")
 
 atoms = molecule("H2O")
@@ -166,7 +169,7 @@ dyn.run(steps=1000)
 from ase.build import molecule
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 
 #  singlet CH2
 singlet = molecule("CH2_s1A1d")
@@ -196,7 +199,7 @@ import time
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", inference_settings="turbo", device="cuda", workers=8
+    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=8
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
