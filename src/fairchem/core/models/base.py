@@ -147,6 +147,9 @@ class HydraModel(nn.Module):
         # because they all expect the name of the outputs directly instead of the head_name.property_name
         self.pass_through_head_outputs = pass_through_head_outputs
 
+        # Does this model support inference on single atom systems
+        self.supports_single_atoms = supports_single_atoms
+
         # if finetune_config is provided, then attempt to load the model from the given finetune checkpoint
         starting_model = None
         if finetune_config is not None:

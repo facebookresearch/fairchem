@@ -121,11 +121,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             inference_model_path, map_location="cpu", weights_only=False
         )
 
-        # Check if model natively supports single atom predictions
-        self.supports_single_atoms = checkpoint.model_config.get(
-            "supports_single_atoms", False
-        )
-
         # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
             checkpoint, overrides, inference_settings
@@ -264,7 +259,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Handle single-atom systems (natoms==1 and pbc all False)
         # Skip this check if the model natively supports single atoms
-        if not self.supports_single_atoms:
+        if not self.model.supports_single_atoms:
             single_atom_result = single_atom_prediction_from_lookup(
                 data=data,
                 atom_refs=self.atom_refs,
