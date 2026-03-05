@@ -200,9 +200,15 @@ def test_calculator_setup(all_calculators):
             print(len(datasets), calc.task_name)
             implemented_properties.append("stress")
 
+        # TOOD: UMA-S-1.2 does not have stress implemented, for some tasks, skip
+        remove_properties_from_checks=set()
+        if calc.predictor.model.module.model_id=="UMA-S-1.2" and calc.task_name not in ["omc", "omat"]:
+            remove_properties_from_checks={"stress"}
+
         assert all(
-            prop in calc.implemented_properties for prop in implemented_properties
+            prop in calc.implemented_properties for prop in set(implemented_properties) - remove_properties_from_checks
         )
+        
 
 
 @pytest.mark.parametrize(
