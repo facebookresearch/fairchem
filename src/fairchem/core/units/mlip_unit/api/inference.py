@@ -29,7 +29,7 @@ DEFAULT_CHARGE = 0
 DEFAULT_SPIN_OMOL = 1
 DEFAULT_SPIN = 0
 
-ALLOWED_DTYPES = ["float32", "float64"]
+ALLOWED_DTYPES = [torch.float32, torch.float64]
 
 
 @dataclass
@@ -99,7 +99,7 @@ class InferenceSettings:
     # All model parameters, buffers, and float input tensors will be
     # cast to this dtype. Set to torch.float64 for higher precision.
     # Accepts a torch.dtype or a string in ALLOWED_DTYPES (e.g. "float32").
-    base_precision_dtype: torch.dtype = torch.float32
+    base_precision_dtype: torch.dtype | str = torch.float32
 
     # Execution backend mode for the backbone. The default is "general".
     # Set to "umas_fast_pytorch" to enable block-diagonal SO2 GEMM conversion for faster inference.
@@ -108,10 +108,10 @@ class InferenceSettings:
 
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
+            self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
             assert (
                 self.base_precision_dtype in ALLOWED_DTYPES
             ), f"base_precision_dtype must be one of {ALLOWED_DTYPES}, got {self.base_precision_dtype}"
-            self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
 
     def to_omegaconf(self) -> dict:
         """
@@ -188,6 +188,7 @@ NAME_TO_INFERENCE_SETTING = {
     "default": inference_settings_default(),
     "turbo": inference_settings_turbo(),
     "traineval": inference_settings_traineval(),
+    "turbo_umas": inference_settings_turbo_umas(),
 }
 
 
