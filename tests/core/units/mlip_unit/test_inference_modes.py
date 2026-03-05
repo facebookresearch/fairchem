@@ -480,4 +480,4 @@ def test_supports_single_atoms_in_checkpoint(conserving_mole_checkpoint):
     """
     inference_checkpoint_pt, _ = conserving_mole_checkpoint
     predictor = MLIPPredictUnit(inference_checkpoint_pt, device="cpu")
-    assert predictor.supports_single_atoms is True
+    assert predictor.model.module.supports_single_atoms is True
