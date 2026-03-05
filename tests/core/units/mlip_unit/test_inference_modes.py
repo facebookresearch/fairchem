@@ -473,41 +473,11 @@ def test_ac_with_chunking_and_batching(
     )
 
 
-def test_supports_single_atoms_in_checkpoint(fake_uma_dataset, tmp_path):
+def test_supports_single_atoms_in_checkpoint(conserving_mole_checkpoint):
     """
-    Train a small model with supports_single_atoms=true in the model config,
-    then load the checkpoint and verify the flag is set on the predict unit.
+    Verify that a checkpoint trained with supports_single_atoms=true in the
+    model config has the flag set on the loaded predict unit.
     """
-    from fairchem.core.units.mlip_unit.mlip_unit import UNIT_INFERENCE_CHECKPOINT
-    from tests.core.testing_utils import launch_main
-
-    temp_dir = str(tmp_path / "single_atom_ckpt")
-    os.makedirs(temp_dir, exist_ok=True)
-    timestamp_id = "sa_test"
-
-    sys_args = [
-        "--config",
-        "tests/core/units/mlip_unit/test_mlip_train.yaml",
-        "num_experts=0",
-        "checkpoint_every=10000",
-        "datasets=aselmdb",
-        f"+job.run_dir={temp_dir}",
-        f"datasets.data_root_dir={fake_uma_dataset}",
-        "job.device_type=CPU",
-        f"+job.timestamp_id={timestamp_id}",
-        "optimizer=savegrad",
-        "max_steps=2",
-        "max_epochs=null",
-        "expected_loss=null",
-        "act_type=gate",
-        "ff_type=spectral",
-        "+runner.train_eval_unit.model.supports_single_atoms=true",
-    ]
-    launch_main(sys_args)
-
-    checkpoint_dir = os.path.join(temp_dir, timestamp_id, "checkpoints", "step_0")
-    inference_checkpoint_pt = os.path.join(checkpoint_dir, UNIT_INFERENCE_CHECKPOINT)
-    assert os.path.isfile(inference_checkpoint_pt)
-
+    inference_checkpoint_pt, _ = conserving_mole_checkpoint
     predictor = MLIPPredictUnit(inference_checkpoint_pt, device="cpu")
     assert predictor.supports_single_atoms is True
