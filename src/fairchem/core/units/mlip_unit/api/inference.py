@@ -29,6 +29,13 @@ DEFAULT_CHARGE = 0
 DEFAULT_SPIN_OMOL = 1
 DEFAULT_SPIN = 0
 
+DTYPE_MAP: dict[str, torch.dtype] = {
+    "float16": torch.float16,
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "bfloat16": torch.bfloat16,
+}
+
 
 @dataclass
 class MLIPInferenceCheckpoint:
@@ -97,12 +104,26 @@ class InferenceSettings:
     # Base precision dtype for model parameters and input data.
     # All model parameters, buffers, and float input tensors will be
     # cast to this dtype. Set to torch.float64 for higher precision.
-    base_precision_dtype: torch.dtype = torch.float32
+    # Accepts torch.dtype or a string (e.g. "float32", "float64",
+    # "torch.float64") for Hydra YAML compatibility.
+    base_precision_dtype: torch.dtype | str = torch.float32
 
     # Execution backend mode for the backbone. If set to None, the
     # checkpoint default ("general") is used. Set to "umas_fast_pytorch"
     # to enable block-diagonal SO2 GEMM conversion for faster inference.
     execution_mode: str | None = None
+
+    def __post_init__(self):
+        if isinstance(self.base_precision_dtype, str):
+            dtype_str = self.base_precision_dtype.lower()
+            if dtype_str.startswith("torch."):
+                dtype_str = dtype_str[len("torch.") :]
+            if dtype_str not in DTYPE_MAP:
+                raise ValueError(
+                    f"Unsupported dtype string '{self.base_precision_dtype}'. "
+                    f"Supported values: {list(DTYPE_MAP.keys())}"
+                )
+            self.base_precision_dtype = DTYPE_MAP[dtype_str]
 
 
 # this is most general setting that works for most systems and models,
