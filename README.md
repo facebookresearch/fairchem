@@ -94,8 +94,8 @@ Models are referenced by their name, below are the currently supported models:
 ### Set the task for your application and calculate
 
 - **oc20:** use this for catalysis
-- **oc22:** use this for oxide catalysis
-- **oc25:** use this for (electro)catalysis
+- **oc22:** use this for oxide catalysis (1p2 only)
+- **oc25:** use this for (electro)catalysis (1p2 only)
 - **omat:** use this for inorganic materials
 - **omol:** use this for molecules+polymers
 - **odac:** use this for MOFs
