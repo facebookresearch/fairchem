@@ -1,5 +1,4 @@
 # SLURM 64 GPU job configuration
-device_type: CUDA
 run_dir: /checkpoint/ocp/rgao/speed
 run_name: test_speed
 scheduler:

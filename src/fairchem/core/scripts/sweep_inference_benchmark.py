@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import sys
-import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -88,13 +87,12 @@ def calculate_node_gpu_distribution(num_gpus: int) -> tuple[int, int]:
         )
 
 
-def wait_for_jobs(jobs: list, check_interval: int = 30) -> tuple[set[int], set[int]]:
+def wait_for_jobs(jobs: list) -> tuple[set[int], set[int]]:
     """
-    Wait for all jobs to complete, periodically reporting status.
+    Wait for all jobs to complete, blocking on each in submission order.
 
     Args:
-        jobs: List of job objects with done(), results(), and job_id attributes
-        check_interval: Seconds between status checks (default: 30)
+        jobs: List of job objects with results() and job_id attributes
 
     Returns:
         Tuple of (completed_job_indices, failed_job_indices)
@@ -102,41 +100,17 @@ def wait_for_jobs(jobs: list, check_interval: int = 30) -> tuple[set[int], set[i
     completed_jobs: set[int] = set()
     failed_jobs: set[int] = set()
 
-    with tqdm(total=len(jobs), desc="Jobs completed", unit="job") as pbar:
-        while len(completed_jobs) + len(failed_jobs) < len(jobs):
-            for i, job in enumerate(jobs):
-                if i in completed_jobs or i in failed_jobs:
-                    continue
-                try:
-                    # Check if job is done (non-blocking check)
-                    if job.done():
-                        try:
-                            job.results()
-                            completed_jobs.add(i)
-                            pbar.update(1)
-                            pbar.set_postfix(
-                                completed=len(completed_jobs), failed=len(failed_jobs)
-                            )
-                            logging.info(f"Job {job.job_id} completed successfully")
-                        except Exception as e:
-                            failed_jobs.add(i)
-                            pbar.update(1)
-                            pbar.set_postfix(
-                                completed=len(completed_jobs), failed=len(failed_jobs)
-                            )
-                            logging.error(f"Job {job.job_id} failed with error: {e}")
-                except Exception as e:
-                    # If done() check fails, mark as failed
-                    failed_jobs.add(i)
-                    pbar.update(1)
-                    pbar.set_postfix(
-                        completed=len(completed_jobs), failed=len(failed_jobs)
-                    )
-                    logging.error(f"Job {job.job_id} status check failed: {e}")
-
-            num_waiting = len(jobs) - len(completed_jobs) - len(failed_jobs)
-            if num_waiting > 0:
-                time.sleep(check_interval)
+    # Block on each job in order. A later job that finishes first will simply
+    # wait here until the earlier one unblocks — acceptable since all results
+    # are needed before aggregation anyway.
+    for i, job in enumerate(tqdm(jobs, desc="Jobs completed", unit="job")):
+        try:
+            job.results()
+            completed_jobs.add(i)
+            logging.info(f"Job {job.job_id} completed successfully")
+        except Exception as e:
+            failed_jobs.add(i)
+            logging.error(f"Job {job.job_id} failed: {e}")
 
     return completed_jobs, failed_jobs
 

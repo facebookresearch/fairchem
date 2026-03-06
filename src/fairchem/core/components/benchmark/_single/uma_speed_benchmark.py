@@ -250,25 +250,52 @@ class InferenceBenchRunner(Runner):
                 f"Loading model: {model_checkpoint}, inference_settings: {self.inference_settings}"
             )
 
-            def yield_inputs():
-                if self.natoms_list is not None:
-                    for natoms in self.natoms_list:
-                        atoms = get_fcc_crystal_by_num_atoms(natoms)
-                        data = AtomicData.from_ase(atoms, task_name=self.dataset_name)
-                        yield len(atoms), data
-                else:
-                    for k, v in self.input_system.items():
-                        atoms = read(v)
-                        if self.expand_supercells is not None:
-                            size = self.expand_supercells
-                            supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
-                            atoms = make_supercell(atoms, supercell_size)
+            predictor = MLIPPredictUnit(
+                model_checkpoint,
+                self.device,
+                overrides=self.overrides,
+                inference_settings=self.inference_settings,
+            )
 
-                        data = AtomicData.from_ase(atoms, task_name=self.dataset_name)
-                        yield k, data
+            # Determine data kwargs based on external_graph_gen setting
+            if self.inference_settings.external_graph_gen:
+                backbone = predictor.model.module.backbone
+                max_neighbors = backbone.max_neighbors
+                cutoff = backbone.cutoff
+                logging.info(
+                    f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}"
+                )
+                from_ase_kwargs = dict(
+                    task_name=self.dataset_name,
+                    r_edges=True,
+                    max_neigh=max_neighbors,
+                    radius=cutoff,
+                )
+                del predictor
+                torch.cuda.empty_cache()
+            else:
+                from_ase_kwargs = dict(task_name=self.dataset_name)
+                del predictor
+
+            # Build inputs list
+            inputs = []
+            if self.natoms_list is not None:
+                for natoms in self.natoms_list:
+                    atoms = get_fcc_crystal_by_num_atoms(natoms)
+                    data = AtomicData.from_ase(atoms, **from_ase_kwargs)
+                    inputs.append((len(atoms), data))
+            else:
+                for k, v in self.input_system.items():
+                    atoms = read(v)
+                    if self.expand_supercells is not None:
+                        size = self.expand_supercells
+                        supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
+                        atoms = make_supercell(atoms, supercell_size)
+                    data = AtomicData.from_ase(atoms, **from_ase_kwargs)
+                    inputs.append((k, data))
 
             # benchmark all models or number of atoms
-            for name, data in yield_inputs():
+            for name, data in inputs:
                 # Reinitialize predictor for each input to ensure clean state
                 predictor = MLIPPredictUnit(
                     model_checkpoint,
@@ -276,7 +303,6 @@ class InferenceBenchRunner(Runner):
                     overrides=self.overrides,
                     inference_settings=self.inference_settings,
                 )
-
                 num_atoms = name if isinstance(name, int) else data.natoms.item()
                 print_info = f"Starting profile: model: {model_checkpoint}, input: {name}, num_atoms: {num_atoms}"
                 logging.info(print_info)
