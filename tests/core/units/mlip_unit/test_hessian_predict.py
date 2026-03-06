@@ -89,7 +89,7 @@ def get_numerical_hessian(
     return hessian
 
 
-@pytest.skip(reason="Enable when untrained predictions are implemented")
+@pytest.mark.xfail(reason="Enable when untrained predictions are implemented")
 @pytest.mark.gpu()
 @pytest.mark.parametrize("vmap", [True, False])
 def test_hessian(vmap):
@@ -125,7 +125,7 @@ def test_hessian(vmap):
     assert np.isfinite(hessian).all()
 
 
-@pytest.xfail(reason="Enable when untrained predictions are implemented")
+@pytest.mark.xfail(reason="Enable when untrained predictions are implemented")
 @pytest.mark.gpu()
 def test_hessian_vs_numerical():
     """Test that analytical and numerical Hessians are close."""
@@ -172,7 +172,7 @@ def test_hessian_vs_numerical():
     )
 
 
-@pytest.skip(reason="Enable when untrained predictions are implemented")
+@pytest.mark.xfail(reason="Enable when untrained predictions are implemented")
 @pytest.mark.gpu()
 def test_hessian_symmetry():
     """Test that the Hessian matrix is symmetric."""
