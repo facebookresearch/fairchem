@@ -13,7 +13,9 @@ Evaluate predicted crystal structures against experimental references using:
 
 from __future__ import annotations
 
+import json
 import random
+import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
@@ -25,36 +27,37 @@ from fairchem.applications.fastcsp.core.utils.slurm import (
     submit_slurm_jobs,
 )
 from p_tqdm import p_map
-from pymatgen.analysis.structure_matcher import StructureMatcher
-from pymatgen.core.structure import Structure
 
 
 def get_eval_config_and_method(
     config: Optional[dict[str, Any]] = None,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[dict[str, Any], str, str]:
     """Extract evaluation configuration from config dictionary."""
     logger = get_central_logger()
     eval_config = config.get("evaluate", {})
     eval_method = eval_config.get("method", "csd").lower()
 
-    if eval_method not in ["csd", "pymatgen"]:
+    if eval_method not in ["csd", "ccdc", "pymatgen", "pmg"]:
         logger.error(f"Invalid evaluation method '{eval_method}' specified.")
-        raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
+        raise ValueError("Evaluation method must be 'csd', 'ccdc', or 'pymatgen'.")
 
-    if eval_method == "csd":
-        csd_config = eval_config.get("csd", {})
-        # TODO: Use CSD_PYTHON_CMD executable with subprocess
+    if eval_method in ["csd", "ccdc"]:
+        eval_method = "csd"
+        csd_config = eval_config.get(eval_method, {})
         eval_config["csd_python_cmd"] = csd_config.get("python_cmd", "python")
         eval_config["num_cpus"] = csd_config.get("num_cpus", 1)
-    elif eval_method == "pymatgen":
-        pmg_config = eval_config.get("pymatgen", {}).get("match_params", {})
+        eval_dir_name = "matched_structures_csd"
+    elif eval_method in ["pymatgen", "pmg"]:
+        eval_method = "pymatgen"
+        pmg_config = eval_config.get(eval_method, {}).get("match_params", {})
         eval_config["pymatgen_match_params"] = {
             "ltol": pmg_config.get("ltol", 0.1),
             "stol": pmg_config.get("stol", 0.1),
             "angle_tol": pmg_config.get("angle_tol", 5.0),
         }
+        eval_dir_name = f"matched_structures_pmg_l{eval_config['pymatgen_match_params']['ltol']}_s{eval_config['pymatgen_match_params']['stol']}_a{eval_config['pymatgen_match_params']['angle_tol']}"
 
-    return eval_config, eval_method
+    return eval_config, eval_method, eval_dir_name
 
 
 def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
@@ -90,41 +93,70 @@ def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
     return se
 
 
-def match_structures(row, target_structures, eval_method="csd", **kwargs):
-    """
-    Compare a single predicted crystal structure against experimental references.
-
-    Evaluates whether a predicted crystal structure matches any of the provided
-    experimental reference structures using either CCDC packing similarity or
-    pymatgen StructureMatcher.
-
-    Args:
-        row: DataFrame row containing structure data with 'relaxed_cif' column
-        target_structures: Dictionary mapping reference codes to target structures
-                          (CCDC Crystal objects for CSD, pymatgen Structure for pymatgen)
-        method: Evaluation method ('csd' or 'pymatgen')
-        **kwargs: Method-specific parameters
-                 For CSD: shell_size (default 30)
-                 For pymatgen: ltol, stol, angle_tol
-
-    Returns:
-        tuple: (refcode, metric) where:
-               - refcode: Reference code of the best matching structure, or None
-               - metric: RMSD for CSD or RMS distance for pymatgen, or None
-    """
-    logger = get_central_logger()
-
+def _load_single_structure(cif_path: Path, eval_method: str = "csd", **kwargs):
+    """Load a single structure from CIF file for the specified evaluation method."""
     if eval_method == "csd":
-        return _match_csd(row, target_structures, logger, **kwargs)
+        if kwargs.get("csd_python_cmd", "python") != "python":
+            # Use subprocess to load CSD structure when using custom Python executable
+            return _load_csd_structure_subprocess(cif_path, kwargs["csd_python_cmd"])
+        else:
+            try:
+                from ccdc.crystal import Crystal
+            except ImportError as e:
+                raise ImportError("CSD Python API required for CCDC matching.") from e
+            return Crystal.from_string(cif_path.read_text(), "cif")
     elif eval_method == "pymatgen":
-        return _match_pymatgen(row, target_structures, logger, **kwargs)
+        from pymatgen.core.structure import Structure
+
+        return Structure.from_file(str(cif_path))
     else:
-        logger.error(f"Invalid evaluation method '{eval_method}' specified.")
         raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
 
 
-def _match_csd(row, target_xtals, logger, shell_size=30):
+def _load_csd_structure_subprocess(cif_path: Path, csd_python_cmd: str):
+    """Load a CSD structure using subprocess execution."""
+    script_code = f"""
+import sys
+from pathlib import Path
+try:
+    from ccdc.crystal import Crystal
+except ImportError:
+    print("Error: CSD Python API not available", file=sys.stderr)
+    sys.exit(1)
+
+cif_path = Path(r"{cif_path}")
+try:
+    cif_content = cif_path.read_text()
+    crystal = Crystal.from_string(cif_content, "cif")
+    print(str(crystal))
+except Exception as e:
+    print(f"Error loading structure: {{e}}", file=sys.stderr)
+    sys.exit(1)
+"""
+
+    try:
+        result = subprocess.run(
+            [csd_python_cmd, "-c", script_code],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to load CSD structure: {result.stderr}")
+
+        # Return the CIF string - we'll store as string and convert in subprocess when needed
+        return result.stdout.strip()
+
+    except (subprocess.TimeoutExpired, Exception) as e:
+        raise RuntimeError(f"Error loading CSD structure via subprocess: {e}") from e
+
+
+def _match_csd(row, target_xtals, shell_size=30):
     """CSD-specific matching logic."""
+    logger = get_central_logger()
+
     try:
         from ccdc.crystal import Crystal
     except ImportError as e:
@@ -161,17 +193,142 @@ def _match_csd(row, target_xtals, logger, shell_size=30):
     return None, None
 
 
-def _match_pymatgen(row, target_xtals, logger, ltol=0.2, stol=0.3, angle_tol=5):
+def _match_csd_subprocess(row, target_xtals, csd_python_cmd, shell_size=30):
+    """CSD-specific matching logic using subprocess execution - directly calls _match_csd function."""
+    logger = get_central_logger()
+
+    target_cifs = {
+        refcode: str(target_xtal) for refcode, target_xtal in target_xtals.items()
+    }
+
+    script_code = """
+import sys
+import json
+from collections import namedtuple
+
+# Import CSD Python API directly
+try:
+    from ccdc.crystal import Crystal, PackingSimilarity
+except ImportError as e:
+    print("Error: CSD Python API not available", file=sys.stderr)
+    sys.exit(1)
+
+# Replicate ccdc_match_settings function locally
+def ccdc_match_settings(shell_size=30, ignore_H=True, mol_diff=False):
+    se = PackingSimilarity()
+    se.settings.packing_shell_size = shell_size
+    se.settings.distance_tolerance = (shell_size + 5) / 100
+    se.settings.angle_tolerance = shell_size + 5
+    se.settings.ignore_hydrogen_positions = ignore_H
+    se.settings.allow_molecular_differences = mol_diff
+    return se
+
+# Replicate _match_csd function locally
+def match_csd_local(row, target_xtals, shell_size=30):
+    try:
+        gen_xtal = Crystal.from_string(row.relaxed_cif, "cif")
+    except Exception as e:
+        return None, None
+
+    matcher = ccdc_match_settings(shell_size=shell_size)
+    best_match_refcode = None
+    best_rmsd = float("inf")
+
+    for refcode, target_xtal in target_xtals.items():
+        try:
+            results = matcher.compare(gen_xtal, target_xtal)
+            if (
+                results is not None
+                and results.nmatched_molecules >= shell_size
+                and results.rmsd < best_rmsd
+            ):
+                best_match_refcode = refcode
+                best_rmsd = results.rmsd
+        except Exception as e:
+            continue
+
+    return best_match_refcode, best_rmsd
+
+# Simple objects to match function interface
+Row = namedtuple("Row", ["structure_id", "relaxed_cif"])
+
+# Parse input and reconstruct target structures
+data = json.loads(sys.stdin.read())
+target_xtals = {}
+for refcode, cif_str in data["target_cifs"].items():
+    try:
+        target_xtals[refcode] = Crystal.from_string(cif_str, "cif")
+    except:
+        continue
+
+# Call local matching function
+row = Row(data["structure_id"], data["structure_cif"])
+result = match_csd_local(row, target_xtals, shell_size=data["shell_size"])
+
+if result[0] is not None:
+    print(f"{result[0]},{result[1]}")
+else:
+    print("None,None")
+"""
+
+    input_data = {
+        "structure_cif": row.relaxed_cif,
+        "target_cifs": target_cifs,
+        "shell_size": shell_size,
+        "structure_id": row.structure_id,
+    }
+
+    try:
+        result = subprocess.run(
+            [csd_python_cmd, "-c", script_code],
+            input=json.dumps(input_data),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            logger.error(
+                f"CSD subprocess failed for {row.structure_id}: {result.stderr}"
+            )
+            return None, None
+
+        output = result.stdout.strip()
+        if output and "," in output and output != "None,None":
+            match_refcode, rmsd_str = output.split(",")
+            rmsd = float(rmsd_str)
+            logger.info(
+                f"CSD Best Match[{shell_size}] {row.structure_id} | {match_refcode}: {rmsd}"
+            )
+            return match_refcode, rmsd
+
+        return None, None
+
+    except (subprocess.TimeoutExpired, ValueError, Exception) as e:
+        logger.error(f"CSD subprocess error for {row.structure_id}: {e}")
+        return None, None
+
+
+def _match_pymatgen(row, target_xtals, ltol=0.2, stol=0.3, angle_tol=5, ignore_H=True):
     """Pymatgen-specific matching logic."""
+    from pymatgen.analysis.structure_matcher import StructureMatcher
+    from pymatgen.core.structure import Structure
+
+    logger = get_central_logger()
+
     try:
         pred_structure = Structure.from_str(row.relaxed_cif, fmt="cif")
     except Exception as e:
         logger.error(f"Error parsing pymatgen structure {row.structure_id}: {e}")
         return None, None
 
-    matcher = StructureMatcher(
-        ltol=ltol, stol=stol, angle_tol=angle_tol, ignored_species=["H"]
-    )
+    if ignore_H:
+        matcher = StructureMatcher(
+            ltol=ltol, stol=stol, angle_tol=angle_tol, ignored_species=["H"]
+        )
+    else:
+        matcher = StructureMatcher(ltol=ltol, stol=stol, angle_tol=angle_tol)
     best_match_refcode = None
     best_rmsd = float("inf")
 
@@ -195,10 +352,52 @@ def _match_pymatgen(row, target_xtals, logger, ltol=0.2, stol=0.3, angle_tol=5):
     return None, None
 
 
+def match_structures(row, target_structures, eval_method="csd", **kwargs):
+    """
+    Compare a single predicted crystal structure against experimental references.
+
+    Evaluates whether a predicted crystal structure matches any of the provided
+    experimental reference structures using either CCDC packing similarity or
+    pymatgen StructureMatcher.
+
+    Args:
+        row: DataFrame row containing structure data with 'relaxed_cif' column
+        target_structures: Dictionary mapping reference codes to target structures
+                          (CCDC Crystal objects for CSD, pymatgen Structure for pymatgen)
+        method: Evaluation method ('csd' or 'pymatgen')
+        **kwargs: Method-specific parameters
+                 For CSD: shell_size (default 30)
+                 For pymatgen: ltol, stol, angle_tol
+
+    Returns:
+        tuple: (refcode, metric) where:
+               - refcode: Reference code of the best matching structure, or None
+               - metric: RMSD for CSD or RMS distance for pymatgen, or None
+    """
+    logger = get_central_logger()
+
+    if eval_method == "csd":
+        csd_python_cmd = kwargs.get("csd_python_cmd", "python")
+        # Extract shell_size for CSD matching (exclude csd_python_cmd to avoid duplicate arg)
+        shell_size = kwargs.get("shell_size", 30)
+        if csd_python_cmd != "python":
+            return _match_csd_subprocess(
+                row, target_structures, csd_python_cmd, shell_size=shell_size
+            )
+        else:
+            return _match_csd(row, target_structures, shell_size=shell_size)
+    elif eval_method == "pymatgen":
+        return _match_pymatgen(row, target_structures, **kwargs)
+    else:
+        logger.error(f"Invalid evaluation method '{eval_method}' specified.")
+        raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
+
+
 def load_target_structures(
     molecules_file: str | Path,
     target_xtals_dir: Path | str | None = None,
     eval_method: str = "csd",
+    **kwargs,
 ) -> tuple[dict[str, Any], list[list[str]]]:
     """
     Load experimental reference structures from CIF files.
@@ -211,6 +410,7 @@ def load_target_structures(
         molecules_file: CSV file path with name, refcode columns, and optionally cif_path column
         target_xtals_dir: Directory containing experimental CIF files (optional if cif_path column exists)
         eval_method: Evaluation method ('csd' or 'pymatgen')
+        **kwargs: Additional parameters (e.g., csd_python_cmd for CSD method)
 
     Returns:
         tuple: (target_structures_dict, refcodes_list_per_molecule)
@@ -245,11 +445,13 @@ def load_target_structures(
                         continue
 
                 try:
-                    structure = _load_single_structure(cif_path, eval_method)
+                    structure = _load_single_structure(
+                        cif_path, eval_method, **kwargs
+                    )
                     target_structures[refcode] = structure
                     logger.debug(f"Loaded structure for {refcode} from {cif_path}")
                 except Exception as e:
-                    logger.warning(
+                    logger.error(
                         f"Could not load {eval_method} structure for {refcode} from {cif_path}: {e}"
                     )
 
@@ -268,11 +470,11 @@ def load_target_structures(
                         continue
 
                     try:
-                        structure = _load_single_structure(cif_file, eval_method)
+                        structure = _load_single_structure(cif_file, eval_method, **kwargs)
                         target_structures[refcode] = structure
                         logger.debug(f"Loaded structure for {refcode} from {cif_file}")
                     except Exception as e:
-                        logger.warning(
+                        logger.error(
                             f"Could not load {eval_method} structure for {refcode} from {cif_file}: {e}"
                         )
 
@@ -285,6 +487,7 @@ def load_target_structures(
 
         logger.info(f"Loading target structures from directory: {target_xtals_dir}")
         target_xtals_path = Path(target_xtals_dir)
+        all_cif_files = list(target_xtals_path.rglob("*.cif"))
 
         # Get all unique refcodes from molecules_df
         all_refcodes = set()
@@ -296,34 +499,26 @@ def load_target_structures(
 
         # Load structures from directory
         for refcode in all_refcodes:
-            cif_filename = target_xtals_path / f"{refcode}.cif"
-            if not cif_filename.exists():
-                logger.warning(f"CIF file not found: {cif_filename}")
+            cif_filenames = [path for path in all_cif_files if path.stem == refcode]
+            if len(cif_filenames) == 0:
+                logger.error(f"CIF file not found for {refcode} in {target_xtals_path}")
                 continue
+            if len(cif_filenames) > 1:
+                logger.warning(
+                    f"Multiple CIF files found for {refcode} in {target_xtals_path}, using the first one only!"
+                )
+            cif_filename = cif_filenames[0]
 
             try:
-                structure = _load_single_structure(cif_filename, eval_method)
+                structure = _load_single_structure(cif_filename, eval_method, **kwargs)
                 target_structures[refcode] = structure
                 logger.info(f"Loaded structure for {refcode} from {cif_filename}")
             except Exception as e:
-                logger.warning(
+                logger.error(
                     f"Could not load {eval_method} structure for {refcode}: {e}"
                 )
 
     return target_structures, refcodes_list
-
-
-def _load_single_structure(cif_path: Path, eval_method: str):
-    if eval_method == "csd":
-        try:
-            from ccdc.crystal import Crystal
-        except ImportError as e:
-            raise ImportError("CSD Python API required for CCDC matching.") from e
-        return Crystal.from_string(cif_path.read_text(), "cif")
-    elif eval_method == "pymatgen":
-        return Structure.from_file(str(cif_path))
-    else:
-        raise ValueError("Evaluation method must be 'csd' or 'pymatgen'.")
 
 
 def evaluate_structures_file(
@@ -391,7 +586,11 @@ def evaluate_structures_file(
         # Level 1: RMSD15 evaluation
         results15 = filtered_df.swifter.apply(
             lambda row: match_structures(
-                row, filtered_target_structures, eval_method="csd", shell_size=15
+                row,
+                filtered_target_structures,
+                eval_method="csd",
+                shell_size=15,
+                **method_params,
             ),
             axis=1,
             result_type="expand",
@@ -403,7 +602,11 @@ def evaluate_structures_file(
         if df15.shape[0] > 0:
             results20 = df15.swifter.apply(
                 lambda row: match_structures(
-                    row, filtered_target_structures, eval_method="csd", shell_size=20
+                    row,
+                    filtered_target_structures,
+                    eval_method="csd",
+                    shell_size=20,
+                    **method_params,
                 ),
                 axis=1,
                 result_type="expand",
@@ -418,7 +621,11 @@ def evaluate_structures_file(
         if df20.shape[0] > 0:
             results30 = df20.swifter.apply(
                 lambda row: match_structures(
-                    row, filtered_target_structures, eval_method="csd", shell_size=30
+                    row,
+                    filtered_target_structures,
+                    eval_method="csd",
+                    shell_size=30,
+                    **method_params,
                 ),
                 axis=1,
                 result_type="expand",
@@ -493,10 +700,22 @@ def compute_structure_matches(
     ]
     random.shuffle(parquet_files)
 
+    logger.info(f"evaluating structure matches: {eval_method}")
+
     # Load target structures
-    target_structures, refcodes_list = load_target_structures(
-        molecules_file, eval_config.get("target_xtals_dir"), eval_method
-    )
+    if eval_method == "csd":
+        csd_python_cmd = eval_config.get("csd_python_cmd", "python")
+        method_params = {"csd_python_cmd": csd_python_cmd}
+        target_structures, refcodes_list = load_target_structures(
+            molecules_file,
+            eval_config.get("target_xtals_dir"),
+            eval_method,
+            **method_params,
+        )
+    else:
+        target_structures, refcodes_list = load_target_structures(
+            molecules_file, eval_config.get("target_xtals_dir"), eval_method
+        )
 
     # Create mapping from molecule name to refcodes for parquet file processing
     molecules_df = pd.read_csv(molecules_file)
@@ -509,7 +728,13 @@ def compute_structure_matches(
 
     if eval_method == "csd":
         # CSD: Local CPU execution
-        logger.info("Using CSD Python API for structure evaluation (local CPU)")
+        csd_python_cmd = eval_config.get("csd_python_cmd", "python")
+        logger.info(
+            f"Using CSD Python API for structure evaluation (local CPU) with command: {csd_python_cmd}"
+        )
+
+        # Note: running swifter in subprocess for each row is inefficient
+        method_params = {"csd_python_cmd": csd_python_cmd}
 
         args_list = []
         for i, parquet_file in enumerate(parquet_files):
@@ -524,7 +749,7 @@ def compute_structure_matches(
             )
 
         return p_map(
-            lambda args: evaluate_structures_file(*args),
+            lambda args: evaluate_structures_file(*args, **method_params),
             args_list,
             num_cpus=eval_config["num_cpus"],
         )
@@ -574,7 +799,7 @@ if __name__ == "__main__":
     with open(config_path) as config_file:
         config = yaml.safe_load(config_file)
 
-    eval_config, eval_method = get_eval_config_and_method(config)
+    eval_config, eval_method, eval_dir_name = get_eval_config_and_method(config)
 
     compute_structure_matches(
         input_dir=root / "filtered_structures",
