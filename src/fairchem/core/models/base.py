@@ -365,7 +365,7 @@ class HydraModel(nn.Module):
         """
         Mapping from dataset names to their associated tasks.
         """
-        if not hasattr(self, "_dataset_to_tasks"):
+        if self._dataset_to_tasks is None:
             raise RuntimeError(
                 "setup_tasks() must be called before accessing dataset_to_tasks"
             )
@@ -511,7 +511,7 @@ class HydraModelV2(nn.Module):
         """
         Mapping from dataset names to their associated tasks.
         """
-        if not hasattr(self, "_dataset_to_tasks"):
+        if self._dataset_to_tasks is None:
             raise RuntimeError(
                 "setup_tasks() must be called before accessing dataset_to_tasks"
             )
