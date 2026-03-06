@@ -100,6 +100,7 @@ def add_n_empty_edges(
     )
 
 
+@torch.compiler.disable
 def get_balanced_attribute(
     emb: torch.Tensor,
     target_sum: torch.Tensor,
