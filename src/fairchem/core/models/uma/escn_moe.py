@@ -182,7 +182,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
         with torch.no_grad():
             if self.counter % 500 == 0:
                 logging.info(
-                    f"{self.counter }: Expert variance: "
+                    f"{self.counter}: Expert variance: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -193,7 +193,7 @@ class eSCNMDMoeBackbone(eSCNMDBackbone, MOLEInterface):
                     )
                 )
                 logging.info(
-                    f"{self.counter }: Expert mean: "
+                    f"{self.counter}: Expert mean: "
                     + ",".join(
                         [
                             f"{x:.2e}"
@@ -240,9 +240,8 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
+        self.regress_config = backbone.regress_config
         self.wrap_property = wrap_property
 
         self.dataset_names, self.dataset_name_to_exp = self._build_expert_mapping(
@@ -265,6 +264,14 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
         # Track merge state for single-dataset inference
         self.merged_on_dataset = None
         self.non_merged_dataset_names: list[str] = []
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     @staticmethod
     def _build_expert_mapping(
@@ -407,9 +414,8 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
         super().__init__()
         if head_kwargs is None:
             head_kwargs = {}
-        self.regress_stress = backbone.regress_stress
-        self.regress_forces = backbone.regress_forces
 
+        self.regress_config = backbone.regress_config
         self.wrap_property = wrap_property
 
         self.dataset_names = sorted(dataset_names)
@@ -417,6 +423,14 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
 
         # keep track if this head has been merged or not
         self.merged_on_dataset = None
+
+    @property
+    def regress_forces(self) -> bool:
+        return self.regress_config.forces
+
+    @property
+    def regress_stress(self) -> bool:
+        return self.regress_config.stress
 
     def merge_MOLE_model(self, data):
         self.merged_on_dataset = data.dataset[0]
