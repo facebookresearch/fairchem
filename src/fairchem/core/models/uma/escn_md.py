@@ -530,7 +530,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 )
                 wigner_inv = torch.transpose(wigner, 1, 2).contiguous()
 
-        return wigner, wigner_inv
+        # Ensure contiguous for downstream Triton kernels
+        # Note: wigner_inv already contiguous from transpose above
+        return wigner.contiguous(), wigner_inv
 
     def _get_displacement_and_cell(
         self, data_dict: AtomicData

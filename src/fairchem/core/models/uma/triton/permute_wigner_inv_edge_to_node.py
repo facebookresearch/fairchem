@@ -185,7 +185,21 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         Returns:
             out: [E, 9, C] rotated features in L-major order
         """
-        out, x_l = permute_wigner_inv_edge_to_node_launcher(x, wigner)
+        # Import here to avoid circular dependency
+        import fairchem.core.models.uma.triton.custom_ops  # noqa: F401 - registers ops
+
+        # Allocation VISIBLE to torch.compile (can be optimized)
+        out = torch.empty_like(x)
+        x_l = torch.empty_like(x)
+
+        # Ensure inputs are contiguous for Triton
+        x = x.contiguous()
+
+        # ONLY kernel launch is opaque (via custom_op with mutates_args)
+        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node(
+            x, wigner, out, x_l
+        )
+
         ctx.save_for_backward(x_l, wigner)
         return out
 
@@ -202,6 +216,32 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
             grad_wigner: [E, 9, 9]
         """
         x_l, wigner = ctx.saved_tensors
-        grad_x = permute_wigner_inv_edge_to_node_bwd_dx_launcher(grad_out, wigner)
-        grad_wigner = permute_wigner_inv_edge_to_node_bwd_dw_launcher(grad_out, x_l)
+        num_edges = grad_out.shape[0]
+        sphere_channels = grad_out.shape[2]
+
+        # Ensure contiguous for Triton (x_l from empty_like is always contiguous)
+        grad_out = grad_out.contiguous()
+
+        # Allocation VISIBLE to torch.compile
+        grad_x = torch.empty_like(grad_out)
+
+        # ONLY kernel launch is opaque
+        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node_bwd_dx(
+            grad_out, wigner, grad_x
+        )
+
+        # Allocation VISIBLE to torch.compile (zeros for off-diagonal blocks)
+        grad_wigner_flat = torch.zeros(
+            (num_edges, 81),
+            dtype=grad_out.dtype,
+            device=grad_out.device,
+        )
+
+        # ONLY kernel launch is opaque
+        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node_bwd_dw(
+            grad_out, x_l, grad_wigner_flat
+        )
+
+        grad_wigner = grad_wigner_flat.reshape(num_edges, 9, 9)
+
         return grad_x, grad_wigner

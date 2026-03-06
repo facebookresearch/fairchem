@@ -211,7 +211,32 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         Returns:
             out: [E, 9, 2C] rotated edge features
         """
-        out, x_edge = node_to_edge_wigner_permute_launcher(x, edge_index, wigner)
+        # Import here to avoid circular dependency
+        import fairchem.core.models.uma.triton.custom_ops  # noqa: F401 - registers ops
+
+        num_edges = edge_index.shape[1]
+        sphere_channels = x.shape[2]
+
+        # Allocation VISIBLE to torch.compile (can be optimized)
+        out = torch.empty(
+            (num_edges, 9, sphere_channels * 2),
+            dtype=x.dtype,
+            device=x.device,
+        )
+        x_edge = torch.empty(
+            (num_edges, 9, sphere_channels * 2),
+            dtype=x.dtype,
+            device=x.device,
+        )
+
+        # Ensure inputs are contiguous for Triton
+        x = x.contiguous()
+
+        # ONLY kernel launch is opaque (via custom_op with mutates_args)
+        torch.ops.fairchem._kernel_node_to_edge_wigner_permute(
+            x, edge_index, wigner, out, x_edge
+        )
+
         ctx.save_for_backward(x_edge, edge_index, wigner)
         ctx.num_nodes = x.shape[0]
         return out
@@ -232,11 +257,41 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             grad_wigner: [E, 9, 9]
         """
         x_edge, edge_index, wigner = ctx.saved_tensors
+        num_edges = edge_index.shape[1]
+        sphere_channels = grad_out.shape[2] // 2
 
-        # grad_x via Triton kernel + PyTorch scatter
-        grad_x = node_to_edge_wigner_permute_bwd_dx_launcher(
-            grad_out, wigner, edge_index, ctx.num_nodes
+        # Ensure grad_out is contiguous
+        grad_out = grad_out.contiguous()
+
+        # Allocation VISIBLE to torch.compile
+        grad_edge = torch.empty(
+            (num_edges, 9, sphere_channels * 2),
+            dtype=grad_out.dtype,
+            device=grad_out.device,
         )
+
+        # ONLY kernel launch is opaque
+        torch.ops.fairchem._kernel_node_to_edge_wigner_permute_bwd_dx(
+            grad_out, wigner, grad_edge
+        )
+
+        # Scatter (VISIBLE to torch.compile)
+        grad_x = torch.zeros(
+            (ctx.num_nodes, 9, sphere_channels),
+            dtype=grad_out.dtype,
+            device=grad_out.device,
+        )
+
+        # Slice: grad_edge [E, 9, 2C] -> src at [:C], tgt at [C:]
+        grad_src = grad_edge[:, :, :sphere_channels].reshape(num_edges, 9 * sphere_channels)
+        grad_tgt = grad_edge[:, :, sphere_channels:].reshape(num_edges, 9 * sphere_channels)
+
+        src_idx = edge_index[0]
+        tgt_idx = edge_index[1]
+
+        grad_x_flat = grad_x.view(ctx.num_nodes, 9 * sphere_channels)
+        grad_x_flat.index_add_(0, src_idx, grad_src)
+        grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
 
         # grad_wigner = dy @ x^T using block-sparse structure
         # Convert grad to L-major for outer product
