@@ -94,7 +94,7 @@ def get_numerical_hessian(
 @pytest.mark.parametrize("vmap", [True, False])
 def test_hessian(vmap):
     """Test Hessian calculation using MLIPPredictUnit directly."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
@@ -129,7 +129,7 @@ def test_hessian(vmap):
 @pytest.mark.gpu()
 def test_hessian_vs_numerical():
     """Test that analytical and numerical Hessians are close."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
@@ -176,7 +176,7 @@ def test_hessian_vs_numerical():
 @pytest.mark.gpu()
 def test_hessian_symmetry():
     """Test that the Hessian matrix is symmetric."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
