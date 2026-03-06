@@ -1184,13 +1184,9 @@ class MLP_Energy_Head(MLP_EFS_Head):
         wrap_property: bool = False,
     ) -> None:
         super().__init__(backbone, reduce, prefix, wrap_property)
-        #  TODO we should add a direct_stress flag?
         assert (
-            backbone.regress_forces is False
-            and backbone.regress_stress is False
-            or backbone.direct_forces is True
-            or backbone.direct_stress is True
-        ), (
+            backbone.regress_forces is False and backbone.regress_stress is False
+        ) or (backbone.direct_forces is True or backbone.direct_stress is True), (
             "regress_forces and regress_stress must be False for MLP_Energy_Head or direct_forces must be True."
             "Use MLP_EFS_Head if you want to predict gradient forces and stress."
         )
