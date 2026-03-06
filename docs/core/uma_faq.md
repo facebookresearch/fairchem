@@ -9,7 +9,9 @@ Choose your task based on your application domain:
 
 - **omol**: For molecules, biology, organic chemistry, pharmaceuticals
 - **omat**: For inorganic materials, solar cells, alloys, superconductors
-- **oc20**: For heterogeneous catalysis, fuel cells, energy conversion
+- **oc20**: For heterogeneous catalysis, fuel cells, energy conversion (no oxides)
+- **oc22**: For oxide catalysts (added in UMA 1.2)
+- **oc25**: For electrolyte/inorganic interfaces with explicit solvents (added in UMA 1.2)
 - **odac**: For MOFs and direct air capture applications
 - **omc**: For molecular crystals, organic electronics
 :::
@@ -39,5 +41,5 @@ For the `omol` task, set charge and spin in the `atoms.info` dictionary:
 atoms.info.update({"spin": 1, "charge": 0})
 ```
 
-Other tasks (`omat`, `oc20`, `odac`, `omc`) expect `charge=0` and `spin=0`.
+Other tasks (`omat`, `oc20`, `oc22`, `oc25`, `odac`, `omc`) expect `charge=0` and `spin=0`.
 :::
