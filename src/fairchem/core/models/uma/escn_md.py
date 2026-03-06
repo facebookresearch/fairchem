@@ -1150,7 +1150,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         else:
             forces = None
 
-        if self.regress_hessian:
+        if self.regress_config.hessian:
             if forces is None:
                 raise ValueError(
                     "Hessian computation requires forces. "
@@ -1163,7 +1163,10 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 )
 
             hessian = compute_hessian(
-                forces, data["pos"], vmap=self.hessian_vmap, training=self.training
+                forces,
+                data["pos"],
+                vmap=self.regress_config.hessian_vmap,
+                training=create_graph,
             )
             outputs[hessian_key] = (
                 {"hessian": hessian} if self.wrap_property else hessian
