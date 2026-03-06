@@ -17,7 +17,6 @@ kernelspec:
 
 ![UMA model architecture](uma.svg "UMA model architecture")
 
-
 ## The UMA Mixture-of-Linear-Experts routing function
 
 :::{note}
@@ -62,6 +61,10 @@ Choose your task based on the application domain. Each task corresponds to a spe
 | **omat** | [OMat24](https://arxiv.org/abs/2410.12771) | PBE/PBE+U as implemented in VASP using Materials Project suggested settings, except with VASP 54 pseudopotentials. No dispersion. | Inorganic materials discovery, solar photovoltaics, advanced alloys, superconductors, electronic materials, optical materials | UMA has not seen varying charge or spin multiplicity for the OMat task, and expects total_charge=0 and spin multiplicity=0 as model inputs. Spin polarization effects are included, but you can't select the magnetic state. Further, OMat24 did not fully sample possible spin states in the training data. |
 | **oc20** | [OC20*](https://arxiv.org/abs/2010.09990) | RPBE as implemented in VASP, with VASP5.4 pseudopotentials. No dispersion. | Renewable energy, catalysis, fuel cells, energy conversion, sustainable fertilizer production, chemical refining, plastics synthesis/upcycling | UMA has not seen varying charge or spin multiplicity for the OC20 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. No oxides or explicit solvents are included in OC20. The model works surprisingly well for transition state searches given the nature of the training data, but you should be careful. RPBE works well for small molecules, but dispersion will be important for larger molecules on surfaces. |
 | **odac** | [ODAC23](https://arxiv.org/abs/2311.00341) | PBE+D3 as implemented in VASP, with VASP5.4 pseudopotentials. | Direct air capture, carbon capture and storage, CO2 conversion, catalysis | UMA has not seen varying charge or spin multiplicity for the ODAC task, and expects total_charge=0 and spin multiplicity=0 as model inputs. The ODAC23 dataset only contains CO2/H2O water absorption, so anything more than might be inaccurate (e.g. hydrocarbons in MOFs). Further, there is a limited number of bare-MOF structures in the training data, so you should be careful if you are using a new MOF structure. |
+| **oc25** | [OC25](https://arxiv.org/abs/2509.17862) | RPBE+D3 as implemented in VASP, with VASP6.4 pseudopotentials, and dipole corrections.
+ | Renewable energy, (electro)catalysis, fuel cells, energy conversion, sustainable fertilizer production, chemical refining, plastics synthesis/upcycling | UMA has not seen varying charge or spin multiplicity for the OC25 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. The model works surprisingly well for charged systems despite not being explicitly provided that information, but one should be careful. Work functions are not provided by UMA, subsequent DFT calculations are required to extract such information, if desired. Only available in UMA-1.2 |
+ | **oc22** | [OC22](https://arxiv.org/abs/2206.08917) | PBE+U as implemented in VASP with VASP5.4 pseudopotentials and spin-polarization
+ | Direct air capture, carbon capture and storage, CO2 conversion, catalysis | UMA has not seen varying charge or spin multiplicity for the OC22 task, and expects total_charge=0 and spin multiplicity=0 as model inputs. No explicit solvents are included in OC22. Only available in UMA-1.2 |
 
 :::{note}
 *OC20 was updated from the original OC20 and recomputed to produce total energies instead of adsorption energies.

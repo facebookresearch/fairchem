@@ -37,6 +37,9 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    single_atom_prediction_from_lookup,
+)
 from fairchem.core.units.mlip_unit.utils import (
     get_backbone_class_from_checkpoint,
     load_inference_model,
@@ -84,21 +87,6 @@ class MLIPPredictUnitProtocol(Protocol):
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]: ...
-
-
-def merge_uma_model(model, data):
-    logging.info("Calling merge_uma_model")
-    # merge the backbone
-    model.backbone = model.backbone.merge_MOLE_model(data)
-
-    # merge any heads
-    new_output_heads = torch.nn.ModuleDict()
-    for head_name, head in model.output_heads.items():
-        if hasattr(head, "merge_MOLE_model"):
-            new_output_heads[head_name] = head.merge_MOLE_model(data)
-        else:
-            new_output_heads[head_name] = head
-    model.output_heads = new_output_heads
 
 
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
@@ -269,6 +257,20 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if not self.lazy_model_intialized:
             self._lazy_init(data)
 
+        # Handle single-atom systems (natoms==1 and pbc all False)
+        # Skip this check if the model natively supports single atoms
+        if not self.model.module.supports_single_atoms:
+            single_atom_result = single_atom_prediction_from_lookup(
+                data=data,
+                atom_refs=self.atom_refs,
+                tasks=self.tasks,
+                device=self.device,
+            )
+            if single_atom_result is not None:
+                return single_atom_result
+
+        # Regular model prediction path
+        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
         dtype = self.inference_settings.base_precision_dtype
@@ -464,12 +466,15 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
         self._dataset_to_tasks = copy.deepcopy(_mlip_pred_unit.dataset_to_tasks)
         self._validate_atoms_data_fn = _mlip_pred_unit.model.module.validate_atoms_data
 
+        # Serialize InferenceSettings with _target_ so hydra.utils.instantiate
+        # reconstructs it as an actual InferenceSettings object rather than an
+        # OmegaConf struct.
         predict_unit_config = {
             "_target_": "fairchem.core.units.mlip_unit.predict.MLIPPredictUnit",
             "inference_model_path": inference_model_path,
             "device": device,
             "overrides": overrides,
-            "inference_settings": inference_settings,
+            "inference_settings": inference_settings.to_omegaconf(),
             "seed": seed,
             "atom_refs": atom_refs,
             "form_elem_refs": form_elem_refs,
