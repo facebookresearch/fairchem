@@ -125,7 +125,7 @@ def test_hessian(vmap):
     assert np.isfinite(hessian).all()
 
 
-@pytest.skip(reason="Enable when untrained predictions are implemented")
+@pytest.xfail(reason="Enable when untrained predictions are implemented")
 @pytest.mark.gpu()
 def test_hessian_vs_numerical():
     """Test that analytical and numerical Hessians are close."""
