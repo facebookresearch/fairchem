@@ -43,7 +43,7 @@ class SO3_Linear(torch.nn.Module):
         )  # [(L_max + 1) ** 2, C_out, C_in]
         out = torch.einsum(
             "bmi, moi -> bmo", input_embedding, weight
-        )  # [N, (L_max + 1) ** 2, C_out]
+        ).contiguous()  # [N, (L_max + 1) ** 2, C_out]
         bias = self.bias.view(1, 1, self.out_features)
         out[:, 0:1, :] = out.narrow(1, 0, 1) + bias
         return out
