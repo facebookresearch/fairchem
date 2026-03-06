@@ -1,10 +1,13 @@
-from fairchem.core.common import gp_utils
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
+
 import numpy as np
 import torch
-import logging
 
-from dataclasses import dataclass
-from enum import Enum
+from fairchem.core.common import gp_utils
 
 
 def check_or_get_rank_world_size(
@@ -25,12 +28,91 @@ def check_or_get_rank_world_size(
     return rank, world_size
 
 
+@runtime_checkable
+class PartitionStrategyProtocol(Protocol):
+    """Protocol for partition strategies."""
+
+    def partition(self, positions: torch.Tensor, world_size: int) -> torch.Tensor:
+        """
+        Compute rank indices for each atom position.
+
+        Args:
+            positions: [N, 3] tensor of atom coordinates
+            world_size: Number of ranks to partition into
+
+        Returns:
+            rank_indices: [N] tensor of rank assignments for each atom
+        """
+        ...
+
+
 @dataclass
-class PartitionStrategy(str, Enum):
-    INDEX_SPLIT = "index_split"
-    SLICE = "slice"
-    CUBE = "cube"
-    KMEANS = "kmeans"
+class IndexSplitStrategy:
+    """Strategy that splits atoms by index order."""
+
+    def partition(self, positions: torch.Tensor, world_size: int) -> torch.Tensor:
+        chunks = torch.tensor_split(
+            torch.arange(len(positions), device=positions.device),
+            world_size,
+        )
+        for i, t in enumerate(chunks):
+            t.fill_(i)
+        return torch.cat(chunks)
+
+
+@dataclass
+class SliceStrategy:
+    """Strategy that partitions atoms into slices along an axis."""
+
+    axis: int = 0
+
+    def partition(self, positions: torch.Tensor, world_size: int) -> torch.Tensor:
+        return partition_atoms_to_slices(positions, world_size, axis=self.axis)
+
+
+@dataclass
+class CubeStrategy:
+    """Strategy that partitions atoms into a 3D grid."""
+
+    def partition(self, positions: torch.Tensor, world_size: int) -> torch.Tensor:
+        rounded_cbrt = np.round(np.cbrt(world_size))
+        assert (
+            rounded_cbrt**3 == world_size
+        ), "CUBE partitioning requires gp world size to be an integer cube root"
+        return partition_atoms_to_grid(positions, rounded_cbrt)
+
+
+@dataclass
+class KMeansStrategy:
+    """Strategy that partitions atoms using k-means clustering."""
+
+    max_iters: int = 10
+    tol: float = 1e-4
+    seed: int | None = None
+
+    def partition(self, positions: torch.Tensor, world_size: int) -> torch.Tensor:
+        return partition_atoms_kmeans(
+            positions,
+            world_size,
+            max_iters=self.max_iters,
+            tol=self.tol,
+            seed=self.seed,
+        )
+
+
+class PartitionStrategy:
+    """
+    Container for partition strategy instances.
+
+    Provides backward-compatible access to strategies via class attributes
+    (e.g., PartitionStrategy.KMEANS) while allowing instantiation with custom parameters.
+    """
+
+    # Default strategy instances for backward compatibility
+    INDEX_SPLIT: IndexSplitStrategy = IndexSplitStrategy()
+    SLICE: SliceStrategy = SliceStrategy()
+    CUBE: CubeStrategy = CubeStrategy()
+    KMEANS: KMeansStrategy = KMeansStrategy()
 
 
 def partition_atoms_to_grid(coords: torch.Tensor, k: int):
@@ -52,7 +134,7 @@ def partition_atoms_to_grid(coords: torch.Tensor, k: int):
     cell_indices = torch.arange(N, device=coords.device) % total_cells
 
     # If we have more atoms than cells, reassign the extra atoms based on spatial location
-    if N > total_cells:
+    if total_cells < N:
         # Find bounding box of all atoms
         min_coords = torch.min(coords, dim=0)[0]  # [3]
         max_coords = torch.max(coords, dim=0)[0]  # [3]
@@ -177,47 +259,21 @@ def partition_atoms_kmeans(
     # Fit and get cluster assignments
     cluster_indices = kmeans.fit_predict(coords)
 
-    logging.debug(f"fast-pytorch-kmeans completed")
+    logging.debug("fast-pytorch-kmeans completed")
     return cluster_indices.long()
 
 
 def partition_atoms_by_position(
     positions: torch.Tensor,
-    method: PartitionStrategy,
+    method: PartitionStrategyProtocol,
     rank: int | None = None,
     world_size: int | None = None,
 ):
     rank, world_size = check_or_get_rank_world_size(rank, world_size)
-
-    if method is PartitionStrategy.CUBE:
-        rounded_cbrt = np.round(np.cbrt(world_size))
-        assert (
-            rounded_cbrt**3 == world_size
-        ), "CUBE partitioning requires gp world size to be an integer cube root"
-        # first get the assignment of atoms to cell index given k
-        # where index ranges from [0, k^3 - 1]
-        rank_indices = partition_atoms_to_grid(positions, rounded_cbrt)
-    elif method is PartitionStrategy.SLICE:
-        # partition of exactly gp_world_size horizontal slices along an axis
-        rank_indices = partition_atoms_to_slices(positions, world_size)
-    elif method is PartitionStrategy.INDEX_SPLIT:
-        # original GP split code
-        # node_partition = torch.tensor_split(
-        #     torch.arange(len(positions)).to(positions.device),
-        #     world_size,
-        # )[rank]
-        chunks = torch.tensor_split(
-            torch.arange(len(positions), device=positions.device),
-            world_size,
-        )
-        for i, t in enumerate(chunks):
-            t.fill_(i)
-        rank_indices = torch.cat(chunks)
-    elif method is PartitionStrategy.KMEANS:
-        # partition using k-means clustering into exactly world_size clusters
-        rank_indices = partition_atoms_kmeans(positions, world_size)
-    else:
-        raise ValueError(f"method {method} not recognized")
+    assert isinstance(
+        method, PartitionStrategyProtocol
+    ), "method must implement PartitionStrategyProtocol"
+    rank_indices = method.partition(positions, world_size)
 
     node_partition = (rank_indices == rank).nonzero().squeeze()
     if node_partition.dim() == 0:

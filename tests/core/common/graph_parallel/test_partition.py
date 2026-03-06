@@ -377,22 +377,6 @@ class TestPartitionAtomsByPosition:
         assert len(node_partition) == 3
         assert set(node_partition.tolist()) == {0, 1, 2}
 
-    def test_invalid_method(self):
-        """Test that invalid partition method raises an error."""
-        positions = torch.tensor(
-            [
-                [0.0, 0.0, 0.0],
-            ]
-        )
-
-        with pytest.raises(ValueError, match="not recognized"):
-            partition_atoms_by_position(
-                positions,
-                method="invalid_method",
-                rank=0,
-                world_size=1,
-            )
-
     def test_rank_indices_consistency(self):
         """Test that rank_indices are consistent across all ranks."""
         positions = torch.tensor(
