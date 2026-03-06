@@ -293,7 +293,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                     name=f"{dataset}_forces",
                     level="atom",
                     property="forces",
-                    out_spec=OutputSpec(dim=[3], dtype="float32"),
+                    out_spec=OutputSpec(
+                        dim=[3], dtype=self.inference_settings.base_precision_dtype
+                    ),
                     normalizer=energy_task.normalizer,  # Copy from energy
                     datasets=[dataset],
                     loss_fn=None,
@@ -320,7 +322,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                     name=f"{dataset}_stress",
                     level="system",
                     property="stress",
-                    out_spec=OutputSpec(dim=[1, 9], dtype="float32"),
+                    out_spec=OutputSpec(
+                        dim=[1, 9], dtype=self.inference_settings.base_precision_dtype
+                    ),
                     normalizer=energy_task.normalizer,
                     datasets=[dataset],
                     loss_fn=None,
@@ -348,7 +352,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                     level="system",
                     property="hessian",
                     out_spec=OutputSpec(
-                        dim=[None, None], dtype="float32"
+                        dim=[None, None],
+                        dtype=self.inference_settings.base_precision_dtype,
                     ),  # [N*3, N*3]
                     normalizer=energy_task.normalizer,
                     datasets=[dataset],
