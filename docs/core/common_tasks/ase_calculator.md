@@ -103,6 +103,29 @@ predictor = pretrained_mlip.get_predict_unit(
 )
 ```
 
+## Enabling gradient stress or Hessian prediction
+
+Some tasks, for example omol, odac, or oc20/25, were not trained using stress labels. Similarly, no tasks were supervised to predict Hessians. However, predictions of untrained derivatives of energy, such as stress and Hessians, can be enabled by using the following inference settings flags,
+
+| Setting Flag  | Description |
+| ----- | ----- |
+| compute_untrained_forces | A set of task/dataset names (e.g., `{"omol", "oc20"}`) for which forces will be computed via autograd even though the checkpoint was not trained with a forces head for those tasks. |
+| compute_untrained_stress | A set of task/dataset names for which stress tensors will be computed via autograd even though the checkpoint was not trained with a stress head for those tasks. The default empty set disables this. |
+| compute_untrained_hessian | A set of task/dataset names for which the Hessian matrix will be computed via autograd. |
+
+For example, to enable stress and Hessian predictions with `omol` level of theory, the following settings can be used,
+
+```{code-cell} python3
+settings = InferenceSettings(
+    compute_untrained_stress={'omol'},
+    compute_untrained_hessian={'omol'}
+)
+
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p1", device="cuda", inference_settings=settings
+)
+```
+
 ## Multi-GPU Inference
 
 UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we leverage [ray](https://www.ray.io/) to launch Ray Actors for each GPU-rank under the hood. This allows us to seamlessly scale to any infrastructure that can run Ray.
