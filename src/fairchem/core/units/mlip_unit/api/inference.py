@@ -106,6 +106,17 @@ class InferenceSettings:
     # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
     execution_mode: str = "general"
 
+    # New fields for untrained derivative properties
+    # These flags request computation of properties NOT in the checkpoint's task list.
+    # If a property is already in the checkpoint (e.g., omol_forces task exists),
+    # it will be computed regardless of these flags.
+    # Specify datasets as a set of strings (e.g., {"omol", "oc20"}).
+    # Empty set means no untrained properties will be computed (default).
+    compute_untrained_forces: set[str] = field(default_factory=set)
+    compute_untrained_stress: set[str] = field(default_factory=set)
+    compute_untrained_hessian: set[str] = field(default_factory=set)
+    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
+
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
@@ -129,17 +140,6 @@ class InferenceSettings:
             "fairchem.core.units.mlip_unit.api.inference.InferenceSettings"
         )
         return config
-
-    # New fields for untrained derivative properties
-    # These flags request computation of properties NOT in the checkpoint's task list.
-    # If a property is already in the checkpoint (e.g., omol_forces task exists),
-    # it will be computed regardless of these flags.
-    # Specify datasets as a set of strings (e.g., {"omol", "oc20"}).
-    # Empty set means no untrained properties will be computed (default).
-    compute_untrained_forces: set[str] = field(default_factory=set)
-    compute_untrained_stress: set[str] = field(default_factory=set)
-    compute_untrained_hessian: set[str] = field(default_factory=set)
-    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
 
 # this is most general setting that works for most systems and models,
