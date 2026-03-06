@@ -190,7 +190,7 @@ class FAIRChemCalculator(Calculator):
             msg = str(exc)
             if name in ("forces", "stress", "hessian"):
                 msg += (
-                    f"\n {name} prediction can be enabled by setting `calc_untrained_{name}=set('{self.task_name}')` "
+                    f"\n {name} prediction can be enabled by setting `predict_untrained_{name}=set('{self.task_name}')` "
                     f"in the InferenceSettings."
                 )
             raise PropertyNotImplementedError(msg) from exc
@@ -252,6 +252,9 @@ class FAIRChemCalculator(Calculator):
                 stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
                 stress_voigt = full_3x3_to_voigt_6_stress(stress)
                 self.results["stress"] = stress_voigt
+            if calc_key == "hessian":
+                hessian = pred[calc_key].detach().cpu().numpy().squeeze()
+                self.results["hessian"] = hessian
 
     def _check_atoms_pbc(self, atoms) -> None:
         """
