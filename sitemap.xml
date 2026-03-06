@@ -17,6 +17,9 @@
     <loc>http://localhost:3000/uma</loc>
   </url>
   <url>
+    <loc>http://localhost:3000/uma-changelog</loc>
+  </url>
+  <url>
     <loc>http://localhost:3000/intro</loc>
   </url>
   <url>
