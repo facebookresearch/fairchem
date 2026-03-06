@@ -271,23 +271,15 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             List of Task objects for untrained properties
         """
         untrained_tasks = []
-
-        # Build map of existing (dataset, property) combinations
-        existing_combos = set()
         energy_task_by_dataset = {}
 
         for task in checkpoint_tasks.values():
-            for dataset in task.datasets:
-                existing_combos.add((dataset, task.property))
-
             if task.property == "energy":
                 for dataset in task.datasets:
                     energy_task_by_dataset[dataset] = task
 
         # Generate forces tasks
         for dataset in settings.compute_untrained_forces:
-            if (dataset, "forces") in existing_combos:
-                continue  # Task already exists
             if dataset not in energy_task_by_dataset:
                 logging.warning(
                     f"Cannot create forces task for dataset '{dataset}': "
@@ -315,8 +307,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Generate stress tasks
         for dataset in settings.compute_untrained_stress:
-            if (dataset, "stress") in existing_combos:
-                continue
             if dataset not in energy_task_by_dataset:
                 logging.warning(
                     f"Cannot create stress task for dataset '{dataset}': "
@@ -344,8 +334,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Generate hessian tasks
         for dataset in settings.compute_untrained_hessian:
-            if (dataset, "hessian") in existing_combos:
-                continue
             if dataset not in energy_task_by_dataset:
                 logging.warning(
                     f"Cannot create hessian task for dataset '{dataset}': "

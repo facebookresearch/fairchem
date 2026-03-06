@@ -348,7 +348,9 @@ class HydraModel(nn.Module):
         # Add new tasks to the tasks dict
         for task in tasks:
             if task.name in self.tasks:
-                logging.warning(f"Task '{task.name}' already exists, skipping addition")
+                logging.warning(
+                    f"Task '{task.name}' already exists, skipping adding as a new task."
+                )
                 continue
             self.tasks[task.name] = task
 
