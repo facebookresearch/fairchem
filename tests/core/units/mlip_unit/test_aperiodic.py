@@ -39,7 +39,9 @@ def test_conserving_mole_aperiodic_on_pt(
     )
 
     n_repeats = 10
-    settings = InferenceSettings(base_precision_dtype=dtype)
+    settings = InferenceSettings(
+        activation_checkpointing=False, base_precision_dtype=dtype
+    )
     predictor_v1 = MLIPPredictUnit(
         inference_checkpoint_path,
         device="cpu",
