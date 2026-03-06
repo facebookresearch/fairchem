@@ -83,6 +83,11 @@ The advanced user might quickly see that **default** mode and **turbo** mode are
 | merge_mole | This is useful in long rollout applications where the system composition stays constant. By pre-merge the MoLE weights, we can save both memory and compute. |
 | compile | This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems. |
 | external_graph_gen | Only use this if you want to use an external graph generator. This should be rarely used except for development |
+| internal_graph_gen_version | currently we support v2[default], an internal implementation that is better suited for parallelism and v3 the neighborlist from Nvidia Alchemi library which is faster for single gpu operations. |
+| edge_chunk_size | Experimental. Used for padding edge sizes. This helps reduce re-compilations from torch compile, default to None |
+| use_quaternion_wigner | enable quaternion-based Wigner D matrix computation. If false we fall back to euler-angle based rotations. default True. |
+| base_precision_dtype | governs the main precision type of the computation, default to FP32, FP64 is also supported |
+| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "general". "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
 
 For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
 
