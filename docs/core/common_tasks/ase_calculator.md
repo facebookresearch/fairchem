@@ -114,16 +114,16 @@ Some tasks, for example omol, odac, or oc20/25, were not trained using stress la
 
 | Setting Flag  | Description |
 | ----- | ----- |
-| compute_untrained_forces | A set of task/dataset names (e.g., `{"omol", "oc20"}`) for which forces will be computed via autograd even though the checkpoint was not trained with a forces head for those tasks. |
-| compute_untrained_stress | A set of task/dataset names for which stress tensors will be computed via autograd even though the checkpoint was not trained with a stress head for those tasks. The default empty set disables this. |
-| compute_untrained_hessian | A set of task/dataset names for which the Hessian matrix will be computed via autograd. |
+| predict_untrained_forces | A set of task/dataset names (e.g., `{"omol", "oc20"}`) for which forces will be computed via autograd even though the checkpoint was not trained with a forces head for those tasks. |
+| predict_untrained_stress | A set of task/dataset names for which stress tensors will be computed via autograd even though the checkpoint was not trained with a stress head for those tasks. The default empty set disables this. |
+| predict_untrained_hessian | A set of task/dataset names for which the Hessian matrix will be computed via autograd. |
 
 For example, to enable stress and Hessian predictions with `omol` level of theory, the following settings can be used,
 
 ```{code-cell} python3
 settings = InferenceSettings(
-    compute_untrained_stress={'omol'},
-    compute_untrained_hessian={'omol'}
+    predict_untrained_stress={'omol'},
+    predict_untrained_hessian={'omol'}
 )
 
 predictor = pretrained_mlip.get_predict_unit(

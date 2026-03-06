@@ -279,7 +279,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                     energy_task_by_dataset[dataset] = task
 
         # Generate forces tasks
-        for dataset in settings.compute_untrained_forces:
+        for dataset in settings.predict_untrained_forces:
             if dataset not in energy_task_by_dataset:
                 logging.warning(
                     f"Cannot create forces task for dataset '{dataset}': "
@@ -306,7 +306,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         # Generate stress tasks
-        for dataset in settings.compute_untrained_stress:
+        for dataset in settings.predict_untrained_stress:
             if dataset not in energy_task_by_dataset:
                 logging.warning(
                     f"Cannot create stress task for dataset '{dataset}': "
@@ -333,7 +333,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         # Generate hessian tasks
-        for dataset in settings.compute_untrained_hessian:
+        for dataset in settings.predict_untrained_hessian:
             if dataset not in energy_task_by_dataset:
                 logging.warning(
                     f"Cannot create hessian task for dataset '{dataset}': "
@@ -376,9 +376,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             settings: InferenceSettings with compute_untrained_* flags
         """
         # Determine which properties are requested (any dataset)
-        needs_forces = len(settings.compute_untrained_forces) > 0
-        needs_stress = len(settings.compute_untrained_stress) > 0
-        needs_hessian = len(settings.compute_untrained_hessian) > 0
+        needs_forces = len(settings.predict_untrained_forces) > 0
+        needs_stress = len(settings.predict_untrained_stress) > 0
+        needs_hessian = len(settings.predict_untrained_hessian) > 0
 
         # Find and configure all heads
         for head in self.model.module.output_heads.values():
@@ -418,12 +418,12 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         """
         # Check 1: Can't compute derivatives from direct-force models
         if self.model.module.direct_forces:
-            if settings.compute_untrained_hessian:
+            if settings.predict_untrained_hessian:
                 raise ValueError(
                     "Cannot compute Hessian for direct-force models. "
                     "Hessian requires energy-conserving (autograd forces) models."
                 )
-            if settings.compute_untrained_stress:
+            if settings.predict_untrained_stress:
                 raise ValueError(
                     "Cannot compute stress for direct-force models. "
                     "Stress requires energy-conserving (autograd forces) models."
@@ -438,9 +438,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         )
         if not has_energy and any(
             [
-                settings.compute_untrained_forces,
-                settings.compute_untrained_stress,
-                settings.compute_untrained_hessian,
+                settings.predict_untrained_forces,
+                settings.predict_untrained_stress,
+                settings.predict_untrained_hessian,
             ]
         ):
             raise ValueError(
@@ -486,7 +486,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 return single_atom_result
 
         if (
-            len(self.inference_settings.compute_untrained_hessian) > 0
+            len(self.inference_settings.predict_untrained_hessian) > 0
             and data.natoms.numel() != 1
         ):
             raise ValueError(
