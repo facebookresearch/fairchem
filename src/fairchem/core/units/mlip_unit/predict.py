@@ -490,14 +490,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             if single_atom_result is not None:
                 return single_atom_result
 
-        if (
-            len(self.inference_settings.predict_untrained_hessian) > 0
-            and data.natoms.numel() != 1
-        ):
-            raise ValueError(
-                "Hessian computation requires batch_size=1 (single system). "
-                f"Found {data.natoms.numel()} systems in batch."
-            )
         # Regular model prediction path
         # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
