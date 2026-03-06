@@ -59,12 +59,12 @@ Now **~520M total DFT calculations** including:
 | Task | Dataset | Domain | Status |
 |------|---------|--------|--------|
 | **oc20** | [OC20](https://arxiv.org/abs/2010.09990) | Heterogeneous Catalysis | No update |
-| **omat** | [OMat24](https://arxiv.org/abs/2410.12771) | Inorganic Materials | No update |
+| **omat** | [OMat24](https://arxiv.org/abs/2410.12771) | Inorganic Materials | 📊 **Updated** — dimer data |
 | **omol** | [OMol-1.0](https://arxiv.org/abs/2505.08762) | Organic Molecules | 📊 **Updated** — polymers (OPoly26), ionization potentials, small molecule clusters, dimers |
 | **odac** | [ODAC23](https://arxiv.org/abs/2311.00341) | MOFs for Direct Air Capture | No update |
 | **omc** | [OMC25](https://arxiv.org/abs/2508.02651) | Molecular Crystals | No update |
-| **oc25** | [OC25](https://arxiv.org/abs/2509.17862) | Electrolyte/Inorganic Interfaces | 🆕 **New** |
-| **oc22** | [OC22](https://arxiv.org/abs/2206.08917) | Oxide Catalysts | 🆕 **New** |
+| **oc25** | [OC25](https://arxiv.org/abs/2509.17862) | Electrolyte/Inorganic Interfaces | 🆕 **Added to UMA** |
+| **oc22** | [OC22](https://arxiv.org/abs/2206.08917) | Oxide Catalysts | 🆕 **Added to UMA** |
 
 ### Large-Scale Inference & Molecular Dynamics
 
