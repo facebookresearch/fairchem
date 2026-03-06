@@ -30,7 +30,7 @@ def _test_untrained_forces(checkpoint_path, device):
     Test that untrained forces can be computed for energy-only checkpoint.
     """
     # Create predictor with untrained forces enabled
-    settings = InferenceSettings(compute_untrained_forces={"omol"})
+    settings = InferenceSettings(predict_untrained_forces={"omol"})
     predictor = MLIPPredictUnit(
         checkpoint_path, device=device, inference_settings=settings
     )
@@ -90,8 +90,8 @@ def _test_untrained_stress_selective(checkpoint_path, device):
     """
     # Enable stress only for omol dataset
     settings = InferenceSettings(
-        compute_untrained_forces={"omol"},
-        compute_untrained_stress={"omol"},
+        predict_untrained_forces={"omol"},
+        predict_untrained_stress={"omol"},
     )
     predictor = MLIPPredictUnit(
         checkpoint_path, device=device, inference_settings=settings
@@ -152,8 +152,8 @@ def _test_untrained_hessian(checkpoint_path, device):
     """
     # Enable hessian for omol
     settings = InferenceSettings(
-        compute_untrained_forces={"omol"},
-        compute_untrained_hessian={"omol"},
+        predict_untrained_forces={"omol"},
+        predict_untrained_hessian={"omol"},
         hessian_vmap=True,
     )
     predictor = MLIPPredictUnit(
@@ -206,8 +206,8 @@ def _test_untrained_hessian(checkpoint_path, device):
 def test_hessian_batch_size_validation(conserving_mole_checkpoint):
     """Test that hessian computation fails for batch_size > 1."""
     settings = InferenceSettings(
-        compute_untrained_forces={"omol"},
-        compute_untrained_hessian={"omol"},
+        predict_untrained_forces={"omol"},
+        predict_untrained_hessian={"omol"},
     )
     predictor = MLIPPredictUnit(
         conserving_mole_checkpoint[0], device="cpu", inference_settings=settings
@@ -244,7 +244,7 @@ def test_no_duplicate_tasks(conserving_mole_checkpoint):
     """Test that no duplicate tasks are created if checkpoint already has them."""
     # Load checkpoint without untrained tasks
     # Now load with untrained forces enabled (but if checkpoint already has forces, no duplicate)
-    settings = InferenceSettings(compute_untrained_stress={"omol"})
+    settings = InferenceSettings(predict_untrained_stress={"omol"})
     predictor_untrained = MLIPPredictUnit(
         conserving_mole_checkpoint[0], device="cpu", inference_settings=settings
     )
@@ -267,7 +267,7 @@ def test_no_duplicate_tasks(conserving_mole_checkpoint):
 def test_direct_force_model_hessian_validation(direct_mole_checkpoint):
     """Test that direct-force models reject hessian requests."""
     # Try to enable hessian on direct-force model (should fail)
-    settings = InferenceSettings(compute_untrained_hessian={"omol"})
+    settings = InferenceSettings(predict_untrained_hessian={"omol"})
 
     with pytest.raises(
         ValueError, match="Cannot compute Hessian for direct-force models"
@@ -280,7 +280,7 @@ def test_direct_force_model_hessian_validation(direct_mole_checkpoint):
 def test_direct_force_model_stress_validation(direct_mole_checkpoint):
     """Test that direct-force models reject stress requests."""
     # Try to enable stress on direct-force model (should fail)
-    settings = InferenceSettings(compute_untrained_stress={"omol"})
+    settings = InferenceSettings(predict_untrained_stress={"omol"})
 
     with pytest.raises(
         ValueError, match="Cannot compute stress for direct-force models"
@@ -294,7 +294,7 @@ def test_direct_force_model_forces_allowed(direct_mole_checkpoint):
     """Test that direct-force models allow forces (already computed directly)."""
     # Forces should be allowed on direct-force models since they compute them directly
     # This should NOT raise an error, but also shouldn't add untrained tasks
-    settings = InferenceSettings(compute_untrained_forces={"omol"})
+    settings = InferenceSettings(predict_untrained_forces={"omol"})
 
     # This should succeed
     predictor = MLIPPredictUnit(
