@@ -190,7 +190,7 @@ class FAIRChemCalculator(Calculator):
             msg = str(exc)
             if name in ("forces", "stress", "hessian"):
                 msg += (
-                    f"\n {name} prediction can be enabled by setting `calc_untrained_{name}='{self.task_name}'` "
+                    f"\n {name} prediction can be enabled by setting `calc_untrained_{name}=set('{self.task_name}')` "
                     f"in the InferenceSettings."
                 )
             raise PropertyNotImplementedError(msg) from exc
