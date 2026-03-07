@@ -300,6 +300,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             logging.warning(
                 "Model is being compiled this might take a while for the first time"
             )
+            torch._dynamo.config.recompile_limit = 32
             self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True

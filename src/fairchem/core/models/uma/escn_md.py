@@ -35,6 +35,7 @@ from fairchem.core.models.uma.common.rotation import (
     init_edge_rot_euler_angles,
 )
 from fairchem.core.models.uma.common.so3 import CoefficientMapping, SO3_Grid
+from fairchem.core.models.uma.nn import execution_backends
 from fairchem.core.models.uma.nn.embedding import (
     ChgSpinEmbedding,
     DatasetEmbedding,
@@ -81,6 +82,7 @@ if TYPE_CHECKING:
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+AUTO_EDGE_CHUNK_FRACTION = 0.05
 
 
 @dataclass
@@ -672,6 +674,19 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
 
+        if (
+            self.edge_chunk_size is None
+            and not self.training
+            and torch.compiler.is_compiling()
+            and isinstance(self.backend, execution_backends.UMASFastGPUBackend)
+        ):
+            # automatically add AUTO_EDGE_CHUNK_FRACTION% more edges when using torch.compile with UMASFastGPUBackend
+            self.edge_chunk_size = int(
+                graph_dict["edge_index"].shape[1] * AUTO_EDGE_CHUNK_FRACTION
+            )
+            logging.warning(
+                f"auto setting self.edge_chunk_size is set to {self.edge_chunk_size} based on {AUTO_EDGE_CHUNK_FRACTION * 100}% of the number of edges"
+            )
         if self.edge_chunk_size is not None:
             pad_edges(
                 graph_dict,
