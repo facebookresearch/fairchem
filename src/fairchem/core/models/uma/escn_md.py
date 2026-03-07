@@ -93,6 +93,8 @@ class GradRegressConfig:
     direct_stress: bool = False
     forces: bool = False
     stress: bool = False
+    hessian: bool = False
+    hessian_vmap: bool = True
 
 
 def add_n_empty_edges(
@@ -332,6 +334,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             forces=regress_forces,
             stress=regress_stress,
             direct_stress=direct_stress,
+            hessian=regress_hessian,
+            hessian_vmap=hessian_vmap,
         )
 
         # which channels to balance
