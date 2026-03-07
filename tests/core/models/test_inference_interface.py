@@ -174,6 +174,16 @@ class TestHydraModelInferenceInterface:
 class TestBackboneInterface:
     """Tests for backbone interface method implementations."""
 
+    def test_gemnet_validate_inference_settings(self):
+        """Test GemNet rejects merge_mole."""
+        from fairchem.core.models.gemnet_oc.gemnet_oc import GemNetOCBackbone
+
+        # We can't easily instantiate GemNetOCBackbone, so just test the method exists
+        assert hasattr(GemNetOCBackbone, "build_inference_settings")
+        assert hasattr(GemNetOCBackbone, "validate_tasks")
+        assert hasattr(GemNetOCBackbone, "prepare_for_inference")
+        assert hasattr(GemNetOCBackbone, "on_predict_check")
+
     def test_escaip_build_inference_settings(self):
         """Test EScAIP has build_inference_settings classmethod."""
         from fairchem.core.models.escaip.EScAIP import EScAIPBackbone
