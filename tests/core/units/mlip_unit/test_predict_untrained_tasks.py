@@ -236,7 +236,9 @@ def test_hessian_batch_size_validation(conserving_mole_checkpoint):
     batch = atomicdata_list_to_batch([data1, data2])
 
     # Should raise ValueError
-    with pytest.raises(ValueError, match="Hessian computation requires batch_size=1"):
+    with pytest.raises(
+        ValueError, match="Hessian computation requires exactly 1 system in batch"
+    ):
         predictor.predict(batch)
 
 
