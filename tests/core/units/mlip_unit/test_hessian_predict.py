@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -10,6 +17,7 @@ from numpy import testing as npt
 
 from fairchem.core.calculate import pretrained_mlip
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.units.mlip_unit import InferenceSettings
 
 if TYPE_CHECKING:
     from fairchem.core.units.mlip_unit.predict import MLIPPredictUnitProtocol
@@ -93,7 +101,13 @@ def get_numerical_hessian(
 @pytest.mark.parametrize("vmap", [True, False])
 def test_hessian(vmap):
     """Test Hessian calculation using MLIPPredictUnit directly."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device="cuda",
+        inference_settings=InferenceSettings(
+            predict_untrained_hessian={"omol"}, hessian_vmap=vmap
+        ),
+    )
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
@@ -105,10 +119,6 @@ def test_hessian(vmap):
         molecule_cell_size=120,
     )
     batch = atomicdata_list_to_batch([data])
-
-    backbone = predict_unit.model.module.backbone
-    backbone.regress_hessian = True
-    backbone.hessian_vmap = vmap
 
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"].detach().cpu().numpy()
@@ -121,7 +131,17 @@ def test_hessian(vmap):
 @pytest.mark.gpu()
 def test_hessian_vs_numerical():
     """Test that analytical and numerical Hessians are close."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    hessian_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device="cuda",
+        inference_settings=InferenceSettings(
+            predict_untrained_hessian={"omol"}, hessian_vmap=True
+        ),
+    )
+    forces_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device="cuda",
+    )
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
@@ -134,17 +154,11 @@ def test_hessian_vs_numerical():
     )
     batch = atomicdata_list_to_batch([data])
 
-    backbone = predict_unit.model.module.backbone
-    backbone.regress_hessian = True
-    backbone.hessian_vmap = True
-
-    preds = predict_unit.predict(batch)
+    preds = hessian_unit.predict(batch)
     hessian_analytical = preds["hessian"].detach().cpu().numpy()
 
-    # Restore original setting
-    backbone.regress_hessian = False
     hessian_numerical = (
-        get_numerical_hessian(data, predict_unit, eps=1e-4, device="cuda")
+        get_numerical_hessian(data, forces_unit, eps=1e-4, device="cuda")
         .detach()
         .cpu()
         .numpy()
@@ -162,7 +176,13 @@ def test_hessian_vs_numerical():
 @pytest.mark.gpu()
 def test_hessian_symmetry():
     """Test that the Hessian matrix is symmetric."""
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+    predict_unit = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device="cuda",
+        inference_settings=InferenceSettings(
+            predict_untrained_hessian={"omol"}, hessian_vmap=True
+        ),
+    )
 
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
@@ -174,9 +194,6 @@ def test_hessian_symmetry():
         molecule_cell_size=120,
     )
     batch = atomicdata_list_to_batch([data])
-    backbone = predict_unit.model.module.backbone
-    backbone.regress_hessian = True
-    backbone.hessian_vmap = True
 
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"]
