@@ -80,6 +80,7 @@ if TYPE_CHECKING:
 
 
 ESCNMD_DEFAULT_EDGE_ACTIVATION_CHECKPOINT_CHUNK_SIZE = 1024 * 128
+AUTO_EDGE_CHUNK_FRACTION = 0.1
 
 
 @dataclass
@@ -185,6 +186,8 @@ def pad_edges(graph_dict, edge_chunk_size: int, cutoff: float, node_offset: int 
     if edge_chunk_size > 0 and n_edges_post % edge_chunk_size != 0:
         # make sure we have a multiple of self.edge_chunk_size edges
         n_edges_post += edge_chunk_size - n_edges_post % edge_chunk_size
+
+    logging.info(f"n_edges_padded: {n_edges_post}")
 
     n_edges_post = max(n_edges_post, 1)  # at least 1 edge to avoid empty "edge" case
     if n_edges_post > n_edges:
@@ -620,6 +623,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 pbc=pbc,
                 node_partition=node_partition,
             )
+            logging.info(f"n_edges: {graph_dict['edge_index'].shape[1]}")
+
         else:
             # this assume edge_index is provided
             assert (
@@ -658,6 +663,15 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             data_dict["batch"] = data_dict["batch_full"][node_partition]
             data_dict["gp_node_offset"] = node_partition.min().item()
 
+        if self.edge_chunk_size is None:
+            # and isinstance(self.backend, execution_backends.UMASFastGPUBackend):
+            # automatically add AUTO_EDGE_CHUNK_FRACTION% more edges when using torch.compile
+            self.edge_chunk_size = int(
+                graph_dict["edge_index"].shape[1] * AUTO_EDGE_CHUNK_FRACTION
+            )
+            logging.info(
+                f"self.edge_chunk_size is set to {self.edge_chunk_size} based on {AUTO_EDGE_CHUNK_FRACTION * 100}% of the number of edges"
+            )
         if self.edge_chunk_size is not None:
             pad_edges(
                 graph_dict,
