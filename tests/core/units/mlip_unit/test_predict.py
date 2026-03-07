@@ -376,8 +376,6 @@ def test_batching_consistency(padding):
     from ase import Atoms
 
     o_atom = Atoms("O2", positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
-
-    o_atom = Atoms("O2", positions=[[0.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
     o_atom.info.update({"charge": 0, "spin": 4})  # two triplet oxygens -> quintet
     o_atom.pbc = True
 
@@ -487,7 +485,7 @@ def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
     atoms.info.update({"charge": 0, "spin": 1})
     atoms.calc = calc
     forces = atoms.get_forces()
-    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
+    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:, 0]).max()}")
     assert np.abs(forces[:, 0]).max() < FORCE_TOL
 
 

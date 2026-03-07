@@ -99,7 +99,6 @@ def test_hessian(vmap):
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
 
-    # Convert to AtomicData
     data = AtomicData.from_ase(
         atoms,
         task_name="omol",
@@ -108,19 +107,13 @@ def test_hessian(vmap):
     )
     batch = atomicdata_list_to_batch([data])
 
-    # Enable Hessian computation on the backbone
     backbone = predict_unit.model.module.backbone
     backbone.regress_hessian = True
     backbone.hessian_vmap = vmap
 
-    # Get predictions with Hessian
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"].detach().cpu().numpy()
 
-    # Restore original setting
-    backbone.regress_hessian = False
-
-    # Check shape (3 atoms * 3 coords = 9x9 matrix)
     assert hessian.shape == (9, 9)
     assert np.isfinite(hessian).all()
 
@@ -142,19 +135,15 @@ def test_hessian_vs_numerical():
     )
     batch = atomicdata_list_to_batch([data])
 
-    # Enable Hessian computation on the backbone
     backbone = predict_unit.model.module.backbone
     backbone.regress_hessian = True
     backbone.hessian_vmap = True
 
-    # Get analytical Hessian
     preds = predict_unit.predict(batch)
     hessian_analytical = preds["hessian"].detach().cpu().numpy()
 
     # Restore original setting
     backbone.regress_hessian = False
-
-    # Get numerical Hessian
     hessian_numerical = (
         get_numerical_hessian(data, predict_unit, eps=1e-4, device="cuda")
         .detach()
@@ -162,7 +151,6 @@ def test_hessian_vs_numerical():
         .numpy()
     )
 
-    # Analytical and numerical Hessians should be close
     npt.assert_allclose(
         hessian_analytical.diagonal(),
         hessian_numerical.diagonal(),
@@ -181,7 +169,6 @@ def test_hessian_symmetry():
     atoms = molecule("H2O")
     atoms.info.update({"charge": 0, "spin": 1})
 
-    # Convert to AtomicData
     data = AtomicData.from_ase(
         atoms,
         task_name="omol",
@@ -189,20 +176,13 @@ def test_hessian_symmetry():
         molecule_cell_size=120,
     )
     batch = atomicdata_list_to_batch([data])
-
-    # Enable Hessian computation on the backbone
     backbone = predict_unit.model.module.backbone
     backbone.regress_hessian = True
     backbone.hessian_vmap = True
 
-    # Get predictions with Hessian
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"]
 
-    # Restore original setting
-    backbone.regress_hessian = False
-
-    # Hessian should be symmetric
     npt.assert_allclose(
         hessian.detach().cpu().numpy(),
         hessian.T.detach().cpu().numpy(),
