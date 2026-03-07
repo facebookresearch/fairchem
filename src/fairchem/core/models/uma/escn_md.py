@@ -57,6 +57,7 @@ from fairchem.core.models.uma.outputs import (
     compute_energy,
     compute_forces,
     compute_forces_and_stress,
+    compute_hessian,
     get_l_component_range,
     reduce_node_to_system,
 )
@@ -92,6 +93,8 @@ class GradRegressConfig:
     direct_stress: bool = False
     forces: bool = False
     stress: bool = False
+    hessian: bool = False
+    hessian_vmap: bool = True
 
 
 def add_n_empty_edges(
@@ -284,6 +287,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         regress_forces: bool = True,
         direct_stress: bool = False,
         regress_stress: bool = False,
+        regress_hessian: bool = False,
+        hessian_vmap: bool = True,
         # escnmd specific
         num_layers: int = 2,
         hidden_channels: int = 128,
@@ -329,6 +334,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             forces=regress_forces,
             stress=regress_stress,
             direct_stress=direct_stress,
+            hessian=regress_hessian,
+            hessian_vmap=hessian_vmap,
         )
 
         # which channels to balance
@@ -626,15 +633,22 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 "edge_index" in data_dict
             ), "otf_graph is false, need to provide edge_index as input!"
 
-            cell_per_edge = data_dict["cell"].repeat_interleave(
-                data_dict["nedges"], dim=0
-            )
-
-            shifts = torch.einsum(
-                "ij,ijk->ik",
-                data_dict["cell_offsets"].to(cell_per_edge.dtype),
-                cell_per_edge,
-            )
+            # Compute shifts from cell offsets
+            if len(data_dict["natoms"]) == 1:
+                # Single system: use matmul (compile-friendly, no data-dependent ops)
+                shifts = data_dict["cell_offsets"].to(
+                    data_dict["cell"].dtype
+                ) @ data_dict["cell"].squeeze(0)
+            else:
+                # Batched: need repeat_interleave for variable edges per system
+                cell_per_edge = data_dict["cell"].repeat_interleave(
+                    data_dict["nedges"], dim=0
+                )
+                shifts = torch.einsum(
+                    "ij,ijk->ik",
+                    data_dict["cell_offsets"].to(cell_per_edge.dtype),
+                    cell_per_edge,
+                )
             edge_distance_vec = (
                 data_dict["pos"][data_dict["edge_index"][0]]
                 - data_dict["pos"][data_dict["edge_index"][1]]
@@ -1086,6 +1100,14 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def regress_stress(self) -> bool:
         return self.regress_config.stress
 
+    @property
+    def regress_hessian(self) -> bool:
+        return self.regress_config.hessian
+
+    @property
+    def hessian_vmap(self) -> bool:
+        return self.regress_config.hessian_vmap
+
     @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
@@ -1093,6 +1115,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         energy_key = f"{self.prefix}_energy" if self.prefix else "energy"
         forces_key = f"{self.prefix}_forces" if self.prefix else "forces"
         stress_key = f"{self.prefix}_stress" if self.prefix else "stress"
+        hessian_key = f"{self.prefix}_hessian" if self.prefix else "hessian"
 
         outputs = {}
 
@@ -1114,13 +1137,17 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 {"embeddings": embeddings} if self.wrap_property else embeddings
             )
 
+        # Determine if we need create_graph for higher-order derivatives
+        # Hessian computation requires second derivatives, so we need create_graph=True
+        create_graph = self.training or self.regress_hessian
+
         if self.regress_config.stress and not self.regress_config.direct_stress:
             forces, stress = compute_forces_and_stress(
                 energy_part,
                 data["pos"],
                 data["cell"],
                 batch=data["batch_full"],  # use batch_full to work with GP reduction
-                training=self.training,
+                training=create_graph,
             )
             # TODO should we assume gradient forces always when stress is requested?
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
@@ -1128,6 +1155,27 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         elif self.regress_config.forces and not self.regress_config.direct_forces:
             forces = compute_forces(energy_part, data["pos"], training=self.training)
             outputs[forces_key] = {"forces": forces} if self.wrap_property else forces
+        else:
+            forces = None
+
+        if self.regress_hessian:
+            if forces is None:
+                raise ValueError(
+                    "Hessian computation requires forces. "
+                    "Please enable regress_forces or regress_stress."
+                )
+            if data["natoms"].numel() != 1:
+                raise ValueError(
+                    f"Hessian computation requires exactly 1 system in batch, "
+                    f"found {data['natoms'].numel()}"
+                )
+
+            hessian = compute_hessian(
+                forces, data["pos"], vmap=self.hessian_vmap, training=self.training
+            )
+            outputs[hessian_key] = (
+                {"hessian": hessian} if self.wrap_property else hessian
+            )
 
         return outputs
 
