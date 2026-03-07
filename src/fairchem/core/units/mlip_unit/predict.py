@@ -110,6 +110,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
+
+        self.inference_settings = inference_settings
         self._setup_threads(inference_settings)
 
         if inference_settings.wigner_cuda:
@@ -165,7 +167,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         self.model.eval()
         self.lazy_model_intialized = False
-        self.inference_settings = inference_settings
         self.assert_on_nans = assert_on_nans
         self._warned_upcast = False
 
