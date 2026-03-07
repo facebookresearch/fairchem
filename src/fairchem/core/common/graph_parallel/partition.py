@@ -6,8 +6,16 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 import torch
+from monty.dev import requires
 
 from fairchem.core.common import gp_utils
+
+try:
+    from fast_pytorch_kmeans import KMeans as _KMeans  # noqa: F401
+
+    _fast_pytorch_kmeans_installed = True
+except ImportError:
+    _fast_pytorch_kmeans_installed = False
 
 
 def check_or_get_rank_world_size(
@@ -211,6 +219,10 @@ def partition_atoms_to_slices(coords: torch.Tensor, K: int, axis: int = 0):
     return slice_indices
 
 
+@requires(
+    _fast_pytorch_kmeans_installed,
+    message="Requires `fast-pytorch-kmeans` to be installed",
+)
 def partition_atoms_kmeans(
     coords: torch.Tensor,
     k: int,
@@ -233,7 +245,6 @@ def partition_atoms_kmeans(
     Returns:
         cluster_indices (torch.Tensor): [N] tensor of cluster indices for each atom
     """
-    # experimental
     from fast_pytorch_kmeans import KMeans
 
     N = coords.shape[0]

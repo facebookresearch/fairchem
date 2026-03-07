@@ -12,6 +12,7 @@ import torch
 
 from fairchem.core.common.graph_parallel.partition import (
     PartitionStrategy,
+    _fast_pytorch_kmeans_installed,
     partition_atoms_by_position,
     partition_atoms_kmeans,
     partition_atoms_to_grid,
@@ -406,6 +407,10 @@ class TestPartitionAtomsByPosition:
         assert torch.equal(rank_indices_0, rank_indices_1)
 
 
+@pytest.mark.skipif(
+    not _fast_pytorch_kmeans_installed,
+    reason="fast_pytorch_kmeans is not installed, skipping KMEANS performance test",
+)
 class TestPartitionPerformance:
     """Performance tests for partition functions."""
 
@@ -441,6 +446,10 @@ class TestPartitionPerformance:
         )
 
 
+@pytest.mark.skipif(
+    not _fast_pytorch_kmeans_installed,
+    reason="fast_pytorch_kmeans is not installed, skipping KMEANS performance test",
+)
 class TestPartitionAtomsKmeans:
     """Tests for partition_atoms_kmeans function."""
 
