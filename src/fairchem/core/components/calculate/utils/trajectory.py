@@ -18,6 +18,8 @@ import pyarrow.parquet as pq
 if TYPE_CHECKING:
     from ase import Atoms
 
+from ase.calculators.calculator import PropertyNotImplementedError
+
 
 @dataclass
 class TrajectoryFrame:
@@ -71,7 +73,7 @@ class TrajectoryFrame:
         """
         try:
             stress = atoms.get_stress()
-        except Exception:
+        except PropertyNotImplementedError:
             stress = None
 
         return cls(
