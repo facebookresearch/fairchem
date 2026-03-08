@@ -123,7 +123,7 @@ def test_hessian(vmap):
     preds = predict_unit.predict(batch)
     hessian = preds["hessian"].detach().cpu().numpy()
 
-    assert hessian.shape == (9, 9)
+    assert hessian.shape == (1, 9, 9)
     assert np.isfinite(hessian).all()
 
 
@@ -196,7 +196,7 @@ def test_hessian_symmetry():
     batch = atomicdata_list_to_batch([data])
 
     preds = predict_unit.predict(batch)
-    hessian = preds["hessian"]
+    hessian = preds["hessian"].squeeze()
 
     npt.assert_allclose(
         hessian.detach().cpu().numpy(),
