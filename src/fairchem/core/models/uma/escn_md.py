@@ -1100,14 +1100,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def regress_stress(self) -> bool:
         return self.regress_config.stress
 
-    @property
-    def regress_hessian(self) -> bool:
-        return self.regress_config.hessian
-
-    @property
-    def hessian_vmap(self) -> bool:
-        return self.regress_config.hessian_vmap
-
     @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
@@ -1139,7 +1131,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
 
         # Determine if we need create_graph for higher-order derivatives
         # Hessian computation requires second derivatives, so we need create_graph=True
-        create_graph = self.training or self.regress_hessian
+        create_graph = self.training or self.regress_config.hessian
 
         if self.regress_config.stress and not self.regress_config.direct_stress:
             forces, stress = compute_forces_and_stress(
@@ -1158,7 +1150,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
         else:
             forces = None
 
-        if self.regress_hessian:
+        if self.regress_config.hessian:
             if forces is None:
                 raise ValueError(
                     "Hessian computation requires forces. "
@@ -1171,7 +1163,10 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
                 )
 
             hessian = compute_hessian(
-                forces, data["pos"], vmap=self.hessian_vmap, training=self.training
+                forces,
+                data["pos"],
+                vmap=self.regress_config.hessian_vmap,
+                training=create_graph,
             )
             outputs[hessian_key] = (
                 {"hessian": hessian} if self.wrap_property else hessian

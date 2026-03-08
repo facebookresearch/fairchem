@@ -244,11 +244,13 @@ def compute_hessian_vmap(
         )[0]
 
     # Use vmap to compute all components in parallel
+    # autograd.grad returns shape [N, 3] (same as pos), vmap gives [N*3, N, 3]
     hessian = torch.vmap(compute_grad_component)(
-        torch.eye(forces_flat.numel(), device=forces_flat.device)
+        torch.eye(forces_flat.shape[0], device=forces_flat.device)
     )
 
-    return hessian
+    n_dof = forces_flat.numel()
+    return hessian.reshape(n_dof, n_dof)
 
 
 def compute_hessian_loop(
@@ -306,7 +308,8 @@ def compute_hessian(
         training: Whether to create graph for third-order derivatives.
 
     Returns:
-        Hessian matrix of shape [N*3, N*3].
+        Hessian matrix of shape [1, N*3, N*3] (batch dim always 1 since
+        hessian requires single-system batches).
 
     Note:
         Graph parallel (GP) mode is not fully supported. The Hessian should
@@ -325,4 +328,4 @@ def compute_hessian(
     else:
         hessian = compute_hessian_loop(forces_flat, pos, create_graph=training)
 
-    return hessian
+    return hessian.unsqueeze(0)
