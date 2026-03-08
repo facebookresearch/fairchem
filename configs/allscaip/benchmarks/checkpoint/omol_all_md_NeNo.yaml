@@ -1,0 +1,2 @@
+ckpt_path: /checkpoint/ericqu/ESCAIPRUNDIR/202509-0506-4018-ec56/checkpoints/final/inference_ckpt_fixed.pt
+model_name: omol_all_md_NeNo

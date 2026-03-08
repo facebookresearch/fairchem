@@ -1,0 +1,50 @@
+spice_train:
+  splits:
+    train:
+      src:
+        - ${cluster.spice_path}/train
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: spice_energy
+    forces: ${spice_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: spice
+
+spice_val:
+  splits:
+    val:
+      src:
+        - ${cluster.spice_path}/val
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: spice_energy
+    forces: ${spice_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: spice
+
+spice_test:
+  splits:
+    test:
+      src:
+        - ${cluster.spice_path}/test
+  format: ase_db
+  a2g_args:
+    molecule_cell_size: 120.0
+    r_energy: True
+    r_forces: True
+  key_mapping:
+    energy: spice_energy
+    forces: ${spice_forces_key}
+  transforms:
+    common_transform:
+      dataset_name: spice

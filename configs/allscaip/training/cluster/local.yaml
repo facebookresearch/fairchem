@@ -1,0 +1,17 @@
+run_dir: /data/ericqu/rundir
+mode: LOCAL
+device: CUDA
+ranks_per_node: 1
+dataloader_workers: 0
+timeout_hr: 12
+debug: True
+mem_gb: 64
+cpus_per_task: 9
+account: null
+qos: gpu
+partition: gpu
+omol_all_path: /data/ishan-amin/OMOL/ALL
+omol_4M_train_path: /data/ishan-amin/OMOL/4M/train_4M
+data_root_dir: /data/ericqu
+additional_parameters:
+  nodelist: germain
