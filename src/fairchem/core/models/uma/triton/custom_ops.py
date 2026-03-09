@@ -4,25 +4,31 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
-Kernel-only custom op wrappers for Triton kernels.
+Triton kernel wrappers using torch.library.triton_op.
 
-These wrappers make ONLY the kernel launch opaque to torch.compile while
-keeping tensor allocation visible for optimization. Using mutates_args
+These wrappers make kernels visible to torch.compile while keeping
+tensor allocation visible for optimization. Using mutates_args
 allows the kernel to write to pre-allocated outputs.
 
 Why this design:
-- torch.compile can't trace Triton kernels (data_ptr access)
-- But tensor allocation (torch.empty) CAN be traced and optimized
-- By wrapping only the kernel, compile can still optimize memory layout
+- torch.compile can't trace raw Triton kernels (data_ptr access)
+- triton_op + wrap_triton makes kernels visible to the compiler
+- Tensor allocation (torch.empty) CAN be traced and optimized
+- By wrapping only the kernel, compile can optimize memory layout
 
 Public API:
 - _kernel_node_to_edge_wigner_permute: Forward kernel wrapper
+- _kernel_permute_wigner_inv_edge_to_node: Forward kernel wrapper
+- _kernel_node_to_edge_wigner_permute_bwd_dx: Backward kernel wrapper
+- _kernel_permute_wigner_inv_edge_to_node_bwd_dx: Backward kernel wrapper
+- _kernel_permute_wigner_inv_edge_to_node_bwd_dw: Backward kernel wrapper
 """
 
 from __future__ import annotations
 
 import torch
 from torch import Tensor
+from torch.library import triton_op, wrap_triton
 
 from fairchem.core.models.uma.triton.constants import BLOCK_C
 from fairchem.core.models.uma.triton.kernels import (
@@ -39,7 +45,7 @@ from fairchem.core.models.uma.triton.kernels import (
 # =============================================================================
 
 
-@torch.library.custom_op(
+@triton_op(
     "fairchem::_kernel_node_to_edge_wigner_permute",
     mutates_args=("out", "x_edge"),
 )
@@ -65,7 +71,7 @@ def _kernel_node_to_edge_wigner_permute(
     num_c_blocks = (sphere_channels + BLOCK_C - 1) // BLOCK_C
     grid = (num_edges, num_c_blocks)
 
-    node_to_edge_wigner_permute_kernel[grid](
+    wrap_triton(node_to_edge_wigner_permute_kernel)[grid](
         x,
         edge_index,
         wigner_flat,
@@ -87,24 +93,12 @@ def _kernel_node_to_edge_wigner_permute(
     )
 
 
-@_kernel_node_to_edge_wigner_permute.register_fake
-def _kernel_node_to_edge_wigner_permute_fake(
-    x: Tensor,
-    edge_index: Tensor,
-    wigner: Tensor,
-    out: Tensor,
-    x_edge: Tensor,
-) -> None:
-    """FakeTensor impl: no-op since outputs are pre-allocated by caller."""
-    pass
-
-
 # =============================================================================
 # Forward kernel wrapper for permute_wigner_inv_edge_to_node
 # =============================================================================
 
 
-@torch.library.custom_op(
+@triton_op(
     "fairchem::_kernel_permute_wigner_inv_edge_to_node",
     mutates_args=("out", "x_l"),
 )
@@ -122,7 +116,7 @@ def _kernel_permute_wigner_inv_edge_to_node(
     E, num_coeffs, C = x.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
 
-    permute_wigner_inv_edge_to_node_kernel[(E, num_c_blocks)](
+    wrap_triton(permute_wigner_inv_edge_to_node_kernel)[(E, num_c_blocks)](
         x,
         wigner,
         out,
@@ -134,23 +128,12 @@ def _kernel_permute_wigner_inv_edge_to_node(
     )
 
 
-@_kernel_permute_wigner_inv_edge_to_node.register_fake
-def _kernel_permute_wigner_inv_edge_to_node_fake(
-    x: Tensor,
-    wigner: Tensor,
-    out: Tensor,
-    x_l: Tensor,
-) -> None:
-    """FakeTensor impl: no-op since outputs are pre-allocated by caller."""
-    pass
-
-
 # =============================================================================
 # Backward kernel wrapper for node_to_edge_wigner_permute (bwd_dx)
 # =============================================================================
 
 
-@torch.library.custom_op(
+@triton_op(
     "fairchem::_kernel_node_to_edge_wigner_permute_bwd_dx",
     mutates_args=("grad_edge",),
 )
@@ -173,7 +156,7 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
     # Single block per edge (all channels in one pass)
     grid = (num_edges,)
 
-    node_to_edge_wigner_permute_bwd_dx_kernel[grid](
+    wrap_triton(node_to_edge_wigner_permute_bwd_dx_kernel)[grid](
         grad_out,
         wigner_flat,
         grad_edge,
@@ -189,22 +172,12 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
     )
 
 
-@_kernel_node_to_edge_wigner_permute_bwd_dx.register_fake
-def _kernel_node_to_edge_wigner_permute_bwd_dx_fake(
-    grad_out: Tensor,
-    wigner: Tensor,
-    grad_edge: Tensor,
-) -> None:
-    """FakeTensor impl: no-op since output is pre-allocated by caller."""
-    pass
-
-
 # =============================================================================
 # Backward kernel wrappers for permute_wigner_inv_edge_to_node
 # =============================================================================
 
 
-@torch.library.custom_op(
+@triton_op(
     "fairchem::_kernel_permute_wigner_inv_edge_to_node_bwd_dx",
     mutates_args=("grad_x",),
 )
@@ -221,7 +194,7 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dx(
     E, num_coeffs, C = grad_out.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
 
-    permute_wigner_inv_edge_to_node_bwd_dx_kernel[(E, num_c_blocks)](
+    wrap_triton(permute_wigner_inv_edge_to_node_bwd_dx_kernel)[(E, num_c_blocks)](
         grad_out,
         wigner,
         grad_x,
@@ -231,17 +204,7 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dx(
     )
 
 
-@_kernel_permute_wigner_inv_edge_to_node_bwd_dx.register_fake
-def _kernel_permute_wigner_inv_edge_to_node_bwd_dx_fake(
-    grad_out: Tensor,
-    wigner: Tensor,
-    grad_x: Tensor,
-) -> None:
-    """FakeTensor impl: no-op since output is pre-allocated by caller."""
-    pass
-
-
-@torch.library.custom_op(
+@triton_op(
     "fairchem::_kernel_permute_wigner_inv_edge_to_node_bwd_dw",
     mutates_args=("grad_wigner_flat",),
 )
@@ -261,20 +224,10 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dw(
     # Grid: one thread block per edge
     grid = (num_edges,)
 
-    permute_wigner_inv_edge_to_node_bwd_dw_kernel[grid](
+    wrap_triton(permute_wigner_inv_edge_to_node_bwd_dw_kernel)[grid](
         grad_out,
         x_l,
         grad_wigner_flat,
         num_edges,
         sphere_channels,
     )
-
-
-@_kernel_permute_wigner_inv_edge_to_node_bwd_dw.register_fake
-def _kernel_permute_wigner_inv_edge_to_node_bwd_dw_fake(
-    grad_out: Tensor,
-    x_l: Tensor,
-    grad_wigner_flat: Tensor,
-) -> None:
-    """FakeTensor impl: no-op since output is pre-allocated by caller."""
-    pass
