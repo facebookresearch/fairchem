@@ -21,7 +21,6 @@ import torch
 
 from fairchem.core.models.uma.triton.constants import BLOCK_C, M_TO_L_GATHER_IDX
 from fairchem.core.models.uma.triton.kernels import (
-    node_to_edge_wigner_permute_bwd_dx_kernel,
     node_to_edge_wigner_permute_kernel,
 )
 
@@ -97,77 +96,6 @@ def node_to_edge_wigner_permute_launcher(
     )
 
     return out, x_edge
-
-
-def node_to_edge_wigner_permute_bwd_dx_launcher(
-    grad_out: torch.Tensor,
-    wigner: torch.Tensor,
-    edge_index: torch.Tensor,
-    num_nodes: int,
-) -> torch.Tensor:
-    """
-    Backward launcher w.r.t. input x: M→L + W^T @ grad + scatter.
-
-    Args:
-        grad_out: Gradient from downstream [E, 9, 2C] in M-major order
-        wigner: Wigner matrices [E, 9, 9]
-        edge_index: Edge indices [2, E]
-        num_nodes: Number of nodes N
-
-    Returns:
-        grad_x: Gradient w.r.t. input [N, 9, C]
-    """
-    num_edges = edge_index.shape[1]
-    sphere_channels = grad_out.shape[2] // 2
-
-    # Flatten wigner [E, 9, 9] -> [E, 81]
-    wigner_flat = wigner.reshape(num_edges, -1).contiguous()
-
-    # Per-edge gradient buffer (no atomic contention)
-    grad_edge = torch.empty(
-        (num_edges, 9, sphere_channels * 2),
-        dtype=grad_out.dtype,
-        device=grad_out.device,
-    )
-
-    # Single block per edge (all channels in one pass)
-    grid = (num_edges,)
-
-    node_to_edge_wigner_permute_bwd_dx_kernel[grid](
-        grad_out,
-        wigner_flat,
-        grad_edge,
-        num_edges,
-        sphere_channels,
-        grad_out.stride(0),
-        grad_out.stride(1),
-        grad_out.stride(2),
-        grad_edge.stride(0),
-        grad_edge.stride(1),
-        grad_edge.stride(2),
-        BLOCK_C=sphere_channels,  # Process all channels
-    )
-
-    # Efficient scatter using index_add_
-    grad_x = torch.zeros(
-        (num_nodes, 9, sphere_channels),
-        dtype=grad_out.dtype,
-        device=grad_out.device,
-    )
-
-    # Slice along channel dim: grad_edge is [E, 9, 2C] with src at [:C], tgt at [C:]
-    grad_src = grad_edge[:, :, :sphere_channels].reshape(num_edges, 9 * sphere_channels)
-    grad_tgt = grad_edge[:, :, sphere_channels:].reshape(num_edges, 9 * sphere_channels)
-
-    src_idx = edge_index[0]  # [E]
-    tgt_idx = edge_index[1]  # [E]
-
-    # Scatter add to node gradients
-    grad_x_flat = grad_x.view(num_nodes, 9 * sphere_channels)
-    grad_x_flat.index_add_(0, src_idx, grad_src)
-    grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
-
-    return grad_x
 
 
 def _permute_m_to_l(x: torch.Tensor) -> torch.Tensor:
