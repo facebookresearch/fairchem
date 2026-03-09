@@ -97,6 +97,7 @@ def test_single_dataset_predict(internal_graph_gen_version):
         atol=ATOL,
     )
 
+
 @pytest.mark.xfail(reason="Issue with UMA 1.2 release TODO fix")
 @pytest.mark.gpu()
 @pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
@@ -484,7 +485,7 @@ def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
     atoms.info.update({"charge": 0, "spin": 1})
     atoms.calc = calc
     forces = atoms.get_forces()
-    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
+    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:, 0]).max()}")
     assert np.abs(forces[:, 0]).max() < FORCE_TOL
 
 

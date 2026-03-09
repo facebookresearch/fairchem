@@ -41,6 +41,34 @@ Heterogeneous Catalysis
 [Learn more →](../catalysts/datasets/summary.md)
 ::::
 
+::::{card} oc22
+:link: ../catalysts/datasets/oc22.md
+
+```{image} ../assets/icons/catalysis.svg
+:alt: Oxide Catalysts
+:width: 60px
+:align: center
+```
+
+Oxide Catalysts
++++
+[Learn more →](../catalysts/datasets/oc22.md)
+::::
+
+::::{card} oc25
+:link: ../catalysts/datasets/oc25.md
+
+```{image} ../assets/icons/catalysis.svg
+:alt: Electrocatalysis
+:width: 60px
+:align: center
+```
+
+Electrolyte Interfaces
++++
+[Learn more →](../catalysts/datasets/oc25.md)
+::::
+
 ::::{card} omat
 :link: ../inorganic_materials/datasets/summary.md
 
