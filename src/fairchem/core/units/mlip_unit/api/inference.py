@@ -7,7 +7,7 @@ file in the root directory of this source tree.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 import torch  # - needed at runtime for dataclass field type resolution
 
@@ -105,6 +105,17 @@ class InferenceSettings:
     # Set to "umas_fast_pytorch" to enable block-diagonal SO2 GEMM conversion for faster inference.
     # Set to "umas_fast_gpu" to enable highly optimized backend with triton kernels for maximum speed.
     execution_mode: str = "general"
+
+    # New fields for untrained derivative properties
+    # These flags request computation of properties NOT in the checkpoint's task list.
+    # If a property is already in the checkpoint (e.g., omol_forces task exists),
+    # it will be computed regardless of these flags.
+    # Specify datasets as a set of strings (e.g., {"omol", "oc20"}).
+    # Empty set means no untrained properties will be computed (default).
+    predict_untrained_forces: set[str] = field(default_factory=set)
+    predict_untrained_stress: set[str] = field(default_factory=set)
+    predict_untrained_hessian: set[str] = field(default_factory=set)
+    hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
