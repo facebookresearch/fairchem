@@ -13,11 +13,11 @@ from __future__ import annotations
 # Must be a power of 2. sphere_channels must be divisible by this.
 BLOCK_C = 128
 
-# Fixed grid size for edge dimension to avoid torch.compile recompiles.
-# Using a constant grid avoids shape guards on the edge count.
-# Threads beyond num_edges return early (kernels have bounds checking).
-# Set high enough to cover your max edge count. 256K should cover most systems.
-GRID_E = 262144  # 2^18 = 256K edges max
+# Fixed grid size for edge dimension grid-stride loop.
+# Kernels loop: edge_id = program_id(0); while edge_id < num_edges: ...; edge_id += GRID_E_STRIDE
+# This avoids torch.compile recompiles from dynamic edge counts while correctly
+# handling any number of edges (no upper bound).
+GRID_E_STRIDE = 2048
 
 # Permutation indices for L-major to M-major ordering.
 # For lmax=2: coefficients ordered as (l=0), (l=1, m=-1,0,1), (l=2, m=-2,-1,0,1,2)

@@ -30,7 +30,7 @@ import torch
 from torch import Tensor
 from torch.library import triton_op, wrap_triton
 
-from fairchem.core.models.uma.triton.constants import BLOCK_C
+from fairchem.core.models.uma.triton.constants import BLOCK_C, GRID_E_STRIDE
 from fairchem.core.models.uma.triton.kernels import (
     node_to_edge_wigner_permute_bwd_dx_kernel,
     node_to_edge_wigner_permute_kernel,
@@ -69,7 +69,7 @@ def _kernel_node_to_edge_wigner_permute(
 
     # Grid: (num_edges, channel_blocks)
     num_c_blocks = (sphere_channels + BLOCK_C - 1) // BLOCK_C
-    grid = (num_edges, num_c_blocks)
+    grid = (GRID_E_STRIDE, num_c_blocks)
 
     wrap_triton(node_to_edge_wigner_permute_kernel)[grid](
         x,
@@ -90,6 +90,7 @@ def _kernel_node_to_edge_wigner_permute(
         x_edge.stride(1),
         x_edge.stride(2),
         BLOCK_C=BLOCK_C,
+        GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -117,7 +118,7 @@ def _kernel_permute_wigner_inv_edge_to_node(
     E, num_coeffs, C = x.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
 
-    wrap_triton(permute_wigner_inv_edge_to_node_kernel)[(E, num_c_blocks)](
+    wrap_triton(permute_wigner_inv_edge_to_node_kernel)[(GRID_E_STRIDE, num_c_blocks)](
         x,
         wigner,
         out,
@@ -126,6 +127,7 @@ def _kernel_permute_wigner_inv_edge_to_node(
         C,
         BLOCK_C=BLOCK_C,
         SAVE_XL=True,
+        GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -155,7 +157,7 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
     # Flatten wigner for kernel (wigner already contiguous from escn_md source)
     wigner_flat = wigner.reshape(num_edges, -1)
 
-    grid = (num_edges,)
+    grid = (GRID_E_STRIDE,)
 
     wrap_triton(node_to_edge_wigner_permute_bwd_dx_kernel)[grid](
         grad_out,
@@ -170,6 +172,7 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
         grad_edge.stride(1),
         grad_edge.stride(2),
         BLOCK_C=sphere_channels,  # Process all channels
+        GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -196,13 +199,14 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dx(
     E, num_coeffs, C = grad_out.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
 
-    wrap_triton(permute_wigner_inv_edge_to_node_bwd_dx_kernel)[(E, num_c_blocks)](
+    wrap_triton(permute_wigner_inv_edge_to_node_bwd_dx_kernel)[(GRID_E_STRIDE, num_c_blocks)](
         grad_out,
         wigner,
         grad_x,
         E,
         C,
         BLOCK_C=BLOCK_C,
+        GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )
 
@@ -224,7 +228,7 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dw(
     num_edges = grad_out.shape[0]
     sphere_channels = grad_out.shape[2]
 
-    grid = (num_edges,)
+    grid = (GRID_E_STRIDE,)
 
     wrap_triton(permute_wigner_inv_edge_to_node_bwd_dw_kernel)[grid](
         grad_out,
@@ -232,5 +236,6 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dw(
         grad_wigner_flat,
         num_edges,
         sphere_channels,
+        GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )

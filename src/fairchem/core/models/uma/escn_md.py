@@ -125,7 +125,7 @@ def add_n_empty_edges(
     )
 
 
-@torch.compiler.disable
+#@torch.compiler.disable
 def get_balanced_attribute(
     emb: torch.Tensor,
     target_sum: torch.Tensor,
@@ -690,13 +690,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             logging.warning(
                 f"auto setting self.edge_chunk_size is set to {self.edge_chunk_size} based on {AUTO_EDGE_CHUNK_FRACTION * 100}% of the number of edges"
             )
-        if self.edge_chunk_size is not None:
-            pad_edges(
-                graph_dict,
-                self.edge_chunk_size,
-                self.cutoff,
-                data_dict["gp_node_offset"],
-            )
+        # if self.edge_chunk_size is not None:
+        #     pad_edges(
+        #         graph_dict,
+        #         self.edge_chunk_size,
+        #         self.cutoff,
+        #         data_dict["gp_node_offset"],
+        #     )
 
         return graph_dict
 
