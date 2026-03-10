@@ -50,6 +50,7 @@ runner:
       backbone: ${backbone}
       heads: ${heads}
       pass_through_head_outputs: True
+      supports_single_atoms: True
     optimizer_fn: ${optimizer}
     cosine_lr_scheduler_fn:
       _target_: fairchem.core.units.mlip_unit.mlip_unit._get_consine_lr_scheduler
