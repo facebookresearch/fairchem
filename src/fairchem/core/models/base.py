@@ -296,6 +296,48 @@ class HydraModel(nn.Module):
         """
         return getattr(self.backbone, "direct_forces", False)
 
+    def _validate_task_compatibility(self, task: Task) -> None:
+        """
+        Validate that a task is compatible with this model's capabilities.
+
+        Args:
+            task: Task to validate
+
+        Raises:
+            ValueError: If the task is incompatible with the model
+        """
+        derivative_properties = ("forces", "stress", "hessian")
+
+        # Check 1: Can't add autograd-based derivative tasks to direct-force models
+        if (
+            self.direct_forces
+            and task.inference_only
+            and task.property in derivative_properties
+        ):
+            raise ValueError(
+                f"Cannot add autograd-based '{task.property}' task to direct-force model. "
+                f"Derivative properties require energy-conserving (autograd forces) models."
+            )
+
+        # Check 2: Derivative tasks require an energy task for the same dataset(s)
+        if task.inference_only and task.property in derivative_properties:
+            # Collect all datasets covered by energy tasks
+            energy_datasets: set[str] = set()
+            for existing_task in self.tasks.values():
+                if existing_task.property == "energy":
+                    energy_datasets.update(existing_task.datasets)
+
+            # Check if all datasets for this derivative task have energy coverage
+            task_datasets = set(task.datasets)
+            uncovered_datasets = task_datasets - energy_datasets
+
+            if uncovered_datasets:
+                raise ValueError(
+                    f"Cannot add '{task.property}' task for datasets {task.datasets}. "
+                    f"Datasets {sorted(uncovered_datasets)} have no energy task to derive from. "
+                    f"Derivative properties require energy to compute via autograd."
+                )
+
     def prepare_for_inference(
         self, data: AtomicData, settings: InferenceSettings
     ) -> None:
@@ -366,17 +408,22 @@ class HydraModel(nn.Module):
 
         Args:
             tasks: List of Task objects to add
+
+        Raises:
+            RuntimeError: If setup_tasks() has not been called
+            ValueError: If a task is incompatible with the model
         """
         if not hasattr(self, "tasks"):
             raise RuntimeError("setup_tasks() must be called before add_tasks()")
 
-        # Add new tasks to the tasks dict
+        # Validate and add new tasks to the tasks dict
         for task in tasks:
             if task.name in self.tasks:
                 logging.warning(
                     f"Task '{task.name}' already exists, skipping adding as a new task."
                 )
                 continue
+            self._validate_task_compatibility(task)
             self.tasks[task.name] = task
 
         # Rebuild dataset_to_tasks map
@@ -450,6 +497,48 @@ class HydraModelV2(nn.Module):
         """
         return getattr(self.backbone, "direct_forces", False)
 
+    def _validate_task_compatibility(self, task: Task) -> None:
+        """
+        Validate that a task is compatible with this model's capabilities.
+
+        Args:
+            task: Task to validate
+
+        Raises:
+            ValueError: If the task is incompatible with the model
+        """
+        derivative_properties = ("forces", "stress", "hessian")
+
+        # Check 1: Can't add autograd-based derivative tasks to direct-force models
+        if (
+            self.direct_forces
+            and task.inference_only
+            and task.property in derivative_properties
+        ):
+            raise ValueError(
+                f"Cannot add autograd-based '{task.property}' task to direct-force model. "
+                f"Derivative properties require energy-conserving (autograd forces) models."
+            )
+
+        # Check 2: Derivative tasks require an energy task for the same dataset(s)
+        if task.inference_only and task.property in derivative_properties:
+            # Collect all datasets covered by energy tasks
+            energy_datasets: set[str] = set()
+            for existing_task in self.tasks.values():
+                if existing_task.property == "energy":
+                    energy_datasets.update(existing_task.datasets)
+
+            # Check if all datasets for this derivative task have energy coverage
+            task_datasets = set(task.datasets)
+            uncovered_datasets = task_datasets - energy_datasets
+
+            if uncovered_datasets:
+                raise ValueError(
+                    f"Cannot add '{task.property}' task for datasets {task.datasets}. "
+                    f"Datasets {sorted(uncovered_datasets)} have no energy task to derive from. "
+                    f"Derivative properties require energy to compute via autograd."
+                )
+
     def prepare_for_inference(
         self, data: AtomicData, settings: InferenceSettings
     ) -> None:
@@ -517,12 +606,16 @@ class HydraModelV2(nn.Module):
 
         Args:
             tasks: List of Task objects to add
+
+        Raises:
+            ValueError: If a task is incompatible with the model
         """
-        # Add new tasks to the tasks dict
+        # Validate and add new tasks to the tasks dict
         for task in tasks:
             if task.name in self.tasks:
                 logging.warning(f"Task '{task.name}' already exists, skipping addition")
                 continue
+            self._validate_task_compatibility(task)
             self._tasks[task.name] = task
 
         # Rebuild dataset_to_tasks map

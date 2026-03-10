@@ -164,8 +164,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             inference_settings, self.model.module.tasks
         )
 
-        # Merge: explicit requests take precedence, then backbone defaults
-        # Filter out any backbone defaults that conflict with explicit tasks
         explicit_task_names = {t.name for t in untrained_tasks}
         checkpoint_task_names = set(self.model.module.tasks.keys())
 
@@ -312,9 +310,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 continue
 
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             untrained_tasks.append(
                 Task(
-                    name=f"{dataset}_forces",
+                    name=f"{task_prefix}forces",
                     level="atom",
                     property="forces",
                     out_spec=OutputSpec(
@@ -341,9 +341,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 continue
 
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             untrained_tasks.append(
                 Task(
-                    name=f"{dataset}_stress",
+                    name=f"{task_prefix}stress",
                     level="system",
                     property="stress",
                     out_spec=OutputSpec(
@@ -370,9 +372,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 continue
 
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             untrained_tasks.append(
                 Task(
-                    name=f"{dataset}_hessian",
+                    name=f"{task_prefix}hessian",
                     level="system",
                     property="hessian",
                     out_spec=OutputSpec(
@@ -433,49 +437,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                     # Hessian requires forces with create_graph=True
                     if not actual_head.regress_config.direct_forces:
                         actual_head.regress_config.forces = True
-
-    # TODO simplify this, only conservative models allowed to do this, just delegate to the head
-    def _validate_untrained_property_requests(
-        self,
-        settings: InferenceSettings,
-    ) -> None:
-        """
-        Validate that requested untrained properties are compatible with the model.
-
-        Raises:
-            ValueError: If incompatible property requested
-        """
-        # Check 1: Can't compute derivatives from direct-force models
-        if self.model.module.direct_forces:
-            if settings.predict_untrained_hessian:
-                raise ValueError(
-                    "Cannot compute Hessian for direct-force models. "
-                    "Hessian requires energy-conserving (autograd forces) models."
-                )
-            if settings.predict_untrained_stress:
-                raise ValueError(
-                    "Cannot compute stress for direct-force models. "
-                    "Stress requires energy-conserving (autograd forces) models."
-                )
-
-        # Check 2: Hessian requires single-system batches (validated per-prediction)
-        # This is a runtime constraint, not init-time
-
-        # Check 3: At least one energy task must exist
-        has_energy = any(
-            task.property == "energy" for task in self.model.module.tasks.values()
-        )
-        if not has_energy and any(
-            [
-                settings.predict_untrained_forces,
-                settings.predict_untrained_stress,
-                settings.predict_untrained_hessian,
-            ]
-        ):
-            raise ValueError(
-                "Cannot compute derivative properties without an energy task. "
-                "Model must predict energy to compute forces/stress/hessian via autograd."
-            )
 
     def move_to_device(self):
         self.model.to(self.device)
