@@ -71,6 +71,7 @@ from fairchem.core.units.mlip_unit.api.inference import (
     SPIN_RANGE,
     UMATask,
 )
+from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 
 from .escn_md_block import eSCNMD_Block
 
@@ -899,6 +900,63 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
             overrides["execution_mode"] = settings.execution_mode
 
         return overrides
+
+    @classmethod
+    def get_default_untrained_tasks(
+        cls,
+        checkpoint_tasks: dict[str, Task],
+        inference_settings: InferenceSettings,
+    ) -> list[Task]:
+        """
+        Return default untrained tasks for eSCNMDBackbone.
+
+        For this backbone, we add stress tasks for all energy datasets
+        that don't already have stress (either trained or explicitly requested).
+        Stress can be computed via autograd from energy predictions.
+        """
+        tasks = []
+
+        # Find datasets with energy but no stress
+        energy_datasets = set()
+        stress_datasets = set()
+        energy_task_by_dataset = {}
+
+        for task in checkpoint_tasks.values():
+            if task.property == "energy":
+                for dataset in task.datasets:
+                    energy_datasets.add(dataset)
+                    energy_task_by_dataset[dataset] = task
+            elif task.property == "stress":
+                stress_datasets.update(task.datasets)
+
+        # Also exclude datasets already in predict_untrained_stress
+        stress_datasets.update(inference_settings.predict_untrained_stress)
+
+        # Create stress tasks for missing datasets
+        missing_stress_datasets = energy_datasets - stress_datasets
+
+        for dataset in missing_stress_datasets:
+            energy_task = energy_task_by_dataset[dataset]
+            tasks.append(
+                Task(
+                    name=f"{dataset}_stress",
+                    level="system",
+                    property="stress",
+                    out_spec=OutputSpec(
+                        dim=[1, 9], dtype=inference_settings.base_precision_dtype
+                    ),
+                    normalizer=energy_task.normalizer,
+                    datasets=[dataset],
+                    loss_fn=None,
+                    element_references=None,
+                    metrics=[],
+                    train_on_free_atoms=True,
+                    eval_on_free_atoms=True,
+                    inference_only=True,
+                )
+            )
+
+        return tasks
 
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
         """

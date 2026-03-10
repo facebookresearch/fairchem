@@ -11,7 +11,7 @@ import copy
 import logging
 from abc import ABCMeta, abstractmethod
 from collections import defaultdict
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 import hydra
 import torch
@@ -23,6 +23,8 @@ from fairchem.core.common.utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from ase import Atoms
 
     from fairchem.core.datasets.atomic_data import AtomicData
@@ -97,6 +99,29 @@ class BackboneInterface(metaclass=ABCMeta):
             Dict of backbone config key-value pairs to override.
         """
         return {}
+
+    @classmethod
+    @abstractmethod
+    def get_default_untrained_tasks(
+        cls,
+        checkpoint_tasks: dict[str, Task],
+        inference_settings: InferenceSettings,
+    ) -> list[Task]:
+        """
+        Return default untrained tasks this backbone wants to add during inference.
+
+        Override in backbones that support computing properties via autograd
+        or other methods without explicit training. Returns empty list by default.
+
+        Args:
+            checkpoint_tasks: Tasks from the checkpoint (task name -> Task)
+            inference_settings: Current inference settings
+
+        Returns:
+            List of Task objects to add. Tasks with names already in checkpoint_tasks
+            or already in predict_untrained_* settings will be skipped.
+        """
+        return []
 
     @abstractmethod
     def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:

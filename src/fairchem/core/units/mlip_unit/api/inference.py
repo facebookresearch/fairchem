@@ -117,6 +117,10 @@ class InferenceSettings:
     predict_untrained_hessian: set[str] = field(default_factory=set)
     hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
+    # When True, allow backbones to add their default untrained tasks
+    # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
+    auto_add_default_untrained_tasks: bool = True
+
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
