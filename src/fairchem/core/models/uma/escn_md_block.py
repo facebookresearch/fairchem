@@ -109,6 +109,7 @@ class Edgewise(torch.nn.Module):
             extra_m0_output_channels=None,
         )
 
+    @torch.compile(dynamic=True)
     def forward(
         self,
         x,

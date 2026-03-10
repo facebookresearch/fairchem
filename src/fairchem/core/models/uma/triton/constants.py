@@ -13,6 +13,12 @@ from __future__ import annotations
 # Must be a power of 2. sphere_channels must be divisible by this.
 BLOCK_C = 128
 
+# Fixed grid size for edge dimension to avoid torch.compile recompiles.
+# Using a constant grid avoids shape guards on the edge count.
+# Threads beyond num_edges return early (kernels have bounds checking).
+# Set high enough to cover your max edge count. 256K should cover most systems.
+GRID_E = 262144  # 2^18 = 256K edges max
+
 # Permutation indices for L-major to M-major ordering.
 # For lmax=2: coefficients ordered as (l=0), (l=1, m=-1,0,1), (l=2, m=-2,-1,0,1,2)
 # L-major: [0, 1, 2, 3, 4, 5, 6, 7, 8] = [l0, l1m-1, l1m0, l1m1, l2m-2, l2m-1, l2m0, l2m1, l2m2]

@@ -1308,7 +1308,7 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
     DY_ptr,
     X_ptr,
     DW_ptr,
-    E: tl.constexpr,
+    num_edges,
     C: tl.constexpr,
 ):
     """
@@ -1327,6 +1327,10 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
     Grid: (num_edges,)
     """
     edge_id = tl.program_id(0)
+
+    # Bounds check for fixed grid size
+    if edge_id >= num_edges:
+        return
 
     dy_base = edge_id * 9 * C
     x_base = edge_id * 9 * C
