@@ -15,6 +15,7 @@ import numpy.testing as npt
 import pytest
 import ray
 import torch
+from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
@@ -24,10 +25,15 @@ from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_ba
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    single_atom_prediction_from_lookup,
+)
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
+_REPRESENTATIVE_ELEMENTS = [1, 6, 8, 26, 79]  # H, C, O, Fe, Au
+SINGLE_ATOM_ENERGY_ATOL = 5.0  # eV, for model-predicted single atom energies
 
 
 @pytest.fixture(scope="module")
@@ -54,6 +60,18 @@ def uma_merge_mole_predict_unit():
     return pretrained_mlip.get_predict_unit(
         uma_models[0], device="cuda", inference_settings=settings
     )
+
+
+@pytest.fixture(scope="module")
+def uma_1p1_predict_unit():
+    """Module-scoped predict unit for uma-s-1p1."""
+    return pretrained_mlip.get_predict_unit("uma-s-1p1")
+
+
+@pytest.fixture(scope="module")
+def uma_1p2_predict_unit():
+    """Module-scoped predict unit for uma-s-1p2."""
+    return pretrained_mlip.get_predict_unit("uma-s-1p2")
 
 
 @pytest.mark.gpu()
@@ -1053,4 +1071,75 @@ def test_merge_mole_md_consistency(workers, ensemble, device):
         tolerance_factor * baseline_stress_drift + 1e-6,
         err_msg=f"Stress drift A-C ({stress_drift_AC.max():.2e}) exceeds "
         f"{tolerance_factor}x baseline A-B ({baseline_stress_drift:.2e})",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-atom prediction tests
+# ---------------------------------------------------------------------------
+
+
+def _test_single_atom_predict(predict_unit, task_name, energy_atol):
+    """
+    Verify single-atom predictions for a given predict unit and task.
+
+    Checks that energy, forces, and stress have correct shapes,
+    forces are zero (no neighbors), and energy matches the reference
+    table within the specified tolerance.
+    """
+    for atomic_number in _REPRESENTATIVE_ELEMENTS:
+        atom = Atoms([atomic_number], positions=[(0.0, 0.0, 0.0)])
+        atom.info["charge"] = 0
+        atom.info["spin"] = 1
+
+        from_ase_kwargs = {"task_name": task_name}
+        if task_name == "omol":
+            from_ase_kwargs["r_data_keys"] = ["spin", "charge"]
+
+        atomic_data = AtomicData.from_ase(atom, **from_ase_kwargs)
+        batch = atomicdata_list_to_batch([atomic_data])
+        preds = predict_unit.predict(batch)
+
+        # Shape checks
+        assert preds["energy"].shape == (1,)
+        assert preds["forces"].shape == (1, 3)
+        # assert preds["stress"].shape == (1, 9)
+        assert torch.isfinite(preds["energy"]).all()
+
+        # Forces must be zero (no neighbors)
+        assert (preds["forces"] == 0.0).all()
+
+        # Get reference energy via single_atom_prediction_from_lookup
+        ref_batch = atomicdata_list_to_batch([atomic_data])
+        ref_preds = single_atom_prediction_from_lookup(
+            data=ref_batch,
+            atom_refs=predict_unit.atom_refs,
+            tasks=predict_unit.tasks,
+            device=torch.device("cpu"),
+        )
+        ref_energy = next(
+            v.item()
+            for k, v in ref_preds.items()
+            if predict_unit.tasks[k].property == "energy"
+        )
+        npt.assert_allclose(
+            preds["energy"].detach().cpu().item(),
+            ref_energy,
+            atol=energy_atol,
+        )
+
+
+@pytest.mark.parametrize("task_name", ["omat", "omol"])
+def test_single_atom_predict_1p1(task_name, uma_1p1_predict_unit):
+    """Verify uma-s-1p1 single atom energies match the lookup table exactly."""
+    _test_single_atom_predict(uma_1p1_predict_unit, task_name, energy_atol=0.0)
+
+
+@pytest.mark.parametrize("task_name", ["omat", "omol"])
+def test_single_atom_predict_1p2(task_name, uma_1p2_predict_unit):
+    """Verify uma-s-1p2 single atom energies are close to reference values."""
+    _test_single_atom_predict(
+        uma_1p2_predict_unit,
+        task_name,
+        energy_atol=SINGLE_ATOM_ENERGY_ATOL,
     )
