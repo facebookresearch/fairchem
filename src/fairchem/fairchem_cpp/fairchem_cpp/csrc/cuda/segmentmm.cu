@@ -23,7 +23,16 @@ namespace fairchem_cpp {
     TORCH_CHECK(status == CUBLAS_STATUS_SUCCESS, "cuBLAS error: ", status); \
   } while (0)
 
-constexpr bool use_grouped_gemm = true;
+// Runtime toggle for grouped vs loop GEMM
+// Set FAIRCHEM_USE_GROUPED_GEMM=0 to use loop, =1 (default) for grouped
+inline bool use_grouped_gemm() {
+    static int cached = -1;
+    if (cached == -1) {
+        const char* env = std::getenv("FAIRCHEM_USE_GROUPED_GEMM");
+        cached = (env == nullptr || std::string(env) != "0") ? 1 : 0;
+    }
+    return cached == 1;
+}
 
 // Ensures that the pointer mode is set to HOST, which is required for cublasGemmGroupedBatchedEx
 class CublasPointerModeGuard {
@@ -467,19 +476,19 @@ void segment_mm_dispatch(const at::Tensor& A, const at::Tensor& B, at::Tensor& C
     TORCH_CHECK(seglen.is_cpu(), "seglen must be a CPU tensor");
 
     if (A.scalar_type() == at::ScalarType::Float) {
-        if (use_grouped_gemm) {
+        if (use_grouped_gemm()) {
             SegmentMMGrouped<float,float>(A, B, C, seglen,  b_trans, CUDA_R_32F,CUBLAS_COMPUTE_32F );
         } else {
             SegmentMM<float,float>(A, B, C, seglen,  b_trans, CUDA_R_32F,CUBLAS_COMPUTE_32F );
         }
     } else if (A.scalar_type() == at::ScalarType::Half) {
-        if (use_grouped_gemm) {
+        if (use_grouped_gemm()) {
             SegmentMMGrouped<at::Half,__half>(A, B, C, seglen,  b_trans, CUDA_R_16F ,CUBLAS_COMPUTE_32F);
         } else {
             SegmentMM<at::Half,__half>(A, B, C, seglen,  b_trans, CUDA_R_16F ,CUBLAS_COMPUTE_16F);
         }
     } else if (A.scalar_type() == at::ScalarType::BFloat16) {
-        if (use_grouped_gemm) {
+        if (use_grouped_gemm()) {
             SegmentMMGrouped<at::BFloat16, __nv_bfloat16>(A, B, C, seglen,  b_trans, CUDA_R_16BF, CUBLAS_COMPUTE_32F);
         } else {
             SegmentMM<at::BFloat16, __nv_bfloat16>(A, B, C, seglen,  b_trans, CUDA_R_16BF, CUBLAS_COMPUTE_32F);
@@ -500,19 +509,19 @@ void segment_mm_backward_dispatch(const at::Tensor& A, const at::Tensor& dC, at:
     TORCH_CHECK(seglen.is_cpu(), "seglen must be a CPU tensor");
 
     if (A.scalar_type() == at::ScalarType::Float) {
-        if (use_grouped_gemm) {
+        if (use_grouped_gemm()) {
             SegmentMMBackwardBGrouped<float,float>(A, dC, dB, seglen,CUDA_R_32F,CUBLAS_COMPUTE_32F);
         } else {
             SegmentMMBackwardB<float,float>(A, dC, dB, seglen,CUDA_R_32F,CUBLAS_COMPUTE_32F);
         }
     } else if (A.scalar_type() == at::ScalarType::Half) {
-        if (use_grouped_gemm) {
+        if (use_grouped_gemm()) {
             SegmentMMBackwardBGrouped<at::Half, __half>(A, dC, dB, seglen,CUDA_R_16F ,CUBLAS_COMPUTE_32F);
         } else {
             SegmentMMBackwardB<at::Half, __half>(A, dC, dB, seglen,CUDA_R_16F ,CUBLAS_COMPUTE_16F);
         }
     } else if (A.scalar_type() == at::ScalarType::BFloat16) {
-        if (use_grouped_gemm) {
+        if (use_grouped_gemm()) {
             SegmentMMBackwardBGrouped<at::BFloat16,__nv_bfloat16>(A, dC, dB, seglen,CUDA_R_16BF, CUBLAS_COMPUTE_32F);
         } else {
             SegmentMMBackwardB<at::BFloat16,__nv_bfloat16>(A, dC, dB, seglen,CUDA_R_16BF, CUBLAS_COMPUTE_32F);

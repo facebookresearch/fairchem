@@ -35,6 +35,7 @@ ELEMENTS=""
 MOE_LAYER_TYPE="pytorch"
 BENCHMARK=false
 WARMUP=5
+GROUPED_GEMM=1  # 1=grouped (default), 0=loop
 
 # All execution backends to benchmark
 MODES=(
@@ -102,9 +103,13 @@ while [[ $# -gt 0 ]]; do
             WARMUP="$2"
             shift 2
             ;;
+        --grouped-gemm)
+            GROUPED_GEMM="$2"
+            shift 2
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 --checkpoint PATH [--natoms N] [--timeiters N] [--repeats N] [--log-dir DIR] [--speed-only] [--forces-only] [--mixed-batch SIZES] [--elements ELEMS] [--moe-layer-type TYPE] [--benchmark] [--warmup N]"
+            echo "Usage: $0 --checkpoint PATH [--natoms N] [--timeiters N] [--repeats N] [--log-dir DIR] [--speed-only] [--forces-only] [--mixed-batch SIZES] [--elements ELEMS] [--moe-layer-type TYPE] [--benchmark] [--warmup N] [--grouped-gemm 0|1]"
             exit 1
             ;;
     esac
@@ -112,9 +117,12 @@ done
 
 if [[ -z "${CHECKPOINT}" ]]; then
     echo "Error: --checkpoint is required"
-    echo "Usage: $0 --checkpoint PATH [--natoms N] [--timeiters N] [--repeats N] [--log-dir DIR] [--speed-only] [--forces-only] [--mixed-batch SIZES] [--elements ELEMS] [--moe-layer-type TYPE] [--benchmark] [--warmup N]"
+    echo "Usage: $0 --checkpoint PATH [--natoms N] [--timeiters N] [--repeats N] [--log-dir DIR] [--speed-only] [--forces-only] [--mixed-batch SIZES] [--elements ELEMS] [--moe-layer-type TYPE] [--benchmark] [--warmup N] [--grouped-gemm 0|1]"
     exit 1
 fi
+
+# Export grouped GEMM setting for fairchem_cpp
+export FAIRCHEM_USE_GROUPED_GEMM="${GROUPED_GEMM}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -134,6 +142,11 @@ else
 fi
 echo "Modes:      ${MODES[*]}"
 echo "MOE layer:  ${MOE_LAYER_TYPE}"
+if [[ "${GROUPED_GEMM}" == "1" ]]; then
+    echo "GEMM mode:  grouped (cublasGemmGroupedBatchedEx)"
+else
+    echo "GEMM mode:  loop (cublasGemmEx)"
+fi
 echo "Log dir:    ${LOG_DIR}"
 echo "=========================================="
 
