@@ -14,7 +14,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-from ase.calculators.calculator import Calculator
+from ase.calculators.calculator import Calculator, PropertyNotImplementedError
 from ase.stress import full_3x3_to_voigt_6_stress
 
 from fairchem.core.calculate import pretrained_mlip
@@ -125,6 +125,7 @@ class FAIRChemCalculator(Calculator):
         overrides: dict | None = None,
         device: Literal["cuda", "cpu"] | None = None,
         seed: int = 41,
+        workers: int = 1,
     ) -> FAIRChemCalculator:
         """Instantiate a FAIRChemCalculator from a checkpoint file.
 
@@ -139,6 +140,7 @@ class FAIRChemCalculator(Calculator):
             overrides: Optional dictionary of settings to override default inference settings.
             device: Optional torch device to load the model onto.
             seed: Random seed for reproducibility.
+            workers: Number of parallel workers for prediction unit. Default is 1.
         """
 
         if name_or_path in pretrained_mlip.available_models:
@@ -147,6 +149,7 @@ class FAIRChemCalculator(Calculator):
                 inference_settings=inference_settings,
                 overrides=overrides,
                 device=device,
+                workers=workers,
             )
         elif os.path.isfile(name_or_path):
             predict_unit = pretrained_mlip.load_predict_unit(
@@ -154,6 +157,7 @@ class FAIRChemCalculator(Calculator):
                 inference_settings=inference_settings,
                 overrides=overrides,
                 device=device,
+                workers=workers,
             )
         else:
             raise ValueError(
@@ -176,6 +180,22 @@ class FAIRChemCalculator(Calculator):
         if (not state) and (self.atoms.info != atoms.info):
             state.append("info")
         return state
+
+    def get_property(self, name, atoms=None, allow_calculation=True):
+        try:
+            result = super().get_property(
+                name, atoms=atoms, allow_calculation=allow_calculation
+            )
+        except PropertyNotImplementedError as exc:
+            msg = str(exc)
+            if name in ("forces", "stress", "hessian"):
+                msg += (
+                    f"\n {name} prediction can be enabled by setting `predict_untrained_{name}=set('{self.task_name}')` "
+                    f"in the InferenceSettings."
+                )
+            raise PropertyNotImplementedError(msg) from exc
+
+        return result
 
     def calculate(
         self, atoms: Atoms, properties: list[str], system_changes: list[str]
@@ -210,61 +230,31 @@ class FAIRChemCalculator(Calculator):
         # Standard call to check system_changes etc
         Calculator.calculate(self, atoms, properties, system_changes)
 
-        if len(atoms) == 1 and sum(atoms.pbc) == 0:
-            self.results = self._get_single_atom_energies(atoms)
-        else:
-            # Convert using the current a2g object
-            data = self.a2g(atoms)
+        # Convert using the current a2g object
+        data = self.a2g(atoms)
 
-            # Batch and predict
-            pred = self.predictor.predict(data)
+        # Batch and predict
+        pred = self.predictor.predict(data)
 
-            # Collect the results into self.results
-            self.results = {}
-            for calc_key in self.implemented_properties:
-                if calc_key == "energy":
-                    energy = float(pred[calc_key].detach().cpu().numpy()[0])
+        # Collect the results into self.results
+        self.results = {}
+        for calc_key in self.implemented_properties:
+            if calc_key == "energy":
+                energy = float(pred[calc_key].detach().cpu().numpy()[0])
 
-                    self.results["energy"] = self.results["free_energy"] = (
-                        energy  # Free energy is a copy of energy
-                    )
-                if calc_key == "forces":
-                    forces = pred[calc_key].detach().cpu().numpy()
-                    self.results["forces"] = forces
-                if calc_key == "stress":
-                    stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
-                    stress_voigt = full_3x3_to_voigt_6_stress(stress)
-                    self.results["stress"] = stress_voigt
-
-    def _get_single_atom_energies(self, atoms) -> dict:
-        """
-        Populate output with single atom energies
-        """
-        if self.predictor.atom_refs is None:
-            raise ValueError(
-                "Single atom system but no atomic references present. "
-                "Please call fairchem.core.pretrained_mlip.get_predict_unit() "
-                "with an appropriate checkpoint name."
-            )
-        logging.warning(
-            "Single atom systems are not handled by the model; "
-            "the precomputed DFT result is returned. "
-            "Spin multiplicity is ignored for monoatomic systems."
-        )
-        elt = atoms.get_atomic_numbers()[0]
-        results = {}
-
-        atom_refs = self.predictor.atom_refs[self.task_name]
-        try:
-            energy = atom_refs.get(int(elt), {}).get(atoms.info["charge"])
-        except AttributeError:
-            energy = atom_refs[int(elt)]
-        if energy is None:
-            raise ValueError("This model has not stored this element with this charge.")
-        results["energy"] = energy
-        results["forces"] = np.array([[0.0] * 3])
-        results["stress"] = np.array([0.0] * 6)
-        return results
+                self.results["energy"] = self.results["free_energy"] = (
+                    energy  # Free energy is a copy of energy
+                )
+            if calc_key == "forces":
+                forces = pred[calc_key].detach().cpu().numpy()
+                self.results["forces"] = forces
+            if calc_key == "stress":
+                stress = pred[calc_key].detach().cpu().numpy().reshape(3, 3)
+                stress_voigt = full_3x3_to_voigt_6_stress(stress)
+                self.results["stress"] = stress_voigt
+            if calc_key == "hessian":
+                hessian = pred[calc_key].detach().cpu().numpy().squeeze()
+                self.results["hessian"] = hessian
 
     def _check_atoms_pbc(self, atoms) -> None:
         """

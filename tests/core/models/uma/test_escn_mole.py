@@ -252,5 +252,45 @@ def test_dataset_mapping_wrapper_with_deprecated_list(mock_replace, mock_registr
     assert wrapper.dataset_name_to_exp == expected
 
 
+@patch("fairchem.core.models.uma.escn_moe.registry.get_model_class")
+def test_moe_wrapper_merge_replaces_mole(mock_registry):
+    """
+    Test merge_MOLE_model replaces MOLE→Linear and sets state.
+    """
+    mock_backbone = MagicMock()
+    mock_backbone.regress_stress = False
+    mock_backbone.regress_forces = True
+
+    # Real head (Linear→MOLE during construction)
+    mock_head = torch.nn.Sequential(
+        torch.nn.Linear(16, 16),
+        torch.nn.SiLU(),
+        torch.nn.Linear(16, 1),
+    )
+    mock_registry.return_value = lambda *args, **kwargs: mock_head
+
+    wrapper = DatasetSpecificMoEWrapper(
+        backbone=mock_backbone,
+        head_cls="some_head",
+        dataset_mapping={"oc20": "oc20", "omat": "omat"},
+    )
+
+    # Verify MOLE layers exist after construction
+    mole_count_before = sum(1 for m in wrapper.head.modules() if isinstance(m, MOLE))
+    assert mole_count_before > 0, "Should have MOLE layers before merge"
+
+    # Merge on oc20 dataset
+    mock_data = MagicMock()
+    mock_data.dataset = ["oc20"]
+    mock_data.pos = torch.randn(10, 3)
+    wrapper.merge_MOLE_model(mock_data)
+
+    # Verify MOLE replaced with Linear
+    mole_count_after = sum(1 for m in wrapper.head.modules() if isinstance(m, MOLE))
+    assert mole_count_after == 0, "All MOLE layers should be replaced"
+    assert wrapper.merged_on_dataset == "oc20"
+    assert wrapper.non_merged_dataset_names == ["omat"]
+
+
 if __name__ == "__main__":
     mole1_vs_linear()
