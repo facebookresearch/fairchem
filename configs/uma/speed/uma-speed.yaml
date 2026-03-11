@@ -1,0 +1,35 @@
+# Usage:
+#   fairchem -c configs/uma/speed/uma-speed.yaml                    # default: local
+#   fairchem -c configs/uma/speed/uma-speed.yaml job=local_8gpu     # 8 GPU local
+#   fairchem -c configs/uma/speed/uma-speed.yaml job=slurm    # SLURM
+
+defaults:
+  - job: local
+  - _self_
+
+uma_s_1p2:
+  _target_: fairchem.core.calculate.pretrained_mlip.pretrained_checkpoint_path_from_name
+  model_name: "uma-s-1p2"
+
+runner:
+  _target_: fairchem.core.components.benchmark._single.uma_speed_benchmark.InferenceBenchRunner
+  device: "cuda"
+  timeiters: 100
+  repeats: 5
+  natoms_list: [1000]
+  model_checkpoints:
+    # uma_s_1p1: ${uma_s_1p1}
+    uma_s_1p2: ${uma_s_1p2}
+  # for large number atoms (ie: 1000+) turn off compile and turn on activation_checkpointing
+  # for profiling, we substract the graph generation time by using external_graph_gen=True
+  inference_settings:
+    _target_: fairchem.core.units.mlip_unit.api.inference.InferenceSettings
+    tf32: True
+    activation_checkpointing: False
+    merge_mole: True
+    compile: True
+    external_graph_gen: False
+    internal_graph_gen_version: 2
+    # edge_chunk_size: 32
+    execution_mode: "umas_fast_gpu"
+  # generate_traces: True

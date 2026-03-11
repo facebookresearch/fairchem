@@ -12,5 +12,11 @@ from fairchem.core.calculate.ase_calculator import (
     FAIRChemCalculator,
     FormationEnergyCalculator,
 )
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-__all__ = ["FAIRChemCalculator", "FormationEnergyCalculator", "InferenceBatcher"]
+__all__ = [
+    "FAIRChemCalculator",
+    "FormationEnergyCalculator",
+    "InferenceBatcher",
+    "InferenceSettings",
+]

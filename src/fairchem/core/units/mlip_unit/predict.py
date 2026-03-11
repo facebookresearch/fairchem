@@ -37,6 +37,10 @@ from fairchem.core.common.distutils import (
 )
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
 from fairchem.core.units.mlip_unit import InferenceSettings
+from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    single_atom_prediction_from_lookup,
+)
 from fairchem.core.units.mlip_unit.utils import (
     get_backbone_class_from_checkpoint,
     load_inference_model,
@@ -86,21 +90,6 @@ class MLIPPredictUnitProtocol(Protocol):
     def dataset_to_tasks(self) -> dict[str, list]: ...
 
 
-def merge_uma_model(model, data):
-    logging.info("Calling merge_uma_model")
-    # merge the backbone
-    model.backbone = model.backbone.merge_MOLE_model(data)
-
-    # merge any heads
-    new_output_heads = torch.nn.ModuleDict()
-    for head_name, head in model.output_heads.items():
-        if hasattr(head, "merge_MOLE_model"):
-            new_output_heads[head_name] = head.merge_MOLE_model(data)
-        else:
-            new_output_heads[head_name] = head
-    model.output_heads = new_output_heads
-
-
 class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
     def __init__(
         self,
@@ -121,6 +110,8 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         if inference_settings is None:
             inference_settings = InferenceSettings()
+
+        self.inference_settings = inference_settings
         self._setup_threads(inference_settings)
 
         if inference_settings.wigner_cuda:
@@ -158,11 +149,24 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         finally:
             torch.set_default_dtype(prev_dtype)
 
+        untrained_tasks = self._create_untrained_tasks(
+            inference_settings, self.model.module.tasks
+        )
+
+        if untrained_tasks:
+            logging.info(
+                f"Adding {len(untrained_tasks)} untrained task(s): "
+                f"{[t.name for t in untrained_tasks]}"
+            )
+            self.model.module.add_tasks(untrained_tasks)
+
+        self._validate_untrained_property_requests(inference_settings)
+        self._configure_head_gradients(inference_settings)
+
         self._setup_device(device)
 
         self.model.eval()
         self.lazy_model_intialized = False
-        self.inference_settings = inference_settings
         self.assert_on_nans = assert_on_nans
         self._warned_upcast = False
 
@@ -244,6 +248,212 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         return overrides
 
+    def _create_untrained_tasks(
+        self,
+        settings: InferenceSettings,
+        checkpoint_tasks: dict[str, Task],
+    ) -> list[Task]:
+        """
+        Generate Task objects for untrained derivative properties.
+
+        For each requested property+dataset combination:
+        1. Verify an energy task exists for that dataset
+        2. Create a new Task with:
+           - inference_only=True (exclude from training/eval)
+           - Normalizer copied from energy task
+           - element_references=None (derivatives don't use elem refs)
+           - Appropriate out_spec for the property type
+
+        Args:
+            settings: InferenceSettings with compute_untrained_* flags
+            checkpoint_tasks: Dictionary of Task objects from checkpoint
+
+        Returns:
+            List of Task objects for untrained properties
+        """
+        untrained_tasks = []
+        energy_task_by_dataset = {}
+
+        for task in checkpoint_tasks.values():
+            if task.property == "energy":
+                for dataset in task.datasets:
+                    energy_task_by_dataset[dataset] = task
+
+        # Generate forces tasks
+        for dataset in settings.predict_untrained_forces:
+            if dataset not in energy_task_by_dataset:
+                logging.warning(
+                    f"Cannot create forces task for dataset '{dataset}': "
+                    f"no energy task found. Skipping."
+                )
+                continue
+
+            energy_task = energy_task_by_dataset[dataset]
+            untrained_tasks.append(
+                Task(
+                    name=f"{dataset}_forces",
+                    level="atom",
+                    property="forces",
+                    out_spec=OutputSpec(
+                        dim=[3], dtype=self.inference_settings.base_precision_dtype
+                    ),
+                    normalizer=energy_task.normalizer,  # Copy from energy
+                    datasets=[dataset],
+                    loss_fn=None,
+                    element_references=None,  # Forces are derivatives, no elem refs
+                    metrics=[],
+                    train_on_free_atoms=True,
+                    eval_on_free_atoms=True,
+                    inference_only=True,  # KEY: Skip training/eval
+                )
+            )
+
+        # Generate stress tasks
+        for dataset in settings.predict_untrained_stress:
+            if dataset not in energy_task_by_dataset:
+                logging.warning(
+                    f"Cannot create stress task for dataset '{dataset}': "
+                    f"no energy task found. Skipping."
+                )
+                continue
+
+            energy_task = energy_task_by_dataset[dataset]
+            untrained_tasks.append(
+                Task(
+                    name=f"{dataset}_stress",
+                    level="system",
+                    property="stress",
+                    out_spec=OutputSpec(
+                        dim=[1, 9], dtype=self.inference_settings.base_precision_dtype
+                    ),
+                    normalizer=energy_task.normalizer,
+                    datasets=[dataset],
+                    loss_fn=None,
+                    element_references=None,
+                    metrics=[],
+                    train_on_free_atoms=True,
+                    eval_on_free_atoms=True,
+                    inference_only=True,
+                )
+            )
+
+        # Generate hessian tasks
+        for dataset in settings.predict_untrained_hessian:
+            if dataset not in energy_task_by_dataset:
+                logging.warning(
+                    f"Cannot create hessian task for dataset '{dataset}': "
+                    f"no energy task found. Skipping."
+                )
+                continue
+
+            energy_task = energy_task_by_dataset[dataset]
+            untrained_tasks.append(
+                Task(
+                    name=f"{dataset}_hessian",
+                    level="system",
+                    property="hessian",
+                    out_spec=OutputSpec(
+                        dim=[None, None],
+                        dtype=self.inference_settings.base_precision_dtype,
+                    ),  # [N*3, N*3]
+                    normalizer=energy_task.normalizer,
+                    datasets=[dataset],
+                    loss_fn=None,
+                    element_references=None,
+                    metrics=[],
+                    train_on_free_atoms=True,
+                    eval_on_free_atoms=True,
+                    inference_only=True,
+                )
+            )
+
+        return untrained_tasks
+
+    def _configure_head_gradients(self, settings: InferenceSettings) -> None:
+        """
+        Update head's GradRegressConfig to enable autograd for requested properties.
+
+        Note: For single-head models, enabling a property (e.g., stress) will cause
+        the head to compute it for ALL datasets, even if only specific datasets
+        requested it. The filtering happens at the task level - only tasks that
+        exist will be processed and returned.
+
+        Args:
+            settings: InferenceSettings with compute_untrained_* flags
+        """
+        # Determine which properties are requested (any dataset)
+        needs_forces = len(settings.predict_untrained_forces) > 0
+        needs_stress = len(settings.predict_untrained_stress) > 0
+        needs_hessian = len(settings.predict_untrained_hessian) > 0
+
+        # Find and configure all heads
+        for head in self.model.module.output_heads.values():
+            # Handle wrapped heads (DatasetSpecificSingleHeadWrapper)
+            actual_head = head
+            if hasattr(head, "head"):
+                actual_head = head.head
+
+            # Only configure heads that have regress_config
+            if hasattr(actual_head, "regress_config"):
+                if needs_forces and not actual_head.regress_config.direct_forces:
+                    actual_head.regress_config.forces = True
+
+                if needs_stress:
+                    actual_head.regress_config.stress = True
+                    # Stress requires forces computation
+                    if not actual_head.regress_config.direct_forces:
+                        actual_head.regress_config.forces = True
+
+                if needs_hessian:
+                    actual_head.regress_config.hessian = True
+                    actual_head.regress_config.hessian_vmap = settings.hessian_vmap
+                    # Hessian requires forces with create_graph=True
+                    if not actual_head.regress_config.direct_forces:
+                        actual_head.regress_config.forces = True
+
+    # TODO simplify this, only conservative models allowed to do this, just delegate to the head
+    def _validate_untrained_property_requests(
+        self,
+        settings: InferenceSettings,
+    ) -> None:
+        """
+        Validate that requested untrained properties are compatible with the model.
+
+        Raises:
+            ValueError: If incompatible property requested
+        """
+        # Check 1: Can't compute derivatives from direct-force models
+        if self.model.module.direct_forces:
+            if settings.predict_untrained_hessian:
+                raise ValueError(
+                    "Cannot compute Hessian for direct-force models. "
+                    "Hessian requires energy-conserving (autograd forces) models."
+                )
+            if settings.predict_untrained_stress:
+                raise ValueError(
+                    "Cannot compute stress for direct-force models. "
+                    "Stress requires energy-conserving (autograd forces) models."
+                )
+
+        # Check 2: Hessian requires single-system batches (validated per-prediction)
+        # This is a runtime constraint, not init-time
+
+        # Check 3: At least one energy task must exist
+        has_energy = any(
+            task.property == "energy" for task in self.model.module.tasks.values()
+        )
+        if not has_energy and any(
+            [
+                settings.predict_untrained_forces,
+                settings.predict_untrained_stress,
+                settings.predict_untrained_hessian,
+            ]
+        ):
+            raise ValueError(
+                "Cannot compute derivative properties without an energy task. "
+                "Model must predict energy to compute forces/stress/hessian via autograd."
+            )
+
     def move_to_device(self):
         self.model.to(self.device)
         for task in self.model.module.tasks.values():
@@ -269,6 +479,20 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         if not self.lazy_model_intialized:
             self._lazy_init(data)
 
+        # Handle single-atom systems (natoms==1 and pbc all False)
+        # Skip this check if the model natively supports single atoms
+        if not self.model.module.supports_single_atoms:
+            single_atom_result = single_atom_prediction_from_lookup(
+                data=data,
+                atom_refs=self.atom_refs,
+                tasks=self.tasks,
+                device=self.device,
+            )
+            if single_atom_result is not None:
+                return single_atom_result
+
+        # Regular model prediction path
+        # this needs to be .clone() to avoid issues with graph parallel modifying this data with MOLE
         data_device = data.to(self.device).clone()
 
         dtype = self.inference_settings.base_precision_dtype
@@ -298,6 +522,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             logging.warning(
                 "Model is being compiled this might take a while for the first time"
             )
+            torch._dynamo.config.recompile_limit = 32
             self.model = torch.compile(self.model, dynamic=True)
 
         self.lazy_model_intialized = True
@@ -469,7 +694,7 @@ class ParallelMLIPPredictUnit(MLIPPredictUnitProtocol):
             "inference_model_path": inference_model_path,
             "device": device,
             "overrides": overrides,
-            "inference_settings": inference_settings,
+            "inference_settings": inference_settings.to_omegaconf(),
             "seed": seed,
             "atom_refs": atom_refs,
             "form_elem_refs": form_elem_refs,
