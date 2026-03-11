@@ -1250,20 +1250,6 @@ def test_no_duplicate_tasks(conserving_mole_checkpoint):
         assert count <= 3, f"Property {prop} has {count} tasks, may have duplicates"
 
 
-def test_direct_force_model_hessian_validation(direct_mole_checkpoint):
-    """Test that direct-force models reject hessian requests."""
-    # Try to enable hessian on direct-force model (should fail)
-    settings = InferenceSettings(predict_untrained_hessian={"omol"})
-
-    with pytest.raises(
-        ValueError,
-        match="Cannot add autograd-based 'hessian' task to direct-force model",
-    ):
-        MLIPPredictUnit(
-            direct_mole_checkpoint[0], device="cpu", inference_settings=settings
-        )
-
-
 def test_auto_add_default_untrained_stress_tasks(conserving_mole_checkpoint):
     """Test that stress tasks are auto-added for energy datasets by eSCNMDBackbone.
 
@@ -1496,30 +1482,17 @@ def test_hessian_batch_size_validation(conserving_mole_checkpoint):
         predictor.predict(batch)
 
 
-def test_direct_force_model_stress_validation(direct_mole_checkpoint):
-    """Test that direct-force models reject stress requests."""
-    # Try to enable stress on direct-force model (should fail)
-    settings = InferenceSettings(predict_untrained_stress={"omol"})
+def test_direct_force_model_untrained_validation(direct_mole_checkpoint):
+    """Test that direct-force models reject hessian requests."""
+    # Try to enable hessian on direct-force model (should fail)
 
-    with pytest.raises(
-        ValueError, match="Cannot compute stress for direct-force models"
-    ):
-        MLIPPredictUnit(
-            direct_mole_checkpoint[0], device="cpu", inference_settings=settings
-        )
+    for prop in ("forces", "stress", "hessian"):
+        settings = InferenceSettings(**{f"predict_untrained_{prop}": {"omol"}})
 
-
-def test_direct_force_model_forces_allowed(direct_mole_checkpoint):
-    """Test that direct-force models allow forces (already computed directly)."""
-    # Forces should be allowed on direct-force models since they compute them directly
-    # This should NOT raise an error, but also shouldn't add untrained tasks
-    settings = InferenceSettings(predict_untrained_forces={"omol"})
-
-    # This should succeed
-    predictor = MLIPPredictUnit(
-        direct_mole_checkpoint[0], device="cpu", inference_settings=settings
-    )
-
-    # Verify predictor was created successfully
-    assert predictor is not None
-    assert predictor.model.module.direct_forces is True
+        with pytest.raises(
+            ValueError,
+            match=f"Cannot add autograd-based '{prop}' task to direct-force model",
+        ):
+            MLIPPredictUnit(
+                direct_mole_checkpoint[0], device="cpu", inference_settings=settings
+            )
