@@ -314,7 +314,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         always_use_pbc: bool = True,
         charge_balanced_channels: list[int] | None = None,
         spin_balanced_channels: list[int] | None = None,
-        edge_chunk_size: int | None = None,
+        edge_chunk_size: int = 1,
         execution_mode: str = "general",
     ) -> None:
         super().__init__()
@@ -726,11 +726,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         with record_function("generate_graph"):
             graph_dict = self._generate_graph(data_dict)
-
-        if graph_dict["edge_index"].numel() == 0:
-            raise ValueError(
-                f"No edges found in input system, this means either you have a single atom in the system or the atoms are farther apart than the radius cutoff of the model of {self.cutoff} Angstroms. We don't know how to handle this case. Check the positions of system: {data_dict['pos']}"
-            )
 
         with record_function("obtain wigner"):
             wigner, wigner_inv = self._get_rotmat_and_wigner(
