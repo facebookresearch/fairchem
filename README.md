@@ -42,6 +42,8 @@ demos, and application efforts for materials science and quantum chemistry.
 
 
 ## Latest news
+March 2026 - UMA-1.2 released! ~50% faster, ~40% more accurate on Open Molecules test set, and expanded data coverage for catalysts (oxides and interfaces), molecules, and polymers!
+
 Oct 2025 - [check out our seamless Multi-node, Multi-GPU and LAMMPs interfaces to run large scale dynamics!](#multi-gpu-inference-and-lammps)
 
 ## Read our latest release post!
