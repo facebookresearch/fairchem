@@ -20,7 +20,7 @@ from fairchem.core.models.escaip.utils.nn_utils import (
     get_linear,
     get_normalization_layer,
 )
-from fairchem.core.models.uma.nn.embedding_dev import ChgSpinEmbedding
+from fairchem.core.models.uma.nn.embedding import ChgSpinEmbedding
 
 
 class InputBlock(nn.Module):

@@ -840,7 +840,10 @@ def biknn_radius_graph(
     # pad the data if max_atoms is not None
     slices, cumsum, cat_dims, natoms_list = data.get_batch_stats()
     if slices is None or cumsum is None or cat_dims is None or natoms_list is None:
-        raise ValueError("The data object must be batched.")
+        # Unbatched single-system input (e.g., from ASE calculator): synthesize stats.
+        n = data.pos.shape[0]
+        natoms_list = [n]
+        slices = {"pos": torch.tensor([0, n], device=data.pos.device)}
 
     pos_list: list[torch.Tensor] = list(torch.split(data.pos, natoms_list, dim=0))
     num_graphs = len(natoms_list)

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import TYPE_CHECKING
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.profiler import record_function
@@ -30,10 +32,21 @@ from fairchem.core.models.escaip.utils.nn_utils import (
     init_linear_weights,
     no_weight_decay,
 )
+from fairchem.core.units.mlip_unit.api.inference import (
+    CHARGE_RANGE,
+    DEFAULT_CHARGE,
+    DEFAULT_SPIN,
+    DEFAULT_SPIN_OMOL,
+    SPIN_RANGE,
+    UMATask,
+)
 
 if TYPE_CHECKING:
+    from ase import Atoms
+
     from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.models.allscaip.custom_types import GraphAttentionData
+    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
 
 @registry.register_model("AllScAIP_backbone")
@@ -104,6 +117,98 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
         # log recompiles
         torch._logging.set_logs(recompiles=True)  # type: ignore
 
+    @classmethod
+    def build_inference_settings(cls, settings: InferenceSettings) -> dict:
+        """
+        Build backbone config overrides from inference settings.
+        """
+        overrides = {}
+
+        if settings.compile:
+            if settings.max_atoms is None:
+                raise ValueError(
+                    "max_atoms must be set in InferenceSettings when compile=True. "
+                    "AllScAIP requires padding to a fixed size for torch.compile."
+                )
+            overrides["use_compile"] = True
+            overrides["use_padding"] = True
+            overrides["max_atoms"] = settings.max_atoms
+        else:
+            overrides["use_compile"] = False
+            overrides["use_padding"] = False
+
+        return overrides
+
+    def validate_tasks(self, dataset_to_tasks: dict[str, list]) -> None:
+        """
+        Validate that task datasets are compatible with this backbone.
+        """
+        if self.dataset_list:
+            assert set(dataset_to_tasks.keys()).issubset(
+                set(self.dataset_list)
+            ), "Datasets in tasks is not a strict subset of datasets in backbone."
+
+    def prepare_for_inference(self, data: AtomicData, settings: InferenceSettings):
+        return self
+
+    def on_predict_check(self, data: AtomicData) -> None:
+        pass
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+
+        Sets default values for charge and spin in atoms.info and validates
+        they are within acceptable ranges.
+        """
+        # Set charge defaults
+        if "charge" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                logging.warning(
+                    "task_name='omol' detected, but charge is not set in atoms.info. "
+                    "Defaulting to charge=0. Ensure charge is an integer representing "
+                    "the total charge on the system and is within the range -100 to 100."
+                )
+            atoms.info["charge"] = DEFAULT_CHARGE
+
+        # Set spin defaults (OMOL uses spin=1, others use spin=0)
+        if "spin" not in atoms.info:
+            if task_name == UMATask.OMOL.value:
+                atoms.info["spin"] = DEFAULT_SPIN_OMOL
+                logging.warning(
+                    "task_name='omol' detected, but spin multiplicity is not set in "
+                    "atoms.info. Defaulting to spin=1. Ensure spin is an integer "
+                    "representing the spin multiplicity from 0 to 100."
+                )
+            else:
+                atoms.info["spin"] = DEFAULT_SPIN
+
+        # Validate charge range
+        charge = atoms.info["charge"]
+        if not isinstance(charge, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for charge: {type(charge)}. "
+                "Charge must be an integer representing the total charge on the system."
+            )
+        if not (CHARGE_RANGE[0] <= charge <= CHARGE_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for charge: {charge}. "
+                f"Charge must be within the range {CHARGE_RANGE[0]} to {CHARGE_RANGE[1]}."
+            )
+
+        # Validate spin range
+        spin = atoms.info["spin"]
+        if not isinstance(spin, (int, np.integer)):
+            raise TypeError(
+                f"Invalid type for spin: {type(spin)}. "
+                "Spin must be an integer representing the spin multiplicity."
+            )
+        if not (SPIN_RANGE[0] <= spin <= SPIN_RANGE[1]):
+            raise ValueError(
+                f"Invalid value for spin: {spin}. "
+                f"Spin must be within the range {SPIN_RANGE[0]} to {SPIN_RANGE[1]}."
+            )
+
     def compiled_forward(self, data: GraphAttentionData):
         # input block
         with record_function("input_block"):
@@ -120,6 +225,7 @@ class AllScAIPBackbone(nn.Module, BackboneInterface):
             "node_reps": neighbor_reps[:, 0].to(torch.float32),
         }
 
+    @torch.compiler.disable()
     @conditional_grad(torch.enable_grad())
     def forward(self, data: AtomicData):
         # TODO: remove this when FairChem fixes this

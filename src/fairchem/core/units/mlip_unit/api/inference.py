@@ -104,6 +104,12 @@ class InferenceSettings:
     # to enable block-diagonal SO2 GEMM conversion for faster inference.
     execution_mode: str | None = None
 
+    # Maximum number of atoms per system for padding. Required when
+    # compile=True for models that use padding (e.g., AllScAIP).
+    # All inputs will be padded to this size. Larger values consume more
+    # VRAM but allow bigger systems; reduce if you run into OOM errors.
+    max_atoms: int | None = None
+
 
 # this is most general setting that works for most systems and models,
 # not optimized for speed

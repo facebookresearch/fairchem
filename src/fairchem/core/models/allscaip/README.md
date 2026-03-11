@@ -15,32 +15,66 @@ allscaip/
 │   ├── input_block.py                   # Atomic/edge featurization into initial embeddings
 │   ├── graph_attention_block.py         # Single transformer block (neighborhood + node attention + FFNs)
 │   ├── neighborhood_attention.py        # Neighbor-level self-attention (source and destination)
-│   └── node_attention.py               # Node-level self-attention with sincx masking
+│   └── node_attention.py                # Node-level self-attention with sincx masking
 │
 └── utils/
     ├── nn_utils.py                      # Feedforward network construction helpers
     ├── radius_graph_v2.py               # BiKNN radius graph with soft/hard ranking and envelope
-    ├── data_preprocess.py               # AtomicData → GraphAttentionData preprocessing pipeline
-    └── fix_ckpt.py                      # Checkpoint patching for compile/max_atoms settings
+    └── data_preprocess.py               # AtomicData → GraphAttentionData preprocessing pipeline
 ```
 
-## Checkpoint Usage (`utils/fix_ckpt.py`)
+## Quick Start
 
-The default checkpoint ships with `use_compile=False`, which works out of the box with the ASE calculator and handles arbitrary system sizes without padding overhead.
+Run an MD simulation using AllScAIP with the ASE calculator:
 
-When to enable compile:
+```python
+from ase import units
+from ase.build import molecule
+from ase.io import Trajectory
+from ase.md.langevin import Langevin
 
-- **Variable system sizes** (e.g., different molecules via ASE calculator) — keep `use_compile=False`. Padding every input to `max_atoms` wastes compute when system sizes vary widely.
-- **Similar system sizes** (e.g., running MD on a fixed system) — enable compile with `max_atoms` set to the maximum system size. The padding overhead is minimal when actual sizes are close to `max_atoms`.
-- **Batch inference / finetuning with implicit batching** — always enable compile. The data loader samples systems up to `max_atoms` per batch, so padding overhead is negligible and you get the full benefit of `torch.compile`.
+from fairchem.core import FAIRChemCalculator
 
-Use `fix_ckpt.py` to patch a checkpoint:
+calc = FAIRChemCalculator.from_model_checkpoint(
+    "/path/to/your/checkpoint.pt", task_name="omol"
+)
 
-```bash
-# Enable compile and set max_atoms to 200 (adjust based on available VRAM)
-python fix_ckpt.py path/to/checkpoint.pt \
-    --enable-compile \
-    --max-atoms 200
+atoms = molecule("H2O")
+atoms.calc = calc
+
+dyn = Langevin(
+    atoms,
+    timestep=0.1 * units.fs,
+    temperature_K=400,
+    friction=0.001 / units.fs,
+)
+trajectory = Trajectory("my_md.traj", "w", atoms)
+dyn.attach(trajectory.write, interval=1)
+dyn.run(steps=1000)
 ```
 
-This writes a patched checkpoint to `*_fixed.pt` with `use_compile=True`, `use_padding=True`, and the specified `max_atoms`. Larger `max_atoms` values consume more VRAM but allow bigger systems in a single pass; reduce it if you run into OOM errors.
+## Inference with `torch.compile`
+
+AllScAIP pads inputs to a fixed `max_atoms` size to enable `torch.compile`. The compile and padding settings are controlled via `InferenceSettings` and passed to the calculator:
+
+- **Variable system sizes** (e.g., different molecules via ASE calculator): keep `compile=False`. Padding every input to `max_atoms` wastes compute when system sizes vary widely.
+- **Similar system sizes** (e.g., running MD on a fixed system): set `compile=True` with `max_atoms` equal to the maximum system size. The padding overhead is minimal when actual sizes are close to `max_atoms`.
+- **Batch inference / finetuning with implicit batching**: always enable compile. The data loader samples systems up to `max_atoms` per batch, so padding overhead is negligible and you get the full benefit of `torch.compile`.
+
+```python
+from fairchem.core import FAIRChemCalculator
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+# Without compile (default): works for any system size
+calc = FAIRChemCalculator.from_model_checkpoint(
+    "/path/to/your/checkpoint.pt", task_name="omol"
+)
+
+# With compile: requires max_atoms, best for fixed-size MD simulations
+settings = InferenceSettings(compile=True, max_atoms=200)
+calc = FAIRChemCalculator.from_model_checkpoint(
+    "/path/to/your/checkpoint.pt",
+    task_name="omol",
+    inference_settings=settings,
+)
+```
