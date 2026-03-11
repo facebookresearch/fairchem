@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 import torch
@@ -61,16 +62,16 @@ def reduce_node_to_system(
     system_values = torch.zeros(
         output_shape,
         device=node_values.device,
-        dtype=node_values.dtype,
+        dtype=torch.float64,
     )
 
     if node_values.dim() == 1:
-        system_values.index_add_(0, batch, node_values)
+        system_values.index_add_(0, batch, node_values.to(system_values.dtype))
     else:
         # For multi-dimensional tensors, we need to handle each trailing dimension
         flat_node = node_values.view(node_values.shape[0], -1)
         flat_system = system_values.view(num_systems, -1)
-        flat_system.index_add_(0, batch, flat_node)
+        flat_system.index_add_(0, batch, flat_node.to(flat_system.dtype))
         system_values = flat_system.view(output_shape)
 
     if gp_utils.initialized():
@@ -113,8 +114,18 @@ def compute_energy(
         emb["node_embedding"], l_min=0, l_max=0
     ).squeeze(1)
     node_energy = energy_block(scalar_embedding)
+    logging.warning(
+        f"rank: {gp_utils.get_gp_rank()}, node_energy_shape: {node_energy.shape}, node_energy: {node_energy[0]}"
+    )
     node_energy_flat = node_energy.view(-1)
-    energy, energy_part = reduce_node_to_system(node_energy_flat, batch, num_systems)
+    energy, energy_part = reduce_node_to_system(
+        node_energy_flat,
+        batch,
+        num_systems,
+    )
+    logging.warning(
+        f"rank: {gp_utils.get_gp_rank()}, reduced_node_energy: {energy.cpu().detach().sum()}"
+    )
 
     if reduce == "sum":
         pass
