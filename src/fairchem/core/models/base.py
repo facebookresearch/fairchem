@@ -100,10 +100,9 @@ class BackboneInterface(metaclass=ABCMeta):
         """
         return {}
 
-    @classmethod
     @abstractmethod
     def get_default_untrained_tasks(
-        cls,
+        self,
         checkpoint_tasks: dict[str, Task],
         inference_settings: InferenceSettings,
     ) -> list[Task]:

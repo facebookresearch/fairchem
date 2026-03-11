@@ -901,9 +901,8 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return overrides
 
-    @classmethod
     def get_default_untrained_tasks(
-        cls,
+        self,
         checkpoint_tasks: dict[str, Task],
         inference_settings: InferenceSettings,
     ) -> list[Task]:
@@ -913,7 +912,14 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         For this backbone, we add stress tasks for all energy datasets
         that don't already have stress (either trained or explicitly requested).
         Stress can be computed via autograd from energy predictions.
+
+        Returns empty list if the model uses direct forces, since autograd-based
+        stress computation requires energy-conserving force computation.
         """
+        # Direct force models can't compute stress via autograd
+        if self.direct_forces:
+            return []
+
         tasks = []
 
         # Find datasets with energy but no stress

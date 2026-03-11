@@ -152,9 +152,9 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         # Get backbone's default untrained tasks (if supported and enabled)
         default_backbone_tasks = []
         if inference_settings.auto_add_default_untrained_tasks:
-            backbone_cls = get_backbone_class_from_checkpoint(checkpoint)
-            if hasattr(backbone_cls, "get_default_untrained_tasks"):
-                default_backbone_tasks = backbone_cls.get_default_untrained_tasks(
+            backbone = self.model.module.backbone
+            if hasattr(backbone, "get_default_untrained_tasks"):
+                default_backbone_tasks = backbone.get_default_untrained_tasks(
                     self.model.module.tasks,
                     inference_settings,
                 )
@@ -180,8 +180,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 f"{[t.name for t in untrained_tasks]}"
             )
             self.model.module.add_tasks(untrained_tasks)
-
-        self._validate_untrained_property_requests(inference_settings)
 
         self._setup_device(device)
 
