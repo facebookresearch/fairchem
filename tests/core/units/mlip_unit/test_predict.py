@@ -17,6 +17,7 @@ import ray
 import torch
 from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
+from ase.data import chemical_symbols
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
@@ -32,8 +33,14 @@ from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
-_REPRESENTATIVE_ELEMENTS = [1, 6, 8, 26, 79]  # H, C, O, Fe, Au
-SINGLE_ATOM_ENERGY_ATOL = 5.0  # eV, for model-predicted single atom energies
+_REPRESENTATIVE_ELEMENTS = [
+    (1, 0, 2),  # H:  charge=0, spin=2
+    (6, 0, 3),  # C:  charge=0, spin=3
+    (8, 0, 3),  # O:  charge=0, spin=3
+    (11, 1, 1),  # Na: charge=+1, spin=1
+    (79, 0, 2),  # Au: charge=0, spin=2
+]
+SINGLE_ATOM_ENERGY_ATOL = 0.05  # eV, for model-predicted single atom energies
 
 
 @pytest.fixture(scope="module")
@@ -1087,10 +1094,13 @@ def _test_single_atom_predict(predict_unit, task_name, energy_atol):
     forces are zero (no neighbors), and energy matches the reference
     table within the specified tolerance.
     """
-    for atomic_number in _REPRESENTATIVE_ELEMENTS:
+    for atomic_number, charge, spin in _REPRESENTATIVE_ELEMENTS:
+        symbol = chemical_symbols[atomic_number]
+        elem_id = f"{symbol} (Z={atomic_number})"
+
         atom = Atoms([atomic_number], positions=[(0.0, 0.0, 0.0)])
-        atom.info["charge"] = 0
-        atom.info["spin"] = 1
+        atom.info["charge"] = charge
+        atom.info["spin"] = spin
 
         from_ase_kwargs = {"task_name": task_name}
         if task_name == "omol":
@@ -1101,13 +1111,21 @@ def _test_single_atom_predict(predict_unit, task_name, energy_atol):
         preds = predict_unit.predict(batch)
 
         # Shape checks
-        assert preds["energy"].shape == (1,)
-        assert preds["forces"].shape == (1, 3)
-        # assert preds["stress"].shape == (1, 9)
-        assert torch.isfinite(preds["energy"]).all()
+        assert preds["energy"].shape == (
+            1,
+        ), f"{elem_id}: energy shape {preds['energy'].shape} != (1,)"
+        assert preds["forces"].shape == (
+            1,
+            3,
+        ), f"{elem_id}: forces shape {preds['forces'].shape} != (1, 3)"
+        assert torch.isfinite(
+            preds["energy"]
+        ).all(), f"{elem_id}: energy is not finite: {preds['energy']}"
 
         # Forces must be zero (no neighbors)
-        assert (preds["forces"] == 0.0).all()
+        assert (
+            preds["forces"] == 0.0
+        ).all(), f"{elem_id}: forces are not zero: {preds['forces']}"
 
         # Get reference energy via single_atom_prediction_from_lookup
         ref_batch = atomicdata_list_to_batch([atomic_data])
@@ -1126,6 +1144,7 @@ def _test_single_atom_predict(predict_unit, task_name, energy_atol):
             preds["energy"].detach().cpu().item(),
             ref_energy,
             atol=energy_atol,
+            err_msg=(f"{elem_id}: predicted energy does not match reference"),
         )
 
 
