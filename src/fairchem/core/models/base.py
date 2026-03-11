@@ -440,7 +440,10 @@ class HydraModel(nn.Module):
 
     def _configure_gradient_for_task(self, task: Task) -> None:
         """
-        Configure head gradient settings for a single inference-only task.
+        Configure backbone gradient settings for a single inference-only task.
+
+        Since heads share the backbone's regress_config, we configure it directly
+        on the backbone rather than iterating through heads.
 
         Args:
             task: The inference-only task to configure gradients for
@@ -449,32 +452,28 @@ class HydraModel(nn.Module):
         if task.property not in derivative_properties:
             return
 
-        for head in self.output_heads.values():
-            # Handle wrapped heads (DatasetSpecificSingleHeadWrapper)
-            actual_head = head
-            if hasattr(head, "head"):
-                actual_head = head.head
+        # Only configure if backbone has regress_config
+        if not hasattr(self.backbone, "regress_config"):
+            return
 
-            # Only configure heads that have regress_config
-            if not hasattr(actual_head, "regress_config"):
-                continue
+        regress_config = self.backbone.regress_config
 
-            if task.property == "forces":
-                if not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
+        if task.property == "forces":
+            if not regress_config.direct_forces:
+                regress_config.forces = True
 
-            elif task.property == "stress":
-                actual_head.regress_config.stress = True
-                # Stress requires forces computation
-                if not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
+        elif task.property == "stress":
+            regress_config.stress = True
+            # Stress requires forces computation
+            if not regress_config.direct_forces:
+                regress_config.forces = True
 
-            elif task.property == "hessian":
-                actual_head.regress_config.hessian = True
-                actual_head.regress_config.hessian_vmap = True
-                # Hessian requires forces with create_graph=True
-                if not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
+        elif task.property == "hessian":
+            regress_config.hessian = True
+            regress_config.hessian_vmap = True
+            # Hessian requires forces with create_graph=True
+            if not regress_config.direct_forces:
+                regress_config.forces = True
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:
@@ -677,7 +676,10 @@ class HydraModelV2(nn.Module):
 
     def _configure_gradient_for_task(self, task: Task) -> None:
         """
-        Configure head gradient settings for a single inference-only task.
+        Configure backbone gradient settings for a single inference-only task.
+
+        Since heads share the backbone's regress_config, we configure it directly
+        on the backbone rather than iterating through heads.
 
         Args:
             task: The inference-only task to configure gradients for
@@ -686,32 +688,28 @@ class HydraModelV2(nn.Module):
         if task.property not in derivative_properties:
             return
 
-        for head in self.output_heads.values():
-            # Handle wrapped heads (DatasetSpecificSingleHeadWrapper)
-            actual_head = head
-            if hasattr(head, "head"):
-                actual_head = head.head
+        # Only configure if backbone has regress_config
+        if not hasattr(self.backbone, "regress_config"):
+            return
 
-            # Only configure heads that have regress_config
-            if not hasattr(actual_head, "regress_config"):
-                continue
+        regress_config = self.backbone.regress_config
 
-            if task.property == "forces":
-                if not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
+        if task.property == "forces":
+            if not regress_config.direct_forces:
+                regress_config.forces = True
 
-            elif task.property == "stress":
-                actual_head.regress_config.stress = True
-                # Stress requires forces computation
-                if not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
+        elif task.property == "stress":
+            regress_config.stress = True
+            # Stress requires forces computation
+            if not regress_config.direct_forces:
+                regress_config.forces = True
 
-            elif task.property == "hessian":
-                actual_head.regress_config.hessian = True
-                actual_head.regress_config.hessian_vmap = True
-                # Hessian requires forces with create_graph=True
-                if not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
+        elif task.property == "hessian":
+            regress_config.hessian = True
+            regress_config.hessian_vmap = True
+            # Hessian requires forces with create_graph=True
+            if not regress_config.direct_forces:
+                regress_config.forces = True
 
     @property
     def dataset_to_tasks(self) -> dict[str, list]:

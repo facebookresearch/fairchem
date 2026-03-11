@@ -1256,7 +1256,8 @@ def test_direct_force_model_hessian_validation(direct_mole_checkpoint):
     settings = InferenceSettings(predict_untrained_hessian={"omol"})
 
     with pytest.raises(
-        ValueError, match="Cannot compute Hessian for direct-force models"
+        ValueError,
+        match="Cannot add autograd-based 'hessian' task to direct-force model",
     ):
         MLIPPredictUnit(
             direct_mole_checkpoint[0], device="cpu", inference_settings=settings
