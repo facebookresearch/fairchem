@@ -937,9 +937,11 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         for dataset in missing_stress_datasets:
             energy_task = energy_task_by_dataset[dataset]
+            # Infer task name prefix from energy task naming convention
+            task_prefix = "" if energy_task.name == "energy" else f"{dataset}_"
             tasks.append(
                 Task(
-                    name=f"{dataset}_stress",
+                    name=f"{task_prefix}stress",
                     level="system",
                     property="stress",
                     out_spec=OutputSpec(

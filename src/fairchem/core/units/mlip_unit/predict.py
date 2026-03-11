@@ -182,7 +182,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             self.model.module.add_tasks(untrained_tasks)
 
         self._validate_untrained_property_requests(inference_settings)
-        self._configure_head_gradients(inference_settings)
 
         self._setup_device(device)
 
@@ -395,48 +394,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             )
 
         return untrained_tasks
-
-    def _configure_head_gradients(self, settings: InferenceSettings) -> None:
-        """
-        Update head's GradRegressConfig to enable autograd for requested properties.
-
-        Note: For single-head models, enabling a property (e.g., stress) will cause
-        the head to compute it for ALL datasets, even if only specific datasets
-        requested it. The filtering happens at the task level - only tasks that
-        exist will be processed and returned.
-
-        Args:
-            settings: InferenceSettings with compute_untrained_* flags
-        """
-        # Determine which properties are requested (any dataset)
-        needs_forces = len(settings.predict_untrained_forces) > 0
-        needs_stress = len(settings.predict_untrained_stress) > 0
-        needs_hessian = len(settings.predict_untrained_hessian) > 0
-
-        # Find and configure all heads
-        for head in self.model.module.output_heads.values():
-            # Handle wrapped heads (DatasetSpecificSingleHeadWrapper)
-            actual_head = head
-            if hasattr(head, "head"):
-                actual_head = head.head
-
-            # Only configure heads that have regress_config
-            if hasattr(actual_head, "regress_config"):
-                if needs_forces and not actual_head.regress_config.direct_forces:
-                    actual_head.regress_config.forces = True
-
-                if needs_stress:
-                    actual_head.regress_config.stress = True
-                    # Stress requires forces computation
-                    if not actual_head.regress_config.direct_forces:
-                        actual_head.regress_config.forces = True
-
-                if needs_hessian:
-                    actual_head.regress_config.hessian = True
-                    actual_head.regress_config.hessian_vmap = settings.hessian_vmap
-                    # Hessian requires forces with create_graph=True
-                    if not actual_head.regress_config.direct_forces:
-                        actual_head.regress_config.forces = True
 
     def move_to_device(self):
         self.model.to(self.device)
