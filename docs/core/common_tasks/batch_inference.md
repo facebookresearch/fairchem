@@ -1,4 +1,4 @@
-# Batch inference with UMA models
+# Batch Inference with UMA Models
 
 ````{admonition} Need to install fairchem-core or get UMA access or getting permissions/401 errors?
 :class: dropdown
@@ -29,14 +29,14 @@ os.environ['HF_TOKEN'] = 'MY_TOKEN'
 ```
 
 ````
-If your application requires predictions over many systems you can run batch inference using
-UMA models to use compute more efficiently and improve GPU utilization. Below we show some easy ways to run batch
-inference over batches created at runtime or loading from a dataset. If you want to learn more about the different
-inference settings supported have a look at the
-[Prediction interface documentation](https://fair-chem.github.io/core/common_tasks/ase_calculator.html)
 
-Generate batches at runtime
------------------------------
+If your application requires predictions over many systems, you can run batch inference using UMA models to use compute more efficiently and improve GPU utilization.
+
+:::{tip}
+To learn more about the different inference settings supported, see the [Prediction interface documentation](https://fair-chem.github.io/core/common_tasks/ase_calculator.html).
+:::
+
+## Generate Batches at Runtime
 The recommended way to create batches at runtime is to convert ASE `Atoms` objects into `AtomicData`
 as follows,
 
@@ -53,7 +53,7 @@ atomic_data_list = [
 ]
 batch = atomicdata_list_to_batch(atomic_data_list)
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 preds = predictor.predict(batch)
 ```
 
@@ -68,10 +68,9 @@ preds["energy"][0]
 preds["forces"][batch.batch == 0]
 ```
 
-## Batch inference using a dataset and a dataloader
+## Batch Inference Using a Dataset and DataLoader
 
-If you are running predictions over more structures than you can fit in memory, you can run inference using
-a torch Dataloader,
+If you are running predictions over more structures than you can fit in memory, you can run inference using a torch DataLoader:
 
 ```python
 from torch.utils.data import DataLoader
@@ -82,17 +81,17 @@ dataset = AseDBDataset(
     config=dict(src="path/to/your/dataset.aselmdb", a2g_args=dict(task_name="omol"))
 )
 loader = DataLoader(dataset, batch_size=200, collate_fn=atomicdata_list_to_batch)
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 
 for batch in loader:
     preds = predictor.predict(batch)
 ```
 
-## Inference over heterogenous batches
+## Inference over Heterogeneous Batches
 
-For the odd cases where you want to batch systems to be computed with different task predictions
-(ie molecules and materials), you can take advantage of UMA models and do it in a single batch
-as follows,
+:::{note}
+For cases where you want to batch systems to be computed with different task predictions (e.g., molecules and materials), you can take advantage of UMA models and do it in a single batch.
+:::
 
 ```python
 from ase.build import bulk, molecule

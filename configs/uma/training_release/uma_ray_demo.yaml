@@ -24,6 +24,7 @@ job:
   debug: ${cluster.debug}
   run_dir: ${cluster.run_dir}
   run_name: uma_sm_direct
+  recursive_instantiate_runner: False
   # logger:
   #   _target_: fairchem.core.common.logger.WandBSingletonLogger.init_wandb
   #   _partial_: true

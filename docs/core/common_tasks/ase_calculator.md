@@ -11,19 +11,20 @@ kernelspec:
   name: python3
 ---
 
-Inference using ASE and Predictor interface
-------------------
+# Inference using ASE and Predictor Interface
 
 Inference is done using [MLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/units/mlip_unit/mlip_unit.py#L867). The [FairchemCalculator](https://github.com/facebookresearch/fairchem/blob/main/src/fairchem/core/calculate/ase_calculator.py#L3) (an ASE calculator) is simply a convenience wrapper around the MLIPPredictUnit.
 
-For simple cases such as doing demos or education, the ASE calculator is very easy to use but for any more complex cases such as running MD, batched inference etc, we do not recommend using the calculator interface but using the predictor directly.
+:::{tip}
+For simple cases such as demos or education, the ASE calculator is very easy to use. For more complex cases such as running MD or batched inference, we recommend using the predictor directly for better performance.
+:::
 
 ```{code-cell} python3
 from __future__ import annotations
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1", device="cuda")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2", device="cuda")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 
@@ -67,7 +68,7 @@ For long rollout trajectory use-cases, such as molecular dynamics (MD) or relaxa
 
 ```{code-cell} python3
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", device="cuda", inference_settings="turbo"
+    "uma-s-1p2", device="cuda", inference_settings="turbo"
 )
 ```
 
@@ -82,6 +83,11 @@ The advanced user might quickly see that **default** mode and **turbo** mode are
 | merge_mole | This is useful in long rollout applications where the system composition stays constant. By pre-merge the MoLE weights, we can save both memory and compute. |
 | compile | This uses torch.compile to significantly speed up computation. Due to the way pytorch traces the internal graph, it requires a long compile time during the first iteration and can even recompile anytime it detected a significant change in input dimensions. It is not recommended if you are computing frequently on very different atomic systems. |
 | external_graph_gen | Only use this if you want to use an external graph generator. This should be rarely used except for development |
+| internal_graph_gen_version | currently we support v2[default], an internal implementation that is better suited for parallelism and v3 the neighborlist from Nvidia Alchemi library which is faster for single gpu operations. |
+| edge_chunk_size | Experimental. Used for padding edge sizes. This helps reduce re-compilations from torch compile, default to None |
+| use_quaternion_wigner | enable quaternion-based Wigner D matrix computation. If false we fall back to euler-angle based rotations. default True. |
+| base_precision_dtype | governs the main precision type of the computation, default to FP32, FP64 is also supported |
+| execution_mode | This allows manually toggling custom backends to maximize speed ups. default to "general". "umas-fast-gpu" will introduce 30-40% speedup for uma-s line of models. |
 
 For example, for an MD simulation use-case for a system of ~500 atoms, we can choose to use a custom mode like the following:
 
@@ -98,38 +104,63 @@ settings = InferenceSettings(
 )
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", device="cuda", inference_settings=settings
+    "uma-s-1p2", device="cuda", inference_settings=settings
+)
+```
+
+## Enabling gradient stress or Hessian prediction
+
+Some tasks, for example omol, odac, or oc20/25, were not trained using stress labels. Similarly, no tasks were supervised to predict Hessians. However, predictions of untrained derivatives of energy, such as stress and Hessians, can be enabled by using the following inference settings flags,
+
+| Setting Flag  | Description |
+| ----- | ----- |
+| predict_untrained_forces | A set of task/dataset names (e.g., `{"omol", "oc20"}`) for which forces will be computed via autograd even though the checkpoint was not trained with a forces head for those tasks. |
+| predict_untrained_stress | A set of task/dataset names for which stress tensors will be computed via autograd even though the checkpoint was not trained with a stress head for those tasks. The default empty set disables this. |
+| predict_untrained_hessian | A set of task/dataset names for which the Hessian matrix will be computed via autograd. |
+
+For example, to enable stress and Hessian predictions with `omol` level of theory, the following settings can be used,
+
+```{code-cell} python3
+settings = InferenceSettings(
+    predict_untrained_stress={'omol'},
+    predict_untrained_hessian={'omol'}
+)
+
+predictor = pretrained_mlip.get_predict_unit(
+    "uma-s-1p2", device="cuda", inference_settings=settings
 )
 ```
 
 ## Multi-GPU Inference
 
-UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we leverage [ray](https://www.ray.io/) to launch Ray Actors for each GPU-rank under the hood. This allows us to seemlessly scale to any infrastructure that can run Ray.
+UMA supports Graph Parallel inference natively. The graph is chunked into each rank and both the forward and backwards communication is handled by the built-in graph parallel algorithm with torch distributed. Because Multi-GPU inference requires special setup of communication protocols within a node and across nodes, we leverage [ray](https://www.ray.io/) to launch Ray Actors for each GPU-rank under the hood. This allows us to seamlessly scale to any infrastructure that can run Ray.
 
 To make things simple for the user that wants to run multi-gpu inference locally, we provide a drop-in replacement for MLIPPredictUnit, called [ParallelMLIPPredictUnit](https://github.com/facebookresearch/fairchem/blob/85bd83535fedbc1d99eee4c12e175603ccc44ef7/src/fairchem/core/units/mlip_unit/predict.py#L415)
 
-To enable this you need to install Ray manually or through the fairchem extra dependencies option
+:::{note}
+To enable multi-GPU inference, you need to install Ray manually or through the fairchem extra dependencies option.
+:::
 
-```
+```bash
 pip install fairchem-core[extras]
 ```
 
-For example, we can create a predictor with 8 GPU workers in a very similiar way to MLIPPredictUnit and perform a md calculation with the ase calculator. This mode of operation is also compatible with our LAMMPs integration.
+For example, we can create a predictor with 8 GPU workers in a very similar way to MLIPPredictUnit and perform an MD calculation with the ASE calculator. This mode of operation is also compatible with our LAMMPS integration.
 
-```
+```python
 from ase import units
 from ase.md.langevin import Langevin
 from fairchem.core import pretrained_mlip, FAIRChemCalculator
 import time
 
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 
 predictor = pretrained_mlip.get_predict_unit(
-    "uma-s-1p1", inference_settings="turbo", device="cuda", workers=1
+    "uma-s-1p2", inference_settings="turbo", device="cuda", workers=1
 )
 calc = FAIRChemCalculator(predictor, task_name="omat")
 
-atoms = get_fcc_carbon_xtal(8000)
+atoms = get_fcc_crystal_by_num_atoms(8000)
 atoms.calc = calc
 
 dyn = Langevin(
@@ -151,4 +182,6 @@ dyn.attach(
 dyn.run(steps=1000)
 ```
 
-This will automatically create a Ray server on your local machine and use a local client to connect to it. If you have setup a Ray cluster, you can leverage it to run parallel inference on as many nodes as you like. We are actively working on optimziations to scale inference to large systems.
+:::{tip}
+This will automatically create a Ray server on your local machine and use a local client to connect to it. If you have set up a Ray cluster, you can leverage it to run parallel inference on as many nodes as you like.
+:::

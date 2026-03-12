@@ -8,6 +8,15 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 from fairchem.core.calculate._batch import InferenceBatcher
-from fairchem.core.calculate.ase_calculator import FAIRChemCalculator
+from fairchem.core.calculate.ase_calculator import (
+    FAIRChemCalculator,
+    FormationEnergyCalculator,
+)
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
-__all__ = ["FAIRChemCalculator", "InferenceBatcher"]
+__all__ = [
+    "FAIRChemCalculator",
+    "FormationEnergyCalculator",
+    "InferenceBatcher",
+    "InferenceSettings",
+]

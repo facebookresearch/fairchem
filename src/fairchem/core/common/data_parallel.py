@@ -42,7 +42,7 @@ class OCPCollater:
 
 
 @numba.njit
-def _balanced_partition(sizes: NDArray[np.int_], num_parts: int):
+def _balanced_partition(sizes: NDArray[np.intp], num_parts: int):
     """
     Greedily partition the given set by always inserting
     the largest element into the smallest partition.

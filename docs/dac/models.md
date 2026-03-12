@@ -1,5 +1,17 @@
-
 # Pretrained models
+
+:::{margin}
+```{image} ../assets/icons/mofs-dac.svg
+:alt: MOFs for Direct Air Capture
+:width: 100px
+```
+:::
+
+:::{tip} Recommended Models
+**For CO2 and H2O adsorption**: Use [UMA](../core/uma), trained on all FAIR chemistry datasets including ODAC25.
+
+**For N2 and O2 adsorption**: Use the dedicated eSEN models trained on ODAC25, as UMA was not trained on these adsorbates.
+:::
 
 ## ODAC25 Models
 
@@ -25,7 +37,12 @@ If you use the ODAC25 trained models, please cite the following paper:
 }
 ```
 
-## ODAC23 Models [Deprecated]
+## ODAC23 Models
+
+:::{warning}
+**Deprecated**: These models are superseded by ODAC25 models and UMA. They are provided here for reproducibility only.
+:::
+
 * All config files for the ODAC23 models are available in the [`configs/odac`](https://github.com/facebookresearch/fairchem/tree/main/configs/odac) directory.
 
 ### S2EF models

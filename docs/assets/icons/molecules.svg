@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Organic Molecules: Benzene ring with side chain -->
+
+  <!-- Benzene ring bonds (hexagon) -->
+  <polygon points="50,20 72,32 72,58 50,70 28,58 28,32" fill="none" stroke="#666" stroke-width="2.5"/>
+
+  <!-- Alternating double bonds (inner lines for aromatic) -->
+  <line x1="50" y1="26" x2="66" y2="35" stroke="#666" stroke-width="2"/>
+  <line x1="66" y1="55" x2="50" y2="64" stroke="#666" stroke-width="2"/>
+  <line x1="34" y1="35" x2="34" y2="55" stroke="#666" stroke-width="2"/>
+
+  <!-- Carbon atoms at vertices -->
+  <circle cx="50" cy="20" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="1.5"/>
+  <circle cx="72" cy="32" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="1.5"/>
+  <circle cx="72" cy="58" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="1.5"/>
+  <circle cx="50" cy="70" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="1.5"/>
+  <circle cx="28" cy="58" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="1.5"/>
+  <circle cx="28" cy="32" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="1.5"/>
+
+  <!-- Side chain: OH group attached to top carbon -->
+  <line x1="50" y1="15" x2="50" y2="8" stroke="#666" stroke-width="2"/>
+  <circle cx="50" cy="5" r="4" fill="#E85D04" stroke="#C04D00" stroke-width="1"/>
+
+  <!-- Hydrogen atoms on some carbons -->
+  <line x1="77" y1="30" x2="86" y2="25" stroke="#999" stroke-width="1.5"/>
+  <circle cx="88" cy="23" r="3" fill="#FFF" stroke="#999" stroke-width="1"/>
+
+  <line x1="77" y1="60" x2="86" y2="65" stroke="#999" stroke-width="1.5"/>
+  <circle cx="88" cy="67" r="3" fill="#FFF" stroke="#999" stroke-width="1"/>
+
+  <line x1="50" y1="75" x2="50" y2="85" stroke="#999" stroke-width="1.5"/>
+  <circle cx="50" cy="88" r="3" fill="#FFF" stroke="#999" stroke-width="1"/>
+
+  <line x1="23" y1="60" x2="14" y2="65" stroke="#999" stroke-width="1.5"/>
+  <circle cx="12" cy="67" r="3" fill="#FFF" stroke="#999" stroke-width="1"/>
+
+  <line x1="23" y1="30" x2="14" y2="25" stroke="#999" stroke-width="1.5"/>
+  <circle cx="12" cy="23" r="3" fill="#FFF" stroke="#999" stroke-width="1"/>
+</svg>

@@ -134,3 +134,13 @@ docs/legacy_tutorials/data/*.extxyz
 docs/**.json
 
 
+node_modules/*
+cache.*.json
+docs/uma_tutorials/ni_tutorial_results/*
+docs/**/*.traj.*
+_build/*
+package.json
+package-lock.json
+bulks.pkl
+# MyST build outputs
+_build

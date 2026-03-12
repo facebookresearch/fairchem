@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
     from fairchem.core.components.runner import Runner
 
-
 # this effects the cli only since the actual job will be run in subprocesses or remoe
 logging.basicConfig(level=logging.INFO)
 
@@ -119,10 +118,13 @@ def main(
             )
         # if using ray, then launch ray cluster locally
         if scheduler_cfg.use_ray:
-            logging.info("Running in local mode with local ray cluster")
-            # don't recursively instantiate the runner here to allow lazy instantiations in the runner
-            # the hands all responsibility the user, ie they must initialize ray
-            runner: Runner = hydra.utils.instantiate(cfg.runner, _recursive_=False)
+            logging.info(
+                f"Running in local mode with local ray cluster with recursive_instantiate_runner={cfg.job.recursive_instantiate_runner}"
+            )
+            # disable recursively instantiate the runner here to allow lazy instantiations in the runner
+            runner: Runner = hydra.utils.instantiate(
+                cfg.runner, _recursive_=cfg.job.recursive_instantiate_runner
+            )
             runner.run()
         else:
             from fairchem.core.launchers.slurm_launch import local_launch

@@ -1,14 +1,26 @@
-
 # Pretrained models
 
-**2025 recommendation:** We now suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets before using one of the checkpoints below. The UMA model has a number of nice features over the previous checkpoints
+:::{margin}
+```{image} ../assets/icons/inorganic.svg
+:alt: Inorganic Materials
+:width: 100px
+```
+:::
+
+:::{tip} Recommended Model
+**2025 recommendation:** We suggest using the [UMA model](../core/uma), trained on all of the FAIR chemistry datasets. UMA provides state-of-the-art accuracy, energy conservation, and will continue to receive updates.
+:::
+
+The UMA model has a number of nice features over the previous checkpoints:
 1. It is state-of-the-art in out-of-domain prediction accuracy
-2. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc. 
+2. The UMA small model is an energy conserving and smooth checkpoint, so should work much better for vibrational calculations, molecular dynamics, etc.
 3. The UMA model is most likely to be updated in the future.
 
 ## Legacy OMat pretrained models
 
-These checkpoints are included here for baselining and model reproducibility. 
+:::{note}
+These checkpoints are included here for baselining and model reproducibility. For new projects, we recommend using UMA.
+::: 
 
 * All config files for the OMat24 models are available in the [`configs/omat24`](https://github.com/facebookresearch/fairchem/tree/main/configs/omat24) directory.
 * All models are equiformerV2 S2EFS models
@@ -26,7 +38,7 @@ These checkpoints are trained on OMat24 only. Note that predictions are *not* Ma
 
 
 ## MPTrj only models
-These models are trained only on the [MPTrj]() dataset.
+These models are trained only on the [MPTrj](https://figshare.com/articles/dataset/Materials_Project_Trjectory_MPtrj_Dataset/23713842) dataset.
 
 | Model Name                | Checkpoint	| Config                                                                          |
 |---------------------------|--------------|---------------------------------------------------------------------------------|

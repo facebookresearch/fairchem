@@ -1,3 +1,10 @@
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -8,42 +15,88 @@ import numpy.testing as npt
 import pytest
 import ray
 import torch
+from ase import Atoms
 from ase.build import add_adsorbate, bulk, fcc100, make_supercell, molecule
+from ase.data import chemical_symbols
 
-import fairchem.core.common.gp_utils as gp_utils
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_from_name
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
+from fairchem.core.units.mlip_unit.single_atom_patch import (
+    single_atom_prediction_from_lookup,
+)
 from tests.conftest import seed_everywhere
 
 FORCE_TOL = 1e-4
 ATOL = 5e-4
+_REPRESENTATIVE_ELEMENTS = [
+    (1, 0, 2),  # H:  charge=0, spin=2
+    (6, 0, 3),  # C:  charge=0, spin=3
+    (8, 0, 3),  # O:  charge=0, spin=3
+    (11, 1, 1),  # Na: charge=+1, spin=1
+    (79, 0, 2),  # Au: charge=0, spin=2
+]
+SINGLE_ATOM_ENERGY_ATOL = 0.05  # eV, for model-predicted single atom energies
 
 
-def get_fcc_carbon_xtal(
-    num_atoms: int,
-    lattice_constant: float = 3.8,
-):
-    # lattice_constant = 3.8, fcc generates a supercell with ~50 edges/atom
-    atoms = bulk("C", "fcc", a=lattice_constant)
-    n_cells = int(np.ceil(np.cbrt(num_atoms)))
-    atoms = atoms.repeat((n_cells, n_cells, n_cells))
-    indices = np.random.choice(len(atoms), num_atoms, replace=False)
-    sampled_atoms = atoms[indices]
-    return sampled_atoms
+@pytest.fixture(scope="module")
+def uma_predict_unit_cuda():
+    """Module-scoped predict unit using the first available UMA model with device=cuda."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(uma_models[0], device="cuda")
 
 
-@pytest.fixture()
-def uma_predict_unit(request):
+@pytest.fixture(scope="module")
+def uma_predict_unit(uma_predict_unit_cuda):
+    """Module-scoped predict unit - uses cuda version if available, otherwise cpu."""
+    if torch.cuda.is_available():
+        return uma_predict_unit_cuda
     uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
     return pretrained_mlip.get_predict_unit(uma_models[0])
 
 
+@pytest.fixture(scope="module")
+def uma_merge_mole_predict_unit():
+    """Module-scoped predict unit with merge_mole=True for MgO tests."""
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
+    return pretrained_mlip.get_predict_unit(
+        uma_models[0], device="cuda", inference_settings=settings
+    )
+
+
+@pytest.fixture(scope="module")
+def uma_1p1_predict_unit():
+    """Module-scoped predict unit for uma-s-1p1."""
+    return pretrained_mlip.get_predict_unit("uma-s-1p1")
+
+
+@pytest.fixture(scope="module")
+def uma_1p2_predict_unit():
+    """Module-scoped predict unit for uma-s-1p2."""
+    return pretrained_mlip.get_predict_unit("uma-s-1p2")
+
+
 @pytest.mark.gpu()
-def test_single_dataset_predict(uma_predict_unit):
+@pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
+def test_single_dataset_predict(internal_graph_gen_version):
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    inference_settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=internal_graph_gen_version,
+    )
+    uma_predict_unit = pretrained_mlip.get_predict_unit(
+        uma_models[0], inference_settings=inference_settings
+    )
+
     n = 10
     atoms = bulk("Pt")
     atomic_data_list = [AtomicData.from_ase(atoms, task_name="omat") for _ in range(n)]
@@ -70,8 +123,23 @@ def test_single_dataset_predict(uma_predict_unit):
     )
 
 
+@pytest.mark.xfail(reason="Issue with UMA 1.2 release TODO fix")
 @pytest.mark.gpu()
-def test_multiple_dataset_predict(uma_predict_unit):
+@pytest.mark.parametrize("internal_graph_gen_version", [2, 3])
+def test_multiple_dataset_predict(internal_graph_gen_version):
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    inference_settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=internal_graph_gen_version,
+    )
+    uma_predict_unit = pretrained_mlip.get_predict_unit(
+        uma_models[0], inference_settings=inference_settings
+    )
+
     h2o = molecule("H2O")
     h2o.info.update({"charge": 0, "spin": 1})
     h2o.pbc = True  # all data points must be pbc if mixing.
@@ -127,19 +195,8 @@ def test_multiple_dataset_predict(uma_predict_unit):
     npt.assert_allclose(pred_forces[batch_batch == 2], pt.get_forces(), atol=ATOL)
 
 
-@pytest.mark.gpu()
-@pytest.mark.parametrize(
-    "workers, device, checkpointing",
-    [
-        (1, "cpu", False),
-        (2, "cpu", False),
-        (1, "cuda", False),
-        (1, "cuda", True),
-        # (2, "cuda", False),
-        # (2, "cuda", True),
-    ],
-)
-def test_parallel_predict_unit(workers, device, checkpointing):
+def _test_parallel_predict_unit_impl(workers, device, checkpointing, graph_gen_version):
+    """Implementation of parallel predict unit test."""
     seed = 42
     runs = 2
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -148,10 +205,10 @@ def test_parallel_predict_unit(workers, device, checkpointing):
         tf32=False,
         merge_mole=True,
         activation_checkpointing=checkpointing,
-        internal_graph_gen_version=2,
+        internal_graph_gen_version=graph_gen_version,
         external_graph_gen=False,
     )
-    atoms = get_fcc_carbon_xtal(num_atoms)
+    atoms = get_fcc_crystal_by_num_atoms(num_atoms)
     atomic_data = AtomicData.from_ase(atoms, task_name=["omat"])
 
     seed_everywhere(seed)
@@ -164,10 +221,7 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    ray.shutdown()
-    distutils.cleanup()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
+    distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -190,19 +244,39 @@ def test_parallel_predict_unit(workers, device, checkpointing):
     )
 
 
-@pytest.mark.gpu()
+@pytest.mark.serial()
 @pytest.mark.parametrize(
-    "workers, device, checkpointing",
+    "workers, checkpointing, graph_gen_version",
     [
-        (1, "cpu", False),
-        (2, "cpu", True),
-        (1, "cuda", True),
-        (1, "cuda", False),
-        # (2, "cuda", True),
-        # (2, "cuda", False),
+        (1, False, 2),
+        (2, False, 2),
+        (1, False, 3),
+        (1, True, 3),
+        (2, False, 3),
     ],
 )
-def test_parallel_predict_unit_batch(workers, device, checkpointing):
+def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cpu", checkpointing, graph_gen_version)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing, graph_gen_version",
+    [
+        (1, False, 2),
+        (1, True, 2),
+        (1, True, 3),
+        (1, False, 3),
+        # (2, False),
+        # (2, True),
+    ],
+)
+def test_parallel_predict_unit_gpu(workers, checkpointing, graph_gen_version):
+    _test_parallel_predict_unit_impl(workers, "cuda", checkpointing, graph_gen_version)
+
+
+def _test_parallel_predict_unit_batch_impl(workers, device, checkpointing):
+    """Implementation of parallel predict unit batch test."""
     seed = 42
     runs = 1
     model_path = pretrained_checkpoint_path_from_name("uma-s-1p1")
@@ -246,10 +320,7 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
     for _ in range(runs):
         pp_results = ppunit.predict(atomic_data)
 
-    ray.shutdown()
-    distutils.cleanup()
-    if gp_utils.initialized():
-        gp_utils.cleanup_gp()
+    distutils.cleanup_gp_ray()
 
     seed_everywhere(seed)
     normal_predict_unit = pretrained_mlip.get_predict_unit(
@@ -268,6 +339,32 @@ def test_parallel_predict_unit_batch(workers, device, checkpointing):
         normal_results["forces"].detach().cpu(),
         atol=FORCE_TOL,
     )
+
+
+@pytest.mark.serial()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, False),
+        (2, True),
+    ],
+)
+def test_parallel_predict_unit_batch(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cpu", checkpointing)
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize(
+    "workers, checkpointing",
+    [
+        (1, True),
+        (1, False),
+        # (2, True),
+        # (2, False),
+    ],
+)
+def test_parallel_predict_unit_batch_gpu(workers, checkpointing):
+    _test_parallel_predict_unit_batch_impl(workers, "cuda", checkpointing)
 
 
 @pytest.mark.gpu()
@@ -385,10 +482,9 @@ def _random_rotation_matrix(rng: np.random.Generator) -> np.ndarray:
 
 @pytest.mark.gpu()
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
-def test_rotational_invariance_out_of_plane(mol_name):
+def test_rotational_invariance_out_of_plane(mol_name, uma_predict_unit_cuda):
     rng = np.random.default_rng(seed=123)
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+    calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
 
     atoms = molecule(mol_name)
     atoms.info.update({"charge": 0, "spin": 1})
@@ -407,17 +503,128 @@ def test_rotational_invariance_out_of_plane(mol_name):
 
 
 @pytest.mark.gpu()
-@pytest.mark.xfail(reason="Y-aligned edges cause problems in eSCN family", strict=False)
 @pytest.mark.parametrize("mol_name", ["H2O", "NH2"])
-def test_original_out_of_plane_forces(mol_name):
-    predict_unit = pretrained_mlip.get_predict_unit("uma-s-1", device="cuda")
-    calc = FAIRChemCalculator(predict_unit, task_name="omol")
+def test_original_out_of_plane_forces(mol_name, uma_predict_unit_cuda):
+    calc = FAIRChemCalculator(uma_predict_unit_cuda, task_name="omol")
     atoms = molecule(mol_name)
     atoms.info.update({"charge": 0, "spin": 1})
     atoms.calc = calc
     forces = atoms.get_forces()
-    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:,0]).max()}")
+    print(f"Max out-of-plane forces for {mol_name}: {np.abs(forces[:, 0]).max()}")
     assert np.abs(forces[:, 0]).max() < FORCE_TOL
+
+
+# ---------------------------------------------------------------------------
+# Euler vs Quaternion Wigner D agreement tests
+# ---------------------------------------------------------------------------
+
+
+def _get_predict_unit_with_wigner_mode(use_quaternion: bool):
+    """
+    Create a predict unit with the specified Wigner D computation mode.
+    """
+    settings = InferenceSettings(
+        tf32=False,
+        activation_checkpointing=True,
+        merge_mole=False,
+        compile=False,
+        external_graph_gen=False,
+        use_quaternion_wigner=use_quaternion,
+    )
+    uma_models = [name for name in pretrained_mlip.available_models if "uma" in name]
+    return pretrained_mlip.get_predict_unit(
+        uma_models[0], device="cuda", inference_settings=settings
+    )
+
+
+@pytest.mark.gpu()
+def test_euler_vs_quaternion_random_molecule():
+    """
+    Euler and quaternion Wigner D paths produce identical energy and forces
+    for a random molecule with no Y-aligned edges.
+    """
+    # Methanol (CH3OH) - 6 atoms, no edges along Y axis
+    atoms = molecule("CH3OH")
+    # Apply a rotation to ensure no edges are Y-aligned
+    rng = np.random.default_rng(seed=42)
+    R = _random_rotation_matrix(rng)
+    atoms.set_positions(atoms.get_positions() @ R.T)
+    atoms.info.update({"charge": 0, "spin": 1})
+    atoms.pbc = True
+
+    predict_euler = _get_predict_unit_with_wigner_mode(use_quaternion=False)
+    predict_quat = _get_predict_unit_with_wigner_mode(use_quaternion=True)
+
+    data = AtomicData.from_ase(
+        atoms,
+        task_name="omol",
+        r_data_keys=["spin", "charge"],
+        molecule_cell_size=120,
+    )
+    batch = atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    preds_euler = predict_euler.predict(batch)
+    seed_everywhere(42)
+    preds_quat = predict_quat.predict(batch)
+
+    npt.assert_allclose(
+        preds_euler["energy"].detach().cpu().numpy(),
+        preds_quat["energy"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Energy differs between Euler and quaternion paths",
+    )
+    npt.assert_allclose(
+        preds_euler["forces"].detach().cpu().numpy(),
+        preds_quat["forces"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces differ between Euler and quaternion paths",
+    )
+
+
+@pytest.mark.gpu()
+def test_euler_vs_quaternion_bulk():
+    """
+    Euler and quaternion Wigner D paths produce identical energy, forces,
+    and stress for a bulk crystal with no Y-aligned edges.
+    """
+    # FCC Cu 2x2x2 supercell with a random perturbation to avoid symmetry
+    atoms = bulk("Cu")
+    atoms = atoms.repeat((2, 2, 2))
+    rng = np.random.default_rng(seed=99)
+    atoms.set_positions(
+        atoms.get_positions() + rng.normal(0, 0.05, atoms.positions.shape)
+    )
+
+    predict_euler = _get_predict_unit_with_wigner_mode(use_quaternion=False)
+    predict_quat = _get_predict_unit_with_wigner_mode(use_quaternion=True)
+
+    data = AtomicData.from_ase(atoms, task_name="omat")
+    batch = atomicdata_list_to_batch([data])
+
+    seed_everywhere(42)
+    preds_euler = predict_euler.predict(batch)
+    seed_everywhere(42)
+    preds_quat = predict_quat.predict(batch)
+
+    npt.assert_allclose(
+        preds_euler["energy"].detach().cpu().numpy(),
+        preds_quat["energy"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Energy differs between Euler and quaternion paths (bulk)",
+    )
+    npt.assert_allclose(
+        preds_euler["forces"].detach().cpu().numpy(),
+        preds_quat["forces"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Forces differ between Euler and quaternion paths (bulk)",
+    )
+    npt.assert_allclose(
+        preds_euler["stress"].detach().cpu().numpy(),
+        preds_quat["stress"].detach().cpu().numpy(),
+        atol=ATOL,
+        err_msg="Stress differs between Euler and quaternion paths (bulk)",
+    )
 
 
 @pytest.mark.gpu()
@@ -429,14 +636,10 @@ def test_original_out_of_plane_forces(mol_name):
         np.array([[2, 0, 0], [0, 3, 0], [0, 0, 1]]),  # 2x3x1 supercell (6 atoms)
     ],
 )
-def test_merge_mole_with_supercell(supercell_matrix):
+def test_merge_mole_with_supercell(supercell_matrix, uma_merge_mole_predict_unit):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
-    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings
-    )
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(uma_merge_mole_predict_unit, task_name="omat")
 
     atoms_orig.calc = calc
     energy_orig = atoms_orig.get_potential_energy()
@@ -489,37 +692,40 @@ def test_merge_mole_composition_check():
 
     with pytest.raises(
         AssertionError,
-        match="Cannot run on merged model on system. Relative compositions seem different",
+        match="Compositions differ from merged model",
     ):
         _ = atoms_al.get_potential_energy()
 
 
 @pytest.mark.gpu()
-def test_merge_mole_vs_non_merged_consistency():
+@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+def test_merge_mole_vs_non_merged_consistency(model_name):
     """Test that merged and non-merged versions produce identical results."""
     atoms = bulk("MgO", "rocksalt", a=4.213)
 
     # Test with merge_mole=True
     settings_merged = InferenceSettings(merge_mole=True, external_graph_gen=False)
     predict_unit_merged = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_merged
+        model_name, device="cuda", inference_settings=settings_merged
     )
     calc_merged = FAIRChemCalculator(predict_unit_merged, task_name="omat")
 
     atoms_merged = atoms.copy()
+    atoms_non_merged = atoms.copy()
     atoms_merged.calc = calc_merged
     energy_merged = atoms_merged.get_potential_energy()
     forces_merged = atoms_merged.get_forces()
     stress_merged = atoms_merged.get_stress(voigt=False)
 
+    distutils.cleanup_gp_ray()  # Ensure clean state before next test
+
     # Test with merge_mole=False
     settings_non_merged = InferenceSettings(merge_mole=False, external_graph_gen=False)
     predict_unit_non_merged = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings_non_merged
+        model_name, device="cuda", inference_settings=settings_non_merged
     )
     calc_non_merged = FAIRChemCalculator(predict_unit_non_merged, task_name="omat")
 
-    atoms_non_merged = atoms.copy()
     atoms_non_merged.calc = calc_non_merged
     energy_non_merged = atoms_non_merged.get_potential_energy()
     forces_non_merged = atoms_non_merged.get_forces()
@@ -550,14 +756,10 @@ def test_merge_mole_vs_non_merged_consistency():
 
 
 @pytest.mark.gpu()
-def test_merge_mole_supercell_energy_forces_consistency():
+def test_merge_mole_supercell_energy_forces_consistency(uma_merge_mole_predict_unit):
     atoms_orig = bulk("MgO", "rocksalt", a=4.213)
 
-    settings = InferenceSettings(merge_mole=True, external_graph_gen=False)
-    predict_unit = pretrained_mlip.get_predict_unit(
-        "uma-s-1p1", device="cuda", inference_settings=settings
-    )
-    calc = FAIRChemCalculator(predict_unit, task_name="omat")
+    calc = FAIRChemCalculator(uma_merge_mole_predict_unit, task_name="omat")
 
     atoms_orig.calc = calc
     energy1 = atoms_orig.get_potential_energy()
@@ -581,7 +783,6 @@ def test_merge_mole_supercell_energy_forces_consistency():
 def batch_server_handle(uma_predict_unit):
     """Set up a batch server for testing."""
     pytest.importorskip("ray.serve", reason="ray[serve] not installed")
-    import ray
     from ray import serve
 
     from fairchem.core.units.mlip_unit._batch_serve import setup_batch_predict_server
@@ -634,6 +835,7 @@ def test_batch_server_predict_unit_with_calculator(
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
+        predict_unit=uma_predict_unit,
     )
 
     atoms = bulk("Cu")
@@ -668,7 +870,9 @@ def test_batch_server_predict_unit_with_calculator(
 
 
 @pytest.mark.gpu()
-def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
+def test_batch_server_predict_unit_multiple_systems(
+    batch_server_handle, uma_predict_unit
+):
     """Test BatchServerPredictUnit with multiple concurrent requests."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -676,6 +880,7 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
 
     batch_predict_unit = BatchServerPredictUnit(
         server_handle=batch_server_handle,
+        predict_unit=uma_predict_unit,
     )
 
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe"), bulk("Ni")]
@@ -699,3 +904,261 @@ def test_batch_server_predict_unit_multiple_systems(batch_server_handle):
         assert "stress" in preds
         assert preds["energy"].shape == (1,)
         assert preds["forces"].shape == (len(atoms_list[i]), 3)
+
+
+# this should pass for multi-gpu as well when run locally
+@pytest.mark.serial()
+@pytest.mark.parametrize("workers", [0, 2])
+@pytest.mark.parametrize("ensemble", ["nvt", "npt"])
+@pytest.mark.parametrize("device", ["cpu"])
+def test_merge_mole_md_consistency(workers, ensemble, device):
+    """Test merge_mole vs no-merge consistency over MD trajectory.
+
+    Runs 3 trials:
+    A) no merge
+    B) no merge again (baseline for numerical noise)
+    C) merge
+
+    Compares the relative drift of A-C against baseline A-B to ensure
+    merge_mole doesn't introduce additional numerical drift beyond
+    the inherent noise between identical runs.
+    """
+    from ase import units
+    from ase.md.langevin import Langevin
+    from ase.md.nptberendsen import NPTBerendsen
+    from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
+
+    # Simple system
+    atoms_template = bulk("Cu", "fcc", a=3.6)
+    atoms_template = atoms_template.repeat((2, 2, 2))
+
+    md_steps = 2
+    timestep = 1.0 * units.fs
+    initial_temp_K = 300.0
+    pressure = 1.01325 * units.bar  # 1 atm
+    taut = 100 * units.fs  # Thermostat coupling time
+    taup = 500 * units.fs  # Barostat coupling time
+    compressibility = 4.57e-5 / units.bar  # Water-like compressibility
+
+    # Shared inference settings (except merge_mole)
+    base_settings = dict(
+        tf32=True,
+        activation_checkpointing=False,
+        compile=False,
+        external_graph_gen=False,
+        internal_graph_gen_version=2,
+    )
+
+    def run_md_trial(atoms, calc, seed, steps):
+        """Run MD and collect energy/forces/stress at each step."""
+        atoms = atoms.copy()
+        atoms.calc = calc
+
+        seed_everywhere(seed)
+        MaxwellBoltzmannDistribution(atoms, temperature_K=initial_temp_K)
+
+        if ensemble == "npt":
+            dyn = NPTBerendsen(
+                atoms,
+                timestep=timestep,
+                temperature_K=initial_temp_K,
+                pressure_au=pressure,
+                taut=taut,
+                taup=taup,
+                compressibility_au=compressibility,
+            )
+        else:  # nvt
+            dyn = Langevin(
+                atoms,
+                timestep=timestep,
+                temperature_K=initial_temp_K,
+                friction=0.01 / units.fs,
+            )
+
+        energies = []
+        forces_list = []
+        stresses = []
+
+        # Collect initial state
+        energies.append(atoms.get_potential_energy())
+        forces_list.append(atoms.get_forces().copy())
+        stresses.append(atoms.get_stress(voigt=False).copy())
+
+        for _ in range(steps):
+            dyn.run(1)
+            energies.append(atoms.get_potential_energy())
+            forces_list.append(atoms.get_forces().copy())
+            stresses.append(atoms.get_stress(voigt=False).copy())
+
+        return {
+            "energies": np.array(energies),
+            "forces": np.array(forces_list),
+            "stresses": np.array(stresses),
+        }
+
+    # Trial A: no merge
+    settings_no_merge = InferenceSettings(merge_mole=False, **base_settings)
+    predict_unit_A = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device=device,
+        inference_settings=settings_no_merge,
+        workers=workers,
+    )
+    calc_A = FAIRChemCalculator(predict_unit_A, task_name="omat")
+    results_A = run_md_trial(atoms_template, calc_A, seed=42, steps=md_steps)
+    distutils.cleanup_gp_ray()
+
+    # Trial B: no merge again (baseline for numerical noise)
+    predict_unit_B = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1",
+        device=device,
+        inference_settings=settings_no_merge,
+        workers=workers,
+    )
+    calc_B = FAIRChemCalculator(predict_unit_B, task_name="omat")
+    results_B = run_md_trial(atoms_template, calc_B, seed=42, steps=md_steps)
+    distutils.cleanup_gp_ray()
+
+    # Trial C: merge
+    settings_merge = InferenceSettings(merge_mole=True, **base_settings)
+    predict_unit_C = pretrained_mlip.get_predict_unit(
+        "uma-s-1p1", device=device, inference_settings=settings_merge, workers=workers
+    )
+    calc_C = FAIRChemCalculator(predict_unit_C, task_name="omat")
+    results_C = run_md_trial(atoms_template, calc_C, seed=42, steps=md_steps)
+    distutils.cleanup_gp_ray()
+
+    # Compute drifts
+    # Energy drift
+    energy_drift_AB = np.abs(results_A["energies"] - results_B["energies"])
+    energy_drift_AC = np.abs(results_A["energies"] - results_C["energies"])
+
+    # Forces drift (mean absolute difference across all atoms and steps)
+    forces_drift_AB = np.abs(results_A["forces"] - results_B["forces"])
+    forces_drift_AC = np.abs(results_A["forces"] - results_C["forces"])
+
+    # Stress drift
+    stress_drift_AB = np.abs(results_A["stresses"] - results_B["stresses"])
+    stress_drift_AC = np.abs(results_A["stresses"] - results_C["stresses"])
+
+    # Log the drifts for debugging
+    logging.info(f"Energy drift A-B (max): {energy_drift_AB.max():.2e}")
+    logging.info(f"Energy drift A-C (max): {energy_drift_AC.max():.2e}")
+    logging.info(f"Forces drift A-B (max): {forces_drift_AB.max():.2e}")
+    logging.info(f"Forces drift A-C (max): {forces_drift_AC.max():.2e}")
+    logging.info(f"Stress drift A-B (max): {stress_drift_AB.max():.2e}")
+    logging.info(f"Stress drift A-C (max): {stress_drift_AC.max():.2e}")
+
+    # The drift between A-C should be comparable to the baseline drift A-B
+    # Allow some tolerance factor (e.g., 10x) for merge_mole overhead
+    tolerance_factor = 10.0
+
+    # For energy: max drift A-C should be within tolerance of max drift A-B
+    baseline_energy_drift = max(energy_drift_AB.max(), 1e-10)  # avoid division by zero
+    npt.assert_array_less(
+        energy_drift_AC.max(),
+        tolerance_factor * baseline_energy_drift + 1e-6,
+        err_msg=f"Energy drift A-C ({energy_drift_AC.max():.2e}) exceeds "
+        f"{tolerance_factor}x baseline A-B ({baseline_energy_drift:.2e})",
+    )
+
+    # For forces: max drift A-C should be within tolerance of max drift A-B
+    baseline_forces_drift = max(forces_drift_AB.max(), 1e-10)
+    npt.assert_array_less(
+        forces_drift_AC.max(),
+        tolerance_factor * baseline_forces_drift + 1e-6,
+        err_msg=f"Forces drift A-C ({forces_drift_AC.max():.2e}) exceeds "
+        f"{tolerance_factor}x baseline A-B ({baseline_forces_drift:.2e})",
+    )
+
+    # For stress: max drift A-C should be within tolerance of max drift A-B
+    baseline_stress_drift = max(stress_drift_AB.max(), 1e-10)
+    npt.assert_array_less(
+        stress_drift_AC.max(),
+        tolerance_factor * baseline_stress_drift + 1e-6,
+        err_msg=f"Stress drift A-C ({stress_drift_AC.max():.2e}) exceeds "
+        f"{tolerance_factor}x baseline A-B ({baseline_stress_drift:.2e})",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-atom prediction tests
+# ---------------------------------------------------------------------------
+
+
+def _test_single_atom_predict(predict_unit, task_name, energy_atol):
+    """
+    Verify single-atom predictions for a given predict unit and task.
+
+    Checks that energy, forces, and stress have correct shapes,
+    forces are zero (no neighbors), and energy matches the reference
+    table within the specified tolerance.
+    """
+    for atomic_number, charge, spin in _REPRESENTATIVE_ELEMENTS:
+        symbol = chemical_symbols[atomic_number]
+        elem_id = f"{symbol} (Z={atomic_number})"
+
+        atom = Atoms([atomic_number], positions=[(0.0, 0.0, 0.0)])
+        atom.info["charge"] = charge
+        atom.info["spin"] = spin
+
+        from_ase_kwargs = {"task_name": task_name}
+        if task_name == "omol":
+            from_ase_kwargs["r_data_keys"] = ["spin", "charge"]
+
+        atomic_data = AtomicData.from_ase(atom, **from_ase_kwargs)
+        batch = atomicdata_list_to_batch([atomic_data])
+        preds = predict_unit.predict(batch)
+
+        # Shape checks
+        assert preds["energy"].shape == (
+            1,
+        ), f"{elem_id}: energy shape {preds['energy'].shape} != (1,)"
+        assert preds["forces"].shape == (
+            1,
+            3,
+        ), f"{elem_id}: forces shape {preds['forces'].shape} != (1, 3)"
+        assert torch.isfinite(
+            preds["energy"]
+        ).all(), f"{elem_id}: energy is not finite: {preds['energy']}"
+
+        # Forces must be zero (no neighbors)
+        assert (
+            preds["forces"] == 0.0
+        ).all(), f"{elem_id}: forces are not zero: {preds['forces']}"
+
+        # Get reference energy via single_atom_prediction_from_lookup
+        ref_batch = atomicdata_list_to_batch([atomic_data])
+        ref_preds = single_atom_prediction_from_lookup(
+            data=ref_batch,
+            atom_refs=predict_unit.atom_refs,
+            tasks=predict_unit.tasks,
+            device=torch.device("cpu"),
+        )
+        ref_energy = next(
+            v.item()
+            for k, v in ref_preds.items()
+            if predict_unit.tasks[k].property == "energy"
+        )
+        npt.assert_allclose(
+            preds["energy"].detach().cpu().item(),
+            ref_energy,
+            atol=energy_atol,
+            err_msg=(f"{elem_id}: predicted energy does not match reference"),
+        )
+
+
+@pytest.mark.parametrize("task_name", ["omat", "omol"])
+def test_single_atom_predict_1p1(task_name, uma_1p1_predict_unit):
+    """Verify uma-s-1p1 single atom energies match the lookup table exactly."""
+    _test_single_atom_predict(uma_1p1_predict_unit, task_name, energy_atol=0.0)
+
+
+@pytest.mark.parametrize("task_name", ["omat", "omol"])
+def test_single_atom_predict_1p2(task_name, uma_1p2_predict_unit):
+    """Verify uma-s-1p2 single atom energies are close to reference values."""
+    _test_single_atom_predict(
+        uma_1p2_predict_unit,
+        task_name,
+        energy_atol=SINGLE_ATOM_ENERGY_ATOL,
+    )

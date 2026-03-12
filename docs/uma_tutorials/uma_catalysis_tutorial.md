@@ -36,10 +36,10 @@ By the end of this tutorial, you will be able to:
 - Apply D3 dispersion corrections to improve accuracy
 ```
 
-```{admonition} About UMA-S-1P1
+```{admonition} About UMA-S-1P2
 :class: tip
 
-The **UMA-S-1P1** model is a state-of-the-art universal machine learning potential trained on the OMat24, OC20, OMol25, ODAC23, and OMC25 datasets, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies. Here we'll use the UMA-s-1p1 checkpoint which is the small (=faster) 1.1 version released in June. The UMA-s-1p1 checkpoint is open science with a lightweight license that users have to agree to through Huggingface. 
+The **UMA-S-1P2** model is a state-of-the-art universal machine learning potential trained on the OMat24, OC20, OMol25, ODAC23, and OMC25 datasets, covering diverse materials and surface chemistries. It provides ~1000× speedup over DFT while maintaining reasonable accuracy for screening studies. Here we'll use the uma-s-1p2 checkpoint which is the small (=faster) 1.1 version released in June. The uma-s-1p2 checkpoint is open science with a lightweight license that users have to agree to through Huggingface. 
 
 You can read more about the UMA models here: https://arxiv.org/abs/2506.23971
 ```
@@ -108,7 +108,7 @@ fairchem.core.__version__
 
 ## Package imports
 
-First, let's import all necessary libraries and initialize the UMA-S-1P1 predictor:
+First, let's import all necessary libraries and initialize the UMA-S-1P2 predictor:
 
 ```{code-cell} ipython3
 from pathlib import Path
@@ -160,9 +160,9 @@ for key, dirname in part_dirs.items():
 for facet in ["111", "100", "110", "211"]:
     (output_dir / part_dirs["part2"] / f"ni{facet}").mkdir(exist_ok=True)
 
-# Initialize the UMA-S-1P1 predictor
-print("\nLoading UMA-S-1P1 model...")
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+# Initialize the UMA-S-1P2 predictor
+print("\nLoading UMA-S-1P2 model...")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
 print("✓ Model loaded successfully!")
 ```
 
@@ -246,7 +246,7 @@ Don't have access to UMA yet? You can still explore this calculation!
 ```{admonition} Understanding the Results
 :class: tip
 
-UMA-s-1p1 using the `omat` task name will predict lattice constants at the PBE level of DFT. For metals, PBE typically predicts lattice constants within 1-2% of experimental values. 
+uma-s-1p2 using the `omat` task name will predict lattice constants at the PBE level of DFT. For metals, PBE typically predicts lattice constants within 1-2% of experimental values. 
 
 Small discrepancies arise from:
 - Training data biases (if your structure is far from OMAT24)
@@ -261,7 +261,7 @@ For surface calculations, using the ML-optimized lattice constant maintains inte
 
 **Paper (Table 1):** Ni lattice constant = 3.524 Å (experimental reference)
 
-The UMA-S-1P1 model with OMAT provides excellent agreement with experiment, as would be expected for the PBE functional for simple BCC Ni. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
+The UMA-S-1P2 model with OMAT provides excellent agreement with experiment, as would be expected for the PBE functional for simple BCC Ni. The underlying calculations for OMat24 and the original results cited in the paper should be very similar (both PBE), so the fact that the results are a little closer to experiment than the original results is within the numerical noise of the ML model.
 ```
 
 ```{admonition} Further exploration
@@ -269,7 +269,7 @@ The UMA-S-1P1 model with OMAT provides excellent agreement with experiment, as w
 
 Try modifying the following parameters and observe the effects:
 
-1. **Task name**: The original paper re-relaxed the structures at the RPBE level of theory before continuing. Try that with the UMA-s-1p1 model (using the oc20 task name) and see if it matters here.
+1. **Task name**: The original paper re-relaxed the structures at the RPBE level of theory before continuing. Try that with the uma-s-1p2 model (using the oc20 task name) and see if it matters here.
 2. **Initial guess**: Change `a_initial` to 3.0 or 4.0 Å. Does the optimizer still converge to the same value?
 3. **Convergence criterion**: Tighten `fmax` to 0.01 eV/Å. How many more steps are required?
 4. **Different metals**: Replace `"Ni"` with `"Cu"`, `"Pd"`, or `"Pt"`. Compare predicted vs experimental lattice constants.
@@ -1985,7 +1985,7 @@ Limitations:
 
 ### Key Takeaways
 
-1. **ML Potentials**: UMa-S-1P1 provides ~1000× speedup over DFT with reasonable accuracy
+1. **ML Potentials**: uma-s-1p2 provides ~1000× speedup over DFT with reasonable accuracy
 2. **Bulk optimization**: Always use the ML-optimized lattice constant for consistency
 3. **Surface energies**: Linear extrapolation eliminates finite-size effects
 4. **Adsorption**: Test multiple sites; lowest energy may not be intuitive
@@ -1994,17 +1994,13 @@ Limitations:
 
 ### Recommended Workflow for New Systems
 
-```{mermaid}
-graph TD
-    A[Optimize Bulk] --> B[Calculate Surface Energies]
-    B --> C[Wulff Construction]
-    C --> D[Low-Coverage Adsorption]
-    D --> E{Coverage Important?}
-    E -->|Yes| F[Coverage Study]
-    E -->|No| G[Reaction Barriers]
-    F --> G
-    G --> H[Microkinetic Modeling]
-```
+1. **Optimize Bulk** - Determine equilibrium lattice constant
+2. **Calculate Surface Energies** - Identify stable facets
+3. **Wulff Construction** - Predict nanoparticle morphology
+4. **Low-Coverage Adsorption** - Find binding sites and energies
+5. **Coverage Study** (if coverage-dependent effects are important) - Determine lateral interactions
+6. **Reaction Barriers** - Calculate activation energies using NEB
+7. **Microkinetic Modeling** - Predict overall catalytic performance
 
 ### Accuracy Considerations
 

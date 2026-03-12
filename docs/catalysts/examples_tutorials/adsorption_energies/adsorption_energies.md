@@ -11,9 +11,17 @@ kernelspec:
   name: python3
 ---
 
-Expert adsorption energies
-======================================================
+# Expert Adsorption Energies
 
+:::{card} Tutorial Overview
+
+| Property | Value |
+|----------|-------|
+| **Difficulty** | Advanced |
+| **Time** | 45-60 minutes |
+| **Prerequisites** | Basic catalysis knowledge, Python, ASE |
+| **Goal** | Reproduce NRR/HER selectivity literature results |
+:::
 
 One of the most common tasks in computational catalysis is calculating the binding energies or adsorption energies of small molecules on catalyst surfaces.
 
@@ -160,7 +168,7 @@ Running the model with QuasiNewton prints at each relaxation step which is a lot
 os.makedirs(f"data/{bulk_src_id}_{adsorbate_smiles_h}", exist_ok=True)
 
 # Define the
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 ```
 

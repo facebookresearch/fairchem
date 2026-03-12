@@ -11,8 +11,11 @@ kernelspec:
   name: python3
 ---
 
-Phonons
-------------------
+# Phonon Calculations
+
+:::{tip} What You Will Learn
+Run phonon calculations to predict thermal conductivity, vibrational modes, entropy, and finite-temperature stability.
+:::
 
 Phonon calculations are very important for inorganic materials science to
 * Calculate thermal conductivity
@@ -45,7 +48,7 @@ result = phonon_flow(
     method="fairchem",
     job_params={
         "all": dict(
-            name_or_path="uma-s-1p1",
+            name_or_path="uma-s-1p2",
             task_name="omat",
         ),
     },

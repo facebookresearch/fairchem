@@ -8,14 +8,17 @@ LICENSE file in the root directory of this source tree.
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import os
 import random
 import timeit
 from collections import defaultdict
+from dataclasses import dataclass
 
 import numpy as np
 import torch
+import torch._dynamo as dynamo
 from ase.build import make_supercell
 from ase.io import read
 from torch.profiler import ProfilerActivity, profile, record_function
@@ -23,8 +26,8 @@ from torch.profiler import ProfilerActivity, profile, record_function
 from fairchem.core.common import distutils
 from fairchem.core.common.profiler_utils import get_profile_schedule
 from fairchem.core.components.runner import Runner
-from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
-from fairchem.core.datasets.common_structures import get_fcc_carbon_xtal
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
 from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import (
     InferenceSettings,
@@ -42,23 +45,6 @@ def seed_everywhere(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-
-
-def ase_to_graph(
-    atoms, neighbors: int, cutoff: float, external_graph=True, dataset_name="omat"
-):
-    data_object = AtomicData.from_ase(
-        atoms,
-        max_neigh=neighbors,
-        radius=cutoff,
-        r_edges=external_graph,
-        task_name=dataset_name,
-    )
-    data_object.natoms = torch.tensor(len(atoms))
-    data_object.charge = torch.LongTensor([0])
-    data_object.spin = torch.LongTensor([0])
-    data_object.pos.requires_grad = True
-    return atomicdata_list_to_batch([data_object])
 
 
 def get_qps(data, predictor, warmups: int = 10, timeiters: int = 10, repeats: int = 5):
@@ -106,6 +92,115 @@ def make_profile(data, predictor, name, save_loc):
             p.step()
 
 
+@dataclass
+class CompileDebugSettings:
+    """
+    Settings for debugging torch.compile graph breaks and compilation issues.
+
+    Attributes:
+        enabled: Enable compile debugging (default: False)
+        log_graph_breaks: Log graph break reasons (default: True)
+        run_dynamo_explain: Run torch._dynamo.explain() for detailed analysis
+        verbose: Enable verbose dynamo logging
+        fullgraph: Test with fullgraph=True to find breaks (will error if breaks exist)
+    """
+
+    enabled: bool = False
+    log_graph_breaks: bool = True
+    run_dynamo_explain: bool = False
+    verbose: bool = False
+    fullgraph: bool = False
+
+
+def _setup_compile_debug_logging(settings: CompileDebugSettings) -> None:
+    """
+    Configure torch._dynamo logging for debugging compilation issues.
+
+    Args:
+        settings: CompileDebugSettings instance with debug configuration
+    """
+    if not settings.enabled:
+        return
+
+    logging.info("Enabling torch.compile debug logging...")
+
+    # Enable dynamo verbose mode
+    if settings.verbose:
+        dynamo.config.verbose = True
+        logging.getLogger("torch._dynamo").setLevel(logging.DEBUG)
+
+    # Log graph breaks
+    if settings.log_graph_breaks:
+        # Set environment-like logging via torch internal config
+        # This is equivalent to TORCH_LOGS="graph_breaks"
+        torch._logging.set_logs(graph_breaks=True)
+        logging.info("Graph break logging enabled")
+
+    logging.info(f"Compile debug settings: {settings}")
+
+
+def _run_dynamo_explain(model, data, name: str) -> None:
+    """
+    Run torch._dynamo.explain() to analyze graph breaks.
+
+    Args:
+        model: The model to analyze
+        data: Sample input data
+        name: Name for logging
+    """
+    logging.info(f"Running torch._dynamo.explain() for {name}...")
+    try:
+        explanation = dynamo.explain(model)(data)
+        logging.info("=" * 60)
+        logging.info(f"DYNAMO EXPLAIN RESULTS for {name}")
+        logging.info("=" * 60)
+        logging.info(f"Graph count: {explanation.graph_count}")
+        logging.info(f"Graph break count: {explanation.graph_break_count}")
+        logging.info(f"Ops per graph: {explanation.ops_per_graph}")
+
+        if explanation.break_reasons:
+            logging.info("-" * 60)
+            logging.info("GRAPH BREAK REASONS:")
+            logging.info("-" * 60)
+            for i, reason in enumerate(explanation.break_reasons):
+                logging.info(f"\n[Break {i + 1}]")
+                logging.info(str(reason))
+        else:
+            logging.info("No graph breaks detected!")
+        logging.info("=" * 60)
+    except Exception as e:
+        logging.error(f"Error during dynamo.explain(): {e}")
+        import traceback
+
+        traceback.print_exc()
+
+
+def _to_compile_debug_settings(
+    value: CompileDebugSettings | dict | None,
+) -> CompileDebugSettings:
+    """
+    Convert a dict or DictConfig to CompileDebugSettings.
+
+    Args:
+        value: CompileDebugSettings, dict, or None
+
+    Returns:
+        CompileDebugSettings instance with defaults for missing fields
+    """
+    if value is None:
+        return CompileDebugSettings()
+    if isinstance(value, CompileDebugSettings):
+        return value
+    # Handle dict or DictConfig from Hydra
+    return CompileDebugSettings(
+        enabled=value.get("enabled", False),
+        log_graph_breaks=value.get("log_graph_breaks", True),
+        run_dynamo_explain=value.get("run_dynamo_explain", False),
+        verbose=value.get("verbose", False),
+        fullgraph=value.get("fullgraph", False),
+    )
+
+
 class InferenceBenchRunner(Runner):
     def __init__(
         self,
@@ -121,6 +216,7 @@ class InferenceBenchRunner(Runner):
         generate_traces: bool = False,  # takes additional memory and time
         expand_supercells: int | None = None,
         dataset_name: str = "omat",
+        debug_compile: CompileDebugSettings | None = None,
     ):
         self.natoms_list = natoms_list
         self.input_system = input_system
@@ -137,11 +233,15 @@ class InferenceBenchRunner(Runner):
         self.expand_supercells = expand_supercells
         self.dataset_name = dataset_name
         self.repeats = repeats
+        self.debug_compile = _to_compile_debug_settings(debug_compile)
 
     def run(self) -> None:
         self.run_dir = self.job_config.metadata.results_dir
         os.makedirs(self.run_dir, exist_ok=True)
         seed_everywhere(self.seed)
+
+        # Setup compile debug logging if enabled
+        _setup_compile_debug_logging(self.debug_compile)
 
         model_to_qps_data = defaultdict(list)
 
@@ -149,63 +249,114 @@ class InferenceBenchRunner(Runner):
             logging.info(
                 f"Loading model: {model_checkpoint}, inference_settings: {self.inference_settings}"
             )
+
             predictor = MLIPPredictUnit(
                 model_checkpoint,
                 self.device,
                 overrides=self.overrides,
                 inference_settings=self.inference_settings,
             )
-            max_neighbors = predictor.model.module.backbone.max_neighbors
-            cutoff = predictor.model.module.backbone.cutoff
-            logging.info(f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}")
 
-            def yield_inputs(max_neighbors=max_neighbors, cutoff=cutoff):
-                if self.natoms_list is not None:
-                    for natoms in self.natoms_list:
-                        atoms = get_fcc_carbon_xtal(natoms)
-                        data = ase_to_graph(
-                            atoms,
-                            max_neighbors,
-                            cutoff,
-                            external_graph=self.inference_settings.external_graph_gen,
-                            dataset_name=self.dataset_name,
-                        )
-                        yield data.natoms.item(), data
-                else:
-                    for k, v in self.input_system.items():
-                        atoms = read(v)
-                        if self.expand_supercells is not None:
-                            size = self.expand_supercells
-                            supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
-                            atoms = make_supercell(atoms, supercell_size)
+            # Determine data kwargs based on external_graph_gen setting
+            if self.inference_settings.external_graph_gen:
+                backbone = predictor.model.module.backbone
+                max_neighbors = backbone.max_neighbors
+                cutoff = backbone.cutoff
+                logging.info(
+                    f"Model's max_neighbors: {max_neighbors}, cutoff: {cutoff}"
+                )
+                from_ase_kwargs = dict(
+                    task_name=self.dataset_name,
+                    r_edges=True,
+                    max_neigh=max_neighbors,
+                    radius=cutoff,
+                )
+                del predictor
+                torch.cuda.empty_cache()
+            else:
+                from_ase_kwargs = dict(task_name=self.dataset_name)
+                del predictor
 
-                        data = ase_to_graph(
-                            atoms,
-                            max_neighbors,
-                            cutoff,
-                            external_graph=self.inference_settings.external_graph_gen,
-                            dataset_name=self.dataset_name,
-                        )
-                        yield k, data
+            # Build inputs list
+            inputs = []
+            if self.natoms_list is not None:
+                for natoms in self.natoms_list:
+                    atoms = get_fcc_crystal_by_num_atoms(natoms)
+                    data = AtomicData.from_ase(atoms, **from_ase_kwargs)
+                    inputs.append((len(atoms), data))
+            else:
+                for k, v in self.input_system.items():
+                    atoms = read(v)
+                    if self.expand_supercells is not None:
+                        size = self.expand_supercells
+                        supercell_size = [[size, 0, 0], [0, size, 0], [0, 0, size]]
+                        atoms = make_supercell(atoms, supercell_size)
+                    data = AtomicData.from_ase(atoms, **from_ase_kwargs)
+                    inputs.append((k, data))
 
             # benchmark all models or number of atoms
-            for name, data in yield_inputs():
-                num_atoms = data.natoms.item()
+            for name, data in inputs:
+                # Reinitialize predictor for each input to ensure clean state
+                predictor = MLIPPredictUnit(
+                    model_checkpoint,
+                    self.device,
+                    overrides=self.overrides,
+                    inference_settings=self.inference_settings,
+                )
+                num_atoms = name if isinstance(name, int) else data.natoms.item()
                 print_info = f"Starting profile: model: {model_checkpoint}, input: {name}, num_atoms: {num_atoms}"
-                if self.inference_settings.external_graph_gen:
-                    num_edges = data.edge_index.shape[1]
-                    print_info += f" num edges compute on: {num_edges}"
                 logging.info(print_info)
-                inp = data.clone()
-                if self.generate_traces:
-                    make_profile(inp, predictor, name=name, save_loc=self.run_dir)
-                qps, ns_per_day = get_qps(
-                    inp, predictor, timeiters=self.timeiters, repeats=self.repeats
-                )
-                model_to_qps_data[model_name].append([num_atoms, ns_per_day])
-                logging.info(
-                    f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
-                )
+                inp = data
+
+                # Run dynamo.explain() if debug enabled
+                if self.debug_compile.enabled and self.debug_compile.run_dynamo_explain:
+                    _run_dynamo_explain(predictor.model, inp, f"{model_name}_{name}")
+
+                try:
+                    if self.generate_traces:
+                        make_profile(inp, predictor, name=name, save_loc=self.run_dir)
+                    qps, ns_per_day = get_qps(
+                        inp, predictor, timeiters=self.timeiters, repeats=self.repeats
+                    )
+                    model_to_qps_data[model_name].append([num_atoms, ns_per_day])
+                    logging.info(
+                        f"Profile results: model: {model_checkpoint}, num_atoms: {num_atoms}, qps: {qps}, ns_per_day: {ns_per_day}"
+                    )
+                except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                    # Check if it's an OOM error
+                    if isinstance(e, torch.cuda.OutOfMemoryError) or (
+                        isinstance(e, RuntimeError)
+                        and "out of memory" in str(e).lower()
+                    ):
+                        logging.warning(
+                            f"GPU OOM: model: {model_checkpoint}, num_atoms: {num_atoms}"
+                        )
+                        # Mark as OOM instead of crashing
+                        model_to_qps_data[model_name].append([num_atoms, "OOM"])
+                        break  # No need to test larger inputs if this one already OOMs
+                    # Re-raise if it's not an OOM error
+                    raise
+                finally:
+                    # Free GPU memory after each input
+                    torch.cuda.empty_cache()
+
+        # Save results to file
+        if distutils.is_master():
+            results_file = os.path.join(self.run_dir, "benchmark_results.json")
+            results = {
+                "model_to_qps_data": dict(model_to_qps_data),
+                "config": {
+                    "timeiters": self.timeiters,
+                    "repeats": self.repeats,
+                    "natoms_list": list(self.natoms_list) if self.natoms_list else None,
+                    "device": self.device,
+                    "dataset_name": self.dataset_name,
+                    "world_size": distutils.get_world_size(),
+                },
+            }
+            with open(results_file, "w") as f:
+                json.dump(results, f, indent=2)
+            logging.info(f"Saved benchmark results to {results_file}")
 
     def save_state(self, _):
         return

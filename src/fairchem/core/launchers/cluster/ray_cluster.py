@@ -32,11 +32,27 @@ def kill_proc_tree(pid, including_parent=True):
         parent.wait(5)
 
 
-def find_free_port():
+def find_free_port(preferred: int = 0) -> int:
+    """
+    Find an available port.
+
+    Args:
+        preferred: Try this port first. If 0 or unavailable, let the OS pick.
+    """
+    if preferred:
+        try:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+                s.bind(("", preferred))
+                return preferred
+        except OSError:
+            pass
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(("", 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
+
+
+RAY_DEFAULT_DASHBOARD_PORT = 8265
 
 
 def scancel(job_ids: list[str]):
@@ -238,6 +254,7 @@ def _ray_head_script(
     # using 0 as the port for the head will make ray search for an open port instead of
     # always using the same one.
     port = find_free_port()
+    dashboard_port = find_free_port(preferred=RAY_DEFAULT_DASHBOARD_PORT)
     head_env["RAY_ADDRESS"] = f"{hostname}:{port}"
     head_env["RAY_gcs_server_request_timeout_seconds"] = str(
         worker_wait_timeout_seconds
@@ -261,6 +278,9 @@ def _ray_head_script(
                 "--num-gpus",
                 f"{num_gpus}",
                 "--dashboard-host=0.0.0.0",
+                f"--dashboard-port={dashboard_port}",
+                "--min-worker-port=0",
+                "--max-worker-port=0",
             ],
             env=head_env,
             stdout=subprocess.PIPE,
@@ -323,6 +343,8 @@ def worker_script(
                 f"{num_cpus}",
                 "--num-gpus",
                 f"{num_gpus}",
+                "--min-worker-port=0",
+                "--max-worker-port=0",
             ],
             env=worker_env,
             check=False,

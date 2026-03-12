@@ -17,7 +17,7 @@ ff_type: grid
 num_experts: 0
 bf16: False
 moe_layer_type: pytorch
-regress_stress: True
+regress_stress: False
 direct_forces: True
 max_neighbors: 20
 max_steps: null
