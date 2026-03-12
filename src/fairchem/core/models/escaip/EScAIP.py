@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import BackboneInterface, HeadInterface
 from fairchem.core.models.escaip.configs import EScAIPConfigs, init_configs
 from fairchem.core.models.escaip.modules.graph_attention_block import (
@@ -193,7 +192,6 @@ class EScAIPBackbone(nn.Module, BackboneInterface):
             else None,
         }
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data: AtomicData):
         # TODO: remove this when FairChem fixes the bug
         data["atomic_numbers"] = data["atomic_numbers"].long()  # type: ignore
@@ -294,7 +292,6 @@ class EScAIPDirectForceHead(EScAIPHeadBase):
         # get output force
         return force_direction * force_magnitude  # (num_nodes, 3)
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         self.forward_fn = (
             torch.compile(self.compiled_forward)  # type: ignore
@@ -351,7 +348,6 @@ class EScAIPEnergyHead(EScAIPHeadBase):
         )
         return energy_output.squeeze()
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         self.forward_fn = (
             torch.compile(self.compiled_forward)  # type: ignore
@@ -387,7 +383,6 @@ class EScAIPGradientEnergyForceStressHead(EScAIPEnergyHead):  # type: ignore
         self.prefix = prefix
         self.wrap_property = wrap_property
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         if self.prefix:
             energy_key = f"{self.prefix}_energy"

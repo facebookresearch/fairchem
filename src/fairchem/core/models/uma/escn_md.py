@@ -21,7 +21,6 @@ from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
@@ -697,7 +696,6 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
 
         return graph_dict
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
@@ -1115,7 +1113,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def regress_stress(self) -> bool:
         return self.regress_config.stress
 
-    @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
