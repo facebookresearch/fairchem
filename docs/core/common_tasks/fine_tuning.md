@@ -106,7 +106,7 @@ job:
     project: uma_finetune
 
 
-base_model_name: uma-s-1p1
+base_model_name: uma-s-1p2
 max_neighbors: 300
 epochs: 1
 steps: null
