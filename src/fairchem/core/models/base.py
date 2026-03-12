@@ -151,8 +151,168 @@ class BackboneInterface(metaclass=ABCMeta):
         pass  # noqa
 
 
+class HydraInterfaceMixin:
+    """Mixin class providing shared task management functionality for Hydra models."""
+
+    @property
+    def tasks(self) -> dict[str, Task]:
+        """
+        Mapping from task names to their associated Task objects.
+        """
+        return self._tasks
+
+    @property
+    def direct_forces(self) -> bool:
+        """
+        Whether this model uses direct force prediction.
+        """
+        return getattr(self.backbone, "direct_forces", False)
+
+    @property
+    def dataset_to_tasks(self) -> dict[str, list]:
+        """
+        Mapping from dataset names to their associated tasks.
+        """
+        if self._dataset_to_tasks is None:
+            raise RuntimeError(
+                "setup_tasks() must be called before accessing dataset_to_tasks"
+            )
+        return self._dataset_to_tasks
+
+    def _validate_task_compatibility(self, task: Task) -> None:
+        """
+        Validate that a task is compatible with this model's capabilities.
+
+        Args:
+            task: Task to validate
+
+        Raises:
+            ValueError: If the task is incompatible with the model
+        """
+        derivative_properties = ("forces", "stress", "hessian")
+
+        if (
+            self.direct_forces
+            and task.inference_only
+            and task.property in derivative_properties
+        ):
+            raise ValueError(
+                f"Cannot add autograd-based '{task.property}' task to direct-force model. "
+                f"Derivative properties require energy-conserving (autograd forces) models."
+            )
+
+        if task.inference_only and task.property in derivative_properties:
+            energy_datasets: set[str] = set()
+            for existing_task in self.tasks.values():
+                if existing_task.property == "energy":
+                    energy_datasets.update(existing_task.datasets)
+
+            task_datasets = set(task.datasets)
+            uncovered_datasets = task_datasets - energy_datasets
+
+            if uncovered_datasets:
+                raise ValueError(
+                    f"Cannot add '{task.property}' task for datasets {task.datasets}. "
+                    f"Datasets {sorted(uncovered_datasets)} have no energy task to derive from. "
+                    f"Derivative properties require energy to compute via autograd."
+                )
+
+    def on_predict_check(self, data: AtomicData) -> None:
+        """
+        Called before each prediction for any per-prediction checks.
+        """
+        self.backbone.on_predict_check(data)
+
+    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
+        """
+        Validate and set defaults for calculator input data.
+        """
+        self.backbone.validate_atoms_data(atoms, task_name)
+
+    def setup_tasks(self, tasks_config: list) -> None:
+        """
+        Setup tasks from checkpoint config.
+
+        Args:
+            tasks_config: List of task configurations from checkpoint
+        """
+        tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
+        self._tasks = {t.name: t for t in tasks}
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    def add_tasks(self, tasks: Sequence[Task]) -> None:
+        """
+        Add additional tasks to the model.
+
+        This is useful for adding inference-only tasks that weren't in the
+        original checkpoint, such as untrained derivative properties.
+
+        For inference-only derivative tasks (forces, stress, hessian), this method
+        automatically configures the head's gradient settings to enable computation.
+
+        Args:
+            tasks: List of Task objects to add
+
+        Raises:
+            RuntimeError: If setup_tasks() has not been called
+            ValueError: If a task is incompatible with the model
+        """
+        if not hasattr(self, "tasks"):
+            raise RuntimeError("setup_tasks() must be called before add_tasks()")
+        for task in tasks:
+            if task.name in self.tasks:
+                logging.warning(
+                    f"Task '{task.name}' already exists, skipping adding as a new task."
+                )
+                continue
+            self._validate_task_compatibility(task)
+            self.tasks[task.name] = task
+            if task.inference_only:
+                self._configure_gradient_for_task(task)
+
+        self._dataset_to_tasks = _get_dataset_to_tasks_map(self.tasks.values())
+        self.backbone.validate_tasks(self._dataset_to_tasks)
+
+    def _configure_gradient_for_task(self, task: Task) -> None:
+        """
+        Configure backbone gradient settings for a single inference-only task.
+
+        Since heads share the backbone's regress_config, we configure it directly
+        on the backbone rather than iterating through heads.
+
+        Args:
+            task: The inference-only task to configure gradients for
+        """
+        derivative_properties = ("forces", "stress", "hessian")
+        if task.property not in derivative_properties:
+            return
+
+        if not hasattr(self.backbone, "regress_config"):
+            return
+
+        regress_config = self.backbone.regress_config
+
+        if task.property == "forces":
+            if not regress_config.direct_forces:
+                regress_config.forces = True
+
+        elif task.property == "stress":
+            regress_config.stress = True
+            # Stress requires forces computation
+            if not regress_config.direct_forces:
+                regress_config.forces = True
+
+        elif task.property == "hessian":
+            regress_config.hessian = True
+            regress_config.hessian_vmap = True
+            # Hessian requires forces with create_graph=True
+            if not regress_config.direct_forces:
+                regress_config.forces = True
+
+
 @registry.register_model("hydra")
-class HydraModel(nn.Module):
+class HydraModel(nn.Module, HydraInterfaceMixin):
     def __init__(
         self,
         backbone: dict | None = None,
@@ -281,58 +441,6 @@ class HydraModel(nn.Module):
 
         return out
 
-    @property
-    def tasks(self) -> dict[str, Task]:
-        """
-        Mapping from task names to their associated Task objects.
-        """
-        return self._tasks
-
-    @property
-    def direct_forces(self) -> bool:
-        """
-        Whether this model uses direct force prediction.
-        """
-        return getattr(self.backbone, "direct_forces", False)
-
-    def _validate_task_compatibility(self, task: Task) -> None:
-        """
-        Validate that a task is compatible with this model's capabilities.
-
-        Args:
-            task: Task to validate
-
-        Raises:
-            ValueError: If the task is incompatible with the model
-        """
-        derivative_properties = ("forces", "stress", "hessian")
-
-        if (
-            self.direct_forces
-            and task.inference_only
-            and task.property in derivative_properties
-        ):
-            raise ValueError(
-                f"Cannot add autograd-based '{task.property}' task to direct-force model. "
-                f"Derivative properties require energy-conserving (autograd forces) models."
-            )
-
-        if task.inference_only and task.property in derivative_properties:
-            energy_datasets: set[str] = set()
-            for existing_task in self.tasks.values():
-                if existing_task.property == "energy":
-                    energy_datasets.update(existing_task.datasets)
-
-            task_datasets = set(task.datasets)
-            uncovered_datasets = task_datasets - energy_datasets
-
-            if uncovered_datasets:
-                raise ValueError(
-                    f"Cannot add '{task.property}' task for datasets {task.datasets}. "
-                    f"Datasets {sorted(uncovered_datasets)} have no energy task to derive from. "
-                    f"Derivative properties require energy to compute via autograd."
-                )
-
     def prepare_for_inference(
         self, data: AtomicData, settings: InferenceSettings
     ) -> None:
@@ -366,113 +474,9 @@ class HydraModel(nn.Module):
         if need_eval:
             self.eval()
 
-    def on_predict_check(self, data: AtomicData) -> None:
-        """
-        Called before each prediction for any per-prediction checks.
-        """
-        self.backbone.on_predict_check(data)
-
-    def validate_atoms_data(self, atoms: Atoms, task_name: str) -> None:
-        """
-        Validate and set defaults for calculator input data.
-        """
-        self.backbone.validate_atoms_data(atoms, task_name)
-
-    def setup_tasks(self, tasks_config: list) -> None:
-        """
-        Setup tasks from checkpoint config.
-
-        Args:
-            tasks_config: List of task configurations from checkpoint
-        """
-        tasks = [hydra.utils.instantiate(task_config) for task_config in tasks_config]
-        self._tasks = {t.name: t for t in tasks}
-        self._dataset_to_tasks = _get_dataset_to_tasks_map(tasks)
-        self.backbone.validate_tasks(self._dataset_to_tasks)
-
-    def add_tasks(self, tasks: Sequence[Task]) -> None:
-        """
-        Add additional tasks to the model.
-
-        This is useful for adding inference-only tasks that weren't in the
-        original checkpoint, such as untrained derivative properties.
-
-        For inference-only derivative tasks (forces, stress, hessian), this method
-        automatically configures the head's gradient settings to enable computation.
-
-        Args:
-            tasks: List of Task objects to add
-
-        Raises:
-            RuntimeError: If setup_tasks() has not been called
-            ValueError: If a task is incompatible with the model
-        """
-        if not hasattr(self, "tasks"):
-            raise RuntimeError("setup_tasks() must be called before add_tasks()")
-        for task in tasks:
-            if task.name in self.tasks:
-                logging.warning(
-                    f"Task '{task.name}' already exists, skipping adding as a new task."
-                )
-                continue
-            self._validate_task_compatibility(task)
-            self.tasks[task.name] = task
-            if task.inference_only:
-                self._configure_gradient_for_task(task)
-
-        self._dataset_to_tasks = _get_dataset_to_tasks_map(self.tasks.values())
-        self.backbone.validate_tasks(self._dataset_to_tasks)
-
-    def _configure_gradient_for_task(self, task: Task) -> None:
-        """
-        Configure backbone gradient settings for a single inference-only task.
-
-        Since heads share the backbone's regress_config, we configure it directly
-        on the backbone rather than iterating through heads.
-
-        Args:
-            task: The inference-only task to configure gradients for
-        """
-        derivative_properties = ("forces", "stress", "hessian")
-        if task.property not in derivative_properties:
-            return
-
-        if not hasattr(self.backbone, "regress_config"):
-            return
-
-        regress_config = self.backbone.regress_config
-
-        if task.property == "forces":
-            if not regress_config.direct_forces:
-                regress_config.forces = True
-
-        elif task.property == "stress":
-            regress_config.stress = True
-            # Stress requires forces computation
-            if not regress_config.direct_forces:
-                regress_config.forces = True
-
-        elif task.property == "hessian":
-            regress_config.hessian = True
-            regress_config.hessian_vmap = True
-            # Hessian requires forces with create_graph=True
-            if not regress_config.direct_forces:
-                regress_config.forces = True
-
-    @property
-    def dataset_to_tasks(self) -> dict[str, list]:
-        """
-        Mapping from dataset names to their associated tasks.
-        """
-        if self._dataset_to_tasks is None:
-            raise RuntimeError(
-                "setup_tasks() must be called before accessing dataset_to_tasks"
-            )
-        return self._dataset_to_tasks
-
 
 # TODO this model is only used to initialize models in tests.....clean this up
-class HydraModelV2(HydraModel):
+class HydraModelV2(nn.Module, HydraInterfaceMixin):
     def __init__(
         self,
         backbone: BackboneInterface,
