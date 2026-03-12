@@ -1,7 +1,8 @@
-"""FairChem model wrapper for torch-sim.
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
-Provides a TorchSim-compatible interface to FairChem models for computing
-energies, forces, and stresses of atomistic systems.
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations

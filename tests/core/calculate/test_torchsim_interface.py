@@ -1,10 +1,8 @@
-"""Tests for FairChem torchsim integration.
+"""
+Copyright (c) Meta Platforms, Inc. and affiliates.
 
-Tests the FairChemModel wrapper that provides a torch-sim compatible interface
-for FairChem models to compute energies, forces, and stresses.
-
-To run just these tests with uv(from the repo root):
-    uv run --project packages/fairchem-core --extra torchsim --extra dev --extra extras -- pytest tests/core/calculate/test_torchsim_interface.py -v
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 """
 
 from __future__ import annotations
