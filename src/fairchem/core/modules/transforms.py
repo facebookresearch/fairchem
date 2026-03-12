@@ -171,7 +171,8 @@ def omol_transform(data_object: AtomicData, config) -> AtomicData:
 def stress_reshape_transform(data_object: AtomicData, config) -> AtomicData:
     for k in data_object.keys():  # noqa: SIM118
         if "stress" in k and ("iso" not in k and "aniso" not in k):
-            data_object[k] = data_object[k].reshape(1, 9)
+            stress_tensor = getattr(data_object, k)
+            setattr(data_object, k, stress_tensor.reshape(1, 9))
     return data_object
 
 
@@ -207,23 +208,28 @@ def decompose_tensor(data_object, config) -> AtomicData:
     tensor_key = config["tensor"]
     rank = config["rank"]
 
-    if tensor_key not in data_object:
+    if not hasattr(data_object, tensor_key):
         return data_object
 
     if rank != 2:
         raise NotImplementedError
 
+    tensor_data = getattr(data_object, tensor_key)
     tensor_decomposition = torch.einsum(
         "ab, cb->ca",
-        cg_change_mat(rank),
-        data_object[tensor_key].reshape(1, irreps_sum(rank)),
+        cg_change_mat(rank, device=tensor_data.device),
+        tensor_data.reshape(1, irreps_sum(rank)),
     )
 
     for decomposition_key in config["decomposition"]:
         irrep_dim = config["decomposition"][decomposition_key]["irrep_dim"]
-        data_object[decomposition_key] = tensor_decomposition[
-            :,
-            max(0, irreps_sum(irrep_dim - 1)) : irreps_sum(irrep_dim),
-        ]
+        setattr(
+            data_object,
+            decomposition_key,
+            tensor_decomposition[
+                :,
+                max(0, irreps_sum(irrep_dim - 1)) : irreps_sum(irrep_dim),
+            ],
+        )
 
     return data_object
