@@ -88,7 +88,7 @@ from ase.optimize import LBFGS
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
 from fairchem.core.components.calculate.recipes.adsorbml import run_adsorbml
 
-predictor = pretrained_mlip.get_predict_unit("uma-s-1p1")
+predictor = pretrained_mlip.get_predict_unit("uma-s-1p2")
 calc = FAIRChemCalculator(predictor, task_name="oc20")
 
 outputs = run_adsorbml(
