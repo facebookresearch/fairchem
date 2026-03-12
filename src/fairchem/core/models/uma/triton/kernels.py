@@ -372,16 +372,36 @@ def node_to_edge_wigner_permute_kernel(
         w87 = tl.load(wigner_ptr + w_base + 8 * 9 + 7)
         w88 = tl.load(wigner_ptr + w_base + 8 * 9 + 8)
 
-        y4_src = w44 * x4_src + w45 * x5_src + w46 * x6_src + w47 * x7_src + w48 * x8_src
-        y5_src = w54 * x4_src + w55 * x5_src + w56 * x6_src + w57 * x7_src + w58 * x8_src
-        y6_src = w64 * x4_src + w65 * x5_src + w66 * x6_src + w67 * x7_src + w68 * x8_src
-        y7_src = w74 * x4_src + w75 * x5_src + w76 * x6_src + w77 * x7_src + w78 * x8_src
-        y8_src = w84 * x4_src + w85 * x5_src + w86 * x6_src + w87 * x7_src + w88 * x8_src
-        y4_tgt = w44 * x4_tgt + w45 * x5_tgt + w46 * x6_tgt + w47 * x7_tgt + w48 * x8_tgt
-        y5_tgt = w54 * x4_tgt + w55 * x5_tgt + w56 * x6_tgt + w57 * x7_tgt + w58 * x8_tgt
-        y6_tgt = w64 * x4_tgt + w65 * x5_tgt + w66 * x6_tgt + w67 * x7_tgt + w68 * x8_tgt
-        y7_tgt = w74 * x4_tgt + w75 * x5_tgt + w76 * x6_tgt + w77 * x7_tgt + w78 * x8_tgt
-        y8_tgt = w84 * x4_tgt + w85 * x5_tgt + w86 * x6_tgt + w87 * x7_tgt + w88 * x8_tgt
+        y4_src = (
+            w44 * x4_src + w45 * x5_src + w46 * x6_src + w47 * x7_src + w48 * x8_src
+        )
+        y5_src = (
+            w54 * x4_src + w55 * x5_src + w56 * x6_src + w57 * x7_src + w58 * x8_src
+        )
+        y6_src = (
+            w64 * x4_src + w65 * x5_src + w66 * x6_src + w67 * x7_src + w68 * x8_src
+        )
+        y7_src = (
+            w74 * x4_src + w75 * x5_src + w76 * x6_src + w77 * x7_src + w78 * x8_src
+        )
+        y8_src = (
+            w84 * x4_src + w85 * x5_src + w86 * x6_src + w87 * x7_src + w88 * x8_src
+        )
+        y4_tgt = (
+            w44 * x4_tgt + w45 * x5_tgt + w46 * x6_tgt + w47 * x7_tgt + w48 * x8_tgt
+        )
+        y5_tgt = (
+            w54 * x4_tgt + w55 * x5_tgt + w56 * x6_tgt + w57 * x7_tgt + w58 * x8_tgt
+        )
+        y6_tgt = (
+            w64 * x4_tgt + w65 * x5_tgt + w66 * x6_tgt + w67 * x7_tgt + w68 * x8_tgt
+        )
+        y7_tgt = (
+            w74 * x4_tgt + w75 * x5_tgt + w76 * x6_tgt + w77 * x7_tgt + w78 * x8_tgt
+        )
+        y8_tgt = (
+            w84 * x4_tgt + w85 * x5_tgt + w86 * x6_tgt + w87 * x7_tgt + w88 * x8_tgt
+        )
 
         # =========================================================================
         # Store with L→M permutation
@@ -1445,5 +1465,3 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
         tl.store(DW_ptr + dw_base + 8 * 9 + 7, dw_87)
         tl.store(DW_ptr + dw_base + 8 * 9 + 8, dw_88)
         edge_id += GRID_E_STRIDE
-
-

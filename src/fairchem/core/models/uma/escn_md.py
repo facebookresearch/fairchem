@@ -143,9 +143,7 @@ def _validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, 
     sorted_channels = sorted(channels)
     expected = list(range(sorted_channels[0], sorted_channels[-1] + 1))
     if sorted_channels != expected:
-        raise ValueError(
-            f"{name} must be contiguous (e.g., [0, 1, 2]). Got {channels}"
-        )
+        raise ValueError(f"{name} must be contiguous (e.g., [0, 1, 2]). Got {channels}")
     return sorted_channels[0], sorted_channels[-1] + 1
 
 
@@ -204,7 +202,7 @@ def balance_channels_batched(
 
 
 # Legacy per-channel function kept for reference/testing
-#@torch.compiler.disable
+# @torch.compiler.disable
 def get_balanced_attribute(
     emb: torch.Tensor,
     target_sum: torch.Tensor,
@@ -420,11 +418,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         # which channels to balance - validate contiguity and store slice indices
-        charge_channels = list(charge_balanced_channels) if charge_balanced_channels else []
+        charge_channels = (
+            list(charge_balanced_channels) if charge_balanced_channels else []
+        )
         spin_channels = list(spin_balanced_channels) if spin_balanced_channels else []
 
-        self.charge_channel_start, self.charge_channel_end = _validate_contiguous_channels(
-            charge_channels, "charge_balanced_channels"
+        self.charge_channel_start, self.charge_channel_end = (
+            _validate_contiguous_channels(charge_channels, "charge_balanced_channels")
         )
         self.spin_channel_start, self.spin_channel_end = _validate_contiguous_channels(
             spin_channels, "spin_balanced_channels"

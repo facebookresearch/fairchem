@@ -26,9 +26,12 @@ Public API:
 
 from __future__ import annotations
 
-import torch
-from torch import Tensor
+from typing import TYPE_CHECKING
+
 from torch.library import triton_op, wrap_triton
+
+if TYPE_CHECKING:
+    from torch import Tensor
 
 from fairchem.core.models.uma.triton.constants import BLOCK_C, GRID_E_STRIDE
 from fairchem.core.models.uma.triton.kernels import (
@@ -38,7 +41,6 @@ from fairchem.core.models.uma.triton.kernels import (
     permute_wigner_inv_edge_to_node_bwd_dx_kernel,
     permute_wigner_inv_edge_to_node_kernel,
 )
-
 
 # =============================================================================
 # Forward kernel wrapper for node_to_edge_wigner_permute
@@ -199,7 +201,9 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dx(
     E, num_coeffs, C = grad_out.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
 
-    wrap_triton(permute_wigner_inv_edge_to_node_bwd_dx_kernel)[(GRID_E_STRIDE, num_c_blocks)](
+    wrap_triton(permute_wigner_inv_edge_to_node_bwd_dx_kernel)[
+        (GRID_E_STRIDE, num_c_blocks)
+    ](
         grad_out,
         wigner,
         grad_x,

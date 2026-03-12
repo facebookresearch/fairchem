@@ -103,9 +103,7 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         x = x.contiguous()
 
         # ONLY kernel launch is opaque (via custom_op with mutates_args)
-        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node(
-            x, wigner, out, x_l
-        )
+        torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node(x, wigner, out, x_l)
 
         ctx.save_for_backward(x_l, wigner)
         return out
@@ -124,7 +122,6 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         """
         x_l, wigner = ctx.saved_tensors
         num_edges = grad_out.shape[0]
-        sphere_channels = grad_out.shape[2]
 
         # Ensure contiguous for Triton (x_l from empty_like is always contiguous)
         grad_out = grad_out.contiguous()

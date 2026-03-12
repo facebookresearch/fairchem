@@ -211,8 +211,12 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         )
 
         # Slice: grad_edge [E, 9, 2C] -> src at [:C], tgt at [C:]
-        grad_src = grad_edge[:, :, :sphere_channels].reshape(num_edges, 9 * sphere_channels)
-        grad_tgt = grad_edge[:, :, sphere_channels:].reshape(num_edges, 9 * sphere_channels)
+        grad_src = grad_edge[:, :, :sphere_channels].reshape(
+            num_edges, 9 * sphere_channels
+        )
+        grad_tgt = grad_edge[:, :, sphere_channels:].reshape(
+            num_edges, 9 * sphere_channels
+        )
 
         src_idx = edge_index[0]
         tgt_idx = edge_index[1]
