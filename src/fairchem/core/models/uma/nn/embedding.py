@@ -152,10 +152,10 @@ class ChgSpinEmbedding(nn.Module):
 
         if self.embedding_target == "charge":
             # 100 is a conservative upper bound
-            self.target_dict = {str(x): x + 100 for x in range(-100, 101)}
+            self.target_dict = {x: x + 100 for x in range(-100, 101)}
         elif self.embedding_target == "spin":
             # 100 is a conservative upper bound
-            self.target_dict = {str(x): x for x in range(101)}
+            self.target_dict = {x: x for x in range(101)}
 
         if self.embedding_type == "pos_emb":
             # dividing by 2 because x_proj multiplies by 2
@@ -201,7 +201,7 @@ class ChgSpinEmbedding(nn.Module):
         elif self.embedding_type == "rand_emb":
             return self.rand_emb(
                 torch.tensor(
-                    [self.target_dict[str(i)] for i in x.tolist()],
+                    [self.target_dict[i] for i in x.tolist()],
                     device=x.device,
                     dtype=torch.long,
                 )

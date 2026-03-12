@@ -21,7 +21,6 @@ from torch.profiler import record_function
 
 from fairchem.core.common import gp_utils
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import conditional_grad
 from fairchem.core.graph.compute import generate_graph
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.common.quaternion.quaternion_wigner_utils import (
@@ -143,9 +142,7 @@ def _validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, 
     sorted_channels = sorted(channels)
     expected = list(range(sorted_channels[0], sorted_channels[-1] + 1))
     if sorted_channels != expected:
-        raise ValueError(
-            f"{name} must be contiguous (e.g., [0, 1, 2]). Got {channels}"
-        )
+        raise ValueError(f"{name} must be contiguous (e.g., [0, 1, 2]). Got {channels}")
     return sorted_channels[0], sorted_channels[-1] + 1
 
 
@@ -204,7 +201,7 @@ def balance_channels_batched(
 
 
 # Legacy per-channel function kept for reference/testing
-#@torch.compiler.disable
+# @torch.compiler.disable
 def get_balanced_attribute(
     emb: torch.Tensor,
     target_sum: torch.Tensor,
@@ -420,11 +417,13 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         )
 
         # which channels to balance - validate contiguity and store slice indices
-        charge_channels = list(charge_balanced_channels) if charge_balanced_channels else []
+        charge_channels = (
+            list(charge_balanced_channels) if charge_balanced_channels else []
+        )
         spin_channels = list(spin_balanced_channels) if spin_balanced_channels else []
 
-        self.charge_channel_start, self.charge_channel_end = _validate_contiguous_channels(
-            charge_channels, "charge_balanced_channels"
+        self.charge_channel_start, self.charge_channel_end = (
+            _validate_contiguous_channels(charge_channels, "charge_balanced_channels")
         )
         self.spin_channel_start, self.spin_channel_end = _validate_contiguous_channels(
             spin_channels, "spin_balanced_channels"
@@ -682,14 +681,18 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         data_dict["gp_node_offset"] = 0
         node_partition = None
         if gp_utils.initialized():
-            # create the partitions
+            # create the partitions with fixed size k for each rank
+            # this ensures every rank has the same number of atoms
+            # if n%g > 0, the last rank may reference indices beyond actual atom count
             atomic_numbers_full = data_dict["atomic_numbers_full"]
-            node_partition = torch.tensor_split(
-                torch.arange(
-                    len(atomic_numbers_full), device=atomic_numbers_full.device
-                ),
-                gp_utils.get_gp_world_size(),
-            )[gp_utils.get_gp_rank()]
+            n = len(atomic_numbers_full)
+            g = gp_utils.get_gp_world_size()
+            i = gp_utils.get_gp_rank()
+            k = (n + g - 1) // g  # ceiling division to cover all atoms
+            a = i * k
+            b = (i + 1) * k
+            node_partition = torch.arange(a, b, device=atomic_numbers_full.device)
+
             assert (
                 node_partition.numel() > 0
             ), "Looks like there is no atoms in this graph paralell partition. Cannot proceed"
@@ -760,32 +763,10 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
                 node_partition
             ]
             data_dict["batch"] = data_dict["batch_full"][node_partition]
-            data_dict["gp_node_offset"] = node_partition.min().item()
-
-        if (
-            self.edge_chunk_size is None
-            and not self.training
-            and torch.compiler.is_compiling()
-            and isinstance(self.backend, execution_backends.UMASFastGPUBackend)
-        ):
-            # automatically add AUTO_EDGE_CHUNK_FRACTION% more edges when using torch.compile with UMASFastGPUBackend
-            self.edge_chunk_size = int(
-                graph_dict["edge_index"].shape[1] * AUTO_EDGE_CHUNK_FRACTION
-            )
-            logging.warning(
-                f"auto setting self.edge_chunk_size is set to {self.edge_chunk_size} based on {AUTO_EDGE_CHUNK_FRACTION * 100}% of the number of edges"
-            )
-        # if self.edge_chunk_size is not None:
-        #     pad_edges(
-        #         graph_dict,
-        #         self.edge_chunk_size,
-        #         self.cutoff,
-        #         data_dict["gp_node_offset"],
-        #     )
+            data_dict["gp_node_offset"] = node_partition.shape[0] * gp_utils.get_gp_rank()
 
         return graph_dict
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data_dict: AtomicData) -> dict[str, torch.Tensor]:
         data_dict["atomic_numbers"] = data_dict["atomic_numbers"].long()
         data_dict["atomic_numbers_full"] = data_dict["atomic_numbers"]
@@ -1203,7 +1184,6 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
     def regress_stress(self) -> bool:
         return self.regress_config.stress
 
-    @conditional_grad(torch.enable_grad())
     def forward(
         self, data: AtomicData, emb: dict[str, torch.Tensor]
     ) -> dict[str, torch.Tensor]:
@@ -1222,6 +1202,7 @@ class MLP_EFS_Head(nn.Module, HeadInterface):
             len(data["natoms"]),
             natoms=data["natoms"],
             reduce=self.reduce,
+            training=self.training,
         )
 
         outputs[energy_key] = {"energy": energy} if self.wrap_property else energy
@@ -1314,6 +1295,7 @@ class Linear_Energy_Head(nn.Module, HeadInterface):
             len(data_dict["natoms"]),
             natoms=data_dict["natoms"],
             reduce=self.reduce,
+            training=self.training,
         )
         return {"energy": energy}
 
@@ -1333,9 +1315,7 @@ class Linear_Force_Head(nn.Module, HeadInterface):
         forces = forces.view(-1, 3).contiguous()
 
         if gp_utils.initialized():
-            forces = gp_utils.gather_from_model_parallel_region(
-                forces, data_dict["atomic_numbers_full"].shape[0]
-            )
+            forces = gp_utils.gather_from_model_parallel_region(forces)
 
         return {"forces": forces}
 
@@ -1414,7 +1394,9 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
             emb["node_embedding"], l_min=0, l_max=0
         ).squeeze(1)
         node_scalar = self.scalar_block(scalar_embedding).view(-1)
-        iso_stress, _ = reduce_node_to_system(node_scalar, batch, num_systems)
+        iso_stress, _ = reduce_node_to_system(
+            node_scalar, batch, num_systems, training=self.training
+        )
 
         if self.reduce == "mean":
             iso_stress = iso_stress / data_dict["natoms"]
@@ -1428,7 +1410,9 @@ class MLP_Stress_Head(nn.Module, HeadInterface):
         node_l2 = (
             get_l_component_range(l2_output, l_min=2, l_max=2).view(-1, 5).contiguous()
         )
-        aniso_stress, _ = reduce_node_to_system(node_l2, batch, num_systems)
+        aniso_stress, _ = reduce_node_to_system(
+            node_l2, batch, num_systems, training=self.training
+        )
 
         if self.reduce == "mean":
             aniso_stress = aniso_stress / data_dict["natoms"].unsqueeze(1)
