@@ -42,6 +42,7 @@ def reduce_node_to_system(
     node_values: torch.Tensor,
     batch: torch.Tensor,
     num_systems: int,
+    training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Reduce node-level values to system-level by summing over nodes in each system.
 
@@ -74,7 +75,9 @@ def reduce_node_to_system(
         system_values = flat_system.view(output_shape)
 
     if gp_utils.initialized():
-        reduced = gp_utils.reduce_from_model_parallel_region(system_values)
+        reduced = gp_utils.reduce_from_model_parallel_region(
+            system_values, training=training
+        )
     else:
         reduced = system_values
 
@@ -88,6 +91,7 @@ def compute_energy(
     num_systems: int,
     natoms: torch.Tensor | None = None,
     reduce: Literal["sum", "mean"] = "sum",
+    training: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Compute system-level energy from node embeddings and an energy block.
 
@@ -114,7 +118,9 @@ def compute_energy(
     ).squeeze(1)
     node_energy = energy_block(scalar_embedding)
     node_energy_flat = node_energy.view(-1)
-    energy, energy_part = reduce_node_to_system(node_energy_flat, batch, num_systems)
+    energy, energy_part = reduce_node_to_system(
+        node_energy_flat, batch, num_systems, training=training
+    )
 
     if reduce == "sum":
         pass
@@ -151,7 +157,9 @@ def compute_forces(
     forces = torch.neg(grad)
 
     if gp_utils.initialized():
-        forces = gp_utils.reduce_from_model_parallel_region(forces)
+        forces = gp_utils.reduce_from_model_parallel_region(
+            forces, training=training
+        )
 
     return forces
 
@@ -195,14 +203,20 @@ def compute_forces_and_stress(
 
     if gp_utils.initialized():
         grads = (
-            gp_utils.reduce_from_model_parallel_region(grads[0]),
-            gp_utils.reduce_from_model_parallel_region(grads[1]),
+            gp_utils.reduce_from_model_parallel_region(
+                grads[0], training=training
+            ),
+            gp_utils.reduce_from_model_parallel_region(
+                grads[1], training=training
+            ),
         )
 
     num_systems = cell.shape[0]
     forces = torch.neg(grads[0])
     pos_virial_per_atom = grads[0].unsqueeze(2) * pos.unsqueeze(1)  # [N, 3, 3]
-    pos_virial, _ = reduce_node_to_system(pos_virial_per_atom, batch, num_systems)
+    pos_virial, _ = reduce_node_to_system(
+        pos_virial_per_atom, batch, num_systems, training=training
+    )
 
     cell_virial = cell.mT @ grads[1]  # [B, 3, 3]
 

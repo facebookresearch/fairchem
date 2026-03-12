@@ -267,7 +267,7 @@ def test_parallel_predict_unit_cpu(workers, checkpointing, graph_gen_version):
         (1, True, 2),
         (1, True, 3),
         (1, False, 3),
-        # (2, False),
+        (2, False, 2),
         # (2, True),
     ],
 )
