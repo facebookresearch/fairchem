@@ -117,6 +117,12 @@ class InferenceSettings:
     predict_untrained_hessian: set[str] = field(default_factory=set)
     hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
+    # Maximum number of atoms per system for padding. Required when
+    # compile=True for models that use padding (e.g., AllScAIP).
+    # All inputs will be padded to this size. Larger values consume more
+    # VRAM but allow bigger systems; reduce if you run into OOM errors.
+    max_atoms: int | None = None
+
     def __post_init__(self):
         if isinstance(self.base_precision_dtype, str):
             self.base_precision_dtype = getattr(torch, self.base_precision_dtype)
@@ -140,12 +146,6 @@ class InferenceSettings:
             "fairchem.core.units.mlip_unit.api.inference.InferenceSettings"
         )
         return config
-
-    # Maximum number of atoms per system for padding. Required when
-    # compile=True for models that use padding (e.g., AllScAIP).
-    # All inputs will be padded to this size. Larger values consume more
-    # VRAM but allow bigger systems; reduce if you run into OOM errors.
-    max_atoms: int | None = None
 
 
 # this is most general setting that works for most systems and models,

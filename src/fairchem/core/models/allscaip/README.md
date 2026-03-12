@@ -34,9 +34,12 @@ from ase.io import Trajectory
 from ase.md.langevin import Langevin
 
 from fairchem.core import FAIRChemCalculator
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
 
+# settings = InferenceSettings(compile=True, max_atoms=3)
+settings = "default"
 calc = FAIRChemCalculator.from_model_checkpoint(
-    "/path/to/your/checkpoint.pt", task_name="omol"
+    "/path/to/your/checkpoint.pt", task_name="omol", inference_settings=settings
 )
 
 atoms = molecule("H2O")
