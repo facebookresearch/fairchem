@@ -81,6 +81,7 @@ def reduce_node_to_system(
     return reduced, system_values
 
 
+# Compile produces the wrong values using index_add with float64 precision :(
 @torch.compiler.disable
 def compute_energy(
     emb: dict[str, torch.Tensor],
@@ -114,18 +115,12 @@ def compute_energy(
         emb["node_embedding"], l_min=0, l_max=0
     ).squeeze(1)
     node_energy = energy_block(scalar_embedding)
-    # logging.warning(
-    #     f"rank: {gp_utils.get_gp_rank()}, node_energy_shape: {node_energy.shape}, node_energy: {node_energy[0]}"
-    # )
     node_energy_flat = node_energy.view(-1)
     energy, energy_part = reduce_node_to_system(
         node_energy_flat,
         batch,
         num_systems,
     )
-    # logging.warning(
-    #     f"rank: {gp_utils.get_gp_rank()}, reduced_node_energy: {energy.cpu().detach().sum()}"
-    # )
 
     if reduce == "sum":
         pass
