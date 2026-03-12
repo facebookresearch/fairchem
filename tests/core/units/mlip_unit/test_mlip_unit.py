@@ -368,6 +368,7 @@ def grad_train_from_cli_aselmdb_no_lr_mole_dgl_vs_pytorch(
             assert percent_within_tolerance > 0.999, "Failed percent withing tolerance"
 
 
+@pytest.mark.gpu()
 @pytest.mark.serial()
 @pytest.mark.parametrize(
     "train_config, dataset_config, num_ddps, backbone_overrides",
@@ -410,6 +411,7 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
             f"datasets.data_root_dir={fake_uma_dataset}",
             "optimizer=savegrad",
             "runner.max_steps=1",
+            "job.device_type=CUDA",
         ] + backbone_overrides
 
         gp_size = 2
@@ -436,13 +438,13 @@ def test_grad_train_from_cli_aselmdb_no_lr_gp_vs_nongp(
                     os.path.join(
                         gp_save_path,
                         f"ddp{num_ddps * gp_size}.{ddp_rank}_gp{gp_size}.{gp_rank}_step{step}.pt",
-                    )
+                    ), map_location="cpu"
                 )
                 non_gp_params_and_grads = torch.load(
                     os.path.join(
                         no_gp_save_path,
                         f"ddp{num_ddps}.{compare_to_non_gp_ddp_rank}_gp0.0_step{step}.pt",
-                    )
+                    ), map_location="cpu"
                 )
                 relative_diffs = [
                     (

@@ -13,7 +13,8 @@ import threading
 
 import torch
 from torch import distributed as dist
-from torch.distributed.nn.functional import all_reduce, reduce_scatter
+from torch.distributed._functional_collectives import all_gather_tensor_autograd
+from torch.distributed.nn.functional import all_reduce
 
 """
 Functions to support graph parallel training.
@@ -25,9 +26,6 @@ https://github.com/facebookresearch/fairscale/blob/main/fairscale/nn/model_paral
 
 _GRAPH_PARALLEL_GROUP = None
 _DATA_PARALLEL_GROUP = None
-
-_tls = threading.local()
-
 
 def pad_input(input: torch.Tensor, padded_size: int):
     # pad using functional
@@ -55,11 +53,6 @@ def pad_input(input: torch.Tensor, padded_size: int):
 
 def ensure_div(a: int, b: int) -> None:
     assert a % b == 0
-
-
-def divide_and_check_no_remainder(a: int, b: int) -> int:
-    ensure_div(a, b)
-    return a // b
 
 
 def setup_graph_parallel_groups(
@@ -216,7 +209,7 @@ class ScatterToModelParallelRegion(torch.autograd.Function):
             grad_output, sum(ctx.split_sizes)
         )
 
-
+# Only used in Linear_Force_Head
 def gather_from_model_parallel_region(
     input: torch.Tensor,
     natoms: int,
@@ -243,6 +236,7 @@ def gather_from_model_parallel_region(
 def gather_from_model_parallel_region_sum_grad(
     input: torch.Tensor,
     natoms: int,
+    training: bool = True,
 ) -> torch.Tensor:
     assert initialized(), "Cannot use graph parallel with initializing gp group, must call setup_gp from gp_utils.py!"
     world_size = get_gp_world_size()
@@ -252,12 +246,20 @@ def gather_from_model_parallel_region_sum_grad(
         input, natoms // world_size + (1 if natoms % world_size != 0 else 0)
     )
 
-    tensor_list_w_padding = GatherFromModelParallelRegionSumGradPadded.apply(input)
-
+    if training or dist.get_backend() == "gloo":
+        # Training or gloo: use autograd.Function with second-order
+        # gradient support (needed for conserving force models)
+        chunks = GatherFromModelParallelRegionSumGradPadded.apply(input)
+    else:
+        # Inference on nccl: use compile-traceable functional collective
+        gathered = all_gather_tensor_autograd(
+            input, gather_dim=0, group=get_gp_group()
+        )
+        chunks = gathered.chunk(world_size, dim=0)
     return torch.cat(
         [
             t.narrow(0, 0, s) if t.shape[0] != s else t
-            for t, s in zip(tensor_list_w_padding, size_list)
+            for t, s in zip(chunks, size_list)
         ],
         dim=0,
     )
@@ -280,13 +282,19 @@ class GatherFromModelParallelRegionGradPadded(torch.autograd.Function):
 
 
 class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
+    """Gloo-only fallback: all_gather forward, all_reduce+slice backward.
+
+    Used instead of all_gather_tensor_autograd on gloo because the
+    _c10d_functional reduce_scatter backward lacks second-order
+    autograd support.
+    """
+
     @staticmethod
     @torch.compiler.disable
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         ctx.rank = get_gp_rank()
         ctx.group = get_gp_group()
-        if dist.get_backend() == "gloo":
-            ctx.shape = input.shape
+        ctx.shape = input.shape
         tensor_list = [torch.empty_like(input) for _ in range(get_gp_world_size())]
         dist.all_gather(tensor_list, input, group=ctx.group)
         return tuple(tensor_list)
@@ -294,16 +302,11 @@ class GatherFromModelParallelRegionSumGradPadded(torch.autograd.Function):
     @staticmethod
     @torch.compiler.disable
     def backward(ctx, *grad_outputs):
-        if dist.get_backend() == "gloo":
-            grad_output = all_reduce(torch.cat(grad_outputs, dim=0), group=ctx.group)
-            ctx.padded_size = grad_outputs[0].shape[0]
-            result = grad_output[
-                ctx.padded_size * ctx.rank : ctx.padded_size * ctx.rank + ctx.shape[0]
-            ]
-            return result
-        local_grad_output = grad_outputs[ctx.rank]
-        output_tensor = torch.empty_like(local_grad_output)
-        return reduce_scatter(output_tensor, grad_outputs, group=ctx.group)
+        grad_output = all_reduce(torch.cat(grad_outputs, dim=0), group=ctx.group)
+        padded_size = grad_outputs[0].shape[0]
+        return grad_output[
+            padded_size * ctx.rank : padded_size * ctx.rank + ctx.shape[0]
+        ]
 
 
 def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
@@ -322,11 +325,9 @@ def scale_backward_grad(input: torch.Tensor) -> torch.Tensor:
 # avoid over head communication
 class ScaleBackwardGrad(torch.autograd.Function):
     @staticmethod
-    @torch.compiler.disable
     def forward(ctx, input: torch.Tensor) -> torch.Tensor:
         return input
 
     @staticmethod
-    @torch.compiler.disable
     def backward(ctx, grad_output: torch.Tensor):
         return dist.get_world_size(get_gp_group()) * grad_output
