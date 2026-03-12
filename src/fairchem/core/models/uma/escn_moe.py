@@ -17,7 +17,6 @@ import torch.nn as nn
 from matplotlib import pyplot as plt
 
 from fairchem.core.common.registry import registry
-from fairchem.core.common.utils import conditional_grad
 from fairchem.core.models.base import HeadInterface
 from fairchem.core.models.uma.escn_md import eSCNMDBackbone, resolve_dataset_mapping
 from fairchem.core.models.uma.nn.mole import (
@@ -336,7 +335,6 @@ class DatasetSpecificMoEWrapper(nn.Module, HeadInterface):
             return self.merge_MOLE_model(data)
         return self
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         # Fast path for merged model - skip MOLE routing overhead
         if self.merged_on_dataset is not None:
@@ -447,7 +445,6 @@ class DatasetSpecificSingleHeadWrapper(nn.Module, HeadInterface):
             return self.merge_MOLE_model(data)
         return self
 
-    @conditional_grad(torch.enable_grad())
     def forward(self, data, emb: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         data_batch_full = data.batch_full.cpu()
         # run the internal head
