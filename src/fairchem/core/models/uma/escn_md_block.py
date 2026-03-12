@@ -122,7 +122,7 @@ class Edgewise(torch.nn.Module):
         # we perform the all gather upfront once during each forward call so we don't need to repeat this multiple times during activation checkpointing.
         if gp_utils.initialized():
             x_full = gp_utils.gather_from_model_parallel_region_sum_grad(
-                x, total_atoms_across_gp_ranks
+                x, total_atoms_across_gp_ranks, training=self.training
             )
         else:
             x_full = x
