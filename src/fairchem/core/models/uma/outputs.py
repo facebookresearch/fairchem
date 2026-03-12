@@ -81,6 +81,7 @@ def reduce_node_to_system(
     return reduced, system_values
 
 
+@torch.compiler.disable
 def compute_energy(
     emb: dict[str, torch.Tensor],
     energy_block: torch.nn.Module,
