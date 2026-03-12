@@ -26,12 +26,10 @@ Public API:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from torch import (
+    Tensor,  # noqa: TCH002 - needed at runtime for triton_op schema inference
+)
 from torch.library import triton_op, wrap_triton
-
-if TYPE_CHECKING:
-    from torch import Tensor
 
 from fairchem.core.models.uma.triton.constants import BLOCK_C, GRID_E_STRIDE
 from fairchem.core.models.uma.triton.kernels import (
