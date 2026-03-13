@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -15,7 +16,9 @@ import torch
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
-    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    from fairchem.core.units.mlip_unit.api.inference import (
+        InferenceSettings,
+    )
 
 __all__ = [
     "ExecutionMode",
@@ -23,6 +26,7 @@ __all__ = [
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
     "get_execution_backend",
+    "maybe_update_settings_backend",
 ]
 
 # Indices for m=0 spherical harmonic coefficients in L-major ordering (lmax=2)
@@ -446,3 +450,31 @@ def get_execution_backend(
         available = [m.value for m in _EXECUTION_BACKENDS]
         raise ValueError(f"Unknown execution mode: {mode}. Available: {available}")
     return _EXECUTION_BACKENDS[mode]()
+
+
+def maybe_update_settings_backend(
+    settings: InferenceSettings,
+    model: torch.nn.Module,
+) -> InferenceSettings:
+    """
+    Update inference settings to use UMAS_FAST_GPU if conditions are met.
+
+    Sets execution_mode to UMAS_FAST_GPU if:
+    - execution_mode is not already set
+    - UMASFastGPUBackend.validate passes for the model and settings
+
+    Args:
+        settings: Current inference settings.
+        model: The backbone model to validate.
+
+    Returns:
+        Updated inference settings with the appropriate execution mode.
+    """
+    if settings.execution_mode is not None:
+        return settings
+
+    try:
+        UMASFastGPUBackend.validate(model, settings)
+        return replace(settings, execution_mode=ExecutionMode.UMAS_FAST_GPU)
+    except ValueError:
+        return settings

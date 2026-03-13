@@ -36,6 +36,9 @@ from fairchem.core.common.distutils import (
     setup_env_local_multi_gpu,
 )
 from fairchem.core.datasets.atomic_data import AtomicData, warn_if_upcasting
+from fairchem.core.models.uma.nn.execution_backends import (
+    maybe_update_settings_backend,
+)
 from fairchem.core.units.mlip_unit import InferenceSettings
 from fairchem.core.units.mlip_unit.mlip_unit import OutputSpec, Task
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -142,6 +145,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 use_ema=True,
                 overrides=final_overrides,
                 preloaded_checkpoint=checkpoint,
+            )
+
+            # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode
+            self.inference_settings = maybe_update_settings_backend(
+                self.inference_settings, self.model.module.backbone
             )
 
             # Model sets up tasks
