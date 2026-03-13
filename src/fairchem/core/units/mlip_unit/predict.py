@@ -24,7 +24,6 @@ import numpy as np
 import ray
 import torch
 import torch.distributed as dist
-from ray import remote
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from torch.distributed.elastic.utils.distributed import get_free_port
 from torchtnt.framework import PredictUnit, State
@@ -673,7 +672,7 @@ class MLIPWorkerLocal:
         return None
 
 
-@remote
+@ray.remote
 class MLIPWorker(MLIPWorkerLocal):
     pass
 
