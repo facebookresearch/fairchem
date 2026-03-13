@@ -41,6 +41,9 @@ class SO3_Linear(torch.nn.Module):
         weight = torch.index_select(
             self.weight, dim=0, index=self.expand_index
         )  # [(L_max + 1) ** 2, C_out, C_in]
+        # NOTE: einsum may return non-contiguous tensors depending on input layout.
+        # This caused torch.compile recompiles due to changing tensor strides.
+        # Adding .contiguous() ensures consistent memory layout.
         out = torch.einsum(
             "bmi, moi -> bmo", input_embedding, weight
         ).contiguous()  # [N, (L_max + 1) ** 2, C_out]

@@ -18,56 +18,6 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.models.uma.triton.constants import BLOCK_C
-from fairchem.core.models.uma.triton.kernels import (
-    permute_wigner_inv_edge_to_node_kernel,
-)
-
-
-def permute_wigner_inv_edge_to_node_launcher(
-    x: torch.Tensor,
-    wigner: torch.Tensor,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Forward launcher: M→L permute + Wigner inverse.
-
-    Args:
-        x: Edge features [E, 9, C] in M-major order
-        wigner: Wigner inverse matrices [E, 9, 9]
-
-    Returns:
-        out: Rotated features [E, 9, C] in L-major order
-        x_l: Permuted input [E, 9, C] (saved for backward dW computation)
-    """
-    # x: [E, 9, C] - edge features with 9 coefficients (lmax=2)
-    assert x.ndim == 3, "x must be 3D [E, 9, C]"
-    assert x.shape[1] == 9, "x must have 9 coefficients (lmax=2)"
-    # wigner: [E, 9, 9] - block-diagonal Wigner inverse matrices
-    assert wigner.ndim == 3, "wigner must be 3D [E, 9, 9]"
-    assert wigner.shape[1] == 9, "wigner must have shape [E, 9, 9]"
-    assert wigner.shape[2] == 9, "wigner must have shape [E, 9, 9]"
-    # Contiguity required for memory access pattern
-    assert x.is_contiguous(), "x must be contiguous"
-    assert wigner.is_contiguous(), "wigner must be contiguous"
-
-    E, num_coeffs, C = x.shape
-    num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
-    out = torch.empty_like(x)
-    x_l = torch.empty_like(x)
-
-    # Use E as GRID_E_STRIDE so each program handles exactly one edge
-    permute_wigner_inv_edge_to_node_kernel[(E, num_c_blocks)](
-        x,
-        wigner,
-        out,
-        x_l,
-        E,
-        C,
-        BLOCK_C=BLOCK_C,
-        GRID_E_STRIDE=E,
-    )
-    return out, x_l
-
 
 class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
     """

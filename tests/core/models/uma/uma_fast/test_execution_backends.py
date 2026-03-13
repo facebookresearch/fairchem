@@ -16,9 +16,13 @@ import pytest
 import torch
 
 from fairchem.core.models.uma.triton.constants import (
-    L_TO_M_GATHER_IDX,
     M_TO_L_GATHER_IDX,
 )
+
+# L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX - used only in test reference implementations
+L_TO_M_GATHER_IDX = [0] * 9
+for i, val in enumerate(M_TO_L_GATHER_IDX):
+    L_TO_M_GATHER_IDX[val] = i
 
 # =============================================================================
 # Tests: Validation Errors
@@ -440,7 +444,7 @@ def test_node_to_edge_wigner_permute_matches_pytorch():
     """
     import torch
 
-    from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
+    from tests.core.models.uma.uma_fast.triton_test_utils import (
         node_to_edge_wigner_permute_launcher,
     )
 
@@ -476,7 +480,7 @@ def test_permute_wigner_inv_matches_pytorch():
     """
     import torch
 
-    from fairchem.core.models.uma.triton.permute_wigner_inv_edge_to_node import (
+    from tests.core.models.uma.uma_fast.triton_test_utils import (
         permute_wigner_inv_edge_to_node_launcher,
     )
 
