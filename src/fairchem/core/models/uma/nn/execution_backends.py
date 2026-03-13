@@ -352,8 +352,6 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_gpu requires lmax==2 and mmax==2")
         if settings is not None and not settings.merge_mole:
             raise ValueError("umas_fast_gpu requires merge_mole=True")
-        if settings is not None and not settings.compile:
-            raise ValueError("umas_fast_gpu requires compile=True")
 
     @staticmethod
     def prepare_wigner(
