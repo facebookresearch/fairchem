@@ -117,6 +117,10 @@ class InferenceSettings:
     predict_untrained_hessian: set[str] = field(default_factory=set)
     hessian_vmap: bool = True  # Use fast vmap vs memory-efficient loop
 
+    # When True, allow backbones to add their default untrained tasks
+    # (e.g., eSCNMDBackbone adds stress for all energy tasks by default)
+    auto_add_default_untrained_tasks: bool = True
+
     # Maximum number of atoms per system for padding. Required when
     # compile=True for models that use padding (e.g., AllScAIP).
     # All inputs will be padded to this size. Larger values consume more
