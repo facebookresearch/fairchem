@@ -11,11 +11,12 @@ import json
 import logging
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import ase.io
-import pandas as pd
+import ase.units
 from ase.md import MDLogger
 from omegaconf import OmegaConf
 
@@ -52,7 +53,7 @@ class MDRunner(CalculateRunner):
     dynamics integrator and any trajectory writer.
     """
 
-    result_glob_pattern: ClassVar[str] = "trajectory_*.*"
+    result_glob_pattern: ClassVar[str] = "trajectory*.*"
 
     def __init__(
         self,
@@ -114,17 +115,9 @@ class MDRunner(CalculateRunner):
         self._trajectory_writer: ParquetTrajectoryWriter | None = None
         self._start_step = 0
         self._thermostat_state_to_restore: dict | None = None
+        self._elapsed_wall_time: float = 0.0
 
         super().__init__(calculator=calculator, input_data=[atoms])
-
-    def _get_trajectory_extension(self) -> str:
-        """
-        Get the file extension for the trajectory based on writer type.
-
-        Returns:
-            File extension string (e.g., ".parquet")
-        """
-        return ".parquet"
 
     def calculate(self, job_num: int = 0, num_jobs: int = 1) -> dict[str, Any]:
         """
@@ -143,10 +136,9 @@ class MDRunner(CalculateRunner):
         )
 
         results_dir = Path(self.job_config.metadata.results_dir)
-        sid = self._atoms.info.get("sid", job_num)
+        sid = self._atoms.info.get("sid", f"{job_num}_{num_jobs}")
 
-        extension = self._get_trajectory_extension()
-        trajectory_file = results_dir / f"trajectory{extension}"
+        trajectory_file = results_dir / "trajectory.parquet"
         log_file = results_dir / "thermo.log"
 
         self._atoms.calc = self.calculator
@@ -170,16 +162,18 @@ class MDRunner(CalculateRunner):
                 frame = TrajectoryFrame.from_atoms(
                     self._atoms,
                     step=global_step,
-                    time=self._dyn.get_time(),
+                    time=self._dyn.get_time() / ase.units.fs,
                 )
                 self._trajectory_writer.append(frame)
 
         self._dyn.attach(collect_frame, interval=1)
 
+        self._wall_t0 = time.monotonic()
+
         logger = MDLogger(
             dyn=self._dyn,
             atoms=self._atoms,
-            logfile=log_file,
+            logfile=str(log_file),
             header=True,
             mode="a" if self._start_step > 0 else "w",
         )
@@ -245,6 +239,7 @@ class MDRunner(CalculateRunner):
         except _StopfairDetected:
             stopped_by_stopfair = True
         finally:
+            self._elapsed_wall_time += time.monotonic() - self._wall_t0
             # On STOPFAIR the writer was already closed inside save_state
             # (is_preemption=True). For all other exits (success or error),
             # close here so the Parquet footer is written and data is not lost.
@@ -258,6 +253,7 @@ class MDRunner(CalculateRunner):
             "start_step": self._start_step,
             "structure_id": sid,
             "stopped_by_stopfair": stopped_by_stopfair,
+            "elapsed_time_s": self._elapsed_wall_time,
         }
 
     def write_results(
@@ -287,18 +283,15 @@ class MDRunner(CalculateRunner):
         if not log_file.exists():
             return
 
-        traj_df = pd.read_parquet(trajectory_file)
-        num_frames = len(traj_df)
-
         metadata = {
             "trajectory_file": str(trajectory_file),
             "log_file": str(log_file),
             "total_steps": results["total_steps"],
-            "num_frames": num_frames,
             "trajectory_interval": self.trajectory_interval,
             "log_interval": self.log_interval,
             "thermostat_class": type(self.thermostat).__name__,
             "structure_id": results["structure_id"],
+            "elapsed_time_s": results["elapsed_time_s"],
         }
 
         metadata_file = Path(results_dir) / "metadata.json"
@@ -334,9 +327,19 @@ class MDRunner(CalculateRunner):
         tmp_dir = checkpoint_dir.with_name(checkpoint_dir.name + ".tmp")
 
         try:
-            # Clean up any leftover temp dir from a previous failed save
+            # Clean up any leftover temp dir from a previous failed save.
+            # On NFS, rmtree can fail due to .nfs* silly-rename files from
+            # open handles. Rename the stale dir aside and delete it with
+            # ignore_errors so it doesn't block the new save.
             if tmp_dir.exists():
-                shutil.rmtree(tmp_dir)
+                stale = checkpoint_dir.with_name(checkpoint_dir.name + ".stale")
+                if stale.exists():
+                    shutil.rmtree(stale, ignore_errors=True)
+                try:
+                    tmp_dir.rename(stale)
+                    shutil.rmtree(stale, ignore_errors=True)
+                except OSError:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
             tmp_dir.mkdir(parents=True, exist_ok=True)
 
             if self._trajectory_writer:
@@ -358,10 +361,8 @@ class MDRunner(CalculateRunner):
             md_state = {
                 "current_step": current_step,
                 "total_steps": self.steps,
-                "trajectory_frames_written": (
-                    self._trajectory_writer.total_frames
-                    if self._trajectory_writer
-                    else 0
+                "elapsed_wall_time": (
+                    self._elapsed_wall_time + time.monotonic() - self._wall_t0
                 ),
             }
             state_path = tmp_dir / "md_state.json"
@@ -394,10 +395,14 @@ class MDRunner(CalculateRunner):
                 portable_path = tmp_dir / "portable_config.yaml"
                 OmegaConf.save(portable_cfg, portable_path)
 
-            # Atomically swap: remove old checkpoint, move temp into place.
-            # Both dirs share a parent so rename stays on the same filesystem.
+            # Atomically swap: rename old checkpoint aside, move temp into place.
+            # Use ignore_errors on cleanup to handle NFS silly-rename files.
             if checkpoint_dir.exists():
-                shutil.rmtree(checkpoint_dir)
+                old_dir = checkpoint_dir.with_name(checkpoint_dir.name + ".old")
+                if old_dir.exists():
+                    shutil.rmtree(old_dir, ignore_errors=True)
+                checkpoint_dir.rename(old_dir)
+                shutil.rmtree(old_dir, ignore_errors=True)
             tmp_dir.rename(checkpoint_dir)
             return True
         except Exception as e:
@@ -435,6 +440,7 @@ class MDRunner(CalculateRunner):
             md_state = json.load(f)
 
         self._start_step = md_state["current_step"]
+        self._elapsed_wall_time = md_state.get("elapsed_wall_time", 0.0)
 
         if self._start_step > self.steps:
             raise ValueError(
