@@ -54,7 +54,7 @@ def test_invalid_config(invalid_yaml_config):
 
     with pytest.raises(ValueError):  # noqa
         with open(fname) as fp:
-            yaml.load(fp, Loader=UniqueKeyLoader)
+            yaml.safe_load(fp, Loader=UniqueKeyLoader)
 
 
 def test_valid_config(valid_yaml_config):
@@ -63,4 +63,4 @@ def test_valid_config(valid_yaml_config):
         fname = fp.name
 
     with open(fname) as fp:
-        yaml.load(fp, Loader=UniqueKeyLoader)
+        yaml.safe_load(fp, Loader=UniqueKeyLoader)
