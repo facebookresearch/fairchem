@@ -74,6 +74,7 @@ def node_to_edge_wigner_permute_launcher(
     num_c_blocks = (sphere_channels + BLOCK_C - 1) // BLOCK_C
     grid = (num_edges, num_c_blocks)
 
+    # Use num_edges as GRID_E_STRIDE so each program handles exactly one edge
     node_to_edge_wigner_permute_kernel[grid](
         x,
         edge_index,
@@ -93,6 +94,7 @@ def node_to_edge_wigner_permute_launcher(
         x_edge.stride(1),
         x_edge.stride(2),
         BLOCK_C=BLOCK_C,
+        GRID_E_STRIDE=num_edges,
     )
 
     return out, x_edge

@@ -126,7 +126,6 @@ def _kernel_permute_wigner_inv_edge_to_node(
         E,
         C,
         BLOCK_C=BLOCK_C,
-        SAVE_XL=True,
         GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )

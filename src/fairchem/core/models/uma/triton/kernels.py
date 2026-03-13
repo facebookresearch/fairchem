@@ -1029,7 +1029,6 @@ def permute_wigner_inv_edge_to_node_kernel(
     num_edges,
     sphere_channels,
     BLOCK_C: tl.constexpr,
-    SAVE_XL: tl.constexpr,
     GRID_E_STRIDE: tl.constexpr,
 ):
     """
@@ -1037,8 +1036,8 @@ def permute_wigner_inv_edge_to_node_kernel(
 
     Loads input from M-major positions using M_TO_L_GATHER_IDX,
     computes W @ x_l using block-diagonal structure, and stores
-    in L-major order. Optionally writes the permuted x_l to a
-    second buffer for backward dW computation.
+    in L-major order. Writes the permuted x_l to a second buffer
+    for backward dW computation.
 
     Grid: (num_edges, num_c_blocks)
     """
@@ -1084,18 +1083,17 @@ def permute_wigner_inv_edge_to_node_kernel(
             X_ptr + x_base + 7 * sphere_channels + c_range, mask=c_mask, other=0.0
         )  # L=8 <- M=7
 
-        # Optionally save x_l for backward dW computation
-        if SAVE_XL:
-            xl_base = edge_id * 9 * sphere_channels
-            tl.store(XL_ptr + xl_base + 0 * sphere_channels + c_range, x0, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 1 * sphere_channels + c_range, x1, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 2 * sphere_channels + c_range, x2, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 3 * sphere_channels + c_range, x3, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 4 * sphere_channels + c_range, x4, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 5 * sphere_channels + c_range, x5, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 6 * sphere_channels + c_range, x6, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 7 * sphere_channels + c_range, x7, mask=c_mask)
-            tl.store(XL_ptr + xl_base + 8 * sphere_channels + c_range, x8, mask=c_mask)
+        # Save x_l for backward dW computation
+        xl_base = edge_id * 9 * sphere_channels
+        tl.store(XL_ptr + xl_base + 0 * sphere_channels + c_range, x0, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 1 * sphere_channels + c_range, x1, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 2 * sphere_channels + c_range, x2, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 3 * sphere_channels + c_range, x3, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 4 * sphere_channels + c_range, x4, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 5 * sphere_channels + c_range, x5, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 6 * sphere_channels + c_range, x6, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 7 * sphere_channels + c_range, x7, mask=c_mask)
+        tl.store(XL_ptr + xl_base + 8 * sphere_channels + c_range, x8, mask=c_mask)
 
         # L=0 block (1x1)
         w00 = tl.load(W_ptr + w_base + 0)

@@ -55,6 +55,7 @@ def permute_wigner_inv_edge_to_node_launcher(
     out = torch.empty_like(x)
     x_l = torch.empty_like(x)
 
+    # Use E as GRID_E_STRIDE so each program handles exactly one edge
     permute_wigner_inv_edge_to_node_kernel[(E, num_c_blocks)](
         x,
         wigner,
@@ -63,7 +64,7 @@ def permute_wigner_inv_edge_to_node_launcher(
         E,
         C,
         BLOCK_C=BLOCK_C,
-        SAVE_XL=True,
+        GRID_E_STRIDE=E,
     )
     return out, x_l
 
@@ -92,8 +93,6 @@ class PermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         Returns:
             out: [E, 9, C] rotated features in L-major order
         """
-        # Import here to avoid circular dependency
-        import fairchem.core.models.uma.triton.custom_ops  # noqa: F401 - registers ops
 
         # Allocation VISIBLE to torch.compile (can be optimized)
         out = torch.empty_like(x)
