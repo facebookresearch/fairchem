@@ -20,7 +20,7 @@ from ase.build import bulk
 from ray import serve
 
 from fairchem.core import FAIRChemCalculator, pretrained_mlip
-from fairchem.core.calculate._batch import InferenceBatcher
+from fairchem.core.calculate._batch import AutobatchConfig, InferenceBatcher
 from fairchem.core.datasets.atomic_data import AtomicData
 
 # mark all tests in this module as serial (Ray needs serial execution due to large number of subprocesses)
@@ -77,6 +77,7 @@ def inference_batcher(uma_predict_unit):
     cleanup_ray()
 
 
+@pytest.mark.gpu()
 def test_initialization_with_custom_concurrency_options(uma_predict_unit):
     try:
         max_workers = 8
@@ -94,6 +95,7 @@ def test_initialization_with_custom_concurrency_options(uma_predict_unit):
         cleanup_ray()
 
 
+@pytest.mark.gpu()
 def test_initialization_with_ray_actor_options(uma_predict_unit):
     try:
         batcher = InferenceBatcher(
@@ -109,6 +111,7 @@ def test_initialization_with_ray_actor_options(uma_predict_unit):
         cleanup_ray()
 
 
+@pytest.mark.gpu()
 def test_context_manager_enter_exit(uma_predict_unit):
     try:
         with InferenceBatcher(
@@ -131,6 +134,7 @@ def test_context_manager_enter_exit(uma_predict_unit):
         cleanup_ray()
 
 
+@pytest.mark.gpu()
 def test_batched_atomic_data_predictions(inference_batcher):
     """Test batched predictions using AtomicData directly."""
     atoms_list = [bulk("Cu"), bulk("Al"), bulk("Fe")]
@@ -153,6 +157,7 @@ def test_batched_atomic_data_predictions(inference_batcher):
         assert preds["forces"].shape == (len(atoms_list[i]), 3)
 
 
+@pytest.mark.gpu()
 def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
     """Test that batched and serial calculations produce consistent results."""
     atoms_list = [
@@ -189,6 +194,7 @@ def test_batch_vs_serial_consistency(inference_batcher, uma_predict_unit):
         npt.assert_allclose(r_batch["forces"], r_serial["forces"], atol=1e-4)
 
 
+@pytest.mark.gpu()
 def test_initialization_with_processes_backend(uma_predict_unit):
     """Test initialization with ProcessPoolExecutor backend."""
     try:
@@ -208,7 +214,8 @@ def test_initialization_with_processes_backend(uma_predict_unit):
         cleanup_ray()
 
 
-def test_initialization_with_ray_workers_backend(uma_predict_unit):
+@pytest.mark.gpu()
+def test_initialization_with_ray_actors_backend(uma_predict_unit):
     """Test initialization with Ray actor pool backend."""
     try:
         from fairchem.core.calculate._batch import RayActorPoolExecutor
@@ -218,7 +225,7 @@ def test_initialization_with_ray_workers_backend(uma_predict_unit):
             max_batch_size=16,
             batch_wait_timeout_s=0.1,
             num_replicas=1,
-            concurrency_backend="ray_workers",
+            concurrency_backend="ray-actors",
             concurrency_backend_options={"num_workers": 2},
         )
 
@@ -227,14 +234,11 @@ def test_initialization_with_ray_workers_backend(uma_predict_unit):
         cleanup_ray()
 
 
+@pytest.mark.gpu()
 def test_autobatch_config_initialization(uma_predict_unit):
-    """Test initialization and configure_autobatch method."""
+    """Test initialization and auto_configure_batching method."""
     try:
-        from fairchem.core.calculate._batch import AutobatchConfig
-        from fairchem.core.datasets.atomic_data import AtomicData
-
         autobatch_config = AutobatchConfig(
-            enabled=True,
             min_batch_size=64,
             max_batch_size_cap=1024,
             probe_steps=2,
@@ -251,7 +255,7 @@ def test_autobatch_config_initialization(uma_predict_unit):
         probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
 
         # Configure autobatch with probe data
-        result = batcher.configure_autobatch(probe_data, config=autobatch_config)
+        result = batcher.auto_configure_batching(probe_data, config=autobatch_config)
 
         # Autobatch should return a result with max_batch_size and timeout
         assert result.max_batch_size >= autobatch_config.min_batch_size
@@ -260,6 +264,7 @@ def test_autobatch_config_initialization(uma_predict_unit):
         cleanup_ray()
 
 
+@pytest.mark.gpu()
 def test_batcher_with_explicit_values(uma_predict_unit):
     """Test that explicit batch size and timeout values are used."""
     try:
@@ -279,7 +284,6 @@ def test_batcher_with_explicit_values(uma_predict_unit):
 
 def test_probe_optimal_batch_size_cpu():
     """Test probing on CPU returns defaults."""
-    from fairchem.core.datasets.atomic_data import AtomicData
     from fairchem.core.units.mlip_unit._batch_serve import (
         AutobatchConfig,
         probe_optimal_batch_size,
@@ -292,7 +296,7 @@ def test_probe_optimal_batch_size_cpu():
         def predict(self, data, undo_element_references=True):
             return {"energy": torch.tensor([0.0])}
 
-    config = AutobatchConfig(enabled=True)
+    config = AutobatchConfig()
     # Create probe data for the test
     probe_data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
     result = probe_optimal_batch_size(MockPredictUnit(), probe_data, config)
