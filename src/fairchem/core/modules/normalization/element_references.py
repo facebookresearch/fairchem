@@ -38,12 +38,22 @@ class ElementReferences(nn.Module):
     def compute_references(batch, tensor, elem_refs, operation):
         assert tensor.shape[0] == len(batch.natoms)
         with torch.autocast(elem_refs.device.type, enabled=False):
+            per_atom_refs = elem_refs[batch.atomic_numbers_full]
+            nan_mask = torch.isnan(per_atom_refs)
+            if nan_mask.any():
+                untrained = batch.atomic_numbers_full[nan_mask].unique().tolist()
+                raise ValueError(
+                    f"Encountered elements with no fitted element "
+                    f"references: atomic numbers {untrained}. This "
+                    f"typically means the model was not trained on "
+                    f"data containing these elements."
+                )
             refs = torch.zeros(
                 tensor.shape, dtype=elem_refs.dtype, device=tensor.device
             ).scatter_reduce(
                 0,
                 batch.batch_full,
-                elem_refs[batch.atomic_numbers_full],
+                per_atom_refs,
                 reduce="sum",
             )
             if operation == "subtract":
@@ -292,7 +302,7 @@ def fit_linear_references(
     elementrefs = {}
 
     for target in targets:
-        coeffs = torch.zeros(max_num_elements)
+        coeffs = torch.full((max_num_elements,), float("nan"))
 
         if use_numpy:
             solution = torch.tensor(
