@@ -30,7 +30,6 @@ class AutobatchConfig:
     """Configuration for probing-based autobatching.
 
     Attributes:
-        enabled: Whether autobatching is enabled.
         min_batch_size: Minimum batch size (in atoms) to start probing from.
         max_batch_size_cap: Maximum batch size cap to avoid excessive probing.
         probe_steps: Number of probe steps to run at each batch size.
@@ -41,7 +40,6 @@ class AutobatchConfig:
         warmup_steps: Number of warmup inference steps before probing.
     """
 
-    enabled: bool = False
     min_batch_size: int = 128
     max_batch_size_cap: int = 16384
     probe_steps: int = 3
@@ -121,7 +119,7 @@ def probe_optimal_batch_size(
         AutobatchResult with optimal parameters.
     """
     if config is None:
-        config = AutobatchConfig(enabled=True)
+        config = AutobatchConfig()
 
     if not probe_data:
         raise ValueError("probe_data cannot be empty")
@@ -248,8 +246,8 @@ class BatchPredictServer:
     def __init__(
         self,
         predict_unit_ref,
-        max_batch_size: int,
-        batch_wait_timeout_s: float,
+        max_batch_size: int | None,
+        batch_wait_timeout_s: float | None,
         split_oom_batch: bool = True,
     ):
         """
@@ -257,15 +255,32 @@ class BatchPredictServer:
 
         Args:
             predict_unit_ref: Ray object reference to an MLIPPredictUnit instance
-            max_batch_size: Maximum number of atoms in a batch.
+            max_batch_size: Maximum number of atoms in a batch. If None, batching
+                must be configured via configure_batching() or auto_configure_batching()
+                before running predictions.
                 The actual number of atoms will likely be larger than this as batches
                 are split when num atoms exceeds this value.
-            batch_wait_timeout_s: Timeout in seconds to wait for a prediction
+            batch_wait_timeout_s: Timeout in seconds to wait for a prediction.
+                If None, batching must be configured before running predictions.
             split_oom_batch: If true will split batch if an OOM error is raised
         """
         self.predict_unit = ray.get(predict_unit_ref)
         self.split_oom_batch = split_oom_batch
-        self.configure_batching(max_batch_size, batch_wait_timeout_s)
+        self._batching_configured = False
+
+        if max_batch_size is not None and batch_wait_timeout_s is not None:
+            self.configure_batching(max_batch_size, batch_wait_timeout_s)
+        elif max_batch_size is not None or batch_wait_timeout_s is not None:
+            raise ValueError(
+                "Both max_batch_size and batch_wait_timeout_s must be provided together, "
+                "or both must be None for autobatch configuration."
+            )
+        else:
+            logging.info(
+                "BatchPredictServer initialized without batching configuration. "
+                "Call configure_batching() or use InferenceBatcher.auto_configure_batching() "
+                "before running predictions."
+            )
 
         logging.info("BatchedPredictor initialized with predict_unit from object store")
 
@@ -274,8 +289,31 @@ class BatchPredictServer:
         max_batch_size: int,
         batch_wait_timeout_s: float,
     ):
+        """Configure batching parameters.
+
+        Args:
+            max_batch_size: Maximum number of atoms in a batch.
+            batch_wait_timeout_s: Maximum wait time before processing partial batch.
+
+        Raises:
+            ValueError: If max_batch_size or batch_wait_timeout_s is invalid.
+        """
+        if max_batch_size is None or max_batch_size <= 0:
+            raise ValueError(
+                f"max_batch_size must be a positive integer, got {max_batch_size}"
+            )
+        if batch_wait_timeout_s is None or batch_wait_timeout_s <= 0:
+            raise ValueError(
+                f"batch_wait_timeout_s must be a positive float, got {batch_wait_timeout_s}"
+            )
+
         self.predict.set_max_batch_size(max_batch_size)
         self.predict.set_batch_wait_timeout_s(batch_wait_timeout_s)
+        self._batching_configured = True
+        logging.info(
+            f"Batching configured: max_batch_size={max_batch_size}, "
+            f"batch_wait_timeout_s={batch_wait_timeout_s}"
+        )
 
     def get_predict_unit_attribute(self, attribute_name: str) -> Any:
         return getattr(self.predict_unit, attribute_name)
@@ -295,7 +333,17 @@ class BatchPredictServer:
 
         Returns:
             List of prediction dictionaries, one per input
+
+        Raises:
+            RuntimeError: If batching has not been configured.
         """
+        if not self._batching_configured:
+            raise RuntimeError(
+                "Batching has not been configured. Call configure_batching() with "
+                "explicit max_batch_size and batch_wait_timeout_s values, or use "
+                "InferenceBatcher.auto_configure_batching() to automatically determine "
+                "optimal parameters before running predictions."
+            )
         data_deque = deque([data_list])
         prediction_list = []
         while len(data_deque) > 0:
@@ -390,8 +438,8 @@ class BatchPredictServer:
 
 def setup_batch_predict_server(
     predict_unit: MLIPPredictUnit,
-    max_batch_size: int = 512,
-    batch_wait_timeout_s: float = 0.1,
+    max_batch_size: int | None = None,
+    batch_wait_timeout_s: float | None = None,
     split_oom_batch: bool = True,
     num_replicas: int = 1,
     ray_actor_options: dict | None = None,
@@ -403,9 +451,10 @@ def setup_batch_predict_server(
 
     Args:
         predict_unit: An MLIPPredictUnit instance to use for batched inference
-        max_batch_size: Maximum number of atoms in a batch. Defaults to 512.
+        max_batch_size: Maximum number of atoms in a batch. If None, batching must
+            be configured later via configure_batching() before running predictions.
         batch_wait_timeout_s: Maximum wait time before processing partial batch.
-            Defaults to 0.1.
+            If None, batching must be configured later.
         split_oom_batch: Whether to split batches that cause OOM errors.
         num_replicas: Number of deployment replicas for scaling.
         ray_actor_options: Additional Ray actor options (e.g., {"num_gpus": 1, "num_cpus": 4})

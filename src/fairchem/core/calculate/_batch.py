@@ -143,7 +143,7 @@ class RayActorPoolExecutor:
 
 
 def _get_concurrency_backend(
-    backend: Literal["threads", "processes", "ray_workers"], options: dict
+    backend: Literal["threads", "processes", "ray-actors"], options: dict
 ) -> ExecutorProtocol:
     """Get a backend to run ASE calculations concurrently.
 
@@ -152,7 +152,7 @@ def _get_concurrency_backend(
             - "threads": ThreadPoolExecutor for I/O-bound tasks (default).
             - "processes": ProcessPoolExecutor for CPU-bound tasks.
                 Note: Tasks must be picklable; not suitable for GPU operations.
-            - "ray_workers": Ray actor pool for distributed execution.
+            - "ray-actors": Ray actor pool for distributed execution.
                 Supports options like num_workers and ray_actor_options.
         options: Backend-specific options dictionary.
 
@@ -166,7 +166,7 @@ def _get_concurrency_backend(
         return ThreadPoolExecutor(**options)
     elif backend == "processes":
         return ProcessPoolExecutor(**options)
-    elif backend == "ray_workers":
+    elif backend == "ray-actors":
         return RayActorPoolExecutor(**options)
     raise ValueError(f"Invalid concurrency backend: {backend}")
 
@@ -189,7 +189,7 @@ class InferenceBatcher:
         >>> data = [AtomicData.from_ase(bulk("Cu"), task_name="omat")]
         >>> with InferenceBatcher(predict_unit) as batcher:
         ...     # Probe for optimal batch size using representative data
-        ...     batcher.configure_autobatch(data)
+        ...     batcher.auto_configure_batching(data)
         ...     # Now run simulations with optimal batch size
         ...     futures = [batcher.executor.submit(run_sim, atoms) for atoms in systems]
     """
@@ -201,18 +201,20 @@ class InferenceBatcher:
         batch_wait_timeout_s: float | None = None,
         split_oom_batch: bool = False,
         num_replicas: int = 1,
-        concurrency_backend: Literal["threads", "processes", "ray_workers"] = "threads",
+        concurrency_backend: Literal["threads", "processes", "ray-actors"] = "threads",
         concurrency_backend_options: dict | None = None,
         ray_actor_options: dict | None = None,
     ):
         """
         Args:
             predict_unit: The predict unit to use for inference.
-            max_batch_size: Maximum number of atoms in a batch. If None and autobatch
-                is enabled, this will be determined by probing. Otherwise defaults to 512.
+            max_batch_size: Maximum number of atoms in a batch. If None, must call
+                auto_configure_batching() before running predictions to automatically
+                determine optimal parameters.
             batch_wait_timeout_s: The maximum time to wait for a batch to be ready.
-                If None and autobatch is enabled, this will be determined by probing.
-                Otherwise defaults to 0.1.
+                If None, must call auto_configure_batching() before running predictions.
+                Note: Both max_batch_size and batch_wait_timeout_s must be provided
+                together, or both must be None for autobatch configuration.
             split_oom_batch: If True, split and retry on OOM errors.
             num_replicas: The number of replicas to use for inference.
             concurrency_backend: The concurrency backend to use for running simulations:
@@ -221,18 +223,14 @@ class InferenceBatcher:
                 - "processes": ProcessPoolExecutor. Best for CPU-bound tasks.
                     Note: Tasks must be picklable; not suitable for GPU operations.
                     Options: max_workers (int).
-                - "ray_workers": Ray actor pool for distributed execution.
+                - "ray-actors": Ray actor pool for distributed execution.
                     Options: num_workers (int), ray_actor_options (dict).
             concurrency_backend_options: Options to pass to the concurrency backend.
                 See backend descriptions above for available options.
             ray_actor_options: Options to pass to the Ray actor running the batch server.
-            autobatch_config: Configuration for probing-based autobatching.
-                If enabled and max_batch_size/batch_wait_timeout_s are None,
-                optimal values will be determined by probing GPU memory.
-            autobatch_probe_data: List of AtomicData objects to use for autobatch probing.
-                Required if autobatch_config is enabled and max_batch_size or
-                batch_wait_timeout_s is not set. The data will be repeated if needed
-                to reach larger batch sizes during probing.
+
+        Raises:
+            ValueError: If only one of max_batch_size or batch_wait_timeout_s is provided.
         """
         self.predict_unit = predict_unit
         self.num_replicas = num_replicas
@@ -254,9 +252,9 @@ class InferenceBatcher:
         if concurrency_backend in ("threads", "processes"):
             if "max_workers" not in concurrency_backend_options:
                 concurrency_backend_options["max_workers"] = min(cpu_count(), 16)
-        # Set default num_workers for ray_workers backend
+        # Set default num_workers for ray-actors backend
         elif (
-            concurrency_backend == "ray_workers"
+            concurrency_backend == "ray-actors"
             and "num_workers" not in concurrency_backend_options
         ):
             concurrency_backend_options["num_workers"] = min(cpu_count(), 16)
@@ -278,7 +276,7 @@ class InferenceBatcher:
             predict_unit=self.predict_unit,
         )
 
-    def configure_autobatch(
+    def auto_configure_batching(
         self,
         data: list[AtomicData],
         config: AutobatchConfig | None = None,
@@ -297,7 +295,7 @@ class InferenceBatcher:
             AutobatchResult with the determined optimal parameters.
         """
         if config is None:
-            config = AutobatchConfig(enabled=True)
+            config = AutobatchConfig()
 
         result = probe_optimal_batch_size(
             predict_unit=self.predict_unit,
