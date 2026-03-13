@@ -4,14 +4,14 @@ name: build documentation
 on:
   workflow_call:
   workflow_dispatch:
-  merge_group:
-  push:
-    branches: [main]
-  workflow_run:
-    workflows:
-      - "contributor check"
-    types:
-      - completed
+  #merge_group:
+  #push:
+  #  branches: [main]
+  #workflow_run:
+  #  workflows:
+  #    - "contributor check"
+  #  types:
+  #    - completed
 env:
   # `BASE_URL` determines, relative to the root of the domain, the URL that your site is served from.
   # E.g., if your site lives at `https://mydomain.org/myproject`, set `BASE_URL=/myproject`.
