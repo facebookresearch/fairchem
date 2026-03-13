@@ -123,25 +123,25 @@ class TestReduceNodeToSystem:
 
     def test_single_system(self):
         """Test reduction with a single system."""
-        node_values = torch.tensor([1.0, 2.0, 3.0])
+        node_values = torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64)
         batch = torch.tensor([0, 0, 0])
 
         reduced, unreduced = reduce_node_to_system(node_values, batch, num_systems=1)
 
         assert reduced.shape == (1,)
         assert unreduced.shape == (1,)
-        assert torch.allclose(reduced, torch.tensor([6.0]))
-        assert torch.allclose(unreduced, torch.tensor([6.0]))
+        assert torch.allclose(reduced, torch.tensor([6.0], dtype=torch.float64))
+        assert torch.allclose(unreduced, torch.tensor([6.0], dtype=torch.float64))
 
     def test_multiple_systems(self):
         """Test reduction with multiple systems."""
-        node_values = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+        node_values = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0], dtype=torch.float64)
         batch = torch.tensor([0, 0, 1, 1, 1])
 
         reduced, unreduced = reduce_node_to_system(node_values, batch, num_systems=2)
 
         assert reduced.shape == (2,)
-        assert torch.allclose(reduced, torch.tensor([3.0, 12.0]))
+        assert torch.allclose(reduced, torch.tensor([3.0, 12.0], dtype=torch.float64))
 
     def test_multidimensional_values(self):
         """Test reduction with multi-dimensional node values."""
@@ -152,7 +152,8 @@ class TestReduceNodeToSystem:
                 [4.0, 5.0, 6.0],
                 [7.0, 8.0, 9.0],
                 [10.0, 11.0, 12.0],
-            ]
+            ],
+            dtype=torch.float64,
         )
         batch = torch.tensor([0, 0, 1, 1])
 
@@ -163,19 +164,22 @@ class TestReduceNodeToSystem:
             [
                 [5.0, 7.0, 9.0],  # sum of nodes 0, 1
                 [17.0, 19.0, 21.0],  # sum of nodes 2, 3
-            ]
+            ],
+            dtype=torch.float64,
         )
         assert torch.allclose(reduced, expected)
 
     def test_empty_system(self):
         """Test that systems with no nodes have zero values."""
-        node_values = torch.tensor([1.0, 2.0])
+        node_values = torch.tensor([1.0, 2.0], dtype=torch.float64)
         batch = torch.tensor([0, 2])  # system 1 has no nodes
 
         reduced, _ = reduce_node_to_system(node_values, batch, num_systems=3)
 
         assert reduced.shape == (3,)
-        assert torch.allclose(reduced, torch.tensor([1.0, 0.0, 2.0]))
+        assert torch.allclose(
+            reduced, torch.tensor([1.0, 0.0, 2.0], dtype=torch.float64)
+        )
 
     def test_preserves_dtype(self):
         """Test that output preserves input dtype."""
@@ -202,33 +206,39 @@ class TestComputeEnergy:
 
     def test_single_system(self):
         """Test energy computation for a single system."""
-        emb, energy_block = _make_emb_and_block(torch.tensor([0.5, 1.0, 1.5]))
+        emb, energy_block = _make_emb_and_block(
+            torch.tensor([0.5, 1.0, 1.5], dtype=torch.float64)
+        )
         batch = torch.tensor([0, 0, 0])
 
         energy, energy_part = compute_energy(emb, energy_block, batch, num_systems=1)
 
         assert energy.shape == (1,)
-        assert torch.allclose(energy, torch.tensor([3.0]))
+        assert torch.allclose(energy, torch.tensor([3.0], dtype=torch.float64))
 
     def test_multiple_systems(self):
         """Test energy computation for multiple systems."""
-        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0, 3.0, 4.0]))
+        emb, energy_block = _make_emb_and_block(
+            torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float64)
+        )
         batch = torch.tensor([0, 0, 1, 1])
 
         energy, energy_part = compute_energy(emb, energy_block, batch, num_systems=2)
 
         assert energy.shape == (2,)
-        assert torch.allclose(energy, torch.tensor([3.0, 7.0]))
+        assert torch.allclose(energy, torch.tensor([3.0, 7.0], dtype=torch.float64))
 
     def test_node_energy_flattening(self):
         """Test that energy_block output [N, 1] is properly flattened to [N]."""
-        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 2.0, 3.0]))
+        emb, energy_block = _make_emb_and_block(
+            torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64)
+        )
         batch = torch.tensor([0, 0, 0])
 
         energy, _ = compute_energy(emb, energy_block, batch, num_systems=1)
 
         assert energy.shape == (1,)
-        assert torch.allclose(energy, torch.tensor([6.0]))
+        assert torch.allclose(energy, torch.tensor([6.0], dtype=torch.float64))
 
     def test_energy_part_for_gradients(self):
         """Test that energy_part can be used for gradient computation."""
@@ -248,7 +258,9 @@ class TestComputeEnergy:
 
     def test_reduce_mean(self):
         """Test that reduce='mean' divides energy by natoms per system."""
-        emb, energy_block = _make_emb_and_block(torch.tensor([1.0, 3.0, 2.0, 6.0]))
+        emb, energy_block = _make_emb_and_block(
+            torch.tensor([1.0, 3.0, 2.0, 6.0], dtype=torch.float64)
+        )
         batch = torch.tensor([0, 0, 1, 1])
         natoms = torch.tensor([2, 2])
 
@@ -257,7 +269,7 @@ class TestComputeEnergy:
         )
 
         assert energy.shape == (2,)
-        assert torch.allclose(energy, torch.tensor([2.0, 4.0]))
+        assert torch.allclose(energy, torch.tensor([2.0, 4.0], dtype=torch.float64))
 
     def test_reduce_sum_is_default(self):
         """Test that reduce defaults to 'sum'."""
