@@ -40,7 +40,7 @@ fairchem/applications/fastcsp/core/
 ```
 Input: molecules.csv + config.yaml
         ↓
-[generate] → genarris/ (raw structure generation)
+[generate] → generated_structures/ (raw structure generation)
         ↓
 [process_generated] → raw_structures/ (processed & deduplicated)
         ↓
@@ -124,10 +124,10 @@ fastcsp --config config.yaml --stages generate process_generated relax filter
 ### Programmatic Usage
 ```python
 from fairchem.applications.fastcsp.core.workflow.main import main
-from fairchem.applications.fastcsp.core.utils.logging import get_fastcsp_logger
+from fairchem.applications.fastcsp.core.utils.logging import get_central_logger
 
-# Set up logging
-logger = get_fastcsp_logger(config=config, root_dir="./results")
+# Get the central logger
+logger = get_central_logger()
 
 # Run individual functions
 from fairchem.applications.fastcsp.core.workflow.relax import run_relax_jobs

@@ -5,21 +5,6 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 
 Structure Deduplication Utilities for FastCSP
-
-Key Features:
-- Hierarchical deduplication: fast pre-filtering followed by detailed comparison
-- Parallel processing for scalable performance on large structure databases
-- Configurable tolerance parameters for different similarity requirements
-
-Deduplication Strategy:
-1. Fast Pre-filtering: Group structures by binned properties
-2. Crystallographic Comparison: Apply StructureMatcher within each group
-3. Clustering: Identify connected components of similar structures
-4. Representative Selection: Choose optimal representative from each cluster
-
-The module is optimized for crystal structure prediction workflows where hundreds
-to thousands of structures per molecule need to be efficiently deduplicated while
-preserving all unique polymorphs and avoiding false positive matches.
 """
 
 from __future__ import annotations
@@ -84,18 +69,16 @@ def process_structure_group(group_data, ltol=0.2, stol=0.3, angle_tol=5):
 
 
 def deduplicate_structures(
-    df: pd.DataFrame,
+    structures_df: pd.DataFrame,
+    hash_density: bool = True,
+    hash_volume: bool = True,
     ltol: float = 0.2,
     stol: float = 0.3,
     angle_tol: float = 5,
-    n_jobs: int = 120,
     remove_duplicates: bool = False,
-    hash_density: bool = True,
-    hash_volume: bool = True,
+    n_jobs: int = 70,
 ):
     """
-    Perform efficient deduplication of crystals.
-
     Implements a two-stage deduplication algorithm that combines hash-based pre-filtering
     with detailed crystal comparison for optimal performance on large scale.
     """
@@ -103,7 +86,10 @@ def deduplicate_structures(
 
     # Stage 1: Generate hash-based groups for pre-filtering
     logger.info("Generating structure hashes for pre-filtering...")
-    hashes = df[["structure", "z"]].apply(
+    logger.info(f"Hashing settings - Density: {hash_density}, Volume: {hash_volume}")
+    logger.info(f"Total structures to process: {len(structures_df)}")
+    logger.info(f"Structure DataFrame head:\n{structures_df.head()}")
+    hashes = structures_df[["structure", "z"]].apply(
         lambda x: get_structure_hash(
             x["structure"],
             x["z"],
@@ -124,7 +110,9 @@ def deduplicate_structures(
     groups_to_process = []
     for _, indices in hash_groups:
         # Extract structures for this hash group
-        groups_to_process.append((indices, df["structure"].to_numpy()[indices]))
+        groups_to_process.append(
+            (indices, structures_df["structure"].to_numpy()[indices])
+        )
 
     # Stage 3: Parallel crystallographic deduplication within hash groups
     num_groups = len(groups_to_process)
@@ -152,12 +140,13 @@ def deduplicate_structures(
 
     # Stage 5: Apply group assignments to DataFrame
     all_matches.sort(key=lambda x: x[0])  # Sort by original DataFrame index
-    df["group_index"] = [match[1] for match in all_matches]
+    structures_df["group_index"] = [match[1] for match in all_matches]
 
     # Stage 6: Optional duplicate removal (keep one representative per group)
     if remove_duplicates:
         logger.info("Removing duplicates, keeping one structure per group...")
-        df_deduped = df.drop_duplicates(subset=["group_index"])
-        return df_deduped
-
-    return df
+        structures_df = structures_df.drop_duplicates(
+            subset=["group_index"]
+        ).reset_index(drop=True)
+        logger.info(f"Structures after deduplication: {len(structures_df)}")
+    return structures_df
