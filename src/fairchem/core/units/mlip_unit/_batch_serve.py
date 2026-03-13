@@ -67,6 +67,15 @@ class BatchPredictServer:
     def get_predict_unit_attribute(self, attribute_name: str) -> Any:
         return getattr(self.predict_unit, attribute_name)
 
+    def update_predict_unit(self, predict_unit_ref) -> None:
+        """Update the predict unit with a new checkpoint.
+
+        Args:
+            predict_unit_ref: Ray object reference to a new MLIPPredictUnit instance
+        """
+        self.predict_unit = ray.get(predict_unit_ref)
+        logging.info("BatchPredictServer predict_unit updated from object store")
+
     @serve.batch(
         batch_size_fn=lambda batch: sum(sample.natoms.sum() for sample in batch).item()
     )
@@ -220,10 +229,15 @@ def setup_batch_predict_server(
         )
         logging.info("Ray initialized by setup_batch_predict_server")
 
-    serve.start(
-        logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
-    )
-    logging.info("Ray Serve started by setup_batch_predict_server")
+    # Start Ray Serve if not already started
+    try:
+        serve.status()
+        logging.info("Ray Serve already running")
+    except Exception:
+        serve.start(
+            logging_config=serve.schema.LoggingConfig(log_level="WARNING"),
+        )
+        logging.info("Ray Serve started by setup_batch_predict_server")
 
     predict_unit_ref = ray.put(predict_unit)
     logging.info("Predict unit stored in Ray object store")
