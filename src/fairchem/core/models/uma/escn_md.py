@@ -125,7 +125,7 @@ def add_n_empty_edges(
     )
 
 
-def _validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, int]:
+def validate_contiguous_channels(channels: list[int], name: str) -> tuple[int, int]:
     """Validate channels are contiguous, return (start, end) slice indices.
 
     Args:
@@ -346,9 +346,9 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         spin_channels = list(spin_balanced_channels) if spin_balanced_channels else []
 
         self.charge_channel_start, self.charge_channel_end = (
-            _validate_contiguous_channels(charge_channels, "charge_balanced_channels")
+            validate_contiguous_channels(charge_channels, "charge_balanced_channels")
         )
-        self.spin_channel_start, self.spin_channel_end = _validate_contiguous_channels(
+        self.spin_channel_start, self.spin_channel_end = validate_contiguous_channels(
             spin_channels, "spin_balanced_channels"
         )
 
