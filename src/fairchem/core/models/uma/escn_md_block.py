@@ -109,6 +109,64 @@ class Edgewise(torch.nn.Module):
             extra_m0_output_channels=None,
         )
 
+    def node_to_edge_wigner_permute(
+        self,
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Gather node features and rotate L->M.
+
+        Default: PyTorch gather + BMM.
+
+        Args:
+            x_full: Node features [N, L, C]
+            edge_index: Edge indices [2, E]
+            wigner: Wigner rotation matrices [E, M, L] or [E, M, 2L]
+
+        Returns:
+            Rotated edge messages [E, M, 2C]
+        """
+        x_source = x_full[edge_index[0]]
+        x_target = x_full[edge_index[1]]
+        x_message = torch.cat((x_source, x_target), dim=2)
+        return torch.bmm(wigner, x_message)
+
+    def permute_wigner_inv_edge_to_node(
+        self,
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        """
+        Rotate M->L and scatter edge messages to nodes.
+
+        Default: PyTorch BMM + index_add.
+
+        Args:
+            x_message: Edge message features [E, M, C]
+            wigner_inv: Inverse Wigner matrices [E, L, M]
+            edge_index: Edge indices [2, E]
+            num_nodes: Total number of nodes (output size)
+            node_offset: Offset for node indices (for chunking)
+
+        Returns:
+            Node embeddings [N, L, C] accumulated from edge messages
+        """
+        # Rotate M->L
+        x_rotated = torch.bmm(wigner_inv, x_message)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
+
     def forward(
         self,
         x,
@@ -187,13 +245,11 @@ class Edgewise(torch.nn.Module):
         set_mole_ac_start_index(self, ac_mole_start_idx)
 
         with record_function("SO2Conv"):
-            x_message = self.backend.node_to_edge_wigner_permute(
-                x_full, edge_index, wigner
-            )
+            x_message = self.node_to_edge_wigner_permute(x_full, edge_index, wigner)
             x_message, x_0_gating = self.so2_conv_1(x_message, x_edge)
             x_message = self.act(x_0_gating, x_message)
             x_message = self.so2_conv_2(x_message)
-            new_embedding = self.backend.permute_wigner_inv_edge_to_node(
+            new_embedding = self.permute_wigner_inv_edge_to_node(
                 x_message,
                 wigner_inv_envelope,
                 edge_index,

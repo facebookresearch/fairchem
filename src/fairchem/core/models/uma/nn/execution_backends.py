@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from fairchem.core.models.uma.escn_md_block import Edgewise
+from fairchem.core.models.uma.nn.embedding import EdgeDegreeEmbedding
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
@@ -25,12 +27,168 @@ __all__ = [
     "ExecutionBackend",
     "UMASFastPytorchBackend",
     "UMASFastGPUBackend",
+    "UMASFastGPUEdgeDegreeEmbedding",
+    "UMASFastEdgewise",
+    "UMASFastGPUEdgewise",
     "get_execution_backend",
     "maybe_update_settings_backend",
 ]
 
 # Indices for m=0 spherical harmonic coefficients in L-major ordering (lmax=2)
 _M0_COL_INDICES_L_ORDER = [0, 2, 6]
+
+
+class UMASFastGPUEdgeDegreeEmbedding(EdgeDegreeEmbedding):
+    """
+    EdgeDegreeEmbedding variant for UMASFastGPUBackend.
+
+    Uses L-ordered wigner_inv (not M-ordered) for m=0 column indexing.
+    Created at inference time via from_instance().
+    """
+
+    @classmethod
+    def from_instance(cls, src: EdgeDegreeEmbedding) -> UMASFastGPUEdgeDegreeEmbedding:
+        """Create GPU variant from existing EdgeDegreeEmbedding."""
+        new = cls.__new__(cls)
+        torch.nn.Module.__init__(new)
+
+        # Config
+        new.sphere_channels = src.sphere_channels
+        new.lmax = src.lmax
+        new.mmax = src.mmax
+        new.activation_checkpoint_chunk_size = src.activation_checkpoint_chunk_size
+        new.rescale_factor = src.rescale_factor
+
+        # Computed
+        new.m_0_num_coefficients = src.m_0_num_coefficients
+        new.m_all_num_coefficents = src.m_all_num_coefficents
+
+        # References (shared, not owned)
+        new.mappingReduced = src.mappingReduced
+        new.backend = src.backend
+
+        # Submodule (transfer ownership)
+        new.rad_func = src.rad_func
+
+        return new
+
+    def edge_degree_scatter(
+        self,
+        x: torch.Tensor,
+        radial_output: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        """
+        Edge degree embedding with L-ordered wigner indexing.
+
+        Uses _M0_COL_INDICES_L_ORDER [0, 2, 6] instead of [:3] slice
+        because UMASFastGPUBackend.prepare_wigner passes through raw
+        L-ordered wigner matrices (doesn't apply M-mapping).
+        """
+        radial = radial_output.reshape(
+            -1, self.m_0_num_coefficients, self.sphere_channels
+        )
+
+        # Select m=0 columns from L-ordered wigner_inv
+        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
+        x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
+
+        x_edge_embedding = x_edge_embedding.to(x.dtype)
+
+        return x.index_add(
+            0,
+            edge_index[1] - node_offset,
+            x_edge_embedding / self.rescale_factor,
+        )
+
+
+class UMASFastEdgewise(Edgewise):
+    """
+    Edgewise variant with block-diagonal SO2 convolutions.
+
+    Base class for fast execution backends. Created at inference time
+    via from_instance().
+    """
+
+    @classmethod
+    def from_instance(cls, src: Edgewise) -> UMASFastEdgewise:
+        """Create fast variant from existing Edgewise.
+
+        Converts SO2_Convolution modules to block-diagonal variants
+        and transfers all state from the source instance.
+        """
+        from fairchem.core.models.uma.nn.so2_layers import (
+            convert_so2_conv1,
+            convert_so2_conv2,
+        )
+
+        new = cls.__new__(cls)
+        torch.nn.Module.__init__(new)
+
+        # Config
+        new.sphere_channels = src.sphere_channels
+        new.hidden_channels = src.hidden_channels
+        new.lmax = src.lmax
+        new.mmax = src.mmax
+        new.activation_checkpoint_chunk_size = src.activation_checkpoint_chunk_size
+        new.act_type = src.act_type
+
+        # References (shared, not owned)
+        new.mappingReduced = src.mappingReduced
+        new.SO3_grid = src.SO3_grid
+        new.backend = src.backend
+
+        # Submodules - convert SO2 layers to block-diagonal variants
+        new.act = src.act
+        new.so2_conv_1 = convert_so2_conv1(src.so2_conv_1)
+        new.so2_conv_2 = convert_so2_conv2(src.so2_conv_2)
+
+        return new
+
+
+class UMASFastGPUEdgewise(UMASFastEdgewise):
+    """
+    Edgewise variant for UMASFastGPUBackend.
+
+    Extends UMASFastEdgewise with Triton kernels for wigner operations.
+    """
+
+    def node_to_edge_wigner_permute(
+        self,
+        x_full: torch.Tensor,
+        edge_index: torch.Tensor,
+        wigner: torch.Tensor,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            UMASFastGPUNodeToEdgeWignerPermute,
+        )
+
+        return UMASFastGPUNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
+
+    def permute_wigner_inv_edge_to_node(
+        self,
+        x_message: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        num_nodes: int,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        from fairchem.core.models.uma.triton import (
+            UMASFastGPUPermuteWignerInvEdgeToNode,
+        )
+
+        # Rotate M->L using Triton kernel
+        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(x_message, wigner_inv)
+        # Scatter to nodes
+        new_embedding = torch.zeros(
+            (num_nodes,) + x_rotated.shape[1:],
+            dtype=x_rotated.dtype,
+            device=x_rotated.device,
+        )
+        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
+        return new_embedding
 
 
 class ExecutionMode(str, Enum):
@@ -54,9 +212,6 @@ class ExecutionBackend:
     All methods are static — backends carry no instance state.
 
     Methods (override for optimization):
-        - node_to_edge_wigner_permute: Gather node features and rotate L->M
-        - permute_wigner_inv_edge_to_node: Rotate M->L and scatter to nodes
-        - edge_degree_scatter: Rotate radial and scatter to nodes
         - prepare_model_for_inference: Apply backend-specific model transforms
     """
 
@@ -152,113 +307,6 @@ class ExecutionBackend:
         )
         return wigner, wigner_inv
 
-    @staticmethod
-    def node_to_edge_wigner_permute(
-        x_full: torch.Tensor,
-        edge_index: torch.Tensor,
-        wigner: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Gather node features and rotate L->M.
-
-        Default: PyTorch gather + BMM.
-
-        Args:
-            x_full: Node features [N, L, C]
-            edge_index: Edge indices [2, E]
-            wigner: Wigner rotation matrices [E, M, L] or [E, M, 2L]
-
-        Returns:
-            Rotated edge messages [E, M, 2C]
-        """
-        x_source = x_full[edge_index[0]]
-        x_target = x_full[edge_index[1]]
-        x_message = torch.cat((x_source, x_target), dim=2)
-        return torch.bmm(wigner, x_message)
-
-    @staticmethod
-    def permute_wigner_inv_edge_to_node(
-        x_message: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
-        num_nodes: int,
-        node_offset: int = 0,
-    ) -> torch.Tensor:
-        """
-        Rotate M->L and scatter edge messages to nodes.
-
-        Default: PyTorch BMM + index_add.
-
-        Args:
-            x_message: Edge message features [E, M, C]
-            wigner_inv: Inverse Wigner matrices [E, L, M]
-            edge_index: Edge indices [2, E]
-            num_nodes: Total number of nodes (output size)
-            node_offset: Offset for node indices (for chunking)
-
-        Returns:
-            Node embeddings [N, L, C] accumulated from edge messages
-        """
-        # Rotate M->L
-        x_rotated = torch.bmm(wigner_inv, x_message)
-        # Scatter to nodes
-        new_embedding = torch.zeros(
-            (num_nodes,) + x_rotated.shape[1:],
-            dtype=x_rotated.dtype,
-            device=x_rotated.device,
-        )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
-        return new_embedding
-
-    @staticmethod
-    def edge_degree_scatter(
-        x: torch.Tensor,
-        radial_output: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
-        m_0_num_coefficients: int,
-        sphere_channels: int,
-        rescale_factor: float,
-        node_offset: int = 0,
-    ) -> torch.Tensor:
-        """
-        Edge degree embedding: rotate radial and scatter to nodes.
-
-        Default: PyTorch BMM + index_add.
-
-        Args:
-            x: Node features [N, L, C] to update
-            radial_output: RadialMLP output [E, m0 * C]
-            wigner_inv: Wigner inverse with envelope pre-fused
-                [E, L, m0] or [E, L, L]
-            edge_index: Edge indices [2, E]
-            m_0_num_coefficients: Number of m=0 coefficients
-                (3 for lmax=2)
-            sphere_channels: Number of channels C
-            rescale_factor: Aggregation rescale factor
-            node_offset: Node offset for graph parallelism
-
-        Returns:
-            Updated node features [N, L, C]
-        """
-        # Reshape radial output: [E, m0*C] -> [E, m0, C]
-        radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
-
-        # Slice wigner to m=0 columns and rotate:
-        # [E, L, m0] @ [E, m0, C] -> [E, L, C]
-        wigner_inv_m0 = wigner_inv[:, :, :m_0_num_coefficients]
-        x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
-
-        # Type cast if needed
-        x_edge_embedding = x_edge_embedding.to(x.dtype)
-
-        # Scatter to destination nodes with rescaling
-        return x.index_add(
-            0,
-            edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
-        )
-
 
 class UMASFastPytorchBackend(ExecutionBackend):
     """
@@ -289,22 +337,12 @@ class UMASFastPytorchBackend(ExecutionBackend):
     @staticmethod
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
         """
-        Convert SO2_Convolution modules to block-diagonal GEMM variants
-        and create unified radial MLP for batched computation.
-
-        Replaces so2_conv_1 with SO2_Conv1_WithRadialBlock and
-        so2_conv_2 with SO2_Conv2_InternalBlock in each block's
-        Edgewise module. Then creates a UnifiedRadialMLP from all
-        radial functions for efficient batched computation.
+        Convert Edgewise modules to UMASFastEdgewise with block-diagonal
+        SO2 convolutions and create unified radial MLP.
         """
-        from fairchem.core.models.uma.nn.so2_layers import (
-            convert_so2_conv1,
-            convert_so2_conv2,
-        )
-
+        # Replace Edgewise modules with fast variants (includes SO2 conversion)
         for block in model.blocks:
-            block.edge_wise.so2_conv_1 = convert_so2_conv1(block.edge_wise.so2_conv_1)
-            block.edge_wise.so2_conv_2 = convert_so2_conv2(block.edge_wise.so2_conv_2)
+            block.edge_wise = UMASFastEdgewise.from_instance(block.edge_wise)
 
         # Create unified radial MLP for batched computation
         rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
@@ -332,8 +370,10 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
     """
     GPU-optimized backend: SO2 block conversion + Triton kernels.
 
-    Extends UMASFastPytorchBackend with Triton-accelerated
-    node_to_edge_wigner_permute, permute_wigner_inv_edge_to_node, and edge_degree_scatter.
+    Replaces EdgeDegreeEmbedding and Edgewise modules with GPU-optimized
+    variants that include Triton-accelerated wigner operations and
+    block-diagonal SO2 convolutions.
+
     Requires lmax==2, mmax==2, and merge_mole=True.
 
     Note: sphere_channels % 128 == 0 gives optimal GPU utilization.
@@ -354,6 +394,31 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_gpu requires merge_mole=True")
 
     @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        """
+        Prepare model for GPU-optimized inference.
+
+        Replaces EdgeDegreeEmbedding with UMASFastGPUEdgeDegreeEmbedding
+        for L-ordered wigner indexing, and replaces Edgewise with
+        UMASFastGPUEdgewise which includes SO2 block conversion and
+        Triton-accelerated wigner operations.
+
+        Also creates unified radial MLP for batched computation.
+        """
+        # Replace edge_degree_embedding with GPU variant
+        model.edge_degree_embedding = UMASFastGPUEdgeDegreeEmbedding.from_instance(
+            model.edge_degree_embedding
+        )
+
+        # Replace Edgewise modules with GPU variants (includes SO2 conversion)
+        for block in model.blocks:
+            block.edge_wise = UMASFastGPUEdgewise.from_instance(block.edge_wise)
+
+        # Create unified radial MLP for batched computation
+        rad_funcs = [block.edge_wise.so2_conv_1.rad_func for block in model.blocks]
+        model._unified_radial_mlp = UnifiedRadialMLP(rad_funcs)
+
+    @staticmethod
     def prepare_wigner(
         wigner: torch.Tensor,
         wigner_inv: torch.Tensor,
@@ -362,66 +427,6 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         # Passthrough — Triton kernels handle L-to-M internally
         return wigner, wigner_inv
-
-    @staticmethod
-    def node_to_edge_wigner_permute(
-        x_full: torch.Tensor,
-        edge_index: torch.Tensor,
-        wigner: torch.Tensor,
-    ) -> torch.Tensor:
-        from fairchem.core.models.uma.triton import (
-            UMASFastGPUNodeToEdgeWignerPermute,
-        )
-
-        return UMASFastGPUNodeToEdgeWignerPermute.apply(x_full, edge_index, wigner)
-
-    @staticmethod
-    def permute_wigner_inv_edge_to_node(
-        x_message: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
-        num_nodes: int,
-        node_offset: int = 0,
-    ) -> torch.Tensor:
-        from fairchem.core.models.uma.triton import (
-            UMASFastGPUPermuteWignerInvEdgeToNode,
-        )
-
-        # Rotate M->L using Triton kernel
-        x_rotated = UMASFastGPUPermuteWignerInvEdgeToNode.apply(x_message, wigner_inv)
-        # Scatter to nodes
-        new_embedding = torch.zeros(
-            (num_nodes,) + x_rotated.shape[1:],
-            dtype=x_rotated.dtype,
-            device=x_rotated.device,
-        )
-        new_embedding.index_add_(0, edge_index[1] - node_offset, x_rotated)
-        return new_embedding
-
-    @staticmethod
-    def edge_degree_scatter(
-        x: torch.Tensor,
-        radial_output: torch.Tensor,
-        wigner_inv: torch.Tensor,
-        edge_index: torch.Tensor,
-        m_0_num_coefficients: int,
-        sphere_channels: int,
-        rescale_factor: float,
-        node_offset: int = 0,
-    ) -> torch.Tensor:
-        radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
-
-        # Select m=0 columns from L-ordered wigner_inv
-        wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
-        x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
-
-        x_edge_embedding = x_edge_embedding.to(x.dtype)
-
-        return x.index_add(
-            0,
-            edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
-        )
 
 
 _EXECUTION_BACKENDS: dict[ExecutionMode, type[ExecutionBackend]] = {

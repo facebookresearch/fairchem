@@ -74,6 +74,49 @@ class EdgeDegreeEmbedding(torch.nn.Module):
 
         self.rescale_factor = rescale_factor
 
+    def edge_degree_scatter(
+        self,
+        x: torch.Tensor,
+        radial_output: torch.Tensor,
+        wigner_inv: torch.Tensor,
+        edge_index: torch.Tensor,
+        node_offset: int = 0,
+    ) -> torch.Tensor:
+        """
+        Edge degree embedding: rotate radial and scatter to nodes.
+
+        Default implementation for general backend (M-ordered wigner).
+
+        Args:
+            x: Node features [N, L, C] to update
+            radial_output: RadialMLP output [E, m0 * C]
+            wigner_inv: Wigner inverse with envelope pre-fused [E, L, M]
+            edge_index: Edge indices [2, E]
+            node_offset: Node offset for graph parallelism
+
+        Returns:
+            Updated node features [N, L, C]
+        """
+        # Reshape radial output: [E, m0*C] -> [E, m0, C]
+        radial = radial_output.reshape(
+            -1, self.m_0_num_coefficients, self.sphere_channels
+        )
+
+        # Slice wigner to m=0 columns and rotate:
+        # [E, L, m0] @ [E, m0, C] -> [E, L, C]
+        wigner_inv_m0 = wigner_inv[:, :, : self.m_0_num_coefficients]
+        x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
+
+        # Type cast if needed
+        x_edge_embedding = x_edge_embedding.to(x.dtype)
+
+        # Scatter to destination nodes with rescaling
+        return x.index_add(
+            0,
+            edge_index[1] - node_offset,
+            x_edge_embedding / self.rescale_factor,
+        )
+
     def forward_chunk(
         self,
         x,
@@ -84,14 +127,11 @@ class EdgeDegreeEmbedding(torch.nn.Module):
     ):
         radial = self.rad_func(x_edge)
 
-        return self.backend.edge_degree_scatter(
+        return self.edge_degree_scatter(
             x,
             radial,
             wigner_inv_envelope,
             edge_index,
-            self.m_0_num_coefficients,
-            self.sphere_channels,
-            self.rescale_factor,
             node_offset,
         )
 
