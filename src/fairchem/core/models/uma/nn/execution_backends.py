@@ -19,6 +19,9 @@ import torch
 if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+# Enable coordinate descent tuning for inductor-generated kernels
+torch._inductor.config.coordinate_descent_tuning = True
+
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
 if TYPE_CHECKING:
