@@ -73,6 +73,7 @@ def get_predict_unit(
     device: Literal["cuda", "cpu"] | None = None,
     cache_dir: str = CACHE_DIR,
     workers: int = 1,
+    seed: int = 41,
 ) -> MLIPPredictUnit:
     """
     Retrieves a prediction unit for a specified model.
@@ -87,6 +88,8 @@ def get_predict_unit(
         cache_dir: Path to folder where model files will be stored. Default is "~/.cache/fairchem"
         workers: Number of parallel workers for prediction unit. Default is 1. If greater than 1,
             we will instantiate a ParallelMLIPPredictUnit instead of the normal predict unit.
+        seed: Optional random seed for reproducibility. If provided, will set the random seed for
+            Python's random module, NumPy, and PyTorch to ensure reproducible predictions.
 
     Returns:
         An initialized MLIPPredictUnit ready for making predictions.
@@ -112,6 +115,7 @@ def get_predict_unit(
         atom_refs,
         form_elem_refs,
         workers,
+        seed,
     )
 
 
