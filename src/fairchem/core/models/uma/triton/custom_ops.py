@@ -33,6 +33,7 @@ from torch.library import triton_op, wrap_triton
 
 from fairchem.core.models.uma.triton.constants import BLOCK_C, GRID_E_STRIDE
 from fairchem.core.models.uma.triton.kernels import (
+    node_to_edge_wigner_permute_bwd_dw_kernel,
     node_to_edge_wigner_permute_bwd_dx_kernel,
     node_to_edge_wigner_permute_kernel,
     permute_wigner_inv_edge_to_node_bwd_dw_kernel,
@@ -170,6 +171,45 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
         grad_edge.stride(1),
         grad_edge.stride(2),
         BLOCK_C=sphere_channels,  # Process all channels
+        GRID_E_STRIDE=GRID_E_STRIDE,
+        num_warps=1,
+    )
+
+
+# =============================================================================
+# Backward kernel wrapper for node_to_edge_wigner_permute (bwd_dw)
+# =============================================================================
+
+
+@triton_op(
+    "fairchem::_kernel_node_to_edge_wigner_permute_bwd_dw",
+    mutates_args=("grad_wigner_flat",),
+)
+def _kernel_node_to_edge_wigner_permute_bwd_dw(
+    grad_out: Tensor,
+    x: Tensor,
+    edge_index: Tensor,
+    grad_wigner_flat: Tensor,
+) -> None:
+    """
+    Fused backward for dW: gather from nodes + M→L permute + outer product.
+    """
+    num_edges = grad_out.shape[0]
+    sphere_channels = grad_out.shape[2] // 2
+
+    grid = (GRID_E_STRIDE,)
+
+    wrap_triton(node_to_edge_wigner_permute_bwd_dw_kernel)[grid](
+        grad_out,
+        x,
+        edge_index,
+        grad_wigner_flat,
+        num_edges,
+        sphere_channels,
+        x.stride(0),
+        x.stride(1),
+        edge_index.stride(0),
+        C=sphere_channels,
         GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,
     )

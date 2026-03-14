@@ -125,28 +125,18 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         grad_x_flat.index_add_(0, src_idx, grad_src)
         grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
 
-        # Recompute x_edge from saved node features (saves ~1.8GB per layer)
-        x_source = x[edge_index[0]]  # [E, 9, C]
-        x_target = x[edge_index[1]]  # [E, 9, C]
-        x_edge = torch.cat((x_source, x_target), dim=2)  # [E, 9, 2C]
-
-        # grad_wigner = dy @ x^T using block-sparse structure
-        # Index directly from M-major grad_out using M_TO_L_GATHER_IDX
-        # M_TO_L: [0, 5, 1, 3, 8, 6, 2, 4, 7]
-        E = num_edges
-        grad_wigner = torch.zeros(E, 9, 9, device=wigner.device, dtype=wigner.dtype)
-
-        # L=0 block (1x1): M_TO_L[0]=0
-        grad_wigner[:, 0, 0] = (grad_out[:, 0, :] * x_edge[:, 0, :]).sum(dim=-1)
-
-        # L=1 block (3x3): M_TO_L[1,2,3]=[5,1,3]
-        grad_wigner[:, 1:4, 1:4] = torch.bmm(
-            grad_out[:, [5, 1, 3], :], x_edge[:, 1:4, :].transpose(1, 2)
+        # Fused Triton kernel: gather from nodes + M→L permute + outer product
+        # Avoids materializing x_edge [E, 9, 2C] = ~1.8GB
+        grad_wigner_flat = torch.zeros(
+            (num_edges, 81),
+            dtype=wigner.dtype,
+            device=wigner.device,
         )
 
-        # L=2 block (5x5): M_TO_L[4,5,6,7,8]=[8,6,2,4,7]
-        grad_wigner[:, 4:9, 4:9] = torch.bmm(
-            grad_out[:, [8, 6, 2, 4, 7], :], x_edge[:, 4:9, :].transpose(1, 2)
+        torch.ops.fairchem._kernel_node_to_edge_wigner_permute_bwd_dw(
+            grad_out, x, edge_index, grad_wigner_flat
         )
+
+        grad_wigner = grad_wigner_flat.reshape(num_edges, 9, 9)
 
         return grad_x, None, grad_wigner
