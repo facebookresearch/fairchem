@@ -98,18 +98,17 @@ def _kernel_node_to_edge_wigner_permute(
 
 @triton_op(
     "fairchem::_kernel_permute_wigner_inv_edge_to_node",
-    mutates_args=("out", "x_l"),
+    mutates_args=("out",),
 )
 def _kernel_permute_wigner_inv_edge_to_node(
     x: Tensor,
     wigner: Tensor,
     out: Tensor,
-    x_l: Tensor,
 ) -> None:
     """
-    Kernel-only wrapper: launches Triton kernel, mutates out/x_l in-place.
+    Kernel-only wrapper: launches Triton kernel, mutates out in-place.
 
-    This is opaque to torch.compile but allocation happens outside.
+    x_l eliminated — bwd_dw kernel permutes M→L internally.
     """
     E, num_coeffs, C = x.shape
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
@@ -118,7 +117,6 @@ def _kernel_permute_wigner_inv_edge_to_node(
         x,
         wigner,
         out,
-        x_l,
         E,
         C,
         BLOCK_C=BLOCK_C,

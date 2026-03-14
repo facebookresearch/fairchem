@@ -886,7 +886,6 @@ def permute_wigner_inv_edge_to_node_kernel(
     X_ptr,
     W_ptr,
     OUT_ptr,
-    XL_ptr,
     num_edges,
     sphere_channels,
     BLOCK_C: tl.constexpr,
@@ -944,17 +943,7 @@ def permute_wigner_inv_edge_to_node_kernel(
             X_ptr + x_base + 7 * sphere_channels + c_range, mask=c_mask, other=0.0
         )  # L=8 <- M=7
 
-        # Save x_l for backward dW computation
-        xl_base = edge_id * 9 * sphere_channels
-        tl.store(XL_ptr + xl_base + 0 * sphere_channels + c_range, x0, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 1 * sphere_channels + c_range, x1, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 2 * sphere_channels + c_range, x2, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 3 * sphere_channels + c_range, x3, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 4 * sphere_channels + c_range, x4, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 5 * sphere_channels + c_range, x5, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 6 * sphere_channels + c_range, x6, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 7 * sphere_channels + c_range, x7, mask=c_mask)
-        tl.store(XL_ptr + xl_base + 8 * sphere_channels + c_range, x8, mask=c_mask)
+        # x_l stores eliminated — bwd_dw kernel loads from M-major input directly
 
         # L=0 block (1x1)
         w00 = tl.load(W_ptr + w_base + 0)
@@ -1363,15 +1352,16 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
         dy7 = tl.load(DY_ptr + dy_base + 7 * C + c_range, mask=c_mask, other=0.0)
         dy8 = tl.load(DY_ptr + dy_base + 8 * C + c_range, mask=c_mask, other=0.0)
 
-        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)
-        x1 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)
-        x2 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)
-        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)
-        x4 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)
-        x5 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)
-        x6 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)
-        x7 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)
-        x8 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)
+        # Load x from M-major positions using M_TO_L_GATHER_IDX = [0,5,1,3,8,6,2,4,7]
+        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)  # L=0 <- M=0
+        x1 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)  # L=1 <- M=5
+        x2 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)  # L=2 <- M=1
+        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)  # L=3 <- M=3
+        x4 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)  # L=4 <- M=8
+        x5 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)  # L=5 <- M=6
+        x6 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)  # L=6 <- M=2
+        x7 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)  # L=7 <- M=4
+        x8 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)  # L=8 <- M=7
 
         # L=0 block (1x1): dW[0,0] = sum_c dy[0,c] * x[0,c]
         dw_00 = tl.sum(dy0 * x0)
