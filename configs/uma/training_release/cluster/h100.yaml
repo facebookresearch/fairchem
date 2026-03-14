@@ -1,7 +1,7 @@
 data_root_dir: /checkpoint/ocp/shared
 run_dir: /checkpoint/ocp/shared/uma
 account: ocp
-qos: ocp
+qos: h100_ocp_high
 mode: SLURM
 device: CUDA
 ranks_per_node: 8
@@ -9,3 +9,4 @@ dataloader_workers: 8
 debug: False
 mem_gb: 0
 cpus_per_task: 24
+mp_start_method: fork
