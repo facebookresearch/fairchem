@@ -7,10 +7,17 @@ LICENSE file in the root directory of this source tree.
 
 from __future__ import annotations
 
+import os
 from enum import Enum
 from typing import TYPE_CHECKING
 
 import torch
+
+# Enable expandable segments for the CUDA caching allocator to reduce
+# memory fragmentation and eliminate periodic GC stalls during inference.
+# Must be set before the first CUDA allocation.
+if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
