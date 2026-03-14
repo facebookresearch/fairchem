@@ -61,16 +61,16 @@ def reduce_node_to_system(
     system_values = torch.zeros(
         output_shape,
         device=node_values.device,
-        dtype=node_values.dtype,
+        dtype=torch.float64,
     )
 
     if node_values.dim() == 1:
-        system_values.index_add_(0, batch, node_values)
+        system_values.index_add_(0, batch, node_values.to(system_values.dtype))
     else:
         # For multi-dimensional tensors, we need to handle each trailing dimension
         flat_node = node_values.view(node_values.shape[0], -1)
         flat_system = system_values.view(num_systems, -1)
-        flat_system.index_add_(0, batch, flat_node)
+        flat_system.index_add_(0, batch, flat_node.to(flat_system.dtype))
         system_values = flat_system.view(output_shape)
 
     if gp_utils.initialized():
@@ -81,6 +81,8 @@ def reduce_node_to_system(
     return reduced, system_values
 
 
+# Compile produces the wrong values using index_add with float64 precision :(
+@torch.compiler.disable
 def compute_energy(
     emb: dict[str, torch.Tensor],
     energy_block: torch.nn.Module,
@@ -114,7 +116,11 @@ def compute_energy(
     ).squeeze(1)
     node_energy = energy_block(scalar_embedding)
     node_energy_flat = node_energy.view(-1)
-    energy, energy_part = reduce_node_to_system(node_energy_flat, batch, num_systems)
+    energy, energy_part = reduce_node_to_system(
+        node_energy_flat,
+        batch,
+        num_systems,
+    )
 
     if reduce == "sum":
         pass
