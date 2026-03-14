@@ -335,19 +335,6 @@ def test_invalid_task_name_raises_error(direct_checkpoint) -> None:
         FairChemModel(model=checkpoint_path, task_name="invalid_task")
 
 
-def test_custom_neighbor_list_raises_error(direct_checkpoint) -> None:
-    """Test that FairChemModel raises NotImplementedError for custom neighbor list."""
-    checkpoint_path, _ = direct_checkpoint
-    with pytest.raises(
-        NotImplementedError, match="Custom neighbor list is not supported"
-    ):
-        FairChemModel(
-            model=checkpoint_path,
-            task_name="oc20",
-            neighbor_list_fn=lambda x: x,
-        )
-
-
 def test_single_system_pbc() -> None:
     """Test conversion of a single periodic system."""
     system = bulk("Si", "diamond", a=5.43)

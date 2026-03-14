@@ -32,8 +32,6 @@ except ImportError:
 
 
 if typing.TYPE_CHECKING:
-    from collections.abc import Callable
-
     from torch_sim import SimState
 
 # Use object as fallback base class if ModelInterface is not available
@@ -172,13 +170,13 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
     def __init__(
         self,
         model: str | Path,
-        neighbor_list_fn: Callable | None = None,
         *,  # force remaining arguments to be keyword-only
         model_cache_dir: str | Path | None = None,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
         compute_stress: bool = False,
         task_name: UMATask | str | None = None,
+        retain_graph: bool = False,
     ) -> None:
         """Initialize the FairChem model.
 
@@ -195,6 +193,8 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
             compute_stress (bool): Whether to compute stress tensor
             task_name (UMATask | str | None): Task type for UMA models (optional,
                 only needed for UMA models)
+            retain_graph (bool): Whether to retain the computation graph for
+                backpropagation. Defaults to False, which detaches output tensors.
 
         Raises:
             ImportError: If torch-sim is not installed
@@ -214,12 +214,8 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         self._dtype = dtype or torch.float32
         self._compute_stress = compute_stress
         self._compute_forces = True
-        self._memory_scales_with = "n_atoms"
-
-        if neighbor_list_fn is not None:
-            raise NotImplementedError(
-                "Custom neighbor list is not supported for FairChemModel."
-            )
+        self._memory_scales_with = "n_atoms"  # TODO: this does vary with model type
+        self.retain_graph = retain_graph
 
         # Convert Path to string for consistency
         if isinstance(model, Path):
@@ -254,9 +250,6 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
                 f"Available pretrained models are: {pretrained_mlip.available_models}"
             )
 
-        # Determine implemented properties
-        # This is a simplified approach - in practice you might want to
-        # inspect the model configuration more carefully
         self.implemented_properties = ["energy", "forces"]
         if compute_stress:
             self.implemented_properties.append("stress")
@@ -312,7 +305,6 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
                 stress = stress.view(-1, 3, 3)
             results["stress"] = stress
 
-        retain_graph = getattr(self, "retain_graph", False)
-        if not retain_graph:
+        if not self.retain_graph:
             return {k: v.detach() for k, v in results.items()}
         return results
