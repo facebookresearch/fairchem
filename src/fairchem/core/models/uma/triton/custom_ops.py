@@ -175,6 +175,69 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
 
 
 # =============================================================================
+# Combined bwd_dx + bwd_dw wrapper for node_to_edge_wigner_permute
+# =============================================================================
+
+
+@triton_op(
+    "fairchem::_kernel_node_to_edge_wigner_permute_bwd_combined",
+    mutates_args=("grad_src", "grad_tgt", "grad_wigner_flat"),
+)
+def _kernel_node_to_edge_wigner_permute_bwd_combined(
+    grad_out: Tensor,
+    wigner: Tensor,
+    x: Tensor,
+    edge_index: Tensor,
+    grad_src: Tensor,
+    grad_tgt: Tensor,
+    grad_wigner_flat: Tensor,
+) -> None:
+    """
+    Combined backward: launches both bwd_dx and bwd_dw kernels in one op.
+
+    Reduces Python dispatch overhead from 2 torch.ops calls to 1.
+    """
+    num_edges = grad_out.shape[0]
+    sphere_channels = grad_out.shape[2] // 2
+
+    wigner_flat = wigner.reshape(num_edges, -1)
+
+    # Launch bwd_dx
+    grid_dx = (GRID_E_STRIDE,)
+    wrap_triton(node_to_edge_wigner_permute_bwd_dx_kernel)[grid_dx](
+        grad_out,
+        wigner_flat,
+        grad_src,
+        grad_tgt,
+        num_edges,
+        sphere_channels,
+        grad_out.stride(0),
+        grad_out.stride(1),
+        grad_out.stride(2),
+        BLOCK_C=sphere_channels,
+        GRID_E_STRIDE=GRID_E_STRIDE,
+        num_warps=1,
+    )
+
+    # Launch bwd_dw
+    grid_dw = (GRID_E_STRIDE,)
+    wrap_triton(node_to_edge_wigner_permute_bwd_dw_kernel)[grid_dw](
+        grad_out,
+        x,
+        edge_index,
+        grad_wigner_flat,
+        num_edges,
+        sphere_channels,
+        x.stride(0),
+        x.stride(1),
+        edge_index.stride(0),
+        C=sphere_channels,
+        GRID_E_STRIDE=GRID_E_STRIDE,
+        num_warps=1,
+    )
+
+
+# =============================================================================
 # Backward kernel wrapper for node_to_edge_wigner_permute (bwd_dw)
 # =============================================================================
 
