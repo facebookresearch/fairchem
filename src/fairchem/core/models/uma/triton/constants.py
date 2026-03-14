@@ -11,7 +11,7 @@ from __future__ import annotations
 
 # Block size for channel vectorization in Triton kernels.
 # Must be a power of 2. sphere_channels must be divisible by this.
-BLOCK_C = 128
+BLOCK_C = 256
 
 # Fixed grid size for edge dimension grid-stride loop.
 # Kernels loop: edge_id = program_id(0); while edge_id < num_edges: ...; edge_id += GRID_E_STRIDE
