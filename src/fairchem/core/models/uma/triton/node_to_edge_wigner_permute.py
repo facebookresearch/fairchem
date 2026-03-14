@@ -96,7 +96,19 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             grad_out, wigner, grad_src, grad_tgt
         )
 
-        # Scatter to nodes
+        # Launch bwd_dw BEFORE scatter to allow GPU overlap
+        # (bwd_dw reads grad_out/x, scatter reads grad_src/grad_tgt — independent)
+        grad_wigner_flat = torch.zeros(
+            (num_edges, 81),
+            dtype=wigner.dtype,
+            device=wigner.device,
+        )
+
+        torch.ops.fairchem._kernel_node_to_edge_wigner_permute_bwd_dw(
+            grad_out, x, edge_index, grad_wigner_flat
+        )
+
+        # Scatter to nodes (after bwd_dw launch for potential overlap)
         grad_x = torch.zeros(
             (ctx.num_nodes, 9 * sphere_channels),
             dtype=grad_out.dtype,
@@ -110,18 +122,6 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         grad_x.index_add_(0, edge_index[1], grad_tgt)
 
         grad_x = grad_x.view(ctx.num_nodes, 9, sphere_channels)
-
-        # Fused Triton kernel: gather from nodes + M→L permute + outer product
-        # Avoids materializing x_edge [E, 9, 2C] = ~1.8GB
-        grad_wigner_flat = torch.zeros(
-            (num_edges, 81),
-            dtype=wigner.dtype,
-            device=wigner.device,
-        )
-
-        torch.ops.fairchem._kernel_node_to_edge_wigner_permute_bwd_dw(
-            grad_out, x, edge_index, grad_wigner_flat
-        )
 
         grad_wigner = grad_wigner_flat.reshape(num_edges, 9, 9)
 
