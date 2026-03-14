@@ -21,6 +21,8 @@ if "PYTORCH_CUDA_ALLOC_CONF" not in os.environ:
 
 # Enable coordinate descent tuning for inductor-generated kernels
 torch._inductor.config.coordinate_descent_tuning = True
+# Enable aggressive fusion of inductor ops
+torch._inductor.config.aggressive_fusion = True
 
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
