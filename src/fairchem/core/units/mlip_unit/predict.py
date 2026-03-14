@@ -117,7 +117,7 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
         self.inference_settings = inference_settings
         self._setup_threads(inference_settings)
 
-        if inference_settings.wigner_cuda:
+        if self.inference_settings.wigner_cuda:
             logging.warning(
                 "The wigner_cuda flag is deprecated and will be removed in future versions."
             )
@@ -134,14 +134,14 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
-            checkpoint, overrides, inference_settings
+            checkpoint, overrides, self.inference_settings
         )
 
         # Set default dtype during model construction so that non-persistent
         # buffers (SO3_Grid matrices, CoefficientMapping) are created at the
         # requested precision rather than being cast from float32 later.
         prev_dtype = torch.get_default_dtype()
-        torch.set_default_dtype(inference_settings.base_precision_dtype)
+        torch.set_default_dtype(self.inference_settings.base_precision_dtype)
 
         try:
             # Load model with overrides, passing pre-loaded checkpoint
@@ -159,17 +159,17 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
 
         # Get backbone's default untrained tasks (if supported and enabled)
         default_backbone_tasks = []
-        if inference_settings.auto_add_default_untrained_tasks:
+        if self.inference_settings.auto_add_default_untrained_tasks:
             backbone = self.model.module.backbone
             if hasattr(backbone, "get_default_untrained_tasks"):
                 default_backbone_tasks = backbone.get_default_untrained_tasks(
                     self.model.module.tasks,
-                    inference_settings,
+                    self.inference_settings,
                 )
 
         # Create explicitly requested untrained tasks
         untrained_tasks = self._create_untrained_tasks(
-            inference_settings, self.model.module.tasks
+            self.inference_settings, self.model.module.tasks
         )
 
         explicit_task_names = {t.name for t in untrained_tasks}
