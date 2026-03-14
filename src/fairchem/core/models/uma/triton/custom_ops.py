@@ -156,7 +156,9 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
     # Flatten wigner for kernel (wigner already contiguous from escn_md source)
     wigner_flat = wigner.reshape(num_edges, -1)
 
-    grid = (GRID_E_STRIDE,)
+    # Use larger grid for bwd_dx (heaviest kernel) to increase parallelism
+    BDX_GRID = 4096
+    grid = (BDX_GRID,)
 
     wrap_triton(node_to_edge_wigner_permute_bwd_dx_kernel)[grid](
         grad_out,
@@ -169,7 +171,7 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
         grad_out.stride(1),
         grad_out.stride(2),
         BLOCK_C=sphere_channels,  # Process all channels
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=BDX_GRID,
         num_warps=1,
     )
 
@@ -202,8 +204,9 @@ def _kernel_node_to_edge_wigner_permute_bwd_combined(
 
     wigner_flat = wigner.reshape(num_edges, -1)
 
-    # Launch bwd_dx
-    grid_dx = (GRID_E_STRIDE,)
+    # Launch bwd_dx with larger grid for more parallelism
+    BDX_GRID = 4096
+    grid_dx = (BDX_GRID,)
     wrap_triton(node_to_edge_wigner_permute_bwd_dx_kernel)[grid_dx](
         grad_out,
         wigner_flat,
@@ -215,12 +218,13 @@ def _kernel_node_to_edge_wigner_permute_bwd_combined(
         grad_out.stride(1),
         grad_out.stride(2),
         BLOCK_C=sphere_channels,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=BDX_GRID,
         num_warps=1,
     )
 
-    # Launch bwd_dw
-    grid_dw = (GRID_E_STRIDE,)
+    # Launch bwd_dw with larger grid
+    BDW_GRID = 4096
+    grid_dw = (BDW_GRID,)
     wrap_triton(node_to_edge_wigner_permute_bwd_dw_kernel)[grid_dw](
         grad_out,
         x,
@@ -232,7 +236,7 @@ def _kernel_node_to_edge_wigner_permute_bwd_combined(
         x.stride(1),
         edge_index.stride(0),
         C=sphere_channels,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=BDW_GRID,
         num_warps=1,
     )
 
@@ -296,10 +300,11 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dx(
     Writes to grad_x in-place.
     """
     E, num_coeffs, C = grad_out.shape
+    BDX_GRID = 4096
     num_c_blocks = (C + BLOCK_C - 1) // BLOCK_C
 
     wrap_triton(permute_wigner_inv_edge_to_node_bwd_dx_kernel)[
-        (GRID_E_STRIDE, num_c_blocks)
+        (BDX_GRID, num_c_blocks)
     ](
         grad_out,
         wigner,
@@ -307,7 +312,7 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dx(
         E,
         C,
         BLOCK_C=BLOCK_C,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=BDX_GRID,
         num_warps=1,
     )
 
@@ -333,7 +338,8 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dw(
         sphere_channels & (sphere_channels - 1) == 0 and sphere_channels >= 1
     ), f"sphere_channels must be a power of 2, got {sphere_channels}"
 
-    grid = (GRID_E_STRIDE,)
+    BDW_GRID = 4096
+    grid = (BDW_GRID,)
 
     wrap_triton(permute_wigner_inv_edge_to_node_bwd_dw_kernel)[grid](
         grad_out,
@@ -341,6 +347,6 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dw(
         grad_wigner_flat,
         num_edges,
         sphere_channels,
-        GRID_E_STRIDE=GRID_E_STRIDE,
+        GRID_E_STRIDE=BDW_GRID,
         num_warps=1,
     )
