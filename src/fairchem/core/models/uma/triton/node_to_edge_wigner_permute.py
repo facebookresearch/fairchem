@@ -19,23 +19,6 @@ from __future__ import annotations
 
 import torch
 
-from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
-
-
-def _permute_m_to_l(x: torch.Tensor) -> torch.Tensor:
-    """
-    Permute from M-major to L-major ordering.
-
-    Used in backward dW computation where we need L-major gradients.
-
-    Args:
-        x: Tensor with dim=1 of size 9 in M-major order
-
-    Returns:
-        Tensor in L-major order
-    """
-    return x[:, M_TO_L_GATHER_IDX, :]
-
 
 class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
     """
@@ -147,23 +130,23 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
 
         # grad_wigner = dy @ x^T using block-sparse structure
-        # Convert grad to L-major for outer product
-        grad_l = _permute_m_to_l(grad_out)  # [E, 9, 2C]
-
+        # Index directly from M-major grad_out using M_TO_L_GATHER_IDX
+        # to avoid allocating a full [E, 9, 2C] permutation copy.
+        # M_TO_L: [0, 5, 1, 3, 8, 6, 2, 4, 7]
         E = x_edge.shape[0]
         grad_wigner = torch.zeros(E, 9, 9, device=wigner.device, dtype=wigner.dtype)
 
-        # L=0 block (1x1)
-        grad_wigner[:, 0, 0] = (grad_l[:, 0, :] * x_edge[:, 0, :]).sum(dim=-1)
+        # L=0 block (1x1): M_TO_L[0]=0
+        grad_wigner[:, 0, 0] = (grad_out[:, 0, :] * x_edge[:, 0, :]).sum(dim=-1)
 
-        # L=1 block (3x3)
+        # L=1 block (3x3): M_TO_L[1,2,3]=[5,1,3]
         grad_wigner[:, 1:4, 1:4] = torch.bmm(
-            grad_l[:, 1:4, :], x_edge[:, 1:4, :].transpose(1, 2)
+            grad_out[:, [5, 1, 3], :], x_edge[:, 1:4, :].transpose(1, 2)
         )
 
-        # L=2 block (5x5)
+        # L=2 block (5x5): M_TO_L[4,5,6,7,8]=[8,6,2,4,7]
         grad_wigner[:, 4:9, 4:9] = torch.bmm(
-            grad_l[:, 4:9, :], x_edge[:, 4:9, :].transpose(1, 2)
+            grad_out[:, [8, 6, 2, 4, 7], :], x_edge[:, 4:9, :].transpose(1, 2)
         )
 
         return grad_x, None, grad_wigner
