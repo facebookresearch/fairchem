@@ -12,15 +12,34 @@ E2E accuracy tests are done via run_benchmarks.sh and compare_forces.py scripts.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 import torch
+from ase.build import bulk
 
+from fairchem.core.datasets.ase_datasets import AseDBDataset
+from fairchem.core.datasets.atomic_data import AtomicData
+from fairchem.core.datasets.collaters.simple_collater import data_list_collater
 from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
-from fairchem.core.models.uma.triton.constants import (
-    L_TO_M_GATHER_IDX,
-    M_TO_L_GATHER_IDX,
+from fairchem.core.models.uma.triton.constants import M_TO_L_GATHER_IDX
+from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
+    NodeToEdgeWignerPermuteFunction,
 )
+from fairchem.core.models.uma.triton.permute_wigner_inv_edge_to_node import (
+    PermuteWignerInvEdgeToNodeFunction,
+)
+from fairchem.core.units.mlip_unit import MLIPPredictUnit
 from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+from tests.core.models.uma.uma_fast.triton_test_utils import (
+    node_to_edge_wigner_permute_launcher,
+    permute_wigner_inv_edge_to_node_launcher,
+)
+
+# L_TO_M_GATHER_IDX is the inverse of M_TO_L_GATHER_IDX - used only in test reference implementations
+L_TO_M_GATHER_IDX = [0] * 9
+for i, val in enumerate(M_TO_L_GATHER_IDX):
+    L_TO_M_GATHER_IDX[val] = i
 
 # =============================================================================
 # Tests: Validation Errors
@@ -96,16 +115,6 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
 
     Uses PBC system from fake_uma_dataset (oc20, 5-20 atoms).
     """
-    import os
-
-    import torch
-
-    from fairchem.core.datasets.ase_datasets import AseDBDataset
-    from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-    from fairchem.core.units.mlip_unit import MLIPPredictUnit
-    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-
     checkpoint_pt, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
     atoms = db.get_atoms(0)  # PBC system
@@ -167,16 +176,6 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
 
     Uses non-PBC system from fake_uma_dataset (omol, 2-5 atoms).
     """
-    import os
-
-    import torch
-
-    from fairchem.core.datasets.ase_datasets import AseDBDataset
-    from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-    from fairchem.core.units.mlip_unit import MLIPPredictUnit
-    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-
     checkpoint_pt, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "omol")})
     atoms = db.get_atoms(0)  # Non-PBC molecule
@@ -243,12 +242,6 @@ def test_node_to_edge_wigner_permute_gradcheck():
     Uses fast_mode=True for statistical gradient validation (random projections)
     instead of full Jacobian computation to avoid OOM.
     """
-    import torch
-
-    from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
-        NodeToEdgeWignerPermuteFunction,
-    )
-
     torch.manual_seed(42)
     device = "cuda"
     num_nodes = 8
@@ -287,12 +280,6 @@ def test_permute_wigner_inv_edge_to_node_gradcheck():
     Uses fast_mode=True for statistical gradient validation (random projections)
     instead of full Jacobian computation to avoid OOM.
     """
-    import torch
-
-    from fairchem.core.models.uma.triton.permute_wigner_inv_edge_to_node import (
-        PermuteWignerInvEdgeToNodeFunction,
-    )
-
     torch.manual_seed(42)
     device = "cuda"
     num_edges = 16
@@ -396,12 +383,6 @@ def test_node_to_edge_wigner_permute_matches_pytorch():
     """
     Verify Triton kernel output matches PyTorch reference.
     """
-    import torch
-
-    from fairchem.core.models.uma.triton.node_to_edge_wigner_permute import (
-        node_to_edge_wigner_permute_launcher,
-    )
-
     torch.manual_seed(42)
     device = "cuda"
     num_nodes = 16
@@ -432,12 +413,6 @@ def test_permute_wigner_inv_matches_pytorch():
     """
     Verify Triton kernel output matches PyTorch reference.
     """
-    import torch
-
-    from fairchem.core.models.uma.triton.permute_wigner_inv_edge_to_node import (
-        permute_wigner_inv_edge_to_node_launcher,
-    )
-
     torch.manual_seed(42)
     device = "cuda"
     num_edges = 32
@@ -473,16 +448,6 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
 
     Uses PBC system from fake_uma_dataset (oc20, 5-20 atoms).
     """
-    import os
-
-    import torch
-
-    from fairchem.core.datasets.ase_datasets import AseDBDataset
-    from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-    from fairchem.core.units.mlip_unit import MLIPPredictUnit
-    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-
     checkpoint_pt, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "oc20")})
     atoms = db.get_atoms(0)  # PBC system
@@ -544,16 +509,6 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
     Uses non-PBC system from fake_uma_dataset (omol, 2-5 atoms).
     """
-    import os
-
-    import torch
-
-    from fairchem.core.datasets.ase_datasets import AseDBDataset
-    from fairchem.core.datasets.atomic_data import AtomicData
-    from fairchem.core.datasets.collaters.simple_collater import data_list_collater
-    from fairchem.core.units.mlip_unit import MLIPPredictUnit
-    from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
-
     checkpoint_pt, _ = conserving_mole_checkpoint
     db = AseDBDataset(config={"src": os.path.join(fake_uma_dataset, "omol")})
     atoms = db.get_atoms(0)  # Non-PBC molecule
