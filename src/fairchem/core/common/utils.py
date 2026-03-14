@@ -101,7 +101,13 @@ def _import_local_file(path: Path, *, project_root: Path) -> None:
         path.absolute().relative_to(project_root.absolute()).with_suffix("").parts
     )
     logging.debug(f"Resolved module name of {path} to {module_name}")
-    importlib.import_module(module_name)
+    try:
+        importlib.import_module(module_name)
+    except (ImportError, ModuleNotFoundError) as e:
+        # Skip modules that have missing optional dependencies (e.g., triton on macOS ARM64)
+        logging.debug(
+            f"Skipping import of {module_name} due to missing dependency: {e}"
+        )
 
 
 def setup_experimental_imports(project_root: Path) -> None:
