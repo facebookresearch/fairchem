@@ -473,6 +473,50 @@ def test_permute_wigner_inv_matches_pytorch():
     ), f"Max diff: {(ref_out - triton_out).abs().max()}"
 
 
+@pytest.mark.gpu()
+@pytest.mark.parametrize("sphere_channels", [128, 256, 512])
+def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
+    """
+    Verify permute_wigner_inv backward dW kernel matches PyTorch reference.
+
+    Tests that dW = grad_out @ x_l^T is computed correctly over ALL channels.
+    Regression test for a bug where channels > 128 were silently dropped.
+    """
+    torch.manual_seed(42)
+    device = "cuda"
+    num_edges = 32
+
+    # Create inputs (L-major for grad_out, L-major for x_l)
+    grad_out = torch.randn(num_edges, 9, sphere_channels, device=device)
+    x_l = torch.randn(num_edges, 9, sphere_channels, device=device)
+
+    # PyTorch reference: block-diagonal outer product
+    ref_dw = torch.zeros(num_edges, 9, 9, device=device)
+    # L=0 block (1x1)
+    ref_dw[:, 0, 0] = (grad_out[:, 0, :] * x_l[:, 0, :]).sum(dim=-1)
+    # L=1 block (3x3)
+    ref_dw[:, 1:4, 1:4] = torch.bmm(grad_out[:, 1:4, :], x_l[:, 1:4, :].transpose(1, 2))
+    # L=2 block (5x5)
+    ref_dw[:, 4:9, 4:9] = torch.bmm(grad_out[:, 4:9, :], x_l[:, 4:9, :].transpose(1, 2))
+
+    # Triton kernel via custom op
+    import fairchem.core.models.uma.triton.custom_ops  # noqa: F401
+
+    grad_wigner_flat = torch.zeros(num_edges, 81, device=device)
+    torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node_bwd_dw(
+        grad_out, x_l, grad_wigner_flat
+    )
+    triton_dw = grad_wigner_flat.reshape(num_edges, 9, 9)
+
+    # Compare — tolerance should be tight (numerical precision only)
+    assert torch.allclose(ref_dw, triton_dw, rtol=1e-3, atol=1e-3), (
+        f"permute_wigner_inv bwd_dw mismatch at sphere_channels={sphere_channels}: "
+        f"max abs diff={( ref_dw - triton_dw).abs().max().item():.6e}, "
+        f"ref norm={ref_dw.norm().item():.4f}, "
+        f"triton norm={triton_dw.norm().item():.4f}"
+    )
+
+
 # =============================================================================
 # Tests: E2E umas_fast_gpu Backend
 # =============================================================================
