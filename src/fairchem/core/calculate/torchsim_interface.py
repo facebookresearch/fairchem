@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import typing
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import torch
 
@@ -23,12 +23,10 @@ try:
     import torch_sim as ts
     from torch_sim.models.interface import ModelInterface
     from torch_sim.transforms import pbc_wrap_batched
-    from torch_sim.transforms import wrap_positions as ts_wrap_positions
 except ImportError:
-    ts = None
-    ModelInterface = None
-    pbc_wrap_batched = None
-    ts_wrap_positions = None
+    ts = None  # type: ignore[assignment]
+    ModelInterface = None  # type: ignore[assignment]
+    pbc_wrap_batched = None  # type: ignore[assignment]
 
 
 if typing.TYPE_CHECKING:
@@ -146,7 +144,7 @@ def _simstate_to_atomicdata_batch(
     return atomic_data_batch.contiguous()
 
 
-class FairChemModel(_TSModelInterface):  # type: ignore[misc]
+class FairChemModel(_TSModelInterface):
     """FairChem model wrapper for computing atomistic properties.
 
     Wraps FairChem models to compute energies, forces, and stresses. Can be
@@ -218,8 +216,12 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         self.retain_graph = retain_graph
 
         # Convert Path to string for consistency
-        if isinstance(model, Path):
-            model = str(model)
+        model = str(model) if isinstance(model, Path) else model
+        model_cache_dir = (
+            str(model_cache_dir)
+            if isinstance(model_cache_dir, Path)
+            else model_cache_dir
+        )
 
         # Convert task_name to UMATask if it's a string (only for UMA models)
         if isinstance(task_name, str):
@@ -229,12 +231,14 @@ class FairChemModel(_TSModelInterface):  # type: ignore[misc]
         self._device = device or torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
         )
-        device_str = str(self._device)
+        device_str: Literal["cuda", "cpu"] = (
+            self._device.type
+        )  # ty:ignore[invalid-assignment]
         self.task_name = task_name
 
         # Create efficient batch predictor for fast inference
         if model in pretrained_mlip.available_models:
-            if model_cache_dir and model_cache_dir.exists():
+            if model_cache_dir and os.path.exists(model_cache_dir):
                 self.predictor = pretrained_mlip.get_predict_unit(
                     model, device=device_str, cache_dir=model_cache_dir
                 )
