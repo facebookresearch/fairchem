@@ -324,6 +324,53 @@ class UMASFastPytorchBackend(ExecutionBackend):
         return model._unified_radial_mlp(x_edge)
 
 
+class _EdgeDegreeScatterFunction(torch.autograd.Function):
+    """
+    Custom autograd for edge_degree_scatter to reduce backward overhead.
+
+    Fuses: W_m0 @ radial / rescale + scatter into a single autograd node
+    instead of separate bmm → to → div → index_add nodes.
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        x: torch.Tensor,
+        radial: torch.Tensor,
+        wigner_inv_m0: torch.Tensor,
+        edge_index_1: torch.Tensor,
+        rescale_factor: float,
+    ) -> torch.Tensor:
+        x_edge = torch.bmm(wigner_inv_m0, radial)
+        x_edge = x_edge.to(x.dtype)
+        inv_rescale = 1.0 / rescale_factor
+        result = x.index_add(0, edge_index_1, x_edge * inv_rescale)
+        ctx.save_for_backward(radial, wigner_inv_m0, edge_index_1)
+        ctx.inv_rescale = inv_rescale
+        ctx.num_nodes = x.shape[0]
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        radial, wigner_inv_m0, edge_index_1 = ctx.saved_tensors
+        inv_rescale = ctx.inv_rescale
+
+        # grad of index_add w.r.t. x is identity
+        grad_x = grad_out
+
+        # grad of index_add w.r.t. src is gather
+        grad_edge = grad_out[edge_index_1] * inv_rescale  # [E, 9, C]
+        grad_edge = grad_edge.to(radial.dtype)
+
+        # grad_radial = W_m0^T @ grad_edge  → [E, m0, C]
+        grad_radial = torch.bmm(wigner_inv_m0.transpose(1, 2), grad_edge)
+
+        # grad_wigner_m0 = grad_edge @ radial^T → [E, 9, m0]
+        grad_wigner_m0 = torch.bmm(grad_edge, radial.transpose(1, 2))
+
+        return grad_x, grad_radial, grad_wigner_m0, None, None
+
+
 class UMASFastGPUBackend(UMASFastPytorchBackend):
     """
     GPU-optimized backend: SO2 block conversion + Triton kernels.
@@ -406,17 +453,10 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
         node_offset: int = 0,
     ) -> torch.Tensor:
         radial = radial_output.reshape(-1, m_0_num_coefficients, sphere_channels)
-
-        # Select m=0 columns from L-ordered wigner_inv
         wigner_inv_m0 = wigner_inv[:, :, _M0_COL_INDICES_L_ORDER]
-        x_edge_embedding = torch.bmm(wigner_inv_m0, radial)
 
-        x_edge_embedding = x_edge_embedding.to(x.dtype)
-
-        return x.index_add(
-            0,
-            edge_index[1] - node_offset,
-            x_edge_embedding / rescale_factor,
+        return _EdgeDegreeScatterFunction.apply(
+            x, radial, wigner_inv_m0, edge_index[1] - node_offset, rescale_factor
         )
 
 
