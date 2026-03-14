@@ -1,0 +1,61 @@
+omat_location: /data/shared/MLFF/OMat24/
+omat_train:
+  splits:
+    train:
+      src:
+        - ${cluster.data_root_dir}/omat24/train/aimd-from-PBE-1000-npt
+        - ${cluster.data_root_dir}/omat24/train/aimd-from-PBE-1000-nvt
+        - ${cluster.data_root_dir}/omat24/train/aimd-from-PBE-3000-npt
+        - ${cluster.data_root_dir}/omat24/train/aimd-from-PBE-3000-nvt
+        - ${cluster.data_root_dir}/omat24/train/rattled-300-subsampled
+        - ${cluster.data_root_dir}/omat24/train/rattled-500-subsampled
+        - ${cluster.data_root_dir}/omat24/train/rattled-1000-subsampled
+        - ${cluster.data_root_dir}/omat24/train/rattled-300
+        - ${cluster.data_root_dir}/omat24/train/rattled-500
+        - ${cluster.data_root_dir}/omat24/train/rattled-1000
+        - ${cluster.data_root_dir}/omat24/train/rattled-relax
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+  key_mapping:
+    energy: omat_energy
+    forces: ${omat_forces_key}
+    stress: omat_stress
+  transforms:
+    common_transform:
+      dataset_name: omat
+    stress_reshape_transform:
+      dataset_name: omat
+
+omat_val:
+  splits:
+    val:
+      sample_n: 100000
+      src:
+        - ${cluster.data_root_dir}/omat24/val/aimd-from-PBE-1000-npt
+        - ${cluster.data_root_dir}/omat24/val/aimd-from-PBE-1000-nvt
+        - ${cluster.data_root_dir}/omat24/val/aimd-from-PBE-3000-npt
+        - ${cluster.data_root_dir}/omat24/val/aimd-from-PBE-3000-nvt
+        - ${cluster.data_root_dir}/omat24/val/rattled-300-subsampled
+        - ${cluster.data_root_dir}/omat24/val/rattled-500-subsampled
+        - ${cluster.data_root_dir}/omat24/val/rattled-1000-subsampled
+        - ${cluster.data_root_dir}/omat24/val/rattled-300
+        - ${cluster.data_root_dir}/omat24/val/rattled-500
+        - ${cluster.data_root_dir}/omat24/val/rattled-1000
+        - ${cluster.data_root_dir}/omat24/val/rattled-relax
+  format: ase_db
+  a2g_args:
+    r_energy: True
+    r_forces: True
+    r_stress: True
+  key_mapping:
+    energy: omat_energy
+    forces: ${omat_forces_key}
+    stress: omat_stress
+  transforms:
+    common_transform:
+      dataset_name: omat
+    stress_reshape_transform:
+      dataset_name: omat
