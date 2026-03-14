@@ -55,21 +55,17 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             dtype=x.dtype,
             device=x.device,
         )
-        x_edge = torch.empty(
-            (num_edges, 9, sphere_channels * 2),
-            dtype=x.dtype,
-            device=x.device,
-        )
 
         # Ensure inputs are contiguous for Triton
         x = x.contiguous()
 
         # ONLY kernel launch is opaque (via custom_op with mutates_args)
         torch.ops.fairchem._kernel_node_to_edge_wigner_permute(
-            x, edge_index, wigner, out, x_edge
+            x, edge_index, wigner, out
         )
 
-        ctx.save_for_backward(x_edge, edge_index, wigner)
+        # Save x (node features, ~36MB) instead of x_edge ([E,9,2C], ~1.8GB)
+        ctx.save_for_backward(x, edge_index, wigner)
         ctx.num_nodes = x.shape[0]
         return out
 
@@ -88,7 +84,7 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             None: edge_index has no gradient
             grad_wigner: [E, 9, 9]
         """
-        x_edge, edge_index, wigner = ctx.saved_tensors
+        x, edge_index, wigner = ctx.saved_tensors
         num_edges = edge_index.shape[1]
         sphere_channels = grad_out.shape[2] // 2
 
@@ -129,11 +125,15 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         grad_x_flat.index_add_(0, src_idx, grad_src)
         grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
 
+        # Recompute x_edge from saved node features (saves ~1.8GB per layer)
+        x_source = x[edge_index[0]]  # [E, 9, C]
+        x_target = x[edge_index[1]]  # [E, 9, C]
+        x_edge = torch.cat((x_source, x_target), dim=2)  # [E, 9, 2C]
+
         # grad_wigner = dy @ x^T using block-sparse structure
         # Index directly from M-major grad_out using M_TO_L_GATHER_IDX
-        # to avoid allocating a full [E, 9, 2C] permutation copy.
         # M_TO_L: [0, 5, 1, 3, 8, 6, 2, 4, 7]
-        E = x_edge.shape[0]
+        E = num_edges
         grad_wigner = torch.zeros(E, 9, 9, device=wigner.device, dtype=wigner.dtype)
 
         # L=0 block (1x1): M_TO_L[0]=0

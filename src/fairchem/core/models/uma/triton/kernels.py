@@ -36,7 +36,6 @@ def node_to_edge_wigner_permute_kernel(
     edge_index_ptr,
     wigner_ptr,
     out_ptr,
-    x_edge_ptr,
     num_edges,
     sphere_channels,
     x_stride_n,
@@ -46,9 +45,6 @@ def node_to_edge_wigner_permute_kernel(
     out_stride_e,
     out_stride_l,
     out_stride_c,
-    x_edge_stride_e,
-    x_edge_stride_l,
-    x_edge_stride_c,
     BLOCK_C: tl.constexpr,
     GRID_E_STRIDE: tl.constexpr,
 ):
@@ -59,10 +55,8 @@ def node_to_edge_wigner_permute_kernel(
         1. Gather features from source and target nodes
         2. Block-diagonal Wigner rotation (exploits lmax=2 sparsity)
         3. L→M permutation
-        4. Store both rotated output and pre-Wigner x_edge (for backward)
 
-    The x_edge side output is stored as [E, 9, 2C] with src at [:C], tgt at [C:2C].
-    These values are already in registers so the extra stores are free.
+    x_edge side buffer eliminated — backward recomputes from saved node features.
 
     Grid: (num_edges, num_c_blocks)
     """
@@ -183,139 +177,6 @@ def node_to_edge_wigner_permute_kernel(
             x_ptr + idx1 * x_stride_n + 8 * x_stride_m + c_range * x_stride_c,
             mask=c_mask,
             other=0.0,
-        )
-
-        # =========================================================================
-        # Store x_edge side outputs (for backward dW computation)
-        # =========================================================================
-        x_edge_base = edge_id * x_edge_stride_e
-        # Source at [:C]
-        tl.store(
-            x_edge_ptr + x_edge_base + 0 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x0_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 1 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x1_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 2 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x2_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 3 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x3_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 4 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x4_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 5 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x5_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 6 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x6_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 7 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x7_src,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr + x_edge_base + 8 * x_edge_stride_l + c_range * x_edge_stride_c,
-            x8_src,
-            mask=c_mask,
-        )
-        # Target at [C:2C]
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 0 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x0_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 1 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x1_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 2 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x2_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 3 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x3_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 4 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x4_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 5 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x5_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 6 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x6_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 7 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x7_tgt,
-            mask=c_mask,
-        )
-        tl.store(
-            x_edge_ptr
-            + x_edge_base
-            + 8 * x_edge_stride_l
-            + sphere_channels * x_edge_stride_c
-            + c_range * x_edge_stride_c,
-            x8_tgt,
-            mask=c_mask,
         )
 
         # =========================================================================
