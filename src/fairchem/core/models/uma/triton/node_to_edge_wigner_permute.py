@@ -85,39 +85,31 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         num_edges = edge_index.shape[1]
         sphere_channels = grad_out.shape[2] // 2
 
-        # Allocation VISIBLE to torch.compile
-        grad_edge = torch.empty(
-            (num_edges, 9, sphere_channels * 2),
-            dtype=grad_out.dtype,
-            device=grad_out.device,
-        )
+        # Separate contiguous buffers for src/tgt gradients
+        # Avoids 2x 900MB non-contiguous slice+reshape copies
+        flat_size = num_edges * 9 * sphere_channels
+        grad_src = torch.empty(flat_size, dtype=grad_out.dtype, device=grad_out.device)
+        grad_tgt = torch.empty(flat_size, dtype=grad_out.dtype, device=grad_out.device)
 
         # ONLY kernel launch is opaque
         torch.ops.fairchem._kernel_node_to_edge_wigner_permute_bwd_dx(
-            grad_out, wigner, grad_edge
+            grad_out, wigner, grad_src, grad_tgt
         )
 
-        # Scatter (VISIBLE to torch.compile)
+        # Scatter to nodes
         grad_x = torch.zeros(
-            (ctx.num_nodes, 9, sphere_channels),
+            (ctx.num_nodes, 9 * sphere_channels),
             dtype=grad_out.dtype,
             device=grad_out.device,
         )
 
-        # Slice: grad_edge [E, 9, 2C] -> src at [:C], tgt at [C:]
-        grad_src = grad_edge[:, :, :sphere_channels].reshape(
-            num_edges, 9 * sphere_channels
-        )
-        grad_tgt = grad_edge[:, :, sphere_channels:].reshape(
-            num_edges, 9 * sphere_channels
-        )
+        grad_src = grad_src.view(num_edges, 9 * sphere_channels)
+        grad_tgt = grad_tgt.view(num_edges, 9 * sphere_channels)
 
-        src_idx = edge_index[0]
-        tgt_idx = edge_index[1]
+        grad_x.index_add_(0, edge_index[0], grad_src)
+        grad_x.index_add_(0, edge_index[1], grad_tgt)
 
-        grad_x_flat = grad_x.view(ctx.num_nodes, 9 * sphere_channels)
-        grad_x_flat.index_add_(0, src_idx, grad_src)
-        grad_x_flat.index_add_(0, tgt_idx, grad_tgt)
+        grad_x = grad_x.view(ctx.num_nodes, 9, sphere_channels)
 
         # Fused Triton kernel: gather from nodes + M→L permute + outer product
         # Avoids materializing x_edge [E, 9, 2C] = ~1.8GB

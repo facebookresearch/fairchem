@@ -132,17 +132,19 @@ def _kernel_permute_wigner_inv_edge_to_node(
 
 @triton_op(
     "fairchem::_kernel_node_to_edge_wigner_permute_bwd_dx",
-    mutates_args=("grad_edge",),
+    mutates_args=("grad_src", "grad_tgt"),
 )
 def _kernel_node_to_edge_wigner_permute_bwd_dx(
     grad_out: Tensor,
     wigner: Tensor,
-    grad_edge: Tensor,
+    grad_src: Tensor,
+    grad_tgt: Tensor,
 ) -> None:
     """
     Backward kernel for dx: M→L permute + W^T @ grad.
 
-    Writes per-edge gradients to grad_edge. Caller does scatter to nodes.
+    Writes src/tgt gradients to separate contiguous buffers [E, 9*C]
+    to avoid non-contiguous slice + reshape copies.
     """
     num_edges = grad_out.shape[0]
     sphere_channels = grad_out.shape[2] // 2
@@ -159,15 +161,13 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
     wrap_triton(node_to_edge_wigner_permute_bwd_dx_kernel)[grid](
         grad_out,
         wigner_flat,
-        grad_edge,
+        grad_src,
+        grad_tgt,
         num_edges,
         sphere_channels,
         grad_out.stride(0),
         grad_out.stride(1),
         grad_out.stride(2),
-        grad_edge.stride(0),
-        grad_edge.stride(1),
-        grad_edge.stride(2),
         BLOCK_C=sphere_channels,  # Process all channels
         GRID_E_STRIDE=GRID_E_STRIDE,
         num_warps=1,

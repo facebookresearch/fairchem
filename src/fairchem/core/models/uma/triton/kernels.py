@@ -426,26 +426,23 @@ def node_to_edge_wigner_permute_kernel(
 def node_to_edge_wigner_permute_bwd_dx_kernel(
     grad_out_ptr,  # [E, 9, 2C] gradient from downstream (M-major)
     wigner_ptr,  # [E, 81] Wigner matrices (flattened 9x9)
-    grad_edge_ptr,  # [E, 9, 2C] output gradient per edge (no scatter)
+    grad_src_ptr,  # [E, 9*C] output: source node gradients (contiguous)
+    grad_tgt_ptr,  # [E, 9*C] output: target node gradients (contiguous)
     num_edges,
     sphere_channels,
     grad_stride_e,
     grad_stride_l,
     grad_stride_c,
-    out_stride_e,
-    out_stride_l,
-    out_stride_c,
     BLOCK_C: tl.constexpr,
     GRID_E_STRIDE: tl.constexpr,
 ):
     """
     Backward w.r.t. input x: M→L permutation + W^T @ grad (NO scatter).
 
-    Writes to per-edge buffer instead of atomic scatter.
-    The scatter step is done separately using PyTorch's index_add_.
-    This avoids atomic contention which is the main bottleneck.
+    Writes src/tgt gradients to separate contiguous [E, 9*C] buffers
+    to avoid non-contiguous slice copies in the caller.
 
-    Grid: (num_edges,)
+    Grid: (GRID_E_STRIDE,)
     """
     edge_id = tl.program_id(0)
 
@@ -457,7 +454,7 @@ def node_to_edge_wigner_permute_bwd_dx_kernel(
         # Wigner and gradient base pointers
         w_base = edge_id * 81
         grad_base = edge_id * grad_stride_e
-        out_base = edge_id * out_stride_e
+        out_base = edge_id * 9 * sphere_channels  # contiguous [E, 9*C]
 
         # =========================================================================
         # Load gradient (M-major) and apply M→L permutation inline
@@ -742,136 +739,102 @@ def node_to_edge_wigner_permute_bwd_dx_kernel(
         )
 
         # =========================================================================
-        # Store per-edge gradient (L-major order for subsequent scatter)
+        # Store to separate contiguous [E, 9*C] buffers (avoids slice copies)
         # =========================================================================
+        # Source gradients
         tl.store(
-            grad_edge_ptr + out_base + 0 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 0 * sphere_channels + c_range,
             dx0_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 1 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 1 * sphere_channels + c_range,
             dx1_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 2 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 2 * sphere_channels + c_range,
             dx2_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 3 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 3 * sphere_channels + c_range,
             dx3_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 4 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 4 * sphere_channels + c_range,
             dx4_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 5 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 5 * sphere_channels + c_range,
             dx5_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 6 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 6 * sphere_channels + c_range,
             dx6_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 7 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 7 * sphere_channels + c_range,
             dx7_src,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr + out_base + 8 * out_stride_l + c_range * out_stride_c,
+            grad_src_ptr + out_base + 8 * sphere_channels + c_range,
             dx8_src,
             mask=c_mask,
         )
 
-        # Target gradients at offset sphere_channels
+        # Target gradients
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 0 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 0 * sphere_channels + c_range,
             dx0_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 1 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 1 * sphere_channels + c_range,
             dx1_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 2 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 2 * sphere_channels + c_range,
             dx2_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 3 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 3 * sphere_channels + c_range,
             dx3_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 4 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 4 * sphere_channels + c_range,
             dx4_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 5 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 5 * sphere_channels + c_range,
             dx5_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 6 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 6 * sphere_channels + c_range,
             dx6_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 7 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 7 * sphere_channels + c_range,
             dx7_tgt,
             mask=c_mask,
         )
         tl.store(
-            grad_edge_ptr
-            + out_base
-            + 8 * out_stride_l
-            + sphere_channels
-            + c_range * out_stride_c,
+            grad_tgt_ptr + out_base + 8 * sphere_channels + c_range,
             dx8_tgt,
             mask=c_mask,
         )
+
         edge_id += GRID_E_STRIDE
 
 
@@ -1214,47 +1177,191 @@ def node_to_edge_wigner_permute_bwd_dw_kernel(
         # M_TO_L_GATHER_IDX = [0, 5, 1, 3, 8, 6, 2, 4, 7]
         # Each dy has 2C channels: first C = src, last C = tgt
         # Load src part (first C channels)
-        dy0s = tl.load(grad_out_ptr + grad_base + 0 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy1s = tl.load(grad_out_ptr + grad_base + 5 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy2s = tl.load(grad_out_ptr + grad_base + 1 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy3s = tl.load(grad_out_ptr + grad_base + 3 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy4s = tl.load(grad_out_ptr + grad_base + 8 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy5s = tl.load(grad_out_ptr + grad_base + 6 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy6s = tl.load(grad_out_ptr + grad_base + 2 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy7s = tl.load(grad_out_ptr + grad_base + 4 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
-        dy8s = tl.load(grad_out_ptr + grad_base + 7 * sphere_channels * 2 + c_range, mask=c_mask, other=0.0)
+        dy0s = tl.load(
+            grad_out_ptr + grad_base + 0 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy1s = tl.load(
+            grad_out_ptr + grad_base + 5 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy2s = tl.load(
+            grad_out_ptr + grad_base + 1 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy3s = tl.load(
+            grad_out_ptr + grad_base + 3 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy4s = tl.load(
+            grad_out_ptr + grad_base + 8 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy5s = tl.load(
+            grad_out_ptr + grad_base + 6 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy6s = tl.load(
+            grad_out_ptr + grad_base + 2 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy7s = tl.load(
+            grad_out_ptr + grad_base + 4 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy8s = tl.load(
+            grad_out_ptr + grad_base + 7 * sphere_channels * 2 + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
 
         # Load tgt part (second C channels, offset by sphere_channels)
-        dy0t = tl.load(grad_out_ptr + grad_base + 0 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy1t = tl.load(grad_out_ptr + grad_base + 5 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy2t = tl.load(grad_out_ptr + grad_base + 1 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy3t = tl.load(grad_out_ptr + grad_base + 3 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy4t = tl.load(grad_out_ptr + grad_base + 8 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy5t = tl.load(grad_out_ptr + grad_base + 6 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy6t = tl.load(grad_out_ptr + grad_base + 2 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy7t = tl.load(grad_out_ptr + grad_base + 4 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
-        dy8t = tl.load(grad_out_ptr + grad_base + 7 * sphere_channels * 2 + sphere_channels + c_range, mask=c_mask, other=0.0)
+        dy0t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 0 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy1t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 5 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy2t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 1 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy3t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 3 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy4t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 8 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy5t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 6 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy6t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 2 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy7t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 4 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
+        dy8t = tl.load(
+            grad_out_ptr
+            + grad_base
+            + 7 * sphere_channels * 2
+            + sphere_channels
+            + c_range,
+            mask=c_mask,
+            other=0.0,
+        )
 
         # Load node features (L-major order)
-        xs0 = tl.load(x_ptr + idx0 * x_stride_n + 0 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs1 = tl.load(x_ptr + idx0 * x_stride_n + 1 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs2 = tl.load(x_ptr + idx0 * x_stride_n + 2 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs3 = tl.load(x_ptr + idx0 * x_stride_n + 3 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs4 = tl.load(x_ptr + idx0 * x_stride_n + 4 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs5 = tl.load(x_ptr + idx0 * x_stride_n + 5 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs6 = tl.load(x_ptr + idx0 * x_stride_n + 6 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs7 = tl.load(x_ptr + idx0 * x_stride_n + 7 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xs8 = tl.load(x_ptr + idx0 * x_stride_n + 8 * x_stride_m + c_range, mask=c_mask, other=0.0)
+        xs0 = tl.load(
+            x_ptr + idx0 * x_stride_n + 0 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs1 = tl.load(
+            x_ptr + idx0 * x_stride_n + 1 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs2 = tl.load(
+            x_ptr + idx0 * x_stride_n + 2 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs3 = tl.load(
+            x_ptr + idx0 * x_stride_n + 3 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs4 = tl.load(
+            x_ptr + idx0 * x_stride_n + 4 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs5 = tl.load(
+            x_ptr + idx0 * x_stride_n + 5 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs6 = tl.load(
+            x_ptr + idx0 * x_stride_n + 6 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs7 = tl.load(
+            x_ptr + idx0 * x_stride_n + 7 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xs8 = tl.load(
+            x_ptr + idx0 * x_stride_n + 8 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
 
-        xt0 = tl.load(x_ptr + idx1 * x_stride_n + 0 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt1 = tl.load(x_ptr + idx1 * x_stride_n + 1 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt2 = tl.load(x_ptr + idx1 * x_stride_n + 2 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt3 = tl.load(x_ptr + idx1 * x_stride_n + 3 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt4 = tl.load(x_ptr + idx1 * x_stride_n + 4 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt5 = tl.load(x_ptr + idx1 * x_stride_n + 5 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt6 = tl.load(x_ptr + idx1 * x_stride_n + 6 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt7 = tl.load(x_ptr + idx1 * x_stride_n + 7 * x_stride_m + c_range, mask=c_mask, other=0.0)
-        xt8 = tl.load(x_ptr + idx1 * x_stride_n + 8 * x_stride_m + c_range, mask=c_mask, other=0.0)
+        xt0 = tl.load(
+            x_ptr + idx1 * x_stride_n + 0 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt1 = tl.load(
+            x_ptr + idx1 * x_stride_n + 1 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt2 = tl.load(
+            x_ptr + idx1 * x_stride_n + 2 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt3 = tl.load(
+            x_ptr + idx1 * x_stride_n + 3 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt4 = tl.load(
+            x_ptr + idx1 * x_stride_n + 4 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt5 = tl.load(
+            x_ptr + idx1 * x_stride_n + 5 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt6 = tl.load(
+            x_ptr + idx1 * x_stride_n + 6 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt7 = tl.load(
+            x_ptr + idx1 * x_stride_n + 7 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
+        xt8 = tl.load(
+            x_ptr + idx1 * x_stride_n + 8 * x_stride_m + c_range, mask=c_mask, other=0.0
+        )
 
         # dW[i,j] = sum_c (dy_src[i]*x_src[j] + dy_tgt[i]*x_tgt[j])
         # L=0 block (1x1)
@@ -1353,15 +1460,33 @@ def permute_wigner_inv_edge_to_node_bwd_dw_kernel(
         dy8 = tl.load(DY_ptr + dy_base + 8 * C + c_range, mask=c_mask, other=0.0)
 
         # Load x from M-major positions using M_TO_L_GATHER_IDX = [0,5,1,3,8,6,2,4,7]
-        x0 = tl.load(X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0)  # L=0 <- M=0
-        x1 = tl.load(X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0)  # L=1 <- M=5
-        x2 = tl.load(X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0)  # L=2 <- M=1
-        x3 = tl.load(X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0)  # L=3 <- M=3
-        x4 = tl.load(X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0)  # L=4 <- M=8
-        x5 = tl.load(X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0)  # L=5 <- M=6
-        x6 = tl.load(X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0)  # L=6 <- M=2
-        x7 = tl.load(X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0)  # L=7 <- M=4
-        x8 = tl.load(X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0)  # L=8 <- M=7
+        x0 = tl.load(
+            X_ptr + x_base + 0 * C + c_range, mask=c_mask, other=0.0
+        )  # L=0 <- M=0
+        x1 = tl.load(
+            X_ptr + x_base + 5 * C + c_range, mask=c_mask, other=0.0
+        )  # L=1 <- M=5
+        x2 = tl.load(
+            X_ptr + x_base + 1 * C + c_range, mask=c_mask, other=0.0
+        )  # L=2 <- M=1
+        x3 = tl.load(
+            X_ptr + x_base + 3 * C + c_range, mask=c_mask, other=0.0
+        )  # L=3 <- M=3
+        x4 = tl.load(
+            X_ptr + x_base + 8 * C + c_range, mask=c_mask, other=0.0
+        )  # L=4 <- M=8
+        x5 = tl.load(
+            X_ptr + x_base + 6 * C + c_range, mask=c_mask, other=0.0
+        )  # L=5 <- M=6
+        x6 = tl.load(
+            X_ptr + x_base + 2 * C + c_range, mask=c_mask, other=0.0
+        )  # L=6 <- M=2
+        x7 = tl.load(
+            X_ptr + x_base + 4 * C + c_range, mask=c_mask, other=0.0
+        )  # L=7 <- M=4
+        x8 = tl.load(
+            X_ptr + x_base + 7 * C + c_range, mask=c_mask, other=0.0
+        )  # L=8 <- M=7
 
         # L=0 block (1x1): dW[0,0] = sum_c dy[0,c] * x[0,c]
         dw_00 = tl.sum(dy0 * x0)
