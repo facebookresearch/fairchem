@@ -56,9 +56,6 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             device=x.device,
         )
 
-        # Ensure inputs are contiguous for Triton
-        x = x.contiguous()
-
         # ONLY kernel launch is opaque (via custom_op with mutates_args)
         torch.ops.fairchem._kernel_node_to_edge_wigner_permute(
             x, edge_index, wigner, out
@@ -87,9 +84,6 @@ class NodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         x, edge_index, wigner = ctx.saved_tensors
         num_edges = edge_index.shape[1]
         sphere_channels = grad_out.shape[2] // 2
-
-        # Ensure grad_out is contiguous
-        grad_out = grad_out.contiguous()
 
         # Allocation VISIBLE to torch.compile
         grad_edge = torch.empty(
