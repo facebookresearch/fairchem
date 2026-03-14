@@ -985,7 +985,7 @@ class eSCNMDBackbone(nn.Module, MOLEInterface):
         self._merged_composition = None
 
         # Validate settings against backend requirements (fail early)
-        self.backend.validate(self, settings)
+        self.backend.validate(self.lmax, self.mmax, settings)
 
         if settings.merge_mole:
             assert (

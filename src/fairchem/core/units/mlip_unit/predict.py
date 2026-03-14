@@ -127,6 +127,11 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
             inference_model_path, map_location="cpu", weights_only=False
         )
 
+        # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode
+        self.inference_settings = maybe_update_settings_backend(
+            self.inference_settings, checkpoint.model_config
+        )
+
         # Build model-specific overrides
         final_overrides = self._build_overrides_from_settings(
             checkpoint, overrides, inference_settings
@@ -145,11 +150,6 @@ class MLIPPredictUnit(PredictUnit[AtomicData], MLIPPredictUnitProtocol):
                 use_ema=True,
                 overrides=final_overrides,
                 preloaded_checkpoint=checkpoint,
-            )
-
-            # if the model is uma-s and the execution mode is not explicitly set, default to the optimized uma-s gpu execution mode
-            self.inference_settings = maybe_update_settings_backend(
-                self.inference_settings, self.model.module.backbone
             )
 
             # Model sets up tasks
