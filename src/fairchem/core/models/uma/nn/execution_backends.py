@@ -514,6 +514,10 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
                 optimal = max(1, num_cores // 2)
                 os.environ["OMP_NUM_THREADS"] = str(optimal)
                 torch.set_num_threads(optimal)
+            # Disable Python GC — tcmalloc handles memory efficiently
+            import gc
+            gc.disable()
+
             UMASFastCPUBackend._threads_configured = True
 
     @staticmethod
