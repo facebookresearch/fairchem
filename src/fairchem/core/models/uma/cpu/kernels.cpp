@@ -66,21 +66,55 @@ torch::Tensor node_to_edge_wigner_permute_fwd(
         float* O = out_ptr + e * out_stride_e;
 
         // For each output M-position m (0..8):
-        //   l = L_TO_M[m]  (which L-index to read from)
-        //   out[m, :] = sum_j W[l, j] * x_cat[j, :]
-        //   where j ranges over the block containing l
-        for (int m = 0; m < 9; m++) {
-            const int l = L_TO_M[m];  // L-index for this output row
-            const int bs = BLOCK_START[l];
-            const int bn = BLOCK_SIZE[l];
-            float* dst = O + m * C2;
+        //   l = L_TO_M[m]  (gather: out[m] reads from rotated[L_TO_M[m]])
+        //   out[m,:] = sum_j W[l,j] * x_cat[j,:]
+        // Unroll by block, use precomputed l = L_TO_M[m]
 
+        // m=0: l=L_TO_M[0]=0, L=0 block
+        {
+            const int l = L_TO_M[0];  // =0
+            const float w00 = W[0];
+            float* dst = O;
+            for (int64_t c = 0; c < C; c++) {
+                dst[c]     = w00 * xs[c];
+                dst[C + c] = w00 * xt[c];
+            }
+        }
+
+        // Output positions where L_TO_M[m] falls in L=1 block (l=1,2,3)
+        for (int m = 0; m < 9; m++) {
+            const int l = L_TO_M[m];
+            if (l < 1 || l > 3) continue;
+            float* dst = O + m * C2;
+            const float w0 = W[l * 9 + 1];
+            const float w1 = W[l * 9 + 2];
+            const float w2 = W[l * 9 + 3];
+            const float* xs1 = xs + 1 * C;
+            const float* xs2 = xs + 2 * C;
+            const float* xs3 = xs + 3 * C;
+            const float* xt1 = xt + 1 * C;
+            const float* xt2 = xt + 2 * C;
+            const float* xt3 = xt + 3 * C;
+            for (int64_t c = 0; c < C; c++) {
+                dst[c]     = w0 * xs1[c] + w1 * xs2[c] + w2 * xs3[c];
+                dst[C + c] = w0 * xt1[c] + w1 * xt2[c] + w2 * xt3[c];
+            }
+        }
+
+        // Output positions where L_TO_M[m] falls in L=2 block (l=4..8)
+        for (int m = 0; m < 9; m++) {
+            const int l = L_TO_M[m];
+            if (l < 4) continue;
+            float* dst = O + m * C2;
+            float ww[5];
+            for (int j = 0; j < 5; j++) {
+                ww[j] = W[l * 9 + (4 + j)];
+            }
             for (int64_t c = 0; c < C; c++) {
                 float vs = 0.0f, vt = 0.0f;
-                for (int j = 0; j < bn; j++) {
-                    const int lj = bs + j;
-                    vs += W[l * 9 + lj] * xs[lj * C + c];
-                    vt += W[l * 9 + lj] * xt[lj * C + c];
+                for (int j = 0; j < 5; j++) {
+                    vs += ww[j] * xs[(4 + j) * C + c];
+                    vt += ww[j] * xt[(4 + j) * C + c];
                 }
                 dst[c]     = vs;
                 dst[C + c] = vt;
@@ -328,17 +362,43 @@ torch::Tensor permute_wigner_inv_fwd(
 
         // out[i] = sum_j W_inv[i,j] * x_l[j]
         // where x_l[j] = X[M_TO_L[j]] (M→L gather)
-        for (int i = 0; i < 9; i++) {
-            const int bs = BLOCK_START[i];
-            const int bn = BLOCK_SIZE[i];
-            float* dst = O + i * C;
+        // Precompute x_l pointers for better vectorization
+        const float* xl[9];
+        for (int j = 0; j < 9; j++) {
+            xl[j] = X + M_TO_L[j] * C;
+        }
 
+        // L=0
+        {
+            const float w00 = W[0];
+            float* dst = O;
+            for (int64_t c = 0; c < C; c++) {
+                dst[c] = w00 * xl[0][c];
+            }
+        }
+
+        // L=1
+        for (int i = 0; i < 3; i++) {
+            float* dst = O + (1 + i) * C;
+            const float w0 = W[(1 + i) * 9 + 1];
+            const float w1 = W[(1 + i) * 9 + 2];
+            const float w2 = W[(1 + i) * 9 + 3];
+            for (int64_t c = 0; c < C; c++) {
+                dst[c] = w0 * xl[1][c] + w1 * xl[2][c] + w2 * xl[3][c];
+            }
+        }
+
+        // L=2
+        for (int i = 0; i < 5; i++) {
+            float* dst = O + (4 + i) * C;
+            float ww[5];
+            for (int j = 0; j < 5; j++) {
+                ww[j] = W[(4 + i) * 9 + (4 + j)];
+            }
             for (int64_t c = 0; c < C; c++) {
                 float v = 0.0f;
-                for (int j = 0; j < bn; j++) {
-                    const int lj = bs + j;
-                    // x_l[lj] = X[M_TO_L[lj]]
-                    v += W[i * 9 + lj] * X[M_TO_L[lj] * C + c];
+                for (int j = 0; j < 5; j++) {
+                    v += ww[j] * xl[4 + j][c];
                 }
                 dst[c] = v;
             }
@@ -376,26 +436,30 @@ torch::Tensor permute_wigner_inv_bwd_dx(
         const float* W = w_ptr + e * 81;
         float* GX = gx_ptr + e * stride;
 
-        // grad_x_l[j] = sum_i_in_block(j) W[i,j] * G[i]
-        // Then output in M-major: GX[m] = grad_x_l[L_TO_M[m]]
-        // Compute all 9 grad_x_l values first, then permute
+        // grad_x_l[j] = sum_i W^T[j,i] * G[i] = sum_i W[i,j] * G[i]
+        // Then L→M permute: GX[m] = grad_x_l[L_TO_M[m]]
+        // Iterate over output M-positions, gather from grad_x_l
 
-        float grad_x_l[9];  // per-channel would be too large, do channel loop outside
+        // For each output m, l = L_TO_M[m], compute grad_x_l[l] and write to GX[m]
+        for (int m = 0; m < 9; m++) {
+            const int l = L_TO_M[m];
+            const int bs = BLOCK_START[l];
+            const int bn = BLOCK_SIZE[l];
+            float* dst = GX + m * C;
 
-        for (int64_t c = 0; c < C; c++) {
-            // Compute grad_x_l for this channel
-            for (int j = 0; j < 9; j++) {
-                const int bs = BLOCK_START[j];
-                const int bn = BLOCK_SIZE[j];
+            // Preload W^T column weights: W[bs+i, l] for i in 0..bn-1
+            float wt[5];
+            for (int i = 0; i < bn; i++) {
+                wt[i] = W[(bs + i) * 9 + l];
+            }
+
+            // Vectorizable inner loop over channels
+            for (int64_t c = 0; c < C; c++) {
                 float v = 0.0f;
                 for (int i = 0; i < bn; i++) {
-                    v += W[(bs + i) * 9 + j] * G[(bs + i) * C + c];
+                    v += wt[i] * G[(bs + i) * C + c];
                 }
-                grad_x_l[j] = v;
-            }
-            // L→M permute: GX[m] = grad_x_l[L_TO_M[m]]
-            for (int m = 0; m < 9; m++) {
-                GX[m * C + c] = grad_x_l[L_TO_M[m]];
+                dst[c] = v;
             }
         }
     }
