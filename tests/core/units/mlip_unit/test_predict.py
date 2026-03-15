@@ -25,6 +25,7 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
+from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -1619,18 +1620,15 @@ def test_execution_mode_auto_set_umas_fast_gpu(model_name):
     When running on GPU with merge_mole=True and activation_checkpointing=False,
     the execution_mode should automatically be set to umas_fast_gpu.
     """
-    from fairchem.core.models.uma.nn.execution_backends import ExecutionMode
 
     predict_unit = pretrained_mlip.get_predict_unit(
         model_name, device="cuda", inference_settings="turbo"
     )
 
-    # Verify that execution_mode was set to umas_fast_gpu
-    assert (
-        predict_unit.inference_settings.execution_mode == ExecutionMode.UMAS_FAST_GPU
-    ), (
-        f"Expected execution_mode to be {ExecutionMode.UMAS_FAST_GPU}, "
-        f"got {predict_unit.inference_settings.execution_mode}"
+    # Verify that actual module backend is UMASFastGPUBackend when set to turbo mode
+    assert isinstance(predict_unit.model.module.backbone.backend, UMASFastGPUBackend), (
+        f"Expected backend to be {UMASFastGPUBackend}, "
+        f"got {predict_unit.model.module.backbone.backend}"
     )
 
 
