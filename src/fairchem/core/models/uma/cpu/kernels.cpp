@@ -783,6 +783,14 @@ std::vector<torch::Tensor> node_to_edge_wigner_permute_bwd_combined(
 }
 
 // Forward declaration
+torch::Tensor fused_edgewise_inner(
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&, const torch::Tensor&,
+    const torch::Tensor&,
+    int64_t, const std::vector<int64_t>&, const std::vector<int64_t>&);
 std::vector<torch::Tensor> fused_so2_conv1_forward(
     const torch::Tensor&, const torch::Tensor&,
     const torch::Tensor&, const torch::Tensor&,
@@ -806,6 +814,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Fused M->L permute + Wigner inverse + scatter to nodes");
     m.def("node_to_edge_wigner_permute_bwd_combined", &node_to_edge_wigner_permute_bwd_combined,
           "Combined bwd_dx + bwd_dw for node_to_edge_wigner_permute");
+    m.def("fused_edgewise_inner", &fused_edgewise_inner, "Fused edgewise inner loop");
     m.def("fused_so2_conv1_forward", &fused_so2_conv1_forward,
           "Fused SO2 conv1 forward");
 }
@@ -885,4 +894,120 @@ std::vector<torch::Tensor> fused_so2_conv1_forward(
     out.narrow(1, out_offset, num_l_2).copy_(m2_view.select(1, 1));
 
     return {out, gating};
+}
+
+/*
+ * Fused SO2 conv1 + GateActivation + SO2 conv2 forward
+ *
+ * Eliminates ALL Python dispatch overhead for the edgewise inner loop.
+ * Uses ATen C++ ops directly (at::mm, at::addmm, at::silu, etc.)
+ * which still support autograd but avoid Python interpreter overhead.
+ *
+ * Pipeline: x_message → conv1 → gate_act → conv2 → out
+ */
+torch::Tensor fused_edgewise_inner(
+    const torch::Tensor& x_message,     // [E, 9, 2C] from node_to_edge
+    const torch::Tensor& x_edge,        // [E, total_radial]
+    // Conv1 weights
+    const torch::Tensor& c1_fc_m0_w,    // [m0_out, m0_in]
+    const torch::Tensor& c1_fc_m0_b,    // [m0_out]
+    const torch::Tensor& c1_w_block_1,  // [2*oh1, 2*is1]
+    const torch::Tensor& c1_w_block_2,  // [2*oh2, 2*is2]
+    // Conv2 weights
+    const torch::Tensor& c2_fc_m0_w,    // [m0_out2, m0_in2]
+    const torch::Tensor& c2_fc_m0_b,    // [m0_out2]
+    const torch::Tensor& c2_w_block_1,  // [2*oh1, 2*is1]
+    const torch::Tensor& c2_w_block_2,  // [2*oh2, 2*is2]
+    // Activation
+    const torch::Tensor& act_expand_index, // [8] index for gate expansion
+    // Sizes
+    int64_t extra_m0_channels,
+    const std::vector<int64_t>& m_split_sizes,    // [3, 4, 2]
+    const std::vector<int64_t>& edge_split_sizes  // [768, 512, 256]
+) {
+    const int64_t E = x_message.size(0);
+    const int64_t C_in = x_message.size(2);
+
+    // ========== SO2 Conv1 ==========
+    // Split input by m-order
+    auto x_m0 = x_message.narrow(1, 0, m_split_sizes[0]).reshape({E, -1});
+    int64_t m1_off = m_split_sizes[0];
+    auto x_m1 = x_message.narrow(1, m1_off, m_split_sizes[1]);
+    int64_t m2_off = m1_off + m_split_sizes[1];
+    auto x_m2 = x_message.narrow(1, m2_off, m_split_sizes[2]);
+
+    // Split edge features
+    auto e_m0 = x_edge.narrow(1, 0, edge_split_sizes[0]);
+    auto e_m1 = x_edge.narrow(1, edge_split_sizes[0], edge_split_sizes[1]);
+    auto e_m2 = x_edge.narrow(1, edge_split_sizes[0] + edge_split_sizes[1], edge_split_sizes[2]);
+
+    // m=0: radial * flatten → addmm
+    auto c1_m0_out = at::addmm(c1_fc_m0_b, x_m0 * e_m0, c1_fc_m0_w.t());
+    auto gating = c1_m0_out.narrow(1, 0, extra_m0_channels);
+    auto c1_m0_main = c1_m0_out.narrow(1, extra_m0_channels,
+                                         c1_fc_m0_w.size(0) - extra_m0_channels);
+    int64_t C_hidden = c1_m0_main.size(1) / m_split_sizes[0];
+
+    // m=1: radial * x → mm(w_block)
+    auto x_m1_v = x_m1.reshape({E, 2, -1});
+    auto c1_m1_out = at::mm((x_m1_v * e_m1.unsqueeze(1)).reshape({E, -1}), c1_w_block_1.t());
+    int64_t nl1 = c1_m1_out.size(1) / (2 * C_hidden);
+    auto c1_m1_v = c1_m1_out.reshape({E, 2, nl1, C_hidden});
+
+    // m=2: radial * x → mm(w_block)
+    auto x_m2_v = x_m2.reshape({E, 2, -1});
+    auto c1_m2_out = at::mm((x_m2_v * e_m2.unsqueeze(1)).reshape({E, -1}), c1_w_block_2.t());
+    int64_t nl2 = c1_m2_out.size(1) / (2 * C_hidden);
+    auto c1_m2_v = c1_m2_out.reshape({E, 2, nl2, C_hidden});
+
+    // Assemble conv1 output [E, 9, C_hidden]
+    auto conv1_out = at::cat({
+        c1_m0_main.reshape({E, m_split_sizes[0], C_hidden}),
+        c1_m1_v.select(1, 0),  // real
+        c1_m1_v.select(1, 1),  // imag
+        c1_m2_v.select(1, 0),  // real
+        c1_m2_v.select(1, 1),  // imag
+    }, 1);
+
+    // ========== GateActivation ==========
+    // gate_act(gating): sigmoid
+    auto gate_scalars = at::sigmoid(gating).reshape({E, -1, C_hidden});
+    // Expand gating via index_select
+    gate_scalars = at::index_select(gate_scalars, 1, act_expand_index);
+    // Split scalar (L=0) and vector parts
+    auto act_scalar = conv1_out.narrow(1, 0, 1);
+    auto act_vector = conv1_out.narrow(1, 1, conv1_out.size(1) - 1);
+    // Apply activations
+    act_scalar = at::silu(act_scalar);
+    act_vector = act_vector * gate_scalars;
+    auto activated = at::cat({act_scalar, act_vector}, 1);
+
+    // ========== SO2 Conv2 ==========
+    // Split activated by m-order (same m_split_sizes)
+    auto a_m0 = activated.narrow(1, 0, m_split_sizes[0]).reshape({E, -1});
+    auto a_m1 = activated.narrow(1, m1_off, m_split_sizes[1]);
+    auto a_m2 = activated.narrow(1, m2_off, m_split_sizes[2]);
+
+    // m=0: linear
+    auto c2_m0_out = at::addmm(c2_fc_m0_b, a_m0, c2_fc_m0_w.t());
+    int64_t C_out = c2_m0_out.size(1) / m_split_sizes[0];
+
+    // m=1: block GEMM
+    auto c2_m1_out = at::mm(a_m1.reshape({E, -1}), c2_w_block_1.t());
+    int64_t c2_nl1 = c2_m1_out.size(1) / (2 * C_out);
+    auto c2_m1_v = c2_m1_out.reshape({E, 2, c2_nl1, C_out});
+
+    // m=2: block GEMM
+    auto c2_m2_out = at::mm(a_m2.reshape({E, -1}), c2_w_block_2.t());
+    int64_t c2_nl2 = c2_m2_out.size(1) / (2 * C_out);
+    auto c2_m2_v = c2_m2_out.reshape({E, 2, c2_nl2, C_out});
+
+    // Assemble output [E, 9, C_out]
+    return at::cat({
+        c2_m0_out.reshape({E, m_split_sizes[0], C_out}),
+        c2_m1_v.select(1, 0),
+        c2_m1_v.select(1, 1),
+        c2_m2_v.select(1, 0),
+        c2_m2_v.select(1, 1),
+    }, 1);
 }
