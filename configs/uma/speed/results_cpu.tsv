@@ -1,15 +1,18 @@
 commit	md_qps	static_qps	forces_pass	status	description
 5c488c9	2.07	2.68	yes	keep	baseline: pure PyTorch CPU ops (torch 2.4, 16 threads)
 2067f64	2.24	3.19	yes	keep	C++ fused gather+wigner+permute kernels
-75737ad	3.68	4.52	yes	keep	OMP_NUM_THREADS=8 (half cores)
-a5c55e1	3.92	4.70	yes	keep	vectorization-friendly kernel rewrite
-a5c55e1	4.69	5.74	yes	keep	+ tcmalloc LD_PRELOAD
-fe57b76	0.00	5.62	yes	keep	combined bwd_dx+bwd_dw kernel
-7d28a53	4.43	5.49	yes	keep	+ GC disabled (final best: tcmalloc + GC off + 8 threads)
-7d28a53	0.00	4.59	yes	discard	torch.compile (slower than eager)
-7d28a53	0.00	3.14	yes	discard	jemalloc (much worse than tcmalloc)
-7d28a53	0.00	4.90	yes	discard	mimalloc (slightly worse than tcmalloc)
-7d28a53	0.00	5.33	yes	discard	fused SO2 conv with pre-allocated output (copy_ overhead)
-7d28a53	0.00	4.68	yes	discard	custom autograd SO2 conv (extra mm overhead in backward)
-7d28a53	0.00	5.59	yes	discard	pre-transposed linear weights (MKL handles T flag)
-7d28a53	0.00	5.56	yes	discard	edge_chunk_size=768 (marginal, hurts MD)
+75737ad	3.68	4.52	yes	keep	OMP_NUM_THREADS=8 (half cores = optimal)
+a5c55e1	3.92	4.70	yes	keep	vectorization-friendly kernel rewrite (unrolled L blocks)
+a5c55e1	4.69	5.74	yes	keep	+ tcmalloc LD_PRELOAD (best single run)
+7d28a53	4.38	5.49	yes	keep	+ GC disabled
+31d1542	4.46	5.57	yes	keep	frozen weights (skip weight grads in backward)
+a54d322	0.00	5.59	yes	keep	custom_ops.py for future torch.compile support
+98bb9c7	0.00	5.93	no	discard	INT8 dynamic quantization (forces FAIL)
+98bb9c7	0.00	4.59	yes	discard	torch.compile inductor (slower than eager)
+98bb9c7	0.00	4.34	yes	discard	torch.compile aot_eager (slower, graph breaks on C++ kernels)
+98bb9c7	0.00	5.03	yes	discard	C++ ATen fused edgewise inner (same speed as Python ATen)
+98bb9c7	0.00	5.33	yes	discard	fused SO2 conv with pre-allocated output (copy_ overhead)
+98bb9c7	0.00	4.68	yes	discard	custom autograd SO2 conv (extra mm overhead in backward)
+98bb9c7	0.00	5.28	yes	discard	pre-transposed linear weights (MKL handles T flag natively)
+98bb9c7	0.00	3.14	yes	discard	jemalloc (much worse than tcmalloc)
+98bb9c7	0.00	4.90	yes	discard	mimalloc (slightly worse than tcmalloc)
