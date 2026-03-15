@@ -532,6 +532,100 @@ torch::Tensor permute_wigner_inv_bwd_dw(
     return grad_wigner;
 }
 
+/*
+ * Fused: permute_wigner_inv + scatter to nodes
+ *
+ * Combines M→L permute + Wigner inverse rotation + index_add scatter
+ * into a single pass, avoiding materializing the [E,9,C] intermediate.
+ * Uses thread-local accumulators for the scatter.
+ */
+torch::Tensor permute_wigner_inv_scatter(
+    const torch::Tensor& x,           // [E, 9, C] M-major
+    const torch::Tensor& wigner_inv,   // [E, 9, 9]
+    const torch::Tensor& edge_index,   // [2, E] (we use row 1 = tgt)
+    int64_t num_nodes,
+    int64_t node_offset
+) {
+    const int64_t E = x.size(0);
+    const int64_t C = x.size(2);
+    const int num_threads = omp_get_max_threads();
+
+    const float* x_ptr = x.data_ptr<float>();
+    const float* w_ptr = wigner_inv.data_ptr<float>();
+    const int64_t* ei_ptr = edge_index.data_ptr<int64_t>();
+
+    const int64_t stride = 9 * C;
+    const int64_t out_size = num_nodes * 9 * C;
+
+    // Thread-local accumulators
+    std::vector<std::vector<float>> local_bufs(num_threads);
+    for (auto& buf : local_bufs) {
+        buf.resize(out_size, 0.0f);
+    }
+
+    #pragma omp parallel
+    {
+        const int tid = omp_get_thread_num();
+        float* local = local_bufs[tid].data();
+
+        #pragma omp for schedule(static)
+        for (int64_t e = 0; e < E; e++) {
+            const float* X = x_ptr + e * stride;
+            const float* W = w_ptr + e * 81;
+            const int64_t tgt = ei_ptr[E + e] - node_offset;
+            float* dst_base = local + tgt * stride;
+
+            // Precompute x_l pointers
+            const float* xl[9];
+            for (int j = 0; j < 9; j++) {
+                xl[j] = X + M_TO_L[j] * C;
+            }
+
+            // L=0
+            {
+                const float w00 = W[0];
+                float* dst = dst_base;
+                for (int64_t c = 0; c < C; c++) {
+                    dst[c] += w00 * xl[0][c];
+                }
+            }
+
+            // L=1
+            for (int i = 0; i < 3; i++) {
+                float* dst = dst_base + (1 + i) * C;
+                const float w0 = W[(1+i)*9+1], w1 = W[(1+i)*9+2], w2 = W[(1+i)*9+3];
+                for (int64_t c = 0; c < C; c++) {
+                    dst[c] += w0 * xl[1][c] + w1 * xl[2][c] + w2 * xl[3][c];
+                }
+            }
+
+            // L=2
+            for (int i = 0; i < 5; i++) {
+                float* dst = dst_base + (4 + i) * C;
+                float ww[5];
+                for (int j = 0; j < 5; j++) ww[j] = W[(4+i)*9+(4+j)];
+                for (int64_t c = 0; c < C; c++) {
+                    float v = 0.0f;
+                    for (int j = 0; j < 5; j++) v += ww[j] * xl[4+j][c];
+                    dst[c] += v;
+                }
+            }
+        }
+    }
+
+    // Reduce
+    auto result = torch::zeros({num_nodes, 9, C}, x.options());
+    float* r_ptr = result.data_ptr<float>();
+    #pragma omp parallel for schedule(static)
+    for (int64_t i = 0; i < out_size; i++) {
+        float sum = 0.0f;
+        for (int t = 0; t < num_threads; t++) sum += local_bufs[t][i];
+        r_ptr[i] = sum;
+    }
+
+    return result;
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("node_to_edge_wigner_permute_fwd", &node_to_edge_wigner_permute_fwd,
           "Fused gather + Wigner rotate + L->M permute (forward)");
@@ -545,4 +639,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Backward dx for permute_wigner_inv");
     m.def("permute_wigner_inv_bwd_dw", &permute_wigner_inv_bwd_dw,
           "Backward dw for permute_wigner_inv");
+    m.def("permute_wigner_inv_scatter", &permute_wigner_inv_scatter,
+          "Fused M->L permute + Wigner inverse + scatter to nodes");
 }
