@@ -1,0 +1,13 @@
+commit	md_qps	static_qps	forces_pass	status	description
+5c488c9	2.07	2.68	yes	keep	baseline: pure PyTorch CPU ops (torch 2.4, 16 threads)
+2067f64	2.24	3.19	yes	keep	C++ fused gather+wigner+permute kernels (torch 2.4, 16 threads)
+75737ad	3.68	4.52	yes	keep	auto thread tuning OMP_NUM_THREADS=8 (torch 2.4)
+75737ad	3.68	4.52	yes	keep	torch 2.8 upgrade, 8 threads, no compile
+75737ad	3.49	4.16	yes	discard	torch 2.8 + torch.compile (slower than eager)
+7368913	3.64	4.40	yes	keep	-ffast-math -funroll-loops compiler flags
+a5c55e1	3.92	4.70	yes	keep	vectorization-friendly kernel rewrites (unrolled L blocks)
+a5c55e1	4.69	5.74	yes	keep	+ tcmalloc LD_PRELOAD (best 30-step run)
+76f9f43	3.66	4.46	yes	keep	tcmalloc 50-step steady-state (more conservative)
+76f9f43	0.00	4.59	yes	discard	tcmalloc + torch.compile (compile overhead not worth it)
+76f9f43	0.00	4.90	yes	discard	mimalloc (worse than tcmalloc)
+76f9f43	0.00	3.14	yes	discard	jemalloc (much worse)
