@@ -64,10 +64,9 @@ class CPUNodeToEdgeWignerPermuteFunction(torch.autograd.Function):
         kernels = _get_cpp_kernels()
 
         if kernels:
-            # Ensure contiguous and correct dtype for C++
-            x_c = x.contiguous()
-            ei_c = edge_index.contiguous().to(torch.int64)
-            w_c = wigner.contiguous()
+            x_c = x
+            ei_c = edge_index.to(torch.int64)
+            w_c = wigner
 
             out = kernels.node_to_edge_wigner_permute_fwd(x_c, ei_c, w_c)
 
@@ -84,12 +83,9 @@ class CPUNodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             x, edge_index, wigner = ctx.saved_tensors
             kernels = _get_cpp_kernels()
 
-            grad_out_c = grad_out.contiguous()
-            grad_x = kernels.node_to_edge_wigner_permute_bwd_dx(
-                grad_out_c, wigner, edge_index, ctx.num_nodes
-            )
-            grad_wigner = kernels.node_to_edge_wigner_permute_bwd_dw(
-                grad_out_c, x, edge_index
+            # Combined bwd_dx + bwd_dw in single pass (shared data loading)
+            grad_x, grad_wigner = kernels.node_to_edge_wigner_permute_bwd_combined(
+                grad_out, wigner, x, edge_index, ctx.num_nodes
             )
             return grad_x, None, grad_wigner
         else:
@@ -112,8 +108,8 @@ class CPUPermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
         kernels = _get_cpp_kernels()
 
         if kernels:
-            x_c = x.contiguous()
-            w_c = wigner_inv.contiguous()
+            x_c = x
+            w_c = wigner_inv
 
             out = kernels.permute_wigner_inv_fwd(x_c, w_c)
 
@@ -129,7 +125,7 @@ class CPUPermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
             x_m, wigner_inv = ctx.saved_tensors
             kernels = _get_cpp_kernels()
 
-            grad_out_c = grad_out.contiguous()
+            grad_out_c = grad_out
             grad_x = kernels.permute_wigner_inv_bwd_dx(grad_out_c, wigner_inv)
             grad_wigner = kernels.permute_wigner_inv_bwd_dw(grad_out_c, x_m)
             return grad_x, grad_wigner
