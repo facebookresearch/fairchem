@@ -6,52 +6,58 @@ FAIRChem is Meta FAIR Chemistry's ML framework for atomistic simulations. The co
 
 **How inference works**: The model predicts total energy E in the forward pass. Forces are computed as **forces = -dE/dpos** via `torch.autograd` backward pass — there is no separate force prediction head. This means BOTH forward AND backward kernels are on the critical path for every single inference call. Any optimization must preserve the correctness of both passes.
 
-The model has multiple **execution backends**. The default `general` backend uses standard PyTorch ops. The `umas_fast_gpu` backend replaces key operations with custom Triton CUDA kernels for GPU throughput. **We are building and optimizing the `umas_fast_cpu` backend** — a new backend that replaces key operations with custom C/C++ kernels (compiled via `torch.utils.cpp_extension`) for CPU throughput. The model weights, the backbone architecture, the graph generation, and all other framework code are frozen. Only the kernel implementations and backend dispatch code can be modified.
+The model has multiple **execution backends**. The default `general` backend uses standard PyTorch ops. The `umas_fast_gpu` backend replaces key operations with custom Triton CUDA kernels for GPU throughput. **We are building and optimizing the `umas_fast_cpu` backend** — a new backend that replaces key operations with custom C/C++ kernels for CPU throughput. The model weights, the backbone architecture, the graph generation, and all other framework code are frozen. Only the kernel implementations and backend dispatch code can be modified.
 
 ## Goal
 
-**Maximize MD QPS** (molecular dynamics queries per second) for the `umas_fast_cpu` execution backend on a 2000-atom aperiodic (no PBC) carbon FCC system running Langevin dynamics at 400K.
+**Maximize MD QPS** (molecular dynamics queries per second) for the `umas_fast_cpu` execution backend on a 100-atom aperiodic (no PBC) carbon FCC system running Langevin dynamics at 400K.
 
 Forces must match the gold-standard reference (generated once from the `general` backend without compile) within tolerance — correctness is a hard gate.
 
-## Gold standard reference
+## System hardware
 
-The gold standard is a pickle file `configs/uma/speed/gold_forces.pkl` containing forces and energy from the `general` backend (no compile) on the canonical 2000-atom system. Generate it once:
+- **CPU**: Intel Xeon Platinum 8358 @ 2.60GHz
+- **Cores**: 16 physical cores (no hyperthreading)
+- **SIMD**: AVX-512 (avx512f, avx512dq, avx512cd, avx512bw, avx512vl, avx512_vnni)
+- **Cache**: L1d 512 KiB (16 instances), L2 64 MiB (16 instances)
+- **All 16 cores are available for use** — use OpenMP, torch threading, or manual parallelism
+
+## Environment setup
+
+Every command must be run with the fairchem venv activated and PYTHONPATH set:
 
 ```bash
-cd /home/ubuntu/fairchem/configs/uma/speed
 source ~/fairchem_venv/bin/activate
-export HF_TOKEN=hf_REDACTED
+export PYTHONPATH=/home/ubuntu/fairchem/src:$PYTHONPATH
+export HF_TOKEN=<your_hf_token>
+cd /home/ubuntu/fairchem/configs/uma/speed
+```
+
+Package management uses `uv pip install` (inside fairchem_venv). The fairchem source tree at `/home/ubuntu/fairchem/src` is on PYTHONPATH and takes precedence over site-packages.
+
+## Branch
+
+All work happens on the **`cpu_backend_autoresearch`** branch in `/home/ubuntu/fairchem`.
+
+## Gold standard reference
+
+The gold standard is a pickle file `configs/uma/speed/gold_forces.pkl` containing forces and energy from the `general` backend (no compile) on the canonical 100-atom system. It already exists. To regenerate:
+
+```bash
 python compare_forces.py --generate --device cpu
 ```
 
 This file is read-only after generation. All backends are compared against it.
 
-## Setup
+## Current baseline
 
-To set up a new experiment, work with the user to:
-
-1. **Agree on a run tag**: propose a tag based on today's date (e.g. `mar15_cpu`). The branch `autoresearch/<tag>` must not already exist in the fairchem repo.
-2. **Create the branch**: `cd /home/ubuntu/fairchem && git checkout -b autoresearch/<tag>` — all work happens in this repo since the in-scope source files are symlinked into site-packages.
-3. **Read the in-scope files**: Read ALL files listed in the "In-scope files" section below.
-4. **Read the context files**: Read ALL files listed in the "Read-only context" section.
-5. **Generate gold standard** (if not already present):
-   ```bash
-   cd /home/ubuntu/fairchem/configs/uma/speed
-   source ~/fairchem_venv/bin/activate
-   export HF_TOKEN=hf_REDACTED
-   python compare_forces.py --generate --device cpu
-   ```
-6. **Run baseline**: Run the evaluation WITHOUT any modifications to establish baseline numbers:
-   ```bash
-   python compare_forces.py --backend general --device cpu            # must print PASS
-   python check_md_qps.py --backend general --device cpu --warmup 5 --steps 50 2>&1 | grep "INFO"
-   ```
-   The MD QPS from the `general` backend is the **baseline to beat**. Tolerances: forces atol/rtol=5e-3, energy atol=50meV rtol=1e-4.
-7. **Initialize results.tsv**: Create `results.tsv` in `configs/uma/speed/` with the header row and the baseline entry.
-8. **Confirm and go**: Confirm setup looks good.
-
-Once you get confirmation, kick off the experimentation.
+| Metric | Value |
+|--------|-------|
+| Force correctness | PASS (energy err: 1.3e-6 eV, forces max err: 9.5e-7) |
+| Static QPS | 2.68 |
+| MD QPS | 2.07 |
+| System | 100 atoms, non-PBC FCC carbon |
+| Backend | umas_fast_cpu (pure PyTorch, no C++ kernels yet) |
 
 ## Architecture overview
 
@@ -73,28 +79,79 @@ The UMA model uses an eSCN-MD backbone that processes atomic systems through:
 ExecutionBackend (general — pure PyTorch reference)
   └── UMASFastPytorchBackend (block-diagonal SO2 conv + unified radial MLP)
         ├── UMASFastGPUBackend (Triton CUDA kernels)
-        └── UMASFastCPUBackend (C/C++ CPU kernels)  ← NEW
+        └── UMASFastCPUBackend (C/C++ CPU kernels)  ← THIS IS WHAT WE OPTIMIZE
 ```
 
-The `umas_fast_cpu` backend inherits from `UMASFastPytorchBackend` (getting SO2 block-diagonal conversion and unified radial MLP for free), then overrides the three hot operations with C/C++ kernels:
+The `umas_fast_cpu` backend inherits from `UMASFastPytorchBackend` (getting SO2 block-diagonal conversion and unified radial MLP for free), then overrides the three hot operations:
 
-- `node_to_edge_wigner_permute`: Fused gather + block-diagonal Wigner rotation + L→M permute (OpenMP parallel over edges, BLAS for 9×9 BMM)
-- `permute_wigner_inv_edge_to_node`: Fused M→L permute + Wigner inverse rotation (OpenMP, thread-local accumulators for scatter)
-- `edge_degree_scatter`: m=0 column select + BMM + scatter (BLAS, OpenMP)
-- `prepare_wigner`: Passthrough (C++ kernels handle L-to-M internally, same as GPU backend)
+- `node_to_edge_wigner_permute`: Gather + block-diagonal Wigner rotation + L→M permute
+- `permute_wigner_inv_edge_to_node`: M→L permute + Wigner inverse rotation
+- `edge_degree_scatter`: m=0 column select + BMM + scatter
+- `prepare_wigner`: Passthrough (kernels handle L-to-M internally, same as GPU backend)
 
-The C/C++ extension is JIT-compiled via `torch.utils.cpp_extension.load()` — no new packages required.
+### The math in detail
+
+The Wigner rotation matrix is **block-diagonal** for lmax=2:
+- L=0: 1×1 block (scalar multiply)
+- L=1: 3×3 block
+- L=2: 5×5 block
+- Only 35 of 81 elements are nonzero
+
+L-major to M-major permutation indices: `[0, 2, 6, 3, 7, 1, 5, 8, 4]`
+M-major to L-major permutation indices: `[0, 5, 1, 3, 8, 6, 2, 4, 7]`
+
+For `node_to_edge_wigner_permute` forward:
+1. Gather x[src] and x[tgt] from node features [N, 9, C] using edge_index
+2. Concatenate to [E, 9, 2C]
+3. Block-diagonal Wigner multiply in L-major order
+4. Permute L→M to get output [E, 9, 2C]
+
+For `permute_wigner_inv_edge_to_node` forward:
+1. Permute M→L on input [E, 9, C]
+2. Block-diagonal Wigner inverse multiply
+3. Output [E, 9, C] in L-major order (then scatter to nodes via index_add)
 
 ## In-scope files (YOU MODIFY THESE)
 
 All paths relative to `/home/ubuntu/fairchem/src/fairchem/core/models/uma/`:
 
-1. `nn/execution_backends.py` — Backend dispatch: add `UMASFastCPUBackend` + `UMAS_FAST_CPU` enum
+1. `nn/execution_backends.py` — Backend dispatch: `UMASFastCPUBackend` + `UMAS_FAST_CPU` enum
 2. `cpu/__init__.py` — CPU kernel module exports
-3. `cpu/kernels.cpp` — C/C++ CPU kernels (forward + backward, compiled via torch cpp_extension)
-4. `cpu/ops.py` — Python wrappers + `torch.autograd.Function` for CPU kernels
+3. `cpu/ops.py` — Python wrappers + `torch.autograd.Function` for CPU kernels
+4. `cpu/kernels.cpp` — C/C++ CPU kernels (to be created, compiled via `torch.utils.cpp_extension`)
 
-These files are symlinked from the source tree into site-packages, so edits take effect immediately (clear `__pycache__` if needed).
+## C/C++ kernel compilation
+
+You can write C/C++ code and compile it as a PyTorch extension. Use JIT compilation:
+
+```python
+from torch.utils.cpp_extension import load
+
+cpu_kernels = load(
+    name="uma_cpu_kernels",
+    sources=["path/to/kernels.cpp"],
+    extra_cflags=["-O3", "-fopenmp", "-mavx512f", "-mavx512dq"],
+    extra_ldflags=["-lgomp"],
+    verbose=True,
+)
+```
+
+Or use `CppExtension` in setup for ahead-of-time compilation. The C++ code can:
+- Use `#include <torch/extension.h>` for ATen tensor access
+- Use `#pragma omp parallel for` for multi-threaded loops over edges/nodes (16 cores available!)
+- Use AVX-512 intrinsics (`#include <immintrin.h>`) for SIMD vectorization
+- Access tensor data directly via `.data_ptr<float>()` for zero-overhead raw pointer math
+- Fuse multiple operations into a single pass over the data (e.g., gather + Wigner rotate + permute in one loop)
+- Use thread-local accumulators for scatter operations to avoid contention
+
+**Key fusion opportunities in C++:**
+- Fuse gather + Wigner rotate + L→M permute into a single kernel (avoids materializing [E,9,C] intermediate)
+- Fuse M→L permute + Wigner inverse into a single kernel
+- Fuse Wigner inverse + scatter with thread-local node accumulators + reduction
+- Hardcode the block-diagonal structure (skip zero multiply for 46 of 81 elements)
+- For backward: fuse grad scatter + W^T multiply, fuse outer product for dW
+
+After changing C++ code, clear the JIT cache: `rm -rf /tmp/torch_extensions/*`
 
 ## Read-only context (DO NOT MODIFY)
 
@@ -103,10 +160,9 @@ These files are symlinked from the source tree into site-packages, so edits take
 - `/home/ubuntu/fairchem/src/fairchem/core/models/uma/escn_md.py` — The backbone that calls the backend methods
 - `/home/ubuntu/fairchem/configs/uma/speed/bench_common.py` — Benchmark utilities
 - `/home/ubuntu/fairchem/configs/uma/speed/compare_forces.py` — Force correctness validation against gold PKL
-- `/home/ubuntu/fairchem/configs/uma/speed/check_static_qps.py` — Static QPS benchmark (same system in a loop)
+- `/home/ubuntu/fairchem/configs/uma/speed/check_static_qps.py` — Static QPS benchmark (predict unit directly)
 - `/home/ubuntu/fairchem/configs/uma/speed/check_md_qps.py` — MD QPS benchmark (Langevin dynamics)
 - `/home/ubuntu/fairchem/configs/uma/speed/gold_forces.pkl` — Gold-standard forces/energy from general backend
-- `/home/ubuntu/fairchem/tests/core/models/uma/uma_fast/test_execution_backends.py` — Existing tests
 - `triton/` — GPU-specific Triton kernels (reference for the math, do not use on CPU)
 
 ## Experimentation
@@ -116,9 +172,6 @@ Each experiment modifies one or more in-scope files, then evaluates. The evaluat
 ### Phase 1: Correctness gate
 
 ```bash
-cd /home/ubuntu/fairchem/configs/uma/speed
-source ~/fairchem_venv/bin/activate
-export HF_TOKEN=hf_REDACTED
 python compare_forces.py --backend umas_fast_cpu --device cpu 2>&1 | tail -10
 ```
 
@@ -127,49 +180,50 @@ This MUST print `PASS`. If it prints `FAIL`, the modification broke numerical co
 ### Phase 2: MD QPS measurement
 
 ```bash
-python check_md_qps.py --backend umas_fast_cpu --device cpu --warmup 5 --steps 50 2>&1 | grep "INFO"
+python check_md_qps.py --backend umas_fast_cpu --device cpu --warmup 5 --steps 20 2>&1 | grep "INFO"
 ```
 
-Use 5 warmup + 50 measured steps for experiments (faster iteration). The key metric is `MD QPS` from the output.
+Use 5 warmup + 20 measured steps for experiments (faster iteration). The key metric is `MD QPS` from the output.
 
-For the baseline and final measurements, use the full 200 steps:
+For final measurements, use more steps:
 ```bash
-python check_md_qps.py --backend umas_fast_cpu --device cpu --warmup 5 --steps 200 2>&1 | grep "INFO"
+python check_md_qps.py --backend umas_fast_cpu --device cpu --warmup 5 --steps 50 2>&1 | grep "INFO"
 ```
 
 ### Phase 3 (optional): Static QPS for reference
 
 ```bash
-python check_static_qps.py --backend umas_fast_cpu --device cpu --warmup 3 --iters 50 2>&1 | grep "INFO"
+python check_static_qps.py --backend umas_fast_cpu --device cpu --warmup 5 --iters 20 2>&1 | grep "INFO"
 ```
 
 ## Important notes
 
 - After modifying source files, clear `__pycache__`: `rm -rf /home/ubuntu/fairchem/src/fairchem/core/models/uma/cpu/__pycache__ /home/ubuntu/fairchem/src/fairchem/core/models/uma/nn/__pycache__`
-- Clear any JIT-compiled extension cache if C++ code changes: `rm -rf /tmp/torch_extensions/*`
-- The model has lmax=2, mmax=2, sphere_channels=128 (for small models) or 512 (for UMA-S).
-- The benchmark uses UMA-S-1p2 which has sphere_channels=512.
+- After changing C++ code, clear JIT extension cache: `rm -rf /tmp/torch_extensions/*`
+- The model has lmax=2, mmax=2, sphere_channels=512 (for UMA-S-1p2).
 - C++ kernels should handle any sphere_channels value.
 - Always use `merge_mole=True` and `activation_checkpointing=False`.
+- Use `PYTHONPATH=/home/ubuntu/fairchem/src:$PYTHONPATH` for all python commands.
 
 ## What you CAN do
 
 - Modify any in-scope file. Write C/C++ kernels, optimize memory layout, add OpenMP parallelism.
-- Add new C/C++ kernels or fused operations.
-- Change how the backend dispatches or prepares the model.
-- Use BLAS (OpenBLAS, MKL) for matrix operations via PyTorch's ATen or direct calls.
-- Use OpenMP for edge-parallel and node-parallel loops.
-- Exploit the block-diagonal Wigner structure (1×1 + 3×3 + 5×5 for lmax=2).
+- Write C/C++ extension code compiled via `torch.utils.cpp_extension.load()` or `CppExtension`.
+- **Fuse kernels in C/C++**: combine gather + rotate + permute into a single loop, combine permute + inverse rotate + scatter, etc. Fusion eliminates intermediate allocations and improves cache utilization.
+- Use all 16 CPU cores via OpenMP (`#pragma omp parallel for`) or torch threading.
+- Use AVX-512 SIMD intrinsics for vectorized inner loops.
+- Use BLAS (OpenBLAS, MKL via PyTorch's ATen) for matrix operations.
+- Exploit the block-diagonal Wigner structure (only 35 of 81 elements nonzero).
 - Pre-allocate and reuse buffers across inference calls.
 - Use `torch.compile` with CPU backend (AOTInductor).
 - Add cache-friendly memory access patterns (SoA vs AoS, tiling).
+- Install packages via `uv pip install` in fairchem_venv if needed.
 
 ## What you CANNOT do
 
 - Modify read-only context files or the benchmark scripts.
 - Change the model weights, architecture, or training.
-- Change the benchmark system (2000 atoms, no PBC, carbon FCC).
-- Install new packages (torch.utils.cpp_extension is already available).
+- Change the benchmark system (100 atoms, no PBC, carbon FCC).
 - Change merge_mole (must be True) or activation_checkpointing (must be False).
 
 ## Logging results
@@ -183,8 +237,8 @@ commit	md_qps	static_qps	forces_pass	status	description
 ```
 
 1. git commit hash (short, 7 chars)
-2. MD QPS (e.g. 0.45) — use 0.0 for crashes
-3. Static QPS (e.g. 0.52) — use 0.0 if not measured
+2. MD QPS (e.g. 2.07) — use 0.0 for crashes
+3. Static QPS (e.g. 2.68) — use 0.0 if not measured
 4. forces_pass: `yes` or `no`
 5. status: `keep`, `discard`, or `crash`
 6. short text description of what this experiment tried
@@ -193,15 +247,15 @@ Example:
 
 ```
 commit	md_qps	static_qps	forces_pass	status	description
-a1b2c3d	0.35	0.40	yes	keep	baseline (general backend on CPU)
-b2c3d4e	0.42	0.48	yes	keep	umas_fast_cpu with pure PyTorch (inherited)
-c3d4e5f	0.58	0.65	yes	keep	C++ fused gather+wigner with OpenMP
+5c488c9	2.07	2.68	yes	keep	baseline (pure PyTorch CPU ops)
+b2c3d4e	3.50	4.10	yes	keep	C++ fused gather+wigner with OpenMP 16 threads
+c3d4e5f	5.20	6.00	yes	keep	AVX-512 inner loop + fused scatter
 d4e5f6g	0.00	0.00	no	crash	bad kernel config
 ```
 
 ## The experiment loop
 
-The experiment runs on a dedicated branch in `/home/ubuntu/fairchem` (e.g. `autoresearch/mar15_cpu`).
+The experiment runs on the **`cpu_backend_autoresearch`** branch in `/home/ubuntu/fairchem`.
 
 LOOP FOREVER:
 
@@ -216,12 +270,6 @@ LOOP FOREVER:
 9. If MD QPS improved → keep the commit (advance the branch).
 10. If MD QPS is same or worse → `cd /home/ubuntu/fairchem && git reset --hard HEAD~1` to discard.
 
-**Timeouts**:
-- `compare_forces.py`: should complete in under 10 minutes on CPU. Kill after 30 minutes.
-- `check_md_qps.py` (50 steps): should complete in under 30 minutes on CPU. Kill after 60 minutes.
-- `check_md_qps.py` (200 steps): should complete in under 2 hours on CPU. Kill after 3 hours.
-- `check_static_qps.py` (50 iters): should complete in under 30 minutes on CPU. Kill after 60 minutes.
-
 **Crashes**: If a run crashes (bad kernel config, compilation error, etc.), use judgment: fix if trivial, otherwise discard and move on.
 
 **NEVER STOP**: Once the experiment loop has begun, do NOT pause to ask the human if you should continue. The human might be asleep. You are autonomous. If you run out of ideas, think harder — re-read the kernel code, look for fusion opportunities, try different threading configs, reduce memory allocations. The loop runs until the human interrupts you.
@@ -230,15 +278,34 @@ LOOP FOREVER:
 
 These are starting points, not an exhaustive list:
 
-1. **Baseline: inherit UMASFastPytorchBackend**: First get the CPU backend working by simply inheriting all ops from the PyTorch backend. This gives SO2 block-diagonal + unified radial MLP but uses PyTorch's default BMM/index_add. Measure this as baseline.
-2. **Fused gather+Wigner C++ kernel**: Replace `node_to_edge_wigner_permute` with a C++ kernel that fuses index gather + block-diagonal 9×9 matrix multiply. Avoids materializing the full [E,9,C] gather result. Use OpenMP for edge parallelism.
-3. **Fused scatter+inverse Wigner C++ kernel**: Replace `permute_wigner_inv_edge_to_node` with a C++ kernel. Use thread-local accumulators + final reduction for the scatter to avoid atomic operations.
-4. **Exploit block-diagonal structure**: The 9×9 Wigner is block-diagonal (1×1 + 3×3 + 5×5). Only 35 of 81 elements are nonzero. Hardcode the block structure in C++ to skip zero multiplies.
-5. **OpenMP tuning**: Experiment with `OMP_NUM_THREADS`, `OMP_SCHEDULE`, thread affinity. CPU inference is often memory-bandwidth-bound — fewer threads with better cache locality may win.
-6. **BLAS for the BMM**: Use `cblas_sgemm` directly for the block-diagonal matmuls instead of going through PyTorch's ATen. Batch small matmuls or use a single large GEMM with stride tricks.
-7. **Memory layout optimization**: The default [N, 9, C] layout means the channel dimension is contiguous. For CPU SIMD, this is good. But for the gather operation, [9, N, C] might give better cache behavior. Experiment.
-8. **torch.compile on CPU**: Try AOTInductor for CPU. May auto-fuse some ops. Test with and without.
-9. **Pre-allocate buffers**: Reuse output tensors across inference calls to avoid repeated allocation.
-10. **SIMD intrinsics**: For the inner loops (9 coefficients × C channels), use AVX2/AVX-512 intrinsics in the C++ kernel for maximum throughput.
-11. **Custom backward**: Write C++ backward kernels (grad_x scatter, grad_wigner outer product) that are cache-friendly and OpenMP-parallel.
-12. **torch_num_threads tuning**: The InferenceSettings has a `torch_num_threads` field. Experiment with different values.
+### Phase A: C/C++ kernel implementation (biggest wins)
+
+1. **Fused gather+Wigner+permute C++ kernel**: Write `cpu/kernels.cpp` that fuses index gather + block-diagonal 9×9 matrix multiply + L→M permute into one OpenMP-parallel loop over edges. Each thread processes a chunk of edges, reading node features directly via pointer arithmetic, applying the 35 nonzero Wigner elements, and writing the permuted output. Avoids materializing the [E,9,C] gather intermediate entirely.
+
+2. **Fused permute+inverse Wigner C++ kernel**: Single-pass M→L permute + block-diagonal W_inv multiply. For the full `permute_wigner_inv_edge_to_node`, fuse with scatter using thread-local accumulators: each thread accumulates into its own [N,9,C] buffer, then reduce across threads at the end.
+
+3. **Fused edge_degree_scatter C++ kernel**: m=0 column select + small BMM (9×3 @ 3×C) + scatter with rescale, all in one loop.
+
+4. **Custom backward C++ kernels**: The backward pass is equally important (forces = autograd backward). Write C++ backward kernels that fuse W^T @ grad + permute + scatter for grad_x, and fuse outer-product + block-diagonal mask for grad_wigner.
+
+### Phase B: Vectorization and threading
+
+5. **AVX-512 inner loops**: The inner loop multiplies a [9×9] block-diagonal matrix by C channels. With sphere_channels=512 and AVX-512 (16 floats/register), that's 32 vector ops per coefficient. Hand-write the inner loop with `_mm512_fmadd_ps`.
+
+6. **OpenMP scheduling**: Try `schedule(static)`, `schedule(dynamic,64)`, `schedule(guided)`. For scatter operations, try `schedule(static)` with thread-local accumulators.
+
+7. **Thread count tuning**: Set `OMP_NUM_THREADS=16` (all cores), or try 8 (fewer threads, less contention). Set `torch.set_num_threads()` for PyTorch ops.
+
+### Phase C: Memory and allocation
+
+8. **Pre-allocate output buffers**: Reuse [E,9,2C] and [E,9,C] output tensors across calls instead of `torch.empty` each time.
+
+9. **Memory layout**: Experiment with [9,E,C] layout (coefficient-major) vs [E,9,C] (edge-major). Coefficient-major may allow better vectorization of the Wigner multiply.
+
+10. **torch.compile on CPU**: Try AOTInductor for the non-kernel parts of the model. May auto-fuse some PyTorch ops.
+
+### Phase D: Profiling
+
+11. **Profile first**: Use `torch.profiler` or `py-spy` to identify the actual bottleneck before optimizing. The graph generation or SO2 conv may dominate, not the Wigner ops.
+
+12. **torch_num_threads tuning**: The InferenceSettings has a `torch_num_threads` field. Experiment with different values for the PyTorch-internal ops (linear layers, etc.).
