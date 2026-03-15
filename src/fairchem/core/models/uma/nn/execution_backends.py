@@ -484,12 +484,11 @@ class UMASFastGPUBackend(UMASFastPytorchBackend):
 
 class UMASFastCPUBackend(UMASFastPytorchBackend):
     """
-    CPU-optimized backend: SO2 block conversion + CPU kernels.
+    CPU-optimized backend: C++ Wigner kernels + SO2 block conversion + unified radial.
 
     Extends UMASFastPytorchBackend with CPU-optimized
     node_to_edge_wigner_permute and permute_wigner_inv_edge_to_node
-    that use block-diagonal Wigner structure with L↔M permutation
-    (same math as the GPU Triton kernels, but using PyTorch CPU ops).
+    that use C++ fused kernels with block-diagonal Wigner structure.
 
     Requires lmax==2, mmax==2, and merge_mole=True.
     """
@@ -514,7 +513,6 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
                 optimal = max(1, num_cores // 2)
                 os.environ["OMP_NUM_THREADS"] = str(optimal)
                 torch.set_num_threads(optimal)
-            # Disable Python GC — tcmalloc handles memory efficiently
             import gc
             gc.disable()
 
@@ -524,9 +522,7 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
     def prepare_model_for_inference(model: torch.nn.Module) -> None:
         UMASFastPytorchBackend.prepare_model_for_inference(model)
 
-        # Freeze all model weights — for inference we only need grad w.r.t.
-        # positions (for forces). This eliminates weight gradient GEMMs in
-        # the backward pass, saving ~5% of inference time.
+        # Freeze all model weights for inference
         for param in model.parameters():
             param.requires_grad_(False)
 
