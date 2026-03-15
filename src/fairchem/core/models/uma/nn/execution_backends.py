@@ -521,6 +521,16 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
             UMASFastCPUBackend._threads_configured = True
 
     @staticmethod
+    def prepare_model_for_inference(model: torch.nn.Module) -> None:
+        UMASFastPytorchBackend.prepare_model_for_inference(model)
+
+        # Freeze all model weights — for inference we only need grad w.r.t.
+        # positions (for forces). This eliminates weight gradient GEMMs in
+        # the backward pass, saving ~5% of inference time.
+        for param in model.parameters():
+            param.requires_grad_(False)
+
+    @staticmethod
     def prepare_wigner(
         wigner: torch.Tensor,
         wigner_inv: torch.Tensor,

@@ -83,9 +83,14 @@ class CPUNodeToEdgeWignerPermuteFunction(torch.autograd.Function):
             x, edge_index, wigner = ctx.saved_tensors
             kernels = _get_cpp_kernels()
 
-            # Combined bwd_dx + bwd_dw in single pass (shared data loading)
-            grad_x, grad_wigner = kernels.node_to_edge_wigner_permute_bwd_combined(
-                grad_out, wigner, x, edge_index, ctx.num_nodes
+            # Use separate bwd_dx and bwd_dw kernels
+            # Note: wigner grad is ALWAYS needed because Wigner matrices
+            # depend on positions and forces = -dE/dpos requires this gradient.
+            grad_x = kernels.node_to_edge_wigner_permute_bwd_dx(
+                grad_out, wigner, edge_index, ctx.num_nodes
+            )
+            grad_wigner = kernels.node_to_edge_wigner_permute_bwd_dw(
+                grad_out, x, edge_index
             )
             return grad_x, None, grad_wigner
         else:
@@ -125,9 +130,10 @@ class CPUPermuteWignerInvEdgeToNodeFunction(torch.autograd.Function):
             x_m, wigner_inv = ctx.saved_tensors
             kernels = _get_cpp_kernels()
 
-            grad_out_c = grad_out
-            grad_x = kernels.permute_wigner_inv_bwd_dx(grad_out_c, wigner_inv)
-            grad_wigner = kernels.permute_wigner_inv_bwd_dw(grad_out_c, x_m)
+            grad_x = kernels.permute_wigner_inv_bwd_dx(grad_out, wigner_inv)
+            # Wigner grad always needed: Wigner matrices depend on positions
+            grad_wigner = kernels.permute_wigner_inv_bwd_dw(grad_out, x_m)
+
             return grad_x, grad_wigner
         else:
             return _pytorch_permute_wigner_inv_bwd(ctx, grad_out)
