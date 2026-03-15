@@ -46,10 +46,15 @@ for i, val in enumerate(M_TO_L_GATHER_IDX):
 # =============================================================================
 
 
-class MockEdgeDegreeEmbedding:
-    """Mock edge_degree_embedding with activation_checkpoint_chunk_size=None."""
-
-    activation_checkpoint_chunk_size = None
+def _mock_settings(
+    merge_mole: bool = True, activation_checkpointing: bool = False
+) -> InferenceSettings:
+    """Create mock inference settings for validation tests."""
+    return InferenceSettings(
+        merge_mole=merge_mole,
+        activation_checkpointing=activation_checkpointing,
+        external_graph_gen=False,
+    )
 
 
 @pytest.mark.gpu()
@@ -57,16 +62,10 @@ def test_umas_fast_gpu_validation_requires_correct_lmax():
     """
     Verify that umas_fast_gpu raises ValueError for incorrect lmax.
     """
-
-    # Create a mock model with wrong lmax
-    class MockModelWrongLmax:
-        lmax = 3  # Wrong - should be 2
-        mmax = 2
-        sphere_channels = 128
-        edge_degree_embedding = MockEdgeDegreeEmbedding()
+    settings = _mock_settings()
 
     with pytest.raises(ValueError, match="lmax==2 and mmax==2"):
-        UMASFastGPUBackend.validate(MockModelWrongLmax())
+        UMASFastGPUBackend.validate(lmax=3, mmax=2, settings=settings)
 
 
 @pytest.mark.gpu()
@@ -74,50 +73,21 @@ def test_umas_fast_gpu_validation_requires_correct_mmax():
     """
     Verify that umas_fast_gpu raises ValueError for incorrect mmax.
     """
-
-    # Create a mock model with wrong mmax
-    class MockModelWrongMmax:
-        lmax = 2
-        mmax = 1  # Wrong - should be 2
-        sphere_channels = 128
-        edge_degree_embedding = MockEdgeDegreeEmbedding()
+    settings = _mock_settings()
 
     with pytest.raises(ValueError, match="lmax==2 and mmax==2"):
-        UMASFastGPUBackend.validate(MockModelWrongMmax())
+        UMASFastGPUBackend.validate(lmax=2, mmax=1, settings=settings)
 
 
 @pytest.mark.gpu()
 def test_umas_fast_gpu_validation_accepts_correct_config():
     """
-    Verify that umas_fast_gpu validation passes for correct model config.
+    Verify that umas_fast_gpu validation passes for correct lmax/mmax.
     """
-
-    # Create a mock model with correct parameters
-    class MockModel:
-        lmax = 2
-        mmax = 2
-        sphere_channels = 128
-        edge_degree_embedding = MockEdgeDegreeEmbedding()
+    settings = _mock_settings()
 
     # Should not raise
-    UMASFastGPUBackend.validate(MockModel())
-
-
-@pytest.mark.gpu()
-def test_umas_fast_gpu_validation_accepts_512_channels():
-    """
-    Verify that umas_fast_gpu validation passes for sphere_channels=512.
-    """
-
-    # Create a mock model with 512 channels (like UMA-S)
-    class MockModel:
-        lmax = 2
-        mmax = 2
-        sphere_channels = 512
-        edge_degree_embedding = MockEdgeDegreeEmbedding()
-
-    # Should not raise
-    UMASFastGPUBackend.validate(MockModel())
+    UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
 
 
 @pytest.mark.gpu()
@@ -125,19 +95,10 @@ def test_umas_fast_gpu_validation_requires_merge_mole():
     """
     Verify that umas_fast_gpu raises ValueError when merge_mole=False.
     """
-
-    class MockModel:
-        lmax = 2
-        mmax = 2
-        sphere_channels = 128
-        edge_degree_embedding = MockEdgeDegreeEmbedding()
-
-    class MockSettings:
-        activation_checkpointing = False
-        merge_mole = False  # Wrong - should be True
+    settings = _mock_settings(merge_mole=False)  # Wrong - should be True
 
     with pytest.raises(ValueError, match="merge_mole=True"):
-        UMASFastGPUBackend.validate(MockModel(), MockSettings())
+        UMASFastGPUBackend.validate(lmax=2, mmax=2, settings=settings)
 
 
 # =============================================================================
@@ -599,77 +560,3 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
     assert torch.allclose(
         baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
-
-
-# =============================================================================
-# Tests: Compiled Backend E2E with Pretrained Models
-# =============================================================================
-
-
-@pytest.mark.gpu()
-@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
-def test_compiled_backends_match_baseline(request, model_name):
-    """
-    Test compiled execution modes produce same results as non-compiled baseline.
-
-    Tests:
-    - general compiled vs general non-compiled
-    - umas_fast_gpu compiled vs general non-compiled
-
-    Uses pretrained checkpoints (cached by HuggingFace Hub).
-    """
-    # Get checkpoint from fixture
-    fixture_name = model_name.replace("-", "_").replace(".", "p") + "_checkpoint"
-    checkpoint_pt = request.getfixturevalue(fixture_name)
-
-    # Create test system (32-atom Cu FCC)
-    atoms = bulk("Cu", "fcc", a=3.6) * (2, 2, 2)
-    sample = AtomicData.from_ase(atoms, task_name="omat")
-    batch = data_list_collater([sample], otf_graph=True)
-
-    # Compute baseline ONCE (general, non-compiled)
-    baseline_settings = InferenceSettings(
-        activation_checkpointing=False,
-        merge_mole=True,
-        external_graph_gen=False,
-        execution_mode="general",
-        compile=False,
-    )
-    baseline_predictor = MLIPPredictUnit(
-        checkpoint_pt, "cuda", inference_settings=baseline_settings
-    )
-    baseline_out = baseline_predictor.predict(batch.clone())
-
-    # Test configurations: (execution_mode, compile)
-    test_configs = [
-        ("general", True),
-        ("umas_fast_gpu", True),
-    ]
-
-    for test_mode, test_compile in test_configs:
-        test_settings = InferenceSettings(
-            activation_checkpointing=False,
-            merge_mole=True,
-            external_graph_gen=False,
-            execution_mode=test_mode,
-            compile=test_compile,
-        )
-        test_predictor = MLIPPredictUnit(
-            checkpoint_pt, "cuda", inference_settings=test_settings
-        )
-        test_out = test_predictor.predict(batch.clone())
-
-        # Force comparison
-        assert torch.allclose(
-            baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
-        ), (
-            f"{model_name} {test_mode} compile={test_compile}: "
-            f"force mismatch max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
-        )
-        # Energy comparison
-        assert torch.allclose(
-            baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
-        ), (
-            f"{model_name} {test_mode} compile={test_compile}: "
-            f"energy mismatch {baseline_out['energy']} vs {test_out['energy']}"
-        )

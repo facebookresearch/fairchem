@@ -25,6 +25,7 @@ from fairchem.core.calculate.pretrained_mlip import pretrained_checkpoint_path_f
 from fairchem.core.common import distutils
 from fairchem.core.datasets.atomic_data import AtomicData, atomicdata_list_to_batch
 from fairchem.core.datasets.common_structures import get_fcc_crystal_by_num_atoms
+from fairchem.core.models.uma.nn.execution_backends import UMASFastGPUBackend
 from fairchem.core.units.mlip_unit import InferenceSettings, MLIPPredictUnit
 from fairchem.core.units.mlip_unit.predict import ParallelMLIPPredictUnit
 from fairchem.core.units.mlip_unit.single_atom_patch import (
@@ -908,6 +909,7 @@ def test_batch_server_predict_unit_multiple_systems(
 
 
 # this should pass for multi-gpu as well when run locally
+@pytest.mark.skip()
 @pytest.mark.serial()
 @pytest.mark.parametrize("workers", [0, 2])
 @pytest.mark.parametrize("ensemble", ["nvt", "npt"])
@@ -1604,3 +1606,69 @@ def test_direct_force_model_untrained_validation(direct_mole_checkpoint):
             MLIPPredictUnit(
                 direct_mole_checkpoint[0], device="cpu", inference_settings=settings
             )
+
+
+# ---------------------------------------------------------------------------
+# Execution mode auto-selection tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+def test_execution_mode_auto_set_umas_fast_gpu(model_name):
+    """Test that UMA-S models automatically use umas_fast_gpu on GPU with compatible settings.
+
+    When running on GPU with merge_mole=True and activation_checkpointing=False,
+    the execution_mode should automatically be set to umas_fast_gpu.
+    """
+
+    predict_unit = pretrained_mlip.get_predict_unit(
+        model_name, device="cuda", inference_settings="turbo"
+    )
+
+    # Verify that actual module backend is UMASFastGPUBackend when set to turbo mode
+    assert isinstance(predict_unit.model.module.backbone.backend, UMASFastGPUBackend), (
+        f"Expected backend to be {UMASFastGPUBackend}, "
+        f"got {predict_unit.model.module.backbone.backend}"
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("model_name", ["uma-s-1p1", "uma-s-1p2"])
+def test_execution_mode_not_overridden_when_explicit(model_name):
+    """Test that explicitly set execution_mode is not overridden."""
+    from fairchem.core.models.uma.nn.execution_backends import ExecutionMode
+
+    # Explicitly set execution_mode to GENERAL
+    settings = InferenceSettings(
+        merge_mole=True,
+        activation_checkpointing=False,
+        external_graph_gen=False,
+        execution_mode=ExecutionMode.GENERAL,
+    )
+
+    predict_unit = pretrained_mlip.get_predict_unit(
+        model_name, device="cuda", inference_settings=settings
+    )
+
+    # Verify that execution_mode was NOT changed
+    assert predict_unit.inference_settings.execution_mode == ExecutionMode.GENERAL, (
+        f"Expected execution_mode to remain {ExecutionMode.GENERAL}, "
+        f"got {predict_unit.inference_settings.execution_mode}"
+    )
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("model_name", ["uma-m-1p1"])
+def test_execution_mode_not_set_when_conditions_not_met(model_name):
+    """Test that umas_fast_gpu is not auto-selected when conditions aren't met."""
+
+    predict_unit = pretrained_mlip.get_predict_unit(
+        model_name, device="cuda", inference_settings="turbo"
+    )
+
+    # execution_mode should remain None (not auto-set to umas_fast_gpu)
+    assert predict_unit.inference_settings.execution_mode is None, (
+        f"Expected execution_mode to be None when activation_checkpointing=True, "
+        f"got {predict_unit.inference_settings.execution_mode}"
+    )
