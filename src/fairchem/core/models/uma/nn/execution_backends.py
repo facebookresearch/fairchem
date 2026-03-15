@@ -494,6 +494,8 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
     Requires lmax==2, mmax==2, and merge_mole=True.
     """
 
+    _threads_configured = False
+
     @staticmethod
     def validate(
         model: torch.nn.Module,
@@ -504,6 +506,15 @@ class UMASFastCPUBackend(UMASFastPytorchBackend):
             raise ValueError("umas_fast_cpu requires lmax==2 and mmax==2")
         if settings is not None and not settings.merge_mole:
             raise ValueError("umas_fast_cpu requires merge_mole=True")
+        # Set optimal thread count early (before first inference)
+        if not UMASFastCPUBackend._threads_configured:
+            import os
+            if not os.environ.get("OMP_NUM_THREADS"):
+                num_cores = os.cpu_count() or 8
+                optimal = max(1, num_cores // 2)
+                os.environ["OMP_NUM_THREADS"] = str(optimal)
+                torch.set_num_threads(optimal)
+            UMASFastCPUBackend._threads_configured = True
 
     @staticmethod
     def prepare_wigner(

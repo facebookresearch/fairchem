@@ -136,27 +136,61 @@ torch::Tensor node_to_edge_wigner_permute_bwd_dx(
         for (int64_t e = 0; e < E; e++) {
             const int64_t src_node = ei_ptr[e];
             const int64_t tgt_node = ei_ptr[E + e];
-            const float* G = g_ptr + e * g_stride_e;  // [9, 2C] M-major
+            const float* G = g_ptr + e * g_stride_e;
             const float* W = w_ptr + e * 81;
 
-            // grad_l[l] = G[M_TO_L[l]]  (M→L gather)
-            // grad_cat[j] = sum over l in block(j): W[l,j] * grad_l[l]
-            for (int j = 0; j < 9; j++) {
-                const int bs = BLOCK_START[j];
-                const int bn = BLOCK_SIZE[j];
-                float* ds = local + src_node * gx_stride_n + j * C;
-                float* dt = local + tgt_node * gx_stride_n + j * C;
+            // Precompute M→L permuted grad pointers
+            const float* gl[9];
+            for (int li = 0; li < 9; li++) {
+                gl[li] = G + M_TO_L[li] * C2;
+            }
 
+            float* ds_base = local + src_node * gx_stride_n;
+            float* dt_base = local + tgt_node * gx_stride_n;
+
+            // L=0: j=0, block has only l=0
+            {
+                const float w_val = W[0];
+                float* ds = ds_base;
+                float* dt = dt_base;
+                const float* g0 = gl[0];
+                for (int64_t c = 0; c < C; c++) {
+                    ds[c] += w_val * g0[c];
+                    dt[c] += w_val * g0[C + c];
+                }
+            }
+
+            // L=1: j=1,2,3; block rows l=1,2,3
+            for (int j = 0; j < 3; j++) {
+                float* ds = ds_base + (1 + j) * C;
+                float* dt = dt_base + (1 + j) * C;
+                const float w0 = W[1 * 9 + (1 + j)];
+                const float w1 = W[2 * 9 + (1 + j)];
+                const float w2 = W[3 * 9 + (1 + j)];
+                const float* g1 = gl[1];
+                const float* g2 = gl[2];
+                const float* g3 = gl[3];
+                for (int64_t c = 0; c < C; c++) {
+                    const float vs = w0 * g1[c] + w1 * g2[c] + w2 * g3[c];
+                    const float vt = w0 * g1[C+c] + w1 * g2[C+c] + w2 * g3[C+c];
+                    ds[c] += vs;
+                    dt[c] += vt;
+                }
+            }
+
+            // L=2: j=4..8; block rows l=4..8
+            for (int j = 0; j < 5; j++) {
+                float* ds = ds_base + (4 + j) * C;
+                float* dt = dt_base + (4 + j) * C;
+                float ww[5];
+                for (int i = 0; i < 5; i++) {
+                    ww[i] = W[(4 + i) * 9 + (4 + j)];
+                }
                 for (int64_t c = 0; c < C; c++) {
                     float vs = 0.0f, vt = 0.0f;
-                    for (int i = 0; i < bn; i++) {
-                        const int li = bs + i;
-                        // W^T[j,li] = W[li,j]
-                        const float w_val = W[li * 9 + j];
-                        // grad_l[li] = G[M_TO_L[li]]
-                        const float* gl = G + M_TO_L[li] * C2;
-                        vs += w_val * gl[c];
-                        vt += w_val * gl[C + c];
+                    for (int i = 0; i < 5; i++) {
+                        vs += ww[i] * gl[4 + i][c];
+                        vt += ww[i] * gl[4 + i][C + c];
                     }
                     ds[c] += vs;
                     dt[c] += vt;
