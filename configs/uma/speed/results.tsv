@@ -1,14 +1,19 @@
 commit	md_qps	static_qps	memory_gb	forces_pass	status	description
-c45dbcd	5.18	0.0	21.4	yes	keep	baseline
-ecf143b	3.86	0.0	21.2	yes	discard	increase num_warps 1->4 (fwd), 1->8 (bwd_dx)
-46ee374	3.98	0.0	21.2	yes	discard	edge_degree_scatter broadcast multiply instead of fancy_idx+bmm
-6f89fb0	3.93	0.0	21.2	yes	discard	GRID_E_STRIDE=4096
-866c1f5	3.94	0.0	21.2	yes	discard	GRID_E_STRIDE=1024
-31611ac	3.88	0.0	21.2	yes	discard	eliminate x_l side buffer (recompute in backward)
-dd9d81c	5.21	0.0	21.4	yes	keep	BLOCK_C=256
-dd9b5a4	5.38	0.0	21.5	yes	keep	avoid full M->L permute copy in bwd grad_wigner
-66902dc	5.69	0.0	19.7	yes	keep	eliminate x_edge side buffer (recompute in bwd)
-f16ef94	5.60	0.0	19.7	yes	discard	also eliminate x_l side buffer (slight regression)
-0ede078	5.52	0.0	20.9	yes	discard	split src/tgt BMMs to avoid cat (more kernel launches)
-f7f1919	5.63	0.0	19.7	yes	discard	eliminate x_l via kernel-level M->L permutation (slight regression)
-7c0b02d	5.65	0.0	19.7	yes	discard	BLOCK_C=512 (slightly worse than 256)
+c45dbcd	5.18	7.50	21.4	yes	keep	baseline (main)
+658e3a5	5.23	0.0	21.4	yes	keep	fix: permute_wigner_inv bwd_dw channels > 128
+d76ea27	5.21	0.0	21.4	yes	keep	BLOCK_C=256 for forward/backward kernels
+7ebad3d	5.38	0.0	21.5	yes	keep	avoid full M->L permute copy in bwd grad_wigner
+fe8224a	5.69	0.0	19.7	yes	keep	eliminate x_edge side buffer (recompute in bwd)
+b3ce391	6.03	0.0	18.0	yes	keep	fused Triton bwd_dw kernel (gather+permute+outer product)
+279279a	6.10	0.0	18.0	yes	keep	eliminate x_l via kernel-level M->L in bwd_dw
+ae2a083	6.10	8.25	18.0	yes	keep	remove unnecessary contiguous() calls
+cc5b418	6.08	0.0	18.0	yes	keep	custom autograd Function for edge_degree_scatter
+38c3b6a	6.08	0.0	18.0	yes	keep	split bwd_dx into separate src/tgt buffers
+ca6087b	6.08	0.0	18.0	yes	keep	reorder backward: bwd_dw before scatter
+1e2db13	6.07	0.0	18.0	yes	keep	combine bwd_dx+bwd_dw into single dispatch
+0ae966d	6.51	8.24	18.0	yes	keep	enable CUDA expandable_segments
+c6fd15f	6.53	0.0	18.0	yes	keep	GRID_E_STRIDE=4096 for backward kernels
+16e9d30	6.85	8.58	18.0	yes	keep	inductor coordinate_descent_tuning
+3d75fb3	6.90	8.69	18.0	yes	keep	inductor aggressive_fusion
+df98e3a	6.90	0.0	18.0	yes	keep	disable size_asserts + reorder_for_locality
+4dcef57	6.93	0.0	18.0	yes	keep	automatic_dynamic_shapes=False
