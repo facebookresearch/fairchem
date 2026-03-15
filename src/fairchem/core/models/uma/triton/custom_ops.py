@@ -153,6 +153,9 @@ def _kernel_node_to_edge_wigner_permute_bwd_dx(
     num_edges = grad_out.shape[0]
     sphere_channels = grad_out.shape[2] // 2
 
+    assert (sphere_channels & (sphere_channels - 1)) == 0
+    assert sphere_channels >= 1
+
     # Flatten wigner for kernel (wigner already contiguous from escn_md source)
     wigner_flat = wigner.reshape(num_edges, -1)
 
@@ -228,6 +231,9 @@ def _kernel_permute_wigner_inv_edge_to_node_bwd_dw(
     """
     num_edges = grad_out.shape[0]
     sphere_channels = grad_out.shape[2]
+
+    assert sphere_channels & (sphere_channels - 1) == 0
+    assert sphere_channels >= 1
 
     grid = (GRID_E_STRIDE,)
 

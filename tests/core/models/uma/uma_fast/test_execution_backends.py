@@ -199,10 +199,10 @@ def test_umas_fast_pytorch_forces_match_baseline_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -261,10 +261,10 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -274,7 +274,8 @@ def test_umas_fast_pytorch_forces_match_baseline_no_pbc(
 
 
 @pytest.mark.gpu()
-def test_node_to_edge_wigner_permute_gradcheck():
+@pytest.mark.parametrize("sphere_channels", [128, 512])
+def test_node_to_edge_wigner_permute_gradcheck(sphere_channels):
     """
     Verify NodeToEdgeWignerPermuteFunction backward pass is correct via gradcheck.
 
@@ -285,7 +286,6 @@ def test_node_to_edge_wigner_permute_gradcheck():
     device = "cuda"
     num_nodes = 8
     num_edges = 16
-    sphere_channels = 128  # Minimum for kernel block size
 
     # Create test inputs
     x = torch.randn(
@@ -312,7 +312,8 @@ def test_node_to_edge_wigner_permute_gradcheck():
 
 
 @pytest.mark.gpu()
-def test_permute_wigner_inv_edge_to_node_gradcheck():
+@pytest.mark.parametrize("sphere_channels", [128, 512])
+def test_permute_wigner_inv_edge_to_node_gradcheck(sphere_channels):
     """
     Verify PermuteWignerInvEdgeToNodeFunction backward pass is correct via gradcheck.
 
@@ -322,7 +323,6 @@ def test_permute_wigner_inv_edge_to_node_gradcheck():
     torch.manual_seed(42)
     device = "cuda"
     num_edges = 16
-    sphere_channels = 128  # Minimum for kernel block size
 
     # Create test inputs
     x = torch.randn(
@@ -418,7 +418,8 @@ def _create_block_diagonal_wigner(num_edges: int, device: str) -> torch.Tensor:
 
 
 @pytest.mark.gpu()
-def test_node_to_edge_wigner_permute_matches_pytorch():
+@pytest.mark.parametrize("sphere_channels", [128, 512])
+def test_node_to_edge_wigner_permute_matches_pytorch(sphere_channels):
     """
     Verify Triton kernel output matches PyTorch reference.
     """
@@ -426,7 +427,6 @@ def test_node_to_edge_wigner_permute_matches_pytorch():
     device = "cuda"
     num_nodes = 16
     num_edges = 32
-    sphere_channels = 128
 
     # Create inputs
     x = torch.randn(num_nodes, 9, sphere_channels, device=device)
@@ -448,14 +448,14 @@ def test_node_to_edge_wigner_permute_matches_pytorch():
 
 
 @pytest.mark.gpu()
-def test_permute_wigner_inv_matches_pytorch():
+@pytest.mark.parametrize("sphere_channels", [128, 512])
+def test_permute_wigner_inv_matches_pytorch(sphere_channels):
     """
     Verify Triton kernel output matches PyTorch reference.
     """
     torch.manual_seed(42)
     device = "cuda"
     num_edges = 32
-    sphere_channels = 128
 
     # Create inputs
     x = torch.randn(num_edges, 9, sphere_channels, device=device)
@@ -471,6 +471,50 @@ def test_permute_wigner_inv_matches_pytorch():
     assert torch.allclose(
         ref_out, triton_out, rtol=1e-4, atol=1e-4
     ), f"Max diff: {(ref_out - triton_out).abs().max()}"
+
+
+@pytest.mark.gpu()
+@pytest.mark.parametrize("sphere_channels", [128, 256, 512])
+def test_permute_wigner_inv_bwd_dw_matches_pytorch(sphere_channels):
+    """
+    Verify permute_wigner_inv backward dW kernel matches PyTorch reference.
+
+    Tests that dW = grad_out @ x_l^T is computed correctly over ALL channels.
+    Regression test for a bug where channels > 128 were silently dropped.
+    """
+    torch.manual_seed(42)
+    device = "cuda"
+    num_edges = 32
+
+    # Create inputs (L-major for grad_out, L-major for x_l)
+    grad_out = torch.randn(num_edges, 9, sphere_channels, device=device)
+    x_l = torch.randn(num_edges, 9, sphere_channels, device=device)
+
+    # PyTorch reference: block-diagonal outer product
+    ref_dw = torch.zeros(num_edges, 9, 9, device=device)
+    # L=0 block (1x1)
+    ref_dw[:, 0, 0] = (grad_out[:, 0, :] * x_l[:, 0, :]).sum(dim=-1)
+    # L=1 block (3x3)
+    ref_dw[:, 1:4, 1:4] = torch.bmm(grad_out[:, 1:4, :], x_l[:, 1:4, :].transpose(1, 2))
+    # L=2 block (5x5)
+    ref_dw[:, 4:9, 4:9] = torch.bmm(grad_out[:, 4:9, :], x_l[:, 4:9, :].transpose(1, 2))
+
+    # Triton kernel via custom op
+    import fairchem.core.models.uma.triton.custom_ops  # noqa: F401
+
+    grad_wigner_flat = torch.zeros(num_edges, 81, device=device)
+    torch.ops.fairchem._kernel_permute_wigner_inv_edge_to_node_bwd_dw(
+        grad_out, x_l, grad_wigner_flat
+    )
+    triton_dw = grad_wigner_flat.reshape(num_edges, 9, 9)
+
+    # Compare — tolerance should be tight (numerical precision only)
+    assert torch.allclose(ref_dw, triton_dw, rtol=1e-3, atol=1e-3), (
+        f"permute_wigner_inv bwd_dw mismatch at sphere_channels={sphere_channels}: "
+        f"max abs diff={( ref_dw - triton_dw).abs().max().item():.6e}, "
+        f"ref norm={ref_dw.norm().item():.4f}, "
+        f"triton norm={triton_dw.norm().item():.4f}"
+    )
 
 
 # =============================================================================
@@ -532,10 +576,10 @@ def test_umas_fast_gpu_forces_match_baseline_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -594,10 +638,10 @@ def test_umas_fast_gpu_forces_match_baseline_no_pbc(
 
     # Forces should match within tolerance (backend precision difference)
     assert torch.allclose(
-        baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+        baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
     ), f"Force mismatch: max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
     assert torch.allclose(
-        baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+        baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
     ), f"Energy mismatch: {baseline_out['energy']} vs {test_out['energy']}"
 
 
@@ -661,14 +705,14 @@ def test_compiled_backends_match_baseline(request, model_name):
 
         # Force comparison
         assert torch.allclose(
-            baseline_out["forces"], test_out["forces"], rtol=5e-2, atol=5e-2
+            baseline_out["forces"], test_out["forces"], rtol=2e-3, atol=2e-3
         ), (
             f"{model_name} {test_mode} compile={test_compile}: "
             f"force mismatch max diff = {(baseline_out['forces'] - test_out['forces']).abs().max()}"
         )
         # Energy comparison
         assert torch.allclose(
-            baseline_out["energy"], test_out["energy"], rtol=1e-2, atol=1e-2
+            baseline_out["energy"], test_out["energy"], rtol=1e-4, atol=5e-2
         ), (
             f"{model_name} {test_mode} compile={test_compile}: "
             f"energy mismatch {baseline_out['energy']} vs {test_out['energy']}"
