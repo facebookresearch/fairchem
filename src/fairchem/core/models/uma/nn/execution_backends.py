@@ -29,6 +29,8 @@ torch._inductor.config.triton.unique_kernel_names = False
 torch._inductor.config.reorder_for_locality = True
 # Disable size asserts in generated code (small speedup)
 torch._inductor.config.size_asserts = False
+# Disable automatic dynamic shapes — use static shapes for faster code
+torch._dynamo.config.automatic_dynamic_shapes = False
 
 from fairchem.core.models.uma.nn.unified_radial import UnifiedRadialMLP
 
