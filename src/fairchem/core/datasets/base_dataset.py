@@ -195,6 +195,14 @@ def create_dataset(config: dict[str, Any], split: str) -> Subset:
             indices = indices[
                 np.isin(dataset.get_metadata(subset_to["metadata_key"], indices), rhv)
             ]
+        elif subset_to["op"] == "not_in":
+            indices = indices[
+                np.isin(
+                    dataset.get_metadata(subset_to["metadata_key"], indices),
+                    rhv,
+                    invert=True,
+                )
+            ]
 
     # Apply dataset level transforms
     # TODO is no_shuffle mutually exclusive though? or what is the purpose of no_shuffle?
