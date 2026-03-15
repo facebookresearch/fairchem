@@ -34,7 +34,7 @@ def _get_cpp_kernels():
         _cpp_kernels = load(
             name="uma_cpu_kernels",
             sources=[kernel_src],
-            extra_cflags=["-O3", "-fopenmp", "-march=native"],
+            extra_cflags=["-O3", "-fopenmp", "-march=native", "-funroll-loops", "-ffast-math"],
             extra_ldflags=["-lgomp"],
             verbose=False,
         )
